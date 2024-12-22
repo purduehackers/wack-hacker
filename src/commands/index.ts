@@ -3,7 +3,7 @@ import type {
   SlashCommandOptionsOnlyBuilder,
 } from "discord.js";
 
-import * as summarize from "~/commands/summarize";
+import * as summarize from "./summarize";
 
 type Command = {
   data: SlashCommandOptionsOnlyBuilder;

@@ -9,7 +9,7 @@ import {
 import Groq from "groq-sdk";
 import human from "human-interval";
 
-import { env } from "~/env";
+import { env } from "../env";
 
 const groq = new Groq({ apiKey: env.GROQ_API_KEY });
 
