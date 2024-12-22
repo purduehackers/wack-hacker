@@ -64,3 +64,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
 });
 
 client.login(env.DISCORD_BOT_TOKEN);
+
+Bun.serve({
+  fetch(request, server) {
+    return new Response("Hello, world!", {
+      headers: { "content-type": "text/plain" },
+    });
+  },
+  port: 3000,
+});
