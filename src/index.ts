@@ -1,4 +1,5 @@
 import {
+  ActivityType,
   Client,
   Events,
   GatewayIntentBits,
@@ -36,6 +37,12 @@ const checkBirthdaysTask = cron.schedule("1 0 * * *", checkBirthdays);
 
 client.on(Events.ClientReady, (event) => {
   console.log(`Logged in as ${event.user.tag}!`);
+
+  client.user?.setActivity({
+    name: "eggz",
+    type: ActivityType.Watching,
+  });
+
   checkBirthdaysTask.start();
 });
 
