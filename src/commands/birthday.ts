@@ -66,7 +66,7 @@ export async function command(interaction: ChatInputCommandInteraction) {
     return;
   }
 
-  const monthsWith31Days = ["0", "3", "5", "7", "9", "11", "12"];
+  const monthsWith31Days = ["0", "2", "4", "6", "8", "10", "11"];
 
   if (!monthsWith31Days.includes(month) && day === 31) {
     await interaction.reply({
