@@ -6,8 +6,14 @@ import {
   REST,
   Routes,
 } from "discord.js";
+import cron from "node-cron";
 
 import { commands } from "./commands";
+import {
+  getBirthdaysToday,
+  generateBirthdayMessage,
+} from "./commands/birthday";
+import { LOUNGE_CHANNEL_ID } from "./utils/consts";
 import { env } from "./env";
 
 const rest = new REST({ version: "10" }).setToken(env.DISCORD_BOT_TOKEN);
@@ -26,8 +32,11 @@ try {
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
+const checkBirthdaysTask = cron.schedule("1 0 * * *", checkBirthdays);
+
 client.on(Events.ClientReady, (event) => {
   console.log(`Logged in as ${event.user.tag}!`);
+  checkBirthdaysTask.start();
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
@@ -73,3 +82,27 @@ Bun.serve({
   },
   port: 3000,
 });
+
+async function checkBirthdays() {
+  const birthdays = await getBirthdaysToday();
+
+  if (birthdays.length === 0) return;
+
+  const channel = client.channels.cache.get(LOUNGE_CHANNEL_ID);
+
+  if (!channel) {
+    console.error("Could not find channel: #lounge");
+    return;
+  }
+
+  if (!channel.isSendable()) {
+    console.error("Cannot send messages to #lounge");
+    return;
+  }
+
+  for (const birthday of birthdays) {
+    channel.send({
+      content: generateBirthdayMessage(birthday.userId),
+    });
+  }
+}
