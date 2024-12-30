@@ -17,6 +17,6 @@ WORKDIR /app
 
 COPY --from=build /app/bot /app/bot
 
-ARG TZ=America/Indiana/Indianapolis
+ENV TZ=America/Indiana/Indianapolis
 
 CMD ["/app/bot"]
