@@ -10,7 +10,7 @@ import {
 import cron from "node-cron";
 
 import { commands } from "./commands";
-import { evergreenIssueWorkflow } from "./events/message_create";
+import { messageCreate } from "./events";
 
 import { checkBirthdays } from "./utils/birthdays";
 
@@ -84,11 +84,8 @@ client.on(Events.ClientReady, (event) => {
   checkBirthdaysTask.start();
 });
 
-client.on(Events.MessageCreate, async (message) => {
-  // run all event handlers in parallel
-  // this may create race conditions, but
-  // womp womp
-  await Promise.all([evergreenIssueWorkflow(message)]);
+client.on(messageCreate.eventType, async (message) => {
+  await Promise.allSettled([messageCreate.evergreenIssueWorkflow(message)]);
 });
 
 client.login(env.DISCORD_BOT_TOKEN);
