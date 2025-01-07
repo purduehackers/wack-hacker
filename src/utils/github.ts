@@ -1,6 +1,5 @@
-import { Octokit } from "octokit";
+import { Octokit } from "@octokit/rest";
 
-import { ORGANIZER_ROLE_ID, EVERGREEN_CREATE_ISSUE_STRING } from "./consts";
 import { env } from "../env";
 
 const octokit = new Octokit({ auth: env.GITHUB_TOKEN });
