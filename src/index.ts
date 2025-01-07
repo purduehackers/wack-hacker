@@ -10,11 +10,10 @@ import {
 import cron from "node-cron";
 
 import { commands } from "./commands";
-import {
-  getBirthdaysToday,
-  generateBirthdayMessage,
-} from "./commands/birthday";
-import { LOUNGE_CHANNEL_ID } from "./utils/consts";
+import { evergreenIssueWorkflow } from "./events/message_create";
+
+import { checkBirthdays } from "./utils/birthdays";
+
 import { env } from "./env";
 
 const rest = new REST({ version: "10" }).setToken(env.DISCORD_BOT_TOKEN);
@@ -31,19 +30,12 @@ try {
   console.error(error);
 }
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
-
-const checkBirthdaysTask = cron.schedule("1 0 * * *", checkBirthdays);
-
-client.on(Events.ClientReady, (event) => {
-  console.log(`Logged in as ${event.user.tag}!`);
-
-  client.user?.setActivity({
-    name: "eggz",
-    type: ActivityType.Watching,
-  });
-
-  checkBirthdaysTask.start();
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+  ],
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
@@ -79,6 +71,26 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 });
 
+const checkBirthdaysTask = cron.schedule("1 0 * * *", checkBirthdays(client));
+
+client.on(Events.ClientReady, (event) => {
+  console.log(`Logged in as ${event.user.tag}!`);
+
+  client.user?.setActivity({
+    name: "eggz",
+    type: ActivityType.Watching,
+  });
+
+  checkBirthdaysTask.start();
+});
+
+client.on(Events.MessageCreate, async (message) => {
+  // run all event handlers in parallel
+  // this may create race conditions, but
+  // womp womp
+  await Promise.all([evergreenIssueWorkflow(message)]);
+});
+
 client.login(env.DISCORD_BOT_TOKEN);
 
 Bun.serve({
@@ -89,27 +101,3 @@ Bun.serve({
   },
   port: 3000,
 });
-
-async function checkBirthdays() {
-  const birthdays = await getBirthdaysToday();
-
-  if (birthdays.length === 0) return;
-
-  const channel = client.channels.cache.get(LOUNGE_CHANNEL_ID);
-
-  if (!channel) {
-    console.error("Could not find channel: #lounge");
-    return;
-  }
-
-  if (!channel.isSendable()) {
-    console.error("Cannot send messages to #lounge");
-    return;
-  }
-
-  for (const birthday of birthdays) {
-    channel.send({
-      content: generateBirthdayMessage(birthday.userId),
-    });
-  }
-}

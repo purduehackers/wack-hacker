@@ -16,6 +16,7 @@
     "groq-sdk": "^0.9.1",
     "human-interval": "^2.0.1",
     "node-cron": "^3.0.3",
+    "octokit": "^4.0.3",
     "zod": "^3.24.1"
   },
   "devDependencies": {
