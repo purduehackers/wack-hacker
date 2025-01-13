@@ -2,6 +2,7 @@ import { Events, type Message } from "discord.js";
 
 import {
   ORGANIZER_ROLE_ID,
+  BISHOP_ROLE_ID,
   EVERGREEN_CREATE_ISSUE_STRING,
 } from "../utils/consts";
 import { createGithubIssue, getAssociationsFile } from "../utils/github";
@@ -12,7 +13,7 @@ export async function evergreenIssueWorkflow(message: Message) {
   if (message.author.bot) return;
   if (message.channel.isDMBased()) return;
 
-  if (!message.member?.roles.cache.some((r) => r.id === ORGANIZER_ROLE_ID)) {
+  if (!message.member?.roles.cache.some((r) => r.id === ORGANIZER_ROLE_ID || r.id === BISHOP_ROLE_ID)) {
     return;
   }
 
@@ -37,7 +38,7 @@ export async function evergreenIssueWorkflow(message: Message) {
   const assignees: string | null = people[original.author.id] || null;
 
   const title = `Evergreen request from @${message.author.tag} in #${message.channel.name}`;
-  const body = `**@${assignees ?? original.author.tag}**[^1] said in **[#${message.channel.name}](${message.url})**:
+  const body = `**@${assignees ?? original.author.tag}**[^1] said in **[#${message.channel.name}](<${message.url}>)**:
 
 ${original.content
   .split("\n")
