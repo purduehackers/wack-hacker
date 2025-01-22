@@ -9,7 +9,7 @@ export async function getAssociationsFile() {
     owner: "purduehackers",
     repo: "dark-forest",
     path: "people/associations.json",
-    ref: "ray/refactor",
+    ref: "main",
   });
 
   if (response.status !== 200) {
