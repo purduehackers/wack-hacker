@@ -35,6 +35,7 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildVoiceStates,
   ],
 });
 
@@ -85,7 +86,10 @@ client.on(Events.ClientReady, (event) => {
 });
 
 client.on(messageCreate.eventType, async (message) => {
-  await Promise.allSettled([messageCreate.evergreenIssueWorkflow(message)]);
+  await Promise.allSettled([
+    messageCreate.evergreenIssueWorkflow(message),
+    messageCreate.voiceMessageTranscription(message),
+  ]);
 });
 
 client.login(env.DISCORD_BOT_TOKEN);
