@@ -13,6 +13,10 @@ import { commands } from "./commands";
 import { messageCreate } from "./events";
 
 import { checkBirthdays } from "./utils/birthdays";
+import {
+  createHackNightImagesThread,
+  cleanupHackNightImagesThread,
+} from "./utils/hack-night";
 
 import { env } from "./env";
 
@@ -73,6 +77,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
 });
 
 const checkBirthdaysTask = cron.schedule("1 0 * * *", checkBirthdays(client));
+const createHackNightImagesThreadTask = cron.schedule(
+  "0 20 * * 5",
+  createHackNightImagesThread(client),
+);
+const cleanupHackNightImagesThreadTask = cron.schedule(
+  "0 18 * * 7",
+  cleanupHackNightImagesThread(client),
+);
 
 client.on(Events.ClientReady, (event) => {
   console.log(`Logged in as ${event.user.tag}!`);
@@ -83,6 +95,8 @@ client.on(Events.ClientReady, (event) => {
   });
 
   checkBirthdaysTask.start();
+  createHackNightImagesThreadTask.start();
+  cleanupHackNightImagesThreadTask.start();
 });
 
 client.on(messageCreate.eventType, async (message) => {
