@@ -5,7 +5,10 @@ import {
   type Client,
 } from "discord.js";
 
-import { HACK_NIGHT_CHANNEL_ID } from "./consts";
+import {
+  HACK_NIGHT_CHANNEL_ID,
+  HACK_NIGHT_PHOTOGRAPHY_AWARD_ROLE_ID,
+} from "./consts";
 
 // TODO(@rayhanadev): add more fun messages
 const HACK_NIGHT_MESSAGES = [
@@ -184,6 +187,32 @@ ${Array.from(contributors)
     await starterMessage.unpin();
     await hackNightImageThread.setLocked(true);
     await hackNightImageThread.setArchived(true);
+
+    const roleHolder = await channel.guild.roles
+      .fetch(HACK_NIGHT_PHOTOGRAPHY_AWARD_ROLE_ID)
+      .then((r) => {
+        return r?.members;
+      });
+
+    if (roleHolder && roleHolder?.size > 0) {
+      for (const member of roleHolder.values()) {
+        await member.roles.remove(HACK_NIGHT_PHOTOGRAPHY_AWARD_ROLE_ID);
+    }
+
+    const winner = roleHolder
+      .filter((m) => m.id !== client.user?.id)
+      .sorted((a, b) => {
+        return (contributors.get(b.id) ?? 0) - (contributors.get(a.id) ?? 0);
+      })
+      .first();
+
+    if (winner) {
+      await winner.roles.add(HACK_NIGHT_PHOTOGRAPHY_AWARD_ROLE_ID);
+    }
+
+    await channel.send({
+      content: `Congratulations to <@${winner?.id}> for winning the Hack Night Photography Award! :D`,
+    });
 
     console.log("Cleaned up Hack Night images thread");
   };
