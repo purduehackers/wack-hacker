@@ -115,7 +115,7 @@ export function cleanupHackNightImagesThread(client: Client) {
     }
 
     const snowflake = (
-      (BigInt(new Date().getTime() - 1000 * 60 * 60 * 22) -
+      (BigInt(new Date().getTime() - 1000 * 60 * 60 * 46) -
         BigInt(1420070400000)) <<
       BigInt(22)
     ).toString();
