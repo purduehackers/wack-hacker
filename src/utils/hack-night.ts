@@ -168,15 +168,11 @@ export function cleanupHackNightImagesThread(client: Client) {
       await channel.send({
         content: `Our top contributors this week are:
 ${Array.from(contributors)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([id, count], index) => `\n#${index + 1}: <@${id}> - ${count}`)
-    .join("")
-    .trim()}`,
-      });
-
-      await channel.send({
-        content: "Happy hacking, and see you next time! :D",
+  .sort((a, b) => b[1] - a[1])
+  .slice(0, 5)
+  .map(([id, count], index) => `\n#${index + 1}: <@${id}> - ${count}`)
+  .join("")
+  .trim()}`,
       });
     }
 
@@ -197,23 +193,27 @@ ${Array.from(contributors)
     if (roleHolder && roleHolder?.size > 0) {
       for (const member of roleHolder.values()) {
         await member.roles.remove(HACK_NIGHT_PHOTOGRAPHY_AWARD_ROLE_ID);
+      }
+
+      const winner = roleHolder
+        .filter((m) => m.id !== client.user?.id)
+        .sorted((a, b) => {
+          return (contributors.get(b.id) ?? 0) - (contributors.get(a.id) ?? 0);
+        })
+        .first();
+
+      if (winner) {
+        await winner.roles.add(HACK_NIGHT_PHOTOGRAPHY_AWARD_ROLE_ID);
+      }
+
+      await channel.send({
+        content: `Congratulations to <@${winner?.id}> for winning the Hack Night Photography Award! :D`,
+      });
+      await channel.send({
+        content: "Happy hacking, and see you next time! :D",
+      });
+
+      console.log("Cleaned up Hack Night images thread");
     }
-
-    const winner = roleHolder
-      .filter((m) => m.id !== client.user?.id)
-      .sorted((a, b) => {
-        return (contributors.get(b.id) ?? 0) - (contributors.get(a.id) ?? 0);
-      })
-      .first();
-
-    if (winner) {
-      await winner.roles.add(HACK_NIGHT_PHOTOGRAPHY_AWARD_ROLE_ID);
-    }
-
-    await channel.send({
-      content: `Congratulations to <@${winner?.id}> for winning the Hack Night Photography Award! :D`,
-    });
-
-    console.log("Cleaned up Hack Night images thread");
   };
 }
