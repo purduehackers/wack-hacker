@@ -165,6 +165,7 @@ export function cleanupHackNightImagesThread(client: Client) {
       await channel.send({
         content: `Our top contributors this week are:
   ${Array.from(contributors)
+    .sort((a, b) => b[1] - a[1])
     .slice(0, 5)
     .map(([id, count], index) => `\n#${index + 1}: <@${id}> - ${count}`)
     .join("")
