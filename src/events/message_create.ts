@@ -53,9 +53,8 @@ export async function evergreenIssueWorkflow(message: Message) {
   // TODO(rayhanadev): generate title using groq
   let title = `Evergreen request from @${people[message.author.id] ?? message.author.tag} in #${message.channel.name}`;
 
-  // TODO(theshadoweevee): "/[Ee][Vv][Ee][Rr][Gg][Rr][Ee][Ee][Nn] [Ii][Tt]\s" is ugly. There has to be a better way.
-  if (message.content.match(/[Ee][Vv][Ee][Rr][Gg][Rr][Ee][Ee][Nn] [Ii][Tt]\s?([^\s]+)/)) {
-    title = (message.content.replace(/[Ee][Vv][Ee][Rr][Gg][Rr][Ee][Ee][Nn] [Ii][Tt]\s?/, "") + ` - @${people[message.author.id] ?? message.author.tag} in #${message.channel.name}`).substring(0, 255) // Limit 0-255 to accomadate Github's 256 Issue Title Length Limit
+  if (message.content.match(/evergreen it\s?([^\s]+)/i)) {
+    title = (message.content.replace(/evergreen it\s?/i, "") + ` - @${people[message.author.id] ?? message.author.tag} in #${message.channel.name}`).substring(0, 255) // Limit 0-255 to accomadate Github's 256 Issue Title Length Limit
   }
 
   const body = `**@${people[original.author.id] ?? original.author.tag}**[^1] said in **[#${message.channel.name}](<${message.url}>)**:
