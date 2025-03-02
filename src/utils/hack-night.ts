@@ -165,11 +165,13 @@ export function cleanupHackNightImagesThread(client: Client) {
         content: `Thanks for coming to Hack Night! We took ${attachments.length} picture${attachments.length === 1 ? "" : "s"} :D`,
       });
 
+      const topContributors = Array.from(contributors)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5);
+
       await channel.send({
         content: `Our top contributors this week are:
-${Array.from(contributors)
-  .sort((a, b) => b[1] - a[1])
-  .slice(0, 5)
+${topContributors
   .map(([id, count], index) => `\n#${index + 1}: <@${id}> - ${count}`)
   .join("")
   .trim()}`,
@@ -190,30 +192,27 @@ ${Array.from(contributors)
         return r?.members;
       });
 
-    if (roleHolder && roleHolder?.size > 0) {
+    if (roleHolder) {
       for (const member of roleHolder.values()) {
         await member.roles.remove(HACK_NIGHT_PHOTOGRAPHY_AWARD_ROLE_ID);
       }
-
-      const winner = roleHolder
-        .filter((m) => m.id !== client.user?.id)
-        .sorted((a, b) => {
-          return (contributors.get(b.id) ?? 0) - (contributors.get(a.id) ?? 0);
-        })
-        .first();
-
-      if (winner) {
-        await winner.roles.add(HACK_NIGHT_PHOTOGRAPHY_AWARD_ROLE_ID);
-      }
-
-      await channel.send({
-        content: `Congratulations to <@${winner?.id}> for winning the Hack Night Photography Award! :D`,
-      });
-      await channel.send({
-        content: "Happy hacking, and see you next time! :D",
-      });
-
-      console.log("Cleaned up Hack Night images thread");
     }
+
+    const [winner] = Array.from(contributors).sort((a, b) => b[1] - a[1]);
+
+    if (winner) {
+      await channel.guild.members.fetch(winner[0]).then((m) => {
+        m.roles.add(HACK_NIGHT_PHOTOGRAPHY_AWARD_ROLE_ID);
+      });
+    }
+
+    await channel.send({
+      content: `Congratulations to <@${winner[0]}> for winning the Hack Night Photography Award! :D`,
+    });
+    await channel.send({
+      content: "Happy hacking, and see you next time! :D",
+    });
+
+    console.log("Cleaned up Hack Night images thread");
   };
 }
