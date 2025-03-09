@@ -198,8 +198,9 @@ ${topContributors
       }
     }
 
-    const [winner] = Array.from(contributors).sort((a, b) => b[1] - a[1]);
-
+    // Why use many sorts when few do trick
+    const [winner] = topContributors;
+    
     if (winner) {
       await channel.guild.members.fetch(winner[0]).then((m) => {
         m.roles.add(HACK_NIGHT_PHOTOGRAPHY_AWARD_ROLE_ID);
