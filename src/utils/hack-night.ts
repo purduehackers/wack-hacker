@@ -161,8 +161,8 @@ export function cleanupHackNightImagesThread(client: Client) {
     }
 
     const topContributors = Array.from(contributors)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5);
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
 
     if (SEND_LEADERBOARD_MESSAGE) {
       await starterMessage.reply({
@@ -198,17 +198,17 @@ ${topContributors
       }
     }
 
-    const winner = topContributors[0];
-
-    if (winner) {
+    if (topContributors.length > 0) {
+      const winner = topContributors[0];
+      
       await channel.guild.members.fetch(winner).then((m) => {
         m.roles.add(HACK_NIGHT_PHOTOGRAPHY_AWARD_ROLE_ID);
       });
+      await channel.send({
+        content: `Congratulations to <@${winner}> for winning the Hack Night Photography Award! :D`,
+      });
     }
 
-    await channel.send({
-      content: `Congratulations to <@${winner}> for winning the Hack Night Photography Award! :D`,
-    });
     await channel.send({
       content: "Happy hacking, and see you next time! :D",
     });
