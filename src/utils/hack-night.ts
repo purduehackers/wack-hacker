@@ -1,4 +1,3 @@
-import dayjs from "dayjs";
 import {
   ChannelType,
   ThreadAutoArchiveDuration,
@@ -39,7 +38,8 @@ export function createHackNightImagesThread(client: Client) {
     }
 
     const message = await channel.send({
-      content: `${HACK_NIGHT_MESSAGES[Math.floor(Math.random() * HACK_NIGHT_MESSAGES.length)]} 🎉\n\nShare your pictures from the day in this thread!`,
+      content: `${HACK_NIGHT_MESSAGES[Math.floor(Math.random() * HACK_NIGHT_MESSAGES.length)]} 🎉`
+      +`\n\n<@&1348025087894355979>: Share your pictures from the day in this thread!`,
     });
 
     if (!message) {
@@ -49,7 +49,8 @@ export function createHackNightImagesThread(client: Client) {
 
     await message.pin();
 
-    const date = dayjs().format("MM/DD");
+    const dateObj = new Date();
+    const date = `${(1 + dateObj.getMonth() + "").padStart(2, "0")}/${(dateObj.getDate() + "").padStart(2, "0")}`;
 
     await message.startThread({
       name: `Hack Night Images - ${date}`,
@@ -104,7 +105,7 @@ export function cleanupHackNightImagesThread(client: Client) {
 
     const hackNightImageThread = threads.threads
       .filter((t) => {
-        return t.name.startsWith("Hack Night Images");
+        return t.name.startsWith("Hack Night Images - ");
       })
       .sorted((a, b) => {
         if (!a.createdTimestamp || !b.createdTimestamp) return 0;
@@ -170,11 +171,9 @@ export function cleanupHackNightImagesThread(client: Client) {
         .slice(0, 5);
 
       await channel.send({
-        content: `Our top contributors this week are:
-${topContributors
-  .map(([id, count], index) => `\n#${index + 1}: <@${id}> - ${count}`)
-  .join("")
-  .trim()}`,
+        content: `Our top contributors this week are:\n${topContributors
+          .map(([id, count], index) => `\n#${index + 1}: <@${id}> - ${count}`)
+          .join("")}`
       });
     }
 
