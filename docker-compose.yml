@@ -1,0 +1,34 @@
+services:
+    app:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        container_name: wack-hacker-app
+        restart: always
+        depends_on:
+            - s3
+        env_file:
+            - .env
+        networks:
+            - app_network
+
+    s3:
+        image: minio/minio
+        container_name: wack-hacker-kv
+        restart: always
+        env_file:
+            - .env
+        ports:
+            - "9000:9000"
+            - "9001:9001"
+        volumes:
+            - s3_data:/data
+        command: server --console-address ":9001" /data
+        networks:
+            - app_network
+
+volumes:
+    s3_data:
+
+networks:
+    app_network:
