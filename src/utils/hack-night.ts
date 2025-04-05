@@ -178,8 +178,9 @@ export function cleanupHackNightImagesThread(client: Client) {
     }
 
     // TODO(@rayhanadev): upload all these images to the Sanity project
-    // TODO(@rayhanadev): filter out files that are not images
-    const images = [...attachments.map((a) => a.url)];
+    const images = attachments
+      .filter((a) => a.contentType && (a.contentType.startsWith('image/') || a.contentType.startsWith('video/')))
+      .map((a) => a.url);
 
     await starterMessage.unpin();
     await hackNightImageThread.setLocked(true);
