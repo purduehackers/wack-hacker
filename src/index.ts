@@ -9,9 +9,11 @@ import {
 } from "discord.js";
 import cron from "node-cron";
 
+import * as alerts from "./alerts";
 import { commands } from "./commands";
 import { messageCreate } from "./events";
 
+// TODO(rayhanadev): convert these into alerts
 import { checkBirthdays } from "./utils/birthdays";
 import {
   createHackNightImagesThread,
@@ -76,6 +78,36 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 });
 
+const alertCronHandlers: cron.ScheduledTask[] = [];
+
+for (const alert of Object.values(alerts)) {
+  console.log(`Setting up alert: \`${alert.name}\` - ${alert.description}`);
+  for (const schedule of alert.crons) {
+    console.log(`  - ${schedule}`);
+    const handler = cron.schedule(schedule, async () => {
+      const channel = await client.channels.fetch(alert.channel);
+      if (!channel?.isTextBased() || !channel.isSendable()) {
+        console.error(
+          `Channel ${alert.channel} is not a text channel, skipping alert`,
+        );
+        return;
+      }
+
+      const message = await alert.embed(client);
+      if (!message) {
+        console.error(`Failed to create alert: ${alert.name}`);
+        return;
+      }
+
+      await channel.send({
+        embeds: [message],
+      });
+    });
+
+    alertCronHandlers.push(handler);
+  }
+}
+
 const checkBirthdaysTask = cron.schedule("1 0 * * *", checkBirthdays(client));
 const createHackNightImagesThreadTask = cron.schedule(
   "0 20 * * 5",
@@ -97,6 +129,8 @@ client.on(Events.ClientReady, (event) => {
   checkBirthdaysTask.start();
   createHackNightImagesThreadTask.start();
   cleanupHackNightImagesThreadTask.start();
+
+  alertCronHandlers.forEach((handler) => handler.start());
 });
 
 client.on(messageCreate.eventType, async (message) => {
