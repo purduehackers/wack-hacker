@@ -95,8 +95,8 @@ client.on(Events.ClientReady, (event) => {
   });
 
   checkBirthdaysTask.start();
-  createHackNightImagesThreadTask.start();
-  cleanupHackNightImagesThreadTask.start();
+#  createHackNightImagesThreadTask.start();
+#  cleanupHackNightImagesThreadTask.start();
 });
 
 client.on(messageCreate.eventType, async (message) => {
