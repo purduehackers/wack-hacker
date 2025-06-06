@@ -1,6 +1,5 @@
 import { type Message } from "discord.js";
 import { connectToApi, sendDashboardMessage } from "../../utils/phack";
-import { env } from "../../env";
 
 const client = await connectToApi();
 
