@@ -7,16 +7,10 @@ import {
   REST,
   Routes,
 } from "discord.js";
-import cron from "node-cron";
 
+import { tasks } from "./crons";
+import { events } from "./events";
 import { commands } from "./commands";
-import { messageCreate } from "./events";
-
-import { checkBirthdays } from "./utils/birthdays";
-import {
-  createHackNightImagesThread,
-  cleanupHackNightImagesThread,
-} from "./utils/hack-night";
 
 import { env } from "./env";
 
@@ -26,7 +20,6 @@ try {
   console.log("Started refreshing application (/) commands.");
 
   const body = commands.map(({ data }) => data.toJSON());
-
   await rest.put(Routes.applicationCommands(env.DISCORD_CLIENT_ID), { body });
 
   console.log("Successfully reloaded application (/) commands.");
@@ -41,6 +34,19 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildVoiceStates,
   ],
+});
+
+client.on(Events.ClientReady, (event) => {
+  console.log(`Logged in as ${event.user.tag}!`);
+
+  client.user?.setActivity({
+    name: "eggz",
+    type: ActivityType.Watching,
+  });
+
+  for (const startTask of tasks) {
+    startTask(event);
+  }
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
@@ -76,35 +82,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 });
 
-const checkBirthdaysTask = cron.schedule("1 0 * * *", checkBirthdays(client));
-const createHackNightImagesThreadTask = cron.schedule(
-  "0 20 * * 5",
-  createHackNightImagesThread(client),
-);
-const cleanupHackNightImagesThreadTask = cron.schedule(
-  "0 18 * * 7",
-  cleanupHackNightImagesThread(client),
-);
-
-client.on(Events.ClientReady, (event) => {
-  console.log(`Logged in as ${event.user.tag}!`);
-
-  client.user?.setActivity({
-    name: "eggz",
-    type: ActivityType.Watching,
+for (const event of events) {
+  const { eventType, ...handlers } = event;
+  client.on(eventType, async (e) => {
+    await Promise.allSettled(Object.values(handlers).map((func) => func(e)));
   });
-
-  checkBirthdaysTask.start();
-#  createHackNightImagesThreadTask.start();
-#  cleanupHackNightImagesThreadTask.start();
-});
-
-client.on(messageCreate.eventType, async (message) => {
-  await Promise.allSettled([
-    messageCreate.evergreenIssueWorkflow(message),
-    messageCreate.voiceMessageTranscription(message),
-  ]);
-});
+}
 
 client.login(env.DISCORD_BOT_TOKEN);
 
