@@ -1,19 +1,13 @@
-import { Events, MessageFlags, type Message } from "discord.js";
-import Groq from "groq-sdk";
+import { type Message } from "discord.js";
 
-import { env } from "../env";
 import {
-  ORGANIZER_ROLE_ID,
   BISHOP_ROLE_ID,
+  ORGANIZER_ROLE_ID,
   EVERGREEN_CREATE_ISSUE_STRING,
-} from "../utils/consts";
-import { createGithubIssue, getAssociationsFile } from "../utils/github";
+} from "../../utils/consts";
+import { createGithubIssue, getAssociationsFile } from "../../utils/github";
 
-const groq = new Groq({ apiKey: env.GROQ_API_KEY });
-
-export const eventType = Events.MessageCreate;
-
-export async function evergreenIssueWorkflow(message: Message) {
+export default async function handler(message: Message) {
   if (message.author.bot) return;
   if (message.channel.isDMBased()) return;
 
@@ -27,8 +21,6 @@ export async function evergreenIssueWorkflow(message: Message) {
 
   if (!message.content.toLowerCase().startsWith(EVERGREEN_CREATE_ISSUE_STRING))
     return;
-
-
 
   let original: Message;
 
@@ -54,7 +46,10 @@ export async function evergreenIssueWorkflow(message: Message) {
   let title = `Evergreen request from @${people[message.author.id] ?? message.author.tag} in #${message.channel.name}`;
 
   if (message.content.match(/^evergreen it\s?/i)) {
-    title = (message.content.replace(/^evergreen it\s?/i, "") + ` - @${people[message.author.id] ?? message.author.tag} in #${message.channel.name}`).substring(0, 255) // Limit 0-255 to accomadate Github's 256 Issue Title Length Limit
+    title = (
+      message.content.replace(/^evergreen it\s?/i, "") +
+      ` - @${people[message.author.id] ?? message.author.tag} in #${message.channel.name}`
+    ).substring(0, 255); // Limit 0-255 to accomadate Github's 256 Issue Title Length Limit
   }
 
   const body = `**@${people[original.author.id] ?? original.author.tag}**[^1] said in **[#${message.channel.name}](<${message.url}>)**:
@@ -70,36 +65,4 @@ ${original.content
   const { html_url } = await createGithubIssue(title, body, assignees);
 
   await message.reply(`Created issue: ${html_url}`);
-}
-
-export async function voiceMessageTranscription(message: Message) {
-  if (message.author.bot) return;
-  if (message.channel.isDMBased()) return;
-  if (!message.flags.has(MessageFlags.IsVoiceMessage)) return;
-
-  await message.react("🎙️");
-
-  const audioFile = message.attachments.find(
-    (m) => m.name === "voice-message.ogg",
-  );
-  if (!audioFile) return;
-
-  const file = await fetch(audioFile.url);
-
-  const response = await groq.audio.transcriptions.create({
-    file,
-    model: "whisper-large-v3",
-    language: "en",
-  });
-
-  if (!response.text) {
-    await message.reply({
-      content: "Sorry, I couldn't transcribe that audio message.",
-    });
-    return;
-  }
-
-  await message.reply({
-    content: response.text.trim(),
-  });
 }
