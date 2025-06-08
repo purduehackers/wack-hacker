@@ -43,6 +43,21 @@ export default async function handler(message: Message) {
 
   if (!hasProjectLink && !hasAttachment) {
     await message.delete();
+    const reminderMessage = `Hey there, it looks like you tried to send a message in <#1052236377338683514> without an attachment or URL!! D:
+
+It's okay!! I saved your message for you!! 🙂‍↕️
+
+\`\`\`
+${message.content}
+\`\`\`
+
+- If you meant to reply to someone, send your message in the corresponding thread!
+- If you meant checkpoint or ship a project, add an attachment or URL so people can see your work :D
+- If you think this action was done in error, ping <@636701123620634653> and let them know!
+
+Cheers! ^•^`;
+
+    await message.author.send(reminderMessage);
     return;
   }
 
