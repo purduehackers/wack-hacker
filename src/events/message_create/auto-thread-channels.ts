@@ -56,7 +56,7 @@ export default async function handler(message: Message) {
 
   // TODO(@rayhanadev): use groq to generate title?
   const thread = await message.startThread({
-    name: `${message.author.displayName}'s ship!`,
+    name: `${message.author.displayName}'s ${type}!`,
   });
 
   if (message.channelId === CHECKPOINTS_CHANNEL_ID) {
