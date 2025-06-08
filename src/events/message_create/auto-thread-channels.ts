@@ -1,5 +1,5 @@
 // loosely based on https://github.com/hackclub/scrappy
-//
+import { setTimeout } from "node:timers/promises";
 import { type Message } from "discord.js";
 
 const SHIP_CHANNEL_ID = "904896819165814794";
@@ -74,6 +74,8 @@ Cheers! ^•^`;
   // const thread = await message.startThread({
   //   name: `${message.author.displayName}'s ${type}!`,
   // });
+
+  await setTimeout(1000);
 
   const thread = await message.startThread({
     name: `${message.author.displayName} - ${message.cleanContent.slice(0, 54)}`,
