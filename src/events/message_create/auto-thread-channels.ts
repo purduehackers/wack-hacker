@@ -9,7 +9,7 @@ const AUTO_THREAD_CHANNELS = [SHIP_CHANNEL_ID, CHECKPOINTS_CHANNEL_ID];
 // TODO(@rayhanadev): this is honestly shitty but breaks less
 // than requiring people to add an image like Scrappy does. Look
 // into phasing this out or doing something different.
-const VALID_PROJECT_LINKS = ["https://github.com/"];
+// const VALID_PROJECT_LINKS = ["https://github.com/"];
 
 const CHECKPOINT_RESPONSE_MESSAGES = [
   "Great checkpoint! :D",
@@ -46,25 +46,32 @@ export default async function handler(message: Message) {
     return;
   }
 
-  // NOTE: add a condition when updating AUTO_THREAD_CHANNELS
-  const type =
-    message.channelId === CHECKPOINTS_CHANNEL_ID
-      ? "checkpoint"
-      : message.channelId === SHIP_CHANNEL_ID
-        ? "ship"
-        : "something???";
-
   // TODO(@rayhanadev): use groq to generate title?
+
+  // NOTE: legacy title generation, `{displayName}'s <ship|checkpoint>`
+  // NOTE: add a condition when updating AUTO_THREAD_CHANNELS
+  // const type =
+  //   message.channelId === CHECKPOINTS_CHANNEL_ID
+  //     ? "checkpoint"
+  //     : message.channelId === SHIP_CHANNEL_ID
+  //       ? "ship"
+  //       : "something???";
+  // const thread = await message.startThread({
+  //   name: `${message.author.displayName}'s ${type}!`,
+  // });
+
   const thread = await message.startThread({
-    name: `${message.author.displayName}'s ${type}!`,
+    name: `${message.author.displayName} - ${message.cleanContent.slice(0, 54)}`,
   });
 
   if (message.channelId === CHECKPOINTS_CHANNEL_ID) {
-    await thread.send(
-      CHECKPOINT_RESPONSE_MESSAGES[
-        Math.floor(Math.random() * CHECKPOINT_RESPONSE_MESSAGES.length)
-      ],
-    );
+    // NOTE: a couple people didn't like this, so it's commented out.
+    // can add it back if people come around to it :3
+    // await thread.send(
+    //   CHECKPOINT_RESPONSE_MESSAGES[
+    //     Math.floor(Math.random() * CHECKPOINT_RESPONSE_MESSAGES.length)
+    //   ],
+    // );
     // TODO(@rayhanadev): integrate potential scrapbook
     // TODO(@rayhanadev): add auto-emoji behavior
   }
@@ -73,11 +80,15 @@ export default async function handler(message: Message) {
     await message.react("🎉");
     await message.react("✨");
     await message.react("🚀");
-    await thread.send(
-      SHIP_RESPONSE_MESSAGES[
-        Math.floor(Math.random() * SHIP_RESPONSE_MESSAGES.length)
-      ],
-    );
+
+    // Keep sending messages for me, I still love you Wack Hacker </3
+    if (message.author.id === "636701123620634653") {
+      await thread.send(
+        SHIP_RESPONSE_MESSAGES[
+          Math.floor(Math.random() * SHIP_RESPONSE_MESSAGES.length)
+        ],
+      );
+    }
 
     // TODO(@rayhanadev): integrate potential scrapbook
     // TODO(@rayhanadev): add auto-emoji behavior
@@ -85,6 +96,10 @@ export default async function handler(message: Message) {
   }
 }
 
+const urlPattern = /https?:\/\/\S+/i;
+
 function containsValidProjectLink(text: string): boolean {
-  return VALID_PROJECT_LINKS.some((host) => text.includes(host));
+  // NOTE: legacy behavior
+  // return VALID_PROJECT_LINKS.some((host) => text.includes(host));
+  return urlPattern.test(text);
 }
