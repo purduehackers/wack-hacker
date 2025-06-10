@@ -43,7 +43,7 @@ export default async function handler(message: Message) {
 
   if (!hasProjectLink && !hasAttachment) {
     await message.delete();
-    const reminderMessage = `Hey there, it looks like you tried to send a message in <#1052236377338683514> without an attachment or URL!! D:
+    const reminderMessage = `Hey there, it looks like you tried to send a message in <#${message.channelId}> without an attachment or URL!! D:
 
 It's okay!! I saved your message for you!! 🙂‍↕️
 
