@@ -1,6 +1,6 @@
 import { env } from "../env";
 
-const ENDPOINT = "https://api.purduehackers.com/discord/bot";
+const ENDPOINT = "wss://api.purduehackers.com/discord/bot";
 
 export async function connectToApi(timeout = 3000) {
   return new Promise<WebSocket>((resolve, reject) => {
