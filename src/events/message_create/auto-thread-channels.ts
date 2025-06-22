@@ -40,8 +40,15 @@ export default async function handler(message: Message) {
 
   const hasProjectLink = containsValidProjectLink(message.content);
   const hasAttachment = message.attachments.size > 0;
+  const isSIGHORSECheckpoint = message.reference
+    ? await message.fetchReference().then((ref) => {
+        if (ref.channel.isDMBased()) return false;
+        if (ref.channel.parentId === "1381412394676518932") return true;
+        return false;
+      })
+    : false;
 
-  if (!hasProjectLink && !hasAttachment) {
+  if (!hasProjectLink && !hasAttachment && !isSIGHORSECheckpoint) {
     await message.delete();
     const reminderMessage = `Hey there, it looks like you tried to send a message in <#${message.channelId}> without an attachment or URL!! D:
 
