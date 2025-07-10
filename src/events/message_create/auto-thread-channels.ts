@@ -101,16 +101,16 @@ Cheers! ^•^`;
   }
 
   if (message.channelId === SHIP_CHANNEL_ID) {
-    await message.react("🎉");
-    await message.react("✨");
-    await message.react("🚀");
+    // await message.react("🎉");
+    // await message.react("✨");
+    // await message.react("🚀");
 
     // Keep sending messages for me, I still love you Wack Hacker </3
     if (message.author.id === "636701123620634653") {
       await thread.send(
         SHIP_RESPONSE_MESSAGES[
           Math.floor(Math.random() * SHIP_RESPONSE_MESSAGES.length)
-        ],
+        ] + " 🎉 ✨ 🚀",
       );
     }
 
