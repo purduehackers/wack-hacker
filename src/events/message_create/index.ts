@@ -5,6 +5,7 @@ import dashboard from "./dashboard";
 import evergreenIt from "./evergreen-it";
 import voiceMessageTranscription from "./voice-transcription";
 import welcomer from "./welcomer";
+import grok from "./grok";
 
 export const eventType = Events.MessageCreate;
 export {
@@ -13,4 +14,5 @@ export {
   evergreenIt,
   voiceMessageTranscription,
   welcomer,
+  grok,
 };
