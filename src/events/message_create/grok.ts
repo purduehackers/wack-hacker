@@ -12,16 +12,20 @@ export default async function handler(message: Message) {
 
   // message.startThread(options);
 
-  const parts = message.content.split(" ");
+  const result = message.content.replace(/\s+/g, " ").trim();
+  const parts = result.split(" ");
 
   if (parts.length < 2 || !parts[0].startsWith("@")) return;
 
-  const [ref, invocation, ...time] = parts;
+  const [ref, invocation, ...time1] = parts;
+
+  const isThisReal = message.content.match(/is\s+this\s+real/);
+  const time = isThisReal ? time1.slice(2) : time1;
 
   const refs = ref.substring(1);
   if (distance(ASSISTANT_TRIGGER, refs) > 3) return;
 
-  if (distance(SUMMARIZE_TRIGGER, invocation) > 5) return;
+  if (distance(SUMMARIZE_TRIGGER, invocation) > 5 && !isThisReal) return;
 
   await summarize(
     time.length > 0 ? time.join(" ") : null,
