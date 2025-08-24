@@ -7,6 +7,7 @@ export default async function handler(message: Message) {
   if (message.author.bot) return;
   if (message.channelId !== "1182158612454449282") return;
   if (message.channel.isDMBased()) return;
+  if (message.system) return;
 
   await message.client.channels
     .fetch(CORE_COMMUNITY_CHANNEL)
