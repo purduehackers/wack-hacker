@@ -118,6 +118,8 @@ Cheers! ^•^`;
     // TODO(@rayhanadev): add auto-emoji behavior
     // TODO(@rayhanadev): add hook for SIGHORSE
   }
+
+  await thread.setArchived(true);
 }
 
 const urlPattern = /https?:\/\/\S+/i;
