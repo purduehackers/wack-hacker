@@ -7,7 +7,9 @@ export default async function handler(message: Message) {
   if (message.author.bot) return;
   if (message.channelId !== "1182158612454449282") return;
   if (message.channel.isDMBased()) return;
+  if (message.channel.isThread()) return;
   if (message.system) return;
+  if (message.flags == 32) return; // Message ID for a Message Containing a thread creation prompt
 
   await message.client.channels
     .fetch(CORE_COMMUNITY_CHANNEL)
