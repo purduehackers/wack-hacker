@@ -11,7 +11,7 @@ const AUTO_THREAD_CHANNELS = [SHIP_CHANNEL_ID, CHECKPOINTS_CHANNEL_ID];
 // into phasing this out or doing something different.
 // const VALID_PROJECT_LINKS = ["https://github.com/"];
 
-const _CHECKPOINT_RESPONSE_MESSAGES = [
+const CHECKPOINT_RESPONSE_MESSAGES = [
 	"Great checkpoint! :D",
 	"Nice progress! :D",
 	"Awesome update! :D",
@@ -30,6 +30,15 @@ const SHIP_RESPONSE_MESSAGES = [
 	"Done and dusted! :D",
 	"High-five on the ship! :D",
 	"Boom, nice ship! :D",
+];
+
+const CHECKPOINTS_MESSAGE_OPT_IN_USERS = [
+	"753840846549418024", // kian
+];
+
+const SHIP_MESSAGE_OPT_IN_USERS = [
+	"753840846549418024", // kian
+	"636701123620634653", // ray
 ];
 
 export default async function handler(message: Message) {
@@ -89,31 +98,39 @@ Cheers! ^•^`;
 	});
 
 	if (message.channelId === CHECKPOINTS_CHANNEL_ID) {
-		// NOTE: a couple people didn't like this, so it's commented out.
+		// NOTE: a couple people didn't like this, so it's opt-in.
 		// can add it back if people come around to it :3
-		// await thread.send(
-		//   CHECKPOINT_RESPONSE_MESSAGES[
-		//     Math.floor(Math.random() * CHECKPOINT_RESPONSE_MESSAGES.length)
-		//   ],
-		// );
+		if (CHECKPOINTS_MESSAGE_OPT_IN_USERS.includes(message.author.id)) {
+			await Promise.all([
+				message.react("🎉"),
+				message.react("✨"),
+				message.react("🏁"),
+				thread.send(
+					`${CHECKPOINT_RESPONSE_MESSAGES[
+						Math.floor(Math.random() * CHECKPOINT_RESPONSE_MESSAGES.length)
+					]} 🎉 ✨ 🏁`,
+				),
+			]);
+		}
 		// TODO(@rayhanadev): integrate potential scrapbook
 		// TODO(@rayhanadev): add auto-emoji behavior
 	}
 
 	if (message.channelId === SHIP_CHANNEL_ID) {
-		// await message.react("🎉");
-		// await message.react("✨");
-		// await message.react("🚀");
-
-		// Keep sending messages for me, I still love you Wack Hacker </3
-		if (message.author.id === "636701123620634653") {
-			await thread.send(
-				`${
-					SHIP_RESPONSE_MESSAGES[
-						Math.floor(Math.random() * SHIP_RESPONSE_MESSAGES.length)
-					]
-				} 🎉 ✨ 🚀`,
-			);
+		// Keep sending messages for some, we still love you Wack Hacker </3
+		if (SHIP_MESSAGE_OPT_IN_USERS.includes(message.author.id)) {
+			await Promise.all([
+				message.react("🎉"),
+				message.react("✨"),
+				message.react("🚀"),
+				thread.send(
+					`${
+						SHIP_RESPONSE_MESSAGES[
+							Math.floor(Math.random() * SHIP_RESPONSE_MESSAGES.length)
+						]
+					} 🎉 ✨ 🚀`,
+				),
+			]);
 		}
 
 		// TODO(@rayhanadev): integrate potential scrapbook
