@@ -7,6 +7,7 @@ import grok from "./grok";
 import hackNightImages from "./hack-night-images";
 import voiceMessageTranscription from "./voice-transcription";
 import welcomer from "./welcomer";
+import praise from "./praise";
 
 export const eventType = Events.MessageCreate;
 export {
@@ -17,4 +18,5 @@ export {
 	welcomer,
 	grok,
 	hackNightImages,
+	praise,
 };
