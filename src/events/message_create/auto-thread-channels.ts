@@ -1,6 +1,7 @@
 // loosely based on https://github.com/hackclub/scrappy
 import { setTimeout } from "node:timers/promises";
 import type { Message } from "discord.js";
+import { WACKY_ROLE_ID } from "../../utils/consts";
 
 const SHIP_CHANNEL_ID = "904896819165814794";
 const CHECKPOINTS_CHANNEL_ID = "1052236377338683514";
@@ -17,6 +18,7 @@ const CHECKPOINT_RESPONSE_MESSAGES = [
 	"Awesome update! :D",
 	"Yay thanks for sharing! :D",
 	"Yippie!! Keep it up! :D",
+	"Who up checking they point?",
 ];
 
 const SHIP_RESPONSE_MESSAGES = [
@@ -30,15 +32,6 @@ const SHIP_RESPONSE_MESSAGES = [
 	"Done and dusted! :D",
 	"High-five on the ship! :D",
 	"Boom, nice ship! :D",
-];
-
-const CHECKPOINTS_MESSAGE_OPT_IN_USERS = [
-	"753840846549418024", // kian
-];
-
-const SHIP_MESSAGE_OPT_IN_USERS = [
-	"753840846549418024", // kian
-	"636701123620634653", // ray
 ];
 
 export default async function handler(message: Message) {
@@ -98,9 +91,7 @@ Cheers! ^•^`;
 	});
 
 	if (message.channelId === CHECKPOINTS_CHANNEL_ID) {
-		// NOTE: a couple people didn't like this, so it's opt-in.
-		// can add it back if people come around to it :3
-		if (CHECKPOINTS_MESSAGE_OPT_IN_USERS.includes(message.author.id)) {
+		if (message.member?.roles.cache.has(WACKY_ROLE_ID)) {
 			await Promise.all([
 				message.react("🎉"),
 				message.react("✨"),
@@ -117,8 +108,7 @@ Cheers! ^•^`;
 	}
 
 	if (message.channelId === SHIP_CHANNEL_ID) {
-		// Keep sending messages for some, we still love you Wack Hacker </3
-		if (SHIP_MESSAGE_OPT_IN_USERS.includes(message.author.id)) {
+		if (message.member?.roles.cache.has(WACKY_ROLE_ID)) {
 			await Promise.all([
 				message.react("🎉"),
 				message.react("✨"),
