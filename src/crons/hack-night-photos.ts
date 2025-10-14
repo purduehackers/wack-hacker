@@ -24,6 +24,10 @@ export default async function startTask(client: Client) {
 function handler(client: Client) {
 	return async () => {
 		const channel = client.channels.cache.get(HACK_NIGHT_CHANNEL_ID);
+		const startContent = 
+			`${HACK_NIGHT_MESSAGES[Math.floor(Math.random() * HACK_NIGHT_MESSAGES.length)]} 🎉`
+			+ `\n\nShare your pictures from the night in this thread!`;
+		const pingContent = `(<@&1348025087894355979>)`;
 
 		if (!channel) {
 			console.error("Could not find channel: #hack-night");
@@ -36,9 +40,7 @@ function handler(client: Client) {
 		}
 
 		const message = await channel.send({
-			content:
-				`${HACK_NIGHT_MESSAGES[Math.floor(Math.random() * HACK_NIGHT_MESSAGES.length)]} 🎉` +
-				`\n\n<@&1348025087894355979>: Share your pictures from the day in this thread!`,
+			content: startContent
 		});
 
 		if (!message) {
@@ -51,7 +53,7 @@ function handler(client: Client) {
 		const dateObj = new Date();
 		const date = `${(`${1 + dateObj.getMonth()}`).padStart(2, "0")}/${(`${dateObj.getDate()}`).padStart(2, "0")}`;
 
-		await message.startThread({
+		const thread = await message.startThread({
 			name: `Hack Night Images - ${date}`,
 			autoArchiveDuration: ThreadAutoArchiveDuration.OneDay,
 		});
@@ -71,6 +73,15 @@ function handler(client: Client) {
 		}
 
 		await systemMessage.delete();
+
+		const message2 = await thread.send({
+			content: pingContent
+		});
+
+		if (!message2) {
+			console.error("Could not send ping message");
+			return;
+		}
 
 		console.log("Created Hack Night images thread");
 	};
