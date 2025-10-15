@@ -5,7 +5,9 @@ export const ORGANIZER_ROLE_ID = "1012751663322382438";
 export const BISHOP_ROLE_ID = "1199891815780847647";
 export const HACK_NIGHT_PHOTOGRAPHY_AWARD_ROLE_ID = "1340775295233560606";
 export const EVERGREEN_CREATE_ISSUE_STRING = "evergreen it";
-export const EVERGREEN_WIKI_ENDPOINT = "https://evergreen.skywiki.org/api.php";
+export const EVERGREEN_WIKI_URL = "https://evergreen.skywiki.org";
+export const EVERGREEN_WIKI_ENDPOINT = "/api.php";
+export const EVERGREEN_WIKI_BUFFER = "Evergreen It";
 export const INTERNAL_CATEGORIES = [
 	"809620177347411998",
 	"1290013838955249734",

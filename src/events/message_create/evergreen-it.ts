@@ -1,6 +1,6 @@
 import type { Message } from "discord.js";
 
-import { BISHOP_ROLE_ID, EVERGREEN_CREATE_ISSUE_STRING, ORGANIZER_ROLE_ID } from "../../utils/consts";
+import { BISHOP_ROLE_ID, EVERGREEN_CREATE_ISSUE_STRING, EVERGREEN_WIKI_URL, EVERGREEN_WIKI_BUFFER, ORGANIZER_ROLE_ID } from "../../utils/consts";
 import { createGithubIssue, getAssociationsFile } from "../../utils/github";
 import { appendMediaWikiPage } from "../../utils/mediawiki";
 
@@ -70,7 +70,6 @@ async function handle_github(original:Message, message:Message) {
 }
 
 async function handle_mediawiki(original:Message, message:Message) {
-	const pageTarget = `Evergreen It`;
 	const originalText = original.content;
 	const originalAuthor = original.author.tag;
 	const messageArgs = message.content.slice(EVERGREEN_CREATE_ISSUE_STRING.length);
@@ -88,10 +87,10 @@ async function handle_mediawiki(original:Message, message:Message) {
 
 	const body = `\n\n* [${messageLink} @${originalAuthor} ${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}]: ${title}`;
 
-	const { result } = await appendMediaWikiPage(pageTarget, body, "Wack Hacker - added issue");
+	const { result } = await appendMediaWikiPage(EVERGREEN_WIKI_BUFFER, body, "Wack Hacker - added issue");
 	if (result != `Success`) {
-		return;
+		return ``;
 	}
 	//hacky but oh well
-	return `https://evergreen.skywiki.org/wiki/${pageTarget}`;
+	return `${EVERGREEN_WIKI_URL}/wiki/${EVERGREEN_WIKI_BUFFER}`;
 }

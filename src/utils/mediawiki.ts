@@ -1,8 +1,8 @@
-import { EVERGREEN_WIKI_ENDPOINT } from "./consts";
+import { EVERGREEN_WIKI_URL, EVERGREEN_WIKI_ENDPOINT } from "./consts";
 import fetch from "node-fetch";
 
 async function getCsrfToken() {
-	const res = await fetch(`${EVERGREEN_WIKI_ENDPOINT}?action=query&meta=tokens&type=csrf&format=json`, {
+	const res = await fetch(`${EVERGREEN_WIKI_URL}${EVERGREEN_WIKI_ENDPOINT}?action=query&meta=tokens&type=csrf&format=json`, {
 		method: "GET",
 		headers: { "Content-Type": "application/json" },
 	});
@@ -21,7 +21,7 @@ export async function appendMediaWikiPage(pageTitle:string, appendText:string, a
 		format: "json"
 	});
 
-	const res = await fetch(EVERGREEN_WIKI_ENDPOINT, {
+	const res = await fetch(EVERGREEN_WIKI_URL+EVERGREEN_WIKI_ENDPOINT, {
 		method: "POST",
 		headers: { "Content-Type": "application/x-www-form-urlencoded" },
 		body: params
