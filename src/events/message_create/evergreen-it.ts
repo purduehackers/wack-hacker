@@ -20,7 +20,7 @@ export default async function handler(message: Message) {
 
 	if (!message.reference || !message.reference.messageId) {
 		const messages = await message.channel.messages.fetch({ limit: 2 });
-		const [_, ref:Message] = Array.from(messages.values());
+		const [_, ref] = Array.from(messages.values());
 		original = ref;
 	} else {
 		original = await message.channel.messages.fetch(
