@@ -1,5 +1,4 @@
 import { EVERGREEN_WIKI_URL, EVERGREEN_WIKI_ENDPOINT } from "./consts";
-import fetch from "node-fetch";
 
 async function getCsrfToken() {
 	const res = await fetch(`${EVERGREEN_WIKI_URL}${EVERGREEN_WIKI_ENDPOINT}?action=query&meta=tokens&type=csrf&format=json`, {
