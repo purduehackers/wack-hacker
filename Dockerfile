@@ -1,22 +1,14 @@
-FROM oven/bun AS build
+FROM oven/bun:1.3.0-alpine
 
 WORKDIR /app
 
-COPY bun.lockb .
+COPY bun.lock .
 COPY package.json .
 
 RUN bun install --frozen-lockfile
 
 COPY src ./src
 
-RUN bun build ./src/index.ts --compile --outfile bot
-
-FROM ubuntu:22.04
-
-WORKDIR /app
-
-COPY --from=build /app/bot /app/bot
-
 ENV TZ=America/Indiana/Indianapolis
 
-CMD ["/app/bot"]
+CMD ["bun", "run", "src/index.ts"]
