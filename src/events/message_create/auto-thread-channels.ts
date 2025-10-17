@@ -1,10 +1,7 @@
 // loosely based on https://github.com/hackclub/scrappy
 import { setTimeout } from "node:timers/promises";
 import type { Message } from "discord.js";
-import { WACKY_ROLE_ID } from "../../utils/consts";
-
-const SHIP_CHANNEL_ID = "904896819165814794";
-const CHECKPOINTS_CHANNEL_ID = "1052236377338683514";
+import { SHIP_CHANNEL_ID, CHECKPOINTS_CHANNEL_ID, WACKY_ROLE_ID } from "../../utils/consts";
 
 const AUTO_THREAD_CHANNELS = [SHIP_CHANNEL_ID, CHECKPOINTS_CHANNEL_ID];
 // TODO(@rayhanadev): this is honestly shitty but breaks less
@@ -24,7 +21,7 @@ const CHECKPOINT_RESPONSE_MESSAGES = [
 const SHIP_RESPONSE_MESSAGES = [
 	"Congrats on shipping! :D",
 	"You shipped it! :D",
-	"That’s a wrap! :D",
+	"That's a wrap! :D",
 	"Yay thanks for sharing! :D",
 	"Yippie!! Great work! :D",
 	"Launched and loved! :D",
@@ -52,19 +49,17 @@ export default async function handler(message: Message) {
 
 	if (!hasProjectLink && !hasAttachment && !isSIGHORSECheckpoint) {
 		await message.delete();
-		const reminderMessage = `Hey there, it looks like you tried to send a message in <#${message.channelId}> without an attachment or URL!! D:
+		const reminderMessage = `Hey there, it looks like you tried to send a message in <#${message.channelId}> without an attachment or URL!! D:\n\n`
 
-It's okay!! I saved your message for you!! 🙂‍↕️
+			+`It's okay!! I saved your message for you!! 🙂‍↕️\n\n`
 
-\`\`\`
-${message.content}
-\`\`\`
+			+`\`\`\`${message.content}\`\`\`\n\n`
 
-- If you meant to reply to someone, send your message in the corresponding thread!
-- If you meant checkpoint or ship a project, add an attachment or URL so people can see your work :D
-- If you think this action was done in error, ping <@636701123620634653> and let them know!
+			+`- If you meant to reply to someone, send your message in the corresponding thread!\n`
+			+`- If you meant checkpoint or ship a project, add an attachment or URL so people can see your work :D\n`
+			+`- If you think this action was done in error, ping <@636701123620634653> and let them know!\n\n`
 
-Cheers! ^•^`;
+			+`Cheers! ^•^`;
 
 		await message.author.send(reminderMessage);
 		return;
