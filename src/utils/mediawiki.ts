@@ -1,33 +1,34 @@
 import { EVERGREEN_WIKI_URL, EVERGREEN_WIKI_USER, EVERGREEN_WIKI_ENDPOINT } from "./consts";
 import { env } from "../env";
 
+function extractCookies(rawHeaders:any) {
+	const set = rawHeaders.getSetCookie();
+	const done = set.map((s:any) => s.split(";")[0]).join("; ");
+	console.log(`extracted cookies ${done}`);
+	return done;
+}
+
 async function getToken(tokenType:`csrf`|`login`, cookieStr:string = "") {
 	const res = await fetch(`${EVERGREEN_WIKI_URL}${EVERGREEN_WIKI_ENDPOINT}?action=query&meta=tokens&type=${tokenType}&format=json`, {
-		method: "GET",
-		headers: { Cookie: cookieStr },
+		headers: cookieStr ? { Cookie: cookieStr } : {},
 	});
 	const data = await res.json();
-	console.log(`got token data: `, data);
+	console.log(`(${tokenType}) got token data: `, data);
 	const pathed = (<any>data).query.tokens;
 	return ((tokenType == `csrf`) ? pathed.csrftoken : pathed.logintoken);
 }
 
 async function login() {
-	console.log(`attempting to log in!`);
-	//initial request for cookies
-	// const init = await fetch(`${EVERGREEN_WIKI_URL}${EVERGREEN_WIKI_ENDPOINT}`);
-	// const initialSet:string[] = (<any>init.headers).raw()['set-cookie'] || [];
-	// const initCookiesStr = initialSet.map(sc => sc.split(";")[0]).filter(Boolean).join("; ");
-
-	//actual login
 	console.log(`getting token...`);
 	const token = await getToken(`login`);
 	const params = new URLSearchParams({
 		action: "login",
+		format: "json",
 		lgname: EVERGREEN_WIKI_USER,
 		lgpassword: env.MEDIAWIKI_BOT_KEY,
 		lgtoken: token
 	});
+	console.log(`logging in...`);
 	const res = await fetch(EVERGREEN_WIKI_URL+EVERGREEN_WIKI_ENDPOINT, {
 		method: "POST",
 		headers: { 
@@ -35,17 +36,21 @@ async function login() {
 		},
 		body: params
 	});
-	console.log(`got token!`, res);
-	return res;
+
+	const body = await res.json();
+
+	const cookies = extractCookies(res.headers);
+
+	if (!body?.ok) {
+		console.log(`Login failed: `, body);
+		throw new Error("MediaWiki login failed");
+	}
+	console.log(`got token!`, body);
+	return cookies;
 }
 
 export async function appendMediaWikiPage(pageTitle:string, appendText:string, description:string) {
-	//log in, get csrf token, get cookies
-	const res1 = await login();
-	console.log(`logged in!`, res1);
-
-	const cookies = res1.headers.get("set-cookie")?.split(",") ?? [];
-	const cookiesStr = cookies.join("; ");
+	const cookiesStr = await login();
 	const token = await getToken(`csrf`, cookiesStr);
 	const params = new URLSearchParams({
 		action: `edit`,
