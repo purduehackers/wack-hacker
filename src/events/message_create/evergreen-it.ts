@@ -30,8 +30,21 @@ export default async function handler(message: Message) {
 
 	if (!original) return;
 
-	const mediaUrl = await handle_mediawiki(original, message);
-	const githubUrl = await handle_github(original, message);
+	let mediaUrl:string;
+	let githubUrl:string;
+	try {
+		mediaUrl = await handle_mediawiki(original, message);
+		mediaUrl = mediaUrl.replaceAll(` `, ``);
+	} catch (e) {
+		console.error(e);
+		mediaUrl = ``;
+	}
+	try {
+		githubUrl = await handle_github(original, message);
+	} catch (e) {
+		console.error(e);
+		githubUrl = ``;
+	}
 
 	//hacky but oh well
 	await message.reply(`Created [github issue](${githubUrl}) and [mediawiki issue](${mediaUrl})!`);
@@ -50,7 +63,7 @@ async function handle_github(original:Message, message:Message) {
 	const originalText = original.content;
 	const messageArgs = message.content.slice(EVERGREEN_CREATE_ISSUE_STRING.length);
 	const messageLink = message.url;
-	const channelName = message.channel.name;
+	const channelName = (<any>message.channel).name;
 
 	const pretitle = (messageArgs.length > 0) ? 
 		`${messageArgs.slice(1)} -` : 
@@ -75,7 +88,7 @@ async function handle_mediawiki(original:Message, message:Message) {
 	const messageArgs = message.content.slice(EVERGREEN_CREATE_ISSUE_STRING.length);
 	const messageLink = message.url;
 	// const requestor = message.author.tag;
-	const channelName = message.channel.name;
+	const channelName = (<any>message.channel).name;
 
 	let now = new Date();
 	let months = [`Jan`,`Feb`,`Mar`,`Apr`,`May`,`Jun`,`Jul`,`Aug`,`Sep`,`Oct`,`Nov`,`Dec`];
@@ -86,9 +99,10 @@ async function handle_mediawiki(original:Message, message:Message) {
 	const title = `in #${channelName} - ${userTitle}`;
 
 	const body = `\n\n* [${messageLink} @${originalAuthor} ${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}]: ${title}`;
-
-	const { result } = await appendMediaWikiPage(EVERGREEN_WIKI_BUFFER, body, "Wack Hacker - added issue");
-	if (result != `Success`) {
+	console.log(`got body ${body}`);
+	const data = await appendMediaWikiPage(EVERGREEN_WIKI_BUFFER, body, "Wack Hacker - added issue");
+	console.log(data);
+	if (data.edit.result != `Success`) {
 		return ``;
 	}
 	//hacky but oh well
