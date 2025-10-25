@@ -1,57 +1,91 @@
 import { EVERGREEN_WIKI_URL, EVERGREEN_WIKI_USER, EVERGREEN_WIKI_ENDPOINT } from "./consts";
 import { env } from "../env";
 
-function extractCookies(rawHeaders:any) {
-	const set = rawHeaders.getSetCookie();
-	const done = set.map((s:any) => s.split(";")[0]).join("; ");
-	console.log(`extracted cookies ${done}`);
-	return done;
+function extractCookiesFromResponse(res: Response): string {
+	// Try getSetCookie() (supported in some runtimes) and fall back to get('set-cookie').
+	// Return "name=value; name2=value2" suitable for a Cookie header.
+	const headers: any = (res as any).headers;
+	// getSetCookie may exist and return array
+	if (typeof headers.getSetCookie === "function") {
+		const set = headers.getSetCookie(); // string[]
+		if (Array.isArray(set) && set.length) {
+			// strip attributes like 'Path=...' and keep name=value
+			return set.map((s: string) => s.split(";")[0]).join("; ");
+		}
+	}
+	// fallback: headers.get('set-cookie') may be a string (possibly comma-joined)
+	const sc = headers.get ? headers.get("set-cookie") : null;
+	if (sc) {
+		// split carefully: a server should send multiple Set-Cookie headers; some fetch impls combine them with ','
+		// naive split on ', ' may break cookie values containing commas; we assume simple cookies.
+		// To be safer: split on /(?<=;)\s*(?=[^;=]+=)/ is complex; here we split on ', ' which covers common cases.
+		const parts = sc.split(", ").map((s: string) => s.split(";")[0]);
+		return parts.join("; ");
+	}
+	return ``;
 }
 
-async function getToken(tokenType:`csrf`|`login`, cookieStr:string = "") {
+async function getToken(tokenType:'csrf'|'login', cookieStr:string=""): Promise<{token:string, cookies:string}> {
+	const headers: any = {
+		"User-Agent": EVERGREEN_WIKI_USER
+	};
+	if (cookieStr) {
+		headers.Cookie = cookieStr;
+	}
+
 	const res = await fetch(`${EVERGREEN_WIKI_URL}${EVERGREEN_WIKI_ENDPOINT}?action=query&meta=tokens&type=${tokenType}&format=json`, {
-		headers: cookieStr ? { Cookie: cookieStr } : {},
+		headers
 	});
 	const data = await res.json();
-	console.log(`(${tokenType}) got token data: `, data);
-	const pathed = (<any>data).query.tokens;
-	return ((tokenType == `csrf`) ? pathed.csrftoken : pathed.logintoken);
+	const cookies = extractCookiesFromResponse(res);
+
+	const pathed = (data as any).query.tokens;
+	const token = (tokenType === 'csrf') ? pathed.csrftoken : pathed.logintoken;
+	return { token, cookies };
 }
 
-async function login() {
-	console.log(`getting token...`);
-	const token = await getToken(`login`);
+async function login(): Promise<string> {
+	// first request: get login token AND the session cookies that came with it
+	const { token: loginToken, cookies: initialCookies } = await getToken('login');
+
+	// prepare form
 	const params = new URLSearchParams({
 		action: "login",
 		format: "json",
 		lgname: EVERGREEN_WIKI_USER,
 		lgpassword: env.MEDIAWIKI_BOT_KEY,
-		lgtoken: token
+		lgtoken: loginToken
 	});
-	console.log(`logging in...`);
-	const res = await fetch(EVERGREEN_WIKI_URL+EVERGREEN_WIKI_ENDPOINT, {
+
+	const res = await fetch(EVERGREEN_WIKI_URL + EVERGREEN_WIKI_ENDPOINT, {
 		method: "POST",
-		headers: { 
+		headers: {
 			"Content-Type": "application/x-www-form-urlencoded",
+			"User-Agent": EVERGREEN_WIKI_USER,
+			//send the cookies we got from the token request
+			...(initialCookies ? { Cookie: initialCookies } : {})
 		},
 		body: params
 	});
 
 	const body = await res.json();
+	// cookies returned from the login POST (may replace session cookies)
+	const loginCookies = extractCookiesFromResponse(res);
 
-	const cookies = extractCookies(res.headers);
-
-	if (!body?.ok) {
-		console.log(`Login failed: `, body);
-		throw new Error("MediaWiki login failed");
+	if (!body?.login || body.login.result !== "Success") {
+		throw new Error("MediaWiki login failed: " + JSON.stringify(body));
 	}
-	console.log(`got token!`, body);
-	return cookies;
+	// Return the cookies we should use going forward (prefer cookies from the login POST,
+	// but fall back to the initialCookies if server didn't set new ones)
+	return loginCookies || initialCookies;
 }
 
 export async function appendMediaWikiPage(pageTitle:string, appendText:string, description:string) {
 	const cookiesStr = await login();
-	const token = await getToken(`csrf`, cookiesStr);
+
+	// Now request a csrf token using the cookies we got from login
+	const { token: token } = await getToken('csrf', cookiesStr);
+
 	const params = new URLSearchParams({
 		action: `edit`,
 		format: `json`,
@@ -66,6 +100,7 @@ export async function appendMediaWikiPage(pageTitle:string, appendText:string, d
 		method: "POST",
 		headers: {
 			"Content-Type": "application/x-www-form-urlencoded",
+			"User-Agent": EVERGREEN_WIKI_USER,
 			Cookie: cookiesStr
 		},
 		body: params
@@ -76,8 +111,6 @@ export async function appendMediaWikiPage(pageTitle:string, appendText:string, d
 	if (trueRes?.edit?.captcha) {
 		console.error("Edit requires CAPTCHA:", trueRes.edit.captcha);
 	}
-	console.log(trueRes);
-	console.log(`MW - posted:`);
 
 	return trueRes;
 }
