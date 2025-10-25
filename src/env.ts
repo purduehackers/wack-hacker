@@ -7,6 +7,7 @@ export const env = createEnv({
 		DISCORD_BOT_TOKEN: z.string(),
 		GROQ_API_KEY: z.string(),
 		GITHUB_TOKEN: z.string(),
+		MEDIAWIKI_BOT_KEY: z.string(),
 		PHACK_API_TOKEN: z.string(),
 		TZ: z.string().default("America/Indiana/Indianapolis"),
 		R2_ACCOUNT_ID: z.string(),
