@@ -30,7 +30,7 @@ export async function createGithubIssue(title: string, body: string, assignees: 
 		repo: "evergreen",
 		title,
 		body,
-		assignees,
+		assignees: Array.from(new Set(assignees)),
 	});
 
 	if (response.status !== 201) {
