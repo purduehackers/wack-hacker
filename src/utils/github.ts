@@ -16,23 +16,16 @@ export async function getAssociationsFile() {
 		throw new Error("Failed to fetch associations file");
 	}
 
-	if (response.data.type !== "file") {
+	if ((<any>response.data).type !== "file") {
 		throw new Error("Associations file is not a file");
 	}
 
-	const content = Buffer.from(response.data.content, "base64").toString(
-		"utf-8",
-	);
-
+	const content = Buffer.from((<any>response.data).content, "base64").toString("utf-8");
 	return JSON.parse(content);
 }
 
-export async function createGithubIssue(
-	title: string,
-	body: string,
-	assignees: string[],
-) {
-	const response = await octokit.rest.issues.create({
+export async function createGithubIssue(title: string, body: string, assignees: string[]) {
+	const response = await octokit.request(`POST /repos/purduehackers/evergreen/issues`, {
 		owner: "purduehackers",
 		repo: "evergreen",
 		title,
