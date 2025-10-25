@@ -34,7 +34,7 @@ export default async function handler(message: Message) {
 	let githubUrl:string;
 	try {
 		mediaUrl = await handle_mediawiki(original, message);
-		mediaUrl = mediaUrl.replaceAll(` `, ``);
+		mediaUrl = mediaUrl.replaceAll(` `, `_`);
 	} catch (e) {
 		console.error(e);
 		mediaUrl = ``;
