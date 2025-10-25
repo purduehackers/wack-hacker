@@ -2,6 +2,8 @@ import type { Message } from "discord.js";
 import { INTERNAL_CATEGORIES } from "../../utils/consts";
 import { connectToApi, sendDashboardMessage } from "../../utils/phack";
 
+const client = await connectToApi();
+
 export default async function handler(message: Message) {
 	if (message.author.bot) return;
 	if (message.channel.isDMBased()) return;
@@ -10,8 +12,6 @@ export default async function handler(message: Message) {
 		INTERNAL_CATEGORIES.includes(message.channel.parentId)
 	)
 		return;
-
-	const client = await connectToApi();
 
 	await sendDashboardMessage(client, {
 		image: message.author.avatarURL(),
