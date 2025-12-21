@@ -4,6 +4,7 @@ import {
 	Events,
 	GatewayIntentBits,
 	MessageFlags,
+	Partials,
 	REST,
 	Routes,
 } from "discord.js";
@@ -31,7 +32,9 @@ const client = new Client({
 		GatewayIntentBits.GuildMessages,
 		GatewayIntentBits.MessageContent,
 		GatewayIntentBits.GuildVoiceStates,
+		GatewayIntentBits.GuildMessageReactions,
 	],
+	partials: [Partials.Message, Partials.Reaction, Partials.Channel],
 });
 
 client.on(Events.ClientReady, (event) => {
@@ -82,8 +85,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
 for (const event of events) {
 	const { eventType, ...handlers } = event;
-	client.on(eventType, async (e) => {
-		await Promise.allSettled(Object.values(handlers).map((func) => func(e)));
+	client.on(eventType, async (...args: unknown[]) => {
+		await Promise.allSettled(
+			Object.values(handlers).map((func) => (func as (...args: unknown[]) => Promise<void>)(...args)),
+		);
 	});
 }
 
