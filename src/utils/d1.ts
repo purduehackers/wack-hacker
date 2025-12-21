@@ -1,6 +1,11 @@
 import { env } from "../env";
 
-const D1_API_BASE = `https://api.cloudflare.com/client/v4/accounts/${env.D1_ACCOUNT_ID}/d1/database/${env.D1_DATABASE_ID}`;
+function getD1ApiBase(): string {
+	if (!env.D1_ACCOUNT_ID || !env.D1_DATABASE_ID) {
+		throw new Error("D1_ACCOUNT_ID and D1_DATABASE_ID must be set when COMMIT_OVERFLOW_ENABLED=1");
+	}
+	return `https://api.cloudflare.com/client/v4/accounts/${env.D1_ACCOUNT_ID}/d1/database/${env.D1_DATABASE_ID}`;
+}
 
 interface D1QueryResult<T> {
 	results: T[];
@@ -25,7 +30,11 @@ async function executeQuery<T>(
 	sql: string,
 	params?: (string | number | null)[],
 ): Promise<D1QueryResult<T>> {
-	const response = await fetch(`${D1_API_BASE}/query`, {
+	if (!env.D1_API_TOKEN) {
+		throw new Error("D1_API_TOKEN must be set when COMMIT_OVERFLOW_ENABLED=1");
+	}
+
+	const response = await fetch(`${getD1ApiBase()}/query`, {
 		method: "POST",
 		headers: {
 			Authorization: `Bearer ${env.D1_API_TOKEN}`,

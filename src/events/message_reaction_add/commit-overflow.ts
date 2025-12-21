@@ -1,4 +1,5 @@
 import type { MessageReaction, PartialMessageReaction, User, PartialUser, ThreadChannel } from "discord.js";
+import { env } from "../../env";
 import { detectCommit } from "../../utils/commit-detection";
 import {
 	BISHOP_ROLE_ID,
@@ -153,6 +154,8 @@ export default async function handler(
 	reaction: MessageReaction | PartialMessageReaction,
 	user: User | PartialUser,
 ): Promise<void> {
+	if (env.COMMIT_OVERFLOW_ENABLED !== "1") return;
+
 	await Promise.allSettled([
 		handlePinReaction(reaction, user),
 		handleApproveReaction(reaction, user),
