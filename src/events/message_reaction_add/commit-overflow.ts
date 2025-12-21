@@ -80,23 +80,22 @@ export async function handleApproveReaction(
 		const existingCommit = await getCommit(message.id);
 		if (existingCommit) return;
 
-		const detectedCommit = detectCommit(message as any);
+		const detectedCommit = detectCommit(message);
 		if (!detectedCommit) {
 			await message.react("❓");
 			return;
 		}
 
-		const authorId = message.author?.id;
-		if (!authorId) return;
+		const author = message.author;
+		if (!author) return;
 
-		let dbUser = await getUser(authorId);
+		const dbUser = await getUser(author.id);
 		if (!dbUser) {
-			await createUser(authorId, message.author?.username ?? "unknown", "");
-			dbUser = await getUser(authorId);
+			await createUser(author.id, author.username, "");
 		}
 
 		await createCommit(
-			authorId,
+			author.id,
 			message.id,
 			detectedCommit.type,
 			getCommitDay(),
