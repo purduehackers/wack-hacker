@@ -20,6 +20,7 @@ import {
 	BISHOP_ROLE_ID,
 	COMMIT_OVERFLOW_FORUM_ID,
 	COMMIT_OVERFLOW_ROLE_ID,
+	COMMIT_OVERFLOW_YEAR,
 	ORGANIZER_ROLE_ID,
 } from "../utils/consts";
 
@@ -224,7 +225,7 @@ async function handleView(interaction: ChatInputCommandInteraction) {
 				{ name: "Longest Streak", value: `${longestStreak} day${longestStreak !== 1 ? "s" : ""}`, inline: true },
 				{ name: "\u200b", value: "\u200b", inline: true },
 			)
-			.setFooter({ text: "🟩 Commit Overflow 2025" })
+			.setFooter({ text: `🟩 Commit Overflow ${COMMIT_OVERFLOW_YEAR}` })
 			.setTimestamp();
 
 		// if (recentFive.length > 0 && dbUser.thread_id && interaction.guildId) {
