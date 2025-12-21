@@ -8,7 +8,7 @@ import {
 	COMMIT_PIN_EMOJI,
 	ORGANIZER_ROLE_ID,
 } from "../../utils/consts";
-import { createCommit, createUser, getCommit, getUser } from "../../utils/d1";
+import { createApprovedCommit, createUser, getCommit, getUser } from "../../utils/d1";
 
 function isInCommitOverflowForum(reaction: MessageReaction | PartialMessageReaction): boolean {
 	const channel = reaction.message.channel;
@@ -94,7 +94,7 @@ export async function handleApproveReaction(
 			await createUser(author.id, author.username, "");
 		}
 
-		await createCommit(
+		await createApprovedCommit(
 			author.id,
 			message.id,
 			detectedCommit.type,

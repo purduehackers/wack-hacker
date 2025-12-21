@@ -126,7 +126,7 @@ export async function getCommit(messageId: string): Promise<DbCommit | null> {
 	return commits[0] ?? null;
 }
 
-export async function createCommit(
+export async function createApprovedCommit(
 	userId: string,
 	messageId: string,
 	commitType: CommitType,

@@ -87,6 +87,7 @@ async function handleStart(interaction: ChatInputCommandInteraction) {
 				return;
 			}
 		} catch {
+			console.log(`Thread ${existingUser.thread_id} for user ${userId} no longer exists, cleaning up records`);
 			await deleteUserCommits(userId);
 			await deleteUser(userId);
 		}
@@ -94,8 +95,10 @@ async function handleStart(interaction: ChatInputCommandInteraction) {
 
 	await interaction.deferReply();
 
+	let thread: Awaited<ReturnType<typeof forumChannel.threads.create>> | null = null;
+
 	try {
-		const thread = await forumChannel.threads.create({
+		thread = await forumChannel.threads.create({
 			name: threadName,
 			message: {
 				content: `*No description set yet. React to your own message with ✏️ to set one!*`,
@@ -124,6 +127,15 @@ async function handleStart(interaction: ChatInputCommandInteraction) {
 		});
 	} catch (error) {
 		console.error("Error creating commit overflow thread:", error);
+
+		if (thread) {
+			try {
+				await thread.delete();
+			} catch (deleteError) {
+				console.error("Failed to cleanup thread after error:", deleteError);
+			}
+		}
+
 		await interaction.editReply({
 			content: "Failed to create your thread. Please try again.",
 		});
@@ -169,6 +181,7 @@ async function handleView(interaction: ChatInputCommandInteraction) {
 			try {
 				await forumChannel.threads.fetch(dbUser.thread_id);
 			} catch {
+				console.log(`Thread ${dbUser.thread_id} for user ${targetUser.id} no longer exists, cleaning up records`);
 				await deleteUserCommits(targetUser.id);
 				await deleteUser(targetUser.id);
 				dbUser = null;
