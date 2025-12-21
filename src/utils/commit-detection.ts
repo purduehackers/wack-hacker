@@ -1,9 +1,14 @@
-import type { Message } from "discord.js";
+import type { Collection, Attachment } from "discord.js";
 import type { CommitType } from "./d1";
 
 export interface DetectedCommit {
 	type: CommitType;
 	evidence: string;
+}
+
+export interface CommitDetectionMessage {
+	content: string | null;
+	attachments: Collection<string, Attachment>;
 }
 
 const GITHUB_URL_PATTERNS = [
@@ -45,7 +50,7 @@ function detectGitHubUrl(content: string): string | null {
 	return null;
 }
 
-function hasImage(message: Message): boolean {
+function hasImage(message: CommitDetectionMessage): boolean {
 	return message.attachments.some(
 		(attachment) => attachment.contentType?.startsWith("image/") ?? false,
 	);
@@ -56,8 +61,8 @@ function hasProgressKeywords(content: string): boolean {
 	return PROGRESS_KEYWORDS.some((keyword) => lowerContent.includes(keyword));
 }
 
-export function detectCommit(message: Message): DetectedCommit | null {
-	const content = message.content;
+export function detectCommit(message: CommitDetectionMessage): DetectedCommit | null {
+	const content = message.content ?? "";
 
 	const githubUrl = detectGitHubUrl(content);
 	if (githubUrl) {
