@@ -69,7 +69,7 @@ export const handlePraise = Effect.fn("Praise.handle")(
             });
 
             const roleAddStart = Date.now();
-            const roleAddResult = yield* Effect.tryPromise({
+            yield* Effect.tryPromise({
                 try: () => message.member!.roles.add(WACKY_ROLE_ID),
                 catch: (e) => new Error(`Failed to add role: ${e instanceof Error ? e.message : String(e)}`),
             }).pipe(
