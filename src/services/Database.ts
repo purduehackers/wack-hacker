@@ -122,7 +122,7 @@ export class Database extends Effect.Service<Database>()("Database", {
 
                 const duration_ms = Duration.toMillis(duration);
                 const found = result[0] !== undefined;
-                
+
                 yield* Effect.annotateCurrentSpan({
                     duration_ms,
                     rows_returned: result.length,
@@ -144,10 +144,9 @@ export class Database extends Effect.Service<Database>()("Database", {
                 return Option.fromNullable(result[0]);
             }),
 
-            create: Effect.fn("Database.users.create")(function* (
+            upsert: Effect.fn("Database.users.upsert")(function* (
                 id: string,
                 discordUsername: string,
-                threadId: string,
             ) {
                 yield* Effect.annotateCurrentSpan({
                     user_id: id,
@@ -155,85 +154,44 @@ export class Database extends Effect.Service<Database>()("Database", {
                     discord_username: discordUsername,
                 });
 
-                yield* Effect.logDebug("database insert initiated", {
+                yield* Effect.logDebug("database upsert initiated", {
                     service_name: "Database",
-                    method: "users.create",
-                    operation_type: "insert",
+                    method: "users.upsert",
+                    operation_type: "upsert",
                     table: "users",
                     user_id: id,
                     discord_username: discordUsername,
-                    thread_id: threadId,
-                });
-
-                const [duration] = yield* Effect.tryPromise({
-                    try: () =>
-                        db.insert(schema.users).values({
-                            id,
-                            discord_username: discordUsername,
-                            thread_id: threadId,
-                        }),
-                    catch: (e) => new DatabaseError({ operation: "users.create", cause: e }),
-                }).pipe(Effect.timed);
-
-                const duration_ms = Duration.toMillis(duration);
-
-                yield* Effect.annotateCurrentSpan({ duration_ms });
-
-                yield* Effect.logInfo("database insert completed", {
-                    service_name: "Database",
-                    method: "users.create",
-                    operation_type: "insert",
-                    table: "users",
-                    user_id: id,
-                    discord_username: discordUsername,
-                    thread_id: threadId,
-                    duration_ms,
-                    latency_ms: duration_ms,
-                });
-            }),
-
-            updateThread: Effect.fn("Database.users.updateThread")(function* (
-                id: string,
-                threadId: string,
-            ) {
-                yield* Effect.annotateCurrentSpan({
-                    user_id: id,
-                    table: "users",
-                    thread_id: threadId,
-                });
-
-                yield* Effect.logDebug("database update initiated", {
-                    service_name: "Database",
-                    method: "users.updateThread",
-                    operation_type: "update",
-                    table: "users",
-                    user_id: id,
-                    thread_id: threadId,
                 });
 
                 const [duration] = yield* Effect.tryPromise({
                     try: () =>
                         db
-                            .update(schema.users)
-                            .set({
-                                thread_id: threadId,
-                                updated_at: sql`datetime('now')`,
+                            .insert(schema.users)
+                            .values({
+                                id,
+                                discord_username: discordUsername,
                             })
-                            .where(eq(schema.users.id, id)),
-                    catch: (e) => new DatabaseError({ operation: "users.updateThread", cause: e }),
+                            .onConflictDoUpdate({
+                                target: schema.users.id,
+                                set: {
+                                    discord_username: discordUsername,
+                                    updated_at: sql`datetime('now')`,
+                                },
+                            }),
+                    catch: (e) => new DatabaseError({ operation: "users.upsert", cause: e }),
                 }).pipe(Effect.timed);
 
                 const duration_ms = Duration.toMillis(duration);
 
                 yield* Effect.annotateCurrentSpan({ duration_ms });
 
-                yield* Effect.logInfo("database update completed", {
+                yield* Effect.logInfo("database upsert completed", {
                     service_name: "Database",
-                    method: "users.updateThread",
-                    operation_type: "update",
+                    method: "users.upsert",
+                    operation_type: "upsert",
                     table: "users",
                     user_id: id,
-                    thread_id: threadId,
+                    discord_username: discordUsername,
                     duration_ms,
                     latency_ms: duration_ms,
                 });
@@ -265,6 +223,139 @@ export class Database extends Effect.Service<Database>()("Database", {
                     operation_type: "delete",
                     table: "users",
                     user_id: id,
+                    duration_ms,
+                    latency_ms: duration_ms,
+                });
+            }),
+        };
+
+        const commitOverflowProfiles = {
+            get: Effect.fn("Database.commitOverflowProfiles.get")(function* (userId: string) {
+                yield* Effect.annotateCurrentSpan({
+                    user_id: userId,
+                    table: "commit_overflow_profiles",
+                });
+
+                yield* Effect.logDebug("database query initiated", {
+                    service_name: "Database",
+                    method: "commitOverflowProfiles.get",
+                    operation_type: "select",
+                    table: "commit_overflow_profiles",
+                    user_id: userId,
+                });
+
+                const [duration, result] = yield* Effect.tryPromise({
+                    try: () =>
+                        db
+                            .select()
+                            .from(schema.commitOverflowProfiles)
+                            .where(eq(schema.commitOverflowProfiles.user_id, userId)),
+                    catch: (e) =>
+                        new DatabaseError({ operation: "commitOverflowProfiles.get", cause: e }),
+                }).pipe(Effect.timed);
+
+                const duration_ms = Duration.toMillis(duration);
+                const found = result[0] !== undefined;
+
+                yield* Effect.annotateCurrentSpan({
+                    duration_ms,
+                    rows_returned: result.length,
+                    found,
+                });
+
+                yield* Effect.logInfo("database query completed", {
+                    service_name: "Database",
+                    method: "commitOverflowProfiles.get",
+                    operation_type: "select",
+                    table: "commit_overflow_profiles",
+                    user_id: userId,
+                    duration_ms,
+                    latency_ms: duration_ms,
+                    rows_returned: result.length,
+                    found,
+                });
+
+                return Option.fromNullable(result[0]);
+            }),
+
+            create: Effect.fn("Database.commitOverflowProfiles.create")(function* (
+                userId: string,
+                threadId: string,
+            ) {
+                yield* Effect.annotateCurrentSpan({
+                    user_id: userId,
+                    table: "commit_overflow_profiles",
+                    thread_id: threadId,
+                });
+
+                yield* Effect.logDebug("database insert initiated", {
+                    service_name: "Database",
+                    method: "commitOverflowProfiles.create",
+                    operation_type: "insert",
+                    table: "commit_overflow_profiles",
+                    user_id: userId,
+                    thread_id: threadId,
+                });
+
+                const [duration] = yield* Effect.tryPromise({
+                    try: () =>
+                        db.insert(schema.commitOverflowProfiles).values({
+                            user_id: userId,
+                            thread_id: threadId,
+                        }),
+                    catch: (e) =>
+                        new DatabaseError({ operation: "commitOverflowProfiles.create", cause: e }),
+                }).pipe(Effect.timed);
+
+                const duration_ms = Duration.toMillis(duration);
+
+                yield* Effect.annotateCurrentSpan({ duration_ms });
+
+                yield* Effect.logInfo("database insert completed", {
+                    service_name: "Database",
+                    method: "commitOverflowProfiles.create",
+                    operation_type: "insert",
+                    table: "commit_overflow_profiles",
+                    user_id: userId,
+                    thread_id: threadId,
+                    duration_ms,
+                    latency_ms: duration_ms,
+                });
+            }),
+
+            delete: Effect.fn("Database.commitOverflowProfiles.delete")(function* (userId: string) {
+                yield* Effect.annotateCurrentSpan({
+                    user_id: userId,
+                    table: "commit_overflow_profiles",
+                });
+
+                yield* Effect.logDebug("database delete initiated", {
+                    service_name: "Database",
+                    method: "commitOverflowProfiles.delete",
+                    operation_type: "delete",
+                    table: "commit_overflow_profiles",
+                    user_id: userId,
+                });
+
+                const [duration] = yield* Effect.tryPromise({
+                    try: () =>
+                        db
+                            .delete(schema.commitOverflowProfiles)
+                            .where(eq(schema.commitOverflowProfiles.user_id, userId)),
+                    catch: (e) =>
+                        new DatabaseError({ operation: "commitOverflowProfiles.delete", cause: e }),
+                }).pipe(Effect.timed);
+
+                const duration_ms = Duration.toMillis(duration);
+
+                yield* Effect.annotateCurrentSpan({ duration_ms });
+
+                yield* Effect.logInfo("database delete completed", {
+                    service_name: "Database",
+                    method: "commitOverflowProfiles.delete",
+                    operation_type: "delete",
+                    table: "commit_overflow_profiles",
+                    user_id: userId,
                     duration_ms,
                     latency_ms: duration_ms,
                 });
@@ -524,7 +615,7 @@ export class Database extends Effect.Service<Database>()("Database", {
             }),
         };
 
-        return { users, commits } as const;
+        return { users, commitOverflowProfiles, commits } as const;
     }).pipe(Effect.annotateLogs({ service: "Database" })),
 }) {}
 

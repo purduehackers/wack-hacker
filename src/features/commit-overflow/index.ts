@@ -76,12 +76,12 @@ export const handleCommitOverflowThreadCreate = Effect.fn("CommitOverflow.handle
             thread_name: threadName,
         });
 
-        const existingUserOpt = yield* db.users.get(userId);
+        const existingProfileOpt = yield* db.commitOverflowProfiles.get(userId);
 
-        if (Option.isSome(existingUserOpt) && existingUserOpt.value.thread_id) {
-            const existingUser = existingUserOpt.value;
+        if (Option.isSome(existingProfileOpt)) {
+            const existingProfile = existingProfileOpt.value;
 
-            if (existingUser.thread_id === threadId) {
+            if (existingProfile.thread_id === threadId) {
                 yield* Effect.logDebug("thread already registered for user", {
                     user_id: userId,
                     thread_id: threadId,
@@ -94,7 +94,7 @@ export const handleCommitOverflowThreadCreate = Effect.fn("CommitOverflow.handle
                 const forumChannel = forum as ForumChannel;
                 const oldThreadExists = yield* Effect.tryPromise({
                     try: async () => {
-                        const oldThread = await forumChannel.threads.fetch(existingUser.thread_id!);
+                        const oldThread = await forumChannel.threads.fetch(existingProfile.thread_id);
                         return oldThread !== null;
                     },
                     catch: () => false as const,
@@ -104,7 +104,7 @@ export const handleCommitOverflowThreadCreate = Effect.fn("CommitOverflow.handle
                     const durationMs = Date.now() - startTime;
                     yield* Effect.logInfo("user already has existing thread", {
                         user_id: userId,
-                        existing_thread_id: existingUser.thread_id,
+                        existing_thread_id: existingProfile.thread_id,
                         new_thread_id: threadId,
                         duration_ms: durationMs,
                     });
@@ -112,7 +112,7 @@ export const handleCommitOverflowThreadCreate = Effect.fn("CommitOverflow.handle
                     yield* Effect.tryPromise({
                         try: () =>
                             thread.send({
-                                content: `You already have a Commit Overflow thread! <#${existingUser.thread_id}>\n\nPlease use your existing thread instead.`,
+                                content: `You already have a Commit Overflow thread! <#${existingProfile.thread_id}>\n\nPlease use your existing thread instead.`,
                             }),
                         catch: (e) =>
                             new Error(`Failed to send message: ${e instanceof Error ? e.message : String(e)}`),
@@ -123,11 +123,11 @@ export const handleCommitOverflowThreadCreate = Effect.fn("CommitOverflow.handle
 
             yield* Effect.logInfo("old thread no longer exists, cleaning up user records", {
                 user_id: userId,
-                old_thread_id: existingUser.thread_id,
+                old_thread_id: existingProfile.thread_id,
                 new_thread_id: threadId,
             });
             yield* db.commits.deleteByUser(userId);
-            yield* db.users.delete(userId);
+            yield* db.commitOverflowProfiles.delete(userId);
         }
 
         const guild = thread.guild;
@@ -156,7 +156,8 @@ export const handleCommitOverflowThreadCreate = Effect.fn("CommitOverflow.handle
                 new Error(`Failed to send welcome message: ${e instanceof Error ? e.message : String(e)}`),
         });
 
-        yield* db.users.create(userId, member.user.username, threadId);
+        yield* db.users.upsert(userId, member.user.username);
+        yield* db.commitOverflowProfiles.create(userId, threadId);
 
         const durationMs = Date.now() - startTime;
         yield* Effect.logInfo("commit overflow thread setup complete", {
@@ -243,12 +244,12 @@ const handleView = Effect.fn("CommitOverflow.handleView")(function* (
             catch: (e) => new Error(`Failed to defer: ${e instanceof Error ? e.message : String(e)}`),
     });
 
-    const initialDbUserOpt = yield* db.users.get(targetUser.id);
+    const initialProfileOpt = yield* db.commitOverflowProfiles.get(targetUser.id);
 
-    let userExists = Option.isSome(initialDbUserOpt);
+    let profileExists = Option.isSome(initialProfileOpt);
 
-    if (Option.isSome(initialDbUserOpt) && initialDbUserOpt.value.thread_id) {
-        const threadId = initialDbUserOpt.value.thread_id;
+    if (Option.isSome(initialProfileOpt)) {
+        const threadId = initialProfileOpt.value.thread_id;
         const threadExists = yield* Effect.tryPromise({
             try: async () => {
                 const thread = await forumChannel.threads.fetch(threadId);
@@ -264,12 +265,12 @@ const handleView = Effect.fn("CommitOverflow.handleView")(function* (
                 thread_id: threadId,
             });
             yield* db.commits.deleteByUser(targetUser.id);
-            yield* db.users.delete(targetUser.id);
-            userExists = false;
+            yield* db.commitOverflowProfiles.delete(targetUser.id);
+            profileExists = false;
         }
     }
 
-    if (!userExists) {
+    if (!profileExists) {
         const durationMs = Date.now() - startTime;
         yield* Effect.logInfo("user not found in commit overflow", {
             user_id: interaction.user.id,
@@ -364,7 +365,7 @@ const handlePinReaction = Effect.fn("CommitOverflow.handlePinReaction")(function
     user: User | PartialUser,
 ) {
     const startTime = Date.now();
-    
+
     if (user.bot) return;
     if (reaction.emoji.name !== COMMIT_PIN_EMOJI) return;
     if (!isInCommitOverflowForum(reaction.message.channel)) return;
@@ -484,12 +485,9 @@ const handleApproveReaction = Effect.fn("CommitOverflow.handleApproveReaction")(
     const author = message.author;
     if (!author) return;
 
-    const dbUser = yield* db.users.get(author.id);
-    if (Option.isNone(dbUser)) {
-        yield* db.users.create(author.id, author.username, "");
-    }
+    yield* db.users.upsert(author.id, author.username);
 
-    const commitDay = getCurrentDay(config.TZ);
+    const commitDay = yield* getCurrentDay(config.TZ);
     yield* db.commits.createApproved({
         userId: author.id,
         messageId: message.id,
@@ -525,5 +523,4 @@ export const handleCommitOverflowReaction = (
         { concurrency: "unbounded", mode: "either" },
     ).pipe(Effect.asVoid, Effect.annotateLogs({ feature: "commit_overflow" }));
 
-export { detectCommit } from "./detection";
 export { calculateStreaks } from "./streaks";
