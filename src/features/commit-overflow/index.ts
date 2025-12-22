@@ -1,4 +1,4 @@
-import type { ForumChannel } from "discord.js";
+import type { ForumChannel, AnyThreadChannel } from "discord.js";
 
 import {
     SlashCommandBuilder,
@@ -37,17 +37,6 @@ export const commitOverflowCommand = new SlashCommandBuilder()
     .setDescription("Commit Overflow event commands")
     .addSubcommand((subcommand) =>
         subcommand
-            .setName("start")
-            .setDescription("Create your Commit Overflow thread")
-            .addStringOption((option) =>
-                option
-                    .setName("thread_name")
-                    .setDescription('Name for your thread (e.g. "ray\'s winter break grind")')
-                    .setRequired(true),
-            ),
-    )
-    .addSubcommand((subcommand) =>
-        subcommand
             .setName("view")
             .setDescription("View commit overflow profile")
             .addUserOption((option) =>
@@ -65,140 +54,125 @@ const isInCommitOverflowForum = (
     return channel.parentId === COMMIT_OVERFLOW_FORUM_ID;
 };
 
-const handleStart = Effect.fn("CommitOverflow.handleStart")(function* (
-    interaction: ChatInputCommandInteraction,
-) {
-    const startTime = Date.now();
-    const db = yield* Database;
-    const threadName = interaction.options.getString("thread_name", true);
-    const userId = interaction.user.id;
-    const username = interaction.user.username;
+export const handleCommitOverflowThreadCreate = Effect.fn("CommitOverflow.handleThreadCreate")(
+    function* (thread: AnyThreadChannel, newlyCreated: boolean) {
+        const startTime = Date.now();
 
-    yield* Effect.annotateCurrentSpan({ user_id: userId, username, thread_name: threadName });
-    yield* Effect.logDebug("handling commit overflow start command", {
-        user_id: userId,
-        username,
-        thread_name: threadName,
-    });
+        if (!newlyCreated) return;
+        if (thread.parentId !== COMMIT_OVERFLOW_FORUM_ID) return;
+        if (!thread.ownerId) return;
 
-    const forum = interaction.client.channels.cache.get(COMMIT_OVERFLOW_FORUM_ID);
-    if (!forum || forum.type !== ChannelType.GuildForum) {
-        const durationMs = Date.now() - startTime;
-        yield* Effect.logError("commit overflow forum not found", {
+        const db = yield* Database;
+        const userId = thread.ownerId;
+        const threadId = thread.id;
+        const threadName = thread.name;
+
+        yield* Effect.annotateCurrentSpan({
             user_id: userId,
-            username,
-            duration_ms: durationMs,
-            forum_id: COMMIT_OVERFLOW_FORUM_ID,
+            thread_id: threadId,
+            thread_name: threadName,
         });
-        yield* Effect.tryPromise({
-            try: () =>
-                interaction.reply({
-                    content: "Could not find the Commit Overflow forum channel.",
-                    flags: MessageFlags.Ephemeral,
-                }),
-            catch: (e) => new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
-        });
-        return;
-    }
 
-    const forumChannel = forum as ForumChannel;
-    const existingUserOpt = yield* db.users.get(userId);
-
-    if (Option.isSome(existingUserOpt) && existingUserOpt.value.thread_id) {
-        const existingUser = existingUserOpt.value;
-        yield* Effect.logDebug("checking existing thread", {
+        yield* Effect.logDebug("handling commit overflow thread create", {
             user_id: userId,
-            thread_id: existingUser.thread_id,
+            thread_id: threadId,
+            thread_name: threadName,
         });
-        const threadExists = yield* Effect.tryPromise({
-            try: async () => {
-                const thread = await forumChannel.threads.fetch(existingUser.thread_id!);
-                return thread !== null;
-            },
-            catch: () => false as const,
-        }).pipe(Effect.catchAll(() => Effect.succeed(false)));
 
-        if (threadExists) {
-            const durationMs = Date.now() - startTime;
-            yield* Effect.logInfo("user already has thread", {
+        const existingUserOpt = yield* db.users.get(userId);
+
+        if (Option.isSome(existingUserOpt) && existingUserOpt.value.thread_id) {
+            const existingUser = existingUserOpt.value;
+
+            if (existingUser.thread_id === threadId) {
+                yield* Effect.logDebug("thread already registered for user", {
+                    user_id: userId,
+                    thread_id: threadId,
+                });
+                return;
+            }
+
+            const forum = thread.parent;
+            if (forum && forum.type === ChannelType.GuildForum) {
+                const forumChannel = forum as ForumChannel;
+                const oldThreadExists = yield* Effect.tryPromise({
+                    try: async () => {
+                        const oldThread = await forumChannel.threads.fetch(existingUser.thread_id!);
+                        return oldThread !== null;
+                    },
+                    catch: () => false as const,
+                }).pipe(Effect.catchAll(() => Effect.succeed(false)));
+
+                if (oldThreadExists) {
+                    const durationMs = Date.now() - startTime;
+                    yield* Effect.logInfo("user already has existing thread", {
+                        user_id: userId,
+                        existing_thread_id: existingUser.thread_id,
+                        new_thread_id: threadId,
+                        duration_ms: durationMs,
+                    });
+
+                    yield* Effect.tryPromise({
+                        try: () =>
+                            thread.send({
+                                content: `You already have a Commit Overflow thread! <#${existingUser.thread_id}>\n\nPlease use your existing thread instead.`,
+                            }),
+                        catch: (e) =>
+                            new Error(`Failed to send message: ${e instanceof Error ? e.message : String(e)}`),
+                    });
+                    return;
+                }
+            }
+
+            yield* Effect.logInfo("old thread no longer exists, cleaning up user records", {
                 user_id: userId,
-                username,
-                thread_id: existingUser.thread_id,
-                duration_ms: durationMs,
+                old_thread_id: existingUser.thread_id,
+                new_thread_id: threadId,
             });
-            yield* Effect.tryPromise({
-                try: () =>
-                    interaction.reply({
-                        content: `You already have a Commit Overflow thread! <#${existingUser.thread_id}>`,
-                        flags: MessageFlags.Ephemeral,
-                    }),
-                catch: (e) => new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
-            });
-            return;
+            yield* db.commits.deleteByUser(userId);
+            yield* db.users.delete(userId);
         }
 
-        yield* Effect.logInfo("thread no longer exists cleaning up user records", {
-            user_id: userId,
-            username,
-            thread_id: existingUser.thread_id,
+        const guild = thread.guild;
+        const member = yield* Effect.tryPromise({
+            try: () => guild.members.fetch(userId),
+            catch: (e) => new Error(`Failed to fetch member: ${e instanceof Error ? e.message : String(e)}`),
         });
-        yield* db.commits.deleteByUser(userId);
-        yield* db.users.delete(userId);
-    }
 
-    yield* Effect.tryPromise({
-        try: () => interaction.deferReply(),
-            catch: (e) => new Error(`Failed to defer: ${e instanceof Error ? e.message : String(e)}`),
-    });
+        yield* Effect.tryPromise({
+            try: () => member.roles.add(COMMIT_OVERFLOW_ROLE_ID),
+            catch: (e) => new Error(`Failed to add role: ${e instanceof Error ? e.message : String(e)}`),
+        });
 
-    const createResult = yield* Effect.tryPromise({
-        try: async () => {
-            const thread = await forumChannel.threads.create({
-                name: threadName,
-                message: {
-                    content: `*No description set yet. React to your own message with ${COMMIT_EDIT_DESCRIPTION_EMOJI} to set one!*`,
-                },
-            });
-
-            const infoMessage = await thread.send({
-                content: `${COMMIT_APPROVE_EMOJI} **Welcome to Commit Overflow!**
+        yield* Effect.tryPromise({
+            try: async () => {
+                const infoMessage = await thread.send({
+                    content: `${COMMIT_APPROVE_EMOJI} **Welcome to Commit Overflow!**
 
 • Share your progress by posting GitHub commits, code screenshots, or updates
 • React with ${COMMIT_PIN_EMOJI} to pin important messages
-• Organizers will react with ${COMMIT_APPROVE_EMOJI} to approve commits toward your streak`,
-            });
+• Organizers will react with ${COMMIT_APPROVE_EMOJI} to approve commits toward your streak
+• React to your own message with ${COMMIT_EDIT_DESCRIPTION_EMOJI} to set a thread description!`,
+                });
+                await infoMessage.pin();
+            },
+            catch: (e) =>
+                new Error(`Failed to send welcome message: ${e instanceof Error ? e.message : String(e)}`),
+        });
 
-            await infoMessage.pin();
+        yield* db.users.create(userId, member.user.username, threadId);
 
-            const member = await interaction.guild?.members.fetch(userId);
-            if (member) {
-                await member.roles.add(COMMIT_OVERFLOW_ROLE_ID);
-            }
-
-            return thread.id;
-        },
-        catch: (e) => new Error(`Failed to create thread: ${e instanceof Error ? e.message : String(e)}`),
-    });
-
-    yield* db.users.create(userId, username, createResult);
-    
-    const durationMs = Date.now() - startTime;
-    yield* Effect.logInfo("commit overflow thread created", {
-        user_id: userId,
-        username,
-        thread_id: createResult,
-        thread_name: threadName,
-        duration_ms: durationMs,
-    });
-    
-    yield* Effect.tryPromise({
-        try: () =>
-            interaction.editReply({
-                content: `Your Commit Overflow thread has been created! <#${createResult}>`,
-            }),
-        catch: (e) => new Error(`Failed to edit reply: ${e instanceof Error ? e.message : String(e)}`),
-    });
-});
+        const durationMs = Date.now() - startTime;
+        yield* Effect.logInfo("commit overflow thread setup complete", {
+            user_id: userId,
+            username: member.user.username,
+            thread_id: threadId,
+            thread_name: threadName,
+            duration_ms: durationMs,
+        });
+    },
+    Effect.annotateLogs({ feature: "commit_overflow" }),
+);
 
 const handleView = Effect.fn("CommitOverflow.handleView")(function* (
     interaction: ChatInputCommandInteraction,
@@ -382,9 +356,7 @@ export const handleCommitOverflowCommand = Effect.fn("CommitOverflow.handleComma
             subcommand,
         });
 
-        if (subcommand === "start") {
-            yield* handleStart(interaction);
-        } else if (subcommand === "view") {
+        if (subcommand === "view") {
             yield* handleView(interaction);
         }
     },
