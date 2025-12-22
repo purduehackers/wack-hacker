@@ -4,18 +4,20 @@ import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 export const users = sqliteTable("users", {
     id: text("id").primaryKey(),
     discord_username: text("discord_username").notNull(),
-    thread_id: text("thread_id"),
     created_at: text("created_at").default(sql`(datetime('now'))`),
     updated_at: text("updated_at").default(sql`(datetime('now'))`),
+});
+
+export const commitOverflowProfiles = sqliteTable("commit_overflow_profiles", {
+    user_id: text("user_id").primaryKey(),
+    thread_id: text("thread_id").notNull(),
+    created_at: text("created_at").default(sql`(datetime('now'))`),
 });
 
 export const commits = sqliteTable("commits", {
     id: integer("id").primaryKey({ autoIncrement: true }),
     user_id: text("user_id").notNull(),
     message_id: text("message_id").notNull(),
-    commit_type: text("commit_type", {
-        enum: ["github_url", "image", "progress_text"],
-    }).notNull(),
     commit_day: text("commit_day").notNull(),
     approved_at: text("approved_at"),
     approved_by: text("approved_by"),
@@ -24,6 +26,7 @@ export const commits = sqliteTable("commits", {
 
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
+export type CommitOverflowProfile = typeof commitOverflowProfiles.$inferSelect;
+export type NewCommitOverflowProfile = typeof commitOverflowProfiles.$inferInsert;
 export type Commit = typeof commits.$inferSelect;
 export type NewCommit = typeof commits.$inferInsert;
-export type CommitType = "github_url" | "image" | "progress_text";
