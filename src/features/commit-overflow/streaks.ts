@@ -1,13 +1,9 @@
-import { Effect } from "effect";
-
 export interface StreakResult {
     currentStreak: number;
     longestStreak: number;
 }
 
 export const calculateStreaks = (commitDays: string[]): StreakResult => {
-    const totalDays = commitDays.length;
-    
     if (commitDays.length === 0) {
         return { currentStreak: 0, longestStreak: 0 };
     }
