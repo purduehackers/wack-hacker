@@ -13,9 +13,6 @@ export const commits = sqliteTable("commits", {
     id: integer("id").primaryKey({ autoIncrement: true }),
     user_id: text("user_id").notNull(),
     message_id: text("message_id").notNull(),
-    commit_type: text("commit_type", {
-        enum: ["github_url", "image", "progress_text"],
-    }).notNull(),
     commit_day: text("commit_day").notNull(),
     approved_at: text("approved_at"),
     approved_by: text("approved_by"),
@@ -26,4 +23,3 @@ export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Commit = typeof commits.$inferSelect;
 export type NewCommit = typeof commits.$inferInsert;
-export type CommitType = "github_url" | "image" | "progress_text";

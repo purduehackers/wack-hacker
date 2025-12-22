@@ -20,7 +20,6 @@ import {
     COMMIT_OVERFLOW_FORUM_ID,
     COMMIT_OVERFLOW_ROLE_ID,
     COMMIT_OVERFLOW_YEAR,
-    COMMIT_PENDING_EMOJI,
     COMMIT_APPROVE_EMOJI,
     COMMIT_PIN_EMOJI,
     ORGANIZER_ROLE_ID,
@@ -28,7 +27,6 @@ import {
 } from "../../constants";
 import { getCurrentDay } from "../../lib/dates";
 import { Database } from "../../services";
-import { detectCommit } from "./detection";
 import { calculateStreaks } from "./streaks";
 
 export const commitOverflowCommand = new SlashCommandBuilder()
@@ -361,54 +359,6 @@ export const handleCommitOverflowCommand = Effect.fn("CommitOverflow.handleComma
     Effect.annotateLogs({ feature: "commit_overflow" }),
 );
 
-export const handleCommitOverflowMessage = Effect.fn("CommitOverflow.handleMessage")(
-    function* (message: Message) {
-        const startTime = Date.now();
-        
-        if (message.author.bot) return;
-        if (!message.channel.isThread()) return;
-        if (message.channel.parentId !== COMMIT_OVERFLOW_FORUM_ID) return;
-
-        yield* Effect.annotateCurrentSpan({
-            user_id: message.author.id,
-            message_id: message.id,
-            channel_id: message.channelId,
-        });
-
-        const detectedCommit = detectCommit(message);
-        if (!detectedCommit) {
-            yield* Effect.logDebug("no commit detected in message", {
-                user_id: message.author.id,
-                message_id: message.id,
-                channel_id: message.channelId,
-                content_length: message.content?.length ?? 0,
-                has_attachments: message.attachments.size > 0,
-            });
-            return;
-        }
-
-        const durationMs = Date.now() - startTime;
-        yield* Effect.logInfo("commit detected", {
-            user_id: message.author.id,
-            username: message.author.username,
-            message_id: message.id,
-            channel_id: message.channelId,
-            commit_type: detectedCommit.type,
-            evidence: detectedCommit.evidence.substring(0, 100),
-            content_length: detectedCommit.metrics.content_length,
-            attachment_count: detectedCommit.metrics.attachment_count,
-            image_count: detectedCommit.metrics.image_count,
-            duration_ms: durationMs,
-        });
-
-        yield* Effect.tryPromise({
-            try: () => message.react(COMMIT_PENDING_EMOJI),
-            catch: (e) => new Error(`Error reacting to potential commit: ${e instanceof Error ? e.message : String(e)}`),
-        });
-    },
-    Effect.annotateLogs({ feature: "commit_overflow" }),
-);
-
 const handlePinReaction = Effect.fn("CommitOverflow.handlePinReaction")(function* (
     reaction: MessageReaction | PartialMessageReaction,
     user: User | PartialUser,
@@ -531,21 +481,6 @@ const handleApproveReaction = Effect.fn("CommitOverflow.handleApproveReaction")(
         return;
     }
 
-    const detectedCommit = detectCommit(message);
-    if (!detectedCommit) {
-        yield* Effect.logWarning("approval attempted on non commit message", {
-            user_id: user.id,
-            approver_id: user.id,
-            message_id: message.id,
-            author_id: message.author?.id,
-        });
-        yield* Effect.tryPromise({
-            try: () => message.react("\u2753"),
-            catch: (e) => new Error(`Failed to react: ${e instanceof Error ? e.message : String(e)}`),
-        });
-        return;
-    }
-
     const author = message.author;
     if (!author) return;
 
@@ -558,7 +493,6 @@ const handleApproveReaction = Effect.fn("CommitOverflow.handleApproveReaction")(
     yield* db.commits.createApproved({
         userId: author.id,
         messageId: message.id,
-        commitType: detectedCommit.type,
         commitDay,
         approvedBy: user.id,
     });
@@ -569,7 +503,6 @@ const handleApproveReaction = Effect.fn("CommitOverflow.handleApproveReaction")(
         username: author.username,
         approver_id: user.id,
         message_id: message.id,
-        commit_type: detectedCommit.type,
         commit_day: commitDay,
         duration_ms: durationMs,
     });
