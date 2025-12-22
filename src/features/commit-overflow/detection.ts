@@ -5,6 +5,11 @@ import type { CommitType } from "../../db/schema";
 export interface DetectedCommit {
     type: CommitType;
     evidence: string;
+    metrics: {
+        content_length: number;
+        attachment_count: number;
+        image_count: number;
+    };
 }
 
 export interface CommitDetectionMessage {
@@ -64,18 +69,29 @@ const hasProgressKeywords = (content: string): boolean => {
 
 export const detectCommit = (message: CommitDetectionMessage): DetectedCommit | null => {
     const content = message.content ?? "";
+    const contentLength = content.length;
+    const attachmentCount = message.attachments.size;
+    const imageCount = message.attachments.filter(
+        (attachment) => attachment.contentType?.startsWith("image/") ?? false
+    ).size;
+
+    const metrics = {
+        content_length: contentLength,
+        attachment_count: attachmentCount,
+        image_count: imageCount,
+    };
 
     const githubUrl = detectGitHubUrl(content);
     if (githubUrl) {
-        return { type: "github_url", evidence: githubUrl };
+        return { type: "github_url", evidence: githubUrl, metrics };
     }
 
     if (hasImage(message)) {
-        return { type: "image", evidence: "image attachment" };
+        return { type: "image", evidence: "image attachment", metrics };
     }
 
     if (content.length >= MIN_PROGRESS_TEXT_LENGTH && hasProgressKeywords(content)) {
-        return { type: "progress_text", evidence: content.slice(0, 100) };
+        return { type: "progress_text", evidence: content.slice(0, 100), metrics };
     }
 
     return null;
