@@ -23,7 +23,6 @@ import {
     COMMIT_PENDING_EMOJI,
     COMMIT_APPROVE_EMOJI,
     COMMIT_PIN_EMOJI,
-    COMMIT_EDIT_DESCRIPTION_EMOJI,
     ORGANIZER_ROLE_ID,
     BISHOP_ROLE_ID,
 } from "../../constants";
@@ -151,8 +150,7 @@ export const handleCommitOverflowThreadCreate = Effect.fn("CommitOverflow.handle
 
 • Share your progress by posting GitHub commits, code screenshots, or updates
 • React with ${COMMIT_PIN_EMOJI} to pin important messages
-• Organizers will react with ${COMMIT_APPROVE_EMOJI} to approve commits toward your streak
-• React to your own message with ${COMMIT_EDIT_DESCRIPTION_EMOJI} to set a thread description!`,
+• You or organizers can react with ${COMMIT_APPROVE_EMOJI} to approve commits toward your streak`,
                 });
                 await infoMessage.pin();
             },
@@ -509,12 +507,16 @@ const handleApproveReaction = Effect.fn("CommitOverflow.handleApproveReaction")(
     const isOrganizer = member.roles.cache.has(ORGANIZER_ROLE_ID);
     const isBishop = member.roles.cache.has(BISHOP_ROLE_ID);
 
-    if (!isOrganizer && !isBishop) {
+    const thread = message.channel as ThreadChannel;
+    const isThreadOwner = thread.ownerId === user.id;
+
+    if (!isOrganizer && !isBishop && !isThreadOwner) {
         yield* Effect.logDebug("unauthorized approval attempt", {
             user_id: user.id,
             message_id: message.id,
             is_organizer: isOrganizer,
             is_bishop: isBishop,
+            is_thread_owner: isThreadOwner,
         });
         return;
     }
@@ -578,95 +580,6 @@ const handleApproveReaction = Effect.fn("CommitOverflow.handleApproveReaction")(
     });
 });
 
-const handleEditDescriptionReaction = Effect.fn("CommitOverflow.handleEditDescriptionReaction")(
-    function* (reaction: MessageReaction | PartialMessageReaction, user: User | PartialUser) {
-        const startTime = Date.now();
-        const db = yield* Database;
-
-        if (user.bot) return;
-        if (reaction.emoji.name !== COMMIT_EDIT_DESCRIPTION_EMOJI) return;
-        if (!isInCommitOverflowForum(reaction.message.channel)) return;
-
-        yield* Effect.annotateCurrentSpan({
-            user_id: user.id,
-            message_id: reaction.message.id,
-        });
-
-        const fullReaction = reaction.partial
-            ? yield* Effect.tryPromise({
-                  try: () => reaction.fetch(),
-                  catch: (e) => new Error(`Failed to fetch reaction: ${e instanceof Error ? e.message : String(e)}`),
-              })
-            : reaction;
-
-        const message = fullReaction.message.partial
-            ? yield* Effect.tryPromise({
-                  try: () => fullReaction.message.fetch(),
-                  catch: (e) => new Error(`Failed to fetch message: ${e instanceof Error ? e.message : String(e)}`),
-              })
-            : fullReaction.message;
-
-        if (message.author?.id !== user.id) {
-            yield* Effect.logDebug("description edit rejected not message author", {
-                user_id: user.id,
-                message_id: message.id,
-                author_id: message.author?.id,
-            });
-            return;
-        }
-
-        const thread = message.channel as ThreadChannel;
-
-        const dbUserOpt = yield* db.users.get(user.id);
-        if (Option.isNone(dbUserOpt) || dbUserOpt.value.thread_id !== thread.id) {
-            yield* Effect.logDebug("description edit rejected thread mismatch", {
-                user_id: user.id,
-                message_id: message.id,
-                thread_id: thread.id,
-                user_thread_id: Option.isSome(dbUserOpt) ? dbUserOpt.value.thread_id : null,
-            });
-            return;
-        }
-
-        const starterMessage = yield* Effect.tryPromise({
-            try: () => thread.fetchStarterMessage(),
-            catch: (e) => new Error(`Failed to fetch starter message: ${e instanceof Error ? e.message : String(e)}`),
-        });
-
-        if (!starterMessage) return;
-
-        const newDescription = message.content?.trim();
-        if (!newDescription) {
-            yield* Effect.logDebug("description edit rejected empty content", {
-                user_id: user.id,
-                message_id: message.id,
-                thread_id: thread.id,
-            });
-            return;
-        }
-
-        yield* Effect.tryPromise({
-            try: () => starterMessage.edit({ content: newDescription }),
-            catch: (e) => new Error(`Failed to edit starter message: ${e instanceof Error ? e.message : String(e)}`),
-        });
-
-        const durationMs = Date.now() - startTime;
-        yield* Effect.logInfo("thread description updated", {
-            user_id: user.id,
-            username: user.username,
-            message_id: message.id,
-            thread_id: thread.id,
-            description_length: newDescription.length,
-            duration_ms: durationMs,
-        });
-
-        yield* Effect.tryPromise({
-            try: () => message.react("\u2705"),
-            catch: (e) => new Error(`Failed to react: ${e instanceof Error ? e.message : String(e)}`),
-        });
-    },
-);
-
 export const handleCommitOverflowReaction = (
     reaction: MessageReaction | PartialMessageReaction,
     user: User | PartialUser,
@@ -675,7 +588,6 @@ export const handleCommitOverflowReaction = (
         [
             handlePinReaction(reaction, user),
             handleApproveReaction(reaction, user),
-            handleEditDescriptionReaction(reaction, user),
         ],
         { concurrency: "unbounded", mode: "either" },
     ).pipe(Effect.asVoid, Effect.annotateLogs({ feature: "commit_overflow" }));
