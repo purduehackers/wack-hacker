@@ -24,7 +24,6 @@ const structuredError = (e: unknown) => ({
 
 import { handleAutoThread } from "../features/auto-thread";
 import {
-    handleCommitOverflowMessage,
     handleCommitOverflowReaction,
     handleCommitOverflowThreadCreate,
 } from "../features/commit-overflow";
@@ -77,7 +76,6 @@ const getFeatureFlags = (config: {
 
 const messageHandlers: MessageHandlerConfig[] = [
     { handler: handleGrokMessage },
-    { handler: handleCommitOverflowMessage, featureFlag: "commitOverflow" },
     { handler: handleHackNightImages, featureFlag: "hackNightPhotos" },
     { handler: handleEvergreenIt },
     { handler: handleAutoThread, featureFlag: "autoThread" },

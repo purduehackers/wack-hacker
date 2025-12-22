@@ -315,14 +315,12 @@ export class Database extends Effect.Service<Database>()("Database", {
             createApproved: Effect.fn("Database.commits.createApproved")(function* (data: {
                 userId: string;
                 messageId: string;
-                commitType: schema.CommitType;
                 commitDay: string;
                 approvedBy: string;
             }) {
                 yield* Effect.annotateCurrentSpan({
                     table: "commits",
                     user_id: data.userId,
-                    commit_type: data.commitType,
                 });
 
                 yield* Effect.logDebug("database insert initiated", {
@@ -332,7 +330,6 @@ export class Database extends Effect.Service<Database>()("Database", {
                     table: "commits",
                     user_id: data.userId,
                     message_id: data.messageId,
-                    commit_type: data.commitType,
                     commit_day: data.commitDay,
                     approved_by: data.approvedBy,
                 });
@@ -342,7 +339,6 @@ export class Database extends Effect.Service<Database>()("Database", {
                         db.insert(schema.commits).values({
                             user_id: data.userId,
                             message_id: data.messageId,
-                            commit_type: data.commitType,
                             commit_day: data.commitDay,
                             approved_at: new Date().toISOString(),
                             approved_by: data.approvedBy,
@@ -362,7 +358,6 @@ export class Database extends Effect.Service<Database>()("Database", {
                     table: "commits",
                     user_id: data.userId,
                     message_id: data.messageId,
-                    commit_type: data.commitType,
                     commit_day: data.commitDay,
                     approved_by: data.approvedBy,
                     duration_ms,
