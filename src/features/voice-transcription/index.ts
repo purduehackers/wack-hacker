@@ -52,7 +52,7 @@ export const handleVoiceTranscription = Effect.fn("VoiceTranscription.handle")(
             username: message.author.username,
         });
 
-        const [reactionDuration] = yield* Effect.tryPromise({
+        yield* Effect.tryPromise({
             try: () => message.react("\u{1F399}\u{FE0F}"),
             catch: (e) => new Error(`Failed to react: ${e instanceof Error ? e.message : String(e)}`),
         }).pipe(

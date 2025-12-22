@@ -194,7 +194,7 @@ const program = Effect.gen(function* () {
     });
 });
 
-const server = Bun.serve({
+Bun.serve({
     fetch() {
         return new Response("Wack Hacker is running!", {
             headers: { "content-type": "text/plain" },

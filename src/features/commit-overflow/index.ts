@@ -425,6 +425,9 @@ export const handleCommitOverflowMessage = Effect.fn("CommitOverflow.handleMessa
             channel_id: message.channelId,
             commit_type: detectedCommit.type,
             evidence: detectedCommit.evidence.substring(0, 100),
+            content_length: detectedCommit.metrics.content_length,
+            attachment_count: detectedCommit.metrics.attachment_count,
+            image_count: detectedCommit.metrics.image_count,
             duration_ms: durationMs,
         });
 
