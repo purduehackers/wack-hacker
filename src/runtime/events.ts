@@ -4,6 +4,7 @@ import type {
     PartialMessageReaction,
     User,
     PartialUser,
+    AnyThreadChannel,
 } from "discord.js";
 
 import { Effect } from "effect";
@@ -25,6 +26,7 @@ import { handleAutoThread } from "../features/auto-thread";
 import {
     handleCommitOverflowMessage,
     handleCommitOverflowReaction,
+    handleCommitOverflowThreadCreate,
 } from "../features/commit-overflow";
 import { handleDashboardMessage } from "../features/dashboard";
 import { handleEvergreenIt } from "../features/evergreen";
@@ -39,6 +41,10 @@ type ReactionHandler = (
     reaction: MessageReaction | PartialMessageReaction,
     user: User | PartialUser,
 ) => Effect.Effect<void, unknown, unknown>;
+type ThreadCreateHandler = (
+    thread: AnyThreadChannel,
+    newlyCreated: boolean,
+) => Effect.Effect<void, unknown, unknown>;
 
 interface MessageHandlerConfig {
     handler: MessageHandler;
@@ -47,6 +53,11 @@ interface MessageHandlerConfig {
 
 interface ReactionHandlerConfig {
     handler: ReactionHandler;
+    featureFlag?: keyof ReturnType<typeof getFeatureFlags>;
+}
+
+interface ThreadCreateHandlerConfig {
+    handler: ThreadCreateHandler;
     featureFlag?: keyof ReturnType<typeof getFeatureFlags>;
 }
 
@@ -78,6 +89,10 @@ const messageHandlers: MessageHandlerConfig[] = [
 
 const reactionHandlers: ReactionHandlerConfig[] = [
     { handler: handleCommitOverflowReaction, featureFlag: "commitOverflow" },
+];
+
+const threadCreateHandlers: ThreadCreateHandlerConfig[] = [
+    { handler: handleCommitOverflowThreadCreate, featureFlag: "commitOverflow" },
 ];
 
 export const handleMessageCreate = Effect.fn("Events.handleMessageCreate")(function* (
@@ -270,6 +285,99 @@ export const handleMessageReactionAdd = Effect.fn("Events.handleMessageReactionA
         channel_id: reaction.message.channelId,
         user_id: user.id,
         emoji_name: emojiName,
+        handlers_executed_count: enabledHandlers.length,
+        total_duration_ms: totalDurationMs,
+    });
+});
+
+export const handleThreadCreate = Effect.fn("Events.handleThreadCreate")(function* (
+    thread: AnyThreadChannel,
+    newlyCreated: boolean,
+) {
+    const startTime = Date.now();
+
+    yield* Effect.annotateCurrentSpan({
+        thread_id: thread.id,
+        thread_name: thread.name,
+        parent_id: thread.parentId,
+        owner_id: thread.ownerId,
+        newly_created: newlyCreated,
+    });
+
+    yield* Effect.logDebug("thread create event received", {
+        event_type: "thread_create",
+        thread_id: thread.id,
+        thread_name: thread.name,
+        parent_id: thread.parentId,
+        owner_id: thread.ownerId,
+        newly_created: newlyCreated,
+    });
+
+    const config = yield* AppConfig;
+    const flags = getFeatureFlags(config);
+
+    const allHandlers = threadCreateHandlers;
+    const enabledHandlers = threadCreateHandlers.filter(
+        (h) => !h.featureFlag || flags[h.featureFlag],
+    );
+
+    yield* Effect.annotateCurrentSpan({
+        total_handlers_count: allHandlers.length,
+        enabled_handlers_count: enabledHandlers.length,
+        disabled_handlers_count: allHandlers.length - enabledHandlers.length,
+    });
+
+    yield* Effect.logDebug("thread create handlers filtered", {
+        event_type: "thread_create",
+        thread_id: thread.id,
+        total_handlers_count: allHandlers.length,
+        enabled_handlers_count: enabledHandlers.length,
+        disabled_handlers_count: allHandlers.length - enabledHandlers.length,
+    });
+
+    const effects = enabledHandlers.map((h) => {
+        const handlerStartTime = Date.now();
+        return h.handler(thread, newlyCreated).pipe(
+            Effect.tap(() => {
+                const handlerDurationMs = Date.now() - handlerStartTime;
+                return Effect.logDebug("thread create handler completed", {
+                    event_type: "thread_create",
+                    thread_id: thread.id,
+                    thread_name: thread.name,
+                    handler_name: h.handler.name,
+                    handler_duration_ms: handlerDurationMs,
+                });
+            }),
+            Effect.catchAll((e) => {
+                const handlerDurationMs = Date.now() - handlerStartTime;
+                return Effect.logError("thread create handler failed", {
+                    event_type: "thread_create",
+                    error_type: structuredError(e).type,
+                    error_message: structuredError(e).message,
+                    error_stack: structuredError(e).stack,
+                    thread_id: thread.id,
+                    thread_name: thread.name,
+                    owner_id: thread.ownerId,
+                    handler_name: h.handler.name,
+                    handler_duration_ms: handlerDurationMs,
+                });
+            }),
+        );
+    });
+
+    yield* Effect.all(effects, { concurrency: "unbounded", mode: "either" });
+
+    const totalDurationMs = Date.now() - startTime;
+
+    yield* Effect.annotateCurrentSpan({
+        total_duration_ms: totalDurationMs,
+    });
+
+    yield* Effect.logInfo("thread create event processed", {
+        event_type: "thread_create",
+        thread_id: thread.id,
+        thread_name: thread.name,
+        owner_id: thread.ownerId,
         handlers_executed_count: enabledHandlers.length,
         total_duration_ms: totalDurationMs,
     });

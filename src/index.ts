@@ -8,6 +8,7 @@ import {
     findCommand,
     handleMessageCreate,
     handleMessageReactionAdd,
+    handleThreadCreate,
     startCronJobs,
 } from "./runtime";
 import { ServicesLive, Discord } from "./services";
@@ -183,6 +184,36 @@ const program = Effect.gen(function* () {
         ) as AppEffect<void>;
 
         runtime.runPromise(reactionProgram);
+    });
+
+    client.on(Events.ThreadCreate, async (thread, newlyCreated) => {
+        const threadStartTime = Date.now();
+
+        const threadProgram = handleThreadCreate(thread, newlyCreated).pipe(
+            Effect.tap(() =>
+                Effect.logDebug("thread create handled", {
+                    thread_id: thread.id,
+                    thread_name: thread.name,
+                    parent_id: thread.parentId,
+                    owner_id: thread.ownerId,
+                    newly_created: newlyCreated,
+                    duration_ms: Date.now() - threadStartTime,
+                }),
+            ),
+            Effect.catchAll((e) =>
+                Effect.logError("thread create handling failed", {
+                    error: structuredError(e),
+                    thread_id: thread.id,
+                    thread_name: thread.name,
+                    parent_id: thread.parentId,
+                    owner_id: thread.ownerId,
+                    newly_created: newlyCreated,
+                    duration_ms: Date.now() - threadStartTime,
+                }),
+            ),
+        ) as AppEffect<void>;
+
+        runtime.runPromise(threadProgram);
     });
 
     const startupDuration = Date.now() - startTime;
