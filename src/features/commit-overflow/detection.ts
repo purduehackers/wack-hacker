@@ -1,5 +1,4 @@
 import type { Collection, Attachment } from "discord.js";
-import { Effect } from "effect";
 
 import type { CommitType } from "../../db/schema";
 
@@ -65,11 +64,6 @@ const hasProgressKeywords = (content: string): boolean => {
 
 export const detectCommit = (message: CommitDetectionMessage): DetectedCommit | null => {
     const content = message.content ?? "";
-    const contentLength = content.length;
-    const attachmentCount = message.attachments.size;
-    const imageCount = message.attachments.filter(
-        (attachment) => attachment.contentType?.startsWith("image/") ?? false
-    ).size;
 
     const githubUrl = detectGitHubUrl(content);
     if (githubUrl) {

@@ -15,7 +15,6 @@ export class AI extends Effect.Service<AI>()("AI", {
             userPrompt: string;
         }) {
             const model = options.model ?? "llama-3.3-70b-versatile";
-            const requestStartTime = Date.now();
 
             yield* Effect.annotateCurrentSpan({
                 model,
@@ -127,8 +126,6 @@ export class AI extends Effect.Service<AI>()("AI", {
         });
 
         const transcribe = Effect.fn("AI.transcribe")(function* (audioUrl: string) {
-            const requestStartTime = Date.now();
-
             yield* Effect.annotateCurrentSpan({
                 audio_url: audioUrl,
             });
