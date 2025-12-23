@@ -81,54 +81,108 @@ export const handleCommitOverflowThreadCreate = Effect.fn("CommitOverflow.handle
         if (Option.isSome(existingProfileOpt)) {
             const existingProfile = existingProfileOpt.value;
 
-            if (existingProfile.thread_id === threadId) {
-                yield* Effect.logDebug("thread already registered for user", {
-                    user_id: userId,
-                    thread_id: threadId,
-                });
-                return;
-            }
+		if (existingProfile.thread_id === threadId) {
+				yield* Effect.logDebug("thread already registered for user", {
+					user_id: userId,
+					thread_id: threadId,
+				});
+				return;
+			}
 
-            const forum = thread.parent;
-            if (forum && forum.type === ChannelType.GuildForum) {
-                const forumChannel = forum as ForumChannel;
-                const oldThreadExists = yield* Effect.tryPromise({
-                    try: async () => {
-                        const oldThread = await forumChannel.threads.fetch(existingProfile.thread_id);
-                        return oldThread !== null;
-                    },
-                    catch: () => false as const,
-                }).pipe(Effect.catchAll(() => Effect.succeed(false)));
+			const existingThreadId = existingProfile.thread_id;
+			yield* Effect.logInfo("found existing profile", {
+				user_id: userId,
+				existing_thread_id: existingThreadId,
+				new_thread_id: threadId,
+			});
 
-                if (oldThreadExists) {
-                    const durationMs = Date.now() - startTime;
-                    yield* Effect.logInfo("user already has existing thread", {
-                        user_id: userId,
-                        existing_thread_id: existingProfile.thread_id,
-                        new_thread_id: threadId,
-                        duration_ms: durationMs,
-                    });
+			if (!existingThreadId) {
+				yield* Effect.logWarning("existing profile has no thread_id, cleaning up", {
+					user_id: userId,
+					new_thread_id: threadId,
+				});
+				yield* db.commits.deleteByUser(userId);
+				yield* db.commitOverflowProfiles.delete(userId);
+			} else {
+				const forum = thread.parent;
+				if (forum && forum.type === ChannelType.GuildForum) {
+					const forumChannel = forum as ForumChannel;
 
-                    yield* Effect.tryPromise({
-                        try: () =>
-                            thread.send({
-                                content: `You already have a Commit Overflow thread! <#${existingProfile.thread_id}>\n\nPlease use your existing thread instead.`,
-                            }),
-                        catch: (e) =>
-                            new Error(`Failed to send message: ${e instanceof Error ? e.message : String(e)}`),
-                    });
-                    return;
-                }
-            }
+					const oldThread = yield* Effect.tryPromise({
+						try: () => forumChannel.threads.fetch(existingThreadId),
+						catch: () => null,
+					}).pipe(Effect.catchAll(() => Effect.succeed(null)));
 
-            yield* Effect.logInfo("old thread no longer exists, cleaning up user records", {
-                user_id: userId,
-                old_thread_id: existingProfile.thread_id,
-                new_thread_id: threadId,
-            });
-            yield* db.commits.deleteByUser(userId);
-            yield* db.commitOverflowProfiles.delete(userId);
-        }
+					if (oldThread) {
+						yield* Effect.logInfo("user already has existing thread, deleting duplicate", {
+							user_id: userId,
+							existing_thread_id: existingThreadId,
+							new_thread_id: threadId,
+							duration_ms: Date.now() - startTime,
+						});
+
+						const starterMessage = yield* Effect.tryPromise({
+							try: () => thread.fetchStarterMessage(),
+							catch: () => null,
+						}).pipe(Effect.catchAll(() => Effect.succeed(null)));
+
+						const messageContent = starterMessage?.content || "";
+						const escapedContent = messageContent.replace(/```/g, "`\u200b``");
+						const attachmentUrls = starterMessage?.attachments.map((a) => a.url).join("\n") || "";
+
+						const reminderMessage =
+							`Hey <@${userId}>! You tried to create a new Commit Overflow thread, but you already have one here!\n\n` +
+							`I've saved your message for you:\n` +
+							(escapedContent ? `\`\`\`${escapedContent}\`\`\`\n` : "") +
+							(attachmentUrls ? `Attachments:\n${attachmentUrls}\n` : "") +
+							`\nPlease post your commits in this thread instead! :)`;
+
+						const notificationSent = yield* Effect.tryPromise({
+							try: async () => {
+								await oldThread.send(reminderMessage);
+								return true;
+							},
+							catch: () => false as const,
+						}).pipe(Effect.catchAll(() => Effect.succeed(false)));
+
+						if (notificationSent) {
+							yield* Effect.tryPromise({
+								try: async () => {
+									await thread.delete();
+								},
+								catch: (e) =>
+									new Error(`Failed to delete thread: ${e instanceof Error ? e.message : String(e)}`),
+							});
+
+							yield* Effect.logInfo("duplicate thread deleted and user notified in original", {
+								user_id: userId,
+								existing_thread_id: existingThreadId,
+								deleted_thread_id: threadId,
+								had_message_content: messageContent.length > 0,
+								had_attachments: attachmentUrls.length > 0,
+								duration_ms: Date.now() - startTime,
+							});
+						} else {
+							yield* Effect.logWarning("failed to notify user, keeping duplicate thread", {
+								user_id: userId,
+								existing_thread_id: existingThreadId,
+								new_thread_id: threadId,
+							});
+						}
+
+						return;
+					}
+
+					yield* Effect.logInfo("old thread no longer exists, cleaning up user records", {
+						user_id: userId,
+						old_thread_id: existingThreadId,
+						new_thread_id: threadId,
+					});
+					yield* db.commits.deleteByUser(userId);
+					yield* db.commitOverflowProfiles.delete(userId);
+				}
+			}
+		}
 
         const guild = thread.guild;
         const member = yield* Effect.tryPromise({
