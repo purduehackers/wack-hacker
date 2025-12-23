@@ -54,9 +54,7 @@ export const commitOverflowCommand = new SlashCommandBuilder()
             ),
     );
 
-const isInCommitOverflowForum = (
-    channel: Message["channel"]  ,
-): boolean => {
+const isInCommitOverflowForum = (channel: Message["channel"]): boolean => {
     if (!channel.isThread()) return false;
     return channel.parentId === COMMIT_OVERFLOW_FORUM_ID;
 };
@@ -91,118 +89,132 @@ export const handleCommitOverflowThreadCreate = Effect.fn("CommitOverflow.handle
         if (Option.isSome(existingProfileOpt)) {
             const existingProfile = existingProfileOpt.value;
 
-		if (existingProfile.thread_id === threadId) {
-				yield* Effect.logDebug("thread already registered for user", {
-					user_id: userId,
-					thread_id: threadId,
-				});
-				return;
-			}
+            if (existingProfile.thread_id === threadId) {
+                yield* Effect.logDebug("thread already registered for user", {
+                    user_id: userId,
+                    thread_id: threadId,
+                });
+                return;
+            }
 
-			const existingThreadId = existingProfile.thread_id;
-			yield* Effect.logInfo("found existing profile", {
-				user_id: userId,
-				existing_thread_id: existingThreadId,
-				new_thread_id: threadId,
-			});
+            const existingThreadId = existingProfile.thread_id;
+            yield* Effect.logInfo("found existing profile", {
+                user_id: userId,
+                existing_thread_id: existingThreadId,
+                new_thread_id: threadId,
+            });
 
-			if (!existingThreadId) {
-				yield* Effect.logWarning("existing profile has no thread_id, cleaning up", {
-					user_id: userId,
-					new_thread_id: threadId,
-				});
-				yield* db.commits.deleteByUser(userId);
-				yield* db.commitOverflowProfiles.delete(userId);
-			} else {
-				const forum = thread.parent;
-				if (forum && forum.type === ChannelType.GuildForum) {
-					const forumChannel = forum as ForumChannel;
+            if (!existingThreadId) {
+                yield* Effect.logWarning("existing profile has no thread_id, cleaning up", {
+                    user_id: userId,
+                    new_thread_id: threadId,
+                });
+                yield* db.commits.deleteByUser(userId);
+                yield* db.commitOverflowProfiles.delete(userId);
+            } else {
+                const forum = thread.parent;
+                if (forum && forum.type === ChannelType.GuildForum) {
+                    const forumChannel = forum as ForumChannel;
 
-					const oldThread = yield* Effect.tryPromise({
-						try: () => forumChannel.threads.fetch(existingThreadId),
-						catch: () => null,
-					}).pipe(Effect.catchAll(() => Effect.succeed(null)));
+                    const oldThread = yield* Effect.tryPromise({
+                        try: () => forumChannel.threads.fetch(existingThreadId),
+                        catch: () => null,
+                    }).pipe(Effect.catchAll(() => Effect.succeed(null)));
 
-					if (oldThread) {
-						yield* Effect.logInfo("user already has existing thread, deleting duplicate", {
-							user_id: userId,
-							existing_thread_id: existingThreadId,
-							new_thread_id: threadId,
-							duration_ms: Date.now() - startTime,
-						});
+                    if (oldThread) {
+                        yield* Effect.logInfo(
+                            "user already has existing thread, deleting duplicate",
+                            {
+                                user_id: userId,
+                                existing_thread_id: existingThreadId,
+                                new_thread_id: threadId,
+                                duration_ms: Date.now() - startTime,
+                            },
+                        );
 
-						const starterMessage = yield* Effect.tryPromise({
-							try: () => thread.fetchStarterMessage(),
-							catch: () => null,
-						}).pipe(Effect.catchAll(() => Effect.succeed(null)));
+                        const starterMessage = yield* Effect.tryPromise({
+                            try: () => thread.fetchStarterMessage(),
+                            catch: () => null,
+                        }).pipe(Effect.catchAll(() => Effect.succeed(null)));
 
-						const messageContent = starterMessage?.content || "";
-						const escapedContent = messageContent.replace(/```/g, "`\u200b``");
-						const attachmentUrls = starterMessage?.attachments.map((a) => a.url).join("\n") || "";
+                        const messageContent = starterMessage?.content || "";
+                        const escapedContent = messageContent.replace(/```/g, "`\u200b``");
+                        const attachmentUrls =
+                            starterMessage?.attachments.map((a) => a.url).join("\n") || "";
 
-						const reminderMessage =
-							`Hey <@${userId}>! You tried to create a new Commit Overflow thread, but you already have one here!\n\n` +
-							`I've saved your message for you:\n` +
-							(escapedContent ? `\`\`\`${escapedContent}\`\`\`\n` : "") +
-							(attachmentUrls ? `Attachments:\n${attachmentUrls}\n` : "") +
-							`\nPlease post your commits in this thread instead! :)`;
+                        const reminderMessage =
+                            `Hey <@${userId}>! You tried to create a new Commit Overflow thread, but you already have one here!\n\n` +
+                            `I've saved your message for you:\n` +
+                            (escapedContent ? `\`\`\`${escapedContent}\`\`\`\n` : "") +
+                            (attachmentUrls ? `Attachments:\n${attachmentUrls}\n` : "") +
+                            `\nPlease post your commits in this thread instead! :)`;
 
-						const notificationSent = yield* Effect.tryPromise({
-							try: async () => {
-								await oldThread.send(reminderMessage);
-								return true;
-							},
-							catch: () => false as const,
-						}).pipe(Effect.catchAll(() => Effect.succeed(false)));
+                        const notificationSent = yield* Effect.tryPromise({
+                            try: async () => {
+                                await oldThread.send(reminderMessage);
+                                return true;
+                            },
+                            catch: () => false as const,
+                        }).pipe(Effect.catchAll(() => Effect.succeed(false)));
 
-						if (notificationSent) {
-							yield* Effect.tryPromise({
-								try: async () => {
-									await thread.delete();
-								},
-								catch: (e) =>
-									new Error(`Failed to delete thread: ${e instanceof Error ? e.message : String(e)}`),
-							});
+                        if (notificationSent) {
+                            yield* Effect.tryPromise({
+                                try: async () => {
+                                    await thread.delete();
+                                },
+                                catch: (e) =>
+                                    new Error(
+                                        `Failed to delete thread: ${e instanceof Error ? e.message : String(e)}`,
+                                    ),
+                            });
 
-							yield* Effect.logInfo("duplicate thread deleted and user notified in original", {
-								user_id: userId,
-								existing_thread_id: existingThreadId,
-								deleted_thread_id: threadId,
-								had_message_content: messageContent.length > 0,
-								had_attachments: attachmentUrls.length > 0,
-								duration_ms: Date.now() - startTime,
-							});
-						} else {
-							yield* Effect.logWarning("failed to notify user, keeping duplicate thread", {
-								user_id: userId,
-								existing_thread_id: existingThreadId,
-								new_thread_id: threadId,
-							});
-						}
+                            yield* Effect.logInfo(
+                                "duplicate thread deleted and user notified in original",
+                                {
+                                    user_id: userId,
+                                    existing_thread_id: existingThreadId,
+                                    deleted_thread_id: threadId,
+                                    had_message_content: messageContent.length > 0,
+                                    had_attachments: attachmentUrls.length > 0,
+                                    duration_ms: Date.now() - startTime,
+                                },
+                            );
+                        } else {
+                            yield* Effect.logWarning(
+                                "failed to notify user, keeping duplicate thread",
+                                {
+                                    user_id: userId,
+                                    existing_thread_id: existingThreadId,
+                                    new_thread_id: threadId,
+                                },
+                            );
+                        }
 
-						return;
-					}
+                        return;
+                    }
 
-					yield* Effect.logInfo("old thread no longer exists, cleaning up user records", {
-						user_id: userId,
-						old_thread_id: existingThreadId,
-						new_thread_id: threadId,
-					});
-					yield* db.commits.deleteByUser(userId);
-					yield* db.commitOverflowProfiles.delete(userId);
-				}
-			}
-		}
+                    yield* Effect.logInfo("old thread no longer exists, cleaning up user records", {
+                        user_id: userId,
+                        old_thread_id: existingThreadId,
+                        new_thread_id: threadId,
+                    });
+                    yield* db.commits.deleteByUser(userId);
+                    yield* db.commitOverflowProfiles.delete(userId);
+                }
+            }
+        }
 
         const guild = thread.guild;
         const member = yield* Effect.tryPromise({
             try: () => guild.members.fetch(userId),
-            catch: (e) => new Error(`Failed to fetch member: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (e) =>
+                new Error(`Failed to fetch member: ${e instanceof Error ? e.message : String(e)}`),
         });
 
         yield* Effect.tryPromise({
             try: () => member.roles.add(COMMIT_OVERFLOW_ROLE_ID),
-            catch: (e) => new Error(`Failed to add role: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (e) =>
+                new Error(`Failed to add role: ${e instanceof Error ? e.message : String(e)}`),
         });
 
         yield* Effect.tryPromise({
@@ -217,7 +229,9 @@ export const handleCommitOverflowThreadCreate = Effect.fn("CommitOverflow.handle
                 await infoMessage.pin();
             },
             catch: (e) =>
-                new Error(`Failed to send welcome message: ${e instanceof Error ? e.message : String(e)}`),
+                new Error(
+                    `Failed to send welcome message: ${e instanceof Error ? e.message : String(e)}`,
+                ),
         });
 
         yield* db.users.upsert(userId, member.user.username);
@@ -275,7 +289,8 @@ const handleView = Effect.fn("CommitOverflow.handleView")(function* (
                             "You can only view your own profile. Organizers can view anyone's profile.",
                         flags: MessageFlags.Ephemeral,
                     }),
-                catch: (e) => new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+                catch: (e) =>
+                    new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
             });
             return;
         }
@@ -296,7 +311,8 @@ const handleView = Effect.fn("CommitOverflow.handleView")(function* (
                     content: "Could not find the Commit Overflow forum channel.",
                     flags: MessageFlags.Ephemeral,
                 }),
-            catch: (e) => new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (e) =>
+                new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
         });
         return;
     }
@@ -305,7 +321,7 @@ const handleView = Effect.fn("CommitOverflow.handleView")(function* (
 
     yield* Effect.tryPromise({
         try: () => interaction.deferReply(),
-            catch: (e) => new Error(`Failed to defer: ${e instanceof Error ? e.message : String(e)}`),
+        catch: (e) => new Error(`Failed to defer: ${e instanceof Error ? e.message : String(e)}`),
     });
 
     const initialProfileOpt = yield* db.commitOverflowProfiles.get(targetUser.id);
@@ -350,7 +366,8 @@ const handleView = Effect.fn("CommitOverflow.handleView")(function* (
                         ? "You haven't started Commit Overflow yet. Use `/commit-overflow start` to begin!"
                         : `${targetUser.username} hasn't started Commit Overflow yet.`,
                 }),
-            catch: (e) => new Error(`Failed to edit reply: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (e) =>
+                new Error(`Failed to edit reply: ${e instanceof Error ? e.message : String(e)}`),
         });
         return;
     }
@@ -410,7 +427,8 @@ const handleView = Effect.fn("CommitOverflow.handleView")(function* (
 
     yield* Effect.tryPromise({
         try: () => interaction.editReply({ embeds: [embed] }),
-        catch: (e) => new Error(`Failed to edit reply: ${e instanceof Error ? e.message : String(e)}`),
+        catch: (e) =>
+            new Error(`Failed to edit reply: ${e instanceof Error ? e.message : String(e)}`),
     });
 });
 
@@ -440,7 +458,8 @@ const handleTimezone = Effect.fn("CommitOverflow.handleTimezone")(function* (
                     content: `Invalid timezone: \`${timezone}\`. Please use a valid IANA timezone like \`America/New_York\` or \`America/Los_Angeles\`.`,
                     flags: MessageFlags.Ephemeral,
                 }),
-            catch: (e) => new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (e) =>
+                new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
         });
         return;
     }
@@ -455,10 +474,12 @@ const handleTimezone = Effect.fn("CommitOverflow.handleTimezone")(function* (
         yield* Effect.tryPromise({
             try: () =>
                 interaction.reply({
-                    content: "You haven't started Commit Overflow yet. Create a thread in the forum first!",
+                    content:
+                        "You haven't started Commit Overflow yet. Create a thread in the forum first!",
                     flags: MessageFlags.Ephemeral,
                 }),
-            catch: (e) => new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (e) =>
+                new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
         });
         return;
     }
@@ -519,14 +540,20 @@ const handlePinReaction = Effect.fn("CommitOverflow.handlePinReaction")(function
     const fullReaction = reaction.partial
         ? yield* Effect.tryPromise({
               try: () => reaction.fetch(),
-              catch: (e) => new Error(`Failed to fetch reaction: ${e instanceof Error ? e.message : String(e)}`),
+              catch: (e) =>
+                  new Error(
+                      `Failed to fetch reaction: ${e instanceof Error ? e.message : String(e)}`,
+                  ),
           })
         : reaction;
 
     const message = fullReaction.message.partial
         ? yield* Effect.tryPromise({
               try: () => fullReaction.message.fetch(),
-              catch: (e) => new Error(`Failed to fetch message: ${e instanceof Error ? e.message : String(e)}`),
+              catch: (e) =>
+                  new Error(
+                      `Failed to fetch message: ${e instanceof Error ? e.message : String(e)}`,
+                  ),
           })
         : fullReaction.message;
 
@@ -540,7 +567,8 @@ const handlePinReaction = Effect.fn("CommitOverflow.handlePinReaction")(function
 
     yield* Effect.tryPromise({
         try: () => message.pin(),
-        catch: (e) => new Error(`Failed to pin message: ${e instanceof Error ? e.message : String(e)}`),
+        catch: (e) =>
+            new Error(`Failed to pin message: ${e instanceof Error ? e.message : String(e)}`),
     });
 
     const durationMs = Date.now() - startTime;
@@ -576,14 +604,20 @@ const handleApproveReaction = Effect.fn("CommitOverflow.handleApproveReaction")(
     const fullReaction = reaction.partial
         ? yield* Effect.tryPromise({
               try: () => reaction.fetch(),
-              catch: (e) => new Error(`Failed to fetch reaction: ${e instanceof Error ? e.message : String(e)}`),
+              catch: (e) =>
+                  new Error(
+                      `Failed to fetch reaction: ${e instanceof Error ? e.message : String(e)}`,
+                  ),
           })
         : reaction;
 
     const message = fullReaction.message.partial
         ? yield* Effect.tryPromise({
               try: () => fullReaction.message.fetch(),
-              catch: (e) => new Error(`Failed to fetch message: ${e instanceof Error ? e.message : String(e)}`),
+              catch: (e) =>
+                  new Error(
+                      `Failed to fetch message: ${e instanceof Error ? e.message : String(e)}`,
+                  ),
           })
         : fullReaction.message;
 
@@ -592,7 +626,8 @@ const handleApproveReaction = Effect.fn("CommitOverflow.handleApproveReaction")(
 
     const member = yield* Effect.tryPromise({
         try: () => guild.members.fetch(user.id),
-        catch: (e) => new Error(`Failed to fetch member: ${e instanceof Error ? e.message : String(e)}`),
+        catch: (e) =>
+            new Error(`Failed to fetch member: ${e instanceof Error ? e.message : String(e)}`),
     });
 
     const isOrganizer = member.roles.cache.has(ORGANIZER_ROLE_ID);
@@ -655,12 +690,9 @@ export const handleCommitOverflowReaction = (
     reaction: MessageReaction | PartialMessageReaction,
     user: User | PartialUser,
 ) =>
-    Effect.all(
-        [
-            handlePinReaction(reaction, user),
-            handleApproveReaction(reaction, user),
-        ],
-        { concurrency: "unbounded", mode: "either" },
-    ).pipe(Effect.asVoid, Effect.annotateLogs({ feature: "commit_overflow" }));
+    Effect.all([handlePinReaction(reaction, user), handleApproveReaction(reaction, user)], {
+        concurrency: "unbounded",
+        mode: "either",
+    }).pipe(Effect.asVoid, Effect.annotateLogs({ feature: "commit_overflow" }));
 
 export { calculateStreaks } from "./streaks";

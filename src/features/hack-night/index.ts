@@ -191,7 +191,8 @@ export const handleHackNightImages = Effect.fn("HackNight.handleImages")(
 
         yield* Effect.tryPromise({
             try: () => message.react("\u2705"),
-            catch: (e) => new Error(`Failed to react: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (e) =>
+                new Error(`Failed to react: ${e instanceof Error ? e.message : String(e)}`),
         }).pipe(
             Effect.catchAll((e) =>
                 Effect.logWarning("reaction failed", {
@@ -231,7 +232,7 @@ export const createHackNightThread = Effect.fn("HackNight.createThread")(
         const startTime = Date.now();
         const channel = client.channels.cache.get(HACK_NIGHT_CHANNEL_ID);
 
-        yield* Effect.annotateCurrentSpan({ 
+        yield* Effect.annotateCurrentSpan({
             channel_id: HACK_NIGHT_CHANNEL_ID,
             ping_role_id: HACK_NIGHT_PING_ROLE_ID,
         });
@@ -254,8 +255,9 @@ export const createHackNightThread = Effect.fn("HackNight.createThread")(
             return;
         }
 
+        const hackNightMessage = yield* randomItem(HACK_NIGHT_MESSAGES);
         const startContent =
-            `${randomItem(HACK_NIGHT_MESSAGES)} \u{1F389}` +
+            `${hackNightMessage} \u{1F389}` +
             `\n\nShare your pictures from the night in this thread!`;
         const pingContent = `(<@&${HACK_NIGHT_PING_ROLE_ID}>)`;
 
@@ -288,7 +290,10 @@ export const createHackNightThread = Effect.fn("HackNight.createThread")(
                         thread_name: thread.name,
                     };
                 },
-                catch: (e) => new Error(`Failed to create hack night thread: ${e instanceof Error ? e.message : String(e)}`),
+                catch: (e) =>
+                    new Error(
+                        `Failed to create hack night thread: ${e instanceof Error ? e.message : String(e)}`,
+                    ),
             }),
         );
 
@@ -325,7 +330,7 @@ export const cleanupHackNightThread = Effect.fn("HackNight.cleanupThread")(
 
         const channel = client.channels.cache.get(HACK_NIGHT_CHANNEL_ID);
 
-        yield* Effect.annotateCurrentSpan({ 
+        yield* Effect.annotateCurrentSpan({
             channel_id: HACK_NIGHT_CHANNEL_ID,
             photography_award_role_id: HACK_NIGHT_PHOTOGRAPHY_AWARD_ROLE_ID,
         });
@@ -363,7 +368,10 @@ export const cleanupHackNightThread = Effect.fn("HackNight.cleanupThread")(
         const [fetchDuration, threads] = yield* Effect.timed(
             Effect.tryPromise({
                 try: () => textChannel.threads.fetchActive(),
-                catch: (e) => new Error(`Failed to fetch threads: ${e instanceof Error ? e.message : String(e)}`),
+                catch: (e) =>
+                    new Error(
+                        `Failed to fetch threads: ${e instanceof Error ? e.message : String(e)}`,
+                    ),
             }),
         );
 
@@ -494,7 +502,10 @@ export const cleanupHackNightThread = Effect.fn("HackNight.cleanupThread")(
                         messages_sent: starterMessage ? 4 : 1,
                     };
                 },
-                catch: (e) => new Error(`Failed to cleanup hack night thread: ${e instanceof Error ? e.message : String(e)}`),
+                catch: (e) =>
+                    new Error(
+                        `Failed to cleanup hack night thread: ${e instanceof Error ? e.message : String(e)}`,
+                    ),
             }),
         );
 

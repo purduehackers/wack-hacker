@@ -96,7 +96,7 @@ export class MediaWiki extends Effect.Service<MediaWiki>()("MediaWiki", {
 
             const loginResult = body?.login?.result || "Unknown";
 
-            yield* Effect.annotateCurrentSpan({ 
+            yield* Effect.annotateCurrentSpan({
                 duration_ms,
                 login_result: loginResult,
             });
@@ -197,7 +197,7 @@ export class MediaWiki extends Effect.Service<MediaWiki>()("MediaWiki", {
             const success = editResult === "Success";
             const pageUrl = `${EVERGREEN_WIKI_URL}/wiki/${pageTitle.replaceAll(" ", "_")}`;
 
-            yield* Effect.annotateCurrentSpan({ 
+            yield* Effect.annotateCurrentSpan({
                 duration_ms,
                 edit_result: editResult,
                 success,

@@ -9,20 +9,20 @@ export const users = sqliteTable("users", {
 });
 
 export const commitOverflowProfiles = sqliteTable("commit_overflow_profiles", {
-	user_id: text("user_id").primaryKey(),
-	thread_id: text("thread_id").notNull(),
-	timezone: text("timezone").notNull().default("America/Indiana/Indianapolis"),
-	created_at: text("created_at").default(sql`(datetime('now'))`),
+    user_id: text("user_id").primaryKey(),
+    thread_id: text("thread_id").notNull(),
+    timezone: text("timezone").notNull().default("America/Indiana/Indianapolis"),
+    created_at: text("created_at").default(sql`(datetime('now'))`),
 });
 
 export const commits = sqliteTable("commits", {
-	id: integer("id").primaryKey({ autoIncrement: true }),
-	user_id: text("user_id").notNull(),
-	message_id: text("message_id").notNull(),
-	committed_at: text("committed_at").notNull(),
-	approved_at: text("approved_at"),
-	approved_by: text("approved_by"),
-	created_at: text("created_at").default(sql`(datetime('now'))`),
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    user_id: text("user_id").notNull(),
+    message_id: text("message_id").notNull(),
+    committed_at: text("committed_at").notNull(),
+    approved_at: text("approved_at"),
+    approved_by: text("approved_by"),
+    created_at: text("created_at").default(sql`(datetime('now'))`),
 });
 
 export type User = typeof users.$inferSelect;
