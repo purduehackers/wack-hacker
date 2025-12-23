@@ -27,13 +27,13 @@ import {
     handleCommitOverflowReaction,
     handleCommitOverflowThreadCreate,
 } from "../features/commit-overflow";
+import { handleWackmas } from "../features/commit-overflow";
 import { handleDashboardMessage } from "../features/dashboard";
 import { handleEvergreenIt } from "../features/evergreen";
 import { handleHackNightImages } from "../features/hack-night";
 import { handlePraise } from "../features/praise";
 import { handleGrokMessage } from "../features/summarize";
 import { handleVoiceTranscription } from "../features/voice-transcription";
-import { handleWackmas } from "../features/commit-overflow";
 import { handleWelcomer } from "../features/welcomer";
 
 type MessageHandler = (message: Message) => Effect.Effect<void, unknown, unknown>;
@@ -76,15 +76,15 @@ const getFeatureFlags = (config: {
 });
 
 const messageHandlers: MessageHandlerConfig[] = [
-	{ handler: handleGrokMessage },
-	{ handler: handleHackNightImages, featureFlag: "hackNightPhotos" },
-	{ handler: handleEvergreenIt },
-	{ handler: handleAutoThread, featureFlag: "autoThread" },
-	{ handler: handleWelcomer, featureFlag: "welcomer" },
-	{ handler: handlePraise },
-	{ handler: handleVoiceTranscription },
-	{ handler: handleDashboardMessage, featureFlag: "dashboard" },
-	{ handler: handleWackmas, featureFlag: "commitOverflow" },
+    { handler: handleGrokMessage },
+    { handler: handleHackNightImages, featureFlag: "hackNightPhotos" },
+    { handler: handleEvergreenIt },
+    { handler: handleAutoThread, featureFlag: "autoThread" },
+    { handler: handleWelcomer, featureFlag: "welcomer" },
+    { handler: handlePraise },
+    { handler: handleVoiceTranscription },
+    { handler: handleDashboardMessage, featureFlag: "dashboard" },
+    { handler: handleWackmas, featureFlag: "commitOverflow" },
 ];
 
 const reactionHandlers: ReactionHandlerConfig[] = [
