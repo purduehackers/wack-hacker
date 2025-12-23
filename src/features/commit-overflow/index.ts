@@ -317,60 +317,61 @@ const handleView = Effect.fn("CommitOverflow.handleView")(function* (
         return;
     }
 
-    const forumChannel = forum as ForumChannel;
+const forumChannel = forum as ForumChannel;
 
-    yield* Effect.tryPromise({
-        try: () => interaction.deferReply(),
-        catch: (e) => new Error(`Failed to defer: ${e instanceof Error ? e.message : String(e)}`),
-    });
+	const initialProfileOpt = yield* db.commitOverflowProfiles.get(targetUser.id);
 
-    const initialProfileOpt = yield* db.commitOverflowProfiles.get(targetUser.id);
+	let profileExists = Option.isSome(initialProfileOpt);
 
-    let profileExists = Option.isSome(initialProfileOpt);
+	if (Option.isSome(initialProfileOpt)) {
+		const threadId = initialProfileOpt.value.thread_id;
+		const threadExists = yield* Effect.tryPromise({
+			try: async () => {
+				const thread = await forumChannel.threads.fetch(threadId);
+				return thread !== null;
+			},
+			catch: () => false as const,
+		}).pipe(Effect.catchAll(() => Effect.succeed(false)));
 
-    if (Option.isSome(initialProfileOpt)) {
-        const threadId = initialProfileOpt.value.thread_id;
-        const threadExists = yield* Effect.tryPromise({
-            try: async () => {
-                const thread = await forumChannel.threads.fetch(threadId);
-                return thread !== null;
-            },
-            catch: () => false as const,
-        }).pipe(Effect.catchAll(() => Effect.succeed(false)));
+		if (!threadExists) {
+			yield* Effect.logInfo("thread no longer exists cleaning up user records", {
+				user_id: targetUser.id,
+				username: targetUser.username,
+				thread_id: threadId,
+			});
+			yield* db.commits.deleteByUser(targetUser.id);
+			yield* db.commitOverflowProfiles.delete(targetUser.id);
+			profileExists = false;
+		}
+	}
 
-        if (!threadExists) {
-            yield* Effect.logInfo("thread no longer exists cleaning up user records", {
-                user_id: targetUser.id,
-                username: targetUser.username,
-                thread_id: threadId,
-            });
-            yield* db.commits.deleteByUser(targetUser.id);
-            yield* db.commitOverflowProfiles.delete(targetUser.id);
-            profileExists = false;
-        }
-    }
+	if (!profileExists) {
+		const durationMs = Date.now() - startTime;
+		yield* Effect.logInfo("user not found in commit overflow", {
+			user_id: interaction.user.id,
+			target_user_id: targetUser.id,
+			target_username: targetUser.username,
+			is_viewing_self: isViewingSelf,
+			duration_ms: durationMs,
+		});
+		yield* Effect.tryPromise({
+			try: () =>
+				interaction.reply({
+					content: isViewingSelf
+						? "You haven't joined Commit Overflow yet! Join by creating a thread in <#1452388241796894941>."
+						: `${targetUser.username} hasn't participated in Commit Overflow yet.`,
+					flags: MessageFlags.Ephemeral,
+				}),
+			catch: (e) =>
+				new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+		});
+		return;
+	}
 
-    if (!profileExists) {
-        const durationMs = Date.now() - startTime;
-        yield* Effect.logInfo("user not found in commit overflow", {
-            user_id: interaction.user.id,
-            target_user_id: targetUser.id,
-            target_username: targetUser.username,
-            is_viewing_self: isViewingSelf,
-            duration_ms: durationMs,
-        });
-        yield* Effect.tryPromise({
-            try: () =>
-                interaction.editReply({
-                    content: isViewingSelf
-                        ? "You haven't participated in Commit Overflow yet!"
-                        : `${targetUser.username} hasn't participated in Commit Overflow yet.`,
-                }),
-            catch: (e) =>
-                new Error(`Failed to edit reply: ${e instanceof Error ? e.message : String(e)}`),
-        });
-        return;
-    }
+	yield* Effect.tryPromise({
+		try: () => interaction.deferReply(),
+		catch: (e) => new Error(`Failed to defer: ${e instanceof Error ? e.message : String(e)}`),
+	});
 
     const profileOpt = yield* db.commitOverflowProfiles.get(targetUser.id);
     const timezone = Option.isSome(profileOpt)
