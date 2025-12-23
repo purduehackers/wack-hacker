@@ -363,8 +363,8 @@ const handleView = Effect.fn("CommitOverflow.handleView")(function* (
             try: () =>
                 interaction.editReply({
                     content: isViewingSelf
-                        ? "You haven't started Commit Overflow yet. Use `/commit-overflow start` to begin!"
-                        : `${targetUser.username} hasn't started Commit Overflow yet.`,
+                        ? "You haven't participated in Commit Overflow yet!"
+                        : `${targetUser.username} hasn't participated in Commit Overflow yet.`,
                 }),
             catch: (e) =>
                 new Error(`Failed to edit reply: ${e instanceof Error ? e.message : String(e)}`),
@@ -422,7 +422,7 @@ const handleView = Effect.fn("CommitOverflow.handleView")(function* (
             },
             { name: "\u200b", value: "\u200b", inline: true },
         )
-        .setFooter({ text: `${COMMIT_APPROVE_EMOJI} Commit Overflow ${COMMIT_OVERFLOW_YEAR}` })
+        .setFooter({ text: `${COMMIT_APPROVE_EMOJI} Commit Overflow ${COMMIT_OVERFLOW_YEAR} • ${timezone}` })
         .setTimestamp();
 
     yield* Effect.tryPromise({
