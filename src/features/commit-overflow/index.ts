@@ -14,12 +14,14 @@ import {
     type ThreadChannel,
 } from "discord.js";
 import { Effect, Option } from "effect";
+import { distance } from "fastest-levenshtein";
 
 import {
     COMMIT_OVERFLOW_FORUM_ID,
     COMMIT_OVERFLOW_ROLE_ID,
     COMMIT_OVERFLOW_YEAR,
     COMMIT_OVERFLOW_DEFAULT_TIMEZONE,
+    ALTERNATE_COMMIT_APPROVE_EMOJI,
     COMMIT_APPROVE_EMOJI,
     COMMIT_PIN_EMOJI,
     ORGANIZER_ROLE_ID,
@@ -317,61 +319,61 @@ const handleView = Effect.fn("CommitOverflow.handleView")(function* (
         return;
     }
 
-const forumChannel = forum as ForumChannel;
+    const forumChannel = forum as ForumChannel;
 
-	const initialProfileOpt = yield* db.commitOverflowProfiles.get(targetUser.id);
+    const initialProfileOpt = yield* db.commitOverflowProfiles.get(targetUser.id);
 
-	let profileExists = Option.isSome(initialProfileOpt);
+    let profileExists = Option.isSome(initialProfileOpt);
 
-	if (Option.isSome(initialProfileOpt)) {
-		const threadId = initialProfileOpt.value.thread_id;
-		const threadExists = yield* Effect.tryPromise({
-			try: async () => {
-				const thread = await forumChannel.threads.fetch(threadId);
-				return thread !== null;
-			},
-			catch: () => false as const,
-		}).pipe(Effect.catchAll(() => Effect.succeed(false)));
+    if (Option.isSome(initialProfileOpt)) {
+        const threadId = initialProfileOpt.value.thread_id;
+        const threadExists = yield* Effect.tryPromise({
+            try: async () => {
+                const thread = await forumChannel.threads.fetch(threadId);
+                return thread !== null;
+            },
+            catch: () => false as const,
+        }).pipe(Effect.catchAll(() => Effect.succeed(false)));
 
-		if (!threadExists) {
-			yield* Effect.logInfo("thread no longer exists cleaning up user records", {
-				user_id: targetUser.id,
-				username: targetUser.username,
-				thread_id: threadId,
-			});
-			yield* db.commits.deleteByUser(targetUser.id);
-			yield* db.commitOverflowProfiles.delete(targetUser.id);
-			profileExists = false;
-		}
-	}
+        if (!threadExists) {
+            yield* Effect.logInfo("thread no longer exists cleaning up user records", {
+                user_id: targetUser.id,
+                username: targetUser.username,
+                thread_id: threadId,
+            });
+            yield* db.commits.deleteByUser(targetUser.id);
+            yield* db.commitOverflowProfiles.delete(targetUser.id);
+            profileExists = false;
+        }
+    }
 
-	if (!profileExists) {
-		const durationMs = Date.now() - startTime;
-		yield* Effect.logInfo("user not found in commit overflow", {
-			user_id: interaction.user.id,
-			target_user_id: targetUser.id,
-			target_username: targetUser.username,
-			is_viewing_self: isViewingSelf,
-			duration_ms: durationMs,
-		});
-		yield* Effect.tryPromise({
-			try: () =>
-				interaction.reply({
-					content: isViewingSelf
-						? "You haven't joined Commit Overflow yet! Join by creating a thread in <#1452388241796894941>."
-						: `${targetUser.username} hasn't participated in Commit Overflow yet.`,
-					flags: MessageFlags.Ephemeral,
-				}),
-			catch: (e) =>
-				new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
-		});
-		return;
-	}
+    if (!profileExists) {
+        const durationMs = Date.now() - startTime;
+        yield* Effect.logInfo("user not found in commit overflow", {
+            user_id: interaction.user.id,
+            target_user_id: targetUser.id,
+            target_username: targetUser.username,
+            is_viewing_self: isViewingSelf,
+            duration_ms: durationMs,
+        });
+        yield* Effect.tryPromise({
+            try: () =>
+                interaction.reply({
+                    content: isViewingSelf
+                        ? "You haven't joined Commit Overflow yet! Join by creating a thread in <#1452388241796894941>."
+                        : `${targetUser.username} hasn't participated in Commit Overflow yet.`,
+                    flags: MessageFlags.Ephemeral,
+                }),
+            catch: (e) =>
+                new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+        });
+        return;
+    }
 
-	yield* Effect.tryPromise({
-		try: () => interaction.deferReply(),
-		catch: (e) => new Error(`Failed to defer: ${e instanceof Error ? e.message : String(e)}`),
-	});
+    yield* Effect.tryPromise({
+        try: () => interaction.deferReply(),
+        catch: (e) => new Error(`Failed to defer: ${e instanceof Error ? e.message : String(e)}`),
+    });
 
     const profileOpt = yield* db.commitOverflowProfiles.get(targetUser.id);
     const timezone = Option.isSome(profileOpt)
@@ -423,7 +425,9 @@ const forumChannel = forum as ForumChannel;
             },
             { name: "\u200b", value: "\u200b", inline: true },
         )
-        .setFooter({ text: `${COMMIT_APPROVE_EMOJI} Commit Overflow ${COMMIT_OVERFLOW_YEAR} • ${timezone}` })
+        .setFooter({
+            text: `${COMMIT_APPROVE_EMOJI} Commit Overflow ${COMMIT_OVERFLOW_YEAR} • ${timezone}`,
+        })
         .setTimestamp();
 
     yield* Effect.tryPromise({
@@ -594,7 +598,10 @@ const handleApproveReaction = Effect.fn("CommitOverflow.handleApproveReaction")(
     const db = yield* Database;
 
     if (user.bot) return;
-    if (reaction.emoji.name !== COMMIT_APPROVE_EMOJI) return;
+    const isApproveEmoji =
+        reaction.emoji.name === COMMIT_APPROVE_EMOJI ||
+        reaction.emoji.id === ALTERNATE_COMMIT_APPROVE_EMOJI;
+    if (!isApproveEmoji) return;
     if (!isInCommitOverflowForum(reaction.message.channel)) return;
 
     yield* Effect.annotateCurrentSpan({
@@ -697,3 +704,61 @@ export const handleCommitOverflowReaction = (
     }).pipe(Effect.asVoid, Effect.annotateLogs({ feature: "commit_overflow" }));
 
 export { calculateStreaks } from "./streaks";
+
+const WACK_HACKER_BOT_ID = "1115068381649961060";
+const SANTA_HAT_TRIGGER = "do you like your santa hat";
+const LEVENSHTEIN_THRESHOLD = 5;
+const WACKMAS_RESPONSE = "yes yes yes!!! merry wackmas!!";
+
+export const handleWackmas = Effect.fn("Wackmas.handle")(
+    function* (message: Message) {
+        const startTime = Date.now();
+
+        if (message.author.bot) return;
+        if (!message.mentions.has(WACK_HACKER_BOT_ID)) return;
+
+        const normalizedContent = message.content
+            .replace(/<@!?\d+>/g, "")
+            .toLowerCase()
+            .replace(/[?!.,]/g, "")
+            .trim();
+        const levenshteinDistance = distance(SANTA_HAT_TRIGGER, normalizedContent);
+
+        if (levenshteinDistance > LEVENSHTEIN_THRESHOLD) return;
+
+        yield* Effect.logInfo("wackmas message detected", {
+            channel_id: message.channelId,
+            message_id: message.id,
+            user_id: message.author.id,
+            user_display_name: message.author.displayName,
+            content_preview: message.content.slice(0, 50),
+            levenshtein_distance: levenshteinDistance,
+        });
+
+        yield* Effect.tryPromise({
+            try: () => message.reply(WACKMAS_RESPONSE),
+            catch: (e) =>
+                new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+        }).pipe(
+            Effect.tap(() =>
+                Effect.logInfo("wackmas response sent", {
+                    channel_id: message.channelId,
+                    message_id: message.id,
+                    user_id: message.author.id,
+                    response: WACKMAS_RESPONSE,
+                    duration_ms: Date.now() - startTime,
+                }),
+            ),
+            Effect.catchAll((error) =>
+                Effect.logError("wackmas response failed", {
+                    channel_id: message.channelId,
+                    message_id: message.id,
+                    user_id: message.author.id,
+                    error_message: error.message,
+                    duration_ms: Date.now() - startTime,
+                }),
+            ),
+        );
+    },
+    Effect.annotateLogs({ feature: "wackmas" }),
+);
