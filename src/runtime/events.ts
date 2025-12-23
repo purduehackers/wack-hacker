@@ -27,6 +27,7 @@ import {
     handleCommitOverflowReaction,
     handleCommitOverflowThreadCreate,
 } from "../features/commit-overflow";
+import { handleWackmas } from "../features/commit-overflow";
 import { handleDashboardMessage } from "../features/dashboard";
 import { handleEvergreenIt } from "../features/evergreen";
 import { handleHackNightImages } from "../features/hack-night";
@@ -83,6 +84,7 @@ const messageHandlers: MessageHandlerConfig[] = [
     { handler: handlePraise },
     { handler: handleVoiceTranscription },
     { handler: handleDashboardMessage, featureFlag: "dashboard" },
+    { handler: handleWackmas, featureFlag: "commitOverflow" },
 ];
 
 const reactionHandlers: ReactionHandlerConfig[] = [
