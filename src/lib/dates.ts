@@ -90,13 +90,15 @@ export const getCurrentDay = Effect.fn("getCurrentDay")(function* (timezone: str
     return result;
 });
 
-export const getCommitDay = Effect.fn("getCommitDay")(function* (
+/**
+ * Pure helper function to calculate commit day from a timestamp.
+ * Uses UTC construction to avoid timezone ambiguity during date manipulation.
+ */
+export const getCommitDayFromTimestamp = (
     timestamp: Date,
     timezone: string,
     dayResetHour: number,
-) {
-    const startMs = Date.now();
-
+): string => {
     const formatter = new Intl.DateTimeFormat("en-US", {
         timeZone: timezone,
         year: "numeric",
@@ -107,18 +109,38 @@ export const getCommitDay = Effect.fn("getCommitDay")(function* (
     });
 
     const parts = formatter.formatToParts(timestamp);
-    const year = parts.find((p) => p.type === "year")?.value ?? "1970";
-    const month = parts.find((p) => p.type === "month")?.value ?? "01";
-    const day = parts.find((p) => p.type === "day")?.value ?? "01";
+    const year = Number.parseInt(parts.find((p) => p.type === "year")?.value ?? "1970", 10);
+    const month = Number.parseInt(parts.find((p) => p.type === "month")?.value ?? "01", 10);
+    const day = Number.parseInt(parts.find((p) => p.type === "day")?.value ?? "01", 10);
     const hour = Number.parseInt(parts.find((p) => p.type === "hour")?.value ?? "0", 10);
 
-    let commitDate = new Date(`${year}-${month}-${day}T00:00:00`);
+    // Construct date in UTC to avoid local timezone interference during manipulation
+    const commitDate = new Date(Date.UTC(year, month - 1, day));
 
     if (hour < dayResetHour) {
-        commitDate.setDate(commitDate.getDate() - 1);
+        commitDate.setUTCDate(commitDate.getUTCDate() - 1);
     }
 
-    const result = commitDate.toISOString().split("T")[0];
+    return commitDate.toISOString().split("T")[0];
+};
+
+export const getCommitDay = Effect.fn("getCommitDay")(function* (
+    timestamp: Date,
+    timezone: string,
+    dayResetHour: number,
+) {
+    const startMs = Date.now();
+
+    const result = getCommitDayFromTimestamp(timestamp, timezone, dayResetHour);
+
+    const formatter = new Intl.DateTimeFormat("en-US", {
+        timeZone: timezone,
+        hour: "numeric",
+        hour12: false,
+    });
+    const parts = formatter.formatToParts(timestamp);
+    const hour = Number.parseInt(parts.find((p) => p.type === "hour")?.value ?? "0", 10);
+
     const durationMs = Date.now() - startMs;
 
     yield* Effect.logDebug("calculated commit day from timestamp", {
