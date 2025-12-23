@@ -18,19 +18,32 @@ interface D1ApiResponse<T> {
     errors: { code: number; message: string }[];
 }
 
-const createD1Driver = (
-    accountId: string,
-    databaseId: string,
-    apiToken: string,
-    onQueryComplete?: (durationMs: number, rowCount: number) => void,
-) => {
-    const baseUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/d1/database/${databaseId}`;
+// HACK: Drizzle's sqlite-proxy creates Proxy objects that intercept Object.keys() but return
+// undefined for actual property access. When the D1 driver returns rows like:
+//   { user_id: "123", thread_id: "456", created_at: "2025-01-01" }
+// Drizzle transforms them into Proxy objects where:
+//   - Object.keys(row) returns ["user_id", "thread_id", "created_at"]
+//   - JSON.stringify(row) returns "{}"
+//   - row.thread_id returns undefined
+// Even spreading ({ ...row }) or JSON round-tripping doesn't fix this because the Proxy's
+// getters return undefined. The workaround is to store the raw rows from the D1 driver
+// BEFORE Drizzle processes them, then access those directly in query methods.
+// See: commitOverflowProfiles.get() which uses lastQueryRows instead of Drizzle's result.
+let lastQueryRows: Record<string, unknown>[] = [];
 
-    return async (
-        sqlQuery: string,
-        params: unknown[],
-        method: "all" | "run" | "get" | "values",
-    ): Promise<{ rows: Record<string, unknown>[] }> => {
+const createD1Driver = (
+	accountId: string,
+	databaseId: string,
+	apiToken: string,
+	onQueryComplete?: (durationMs: number, rowCount: number) => void,
+) => {
+	const baseUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/d1/database/${databaseId}`;
+
+	return async (
+		sqlQuery: string,
+		params: unknown[],
+		method: "all" | "run" | "get" | "values",
+	): Promise<{ rows: Record<string, unknown>[] }> => {
         const startTime = Date.now();
 
         const response = await fetch(`${baseUrl}/query`, {
@@ -65,12 +78,15 @@ const createD1Driver = (
             });
         }
 
-        const result = data.result[0];
-        const rows = method === "all" ? result.results : result.results.slice(0, 1);
+		const result = data.result[0];
+		const rawRows = method === "all" ? result.results : result.results.slice(0, 1);
+		const rows = rawRows.map((row) => ({ ...row }));
 
-        onQueryComplete?.(durationMs, rows.length);
+		lastQueryRows = rows;
 
-        return { rows };
+		onQueryComplete?.(durationMs, rows.length);
+
+		return { rows };
     };
 };
 
@@ -254,28 +270,29 @@ export class Database extends Effect.Service<Database>()("Database", {
                         new DatabaseError({ operation: "commitOverflowProfiles.get", cause: e }),
                 }).pipe(Effect.timed);
 
-                const duration_ms = Duration.toMillis(duration);
-                const found = result[0] !== undefined;
+				const duration_ms = Duration.toMillis(duration);
+				const found = result[0] !== undefined;
 
-                yield* Effect.annotateCurrentSpan({
-                    duration_ms,
-                    rows_returned: result.length,
-                    found,
-                });
+				yield* Effect.annotateCurrentSpan({
+					duration_ms,
+					rows_returned: result.length,
+					found,
+				});
 
-                yield* Effect.logInfo("database query completed", {
-                    service_name: "Database",
-                    method: "commitOverflowProfiles.get",
-                    operation_type: "select",
-                    table: "commit_overflow_profiles",
-                    user_id: userId,
-                    duration_ms,
-                    latency_ms: duration_ms,
-                    rows_returned: result.length,
-                    found,
-                });
+				yield* Effect.logInfo("database query completed", {
+					service_name: "Database",
+					method: "commitOverflowProfiles.get",
+					operation_type: "select",
+					table: "commit_overflow_profiles",
+					user_id: userId,
+					duration_ms,
+					latency_ms: duration_ms,
+					rows_returned: result.length,
+					found,
+				});
 
-                return Option.fromNullable(result[0]);
+				const rawRow = lastQueryRows[0] as typeof result[0] | undefined;
+				return Option.fromNullable(rawRow);
             }),
 
             create: Effect.fn("Database.commitOverflowProfiles.create")(function* (
