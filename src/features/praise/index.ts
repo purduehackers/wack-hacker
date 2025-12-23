@@ -71,7 +71,8 @@ export const handlePraise = Effect.fn("Praise.handle")(
             const roleAddStart = Date.now();
             yield* Effect.tryPromise({
                 try: () => message.member!.roles.add(WACKY_ROLE_ID),
-                catch: (e) => new Error(`Failed to add role: ${e instanceof Error ? e.message : String(e)}`),
+                catch: (e) =>
+                    new Error(`Failed to add role: ${e instanceof Error ? e.message : String(e)}`),
             }).pipe(
                 Effect.tap(() =>
                     Effect.logInfo("praise role added", {
@@ -103,7 +104,8 @@ export const handlePraise = Effect.fn("Praise.handle")(
             const reactionStart = Date.now();
             yield* Effect.tryPromise({
                 try: () => message.react("\u{1F973}"),
-                catch: (e) => new Error(`Failed to react: ${e instanceof Error ? e.message : String(e)}`),
+                catch: (e) =>
+                    new Error(`Failed to react: ${e instanceof Error ? e.message : String(e)}`),
             }).pipe(
                 Effect.tap(() =>
                     Effect.logDebug("praise reaction added", {
@@ -153,7 +155,10 @@ export const handlePraise = Effect.fn("Praise.handle")(
             const roleRemoveStart = Date.now();
             yield* Effect.tryPromise({
                 try: () => message.member!.roles.remove(WACKY_ROLE_ID),
-                catch: (e) => new Error(`Failed to remove role: ${e instanceof Error ? e.message : String(e)}`),
+                catch: (e) =>
+                    new Error(
+                        `Failed to remove role: ${e instanceof Error ? e.message : String(e)}`,
+                    ),
             }).pipe(
                 Effect.tap(() =>
                     Effect.logInfo("praise role removed", {
@@ -185,7 +190,8 @@ export const handlePraise = Effect.fn("Praise.handle")(
             const reactionStart = Date.now();
             yield* Effect.tryPromise({
                 try: () => message.react("\u{1F910}"),
-                catch: (e) => new Error(`Failed to react: ${e instanceof Error ? e.message : String(e)}`),
+                catch: (e) =>
+                    new Error(`Failed to react: ${e instanceof Error ? e.message : String(e)}`),
             }).pipe(
                 Effect.tap(() =>
                     Effect.logDebug("praise reaction added", {

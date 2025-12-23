@@ -84,15 +84,18 @@ export const handleEvergreenIt = Effect.fn("Evergreen.handleIt")(
             const fetchMessagesStart = Date.now();
             const messages = yield* Effect.tryPromise({
                 try: () => message.channel.messages.fetch({ limit: 2 }),
-                catch: (e) => new Error(`Failed to fetch messages: ${e instanceof Error ? e.message : String(e)}`),
+                catch: (e) =>
+                    new Error(
+                        `Failed to fetch messages: ${e instanceof Error ? e.message : String(e)}`,
+                    ),
             }).pipe(
                 Effect.tapError((error) =>
                     Effect.logError("failed to fetch messages", {
                         channel_id: message.channelId,
                         error_message: error.message,
                         duration_ms: Date.now() - fetchMessagesStart,
-                    })
-                )
+                    }),
+                ),
             );
             const [, ref] = Array.from(messages.values());
             original = ref;
@@ -112,7 +115,10 @@ export const handleEvergreenIt = Effect.fn("Evergreen.handleIt")(
             const fetchReferenceStart = Date.now();
             original = yield* Effect.tryPromise({
                 try: () => message.channel.messages.fetch(message.reference!.messageId!),
-                catch: (e) => new Error(`Failed to fetch reference: ${e instanceof Error ? e.message : String(e)}`),
+                catch: (e) =>
+                    new Error(
+                        `Failed to fetch reference: ${e instanceof Error ? e.message : String(e)}`,
+                    ),
             }).pipe(
                 Effect.tapError((error) =>
                     Effect.logError("failed to fetch reference message", {
@@ -120,8 +126,8 @@ export const handleEvergreenIt = Effect.fn("Evergreen.handleIt")(
                         reference_message_id: message.reference!.messageId!,
                         error_message: error.message,
                         duration_ms: Date.now() - fetchReferenceStart,
-                    })
-                )
+                    }),
+                ),
             );
 
             yield* Effect.logDebug("fetched referenced message", {
@@ -148,25 +154,23 @@ export const handleEvergreenIt = Effect.fn("Evergreen.handleIt")(
         });
 
         const associationsStart = Date.now();
-        const associations = yield* github
-            .getAssociations()
-            .pipe(
-                Effect.tap((assocs) =>
-                    Effect.logDebug("github associations fetched", {
-                        association_count: Object.keys(assocs).length,
-                        requestor_associated: !!assocs[message.author.id],
-                        original_author_associated: !!assocs[original.author.id],
-                        duration_ms: Date.now() - associationsStart,
-                    })
-                ),
-                Effect.tapError((error) =>
-                    Effect.logWarning("failed to fetch github associations", {
-                        error_message: error instanceof Error ? error.message : String(error),
-                        duration_ms: Date.now() - associationsStart,
-                    })
-                ),
-                Effect.catchAll(() => Effect.succeed({} as Record<string, string>)),
-            );
+        const associations = yield* github.getAssociations().pipe(
+            Effect.tap((assocs) =>
+                Effect.logDebug("github associations fetched", {
+                    association_count: Object.keys(assocs).length,
+                    requestor_associated: !!assocs[message.author.id],
+                    original_author_associated: !!assocs[original.author.id],
+                    duration_ms: Date.now() - associationsStart,
+                }),
+            ),
+            Effect.tapError((error) =>
+                Effect.logWarning("failed to fetch github associations", {
+                    error_message: error instanceof Error ? error.message : String(error),
+                    duration_ms: Date.now() - associationsStart,
+                }),
+            ),
+            Effect.catchAll(() => Effect.succeed({} as Record<string, string>)),
+        );
 
         const assignees: string[] = [
             associations[message.author.id],
@@ -209,14 +213,14 @@ export const handleEvergreenIt = Effect.fn("Evergreen.handleIt")(
                     channel_id: message.channelId,
                     assignee_count: assignees.length,
                     duration_ms: Date.now() - githubIssueStartTime,
-                })
+                }),
             ),
             Effect.tapError((error) =>
                 Effect.logError("failed to create github issue", {
                     channel_id: message.channelId,
                     error_message: error instanceof Error ? error.message : String(error),
                     duration_ms: Date.now() - githubIssueStartTime,
-                })
+                }),
             ),
             Effect.catchAll(() => Effect.succeed("")),
         );
@@ -245,7 +249,7 @@ export const handleEvergreenIt = Effect.fn("Evergreen.handleIt")(
                         channel_id: message.channelId,
                         wiki_page: EVERGREEN_WIKI_BUFFER,
                         duration_ms: Date.now() - wikiStartTime,
-                    })
+                    }),
                 ),
                 Effect.tapError((error) =>
                     Effect.logError("failed to update mediawiki page", {
@@ -253,7 +257,7 @@ export const handleEvergreenIt = Effect.fn("Evergreen.handleIt")(
                         wiki_page: EVERGREEN_WIKI_BUFFER,
                         error_message: error instanceof Error ? error.message : String(error),
                         duration_ms: Date.now() - wikiStartTime,
-                    })
+                    }),
                 ),
                 Effect.catchAll(() => Effect.succeed("")),
             );
@@ -271,7 +275,8 @@ export const handleEvergreenIt = Effect.fn("Evergreen.handleIt")(
                 message.reply(
                     `Created [github issue](${githubResult}) and [mediawiki issue](${wikiResult.replaceAll(" ", "_")})!`,
                 ),
-            catch: (e) => new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (e) =>
+                new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
         }).pipe(
             Effect.tapError((error) =>
                 Effect.logError("failed to send reply", {
@@ -279,8 +284,8 @@ export const handleEvergreenIt = Effect.fn("Evergreen.handleIt")(
                     message_id: message.id,
                     error_message: error.message,
                     duration_ms: Date.now() - replyStart,
-                })
-            )
+                }),
+            ),
         );
 
         yield* Effect.logInfo("evergreen request completed", {

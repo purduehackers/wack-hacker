@@ -108,7 +108,7 @@ export class Dashboard extends Effect.Service<Dashboard>()("Dashboard", {
 
             socket.onopen = () => {
                 const openDurationMs = Date.now() - connectStartTime;
-                
+
                 Effect.runSync(
                     Effect.logDebug("websocket opened", {
                         service_name: "Dashboard",
@@ -302,7 +302,8 @@ export class Dashboard extends Effect.Service<Dashboard>()("Dashboard", {
 
                 yield* Effect.annotateCurrentSpan({
                     username: message.username,
-                    has_attachments: message.attachments !== undefined && message.attachments.length > 0,
+                    has_attachments:
+                        message.attachments !== undefined && message.attachments.length > 0,
                     attachment_count: message.attachments?.length || 0,
                     content_length: message.content.length,
                     state_tag: state._tag,
@@ -315,7 +316,8 @@ export class Dashboard extends Effect.Service<Dashboard>()("Dashboard", {
                     connection_state: state._tag.toLowerCase(),
                     username: message.username,
                     content_length: message.content.length,
-                    has_attachments: message.attachments !== undefined && message.attachments.length > 0,
+                    has_attachments:
+                        message.attachments !== undefined && message.attachments.length > 0,
                     attachment_count: message.attachments?.length || 0,
                 });
 
@@ -413,11 +415,11 @@ export class Dashboard extends Effect.Service<Dashboard>()("Dashboard", {
                 if (ws && ws.readyState === WebSocket.OPEN) {
                     const messagePayload = JSON.stringify(message);
                     const payloadSize = new Blob([messagePayload]).size;
-                    
+
                     ws.send(messagePayload);
-                    
+
                     const durationMs = Date.now() - sendStartTime;
-                    
+
                     yield* Effect.logInfo("message sent to dashboard", {
                         service_name: "Dashboard",
                         method: "send",
@@ -429,13 +431,14 @@ export class Dashboard extends Effect.Service<Dashboard>()("Dashboard", {
                         username: message.username,
                         content_length: message.content.length,
                         payload_size_bytes: payloadSize,
-                        has_attachments: message.attachments !== undefined && message.attachments.length > 0,
+                        has_attachments:
+                            message.attachments !== undefined && message.attachments.length > 0,
                         attachment_count: message.attachments?.length || 0,
                         ws_url: wsUrl,
                     });
                 } else {
                     const durationMs = Date.now() - sendStartTime;
-                    
+
                     yield* Effect.logWarning("message not sent", {
                         service_name: "Dashboard",
                         method: "send",
@@ -479,7 +482,7 @@ export class Dashboard extends Effect.Service<Dashboard>()("Dashboard", {
 
         const disconnect = Effect.fn("Dashboard.disconnect")(function* () {
             const state = yield* Ref.get(stateRef);
-            
+
             yield* Effect.logInfo("dashboard disconnect requested", {
                 service_name: "Dashboard",
                 method: "disconnect",
@@ -491,7 +494,7 @@ export class Dashboard extends Effect.Service<Dashboard>()("Dashboard", {
             if (state._tag === "Connected") {
                 const readyState = state.ws.readyState;
                 state.ws.close();
-                
+
                 yield* Effect.logInfo("websocket closed", {
                     service_name: "Dashboard",
                     method: "disconnect",
@@ -509,7 +512,7 @@ export class Dashboard extends Effect.Service<Dashboard>()("Dashboard", {
                     connection_state: state._tag.toLowerCase(),
                 });
             }
-            
+
             yield* Ref.set(stateRef, { _tag: "Disconnected" });
         });
 

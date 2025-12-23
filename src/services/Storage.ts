@@ -98,7 +98,7 @@ export class Storage extends Effect.Service<Storage>()("Storage", {
 
             const index = JSON.parse(bodyString) as EventIndex;
 
-            yield* Effect.annotateCurrentSpan({ 
+            yield* Effect.annotateCurrentSpan({
                 duration_ms,
                 image_count: index.images.length,
                 content_size_bytes: bodyString.length,
@@ -128,7 +128,7 @@ export class Storage extends Effect.Service<Storage>()("Storage", {
         ) {
             const originalSize = imageBuffer.length;
 
-            yield* Effect.annotateCurrentSpan({ 
+            yield* Effect.annotateCurrentSpan({
                 event_slug: eventSlug,
                 filename,
                 original_size_bytes: originalSize,
@@ -179,7 +179,7 @@ export class Storage extends Effect.Service<Storage>()("Storage", {
 
             const duration_ms = Duration.toMillis(duration);
 
-            yield* Effect.annotateCurrentSpan({ 
+            yield* Effect.annotateCurrentSpan({
                 duration_ms,
                 processed_size_bytes: processedSize,
             });
@@ -262,7 +262,7 @@ export class Storage extends Effect.Service<Storage>()("Storage", {
 
             const duration_ms = Duration.toMillis(duration);
 
-            yield* Effect.annotateCurrentSpan({ 
+            yield* Effect.annotateCurrentSpan({
                 duration_ms,
                 image_count: existing.images.length,
             });
@@ -286,7 +286,7 @@ export class Storage extends Effect.Service<Storage>()("Storage", {
             eventSlug: string,
             discordMessageId: string,
         ) {
-            yield* Effect.annotateCurrentSpan({ 
+            yield* Effect.annotateCurrentSpan({
                 event_slug: eventSlug,
                 discord_message_id: discordMessageId,
             });
@@ -314,7 +314,9 @@ export class Storage extends Effect.Service<Storage>()("Storage", {
                 return false;
             }
 
-            const found = indexOpt.value.images.some((img) => img.discordMessageId === discordMessageId);
+            const found = indexOpt.value.images.some(
+                (img) => img.discordMessageId === discordMessageId,
+            );
 
             yield* Effect.annotateCurrentSpan({ found });
 
@@ -373,7 +375,7 @@ export class Storage extends Effect.Service<Storage>()("Storage", {
                 catch: (e) => new StorageError({ operation: "downloadImage", cause: e }),
             });
 
-            yield* Effect.annotateCurrentSpan({ 
+            yield* Effect.annotateCurrentSpan({
                 duration_ms,
                 size_bytes: buffer.length,
             });
