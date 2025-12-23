@@ -18,60 +18,82 @@ interface D1ApiResponse<T> {
     errors: { code: number; message: string }[];
 }
 
+// HACK: Drizzle's sqlite-proxy creates Proxy objects that intercept Object.keys() but return
+// undefined for actual property access. When the D1 driver returns rows like:
+//   { user_id: "123", thread_id: "456", created_at: "2025-01-01" }
+// Drizzle transforms them into Proxy objects where:
+//   - Object.keys(row) returns ["user_id", "thread_id", "created_at"]
+//   - JSON.stringify(row) returns "{}"
+//   - row.thread_id returns undefined
+// Even spreading ({ ...row }) or JSON round-tripping doesn't fix this because the Proxy's
+// getters return undefined. The workaround is to bypass Drizzle entirely for queries that
+// need actual values, using rawQuery() which returns plain objects directly from D1.
+
 const createD1Driver = (
-    accountId: string,
-    databaseId: string,
-    apiToken: string,
-    onQueryComplete?: (durationMs: number, rowCount: number) => void,
+	accountId: string,
+	databaseId: string,
+	apiToken: string,
+	onQueryComplete?: (durationMs: number, rowCount: number) => void,
 ) => {
-    const baseUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/d1/database/${databaseId}`;
+	const baseUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/d1/database/${databaseId}`;
 
-    return async (
-        sqlQuery: string,
-        params: unknown[],
-        method: "all" | "run" | "get" | "values",
-    ): Promise<{ rows: Record<string, unknown>[] }> => {
-        const startTime = Date.now();
+	const executeQuery = async (
+		sqlQuery: string,
+		params: unknown[],
+		method: "all" | "run" | "get" | "values",
+	): Promise<{ rows: Record<string, unknown>[] }> => {
+		const startTime = Date.now();
 
-        const response = await fetch(`${baseUrl}/query`, {
-            method: "POST",
-            headers: {
-                Authorization: `Bearer ${apiToken}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ sql: sqlQuery, params }),
-        });
+		const response = await fetch(`${baseUrl}/query`, {
+			method: "POST",
+			headers: {
+				Authorization: `Bearer ${apiToken}`,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({ sql: sqlQuery, params }),
+		});
 
-        const durationMs = Date.now() - startTime;
+		const durationMs = Date.now() - startTime;
 
-        if (!response.ok) {
-            const text = await response.text();
-            throw new DatabaseError({
-                operation: "d1Query",
-                cause: new Error(
-                    `D1 API error: ${response.status} ${text} duration_ms=${durationMs}`,
-                ),
-            });
-        }
+		if (!response.ok) {
+			const text = await response.text();
+			throw new DatabaseError({
+				operation: "d1Query",
+				cause: new Error(
+					`D1 API error: ${response.status} ${text} duration_ms=${durationMs}`,
+				),
+			});
+		}
 
-        const data = (await response.json()) as D1ApiResponse<Record<string, unknown>>;
+		const data = (await response.json()) as D1ApiResponse<Record<string, unknown>>;
 
-        if (!data.success) {
-            throw new DatabaseError({
-                operation: "d1Query",
-                cause: new Error(
-                    `D1 query error: ${data.errors.map((e) => e.message).join(", ")} duration_ms=${durationMs}`,
-                ),
-            });
-        }
+		if (!data.success) {
+			throw new DatabaseError({
+				operation: "d1Query",
+				cause: new Error(
+					`D1 query error: ${data.errors.map((e) => e.message).join(", ")} duration_ms=${durationMs}`,
+				),
+			});
+		}
 
-        const result = data.result[0];
-        const rows = method === "all" ? result.results : result.results.slice(0, 1);
+		const result = data.result[0];
+		const rows = method === "all" ? result.results : result.results.slice(0, 1);
 
-        onQueryComplete?.(durationMs, rows.length);
+		onQueryComplete?.(durationMs, rows.length);
 
-        return { rows };
-    };
+		return { rows };
+	};
+
+	return {
+		drizzleDriver: executeQuery,
+		rawQuery: async <T extends Record<string, unknown>>(
+			sql: string,
+			params: unknown[] = [],
+		): Promise<T[]> => {
+			const { rows } = await executeQuery(sql, params, "all");
+			return rows as T[];
+		},
+	};
 };
 
 export class Database extends Effect.Service<Database>()("Database", {
@@ -86,14 +108,13 @@ export class Database extends Effect.Service<Database>()("Database", {
             database_id: config.D1_DATABASE_ID,
         });
 
-        const db = drizzle<typeof schema>(
-            createD1Driver(
-                config.D1_ACCOUNT_ID,
-                config.D1_DATABASE_ID,
-                Redacted.value(config.D1_API_TOKEN),
-            ),
-            { schema },
+        const d1Driver = createD1Driver(
+            config.D1_ACCOUNT_ID,
+            config.D1_DATABASE_ID,
+            Redacted.value(config.D1_API_TOKEN),
         );
+
+        const db = drizzle<typeof schema>(d1Driver.drizzleDriver, { schema });
 
         yield* Effect.logInfo("database service initialized", {
             service_name: "Database",
@@ -244,22 +265,24 @@ export class Database extends Effect.Service<Database>()("Database", {
                     user_id: userId,
                 });
 
-                const [duration, result] = yield* Effect.tryPromise({
+                type CommitOverflowProfile = typeof schema.commitOverflowProfiles.$inferSelect;
+
+                const [duration, rows] = yield* Effect.tryPromise({
                     try: () =>
-                        db
-                            .select()
-                            .from(schema.commitOverflowProfiles)
-                            .where(eq(schema.commitOverflowProfiles.user_id, userId)),
+                        d1Driver.rawQuery<CommitOverflowProfile>(
+                            `SELECT user_id, thread_id, created_at FROM commit_overflow_profiles WHERE user_id = ?`,
+                            [userId],
+                        ),
                     catch: (e) =>
                         new DatabaseError({ operation: "commitOverflowProfiles.get", cause: e }),
                 }).pipe(Effect.timed);
 
                 const duration_ms = Duration.toMillis(duration);
-                const found = result[0] !== undefined;
+                const found = rows[0] !== undefined;
 
                 yield* Effect.annotateCurrentSpan({
                     duration_ms,
-                    rows_returned: result.length,
+                    rows_returned: rows.length,
                     found,
                 });
 
@@ -271,11 +294,11 @@ export class Database extends Effect.Service<Database>()("Database", {
                     user_id: userId,
                     duration_ms,
                     latency_ms: duration_ms,
-                    rows_returned: result.length,
+                    rows_returned: rows.length,
                     found,
                 });
 
-                return Option.fromNullable(result[0]);
+                return Option.fromNullable(rows[0]);
             }),
 
             create: Effect.fn("Database.commitOverflowProfiles.create")(function* (
