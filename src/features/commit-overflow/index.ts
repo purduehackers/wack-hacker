@@ -644,6 +644,17 @@ const handleApproveReaction = Effect.fn("CommitOverflow.handleApproveReaction")(
     const thread = message.channel as ThreadChannel;
     const isThreadOwner = thread.ownerId === user.id;
 
+    // Skip if this is the thread's starter message (default emoji gets auto-added)
+    if (message.id === thread.id) {
+        yield* Effect.logDebug("skipping starter message reaction", {
+            user_id: user.id,
+            message_id: message.id,
+            thread_id: thread.id,
+            reason: "starter_message",
+        });
+        return;
+    }
+
     if (!isOrganizer && !isBishop && !isThreadOwner) {
         yield* Effect.logDebug("unauthorized approval attempt", {
             user_id: user.id,
