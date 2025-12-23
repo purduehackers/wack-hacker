@@ -1,39 +1,13 @@
 import { COMMIT_OVERFLOW_DAY_RESET_HOUR } from "../../constants";
+import { getCommitDayFromTimestamp } from "../../lib/dates";
 
 export interface StreakResult {
     currentStreak: number;
     longestStreak: number;
 }
 
-export const getCommitDayFromTimestamp = (
-    timestamp: string,
-    timezone: string,
-    dayResetHour: number,
-): string => {
-    const date = new Date(timestamp);
-
-    const formatter = new Intl.DateTimeFormat("en-US", {
-        timeZone: timezone,
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "numeric",
-        hour12: false,
-    });
-
-    const parts = formatter.formatToParts(date);
-    const year = parts.find((p) => p.type === "year")?.value ?? "1970";
-    const month = parts.find((p) => p.type === "month")?.value ?? "01";
-    const day = parts.find((p) => p.type === "day")?.value ?? "01";
-    const hour = Number.parseInt(parts.find((p) => p.type === "hour")?.value ?? "0", 10);
-
-    const commitDate = new Date(`${year}-${month}-${day}T00:00:00`);
-
-    if (hour < dayResetHour) {
-        commitDate.setDate(commitDate.getDate() - 1);
-    }
-
-    return commitDate.toISOString().split("T")[0];
+const getCommitDay = (timestamp: string, timezone: string, dayResetHour: number): string => {
+    return getCommitDayFromTimestamp(new Date(timestamp), timezone, dayResetHour);
 };
 
 export const calculateStreaks = (commitTimestamps: string[], timezone: string): StreakResult => {
@@ -45,7 +19,7 @@ export const calculateStreaks = (commitTimestamps: string[], timezone: string): 
 
     const commitDaysSet = new Set<string>();
     for (const ts of commitTimestamps) {
-        commitDaysSet.add(getCommitDayFromTimestamp(ts, timezone, dayResetHour));
+        commitDaysSet.add(getCommitDay(ts, timezone, dayResetHour));
     }
 
     const days = [...commitDaysSet].sort();
@@ -99,7 +73,7 @@ export const getDistinctCommitDays = (commitTimestamps: string[], timezone: stri
 
     const commitDaysSet = new Set<string>();
     for (const ts of commitTimestamps) {
-        commitDaysSet.add(getCommitDayFromTimestamp(ts, timezone, dayResetHour));
+        commitDaysSet.add(getCommitDay(ts, timezone, dayResetHour));
     }
 
     return [...commitDaysSet].sort();
