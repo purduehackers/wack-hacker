@@ -17,7 +17,7 @@ export const handleVoiceTranscription = Effect.fn("VoiceTranscription.handle")(
             });
             return;
         }
-        
+
         if (message.channel.isDMBased()) {
             yield* Effect.logDebug("voice transcription skipped dm message", {
                 user_id: message.author.id,
@@ -26,7 +26,7 @@ export const handleVoiceTranscription = Effect.fn("VoiceTranscription.handle")(
             });
             return;
         }
-        
+
         if (!message.flags.has(MessageFlags.IsVoiceMessage)) {
             yield* Effect.logDebug("voice transcription skipped non-voice message", {
                 user_id: message.author.id,
@@ -54,7 +54,8 @@ export const handleVoiceTranscription = Effect.fn("VoiceTranscription.handle")(
 
         yield* Effect.tryPromise({
             try: () => message.react("\u{1F399}\u{FE0F}"),
-            catch: (e) => new Error(`Failed to react: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (e) =>
+                new Error(`Failed to react: ${e instanceof Error ? e.message : String(e)}`),
         }).pipe(
             Effect.timed,
             Effect.tap(([duration]) =>
@@ -86,7 +87,9 @@ export const handleVoiceTranscription = Effect.fn("VoiceTranscription.handle")(
                 channel_id: message.channelId,
                 message_id: message.id,
                 attachments_count: message.attachments.size,
-                attachment_names: Array.from(message.attachments.values()).map(a => a.name).join(","),
+                attachment_names: Array.from(message.attachments.values())
+                    .map((a) => a.name)
+                    .join(","),
             });
             return;
         }
@@ -128,15 +131,23 @@ export const handleVoiceTranscription = Effect.fn("VoiceTranscription.handle")(
                         file_size_bytes: fileSizeBytes,
                         duration_ms: totalDuration,
                         error_type: error._tag,
-                        error_message: "cause" in error && error.cause ? String(error.cause) : "unknown",
+                        error_message:
+                            "cause" in error && error.cause
+                                ? error.cause instanceof Error
+                                    ? error.cause.message
+                                    : JSON.stringify(error.cause)
+                                : "unknown",
                     });
-                    
+
                     yield* Effect.tryPromise({
                         try: () =>
                             message.reply({
                                 content: "Sorry, I couldn't transcribe that audio message.",
                             }),
-                        catch: (e) => new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+                        catch: (e) =>
+                            new Error(
+                                `Failed to reply: ${e instanceof Error ? e.message : String(e)}`,
+                            ),
                     }).pipe(
                         Effect.catchAll((replyError) =>
                             Effect.logError("failed to send error reply", {
@@ -147,7 +158,7 @@ export const handleVoiceTranscription = Effect.fn("VoiceTranscription.handle")(
                             }),
                         ),
                     );
-                    
+
                     return yield* Effect.fail(error);
                 }),
             ),
@@ -163,13 +174,14 @@ export const handleVoiceTranscription = Effect.fn("VoiceTranscription.handle")(
                 transcription_duration_ms: Duration.toMillis(transcriptionDuration),
                 total_duration_ms: totalDuration,
             });
-            
+
             yield* Effect.tryPromise({
                 try: () =>
                     message.reply({
                         content: "Sorry, I couldn't transcribe that audio message.",
                     }),
-                catch: (e) => new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+                catch: (e) =>
+                    new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
             }).pipe(
                 Effect.catchAll((error) =>
                     Effect.logError("failed to send empty result reply", {
@@ -196,7 +208,8 @@ export const handleVoiceTranscription = Effect.fn("VoiceTranscription.handle")(
                 message.reply({
                     content: transcription.trim(),
                 }),
-            catch: (e) => new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (e) =>
+                new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
         }).pipe(
             Effect.timed,
             Effect.catchAll((error) =>

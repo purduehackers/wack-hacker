@@ -33,7 +33,7 @@ export class GitHub extends Effect.Service<GitHub>()("GitHub", {
 
             const duration_ms = Duration.toMillis(duration);
 
-            yield* Effect.annotateCurrentSpan({ 
+            yield* Effect.annotateCurrentSpan({
                 duration_ms,
                 http_status: response.status,
             });
@@ -129,7 +129,7 @@ export class GitHub extends Effect.Service<GitHub>()("GitHub", {
 
             const duration_ms = Duration.toMillis(duration);
 
-            yield* Effect.annotateCurrentSpan({ 
+            yield* Effect.annotateCurrentSpan({
                 duration_ms,
                 http_status: response.status,
             });

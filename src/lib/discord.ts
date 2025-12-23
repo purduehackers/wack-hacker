@@ -7,7 +7,7 @@ const MAX_MESSAGE_LENGTH = 2000;
 
 export const chunkMessage = Effect.fn("chunkMessage")(function* (content: string) {
     const startMs = Date.now();
-    
+
     if (content.length <= MAX_MESSAGE_LENGTH) {
         const durationMs = Date.now() - startMs;
         yield* Effect.logDebug("message within length limit, no chunking needed", {
@@ -27,7 +27,7 @@ export const chunkMessage = Effect.fn("chunkMessage")(function* (content: string
 
     while (remaining.length > 0) {
         iterationCount++;
-        
+
         if (remaining.length <= MAX_MESSAGE_LENGTH) {
             chunks.push(remaining);
             break;
@@ -84,7 +84,10 @@ export const sendChunkedMessage = Effect.fn("sendChunkedMessage")(function* (
 
             return messages;
         },
-        catch: (e) => new Error(`Failed to send chunked message: ${e instanceof Error ? e.message : String(e)}`),
+        catch: (e) =>
+            new Error(
+                `Failed to send chunked message: ${e instanceof Error ? e.message : String(e)}`,
+            ),
     });
 
     const durationMs = Date.now() - startMs;
@@ -148,7 +151,8 @@ export const followUpEphemeral = Effect.fn("followUpEphemeral")(function* (
                 content,
                 flags: MessageFlags.Ephemeral,
             }),
-        catch: (e) => new Error(`Failed to follow up: ${e instanceof Error ? e.message : String(e)}`),
+        catch: (e) =>
+            new Error(`Failed to follow up: ${e instanceof Error ? e.message : String(e)}`),
     });
 
     const durationMs = Date.now() - startMs;
@@ -251,30 +255,29 @@ export const containsUrl = Effect.fn("containsUrl")(function* (text: string) {
     return result;
 });
 
-export const randomItem = <T>(items: readonly T[]) =>
-    Effect.gen(function* () {
-        const startMs = Date.now();
-        
-        if (items.length === 0) {
-            const durationMs = Date.now() - startMs;
-            yield* Effect.logWarning("attempted to select random item from empty array", {
-                operation: "random_item",
-                items_count: 0,
-                duration_ms: durationMs,
-            });
-            return yield* Effect.fail(new Error("Cannot select random item from empty array"));
-        }
+export const randomItem = Effect.fn("randomItem")(function* (items: readonly string[]) {
+    const startMs = Date.now();
 
-        const randomIndex = Math.floor(Math.random() * items.length);
-        const result = items[randomIndex];
+    if (items.length === 0) {
         const durationMs = Date.now() - startMs;
-
-        yield* Effect.logDebug("selected random item from array", {
+        yield* Effect.logWarning("attempted to select random item from empty array", {
             operation: "random_item",
-            items_count: items.length,
-            selected_index: randomIndex,
+            items_count: 0,
             duration_ms: durationMs,
         });
+        return yield* Effect.fail(new Error("Cannot select random item from empty array"));
+    }
 
-        return result;
-    }).pipe(Effect.withSpan("randomItem"));
+    const randomIndex = Math.floor(Math.random() * items.length);
+    const result = items[randomIndex];
+    const durationMs = Date.now() - startMs;
+
+    yield* Effect.logDebug("selected random item from array", {
+        operation: "random_item",
+        items_count: items.length,
+        selected_index: randomIndex,
+        duration_ms: durationMs,
+    });
+
+    return result;
+});
