@@ -74,20 +74,65 @@ export const formatISO = Effect.fn("formatISO")(function* (date: Date) {
 });
 
 export const getCurrentDay = Effect.fn("getCurrentDay")(function* (timezone: string) {
-    const startMs = Date.now();
-    const now = new Date();
-    const result = now.toLocaleDateString("en-CA", { timeZone: timezone });
-    const durationMs = Date.now() - startMs;
+	const startMs = Date.now();
+	const now = new Date();
+	const result = now.toLocaleDateString("en-CA", { timeZone: timezone });
+	const durationMs = Date.now() - startMs;
 
-    yield* Effect.logInfo("retrieved current day for timezone", {
-        operation: "get_current_day",
-        timezone,
-        current_date: result,
-        timestamp_ms: now.valueOf(),
-        duration_ms: durationMs,
-    });
+	yield* Effect.logInfo("retrieved current day for timezone", {
+		operation: "get_current_day",
+		timezone,
+		current_date: result,
+		timestamp_ms: now.valueOf(),
+		duration_ms: durationMs,
+	});
 
-    return result;
+	return result;
+});
+
+export const getCommitDay = Effect.fn("getCommitDay")(function* (
+	timestamp: Date,
+	timezone: string,
+	dayResetHour: number,
+) {
+	const startMs = Date.now();
+
+	const formatter = new Intl.DateTimeFormat("en-US", {
+		timeZone: timezone,
+		year: "numeric",
+		month: "2-digit",
+		day: "2-digit",
+		hour: "numeric",
+		hour12: false,
+	});
+
+	const parts = formatter.formatToParts(timestamp);
+	const year = parts.find((p) => p.type === "year")?.value ?? "1970";
+	const month = parts.find((p) => p.type === "month")?.value ?? "01";
+	const day = parts.find((p) => p.type === "day")?.value ?? "01";
+	const hour = Number.parseInt(parts.find((p) => p.type === "hour")?.value ?? "0", 10);
+
+	let commitDate = new Date(`${year}-${month}-${day}T00:00:00`);
+
+	if (hour < dayResetHour) {
+		commitDate.setDate(commitDate.getDate() - 1);
+	}
+
+	const result = commitDate.toISOString().split("T")[0];
+	const durationMs = Date.now() - startMs;
+
+	yield* Effect.logDebug("calculated commit day from timestamp", {
+		operation: "get_commit_day",
+		input_timestamp: timestamp.toISOString(),
+		timezone,
+		day_reset_hour: dayResetHour,
+		local_hour: hour,
+		adjusted_for_reset: hour < dayResetHour,
+		commit_day: result,
+		duration_ms: durationMs,
+	});
+
+	return result;
 });
 
 export const generateEventSlug = Effect.fn("generateEventSlug")(function* (date: Date) {

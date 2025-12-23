@@ -29,6 +29,9 @@ export const COMMIT_APPROVE_EMOJI = "\u{1F7E9}";
 export const COMMIT_PENDING_EMOJI = "\u{1F50D}";
 export const COMMIT_EDIT_DESCRIPTION_EMOJI = "\u{270F}\u{FE0F}";
 
+export const COMMIT_OVERFLOW_DEFAULT_TIMEZONE = "America/Indiana/Indianapolis";
+export const COMMIT_OVERFLOW_DAY_RESET_HOUR = 6;
+
 export const INTERNAL_CATEGORIES = [
     "809620177347411998",
     "1290013838955249734",

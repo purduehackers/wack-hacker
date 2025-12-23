@@ -15,19 +15,18 @@ import {
 } from "discord.js";
 import { Effect, Option } from "effect";
 
-import { AppConfig } from "../../config";
 import {
     COMMIT_OVERFLOW_FORUM_ID,
     COMMIT_OVERFLOW_ROLE_ID,
     COMMIT_OVERFLOW_YEAR,
+    COMMIT_OVERFLOW_DEFAULT_TIMEZONE,
     COMMIT_APPROVE_EMOJI,
     COMMIT_PIN_EMOJI,
     ORGANIZER_ROLE_ID,
     BISHOP_ROLE_ID,
 } from "../../constants";
-import { getCurrentDay } from "../../lib/dates";
 import { Database } from "../../services";
-import { calculateStreaks } from "./streaks";
+import { calculateStreaks, getDistinctCommitDays } from "./streaks";
 
 export const commitOverflowCommand = new SlashCommandBuilder()
     .setName("commit-overflow")
@@ -41,6 +40,17 @@ export const commitOverflowCommand = new SlashCommandBuilder()
                     .setName("user")
                     .setDescription("User to view (defaults to yourself)")
                     .setRequired(false),
+            ),
+    )
+    .addSubcommand((subcommand) =>
+        subcommand
+            .setName("timezone")
+            .setDescription("Set your timezone for streak calculations")
+            .addStringOption((option) =>
+                option
+                    .setName("timezone")
+                    .setDescription("Your timezone (e.g., America/New_York, America/Los_Angeles)")
+                    .setRequired(true),
             ),
     );
 
@@ -345,12 +355,18 @@ const handleView = Effect.fn("CommitOverflow.handleView")(function* (
         return;
     }
 
-    const [totalCommits, commitDays] = yield* Effect.all([
+    const profileOpt = yield* db.commitOverflowProfiles.get(targetUser.id);
+    const timezone = Option.isSome(profileOpt)
+        ? profileOpt.value.timezone
+        : COMMIT_OVERFLOW_DEFAULT_TIMEZONE;
+
+    const [totalCommits, commitTimestamps] = yield* Effect.all([
         db.commits.getApprovedCount(targetUser.id),
-        db.commits.getDistinctDays(targetUser.id),
+        db.commits.getCommitTimestamps(targetUser.id),
     ]);
 
-    const { currentStreak, longestStreak } = calculateStreaks(commitDays);
+    const commitDays = getDistinctCommitDays(commitTimestamps, timezone);
+    const { currentStreak, longestStreak } = calculateStreaks(commitTimestamps, timezone);
     const streakEmoji = currentStreak >= 3 ? " \u{1F525}" : "";
 
     const durationMs = Date.now() - startTime;
@@ -398,6 +414,75 @@ const handleView = Effect.fn("CommitOverflow.handleView")(function* (
     });
 });
 
+const handleTimezone = Effect.fn("CommitOverflow.handleTimezone")(function* (
+    interaction: ChatInputCommandInteraction,
+) {
+    const startTime = Date.now();
+    const db = yield* Database;
+    const userId = interaction.user.id;
+    const timezone = interaction.options.getString("timezone", true);
+
+    yield* Effect.annotateCurrentSpan({
+        user_id: userId,
+        timezone,
+    });
+
+    const validTimezones = Intl.supportedValuesOf("timeZone");
+    if (!validTimezones.includes(timezone)) {
+        yield* Effect.logWarning("invalid timezone provided", {
+            user_id: userId,
+            timezone,
+            duration_ms: Date.now() - startTime,
+        });
+        yield* Effect.tryPromise({
+            try: () =>
+                interaction.reply({
+                    content: `Invalid timezone: \`${timezone}\`. Please use a valid IANA timezone like \`America/New_York\` or \`America/Los_Angeles\`.`,
+                    flags: MessageFlags.Ephemeral,
+                }),
+            catch: (e) => new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+        });
+        return;
+    }
+
+    const profileOpt = yield* db.commitOverflowProfiles.get(userId);
+    if (Option.isNone(profileOpt)) {
+        yield* Effect.logWarning("user not in commit overflow", {
+            user_id: userId,
+            timezone,
+            duration_ms: Date.now() - startTime,
+        });
+        yield* Effect.tryPromise({
+            try: () =>
+                interaction.reply({
+                    content: "You haven't started Commit Overflow yet. Create a thread in the forum first!",
+                    flags: MessageFlags.Ephemeral,
+                }),
+            catch: (e) => new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+        });
+        return;
+    }
+
+    yield* db.commitOverflowProfiles.setTimezone(userId, timezone);
+
+    const durationMs = Date.now() - startTime;
+    yield* Effect.logInfo("timezone updated", {
+        user_id: userId,
+        username: interaction.user.username,
+        timezone,
+        duration_ms: durationMs,
+    });
+
+    yield* Effect.tryPromise({
+        try: () =>
+            interaction.reply({
+                content: `Your timezone has been set to \`${timezone}\`. Streak calculations will now use this timezone with the day resetting at 6am.`,
+                flags: MessageFlags.Ephemeral,
+            }),
+        catch: (e) => new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+    });
+});
+
 export const handleCommitOverflowCommand = Effect.fn("CommitOverflow.handleCommand")(
     function* (interaction: ChatInputCommandInteraction) {
         const subcommand = interaction.options.getSubcommand();
@@ -409,6 +494,8 @@ export const handleCommitOverflowCommand = Effect.fn("CommitOverflow.handleComma
 
         if (subcommand === "view") {
             yield* handleView(interaction);
+        } else if (subcommand === "timezone") {
+            yield* handleTimezone(interaction);
         }
     },
     Effect.annotateLogs({ feature: "commit_overflow" }),
@@ -476,7 +563,6 @@ const handleApproveReaction = Effect.fn("CommitOverflow.handleApproveReaction")(
 ) {
     const startTime = Date.now();
     const db = yield* Database;
-    const config = yield* AppConfig;
 
     if (user.bot) return;
     if (reaction.emoji.name !== COMMIT_APPROVE_EMOJI) return;
@@ -541,11 +627,11 @@ const handleApproveReaction = Effect.fn("CommitOverflow.handleApproveReaction")(
 
     yield* db.users.upsert(author.id, author.username);
 
-    const commitDay = yield* getCurrentDay(config.TZ);
+    const committedAt = message.createdAt.toISOString();
     yield* db.commits.createApproved({
         userId: author.id,
         messageId: message.id,
-        commitDay,
+        committedAt,
         approvedBy: user.id,
     });
 
@@ -555,7 +641,7 @@ const handleApproveReaction = Effect.fn("CommitOverflow.handleApproveReaction")(
         username: author.username,
         approver_id: user.id,
         message_id: message.id,
-        commit_day: commitDay,
+        committed_at: committedAt,
         duration_ms: durationMs,
     });
 

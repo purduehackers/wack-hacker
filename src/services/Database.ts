@@ -136,17 +136,23 @@ export class Database extends Effect.Service<Database>()("Database", {
                     user_id: id,
                 });
 
-                const [duration, result] = yield* Effect.tryPromise({
-                    try: () => db.select().from(schema.users).where(eq(schema.users.id, id)),
+                type User = typeof schema.users.$inferSelect;
+
+                const [duration, rows] = yield* Effect.tryPromise({
+                    try: () =>
+                        d1Driver.rawQuery<User>(
+                            `SELECT id, discord_username, created_at, updated_at FROM users WHERE id = ?`,
+                            [id],
+                        ),
                     catch: (e) => new DatabaseError({ operation: "users.get", cause: e }),
                 }).pipe(Effect.timed);
 
                 const duration_ms = Duration.toMillis(duration);
-                const found = result[0] !== undefined;
+                const found = rows[0] !== undefined;
 
                 yield* Effect.annotateCurrentSpan({
                     duration_ms,
-                    rows_returned: result.length,
+                    rows_returned: rows.length,
                     found,
                 });
 
@@ -158,11 +164,11 @@ export class Database extends Effect.Service<Database>()("Database", {
                     user_id: id,
                     duration_ms,
                     latency_ms: duration_ms,
-                    rows_returned: result.length,
+                    rows_returned: rows.length,
                     found,
                 });
 
-                return Option.fromNullable(result[0]);
+                return Option.fromNullable(rows[0]);
             }),
 
             upsert: Effect.fn("Database.users.upsert")(function* (
@@ -270,7 +276,7 @@ export class Database extends Effect.Service<Database>()("Database", {
                 const [duration, rows] = yield* Effect.tryPromise({
                     try: () =>
                         d1Driver.rawQuery<CommitOverflowProfile>(
-                            `SELECT user_id, thread_id, created_at FROM commit_overflow_profiles WHERE user_id = ?`,
+                            `SELECT user_id, thread_id, timezone, created_at FROM commit_overflow_profiles WHERE user_id = ?`,
                             [userId],
                         ),
                     catch: (e) =>
@@ -346,44 +352,89 @@ export class Database extends Effect.Service<Database>()("Database", {
                 });
             }),
 
-            delete: Effect.fn("Database.commitOverflowProfiles.delete")(function* (userId: string) {
-                yield* Effect.annotateCurrentSpan({
-                    user_id: userId,
-                    table: "commit_overflow_profiles",
-                });
+			delete: Effect.fn("Database.commitOverflowProfiles.delete")(function* (userId: string) {
+				yield* Effect.annotateCurrentSpan({
+					user_id: userId,
+					table: "commit_overflow_profiles",
+				});
 
-                yield* Effect.logDebug("database delete initiated", {
-                    service_name: "Database",
-                    method: "commitOverflowProfiles.delete",
-                    operation_type: "delete",
-                    table: "commit_overflow_profiles",
-                    user_id: userId,
-                });
+				yield* Effect.logDebug("database delete initiated", {
+					service_name: "Database",
+					method: "commitOverflowProfiles.delete",
+					operation_type: "delete",
+					table: "commit_overflow_profiles",
+					user_id: userId,
+				});
 
-                const [duration] = yield* Effect.tryPromise({
-                    try: () =>
-                        db
-                            .delete(schema.commitOverflowProfiles)
-                            .where(eq(schema.commitOverflowProfiles.user_id, userId)),
-                    catch: (e) =>
-                        new DatabaseError({ operation: "commitOverflowProfiles.delete", cause: e }),
-                }).pipe(Effect.timed);
+				const [duration] = yield* Effect.tryPromise({
+					try: () =>
+						db
+							.delete(schema.commitOverflowProfiles)
+							.where(eq(schema.commitOverflowProfiles.user_id, userId)),
+					catch: (e) =>
+						new DatabaseError({ operation: "commitOverflowProfiles.delete", cause: e }),
+				}).pipe(Effect.timed);
 
-                const duration_ms = Duration.toMillis(duration);
+				const duration_ms = Duration.toMillis(duration);
 
-                yield* Effect.annotateCurrentSpan({ duration_ms });
+				yield* Effect.annotateCurrentSpan({ duration_ms });
 
-                yield* Effect.logInfo("database delete completed", {
-                    service_name: "Database",
-                    method: "commitOverflowProfiles.delete",
-                    operation_type: "delete",
-                    table: "commit_overflow_profiles",
-                    user_id: userId,
-                    duration_ms,
-                    latency_ms: duration_ms,
-                });
-            }),
-        };
+				yield* Effect.logInfo("database delete completed", {
+					service_name: "Database",
+					method: "commitOverflowProfiles.delete",
+					operation_type: "delete",
+					table: "commit_overflow_profiles",
+					user_id: userId,
+					duration_ms,
+					latency_ms: duration_ms,
+				});
+			}),
+
+			setTimezone: Effect.fn("Database.commitOverflowProfiles.setTimezone")(function* (
+				userId: string,
+				timezone: string,
+			) {
+				yield* Effect.annotateCurrentSpan({
+					user_id: userId,
+					table: "commit_overflow_profiles",
+					timezone,
+				});
+
+				yield* Effect.logDebug("database update initiated", {
+					service_name: "Database",
+					method: "commitOverflowProfiles.setTimezone",
+					operation_type: "update",
+					table: "commit_overflow_profiles",
+					user_id: userId,
+					timezone,
+				});
+
+				const [duration] = yield* Effect.tryPromise({
+					try: () =>
+						db
+							.update(schema.commitOverflowProfiles)
+							.set({ timezone })
+							.where(eq(schema.commitOverflowProfiles.user_id, userId)),
+					catch: (e) =>
+						new DatabaseError({ operation: "commitOverflowProfiles.setTimezone", cause: e }),
+				}).pipe(Effect.timed);
+
+				const duration_ms = Duration.toMillis(duration);
+
+				yield* Effect.annotateCurrentSpan({ duration_ms });
+
+				yield* Effect.logInfo("database update completed", {
+					service_name: "Database",
+					method: "commitOverflowProfiles.setTimezone",
+					operation_type: "update",
+					table: "commit_overflow_profiles",
+					user_id: userId,
+					timezone,
+					duration_ms,
+					latency_ms: duration_ms,
+				});
+			}),
+		};
 
         const commits = {
             get: Effect.fn("Database.commits.get")(function* (messageId: string) {
@@ -397,17 +448,19 @@ export class Database extends Effect.Service<Database>()("Database", {
                     message_id: messageId,
                 });
 
-                const [duration, result] = yield* Effect.tryPromise({
+                type Commit = typeof schema.commits.$inferSelect;
+
+                const [duration, rows] = yield* Effect.tryPromise({
                     try: () =>
-                        db
-                            .select()
-                            .from(schema.commits)
-                            .where(eq(schema.commits.message_id, messageId)),
+                        d1Driver.rawQuery<Commit>(
+                            `SELECT id, user_id, message_id, committed_at, approved_at, approved_by, created_at FROM commits WHERE message_id = ?`,
+                            [messageId],
+                        ),
                     catch: (e) => new DatabaseError({ operation: "commits.get", cause: e }),
                 }).pipe(Effect.timed);
 
                 const duration_ms = Duration.toMillis(duration);
-                const found = result[0] !== undefined;
+                const found = rows[0] !== undefined;
 
                 yield* Effect.annotateCurrentSpan({ duration_ms, found });
 
@@ -419,65 +472,65 @@ export class Database extends Effect.Service<Database>()("Database", {
                     message_id: messageId,
                     duration_ms,
                     latency_ms: duration_ms,
-                    rows_returned: result.length,
+                    rows_returned: rows.length,
                     found,
                 });
 
-                return Option.fromNullable(result[0]);
+                return Option.fromNullable(rows[0]);
             }),
 
-            createApproved: Effect.fn("Database.commits.createApproved")(function* (data: {
-                userId: string;
-                messageId: string;
-                commitDay: string;
-                approvedBy: string;
-            }) {
-                yield* Effect.annotateCurrentSpan({
-                    table: "commits",
-                    user_id: data.userId,
-                });
+			createApproved: Effect.fn("Database.commits.createApproved")(function* (data: {
+				userId: string;
+				messageId: string;
+				committedAt: string;
+				approvedBy: string;
+			}) {
+				yield* Effect.annotateCurrentSpan({
+					table: "commits",
+					user_id: data.userId,
+				});
 
-                yield* Effect.logDebug("database insert initiated", {
-                    service_name: "Database",
-                    method: "commits.createApproved",
-                    operation_type: "insert",
-                    table: "commits",
-                    user_id: data.userId,
-                    message_id: data.messageId,
-                    commit_day: data.commitDay,
-                    approved_by: data.approvedBy,
-                });
+				yield* Effect.logDebug("database insert initiated", {
+					service_name: "Database",
+					method: "commits.createApproved",
+					operation_type: "insert",
+					table: "commits",
+					user_id: data.userId,
+					message_id: data.messageId,
+					committed_at: data.committedAt,
+					approved_by: data.approvedBy,
+				});
 
-                const [duration] = yield* Effect.tryPromise({
-                    try: () =>
-                        db.insert(schema.commits).values({
-                            user_id: data.userId,
-                            message_id: data.messageId,
-                            commit_day: data.commitDay,
-                            approved_at: new Date().toISOString(),
-                            approved_by: data.approvedBy,
-                        }),
-                    catch: (e) =>
-                        new DatabaseError({ operation: "commits.createApproved", cause: e }),
-                }).pipe(Effect.timed);
+				const [duration] = yield* Effect.tryPromise({
+					try: () =>
+						db.insert(schema.commits).values({
+							user_id: data.userId,
+							message_id: data.messageId,
+							committed_at: data.committedAt,
+							approved_at: new Date().toISOString(),
+							approved_by: data.approvedBy,
+						}),
+					catch: (e) =>
+						new DatabaseError({ operation: "commits.createApproved", cause: e }),
+				}).pipe(Effect.timed);
 
-                const duration_ms = Duration.toMillis(duration);
+				const duration_ms = Duration.toMillis(duration);
 
-                yield* Effect.annotateCurrentSpan({ duration_ms });
+				yield* Effect.annotateCurrentSpan({ duration_ms });
 
-                yield* Effect.logInfo("database insert completed", {
-                    service_name: "Database",
-                    method: "commits.createApproved",
-                    operation_type: "insert",
-                    table: "commits",
-                    user_id: data.userId,
-                    message_id: data.messageId,
-                    commit_day: data.commitDay,
-                    approved_by: data.approvedBy,
-                    duration_ms,
-                    latency_ms: duration_ms,
-                });
-            }),
+				yield* Effect.logInfo("database insert completed", {
+					service_name: "Database",
+					method: "commits.createApproved",
+					operation_type: "insert",
+					table: "commits",
+					user_id: data.userId,
+					message_id: data.messageId,
+					committed_at: data.committedAt,
+					approved_by: data.approvedBy,
+					duration_ms,
+					latency_ms: duration_ms,
+				});
+			}),
 
             getByUser: Effect.fn("Database.commits.getByUser")(function* (userId: string) {
                 yield* Effect.annotateCurrentSpan({ user_id: userId, table: "commits" });
@@ -490,19 +543,20 @@ export class Database extends Effect.Service<Database>()("Database", {
                     user_id: userId,
                 });
 
-                const [duration, result] = yield* Effect.tryPromise({
+                type Commit = typeof schema.commits.$inferSelect;
+
+                const [duration, rows] = yield* Effect.tryPromise({
                     try: () =>
-                        db
-                            .select()
-                            .from(schema.commits)
-                            .where(eq(schema.commits.user_id, userId))
-                            .orderBy(schema.commits.commit_day),
+                        d1Driver.rawQuery<Commit>(
+                            `SELECT id, user_id, message_id, committed_at, approved_at, approved_by, created_at FROM commits WHERE user_id = ? ORDER BY committed_at`,
+                            [userId],
+                        ),
                     catch: (e) => new DatabaseError({ operation: "commits.getByUser", cause: e }),
                 }).pipe(Effect.timed);
 
                 const duration_ms = Duration.toMillis(duration);
 
-                yield* Effect.annotateCurrentSpan({ duration_ms, rows_returned: result.length });
+                yield* Effect.annotateCurrentSpan({ duration_ms, rows_returned: rows.length });
 
                 yield* Effect.logInfo("database query completed", {
                     service_name: "Database",
@@ -512,10 +566,10 @@ export class Database extends Effect.Service<Database>()("Database", {
                     user_id: userId,
                     duration_ms,
                     latency_ms: duration_ms,
-                    rows_returned: result.length,
+                    rows_returned: rows.length,
                 });
 
-                return result;
+                return rows;
             }),
 
             getApprovedCount: Effect.fn("Database.commits.getApprovedCount")(function* (
@@ -560,50 +614,50 @@ export class Database extends Effect.Service<Database>()("Database", {
                 return rows.length;
             }),
 
-            getDistinctDays: Effect.fn("Database.commits.getDistinctDays")(function* (
-                userId: string,
-            ) {
-                yield* Effect.annotateCurrentSpan({ user_id: userId, table: "commits" });
+			getCommitTimestamps: Effect.fn("Database.commits.getCommitTimestamps")(function* (
+				userId: string,
+			) {
+				yield* Effect.annotateCurrentSpan({ user_id: userId, table: "commits" });
 
-                yield* Effect.logDebug("database query initiated", {
-                    service_name: "Database",
-                    method: "commits.getDistinctDays",
-                    operation_type: "select_distinct",
-                    table: "commits",
-                    user_id: userId,
-                });
+				yield* Effect.logDebug("database query initiated", {
+					service_name: "Database",
+					method: "commits.getCommitTimestamps",
+					operation_type: "select",
+					table: "commits",
+					user_id: userId,
+				});
 
-                const [duration, rows] = yield* Effect.tryPromise({
-                    try: () =>
-                        db
-                            .selectDistinct({ commit_day: schema.commits.commit_day })
-                            .from(schema.commits)
-                            .where(eq(schema.commits.user_id, userId)),
-                    catch: (e) =>
-                        new DatabaseError({
-                            operation: "commits.getDistinctDays",
-                            cause: e,
-                        }),
-                }).pipe(Effect.timed);
+				const [duration, rows] = yield* Effect.tryPromise({
+					try: () =>
+						d1Driver.rawQuery<{ committed_at: string }>(
+							`SELECT committed_at FROM commits WHERE user_id = ?`,
+							[userId],
+						),
+					catch: (e) =>
+						new DatabaseError({
+							operation: "commits.getCommitTimestamps",
+							cause: e,
+						}),
+				}).pipe(Effect.timed);
 
-                const duration_ms = Duration.toMillis(duration);
+				const duration_ms = Duration.toMillis(duration);
 
-                yield* Effect.annotateCurrentSpan({ duration_ms, distinct_days: rows.length });
+				yield* Effect.annotateCurrentSpan({ duration_ms, commit_count: rows.length });
 
-                yield* Effect.logInfo("database query completed", {
-                    service_name: "Database",
-                    method: "commits.getDistinctDays",
-                    operation_type: "select_distinct",
-                    table: "commits",
-                    user_id: userId,
-                    duration_ms,
-                    latency_ms: duration_ms,
-                    rows_returned: rows.length,
-                    distinct_days: rows.length,
-                });
+				yield* Effect.logInfo("database query completed", {
+					service_name: "Database",
+					method: "commits.getCommitTimestamps",
+					operation_type: "select",
+					table: "commits",
+					user_id: userId,
+					duration_ms,
+					latency_ms: duration_ms,
+					rows_returned: rows.length,
+					commit_count: rows.length,
+				});
 
-                return rows.map((r) => r.commit_day);
-            }),
+				return rows.map((r) => r.committed_at);
+			}),
 
             deleteByUser: Effect.fn("Database.commits.deleteByUser")(function* (userId: string) {
                 yield* Effect.annotateCurrentSpan({ user_id: userId, table: "commits" });
