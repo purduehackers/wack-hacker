@@ -1,8 +1,9 @@
 import { Events, MessageFlags } from "discord.js";
 import { Effect, Layer, Logger, ManagedRuntime } from "effect";
 
-import { AppConfig } from "./config";
 import type { DiscordError } from "./errors";
+
+import { AppConfig } from "./config";
 import {
     getEnabledCommands,
     findCommand,
@@ -58,7 +59,7 @@ const program = Effect.gen(function* () {
 
         const command = findCommand(interaction.commandName);
         if (!command) {
-            runtime.runPromise(
+            void runtime.runPromise(
                 Effect.logWarning("command not found", {
                     command_name: interaction.commandName,
                     user_id: interaction.user.id,
@@ -124,7 +125,7 @@ const program = Effect.gen(function* () {
             }),
         ) as AppEffect<void, undefined>;
 
-        runtime.runPromise(commandProgram);
+        void runtime.runPromise(commandProgram);
     });
 
     client.on(Events.MessageCreate, async (message) => {
@@ -153,7 +154,7 @@ const program = Effect.gen(function* () {
             ),
         ) as AppEffect<void>;
 
-        runtime.runPromise(messageProgram);
+        void runtime.runPromise(messageProgram);
     });
 
     client.on(Events.MessageReactionAdd, async (reaction, user) => {
@@ -183,7 +184,7 @@ const program = Effect.gen(function* () {
             ),
         ) as AppEffect<void>;
 
-        runtime.runPromise(reactionProgram);
+        void runtime.runPromise(reactionProgram);
     });
 
     client.on(Events.ThreadCreate, async (thread, newlyCreated) => {
@@ -213,7 +214,7 @@ const program = Effect.gen(function* () {
             ),
         ) as AppEffect<void>;
 
-        runtime.runPromise(threadProgram);
+        void runtime.runPromise(threadProgram);
     });
 
     const startupDuration = Date.now() - startTime;
@@ -234,7 +235,7 @@ Bun.serve({
     port: 3000,
 });
 
-Effect.logInfo("http server started", {
+void Effect.logInfo("http server started", {
     service_name: "wack_hacker",
     server_port: 3000,
     server_url: `http://localhost:3000`,
@@ -244,7 +245,7 @@ const main = program.pipe(Effect.provide(AppLayer)) as AppEffect<void, DiscordEr
 
 Effect.runPromise(main).catch((e) => {
     const error = structuredError(e);
-    Effect.logError("fatal error during startup", {
+    void Effect.logError("fatal error during startup", {
         service_name: "wack_hacker",
         error_type: error.type,
         error_message: error.message,

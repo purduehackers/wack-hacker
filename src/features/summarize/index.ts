@@ -83,7 +83,8 @@ const summarizeCore = Effect.fn("Summarize.core")(function* (
     const fetchStart = Date.now();
     const messages = yield* Effect.tryPromise({
         try: () => channel.messages.fetch({ limit: 100, after: snowflake }),
-        catch: (e) => new Error(`Failed to fetch messages: ${e instanceof Error ? e.message : String(e)}`),
+        catch: (e) =>
+            new Error(`Failed to fetch messages: ${e instanceof Error ? e.message : String(e)}`),
     });
     const fetchDuration = Date.now() - fetchStart;
 
@@ -151,7 +152,8 @@ const summarizeCore = Effect.fn("Summarize.core")(function* (
                 autoArchiveDuration: 60,
                 reason: `Summarizing messages related to ${displayTopic} from ${formatted}.`,
             }) as Promise<PublicThreadChannel<false>>,
-        catch: (e) => new Error(`Failed to create thread: ${e instanceof Error ? e.message : String(e)}`),
+        catch: (e) =>
+            new Error(`Failed to create thread: ${e instanceof Error ? e.message : String(e)}`),
     });
     const threadDuration = Date.now() - threadStart;
 
@@ -176,7 +178,8 @@ const summarizeCore = Effect.fn("Summarize.core")(function* (
     for (const chunk of chunks) {
         yield* Effect.tryPromise({
             try: () => thread.send(chunk),
-            catch: (e) => new Error(`Failed to send message: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (e) =>
+                new Error(`Failed to send message: ${e instanceof Error ? e.message : String(e)}`),
         });
     }
     const sendDuration = Date.now() - sendStart;
@@ -232,7 +235,8 @@ export const handleSummarizeCommand = Effect.fn("Summarize.handleCommand")(
             });
             yield* Effect.tryPromise({
                 try: () => interaction.reply("Please provide a topic to summarize"),
-                catch: (e) => new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+                catch: (e) =>
+                    new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
             });
             return;
         }
@@ -245,7 +249,8 @@ export const handleSummarizeCommand = Effect.fn("Summarize.handleCommand")(
             });
             yield* Effect.tryPromise({
                 try: () => interaction.reply("This command can only be used in a channel"),
-                catch: (e) => new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+                catch: (e) =>
+                    new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
             });
             return;
         }
@@ -256,7 +261,8 @@ export const handleSummarizeCommand = Effect.fn("Summarize.handleCommand")(
                     content: `Summarizing messages related to ${topic} from ${timeframe ?? "1 hour"} ago.`,
                     flags: MessageFlags.Ephemeral,
                 }),
-            catch: (e) => new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (e) =>
+                new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
         });
 
         yield* summarizeCore(interaction.channel as TextChannel, timeframe, topic);
@@ -356,11 +362,7 @@ export const handleGrokMessage = Effect.fn("Summarize.handleGrokMessage")(
             is_this_real: isThisReal !== null,
         });
 
-        yield* summarizeCore(
-            message.channel as TextChannel,
-            timeframe,
-            null,
-        );
+        yield* summarizeCore(message.channel as TextChannel, timeframe, null);
 
         const totalDuration = Date.now() - startTime;
         yield* Effect.logInfo("grok message processing completed", {

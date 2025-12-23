@@ -62,7 +62,7 @@ export const handleAutoThread = Effect.fn("AutoThread.handle")(
             guildId: message.guildId,
         });
 
-        const hasProjectLink = containsUrl(message.content);
+        const hasProjectLink = yield* containsUrl(message.content);
         const hasAttachment = message.attachments.size > 0;
 
         yield* Effect.logDebug("message content analyzed", {
@@ -135,7 +135,8 @@ export const handleAutoThread = Effect.fn("AutoThread.handle")(
 
             yield* Effect.tryPromise({
                 try: () => message.delete(),
-                catch: (e) => new Error(`Failed to delete: ${e instanceof Error ? e.message : String(e)}`),
+                catch: (e) =>
+                    new Error(`Failed to delete: ${e instanceof Error ? e.message : String(e)}`),
             }).pipe(
                 Effect.tap(() =>
                     Effect.logInfo("message deleted successfully", {
@@ -143,7 +144,7 @@ export const handleAutoThread = Effect.fn("AutoThread.handle")(
                         message_id: message.id,
                         user_id: message.author.id,
                         duration_ms: Date.now() - deleteStartTime,
-                    })
+                    }),
                 ),
                 Effect.catchAll((error) =>
                     Effect.logError("message deletion failed", {
@@ -152,7 +153,7 @@ export const handleAutoThread = Effect.fn("AutoThread.handle")(
                         user_id: message.author.id,
                         error_message: error.message,
                         duration_ms: Date.now() - deleteStartTime,
-                    })
+                    }),
                 ),
             );
 
@@ -168,7 +169,8 @@ export const handleAutoThread = Effect.fn("AutoThread.handle")(
             const dmStartTime = Date.now();
             yield* Effect.tryPromise({
                 try: () => message.author.send(reminderMessage),
-                catch: (e) => new Error(`Failed to DM: ${e instanceof Error ? e.message : String(e)}`),
+                catch: (e) =>
+                    new Error(`Failed to DM: ${e instanceof Error ? e.message : String(e)}`),
             }).pipe(
                 Effect.tap(() =>
                     Effect.logInfo("reminder dm sent successfully", {
@@ -177,7 +179,7 @@ export const handleAutoThread = Effect.fn("AutoThread.handle")(
                         user_id: message.author.id,
                         duration_ms: Date.now() - dmStartTime,
                         total_duration_ms: Date.now() - startTime,
-                    })
+                    }),
                 ),
                 Effect.catchAll((error) =>
                     Effect.logWarning("reminder dm send failed user may have dms disabled", {
@@ -187,7 +189,7 @@ export const handleAutoThread = Effect.fn("AutoThread.handle")(
                         error_message: error.message,
                         duration_ms: Date.now() - dmStartTime,
                         total_duration_ms: Date.now() - startTime,
-                    })
+                    }),
                 ),
             );
             return;
@@ -211,7 +213,8 @@ export const handleAutoThread = Effect.fn("AutoThread.handle")(
                 message.startThread({
                     name: threadName,
                 }),
-            catch: (e) => new Error(`Failed to start thread: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (e) =>
+                new Error(`Failed to start thread: ${e instanceof Error ? e.message : String(e)}`),
         }).pipe(
             Effect.tap((thread) =>
                 Effect.gen(function* () {
@@ -229,7 +232,7 @@ export const handleAutoThread = Effect.fn("AutoThread.handle")(
                         threadName: thread.name,
                         autoArchiveDuration: thread.autoArchiveDuration,
                     });
-                })
+                }),
             ),
             Effect.catchAll((error) =>
                 Effect.gen(function* () {
@@ -242,7 +245,7 @@ export const handleAutoThread = Effect.fn("AutoThread.handle")(
                         duration_ms: Date.now() - threadStartTime,
                     });
                     return yield* Effect.fail(error);
-                })
+                }),
             ),
         );
 
@@ -256,7 +259,7 @@ export const handleAutoThread = Effect.fn("AutoThread.handle")(
 
         if (message.channelId === CHECKPOINTS_CHANNEL_ID && hasWackyRole) {
             const reactionStartTime = Date.now();
-            const responseMessage = randomItem(CHECKPOINT_RESPONSE_MESSAGES);
+            const responseMessage = yield* randomItem(CHECKPOINT_RESPONSE_MESSAGES);
 
             yield* Effect.logInfo("adding checkpoint reactions and response", {
                 channel_id: message.channelId,
@@ -273,11 +276,10 @@ export const handleAutoThread = Effect.fn("AutoThread.handle")(
                         message.react("\u{1F389}"),
                         message.react("\u2728"),
                         message.react("\u{1F3C1}"),
-                        thread.send(
-                            `${responseMessage} \u{1F389} \u2728 \u{1F3C1}`,
-                        ),
+                        thread.send(`${responseMessage} \u{1F389} \u2728 \u{1F3C1}`),
                     ]),
-                catch: (e) => new Error(`Failed to react: ${e instanceof Error ? e.message : String(e)}`),
+                catch: (e) =>
+                    new Error(`Failed to react: ${e instanceof Error ? e.message : String(e)}`),
             }).pipe(
                 Effect.tap(() =>
                     Effect.logInfo("checkpoint reactions and response added successfully", {
@@ -287,7 +289,7 @@ export const handleAutoThread = Effect.fn("AutoThread.handle")(
                         thread_id: thread.id,
                         reaction_count: 3,
                         duration_ms: Date.now() - reactionStartTime,
-                    })
+                    }),
                 ),
                 Effect.catchAll((error) =>
                     Effect.logError("checkpoint reactions failed", {
@@ -297,14 +299,14 @@ export const handleAutoThread = Effect.fn("AutoThread.handle")(
                         thread_id: thread.id,
                         error_message: error.message,
                         duration_ms: Date.now() - reactionStartTime,
-                    })
+                    }),
                 ),
             );
         }
 
         if (message.channelId === SHIP_CHANNEL_ID && hasWackyRole) {
             const reactionStartTime = Date.now();
-            const responseMessage = randomItem(SHIP_RESPONSE_MESSAGES);
+            const responseMessage = yield* randomItem(SHIP_RESPONSE_MESSAGES);
 
             yield* Effect.logInfo("adding ship reactions and response", {
                 channel_id: message.channelId,
@@ -321,11 +323,10 @@ export const handleAutoThread = Effect.fn("AutoThread.handle")(
                         message.react("\u{1F389}"),
                         message.react("\u2728"),
                         message.react("\u{1F680}"),
-                        thread.send(
-                            `${responseMessage} \u{1F389} \u2728 \u{1F680}`,
-                        ),
+                        thread.send(`${responseMessage} \u{1F389} \u2728 \u{1F680}`),
                     ]),
-                catch: (e) => new Error(`Failed to react: ${e instanceof Error ? e.message : String(e)}`),
+                catch: (e) =>
+                    new Error(`Failed to react: ${e instanceof Error ? e.message : String(e)}`),
             }).pipe(
                 Effect.tap(() =>
                     Effect.logInfo("ship reactions and response added successfully", {
@@ -335,7 +336,7 @@ export const handleAutoThread = Effect.fn("AutoThread.handle")(
                         thread_id: thread.id,
                         reaction_count: 3,
                         duration_ms: Date.now() - reactionStartTime,
-                    })
+                    }),
                 ),
                 Effect.catchAll((error) =>
                     Effect.logError("ship reactions failed", {
@@ -345,7 +346,7 @@ export const handleAutoThread = Effect.fn("AutoThread.handle")(
                         thread_id: thread.id,
                         error_message: error.message,
                         duration_ms: Date.now() - reactionStartTime,
-                    })
+                    }),
                 ),
             );
         }
@@ -361,7 +362,8 @@ export const handleAutoThread = Effect.fn("AutoThread.handle")(
 
         yield* Effect.tryPromise({
             try: () => thread.setArchived(true),
-            catch: (e) => new Error(`Failed to archive: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (e) =>
+                new Error(`Failed to archive: ${e instanceof Error ? e.message : String(e)}`),
         }).pipe(
             Effect.tap(() =>
                 Effect.logInfo("thread archived successfully auto thread completed", {
@@ -373,7 +375,7 @@ export const handleAutoThread = Effect.fn("AutoThread.handle")(
                     is_archived: true,
                     archive_duration_ms: Date.now() - archiveStartTime,
                     total_duration_ms: Date.now() - startTime,
-                })
+                }),
             ),
             Effect.catchAll((error) =>
                 Effect.gen(function* () {
@@ -388,7 +390,7 @@ export const handleAutoThread = Effect.fn("AutoThread.handle")(
                         total_duration_ms: Date.now() - startTime,
                     });
                     return yield* Effect.fail(error);
-                })
+                }),
             ),
         );
     },

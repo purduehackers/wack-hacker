@@ -55,7 +55,7 @@ export class Discord extends Effect.Service<Discord>()("Discord", {
 
             const duration_ms = Date.now() - startTime;
 
-            yield* Effect.annotateCurrentSpan({ 
+            yield* Effect.annotateCurrentSpan({
                 command_count: commands.length,
                 duration_ms,
             });
@@ -94,7 +94,7 @@ export class Discord extends Effect.Service<Discord>()("Discord", {
 
             const duration_ms = Date.now() - startTime;
 
-            yield* Effect.annotateCurrentSpan({ 
+            yield* Effect.annotateCurrentSpan({
                 duration_ms,
                 activity_name: "eggz",
             });
@@ -133,7 +133,7 @@ export class Discord extends Effect.Service<Discord>()("Discord", {
 
             const duration_ms = Date.now() - startTime;
 
-            yield* Effect.annotateCurrentSpan({ 
+            yield* Effect.annotateCurrentSpan({
                 user_tag: readyClient.user.tag,
                 duration_ms,
             });

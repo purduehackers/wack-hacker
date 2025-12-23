@@ -90,6 +90,73 @@ export const getCurrentDay = Effect.fn("getCurrentDay")(function* (timezone: str
     return result;
 });
 
+/**
+ * Pure helper function to calculate commit day from a timestamp.
+ * Uses UTC construction to avoid timezone ambiguity during date manipulation.
+ */
+export const getCommitDayFromTimestamp = (
+    timestamp: Date,
+    timezone: string,
+    dayResetHour: number,
+): string => {
+    const formatter = new Intl.DateTimeFormat("en-US", {
+        timeZone: timezone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "numeric",
+        hour12: false,
+    });
+
+    const parts = formatter.formatToParts(timestamp);
+    const year = Number.parseInt(parts.find((p) => p.type === "year")?.value ?? "1970", 10);
+    const month = Number.parseInt(parts.find((p) => p.type === "month")?.value ?? "01", 10);
+    const day = Number.parseInt(parts.find((p) => p.type === "day")?.value ?? "01", 10);
+    const hour = Number.parseInt(parts.find((p) => p.type === "hour")?.value ?? "0", 10);
+
+    // Construct date in UTC to avoid local timezone interference during manipulation
+    const commitDate = new Date(Date.UTC(year, month - 1, day));
+
+    if (hour < dayResetHour) {
+        commitDate.setUTCDate(commitDate.getUTCDate() - 1);
+    }
+
+    return commitDate.toISOString().split("T")[0];
+};
+
+export const getCommitDay = Effect.fn("getCommitDay")(function* (
+    timestamp: Date,
+    timezone: string,
+    dayResetHour: number,
+) {
+    const startMs = Date.now();
+
+    const result = getCommitDayFromTimestamp(timestamp, timezone, dayResetHour);
+
+    const formatter = new Intl.DateTimeFormat("en-US", {
+        timeZone: timezone,
+        hour: "numeric",
+        hour12: false,
+    });
+    const parts = formatter.formatToParts(timestamp);
+    const hour = Number.parseInt(parts.find((p) => p.type === "hour")?.value ?? "0", 10);
+
+    const durationMs = Date.now() - startMs;
+
+    yield* Effect.logDebug("calculated commit day from timestamp", {
+        operation: "get_commit_day",
+        input_timestamp: timestamp.toISOString(),
+        timezone,
+        day_reset_hour: dayResetHour,
+        local_hour: hour,
+        adjusted_for_reset: hour < dayResetHour,
+        commit_day: result,
+        duration_ms: durationMs,
+    });
+
+    return result;
+});
+
 export const generateEventSlug = Effect.fn("generateEventSlug")(function* (date: Date) {
     const startMs = Date.now();
     const year = date.getFullYear();
@@ -119,7 +186,10 @@ export const parseInterval = Effect.fn("parseInterval")(function* (interval: str
             const human = await import("human-interval");
             return human.default(interval);
         },
-        catch: (cause) => new Error(`Failed to parse interval: ${cause instanceof Error ? cause.message : String(cause)}`),
+        catch: (cause) =>
+            new Error(
+                `Failed to parse interval: ${cause instanceof Error ? cause.message : String(cause)}`,
+            ),
     });
 
     const durationMs = Date.now() - startMs;

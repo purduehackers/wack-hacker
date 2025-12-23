@@ -58,7 +58,7 @@ export class AI extends Effect.Service<AI>()("AI", {
                     try: () => response.text(),
                     catch: (e) => new AIError({ model, cause: e }),
                 });
-                
+
                 yield* Effect.logError("ai chat request failed", {
                     service_name: "AI",
                     method: "chat",
@@ -70,7 +70,7 @@ export class AI extends Effect.Service<AI>()("AI", {
                     latency_ms: duration_ms,
                     api_endpoint: "groq_chat_completions",
                 });
-                
+
                 return yield* Effect.fail(new AIError({ model, cause: new Error(text) }));
             }
 
@@ -94,7 +94,7 @@ export class AI extends Effect.Service<AI>()("AI", {
                     error_type: "missing_content",
                     api_endpoint: "groq_chat_completions",
                 });
-                
+
                 return yield* Effect.fail(
                     new AIError({
                         model,
@@ -176,7 +176,7 @@ export class AI extends Effect.Service<AI>()("AI", {
                     try: () => response.text(),
                     catch: (e) => new TranscriptionError({ cause: e }),
                 });
-                
+
                 yield* Effect.logError("ai transcription request failed", {
                     service_name: "AI",
                     method: "transcribe",
@@ -190,7 +190,7 @@ export class AI extends Effect.Service<AI>()("AI", {
                     model: "whisper-large-v3",
                     api_endpoint: "groq_audio_transcriptions",
                 });
-                
+
                 return yield* Effect.fail(new TranscriptionError({ cause: new Error(text) }));
             }
 

@@ -1,14 +1,32 @@
+import { COMMIT_OVERFLOW_DAY_RESET_HOUR } from "../../constants";
+import { getCommitDayFromTimestamp } from "../../lib/dates";
+
 export interface StreakResult {
     currentStreak: number;
     longestStreak: number;
 }
 
-export const calculateStreaks = (commitDays: string[]): StreakResult => {
-    if (commitDays.length === 0) {
+const getCommitDay = (timestamp: string, timezone: string, dayResetHour: number): string => {
+    return getCommitDayFromTimestamp(new Date(timestamp), timezone, dayResetHour);
+};
+
+export const calculateStreaks = (commitTimestamps: string[], timezone: string): StreakResult => {
+    if (commitTimestamps.length === 0) {
         return { currentStreak: 0, longestStreak: 0 };
     }
 
-    const days = [...commitDays].sort();
+    const dayResetHour = COMMIT_OVERFLOW_DAY_RESET_HOUR;
+
+    const commitDaysSet = new Set<string>();
+    for (const ts of commitTimestamps) {
+        commitDaysSet.add(getCommitDay(ts, timezone, dayResetHour));
+    }
+
+    const days = [...commitDaysSet].sort();
+
+    if (days.length === 0) {
+        return { currentStreak: 0, longestStreak: 0 };
+    }
 
     let longestStreak = 1;
     let currentStreakLength = 1;
@@ -48,4 +66,15 @@ export const calculateStreaks = (commitDays: string[]): StreakResult => {
         currentStreak: streakEndingAtMostRecent,
         longestStreak,
     };
+};
+
+export const getDistinctCommitDays = (commitTimestamps: string[], timezone: string): string[] => {
+    const dayResetHour = COMMIT_OVERFLOW_DAY_RESET_HOUR;
+
+    const commitDaysSet = new Set<string>();
+    for (const ts of commitTimestamps) {
+        commitDaysSet.add(getCommitDay(ts, timezone, dayResetHour));
+    }
+
+    return [...commitDaysSet].sort();
 };

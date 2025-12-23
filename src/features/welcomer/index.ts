@@ -13,7 +13,9 @@ export const handleWelcomer = Effect.fn("Welcomer.handle")(
         const channelId = message.channelId;
         const memberCount = message.guild?.memberCount;
         const accountCreatedAt = message.author.createdAt;
-        const accountAgeDays = Math.floor((Date.now() - accountCreatedAt.getTime()) / (1000 * 60 * 60 * 24));
+        const accountAgeDays = Math.floor(
+            (Date.now() - accountCreatedAt.getTime()) / (1000 * 60 * 60 * 24),
+        );
 
         yield* Effect.annotateCurrentSpan({
             user_id: userId,
@@ -93,12 +95,15 @@ export const handleWelcomer = Effect.fn("Welcomer.handle")(
         const channelFetchStart = Date.now();
         const channel = yield* Effect.tryPromise({
             try: () => message.client.channels.fetch(CORE_COMMUNITY_CHANNEL_ID),
-            catch: (e) => new Error(`Failed to fetch channel: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (e) =>
+                new Error(`Failed to fetch channel: ${e instanceof Error ? e.message : String(e)}`),
         }).pipe(
             Effect.tap(() =>
                 Effect.gen(function* () {
                     const channelFetchDuration = Date.now() - channelFetchStart;
-                    yield* Effect.annotateCurrentSpan({ channel_fetch_duration_ms: channelFetchDuration });
+                    yield* Effect.annotateCurrentSpan({
+                        channel_fetch_duration_ms: channelFetchDuration,
+                    });
                     yield* Effect.logDebug("welcome channel fetched", {
                         user_id: userId,
                         message_id: messageId,
@@ -150,7 +155,8 @@ export const handleWelcomer = Effect.fn("Welcomer.handle")(
                     `Hey <@&${WELCOMERS_ROLE_ID}>, somebody just introduced themselves!! Give them a warm welcome :D\n\n${message.channel.url}`,
                 );
             },
-            catch: (e) => new Error(`Failed to send: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (e) =>
+                new Error(`Failed to send: ${e instanceof Error ? e.message : String(e)}`),
         }).pipe(
             Effect.tap(() =>
                 Effect.gen(function* () {
