@@ -717,6 +717,38 @@ export class Database extends Effect.Service<Database>()("Database", {
                 return rows.map((r) => r.committed_at);
             }),
 
+            delete: Effect.fn("Database.commits.delete")(function* (messageId: string) {
+                yield* Effect.annotateCurrentSpan({ message_id: messageId, table: "commits" });
+
+                yield* Effect.logDebug("database delete initiated", {
+                    service_name: "Database",
+                    method: "commits.delete",
+                    operation_type: "delete",
+                    table: "commits",
+                    message_id: messageId,
+                });
+
+                const [duration] = yield* Effect.tryPromise({
+                    try: () =>
+                        db.delete(schema.commits).where(eq(schema.commits.message_id, messageId)),
+                    catch: (e) => new DatabaseError({ operation: "commits.delete", cause: e }),
+                }).pipe(Effect.timed);
+
+                const duration_ms = Duration.toMillis(duration);
+
+                yield* Effect.annotateCurrentSpan({ duration_ms });
+
+                yield* Effect.logInfo("database delete completed", {
+                    service_name: "Database",
+                    method: "commits.delete",
+                    operation_type: "delete",
+                    table: "commits",
+                    message_id: messageId,
+                    duration_ms,
+                    latency_ms: duration_ms,
+                });
+            }),
+
             deleteByUser: Effect.fn("Database.commits.deleteByUser")(function* (userId: string) {
                 yield* Effect.annotateCurrentSpan({ user_id: userId, table: "commits" });
 
