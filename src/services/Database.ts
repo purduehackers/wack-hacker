@@ -827,9 +827,7 @@ export class Database extends Effect.Service<Database>()("Database", {
                     ? `UPDATE commits SET is_private = ? WHERE user_id = ? AND is_explicitly_private = 0`
                     : `UPDATE commits SET is_private = ? WHERE user_id = ?`;
 
-                const params = excludeExplicitlyPrivate
-                    ? [isPrivate ? 1 : 0, userId]
-                    : [isPrivate ? 1 : 0, userId];
+                const params = [isPrivate ? 1 : 0, userId];
 
                 const [duration] = yield* Effect.tryPromise({
                     try: () => d1Driver.rawQuery(query, params),
