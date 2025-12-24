@@ -8,6 +8,7 @@ import {
     getEnabledCommands,
     findCommand,
     handleMessageCreate,
+    handleMessageDelete,
     handleMessageReactionAdd,
     handleMessageReactionRemove,
     handleThreadCreate,
@@ -216,6 +217,34 @@ const program = Effect.gen(function* () {
         ) as AppEffect<void>;
 
         void runtime.runPromise(threadProgram);
+    });
+
+    client.on(Events.MessageDelete, async (message) => {
+        const deleteStartTime = Date.now();
+
+        if (message.partial) return;
+
+        const deleteProgram = handleMessageDelete(message).pipe(
+            Effect.tap(() =>
+                Effect.logDebug("message delete handled", {
+                    message_id: message.id,
+                    channel_id: message.channelId,
+                    author_id: message.author?.id,
+                    duration_ms: Date.now() - deleteStartTime,
+                }),
+            ),
+            Effect.catchAll((e) =>
+                Effect.logError("message delete handling failed", {
+                    error: structuredError(e),
+                    message_id: message.id,
+                    channel_id: message.channelId,
+                    author_id: message.author?.id,
+                    duration_ms: Date.now() - deleteStartTime,
+                }),
+            ),
+        ) as AppEffect<void>;
+
+        void runtime.runPromise(deleteProgram);
     });
 
     client.on(Events.MessageReactionRemove, async (reaction, user) => {

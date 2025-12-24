@@ -27,6 +27,7 @@ import {
     handleCommitOverflowReaction,
     handleCommitOverflowReactionRemove,
     handleCommitOverflowThreadCreate,
+    handleCommitOverflowMessageDelete,
 } from "../features/commit-overflow";
 import { handleWackmas } from "../features/commit-overflow";
 import { handleDashboardMessage } from "../features/dashboard";
@@ -98,6 +99,10 @@ const reactionRemoveHandlers: ReactionHandlerConfig[] = [
 
 const threadCreateHandlers: ThreadCreateHandlerConfig[] = [
     { handler: handleCommitOverflowThreadCreate, featureFlag: "commitOverflow" },
+];
+
+const messageDeleteHandlers: MessageHandlerConfig[] = [
+    { handler: handleCommitOverflowMessageDelete, featureFlag: "commitOverflow" },
 ];
 
 export const handleMessageCreate = Effect.fn("Events.handleMessageCreate")(function* (
@@ -397,6 +402,92 @@ export const handleMessageReactionRemove = Effect.fn("Events.handleMessageReacti
         });
     },
 );
+
+export const handleMessageDelete = Effect.fn("Events.handleMessageDelete")(function* (
+    message: Message,
+) {
+    const startTime = Date.now();
+
+    yield* Effect.annotateCurrentSpan({
+        message_id: message.id,
+        channel_id: message.channelId,
+        author_id: message.author?.id,
+    });
+
+    yield* Effect.logDebug("message delete event received", {
+        event_type: "message_delete",
+        message_id: message.id,
+        channel_id: message.channelId,
+        author_id: message.author?.id,
+    });
+
+    const config = yield* AppConfig;
+    const flags = getFeatureFlags(config);
+
+    const allHandlers = messageDeleteHandlers;
+    const enabledHandlers = messageDeleteHandlers.filter(
+        (h) => !h.featureFlag || flags[h.featureFlag],
+    );
+
+    yield* Effect.annotateCurrentSpan({
+        total_handlers_count: allHandlers.length,
+        enabled_handlers_count: enabledHandlers.length,
+        disabled_handlers_count: allHandlers.length - enabledHandlers.length,
+    });
+
+    yield* Effect.logDebug("message delete handlers filtered", {
+        event_type: "message_delete",
+        message_id: message.id,
+        total_handlers_count: allHandlers.length,
+        enabled_handlers_count: enabledHandlers.length,
+        disabled_handlers_count: allHandlers.length - enabledHandlers.length,
+    });
+
+    const effects = enabledHandlers.map((h) => {
+        const handlerStartTime = Date.now();
+        return h.handler(message).pipe(
+            Effect.tap(() => {
+                const handlerDurationMs = Date.now() - handlerStartTime;
+                return Effect.logDebug("message delete handler completed", {
+                    event_type: "message_delete",
+                    message_id: message.id,
+                    channel_id: message.channelId,
+                    handler_name: h.handler.name,
+                    handler_duration_ms: handlerDurationMs,
+                });
+            }),
+            Effect.catchAll((e) => {
+                const handlerDurationMs = Date.now() - handlerStartTime;
+                return Effect.logError("message delete handler failed", {
+                    event_type: "message_delete",
+                    error_type: structuredError(e).type,
+                    error_message: structuredError(e).message,
+                    error_stack: structuredError(e).stack,
+                    message_id: message.id,
+                    channel_id: message.channelId,
+                    handler_name: h.handler.name,
+                    handler_duration_ms: handlerDurationMs,
+                });
+            }),
+        );
+    });
+
+    yield* Effect.all(effects, { concurrency: "unbounded", mode: "either" });
+
+    const totalDurationMs = Date.now() - startTime;
+
+    yield* Effect.annotateCurrentSpan({
+        total_duration_ms: totalDurationMs,
+    });
+
+    yield* Effect.logInfo("message delete event processed", {
+        event_type: "message_delete",
+        message_id: message.id,
+        channel_id: message.channelId,
+        handlers_executed_count: enabledHandlers.length,
+        total_duration_ms: totalDurationMs,
+    });
+});
 
 export const handleThreadCreate = Effect.fn("Events.handleThreadCreate")(function* (
     thread: AnyThreadChannel,
