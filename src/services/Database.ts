@@ -437,6 +437,54 @@ export class Database extends Effect.Service<Database>()("Database", {
                     latency_ms: duration_ms,
                 });
             }),
+
+            setPrivate: Effect.fn("Database.commitOverflowProfiles.setPrivate")(function* (
+                userId: string,
+                isPrivate: boolean,
+            ) {
+                yield* Effect.annotateCurrentSpan({
+                    user_id: userId,
+                    table: "commit_overflow_profiles",
+                    is_private: isPrivate,
+                });
+
+                yield* Effect.logDebug("database update initiated", {
+                    service_name: "Database",
+                    method: "commitOverflowProfiles.setPrivate",
+                    operation_type: "update",
+                    table: "commit_overflow_profiles",
+                    user_id: userId,
+                    is_private: isPrivate,
+                });
+
+                const [duration] = yield* Effect.tryPromise({
+                    try: () =>
+                        db
+                            .update(schema.commitOverflowProfiles)
+                            .set({ is_private: isPrivate })
+                            .where(eq(schema.commitOverflowProfiles.user_id, userId)),
+                    catch: (e) =>
+                        new DatabaseError({
+                            operation: "commitOverflowProfiles.setPrivate",
+                            cause: e,
+                        }),
+                }).pipe(Effect.timed);
+
+                const duration_ms = Duration.toMillis(duration);
+
+                yield* Effect.annotateCurrentSpan({ duration_ms });
+
+                yield* Effect.logInfo("database update completed", {
+                    service_name: "Database",
+                    method: "commitOverflowProfiles.setPrivate",
+                    operation_type: "update",
+                    table: "commit_overflow_profiles",
+                    user_id: userId,
+                    is_private: isPrivate,
+                    duration_ms,
+                    latency_ms: duration_ms,
+                });
+            }),
         };
 
         const commits = {
@@ -487,10 +535,14 @@ export class Database extends Effect.Service<Database>()("Database", {
                 messageId: string;
                 committedAt: string;
                 approvedBy: string;
+                isPrivate?: boolean;
             }) {
+                const isPrivate = data.isPrivate ?? false;
+
                 yield* Effect.annotateCurrentSpan({
                     table: "commits",
                     user_id: data.userId,
+                    is_private: isPrivate,
                 });
 
                 yield* Effect.logDebug("database insert initiated", {
@@ -502,6 +554,7 @@ export class Database extends Effect.Service<Database>()("Database", {
                     message_id: data.messageId,
                     committed_at: data.committedAt,
                     approved_by: data.approvedBy,
+                    is_private: isPrivate,
                 });
 
                 const [duration] = yield* Effect.tryPromise({
@@ -512,6 +565,7 @@ export class Database extends Effect.Service<Database>()("Database", {
                             committed_at: data.committedAt,
                             approved_at: new Date().toISOString(),
                             approved_by: data.approvedBy,
+                            is_private: isPrivate,
                         }),
                     catch: (e) =>
                         new DatabaseError({ operation: "commits.createApproved", cause: e }),
@@ -530,6 +584,7 @@ export class Database extends Effect.Service<Database>()("Database", {
                     message_id: data.messageId,
                     committed_at: data.committedAt,
                     approved_by: data.approvedBy,
+                    is_private: isPrivate,
                     duration_ms,
                     latency_ms: duration_ms,
                 });
@@ -689,6 +744,111 @@ export class Database extends Effect.Service<Database>()("Database", {
                     operation_type: "delete",
                     table: "commits",
                     user_id: userId,
+                    duration_ms,
+                    latency_ms: duration_ms,
+                });
+            }),
+
+            setExplicitlyPrivate: Effect.fn("Database.commits.setExplicitlyPrivate")(function* (
+                messageId: string,
+                isExplicitlyPrivate: boolean,
+                isPrivate: boolean,
+            ) {
+                yield* Effect.annotateCurrentSpan({
+                    message_id: messageId,
+                    table: "commits",
+                    is_explicitly_private: isExplicitlyPrivate,
+                    is_private: isPrivate,
+                });
+
+                yield* Effect.logDebug("database update initiated", {
+                    service_name: "Database",
+                    method: "commits.setExplicitlyPrivate",
+                    operation_type: "update",
+                    table: "commits",
+                    message_id: messageId,
+                    is_explicitly_private: isExplicitlyPrivate,
+                    is_private: isPrivate,
+                });
+
+                const [duration] = yield* Effect.tryPromise({
+                    try: () =>
+                        db
+                            .update(schema.commits)
+                            .set({
+                                is_explicitly_private: isExplicitlyPrivate,
+                                is_private: isPrivate,
+                            })
+                            .where(eq(schema.commits.message_id, messageId)),
+                    catch: (e) =>
+                        new DatabaseError({ operation: "commits.setExplicitlyPrivate", cause: e }),
+                }).pipe(Effect.timed);
+
+                const duration_ms = Duration.toMillis(duration);
+
+                yield* Effect.annotateCurrentSpan({ duration_ms });
+
+                yield* Effect.logInfo("database update completed", {
+                    service_name: "Database",
+                    method: "commits.setExplicitlyPrivate",
+                    operation_type: "update",
+                    table: "commits",
+                    message_id: messageId,
+                    is_explicitly_private: isExplicitlyPrivate,
+                    is_private: isPrivate,
+                    duration_ms,
+                    latency_ms: duration_ms,
+                });
+            }),
+
+            bulkSetPrivate: Effect.fn("Database.commits.bulkSetPrivate")(function* (
+                userId: string,
+                isPrivate: boolean,
+                excludeExplicitlyPrivate: boolean,
+            ) {
+                yield* Effect.annotateCurrentSpan({
+                    user_id: userId,
+                    table: "commits",
+                    is_private: isPrivate,
+                    exclude_explicitly_private: excludeExplicitlyPrivate,
+                });
+
+                yield* Effect.logDebug("database bulk update initiated", {
+                    service_name: "Database",
+                    method: "commits.bulkSetPrivate",
+                    operation_type: "update",
+                    table: "commits",
+                    user_id: userId,
+                    is_private: isPrivate,
+                    exclude_explicitly_private: excludeExplicitlyPrivate,
+                });
+
+                const query = excludeExplicitlyPrivate
+                    ? `UPDATE commits SET is_private = ? WHERE user_id = ? AND is_explicitly_private = 0`
+                    : `UPDATE commits SET is_private = ? WHERE user_id = ?`;
+
+                const params = excludeExplicitlyPrivate
+                    ? [isPrivate ? 1 : 0, userId]
+                    : [isPrivate ? 1 : 0, userId];
+
+                const [duration] = yield* Effect.tryPromise({
+                    try: () => d1Driver.rawQuery(query, params),
+                    catch: (e) =>
+                        new DatabaseError({ operation: "commits.bulkSetPrivate", cause: e }),
+                }).pipe(Effect.timed);
+
+                const duration_ms = Duration.toMillis(duration);
+
+                yield* Effect.annotateCurrentSpan({ duration_ms });
+
+                yield* Effect.logInfo("database bulk update completed", {
+                    service_name: "Database",
+                    method: "commits.bulkSetPrivate",
+                    operation_type: "update",
+                    table: "commits",
+                    user_id: userId,
+                    is_private: isPrivate,
+                    exclude_explicitly_private: excludeExplicitlyPrivate,
                     duration_ms,
                     latency_ms: duration_ms,
                 });

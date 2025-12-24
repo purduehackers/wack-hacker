@@ -12,6 +12,7 @@ export const commitOverflowProfiles = sqliteTable("commit_overflow_profiles", {
     user_id: text("user_id").primaryKey(),
     thread_id: text("thread_id").notNull(),
     timezone: text("timezone").notNull().default("America/Indiana/Indianapolis"),
+    is_private: integer("is_private", { mode: "boolean" }).notNull().default(false),
     created_at: text("created_at").default(sql`(datetime('now'))`),
 });
 
@@ -22,6 +23,10 @@ export const commits = sqliteTable("commits", {
     committed_at: text("committed_at").notNull(),
     approved_at: text("approved_at"),
     approved_by: text("approved_by"),
+    is_private: integer("is_private", { mode: "boolean" }).notNull().default(false),
+    is_explicitly_private: integer("is_explicitly_private", { mode: "boolean" })
+        .notNull()
+        .default(false),
     created_at: text("created_at").default(sql`(datetime('now'))`),
 });
 
