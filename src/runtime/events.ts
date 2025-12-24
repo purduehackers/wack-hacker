@@ -25,6 +25,7 @@ const structuredError = (e: unknown) => ({
 import { handleAutoThread } from "../features/auto-thread";
 import {
     handleCommitOverflowReaction,
+    handleCommitOverflowReactionRemove,
     handleCommitOverflowThreadCreate,
 } from "../features/commit-overflow";
 import { handleWackmas } from "../features/commit-overflow";
@@ -89,6 +90,10 @@ const messageHandlers: MessageHandlerConfig[] = [
 
 const reactionHandlers: ReactionHandlerConfig[] = [
     { handler: handleCommitOverflowReaction, featureFlag: "commitOverflow" },
+];
+
+const reactionRemoveHandlers: ReactionHandlerConfig[] = [
+    { handler: handleCommitOverflowReactionRemove, featureFlag: "commitOverflow" },
 ];
 
 const threadCreateHandlers: ThreadCreateHandlerConfig[] = [
@@ -289,6 +294,109 @@ export const handleMessageReactionAdd = Effect.fn("Events.handleMessageReactionA
         total_duration_ms: totalDurationMs,
     });
 });
+
+export const handleMessageReactionRemove = Effect.fn("Events.handleMessageReactionRemove")(
+    function* (
+        reaction: MessageReaction | PartialMessageReaction,
+        user: User | PartialUser,
+    ) {
+        const startTime = Date.now();
+        const emojiName = reaction.emoji.name ?? "unknown";
+        const emojiId = reaction.emoji.id ?? "none";
+
+        yield* Effect.annotateCurrentSpan({
+            message_id: reaction.message.id,
+            channel_id: reaction.message.channelId,
+            user_id: user.id,
+            user_bot: user.bot ?? false,
+            emoji_name: emojiName,
+            emoji_id: emojiId,
+            emoji_animated: reaction.emoji.animated ?? false,
+        });
+
+        yield* Effect.logDebug("reaction remove event received", {
+            event_type: "reaction_remove",
+            message_id: reaction.message.id,
+            channel_id: reaction.message.channelId,
+            user_id: user.id,
+            user_bot: user.bot ?? false,
+            emoji_name: emojiName,
+            emoji_id: emojiId,
+        });
+
+        const config = yield* AppConfig;
+        const flags = getFeatureFlags(config);
+
+        const allHandlers = reactionRemoveHandlers;
+        const enabledHandlers = reactionRemoveHandlers.filter(
+            (h) => !h.featureFlag || flags[h.featureFlag],
+        );
+
+        yield* Effect.annotateCurrentSpan({
+            total_handlers_count: allHandlers.length,
+            enabled_handlers_count: enabledHandlers.length,
+            disabled_handlers_count: allHandlers.length - enabledHandlers.length,
+        });
+
+        yield* Effect.logDebug("reaction remove handlers filtered", {
+            event_type: "reaction_remove",
+            message_id: reaction.message.id,
+            total_handlers_count: allHandlers.length,
+            enabled_handlers_count: enabledHandlers.length,
+            disabled_handlers_count: allHandlers.length - enabledHandlers.length,
+        });
+
+        const effects = enabledHandlers.map((h) => {
+            const handlerStartTime = Date.now();
+            return h.handler(reaction, user).pipe(
+                Effect.tap(() => {
+                    const handlerDurationMs = Date.now() - handlerStartTime;
+                    return Effect.logDebug("reaction remove handler completed", {
+                        event_type: "reaction_remove",
+                        message_id: reaction.message.id,
+                        channel_id: reaction.message.channelId,
+                        emoji_name: emojiName,
+                        handler_name: h.handler.name,
+                        handler_duration_ms: handlerDurationMs,
+                    });
+                }),
+                Effect.catchAll((e) => {
+                    const handlerDurationMs = Date.now() - handlerStartTime;
+                    return Effect.logError("reaction remove handler failed", {
+                        event_type: "reaction_remove",
+                        error_type: structuredError(e).type,
+                        error_message: structuredError(e).message,
+                        error_stack: structuredError(e).stack,
+                        message_id: reaction.message.id,
+                        channel_id: reaction.message.channelId,
+                        user_id: user.id,
+                        emoji_name: emojiName,
+                        handler_name: h.handler.name,
+                        handler_duration_ms: handlerDurationMs,
+                    });
+                }),
+            );
+        });
+
+        yield* Effect.all(effects, { concurrency: "unbounded", mode: "either" });
+
+        const totalDurationMs = Date.now() - startTime;
+
+        yield* Effect.annotateCurrentSpan({
+            total_duration_ms: totalDurationMs,
+        });
+
+        yield* Effect.logInfo("reaction remove event processed", {
+            event_type: "reaction_remove",
+            message_id: reaction.message.id,
+            channel_id: reaction.message.channelId,
+            user_id: user.id,
+            emoji_name: emojiName,
+            handlers_executed_count: enabledHandlers.length,
+            total_duration_ms: totalDurationMs,
+        });
+    },
+);
 
 export const handleThreadCreate = Effect.fn("Events.handleThreadCreate")(function* (
     thread: AnyThreadChannel,

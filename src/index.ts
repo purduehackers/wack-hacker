@@ -9,6 +9,7 @@ import {
     findCommand,
     handleMessageCreate,
     handleMessageReactionAdd,
+    handleMessageReactionRemove,
     handleThreadCreate,
     startCronJobs,
 } from "./runtime";
@@ -215,6 +216,36 @@ const program = Effect.gen(function* () {
         ) as AppEffect<void>;
 
         void runtime.runPromise(threadProgram);
+    });
+
+    client.on(Events.MessageReactionRemove, async (reaction, user) => {
+        const reactionStartTime = Date.now();
+
+        const reactionProgram = handleMessageReactionRemove(reaction, user).pipe(
+            Effect.tap(() =>
+                Effect.logDebug("reaction remove handled", {
+                    message_id: reaction.message.id,
+                    channel_id: reaction.message.channelId,
+                    user_id: user.id,
+                    username: user.username,
+                    emoji: reaction.emoji.name ?? "unknown",
+                    duration_ms: Date.now() - reactionStartTime,
+                }),
+            ),
+            Effect.catchAll((e) =>
+                Effect.logError("reaction remove handling failed", {
+                    error: structuredError(e),
+                    message_id: reaction.message.id,
+                    channel_id: reaction.message.channelId,
+                    user_id: user.id,
+                    username: user.username,
+                    emoji: reaction.emoji.name ?? "unknown",
+                    duration_ms: Date.now() - reactionStartTime,
+                }),
+            ),
+        ) as AppEffect<void>;
+
+        void runtime.runPromise(reactionProgram);
     });
 
     const startupDuration = Date.now() - startTime;

@@ -24,6 +24,7 @@ import {
     ALTERNATE_COMMIT_APPROVE_EMOJI,
     COMMIT_APPROVE_EMOJI,
     COMMIT_PIN_EMOJI,
+    COMMIT_PRIVATE_EMOJI,
     ORGANIZER_ROLE_ID,
     BISHOP_ROLE_ID,
 } from "../../constants";
@@ -53,6 +54,21 @@ export const commitOverflowCommand = new SlashCommandBuilder()
                     .setName("timezone")
                     .setDescription("Your timezone (e.g., America/New_York, America/Los_Angeles)")
                     .setRequired(true),
+            ),
+    )
+    .addSubcommand((subcommand) =>
+        subcommand
+            .setName("share")
+            .setDescription("Set whether your commit overflow profile is publicly visible")
+            .addStringOption((option) =>
+                option
+                    .setName("visibility")
+                    .setDescription("Enable or disable public sharing of your profile")
+                    .setRequired(true)
+                    .addChoices(
+                        { name: "enabled", value: "enabled" },
+                        { name: "disabled", value: "disabled" },
+                    ),
             ),
     );
 
@@ -509,6 +525,74 @@ const handleTimezone = Effect.fn("CommitOverflow.handleTimezone")(function* (
     });
 });
 
+const handleShare = Effect.fn("CommitOverflow.handleShare")(function* (
+    interaction: ChatInputCommandInteraction,
+) {
+    const startTime = Date.now();
+    const db = yield* Database;
+    const userId = interaction.user.id;
+    const visibility = interaction.options.getString("visibility", true);
+    const newPrivate = visibility === "disabled";
+
+    yield* Effect.annotateCurrentSpan({
+        user_id: userId,
+        visibility,
+    });
+
+    const profileOpt = yield* db.commitOverflowProfiles.get(userId);
+    if (Option.isNone(profileOpt)) {
+        yield* Effect.logWarning("user not in commit overflow", {
+            user_id: userId,
+            visibility,
+            duration_ms: Date.now() - startTime,
+        });
+        yield* Effect.tryPromise({
+            try: () =>
+                interaction.reply({
+                    content:
+                        "You haven't started Commit Overflow yet. Create a thread in the forum first!",
+                    flags: MessageFlags.Ephemeral,
+                }),
+            catch: (e) =>
+                new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+        });
+        return;
+    }
+
+    const currentProfile = profileOpt.value;
+    const wasPrivate = currentProfile.is_private ?? false;
+
+    yield* db.commitOverflowProfiles.setPrivate(userId, newPrivate);
+
+    // Update all commits based on new privacy setting
+    // When going private: all commits become private
+    // When going public: only non-explicitly-private commits become public
+    yield* db.commits.bulkSetPrivate(userId, newPrivate, !newPrivate);
+
+    const durationMs = Date.now() - startTime;
+    yield* Effect.logInfo("profile sharing updated", {
+        user_id: userId,
+        username: interaction.user.username,
+        visibility,
+        was_private: wasPrivate,
+        is_private: newPrivate,
+        duration_ms: durationMs,
+    });
+
+    const responseMessage = newPrivate
+        ? `Your profile is now **private**. Your commits will not be shared publicly. ${COMMIT_PRIVATE_EMOJI}`
+        : `Your profile is now **public**. Your commits will be shared. ${COMMIT_APPROVE_EMOJI}`;
+
+    yield* Effect.tryPromise({
+        try: () =>
+            interaction.reply({
+                content: responseMessage,
+                flags: MessageFlags.Ephemeral,
+            }),
+        catch: (e) => new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+    });
+});
+
 export const handleCommitOverflowCommand = Effect.fn("CommitOverflow.handleCommand")(
     function* (interaction: ChatInputCommandInteraction) {
         const subcommand = interaction.options.getSubcommand();
@@ -522,6 +606,8 @@ export const handleCommitOverflowCommand = Effect.fn("CommitOverflow.handleComma
             yield* handleView(interaction);
         } else if (subcommand === "timezone") {
             yield* handleTimezone(interaction);
+        } else if (subcommand === "share") {
+            yield* handleShare(interaction);
         }
     },
     Effect.annotateLogs({ feature: "commit_overflow" }),
@@ -681,12 +767,18 @@ const handleApproveReaction = Effect.fn("CommitOverflow.handleApproveReaction")(
 
     yield* db.users.upsert(author.id, author.username);
 
+    const authorProfileOpt = yield* db.commitOverflowProfiles.get(author.id);
+    const isPrivate = Option.isSome(authorProfileOpt)
+        ? (authorProfileOpt.value.is_private ?? false)
+        : false;
+
     const committedAt = message.createdAt.toISOString();
     yield* db.commits.createApproved({
         userId: author.id,
         messageId: message.id,
         committedAt,
         approvedBy: user.id,
+        isPrivate,
     });
 
     const durationMs = Date.now() - startTime;
@@ -696,6 +788,7 @@ const handleApproveReaction = Effect.fn("CommitOverflow.handleApproveReaction")(
         approver_id: user.id,
         message_id: message.id,
         committed_at: committedAt,
+        is_private: isPrivate,
         duration_ms: durationMs,
     });
 
@@ -705,14 +798,187 @@ const handleApproveReaction = Effect.fn("CommitOverflow.handleApproveReaction")(
     });
 });
 
+const handlePrivateReaction = Effect.fn("CommitOverflow.handlePrivateReaction")(function* (
+    reaction: MessageReaction | PartialMessageReaction,
+    user: User | PartialUser,
+) {
+    const startTime = Date.now();
+    const db = yield* Database;
+
+    if (user.bot) return;
+    if (reaction.emoji.name !== COMMIT_PRIVATE_EMOJI) return;
+    if (!isInCommitOverflowForum(reaction.message.channel)) return;
+
+    yield* Effect.annotateCurrentSpan({
+        user_id: user.id,
+        message_id: reaction.message.id,
+    });
+
+    const fullReaction = reaction.partial
+        ? yield* Effect.tryPromise({
+              try: () => reaction.fetch(),
+              catch: (e) =>
+                  new Error(
+                      `Failed to fetch reaction: ${e instanceof Error ? e.message : String(e)}`,
+                  ),
+          })
+        : reaction;
+
+    const message = fullReaction.message.partial
+        ? yield* Effect.tryPromise({
+              try: () => fullReaction.message.fetch(),
+              catch: (e) =>
+                  new Error(
+                      `Failed to fetch message: ${e instanceof Error ? e.message : String(e)}`,
+                  ),
+          })
+        : fullReaction.message;
+
+    const thread = message.channel as ThreadChannel;
+    const isThreadOwner = thread.ownerId === user.id;
+
+    if (!isThreadOwner) {
+        yield* Effect.logDebug("unauthorized private toggle attempt", {
+            user_id: user.id,
+            message_id: message.id,
+            thread_owner_id: thread.ownerId,
+            reason: "not_thread_owner",
+        });
+        return;
+    }
+
+    const existingCommit = yield* db.commits.get(message.id);
+    if (Option.isNone(existingCommit)) {
+        yield* Effect.logDebug("commit not found for private toggle", {
+            user_id: user.id,
+            message_id: message.id,
+            reason: "commit_not_approved",
+        });
+        return;
+    }
+
+    yield* db.commits.setExplicitlyPrivate(message.id, true, true);
+
+    const durationMs = Date.now() - startTime;
+    yield* Effect.logInfo("commit marked explicitly private", {
+        user_id: user.id,
+        message_id: message.id,
+        author_id: message.author?.id,
+        duration_ms: durationMs,
+    });
+
+    yield* Effect.tryPromise({
+        try: () => message.react("\u2705"),
+        catch: (e) => new Error(`Failed to react: ${e instanceof Error ? e.message : String(e)}`),
+    });
+});
+
+const handlePrivateReactionRemove = Effect.fn("CommitOverflow.handlePrivateReactionRemove")(
+    function* (
+        reaction: MessageReaction | PartialMessageReaction,
+        user: User | PartialUser,
+    ) {
+        const startTime = Date.now();
+        const db = yield* Database;
+
+        if (user.bot) return;
+        if (reaction.emoji.name !== COMMIT_PRIVATE_EMOJI) return;
+        if (!isInCommitOverflowForum(reaction.message.channel)) return;
+
+        yield* Effect.annotateCurrentSpan({
+            user_id: user.id,
+            message_id: reaction.message.id,
+        });
+
+        const fullReaction = reaction.partial
+            ? yield* Effect.tryPromise({
+                  try: () => reaction.fetch(),
+                  catch: (e) =>
+                      new Error(
+                          `Failed to fetch reaction: ${e instanceof Error ? e.message : String(e)}`,
+                      ),
+              })
+            : reaction;
+
+        const message = fullReaction.message.partial
+            ? yield* Effect.tryPromise({
+                  try: () => fullReaction.message.fetch(),
+                  catch: (e) =>
+                      new Error(
+                          `Failed to fetch message: ${e instanceof Error ? e.message : String(e)}`,
+                      ),
+              })
+            : fullReaction.message;
+
+        const thread = message.channel as ThreadChannel;
+        const isThreadOwner = thread.ownerId === user.id;
+
+        if (!isThreadOwner) {
+            yield* Effect.logDebug("unauthorized private toggle removal attempt", {
+                user_id: user.id,
+                message_id: message.id,
+                thread_owner_id: thread.ownerId,
+                reason: "not_thread_owner",
+            });
+            return;
+        }
+
+        const existingCommit = yield* db.commits.get(message.id);
+        if (Option.isNone(existingCommit)) {
+            yield* Effect.logDebug("commit not found for private toggle removal", {
+                user_id: user.id,
+                message_id: message.id,
+                reason: "commit_not_approved",
+            });
+            return;
+        }
+
+        const author = message.author;
+        if (!author) return;
+
+        const authorProfileOpt = yield* db.commitOverflowProfiles.get(author.id);
+        const profileIsPrivate = Option.isSome(authorProfileOpt)
+            ? (authorProfileOpt.value.is_private ?? false)
+            : false;
+
+        yield* db.commits.setExplicitlyPrivate(message.id, false, profileIsPrivate);
+
+        const durationMs = Date.now() - startTime;
+        yield* Effect.logInfo("commit explicit privacy removed", {
+            user_id: user.id,
+            message_id: message.id,
+            author_id: author.id,
+            profile_is_private: profileIsPrivate,
+            commit_is_private: profileIsPrivate,
+            duration_ms: durationMs,
+        });
+    },
+);
+
 export const handleCommitOverflowReaction = (
     reaction: MessageReaction | PartialMessageReaction,
     user: User | PartialUser,
 ) =>
-    Effect.all([handlePinReaction(reaction, user), handleApproveReaction(reaction, user)], {
-        concurrency: "unbounded",
-        mode: "either",
-    }).pipe(Effect.asVoid, Effect.annotateLogs({ feature: "commit_overflow" }));
+    Effect.all(
+        [
+            handlePinReaction(reaction, user),
+            handleApproveReaction(reaction, user),
+            handlePrivateReaction(reaction, user),
+        ],
+        {
+            concurrency: "unbounded",
+            mode: "either",
+        },
+    ).pipe(Effect.asVoid, Effect.annotateLogs({ feature: "commit_overflow" }));
+
+export const handleCommitOverflowReactionRemove = (
+    reaction: MessageReaction | PartialMessageReaction,
+    user: User | PartialUser,
+) =>
+    handlePrivateReactionRemove(reaction, user).pipe(
+        Effect.asVoid,
+        Effect.annotateLogs({ feature: "commit_overflow" }),
+    );
 
 export { calculateStreaks } from "./streaks";
 
