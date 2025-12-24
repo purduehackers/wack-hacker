@@ -762,19 +762,25 @@ const handleApproveReaction = Effect.fn("CommitOverflow.handleApproveReaction")(
         return;
     }
 
-    const author = message.author;
-    if (!author) return;
+    const threadOwnerId = thread.ownerId;
+    if (!threadOwnerId) return;
 
-    yield* db.users.upsert(author.id, author.username);
+    const threadOwner = yield* Effect.tryPromise({
+        try: () => guild.members.fetch(threadOwnerId),
+        catch: (e) =>
+            new Error(`Failed to fetch thread owner: ${e instanceof Error ? e.message : String(e)}`),
+    });
 
-    const authorProfileOpt = yield* db.commitOverflowProfiles.get(author.id);
-    const isPrivate = Option.isSome(authorProfileOpt)
-        ? (authorProfileOpt.value.is_private ?? false)
+    yield* db.users.upsert(threadOwnerId, threadOwner.user.username);
+
+    const ownerProfileOpt = yield* db.commitOverflowProfiles.get(threadOwnerId);
+    const isPrivate = Option.isSome(ownerProfileOpt)
+        ? (ownerProfileOpt.value.is_private ?? false)
         : false;
 
     const committedAt = message.createdAt.toISOString();
     yield* db.commits.createApproved({
-        userId: author.id,
+        userId: threadOwnerId,
         messageId: message.id,
         committedAt,
         approvedBy: user.id,
@@ -783,8 +789,9 @@ const handleApproveReaction = Effect.fn("CommitOverflow.handleApproveReaction")(
 
     const durationMs = Date.now() - startTime;
     yield* Effect.logInfo("commit approved", {
-        user_id: author.id,
-        username: author.username,
+        user_id: threadOwnerId,
+        username: threadOwner.user.username,
+        message_author_id: message.author?.id,
         approver_id: user.id,
         message_id: message.id,
         committed_at: committedAt,
@@ -873,6 +880,97 @@ const handlePrivateReaction = Effect.fn("CommitOverflow.handlePrivateReaction")(
     });
 });
 
+const handleApproveReactionRemove = Effect.fn("CommitOverflow.handleApproveReactionRemove")(
+    function* (
+        reaction: MessageReaction | PartialMessageReaction,
+        user: User | PartialUser,
+    ) {
+        const startTime = Date.now();
+        const db = yield* Database;
+
+        if (user.bot) return;
+        const isApproveEmoji =
+            reaction.emoji.name === COMMIT_APPROVE_EMOJI ||
+            reaction.emoji.id === ALTERNATE_COMMIT_APPROVE_EMOJI;
+        if (!isApproveEmoji) return;
+        if (!isInCommitOverflowForum(reaction.message.channel)) return;
+
+        yield* Effect.annotateCurrentSpan({
+            user_id: user.id,
+            message_id: reaction.message.id,
+        });
+
+        const fullReaction = reaction.partial
+            ? yield* Effect.tryPromise({
+                  try: () => reaction.fetch(),
+                  catch: (e) =>
+                      new Error(
+                          `Failed to fetch reaction: ${e instanceof Error ? e.message : String(e)}`,
+                      ),
+              })
+            : reaction;
+
+        const message = fullReaction.message.partial
+            ? yield* Effect.tryPromise({
+                  try: () => fullReaction.message.fetch(),
+                  catch: (e) =>
+                      new Error(
+                          `Failed to fetch message: ${e instanceof Error ? e.message : String(e)}`,
+                      ),
+              })
+            : fullReaction.message;
+
+        // Check if there are still other approve reactions on the message
+        const approveReactions = message.reactions.cache.filter(
+            (r) =>
+                r.emoji.name === COMMIT_APPROVE_EMOJI ||
+                r.emoji.id === ALTERNATE_COMMIT_APPROVE_EMOJI,
+        );
+        const hasOtherApproveReactions = approveReactions.some((r) => (r.count ?? 0) > 0);
+
+        if (hasOtherApproveReactions) {
+            yield* Effect.logDebug("other approve reactions still exist", {
+                user_id: user.id,
+                message_id: message.id,
+                reason: "other_approves_exist",
+            });
+            return;
+        }
+
+        const existingCommit = yield* db.commits.get(message.id);
+        if (Option.isNone(existingCommit)) {
+            yield* Effect.logDebug("commit not found for approve removal", {
+                user_id: user.id,
+                message_id: message.id,
+                reason: "commit_not_found",
+            });
+            return;
+        }
+
+        yield* db.commits.delete(message.id);
+
+        // Remove the checkmark reaction if present
+        const checkReaction = message.reactions.cache.get("\u2705");
+        if (checkReaction) {
+            yield* Effect.tryPromise({
+                try: () => checkReaction.users.remove(message.client.user?.id),
+                catch: (e) =>
+                    new Error(
+                        `Failed to remove reaction: ${e instanceof Error ? e.message : String(e)}`,
+                    ),
+            }).pipe(Effect.catchAll(() => Effect.void));
+        }
+
+        const durationMs = Date.now() - startTime;
+        yield* Effect.logInfo("commit unapproved and deleted", {
+            user_id: user.id,
+            message_id: message.id,
+            message_author_id: message.author?.id,
+            duration_ms: durationMs,
+        });
+    },
+);
+
 const handlePrivateReactionRemove = Effect.fn("CommitOverflow.handlePrivateReactionRemove")(
     function* (
         reaction: MessageReaction | PartialMessageReaction,
@@ -933,12 +1031,12 @@ const handlePrivateReactionRemove = Effect.fn("CommitOverflow.handlePrivateReact
             return;
         }
 
-        const author = message.author;
-        if (!author) return;
+        const threadOwnerId = thread.ownerId;
+        if (!threadOwnerId) return;
 
-        const authorProfileOpt = yield* db.commitOverflowProfiles.get(author.id);
-        const profileIsPrivate = Option.isSome(authorProfileOpt)
-            ? (authorProfileOpt.value.is_private ?? false)
+        const ownerProfileOpt = yield* db.commitOverflowProfiles.get(threadOwnerId);
+        const profileIsPrivate = Option.isSome(ownerProfileOpt)
+            ? (ownerProfileOpt.value.is_private ?? false)
             : false;
 
         yield* db.commits.setExplicitlyPrivate(message.id, false, profileIsPrivate);
@@ -947,7 +1045,8 @@ const handlePrivateReactionRemove = Effect.fn("CommitOverflow.handlePrivateReact
         yield* Effect.logInfo("commit explicit privacy removed", {
             user_id: user.id,
             message_id: message.id,
-            author_id: author.id,
+            thread_owner_id: threadOwnerId,
+            message_author_id: message.author?.id,
             profile_is_private: profileIsPrivate,
             commit_is_private: profileIsPrivate,
             duration_ms: durationMs,
@@ -975,10 +1074,51 @@ export const handleCommitOverflowReactionRemove = (
     reaction: MessageReaction | PartialMessageReaction,
     user: User | PartialUser,
 ) =>
-    handlePrivateReactionRemove(reaction, user).pipe(
-        Effect.asVoid,
-        Effect.annotateLogs({ feature: "commit_overflow" }),
-    );
+    Effect.all(
+        [
+            handleApproveReactionRemove(reaction, user),
+            handlePrivateReactionRemove(reaction, user),
+        ],
+        {
+            concurrency: "unbounded",
+            mode: "either",
+        },
+    ).pipe(Effect.asVoid, Effect.annotateLogs({ feature: "commit_overflow" }));
+
+export const handleCommitOverflowMessageDelete = Effect.fn("CommitOverflow.handleMessageDelete")(
+    function* (message: Message) {
+        const startTime = Date.now();
+        const db = yield* Database;
+
+        if (!isInCommitOverflowForum(message.channel)) return;
+
+        yield* Effect.annotateCurrentSpan({
+            message_id: message.id,
+            channel_id: message.channelId,
+        });
+
+        const existingCommit = yield* db.commits.get(message.id);
+        if (Option.isNone(existingCommit)) {
+            yield* Effect.logDebug("no commit found for deleted message", {
+                message_id: message.id,
+                channel_id: message.channelId,
+                reason: "commit_not_found",
+            });
+            return;
+        }
+
+        yield* db.commits.delete(message.id);
+
+        const durationMs = Date.now() - startTime;
+        yield* Effect.logInfo("commit deleted due to message deletion", {
+            message_id: message.id,
+            channel_id: message.channelId,
+            author_id: message.author?.id,
+            duration_ms: durationMs,
+        });
+    },
+    Effect.annotateLogs({ feature: "commit_overflow" }),
+);
 
 export { calculateStreaks } from "./streaks";
 
