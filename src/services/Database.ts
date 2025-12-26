@@ -784,13 +784,11 @@ export class Database extends Effect.Service<Database>()("Database", {
             setExplicitlyPrivate: Effect.fn("Database.commits.setExplicitlyPrivate")(function* (
                 messageId: string,
                 isExplicitlyPrivate: boolean,
-                isPrivate: boolean,
             ) {
                 yield* Effect.annotateCurrentSpan({
                     message_id: messageId,
                     table: "commits",
                     is_explicitly_private: isExplicitlyPrivate,
-                    is_private: isPrivate,
                 });
 
                 yield* Effect.logDebug("database update initiated", {
@@ -800,7 +798,6 @@ export class Database extends Effect.Service<Database>()("Database", {
                     table: "commits",
                     message_id: messageId,
                     is_explicitly_private: isExplicitlyPrivate,
-                    is_private: isPrivate,
                 });
 
                 const [duration] = yield* Effect.tryPromise({
@@ -809,7 +806,6 @@ export class Database extends Effect.Service<Database>()("Database", {
                             .update(schema.commits)
                             .set({
                                 is_explicitly_private: isExplicitlyPrivate,
-                                is_private: isPrivate,
                             })
                             .where(eq(schema.commits.message_id, messageId)),
                     catch: (e) =>
@@ -827,7 +823,6 @@ export class Database extends Effect.Service<Database>()("Database", {
                     table: "commits",
                     message_id: messageId,
                     is_explicitly_private: isExplicitlyPrivate,
-                    is_private: isPrivate,
                     duration_ms,
                     latency_ms: duration_ms,
                 });

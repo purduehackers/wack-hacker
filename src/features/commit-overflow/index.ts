@@ -864,7 +864,7 @@ const handlePrivateReaction = Effect.fn("CommitOverflow.handlePrivateReaction")(
         return;
     }
 
-    yield* db.commits.setExplicitlyPrivate(message.id, true, true);
+    yield* db.commits.setExplicitlyPrivate(message.id, true);
 
     const durationMs = Date.now() - startTime;
     yield* Effect.logInfo("commit marked explicitly private", {
@@ -1039,7 +1039,7 @@ const handlePrivateReactionRemove = Effect.fn("CommitOverflow.handlePrivateReact
             ? (ownerProfileOpt.value.is_private ?? false)
             : false;
 
-        yield* db.commits.setExplicitlyPrivate(message.id, false, profileIsPrivate);
+        yield* db.commits.setExplicitlyPrivate(message.id, false);
 
         const durationMs = Date.now() - startTime;
         yield* Effect.logInfo("commit explicit privacy removed", {
