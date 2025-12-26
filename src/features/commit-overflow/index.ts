@@ -796,7 +796,7 @@ const handleApproveReaction = Effect.fn("CommitOverflow.handleApproveReaction")(
     }
 
     let forwardedMessageId: string | null = null;
-    if (!isPrivate || hasPrivateEmoji) {
+    if (!isPrivate && !hasPrivateEmoji) {
         const forwardResult = yield* Effect.tryPromise({
             try: () => message.forward(COMMIT_OVERFLOW_FORWARD_THREAD_ID),
             catch: (e) =>
@@ -824,7 +824,7 @@ const handleApproveReaction = Effect.fn("CommitOverflow.handleApproveReaction")(
         committed_at: committedAt,
         is_private: isPrivate,
         already_has_explicitly_private: hasPrivateEmoji,
-        forwarded: !isPrivate || !hasPrivateEmoji,
+        forwarded: !isPrivate && !hasPrivateEmoji,
         forwarded_message_id: forwardedMessageId,
         duration_ms: durationMs,
     });
