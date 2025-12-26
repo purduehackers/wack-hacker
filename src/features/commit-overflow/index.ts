@@ -18,6 +18,7 @@ import { distance } from "fastest-levenshtein";
 
 import {
     COMMIT_OVERFLOW_FORUM_ID,
+    COMMIT_OVERFLOW_FORWARD_THREAD_ID,
     COMMIT_OVERFLOW_ROLE_ID,
     COMMIT_OVERFLOW_YEAR,
     COMMIT_OVERFLOW_DEFAULT_TIMEZONE,
@@ -795,6 +796,25 @@ const handleApproveReaction = Effect.fn("CommitOverflow.handleApproveReaction")(
         yield* db.commits.setExplicitlyPrivate(message.id, true);
     }
 
+    let forwardedMessageId: string | null = null;
+    if (!isPrivate) {
+        const forwardResult = yield* Effect.tryPromise({
+            try: () => message.forward(COMMIT_OVERFLOW_FORWARD_THREAD_ID),
+            catch: (e) =>
+                new Error(`Failed to forward message: ${e instanceof Error ? e.message : String(e)}`),
+        }).pipe(
+            Effect.map((forwardedMessage) => forwardedMessage.id),
+            Effect.catchAll((error) => {
+                return Effect.logWarning("failed to forward commit", {
+                    message_id: message.id,
+                    user_id: threadOwnerId,
+                    error_message: error.message,
+                }).pipe(Effect.map(() => null));
+            }),
+        );
+        forwardedMessageId = forwardResult;
+    }
+
     const durationMs = Date.now() - startTime;
     yield* Effect.logInfo("commit approved", {
         user_id: threadOwnerId,
@@ -805,6 +825,8 @@ const handleApproveReaction = Effect.fn("CommitOverflow.handleApproveReaction")(
         committed_at: committedAt,
         is_private: isPrivate,
         is_explicitly_private: hasPrivateEmoji,
+        forwarded: !isPrivate,
+        forwarded_message_id: forwardedMessageId,
         duration_ms: durationMs,
     });
 
