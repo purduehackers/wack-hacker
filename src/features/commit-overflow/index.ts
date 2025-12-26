@@ -778,6 +778,10 @@ const handleApproveReaction = Effect.fn("CommitOverflow.handleApproveReaction")(
         ? (ownerProfileOpt.value.is_private ?? false)
         : false;
 
+    const hasPrivateEmoji = message.reactions.cache.some(
+        (r) => r.emoji.name === COMMIT_PRIVATE_EMOJI,
+    );
+
     const committedAt = message.createdAt.toISOString();
     yield* db.commits.createApproved({
         userId: threadOwnerId,
@@ -786,6 +790,10 @@ const handleApproveReaction = Effect.fn("CommitOverflow.handleApproveReaction")(
         approvedBy: user.id,
         isPrivate,
     });
+
+    if (hasPrivateEmoji) {
+        yield* db.commits.setExplicitlyPrivate(message.id, true);
+    }
 
     const durationMs = Date.now() - startTime;
     yield* Effect.logInfo("commit approved", {
@@ -796,6 +804,7 @@ const handleApproveReaction = Effect.fn("CommitOverflow.handleApproveReaction")(
         message_id: message.id,
         committed_at: committedAt,
         is_private: isPrivate,
+        is_explicitly_private: hasPrivateEmoji,
         duration_ms: durationMs,
     });
 
