@@ -276,7 +276,7 @@ export class Database extends Effect.Service<Database>()("Database", {
                 const [duration, rows] = yield* Effect.tryPromise({
                     try: () =>
                         d1Driver.rawQuery<CommitOverflowProfile>(
-                            `SELECT user_id, thread_id, timezone, created_at FROM commit_overflow_profiles WHERE user_id = ?`,
+                            `SELECT user_id, thread_id, timezone, is_private, created_at FROM commit_overflow_profiles WHERE user_id = ?`,
                             [userId],
                         ),
                     catch: (e) =>
