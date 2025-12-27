@@ -4,17 +4,7 @@ import type { Schedule } from "effect";
 import { Effect } from "effect";
 
 import { AppConfig } from "../config";
-
-const structuredError = (e: unknown) => ({
-    type:
-        typeof e === "object" && e !== null && "_tag" in e
-            ? (e as { _tag: string })._tag
-            : e instanceof Error
-              ? e.constructor.name
-              : "Unknown",
-    message: e instanceof Error ? e.message : String(e),
-    stack: e instanceof Error ? e.stack?.split("\n").slice(0, 5).join("\n") : undefined,
-});
+import { structuredError } from "../errors";
 
 import {
     createHackNightThread,
@@ -95,9 +85,7 @@ export const startCronJobs = Effect.fn("Crons.startCronJobs")(function* (client:
             Effect.catchAll((e) => {
                 const jobDurationMs = Date.now() - jobStartTime;
                 return Effect.logError("cron job execution failed", {
-                    error_type: structuredError(e).type,
-                    error_message: structuredError(e).message,
-                    error_stack: structuredError(e).stack,
+                    ...structuredError(e),
                     cron_job_name: job.name,
                     feature_flag: job.featureFlag ?? "none",
                     job_duration_ms: jobDurationMs,

@@ -1,18 +1,7 @@
 import { Effect, Ref, Duration, Schedule, Redacted } from "effect";
 
 import { AppConfig } from "../config";
-import { DashboardError, DashboardConnectionFailed } from "../errors";
-
-const structuredError = (e: unknown) => ({
-    type:
-        typeof e === "object" && e !== null && "_tag" in e
-            ? (e as { _tag: string })._tag
-            : e instanceof Error
-              ? e.constructor.name
-              : "Unknown",
-    message: e instanceof Error ? e.message : String(e),
-    stack: e instanceof Error ? e.stack?.split("\n").slice(0, 5).join("\n") : undefined,
-});
+import { DashboardError, DashboardConnectionFailed, structuredError } from "../errors";
 
 export interface DiscordMessage {
     image: string | null;
@@ -357,7 +346,7 @@ export class Dashboard extends Effect.Service<Dashboard>()("Dashboard", {
                                             operation_type: "websocket_reconnect",
                                             connection_state: "failed",
                                             ws_url: wsUrl,
-                                            error: structuredError(e),
+                                            ...structuredError(e),
                                             error_type: "reconnect_failed",
                                         }),
                                         Effect.succeed(null),
@@ -387,7 +376,7 @@ export class Dashboard extends Effect.Service<Dashboard>()("Dashboard", {
                                             connection_state: "failed",
                                             previous_state: state._tag.toLowerCase(),
                                             ws_url: wsUrl,
-                                            error: structuredError(e),
+                                            ...structuredError(e),
                                             error_type: "connect_failed",
                                         }),
                                         Effect.succeed(null),
@@ -462,7 +451,7 @@ export class Dashboard extends Effect.Service<Dashboard>()("Dashboard", {
                             service_name: "Dashboard",
                             method: "send",
                             operation_type: "websocket_send",
-                            error: structuredError(e),
+                            ...structuredError(e),
                             ws_url: wsUrl,
                             error_type: "send_error",
                         }).pipe(Effect.andThen(Effect.void)),

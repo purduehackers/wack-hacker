@@ -1,7 +1,7 @@
 import { Events, MessageFlags } from "discord.js";
 import { Effect, Layer, Logger, ManagedRuntime } from "effect";
 
-import type { DiscordError } from "./errors";
+import { type DiscordError, structuredError } from "./errors";
 
 import { AppConfig } from "./config";
 import {
@@ -15,17 +15,6 @@ import {
     startCronJobs,
 } from "./runtime";
 import { ServicesLive, Discord } from "./services";
-
-const structuredError = (e: unknown) => ({
-    type:
-        typeof e === "object" && e !== null && "_tag" in e
-            ? (e as { _tag: string })._tag
-            : e instanceof Error
-              ? e.constructor.name
-              : "Unknown",
-    message: e instanceof Error ? e.message : String(e),
-    stack: e instanceof Error ? e.stack?.split("\n").slice(0, 5).join("\n") : undefined,
-});
 
 const isDev = process.env.NODE_ENV !== "production";
 
@@ -91,7 +80,7 @@ const program = Effect.gen(function* () {
             Effect.catchAll((e) =>
                 Effect.gen(function* () {
                     yield* Effect.logError("command execution failed", {
-                        error: structuredError(e),
+                        ...structuredError(e),
                         command_name: interaction.commandName,
                         user_id: interaction.user.id,
                         username: interaction.user.username,
@@ -146,7 +135,7 @@ const program = Effect.gen(function* () {
             ),
             Effect.catchAll((e) =>
                 Effect.logError("message handling failed", {
-                    error: structuredError(e),
+                    ...structuredError(e),
                     message_id: message.id,
                     channel_id: message.channelId,
                     author_id: message.author.id,
@@ -175,7 +164,7 @@ const program = Effect.gen(function* () {
             ),
             Effect.catchAll((e) =>
                 Effect.logError("reaction handling failed", {
-                    error: structuredError(e),
+                    ...structuredError(e),
                     message_id: reaction.message.id,
                     channel_id: reaction.message.channelId,
                     user_id: user.id,
@@ -205,7 +194,7 @@ const program = Effect.gen(function* () {
             ),
             Effect.catchAll((e) =>
                 Effect.logError("thread create handling failed", {
-                    error: structuredError(e),
+                    ...structuredError(e),
                     thread_id: thread.id,
                     thread_name: thread.name,
                     parent_id: thread.parentId,
@@ -235,7 +224,7 @@ const program = Effect.gen(function* () {
             ),
             Effect.catchAll((e) =>
                 Effect.logError("message delete handling failed", {
-                    error: structuredError(e),
+                    ...structuredError(e),
                     message_id: message.id,
                     channel_id: message.channelId,
                     author_id: message.author?.id,
@@ -263,7 +252,7 @@ const program = Effect.gen(function* () {
             ),
             Effect.catchAll((e) =>
                 Effect.logError("reaction remove handling failed", {
-                    error: structuredError(e),
+                    ...structuredError(e),
                     message_id: reaction.message.id,
                     channel_id: reaction.message.channelId,
                     user_id: user.id,
@@ -304,12 +293,9 @@ void Effect.logInfo("http server started", {
 const main = program.pipe(Effect.provide(AppLayer)) as AppEffect<void, DiscordError>;
 
 Effect.runPromise(main).catch((e) => {
-    const error = structuredError(e);
     void Effect.logError("fatal error during startup", {
         service_name: "wack_hacker",
-        error_type: error.type,
-        error_message: error.message,
-        stack_trace: error.stack,
+        ...structuredError(e),
     })
         .pipe(Effect.provide(AppLayer), Effect.runPromise)
         .finally(() => process.exit(1));
