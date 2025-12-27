@@ -57,3 +57,18 @@ export class ValidationError extends Data.TaggedError("ValidationError")<{
     field: string;
     message: string;
 }> {}
+
+/**
+ * Converts an unknown error into a structured object for logging.
+ * Handles Effect tagged errors, standard Errors, and unknown values.
+ */
+export const structuredError = (e: unknown) => ({
+    error_type:
+        typeof e === "object" && e !== null && "_tag" in e
+            ? (e as { _tag: string })._tag
+            : e instanceof Error
+              ? e.constructor.name
+              : "Unknown",
+    error_message: e instanceof Error ? e.message : String(e),
+    error_stack: e instanceof Error ? e.stack?.split("\n").slice(0, 5).join("\n") : undefined,
+});

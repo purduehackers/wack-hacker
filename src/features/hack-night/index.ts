@@ -15,18 +15,8 @@ import {
 } from "../../constants";
 import { generateEventSlug } from "../../lib/dates";
 import { randomItem } from "../../lib/discord";
+import { structuredError } from "../../errors";
 import { Storage } from "../../services";
-
-const structuredError = (e: unknown) => ({
-    type:
-        typeof e === "object" && e !== null && "_tag" in e
-            ? (e as { _tag: string })._tag
-            : e instanceof Error
-              ? e.constructor.name
-              : "Unknown",
-    message: e instanceof Error ? e.message : String(e),
-    stack: e instanceof Error ? e.stack?.split("\n").slice(0, 5).join("\n") : undefined,
-});
 
 export const handleHackNightImages = Effect.fn("HackNight.handleImages")(
     function* (message: Message) {
@@ -207,7 +197,7 @@ export const handleHackNightImages = Effect.fn("HackNight.handleImages")(
         effect.pipe(
             Effect.catchAll((e) =>
                 Effect.logError("hack night image upload failed", {
-                    error: structuredError(e),
+                    ...structuredError(e),
                     message_id: message.id,
                     channel_id: message.channelId,
                     thread_id: message.channel.isThread() ? message.channel.id : undefined,
@@ -314,7 +304,7 @@ export const createHackNightThread = Effect.fn("HackNight.createThread")(
         effect.pipe(
             Effect.catchAll((e) =>
                 Effect.logError("hack night thread creation failed", {
-                    error: structuredError(e),
+                    ...structuredError(e),
                     channel_id: HACK_NIGHT_CHANNEL_ID,
                     ping_role_id: HACK_NIGHT_PING_ROLE_ID,
                 }),
@@ -534,7 +524,7 @@ export const cleanupHackNightThread = Effect.fn("HackNight.cleanupThread")(
         effect.pipe(
             Effect.catchAll((e) =>
                 Effect.logError("hack night thread cleanup failed", {
-                    error: structuredError(e),
+                    ...structuredError(e),
                     channel_id: HACK_NIGHT_CHANNEL_ID,
                     photography_award_role_id: HACK_NIGHT_PHOTOGRAPHY_AWARD_ROLE_ID,
                 }),

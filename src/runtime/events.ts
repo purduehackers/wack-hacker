@@ -10,17 +10,7 @@ import type {
 import { Effect } from "effect";
 
 import { AppConfig } from "../config";
-
-const structuredError = (e: unknown) => ({
-    type:
-        typeof e === "object" && e !== null && "_tag" in e
-            ? (e as { _tag: string })._tag
-            : e instanceof Error
-              ? e.constructor.name
-              : "Unknown",
-    message: e instanceof Error ? e.message : String(e),
-    stack: e instanceof Error ? e.stack?.split("\n").slice(0, 5).join("\n") : undefined,
-});
+import { structuredError } from "../errors";
 
 import { handleAutoThread } from "../features/auto-thread";
 import {
@@ -168,9 +158,7 @@ export const handleMessageCreate = Effect.fn("Events.handleMessageCreate")(funct
                 const handlerDurationMs = Date.now() - handlerStartTime;
                 return Effect.logError("message handler failed", {
                     event_type: "message_create",
-                    error_type: structuredError(e).type,
-                    error_message: structuredError(e).message,
-                    error_stack: structuredError(e).stack,
+                    ...structuredError(e),
                     message_id: message.id,
                     channel_id: message.channelId,
                     author_id: message.author.id,
@@ -267,9 +255,7 @@ export const handleMessageReactionAdd = Effect.fn("Events.handleMessageReactionA
                 const handlerDurationMs = Date.now() - handlerStartTime;
                 return Effect.logError("reaction handler failed", {
                     event_type: "reaction_add",
-                    error_type: structuredError(e).type,
-                    error_message: structuredError(e).message,
-                    error_stack: structuredError(e).stack,
+                    ...structuredError(e),
                     message_id: reaction.message.id,
                     channel_id: reaction.message.channelId,
                     user_id: user.id,
@@ -369,9 +355,7 @@ export const handleMessageReactionRemove = Effect.fn("Events.handleMessageReacti
                     const handlerDurationMs = Date.now() - handlerStartTime;
                     return Effect.logError("reaction remove handler failed", {
                         event_type: "reaction_remove",
-                        error_type: structuredError(e).type,
-                        error_message: structuredError(e).message,
-                        error_stack: structuredError(e).stack,
+                        ...structuredError(e),
                         message_id: reaction.message.id,
                         channel_id: reaction.message.channelId,
                         user_id: user.id,
@@ -460,9 +444,7 @@ export const handleMessageDelete = Effect.fn("Events.handleMessageDelete")(funct
                 const handlerDurationMs = Date.now() - handlerStartTime;
                 return Effect.logError("message delete handler failed", {
                     event_type: "message_delete",
-                    error_type: structuredError(e).type,
-                    error_message: structuredError(e).message,
-                    error_stack: structuredError(e).stack,
+                    ...structuredError(e),
                     message_id: message.id,
                     channel_id: message.channelId,
                     handler_name: h.handler.name,
@@ -551,9 +533,7 @@ export const handleThreadCreate = Effect.fn("Events.handleThreadCreate")(functio
                 const handlerDurationMs = Date.now() - handlerStartTime;
                 return Effect.logError("thread create handler failed", {
                     event_type: "thread_create",
-                    error_type: structuredError(e).type,
-                    error_message: structuredError(e).message,
-                    error_stack: structuredError(e).stack,
+                    ...structuredError(e),
                     thread_id: thread.id,
                     thread_name: thread.name,
                     owner_id: thread.ownerId,
