@@ -1,13 +1,13 @@
 import type { Message, TextChannel, ThreadChannel } from "discord.js";
 import { ComponentType, Events } from "discord.js";
-import { Effect, Redacted } from "effect";
+import { Effect, Fiber, Redacted, Schedule } from "effect";
 
 import { AppConfig } from "../../config.js";
 import { SUDO_ROLE_ID, INTERNAL_CATEGORIES } from "../../constants.js";
 import { DiscordSendError, DiscordThreadError } from "../../errors.js";
 
 import { classifyRequest } from "./classifier.js";
-import { generateCode } from "./generator.js";
+import { generateCode, type StepCallbacks, type GenerationResult } from "./generator.js";
 import { generateSummary } from "./summarizer.js";
 import { validateCode } from "./validator.js";
 import { executeCode } from "./executor.js";
@@ -18,14 +18,35 @@ import {
     createApprovalButtons,
     createLogsAttachment,
     createErrorsAttachment,
-    formatCodeBlock,
     formatValidationErrors,
     formatExecutionFooter,
+    formatStepMessage,
+    formatGenerationHeader,
+    createCodeDisplay,
 } from "./components.js";
 
 export * from "./errors.js";
 
 const WACK_HACKER_BOT_ID = "1115068381649961060";
+
+const TYPING_INTERVAL_MS = 7000;
+
+const withTypingIndicator = <A, E, R>(
+    channel: ThreadChannel,
+    effect: Effect.Effect<A, E, R>,
+): Effect.Effect<A, E, R> => {
+    const sendTyping = Effect.tryPromise({
+        try: () => channel.sendTyping(),
+        catch: () => null,
+    }).pipe(Effect.ignore);
+
+    const typingLoop = sendTyping.pipe(Effect.repeat(Schedule.spaced(TYPING_INTERVAL_MS)));
+
+    return sendTyping.pipe(
+        Effect.andThen(Effect.fork(typingLoop)),
+        Effect.flatMap((fiber) => effect.pipe(Effect.ensuring(Fiber.interrupt(fiber).pipe(Effect.ignore)))),
+    );
+};
 
 type ApprovalResult =
     | { type: "approved" }
@@ -83,6 +104,17 @@ const awaitApprovalOrFeedback = (
                 resolve({ type: "timeout" });
             });
     });
+};
+
+const cleanupStepMessages = async (messages: Message[]): Promise<void> => {
+    const deletePromises = messages.map(async (msg) => {
+        try {
+            await msg.delete();
+        } catch {
+            // Ignore deletion failures (message may already be deleted)
+        }
+    });
+    await Promise.all(deletePromises);
 };
 
 export const handleCodeMode = Effect.fn("CodeMode.handle")(
@@ -196,7 +228,38 @@ export const handleCodeMode = Effect.fn("CodeMode.handle")(
             catch: (cause) => new DiscordSendError({ channelId: thread.id, cause }),
         });
 
-        let currentCode = yield* generateCode(requestText, message.guild);
+        // Track step messages for cleanup
+        let stepMessages: Message[] = [];
+
+        const createStepCallbacks = (): StepCallbacks => ({
+            onStepFinish: async (step) => {
+                try {
+                    const stepMessage = await thread.send(formatStepMessage(step));
+                    stepMessages.push(stepMessage);
+                } catch {
+                    // Ignore send failures - don't break generation for tracking issues
+                }
+            },
+        });
+
+        // Initial code generation with step tracking
+        const initialResult = yield* withTypingIndicator(
+            thread,
+            generateCode(requestText, message.guild!, createStepCallbacks()).pipe(
+                Effect.ensuring(
+                    Effect.promise(async () => {
+                        await cleanupStepMessages(stepMessages);
+                        stepMessages = [];
+                    }).pipe(Effect.ignore),
+                ),
+            ),
+        );
+
+        let currentCode = initialResult.code;
+        let generationHeader = formatGenerationHeader(
+            initialResult.totalDurationMs,
+            initialResult.toolCallCount,
+        );
         let feedbackHistory: string[] = [];
 
         while (true) {
@@ -220,11 +283,18 @@ export const handleCodeMode = Effect.fn("CodeMode.handle")(
                 return;
             }
 
+            const codeDisplay = createCodeDisplay(
+                currentCode,
+                generationHeader,
+                `<@${message.author.id}> Please review this code before I execute it:`,
+            );
+
             yield* Effect.tryPromise({
                 try: () =>
                     statusMessage.edit({
-                        content: `<@${message.author.id}> Please review this code before I execute it:\n${formatCodeBlock(currentCode)}`,
+                        content: codeDisplay.content,
                         components: [createApprovalButtons()],
+                        files: [codeDisplay.file],
                     }),
                 catch: (cause) => new DiscordSendError({ channelId: thread.id, cause }),
             });
@@ -242,11 +312,19 @@ export const handleCodeMode = Effect.fn("CodeMode.handle")(
             });
 
             if (approvalResult.type === "timeout") {
+                const timeoutDisplay = createCodeDisplay(
+                    currentCode,
+                    generationHeader,
+                    `<@${message.author.id}> Please review this code before I execute it:`,
+                    "**Approval timed out.**",
+                );
+
                 yield* Effect.tryPromise({
                     try: () =>
                         statusMessage.edit({
-                            content: `<@${message.author.id}> Please review this code before I execute it:\n${formatCodeBlock(currentCode)}\n\n**Approval timed out.**`,
+                            content: timeoutDisplay.content,
                             components: [],
+                            files: [timeoutDisplay.file],
                         }),
                     catch: (cause) => new DiscordSendError({ channelId: thread.id, cause }),
                 });
@@ -260,11 +338,19 @@ export const handleCodeMode = Effect.fn("CodeMode.handle")(
             }
 
             if (approvalResult.type === "cancelled") {
+                const cancelDisplay = createCodeDisplay(
+                    currentCode,
+                    generationHeader,
+                    `<@${message.author.id}> Please review this code before I execute it:`,
+                    "**Cancelled by user.**",
+                );
+
                 yield* Effect.tryPromise({
                     try: () =>
                         statusMessage.edit({
-                            content: `<@${message.author.id}> Please review this code before I execute it:\n${formatCodeBlock(currentCode)}\n\n**Cancelled by user.**`,
+                            content: cancelDisplay.content,
                             components: [],
+                            files: [cancelDisplay.file],
                         }),
                     catch: (cause) => new DiscordSendError({ channelId: thread.id, cause }),
                 });
@@ -297,8 +383,9 @@ export const handleCodeMode = Effect.fn("CodeMode.handle")(
                 yield* Effect.tryPromise({
                     try: () =>
                         statusMessage.edit({
-                            content: `<@${message.author.id}> Please review this code before I execute it:\n${formatCodeBlock(currentCode)}\n\n**Regenerating based on your feedback...**`,
+                            content: `**Regenerating based on your feedback...**`,
                             components: [],
+                            files: [],
                         }),
                     catch: (cause) => new DiscordSendError({ channelId: thread.id, cause }),
                 });
@@ -321,7 +408,30 @@ ${feedbackContext}
 
 Generate updated code that addresses the feedback while still fulfilling the original request.`;
 
-                currentCode = yield* generateCode(enhancedRequest, message.guild!);
+                // Regenerate code with step tracking
+                const feedbackResult = yield* withTypingIndicator(
+                    thread,
+                    generateCode(enhancedRequest, message.guild!, createStepCallbacks()).pipe(
+                        Effect.ensuring(
+                            Effect.promise(async () => {
+                                await cleanupStepMessages(stepMessages);
+                                stepMessages = [];
+                            }).pipe(Effect.ignore),
+                        ),
+                    ),
+                );
+
+                currentCode = feedbackResult.code;
+                generationHeader = formatGenerationHeader(
+                    feedbackResult.totalDurationMs,
+                    feedbackResult.toolCallCount,
+                );
+
+                // Add check mark to indicate feedback was implemented
+                yield* Effect.tryPromise({
+                    try: () => approvalResult.feedbackMessage.react("✅"),
+                    catch: () => null,
+                });
             }
         }
 
@@ -330,11 +440,18 @@ Generate updated code that addresses the feedback while still fulfilling the ori
             catch: (cause) => new DiscordSendError({ channelId: thread.id, cause }),
         });
 
+        const finalCodeDisplay = createCodeDisplay(
+            currentCode,
+            generationHeader,
+            `<@${message.author.id}> Please review this code before I execute it:`,
+        );
+
         yield* Effect.tryPromise({
             try: () =>
                 statusMessage.edit({
-                    content: `<@${message.author.id}> Please review this code before I execute it:\n${formatCodeBlock(currentCode)}`,
+                    content: finalCodeDisplay.content,
                     components: [],
+                    files: [finalCodeDisplay.file],
                 }),
             catch: (cause) => new DiscordSendError({ channelId: thread.id, cause }),
         });
@@ -350,7 +467,7 @@ Generate updated code that addresses the feedback while still fulfilling the ori
         };
 
         const fullScript = buildExecutableScript(currentCode, scriptContext);
-        const executionResult = yield* executeCode(fullScript);
+        const executionResult = yield* withTypingIndicator(thread, executeCode(fullScript));
 
         const summary = yield* generateSummary(
             requestText,

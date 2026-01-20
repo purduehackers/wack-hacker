@@ -27,5 +27,6 @@ export const AppConfig = makeEnv("AppConfig", {
   WELCOMER_ENABLED: Env.booleanOr("WELCOMER_ENABLED", true),
   CODE_MODE_ENABLED: Env.booleanOr("CODE_MODE_ENABLED", true),
   AI_GATEWAY_API_KEY: Env.redacted("AI_GATEWAY_API_KEY"),
+  CONTEXT7_API_KEY: Env.redacted("CONTEXT7_API_KEY"),
   NODE_ENV: Env.stringOr("NODE_ENV", "development"),
 });

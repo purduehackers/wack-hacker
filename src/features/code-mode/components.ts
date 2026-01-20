@@ -1,5 +1,6 @@
 import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
 import type { ExecutionResult } from "./executor.js";
+import type { StepInfo } from "./generator.js";
 
 export const BUTTON_IDS = {
     APPROVE: "code_mode_approve",
@@ -50,4 +51,37 @@ export const formatExecutionFooter = (result: ExecutionResult): string => {
     const durationSec = (result.duration_ms / 1000).toFixed(2);
     const status = result.type === "success" ? "successfully" : result.type === "error" ? "with errors" : "timed out";
     return `-# This task ran ${status} in ${durationSec} seconds. It generated ${result.logs.length} logs and ${result.errors.length} errors.`;
+};
+
+export const formatStepMessage = (step: StepInfo): string => {
+    if (step.type === "tool_call") {
+        return `-# :mag: ${step.content}`;
+    }
+    const truncatedText =
+        step.content.length > 150 ? step.content.slice(0, 147) + "..." : step.content;
+    return `-# :thought_balloon: ${truncatedText}`;
+};
+
+export const formatGenerationHeader = (durationMs: number, toolCallCount: number): string => {
+    const durationSec = Math.round(durationMs / 1000);
+    const toolText = toolCallCount === 1 ? "1 tool" : `${toolCallCount} tools`;
+    return `-# Thought for ${durationSec} seconds and ran ${toolText}.`;
+};
+
+export interface CodeDisplay {
+    content: string;
+    file: AttachmentBuilder;
+}
+
+export const createCodeDisplay = (
+    code: string,
+    header: string,
+    prefix: string,
+    suffix?: string,
+): CodeDisplay => {
+    const content = `${prefix}\n${header}${suffix ? `\n\n${suffix}` : ""}`;
+    const buffer = Buffer.from(code, "utf-8");
+    const file = new AttachmentBuilder(buffer, { name: "code.ts" });
+
+    return { content, file };
 };
