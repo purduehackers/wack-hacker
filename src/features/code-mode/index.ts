@@ -4,7 +4,7 @@ import { Effect, Fiber, Redacted, Schedule } from "effect";
 
 import { AppConfig } from "../../config.js";
 import { SUDO_ROLE_ID, INTERNAL_CATEGORIES } from "../../constants.js";
-import { DiscordSendError, DiscordThreadError } from "../../errors.js";
+import { DiscordFetchError, DiscordSendError, DiscordThreadError } from "../../errors.js";
 
 import { classifyRequest } from "./classifier.js";
 import { generateCode, type StepCallbacks, type GenerationResult } from "./generator.js";
@@ -163,7 +163,7 @@ export const handleCodeMode = Effect.fn("CodeMode.handle")(
 
         const member = yield* Effect.tryPromise({
             try: () => message.guild!.members.fetch(message.author.id),
-            catch: (cause) => new DiscordSendError({ channelId: message.channelId, cause }),
+            catch: (cause) => new DiscordFetchError({ resource: "member", resourceId: message.author.id, cause }),
         });
 
         if (!member.roles.cache.has(SUDO_ROLE_ID)) {
