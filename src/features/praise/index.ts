@@ -2,6 +2,7 @@ import { ChannelType, type Message } from "discord.js";
 import { Effect } from "effect";
 
 import { WACKY_ROLE_ID } from "../../constants";
+import { DiscordReactError, DiscordRoleError } from "../../errors";
 
 const ENABLE_PATTERN = /wackity\s+hackity\s+praise\s+me/;
 const DISABLE_PATTERN = /wackity\s+hackity\s+go\s+away/;
@@ -71,8 +72,13 @@ export const handlePraise = Effect.fn("Praise.handle")(
             const roleAddStart = Date.now();
             yield* Effect.tryPromise({
                 try: () => message.member!.roles.add(WACKY_ROLE_ID),
-                catch: (e) =>
-                    new Error(`Failed to add role: ${e instanceof Error ? e.message : String(e)}`),
+                catch: (cause) =>
+                    new DiscordRoleError({
+                        userId: message.author.id,
+                        roleId: WACKY_ROLE_ID,
+                        action: "add",
+                        cause,
+                    }),
             }).pipe(
                 Effect.tap(() =>
                     Effect.logInfo("praise role added", {
@@ -104,8 +110,8 @@ export const handlePraise = Effect.fn("Praise.handle")(
             const reactionStart = Date.now();
             yield* Effect.tryPromise({
                 try: () => message.react("\u{1F973}"),
-                catch: (e) =>
-                    new Error(`Failed to react: ${e instanceof Error ? e.message : String(e)}`),
+                catch: (cause) =>
+                    new DiscordReactError({ messageId: message.id, emoji: "partying_face", cause }),
             }).pipe(
                 Effect.tap(() =>
                     Effect.logDebug("praise reaction added", {
@@ -155,10 +161,13 @@ export const handlePraise = Effect.fn("Praise.handle")(
             const roleRemoveStart = Date.now();
             yield* Effect.tryPromise({
                 try: () => message.member!.roles.remove(WACKY_ROLE_ID),
-                catch: (e) =>
-                    new Error(
-                        `Failed to remove role: ${e instanceof Error ? e.message : String(e)}`,
-                    ),
+                catch: (cause) =>
+                    new DiscordRoleError({
+                        userId: message.author.id,
+                        roleId: WACKY_ROLE_ID,
+                        action: "remove",
+                        cause,
+                    }),
             }).pipe(
                 Effect.tap(() =>
                     Effect.logInfo("praise role removed", {
@@ -190,8 +199,8 @@ export const handlePraise = Effect.fn("Praise.handle")(
             const reactionStart = Date.now();
             yield* Effect.tryPromise({
                 try: () => message.react("\u{1F910}"),
-                catch: (e) =>
-                    new Error(`Failed to react: ${e instanceof Error ? e.message : String(e)}`),
+                catch: (cause) =>
+                    new DiscordReactError({ messageId: message.id, emoji: "zipper_mouth_face", cause }),
             }).pipe(
                 Effect.tap(() =>
                     Effect.logDebug("praise reaction added", {

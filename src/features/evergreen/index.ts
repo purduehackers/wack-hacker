@@ -9,6 +9,7 @@ import {
     EVERGREEN_WIKI_BUFFER,
     ORGANIZER_ROLE_ID,
 } from "../../constants";
+import { DiscordFetchError, DiscordReplyError } from "../../errors";
 import { GitHub, MediaWiki } from "../../services";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -84,10 +85,8 @@ export const handleEvergreenIt = Effect.fn("Evergreen.handleIt")(
             const fetchMessagesStart = Date.now();
             const messages = yield* Effect.tryPromise({
                 try: () => message.channel.messages.fetch({ limit: 2 }),
-                catch: (e) =>
-                    new Error(
-                        `Failed to fetch messages: ${e instanceof Error ? e.message : String(e)}`,
-                    ),
+                catch: (cause) =>
+                    new DiscordFetchError({ resource: "messages", resourceId: message.channelId, cause }),
             }).pipe(
                 Effect.tapError((error) =>
                     Effect.logError("failed to fetch messages", {
@@ -115,10 +114,12 @@ export const handleEvergreenIt = Effect.fn("Evergreen.handleIt")(
             const fetchReferenceStart = Date.now();
             original = yield* Effect.tryPromise({
                 try: () => message.channel.messages.fetch(message.reference!.messageId!),
-                catch: (e) =>
-                    new Error(
-                        `Failed to fetch reference: ${e instanceof Error ? e.message : String(e)}`,
-                    ),
+                catch: (cause) =>
+                    new DiscordFetchError({
+                        resource: "message",
+                        resourceId: message.reference!.messageId!,
+                        cause,
+                    }),
             }).pipe(
                 Effect.tapError((error) =>
                     Effect.logError("failed to fetch reference message", {
@@ -275,8 +276,7 @@ export const handleEvergreenIt = Effect.fn("Evergreen.handleIt")(
                 message.reply(
                     `Created [github issue](${githubResult}) and [mediawiki issue](${wikiResult.replaceAll(" ", "_")})!`,
                 ),
-            catch: (e) =>
-                new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (cause) => new DiscordReplyError({ messageId: message.id, cause }),
         }).pipe(
             Effect.tapError((error) =>
                 Effect.logError("failed to send reply", {

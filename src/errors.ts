@@ -1,67 +1,169 @@
-import { Data } from "effect";
+import { Schema } from "effect";
 
-export class DatabaseError extends Data.TaggedError("DatabaseError")<{
-    operation: string;
-    cause: unknown;
-}> {}
+export class DatabaseError extends Schema.TaggedError<DatabaseError>("DatabaseError")(
+    "DatabaseError",
+    {
+        operation: Schema.String,
+        cause: Schema.optional(Schema.Defect),
+    },
+) {}
 
-export class DiscordError extends Data.TaggedError("DiscordError")<{
-    action: string;
-    cause: unknown;
-}> {}
+export class DiscordError extends Schema.TaggedError<DiscordError>("DiscordError")(
+    "DiscordError",
+    {
+        action: Schema.String,
+        cause: Schema.optional(Schema.Defect),
+    },
+) {}
 
-export class ChannelNotFound extends Data.TaggedError("ChannelNotFound")<{
-    channelId: string;
-}> {}
+export class ChannelNotFound extends Schema.TaggedError<ChannelNotFound>("ChannelNotFound")(
+    "ChannelNotFound",
+    {
+        channelId: Schema.String,
+    },
+) {}
 
-export class AIError extends Data.TaggedError("AIError")<{
-    model: string;
-    cause: unknown;
-}> {}
+export class AIError extends Schema.TaggedError<AIError>("AIError")("AIError", {
+    model: Schema.String,
+    cause: Schema.optional(Schema.Defect),
+}) {}
 
-export class TranscriptionError extends Data.TaggedError("TranscriptionError")<{
-    cause: unknown;
-}> {}
+export class TranscriptionError extends Schema.TaggedError<TranscriptionError>("TranscriptionError")(
+    "TranscriptionError",
+    {
+        cause: Schema.optional(Schema.Defect),
+    },
+) {}
 
-export class StorageError extends Data.TaggedError("StorageError")<{
-    operation: string;
-    key?: string;
-    cause: unknown;
-}> {}
+export class StorageError extends Schema.TaggedError<StorageError>("StorageError")(
+    "StorageError",
+    {
+        operation: Schema.String,
+        key: Schema.optional(Schema.String),
+        cause: Schema.optional(Schema.Defect),
+    },
+) {}
 
-export class GitHubError extends Data.TaggedError("GitHubError")<{
-    operation: string;
-    cause: unknown;
-}> {}
+export class GitHubError extends Schema.TaggedError<GitHubError>("GitHubError")("GitHubError", {
+    operation: Schema.String,
+    cause: Schema.optional(Schema.Defect),
+}) {}
 
-export class MediaWikiError extends Data.TaggedError("MediaWikiError")<{
-    operation: string;
-    cause: unknown;
-}> {}
+export class MediaWikiError extends Schema.TaggedError<MediaWikiError>("MediaWikiError")(
+    "MediaWikiError",
+    {
+        operation: Schema.String,
+        cause: Schema.optional(Schema.Defect),
+    },
+) {}
 
-export class DashboardError extends Data.TaggedError("DashboardError")<{
-    operation: string;
-    cause: unknown;
-}> {}
+export class DashboardError extends Schema.TaggedError<DashboardError>("DashboardError")(
+    "DashboardError",
+    {
+        operation: Schema.String,
+        cause: Schema.optional(Schema.Defect),
+    },
+) {}
 
-export class DashboardConnectionFailed extends Data.TaggedError("DashboardConnectionFailed")<{
-    attempts: number;
-    lastError: unknown;
-}> {}
+export class DashboardConnectionFailed extends Schema.TaggedError<DashboardConnectionFailed>(
+    "DashboardConnectionFailed",
+)("DashboardConnectionFailed", {
+    attempts: Schema.Number,
+    lastError: Schema.optional(Schema.Defect),
+}) {}
 
-export class FeatureDisabled extends Data.TaggedError("FeatureDisabled")<{
-    feature: string;
-}> {}
+export class FeatureDisabled extends Schema.TaggedError<FeatureDisabled>("FeatureDisabled")(
+    "FeatureDisabled",
+    {
+        feature: Schema.String,
+    },
+) {}
 
-export class ValidationError extends Data.TaggedError("ValidationError")<{
-    field: string;
-    message: string;
-}> {}
+export class ValidationError extends Schema.TaggedError<ValidationError>("ValidationError")(
+    "ValidationError",
+    {
+        field: Schema.String,
+        message: Schema.String,
+    },
+) {}
 
-/**
- * Converts an unknown error into a structured object for logging.
- * Handles Effect tagged errors, standard Errors, and unknown values.
- */
+export class DiscordReactError extends Schema.TaggedError<DiscordReactError>("DiscordReactError")(
+    "DiscordReactError",
+    {
+        messageId: Schema.String,
+        emoji: Schema.optional(Schema.String),
+        cause: Schema.optional(Schema.Defect),
+    },
+) {}
+
+export class DiscordReplyError extends Schema.TaggedError<DiscordReplyError>("DiscordReplyError")(
+    "DiscordReplyError",
+    {
+        messageId: Schema.String,
+        cause: Schema.optional(Schema.Defect),
+    },
+) {}
+
+export class DiscordSendError extends Schema.TaggedError<DiscordSendError>("DiscordSendError")(
+    "DiscordSendError",
+    {
+        channelId: Schema.String,
+        cause: Schema.optional(Schema.Defect),
+    },
+) {}
+
+export class DiscordFetchError extends Schema.TaggedError<DiscordFetchError>("DiscordFetchError")(
+    "DiscordFetchError",
+    {
+        resource: Schema.String,
+        resourceId: Schema.optional(Schema.String),
+        cause: Schema.optional(Schema.Defect),
+    },
+) {}
+
+export class DiscordRoleError extends Schema.TaggedError<DiscordRoleError>("DiscordRoleError")(
+    "DiscordRoleError",
+    {
+        userId: Schema.String,
+        roleId: Schema.String,
+        action: Schema.String,
+        cause: Schema.optional(Schema.Defect),
+    },
+) {}
+
+export class DiscordThreadError extends Schema.TaggedError<DiscordThreadError>("DiscordThreadError")(
+    "DiscordThreadError",
+    {
+        channelId: Schema.String,
+        operation: Schema.String,
+        cause: Schema.optional(Schema.Defect),
+    },
+) {}
+
+export class DiscordPinError extends Schema.TaggedError<DiscordPinError>("DiscordPinError")(
+    "DiscordPinError",
+    {
+        messageId: Schema.String,
+        action: Schema.String,
+        cause: Schema.optional(Schema.Defect),
+    },
+) {}
+
+export class IntervalParseError extends Schema.TaggedError<IntervalParseError>("IntervalParseError")(
+    "IntervalParseError",
+    {
+        interval: Schema.String,
+        cause: Schema.optional(Schema.Defect),
+    },
+) {}
+
+export class EmptyArrayError extends Schema.TaggedError<EmptyArrayError>("EmptyArrayError")(
+    "EmptyArrayError",
+    {
+        operation: Schema.String,
+    },
+) {}
+
 export const structuredError = (e: unknown) => ({
     error_type:
         typeof e === "object" && e !== null && "_tag" in e

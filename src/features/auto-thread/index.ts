@@ -11,6 +11,12 @@ import {
     CHECKPOINT_RESPONSE_MESSAGES,
     SHIP_RESPONSE_MESSAGES,
 } from "../../constants";
+import {
+    DiscordFetchError,
+    DiscordReactError,
+    DiscordSendError,
+    DiscordThreadError,
+} from "../../errors";
 import { randomItem, containsUrl } from "../../lib/discord";
 
 export const handleAutoThread = Effect.fn("AutoThread.handle")(
@@ -135,8 +141,8 @@ export const handleAutoThread = Effect.fn("AutoThread.handle")(
 
             yield* Effect.tryPromise({
                 try: () => message.delete(),
-                catch: (e) =>
-                    new Error(`Failed to delete: ${e instanceof Error ? e.message : String(e)}`),
+                catch: (cause) =>
+                    new DiscordFetchError({ resource: "message_delete", resourceId: message.id, cause }),
             }).pipe(
                 Effect.tap(() =>
                     Effect.logInfo("message deleted successfully", {
@@ -169,8 +175,8 @@ export const handleAutoThread = Effect.fn("AutoThread.handle")(
             const dmStartTime = Date.now();
             yield* Effect.tryPromise({
                 try: () => message.author.send(reminderMessage),
-                catch: (e) =>
-                    new Error(`Failed to DM: ${e instanceof Error ? e.message : String(e)}`),
+                catch: (cause) =>
+                    new DiscordSendError({ channelId: message.author.id, cause }),
             }).pipe(
                 Effect.tap(() =>
                     Effect.logInfo("reminder dm sent successfully", {
@@ -213,8 +219,12 @@ export const handleAutoThread = Effect.fn("AutoThread.handle")(
                 message.startThread({
                     name: threadName,
                 }),
-            catch: (e) =>
-                new Error(`Failed to start thread: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (cause) =>
+                new DiscordThreadError({
+                    channelId: message.channelId,
+                    operation: "start_thread",
+                    cause,
+                }),
         }).pipe(
             Effect.tap((thread) =>
                 Effect.gen(function* () {
@@ -278,8 +288,8 @@ export const handleAutoThread = Effect.fn("AutoThread.handle")(
                         message.react("\u{1F3C1}"),
                         thread.send(`${responseMessage} \u{1F389} \u2728 \u{1F3C1}`),
                     ]),
-                catch: (e) =>
-                    new Error(`Failed to react: ${e instanceof Error ? e.message : String(e)}`),
+                catch: (cause) =>
+                    new DiscordReactError({ messageId: message.id, emoji: "checkpoint_set", cause }),
             }).pipe(
                 Effect.tap(() =>
                     Effect.logInfo("checkpoint reactions and response added successfully", {
@@ -325,8 +335,8 @@ export const handleAutoThread = Effect.fn("AutoThread.handle")(
                         message.react("\u{1F680}"),
                         thread.send(`${responseMessage} \u{1F389} \u2728 \u{1F680}`),
                     ]),
-                catch: (e) =>
-                    new Error(`Failed to react: ${e instanceof Error ? e.message : String(e)}`),
+                catch: (cause) =>
+                    new DiscordReactError({ messageId: message.id, emoji: "ship_set", cause }),
             }).pipe(
                 Effect.tap(() =>
                     Effect.logInfo("ship reactions and response added successfully", {
@@ -362,8 +372,12 @@ export const handleAutoThread = Effect.fn("AutoThread.handle")(
 
         yield* Effect.tryPromise({
             try: () => thread.setArchived(true),
-            catch: (e) =>
-                new Error(`Failed to archive: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (cause) =>
+                new DiscordThreadError({
+                    channelId: thread.id,
+                    operation: "archive",
+                    cause,
+                }),
         }).pipe(
             Effect.tap(() =>
                 Effect.logInfo("thread archived successfully auto thread completed", {

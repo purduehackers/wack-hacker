@@ -3,6 +3,8 @@ import type { Message, ChatInputCommandInteraction, TextChannel, ThreadChannel }
 import { MessageFlags } from "discord.js";
 import { Effect } from "effect";
 
+import { DiscordReplyError, DiscordSendError, EmptyArrayError } from "../errors";
+
 const MAX_MESSAGE_LENGTH = 2000;
 
 export const chunkMessage = Effect.fn("chunkMessage")(function* (content: string) {
@@ -84,10 +86,7 @@ export const sendChunkedMessage = Effect.fn("sendChunkedMessage")(function* (
 
             return messages;
         },
-        catch: (e) =>
-            new Error(
-                `Failed to send chunked message: ${e instanceof Error ? e.message : String(e)}`,
-            ),
+        catch: (cause) => new DiscordSendError({ channelId: channel.id, cause }),
     });
 
     const durationMs = Date.now() - startMs;
@@ -120,7 +119,7 @@ export const replyEphemeral = Effect.fn("replyEphemeral")(function* (
                 content,
                 flags: MessageFlags.Ephemeral,
             }),
-        catch: (e) => new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+        catch: (cause) => new DiscordReplyError({ messageId: interaction.id, cause }),
     });
 
     const durationMs = Date.now() - startMs;
@@ -151,8 +150,7 @@ export const followUpEphemeral = Effect.fn("followUpEphemeral")(function* (
                 content,
                 flags: MessageFlags.Ephemeral,
             }),
-        catch: (e) =>
-            new Error(`Failed to follow up: ${e instanceof Error ? e.message : String(e)}`),
+        catch: (cause) => new DiscordReplyError({ messageId: interaction.id, cause }),
     });
 
     const durationMs = Date.now() - startMs;
@@ -195,7 +193,7 @@ export const safeReply = Effect.fn("safeReply")(function* (
                 });
             }
         },
-        catch: (e) => new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+        catch: (cause) => new DiscordReplyError({ messageId: interaction.id, cause }),
     });
 
     const durationMs = Date.now() - startMs;
@@ -265,7 +263,7 @@ export const randomItem = Effect.fn("randomItem")(function* (items: readonly str
             items_count: 0,
             duration_ms: durationMs,
         });
-        return yield* Effect.fail(new Error("Cannot select random item from empty array"));
+        return yield* Effect.fail(new EmptyArrayError({ operation: "random_item" }));
     }
 
     const randomIndex = Math.floor(Math.random() * items.length);

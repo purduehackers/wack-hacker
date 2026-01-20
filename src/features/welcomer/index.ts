@@ -2,6 +2,7 @@ import { MessageFlags, type Message } from "discord.js";
 import { Effect } from "effect";
 
 import { CORE_COMMUNITY_CHANNEL_ID, INTRO_CHANNEL_ID, WELCOMERS_ROLE_ID } from "../../constants";
+import { DiscordFetchError, DiscordSendError } from "../../errors";
 
 export const handleWelcomer = Effect.fn("Welcomer.handle")(
     function* (message: Message) {
@@ -95,8 +96,8 @@ export const handleWelcomer = Effect.fn("Welcomer.handle")(
         const channelFetchStart = Date.now();
         const channel = yield* Effect.tryPromise({
             try: () => message.client.channels.fetch(CORE_COMMUNITY_CHANNEL_ID),
-            catch: (e) =>
-                new Error(`Failed to fetch channel: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (cause) =>
+                new DiscordFetchError({ resource: "channel", resourceId: CORE_COMMUNITY_CHANNEL_ID, cause }),
         }).pipe(
             Effect.tap(() =>
                 Effect.gen(function* () {
@@ -155,8 +156,8 @@ export const handleWelcomer = Effect.fn("Welcomer.handle")(
                     `Hey <@&${WELCOMERS_ROLE_ID}>, somebody just introduced themselves!! Give them a warm welcome :D\n\n${message.channel.url}`,
                 );
             },
-            catch: (e) =>
-                new Error(`Failed to send: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (cause) =>
+                new DiscordSendError({ channelId: CORE_COMMUNITY_CHANNEL_ID, cause }),
         }).pipe(
             Effect.tap(() =>
                 Effect.gen(function* () {
