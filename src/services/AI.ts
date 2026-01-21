@@ -1,4 +1,6 @@
 import { Duration, Effect, Redacted } from "effect";
+import { generateText, experimental_transcribe as transcribe } from "ai";
+import { createGroq } from "@ai-sdk/groq";
 
 import { AppConfig } from "../config";
 import { AIError, TranscriptionError } from "../errors";
@@ -8,6 +10,10 @@ export class AI extends Effect.Service<AI>()("AI", {
     scoped: Effect.gen(function* () {
         const config = yield* AppConfig;
         const groqApiKey = Redacted.value(config.GROQ_API_KEY);
+
+        const groq = createGroq({
+            apiKey: groqApiKey,
+        });
 
         const chat = Effect.fn("AI.chat")(function* (options: {
             model?: string;
@@ -32,57 +38,19 @@ export class AI extends Effect.Service<AI>()("AI", {
                 api_endpoint: "groq_chat_completions",
             });
 
-            const [duration, response] = yield* Effect.tryPromise({
+            const [duration, result] = yield* Effect.tryPromise({
                 try: () =>
-                    fetch("https://api.groq.com/openai/v1/chat/completions", {
-                        method: "POST",
-                        headers: {
-                            Authorization: `Bearer ${groqApiKey}`,
-                            "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify({
-                            model,
-                            messages: [
-                                { role: "system", content: options.systemPrompt },
-                                { role: "user", content: options.userPrompt },
-                            ],
-                        }),
+                    generateText({
+                        model: groq(model),
+                        system: options.systemPrompt,
+                        prompt: options.userPrompt,
                     }),
                 catch: (e) => new AIError({ model, cause: e }),
             }).pipe(Effect.timed);
 
             const duration_ms = Duration.toMillis(duration);
+            const content = result.text;
 
-            if (!response.ok) {
-                const text = yield* Effect.tryPromise({
-                    try: () => response.text(),
-                    catch: (e) => new AIError({ model, cause: e }),
-                });
-
-                yield* Effect.logError("ai chat request failed", {
-                    service_name: "AI",
-                    method: "chat",
-                    operation_type: "api_request",
-                    model,
-                    http_status: response.status,
-                    error_message: text,
-                    duration_ms,
-                    latency_ms: duration_ms,
-                    api_endpoint: "groq_chat_completions",
-                });
-
-                return yield* Effect.fail(new AIError({ model, cause: new Error(text) }));
-            }
-
-            const data = yield* Effect.tryPromise({
-                try: () =>
-                    response.json() as Promise<{
-                        choices: { message: { content: string } }[];
-                    }>,
-                catch: (e) => new AIError({ model, cause: e }),
-            });
-
-            const content = data.choices[0]?.message?.content;
             if (!content) {
                 yield* Effect.logError("ai chat response missing content", {
                     service_name: "AI",
@@ -119,13 +87,15 @@ export class AI extends Effect.Service<AI>()("AI", {
                 system_prompt_length: options.systemPrompt.length,
                 user_prompt_length: options.userPrompt.length,
                 api_endpoint: "groq_chat_completions",
-                http_status: response.status,
+                usage_input_tokens: result.usage?.inputTokens,
+                usage_output_tokens: result.usage?.outputTokens,
+                usage_total_tokens: result.usage?.totalTokens,
             });
 
             return content;
         });
 
-        const transcribe = Effect.fn("AI.transcribe")(function* (audioUrl: string) {
+        const transcribeAudio = Effect.fn("AI.transcribe")(function* (audioUrl: string) {
             yield* Effect.annotateCurrentSpan({
                 audio_url: audioUrl,
             });
@@ -151,56 +121,25 @@ export class AI extends Effect.Service<AI>()("AI", {
             });
 
             const audioSize = blob.size;
+            const audioBuffer = yield* Effect.tryPromise({
+                try: () => blob.arrayBuffer(),
+                catch: (e) => new TranscriptionError({ cause: e }),
+            });
 
-            const formData = new FormData();
-            formData.append("file", blob, "audio.ogg");
-            formData.append("model", "whisper-large-v3");
-            formData.append("language", "en");
-
-            const [duration, response] = yield* Effect.tryPromise({
+            const [duration, result] = yield* Effect.tryPromise({
                 try: () =>
-                    fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
-                        method: "POST",
-                        headers: {
-                            Authorization: `Bearer ${groqApiKey}`,
-                        },
-                        body: formData,
+                    transcribe({
+                        model: groq.transcription("whisper-large-v3"),
+                        audio: new Uint8Array(audioBuffer),
+                        providerOptions: { groq: { language: "en" } },
                     }),
                 catch: (e) => new TranscriptionError({ cause: e }),
             }).pipe(Effect.timed);
 
             const duration_ms = Duration.toMillis(duration);
 
-            if (!response.ok) {
-                const text = yield* Effect.tryPromise({
-                    try: () => response.text(),
-                    catch: (e) => new TranscriptionError({ cause: e }),
-                });
-
-                yield* Effect.logError("ai transcription request failed", {
-                    service_name: "AI",
-                    method: "transcribe",
-                    operation_type: "audio_transcription",
-                    audio_url: audioUrl,
-                    audio_size_bytes: audioSize,
-                    http_status: response.status,
-                    error_message: text,
-                    duration_ms,
-                    latency_ms: duration_ms,
-                    model: "whisper-large-v3",
-                    api_endpoint: "groq_audio_transcriptions",
-                });
-
-                return yield* Effect.fail(new TranscriptionError({ cause: new Error(text) }));
-            }
-
-            const data = yield* Effect.tryPromise({
-                try: () => response.json() as Promise<{ text: string }>,
-                catch: (e) => new TranscriptionError({ cause: e }),
-            });
-
             yield* Effect.annotateCurrentSpan({
-                transcription_length: data.text.length,
+                transcription_length: result.text.length,
                 audio_size_bytes: audioSize,
                 duration_ms,
             });
@@ -213,17 +152,16 @@ export class AI extends Effect.Service<AI>()("AI", {
                 audio_size_bytes: audioSize,
                 duration_ms,
                 latency_ms: duration_ms,
-                transcription_length: data.text.length,
+                transcription_length: result.text.length,
                 model: "whisper-large-v3",
                 language: "en",
-                http_status: response.status,
                 api_endpoint: "groq_audio_transcriptions",
             });
 
-            return data.text;
+            return result.text;
         });
 
-        return { chat, transcribe } as const;
+        return { chat, transcribe: transcribeAudio } as const;
     }).pipe(Effect.annotateLogs({ service: "AI" })),
 }) {}
 

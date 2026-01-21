@@ -15,7 +15,7 @@ import {
 } from "../../constants";
 import { generateEventSlug } from "../../lib/dates";
 import { randomItem } from "../../lib/discord";
-import { structuredError } from "../../errors";
+import { structuredError, DiscordReactError, DiscordThreadError, DiscordFetchError } from "../../errors";
 import { Storage } from "../../services";
 
 export const handleHackNightImages = Effect.fn("HackNight.handleImages")(
@@ -181,8 +181,7 @@ export const handleHackNightImages = Effect.fn("HackNight.handleImages")(
 
         yield* Effect.tryPromise({
             try: () => message.react("\u2705"),
-            catch: (e) =>
-                new Error(`Failed to react: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (cause) => new DiscordReactError({ messageId: message.id, emoji: "checkmark", cause }),
         }).pipe(
             Effect.catchAll((e) =>
                 Effect.logWarning("reaction failed", {
@@ -280,10 +279,12 @@ export const createHackNightThread = Effect.fn("HackNight.createThread")(
                         thread_name: thread.name,
                     };
                 },
-                catch: (e) =>
-                    new Error(
-                        `Failed to create hack night thread: ${e instanceof Error ? e.message : String(e)}`,
-                    ),
+                catch: (cause) =>
+                    new DiscordThreadError({
+                        channelId: HACK_NIGHT_CHANNEL_ID,
+                        operation: "create_hack_night_thread",
+                        cause,
+                    }),
             }),
         );
 
@@ -358,10 +359,8 @@ export const cleanupHackNightThread = Effect.fn("HackNight.cleanupThread")(
         const [fetchDuration, threads] = yield* Effect.timed(
             Effect.tryPromise({
                 try: () => textChannel.threads.fetchActive(),
-                catch: (e) =>
-                    new Error(
-                        `Failed to fetch threads: ${e instanceof Error ? e.message : String(e)}`,
-                    ),
+                catch: (cause) =>
+                    new DiscordFetchError({ resource: "threads", resourceId: HACK_NIGHT_CHANNEL_ID, cause }),
             }),
         );
 
@@ -492,10 +491,12 @@ export const cleanupHackNightThread = Effect.fn("HackNight.cleanupThread")(
                         messages_sent: starterMessage ? 4 : 1,
                     };
                 },
-                catch: (e) =>
-                    new Error(
-                        `Failed to cleanup hack night thread: ${e instanceof Error ? e.message : String(e)}`,
-                    ),
+                catch: (cause) =>
+                    new DiscordThreadError({
+                        channelId: hackNightImageThread.id,
+                        operation: "cleanup_hack_night_thread",
+                        cause,
+                    }),
             }),
         );
 

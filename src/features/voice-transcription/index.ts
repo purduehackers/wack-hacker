@@ -1,6 +1,7 @@
 import { MessageFlags, type Message } from "discord.js";
 import { Duration, Effect } from "effect";
 
+import { DiscordReactError, DiscordReplyError } from "../../errors";
 import { AI } from "../../services";
 
 export const handleVoiceTranscription = Effect.fn("VoiceTranscription.handle")(
@@ -54,8 +55,8 @@ export const handleVoiceTranscription = Effect.fn("VoiceTranscription.handle")(
 
         yield* Effect.tryPromise({
             try: () => message.react("\u{1F399}\u{FE0F}"),
-            catch: (e) =>
-                new Error(`Failed to react: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (cause) =>
+                new DiscordReactError({ messageId: message.id, emoji: "microphone", cause }),
         }).pipe(
             Effect.timed,
             Effect.tap(([duration]) =>
@@ -144,10 +145,7 @@ export const handleVoiceTranscription = Effect.fn("VoiceTranscription.handle")(
                             message.reply({
                                 content: "Sorry, I couldn't transcribe that audio message.",
                             }),
-                        catch: (e) =>
-                            new Error(
-                                `Failed to reply: ${e instanceof Error ? e.message : String(e)}`,
-                            ),
+                        catch: (cause) => new DiscordReplyError({ messageId: message.id, cause }),
                     }).pipe(
                         Effect.catchAll((replyError) =>
                             Effect.logError("failed to send error reply", {
@@ -180,8 +178,7 @@ export const handleVoiceTranscription = Effect.fn("VoiceTranscription.handle")(
                     message.reply({
                         content: "Sorry, I couldn't transcribe that audio message.",
                     }),
-                catch: (e) =>
-                    new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+                catch: (cause) => new DiscordReplyError({ messageId: message.id, cause }),
             }).pipe(
                 Effect.catchAll((error) =>
                     Effect.logError("failed to send empty result reply", {
@@ -208,8 +205,7 @@ export const handleVoiceTranscription = Effect.fn("VoiceTranscription.handle")(
                 message.reply({
                     content: transcription.trim(),
                 }),
-            catch: (e) =>
-                new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (cause) => new DiscordReplyError({ messageId: message.id, cause }),
         }).pipe(
             Effect.timed,
             Effect.catchAll((error) =>

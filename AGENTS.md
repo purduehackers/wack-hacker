@@ -817,6 +817,42 @@ bun run lint         # Run oxlint
 bun run format       # Run oxfmt
 ```
 
+## AI SDK Usage
+
+When building AI features using the Vercel AI SDK:
+
+- **Use Vercel AI Gateway**: Specify a model string (`<provider>/<model-id>`) in the model parameter. You do not need to import or use a gateway or provider-specific package.
+
+```typescript
+import { generateText } from "ai";
+
+const result = await generateText({
+  model: "anthropic/claude-sonnet-4-20250514",
+  system: "You are a helpful assistant.",
+  prompt: userInput,
+});
+```
+
+- **Use Groq for speed/transcription**: When building AI features that require fast inference or Whisper for speech-to-text, use Groq which separately uses the `@ai-sdk/groq` provider.
+
+```typescript
+import { createGroq } from "@ai-sdk/groq";
+
+const groq = createGroq({ apiKey: groqApiKey });
+
+// Fast inference
+const result = await generateText({
+  model: groq("llama-3.3-70b-versatile"),
+  prompt: userInput,
+});
+
+// Speech-to-text
+const transcription = await transcribe({
+  model: groq.transcription("whisper-large-v3"),
+  audio: audioBuffer,
+});
+```
+
 ## Best Practices
 
 ### DO ✅

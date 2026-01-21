@@ -29,6 +29,15 @@ import {
     ORGANIZER_ROLE_ID,
     BISHOP_ROLE_ID,
 } from "../../constants";
+import {
+    DiscordFetchError,
+    DiscordPinError,
+    DiscordReactError,
+    DiscordReplyError,
+    DiscordRoleError,
+    DiscordSendError,
+    DiscordThreadError,
+} from "../../errors";
 import { Database } from "../../services";
 import { calculateStreaks, getDistinctCommitDays } from "./streaks";
 
@@ -177,15 +186,17 @@ export const handleCommitOverflowThreadCreate = Effect.fn("CommitOverflow.handle
                         }).pipe(Effect.catchAll(() => Effect.succeed(false)));
 
                         if (notificationSent) {
-                            yield* Effect.tryPromise({
-                                try: async () => {
-                                    await thread.delete();
-                                },
-                                catch: (e) =>
-                                    new Error(
-                                        `Failed to delete thread: ${e instanceof Error ? e.message : String(e)}`,
-                                    ),
-                            });
+                        yield* Effect.tryPromise({
+                            try: async () => {
+                                await thread.delete();
+                            },
+                            catch: (cause) =>
+                                new DiscordThreadError({
+                                    channelId: thread.id,
+                                    operation: "delete_duplicate",
+                                    cause,
+                                }),
+                        });
 
                             yield* Effect.logInfo(
                                 "duplicate thread deleted and user notified in original",
@@ -226,14 +237,19 @@ export const handleCommitOverflowThreadCreate = Effect.fn("CommitOverflow.handle
         const guild = thread.guild;
         const member = yield* Effect.tryPromise({
             try: () => guild.members.fetch(userId),
-            catch: (e) =>
-                new Error(`Failed to fetch member: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (cause) =>
+                new DiscordFetchError({ resource: "member", resourceId: userId, cause }),
         });
 
         yield* Effect.tryPromise({
             try: () => member.roles.add(COMMIT_OVERFLOW_ROLE_ID),
-            catch: (e) =>
-                new Error(`Failed to add role: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (cause) =>
+                new DiscordRoleError({
+                    userId,
+                    roleId: COMMIT_OVERFLOW_ROLE_ID,
+                    action: "add",
+                    cause,
+                }),
         });
 
         yield* Effect.tryPromise({
@@ -247,10 +263,8 @@ export const handleCommitOverflowThreadCreate = Effect.fn("CommitOverflow.handle
                 });
                 await infoMessage.pin();
             },
-            catch: (e) =>
-                new Error(
-                    `Failed to send welcome message: ${e instanceof Error ? e.message : String(e)}`,
-                ),
+            catch: (cause) =>
+                new DiscordSendError({ channelId: thread.id, cause }),
         });
 
         yield* db.users.upsert(userId, member.user.username);
@@ -308,8 +322,7 @@ const handleView = Effect.fn("CommitOverflow.handleView")(function* (
                             "You can only view your own profile. Organizers can view anyone's profile.",
                         flags: MessageFlags.Ephemeral,
                     }),
-                catch: (e) =>
-                    new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+                catch: (cause) => new DiscordReplyError({ messageId: interaction.id, cause }),
             });
             return;
         }
@@ -330,8 +343,7 @@ const handleView = Effect.fn("CommitOverflow.handleView")(function* (
                     content: "Could not find the Commit Overflow forum channel.",
                     flags: MessageFlags.Ephemeral,
                 }),
-            catch: (e) =>
-                new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (cause) => new DiscordReplyError({ messageId: interaction.id, cause }),
         });
         return;
     }
@@ -381,15 +393,14 @@ const handleView = Effect.fn("CommitOverflow.handleView")(function* (
                         : `${targetUser.username} hasn't participated in Commit Overflow yet.`,
                     flags: MessageFlags.Ephemeral,
                 }),
-            catch: (e) =>
-                new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (cause) => new DiscordReplyError({ messageId: interaction.id, cause }),
         });
         return;
     }
 
     yield* Effect.tryPromise({
         try: () => interaction.deferReply(),
-        catch: (e) => new Error(`Failed to defer: ${e instanceof Error ? e.message : String(e)}`),
+        catch: (cause) => new DiscordReplyError({ messageId: interaction.id, cause }),
     });
 
     const profileOpt = yield* db.commitOverflowProfiles.get(targetUser.id);
@@ -449,8 +460,7 @@ const handleView = Effect.fn("CommitOverflow.handleView")(function* (
 
     yield* Effect.tryPromise({
         try: () => interaction.editReply({ embeds: [embed] }),
-        catch: (e) =>
-            new Error(`Failed to edit reply: ${e instanceof Error ? e.message : String(e)}`),
+        catch: (cause) => new DiscordReplyError({ messageId: interaction.id, cause }),
     });
 });
 
@@ -480,8 +490,7 @@ const handleTimezone = Effect.fn("CommitOverflow.handleTimezone")(function* (
                     content: `Invalid timezone: \`${timezone}\`. Please use a valid IANA timezone like \`America/New_York\` or \`America/Los_Angeles\`.`,
                     flags: MessageFlags.Ephemeral,
                 }),
-            catch: (e) =>
-                new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (cause) => new DiscordReplyError({ messageId: interaction.id, cause }),
         });
         return;
     }
@@ -500,8 +509,7 @@ const handleTimezone = Effect.fn("CommitOverflow.handleTimezone")(function* (
                         "You haven't started Commit Overflow yet. Create a thread in the forum first!",
                     flags: MessageFlags.Ephemeral,
                 }),
-            catch: (e) =>
-                new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (cause) => new DiscordReplyError({ messageId: interaction.id, cause }),
         });
         return;
     }
@@ -522,7 +530,7 @@ const handleTimezone = Effect.fn("CommitOverflow.handleTimezone")(function* (
                 content: `Your timezone has been set to \`${timezone}\`. Streak calculations will now use this timezone with the day resetting at 6am.`,
                 flags: MessageFlags.Ephemeral,
             }),
-        catch: (e) => new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+        catch: (cause) => new DiscordReplyError({ messageId: interaction.id, cause }),
     });
 });
 
@@ -554,8 +562,7 @@ const handleShare = Effect.fn("CommitOverflow.handleShare")(function* (
                         "You haven't started Commit Overflow yet. Create a thread in the forum first!",
                     flags: MessageFlags.Ephemeral,
                 }),
-            catch: (e) =>
-                new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (cause) => new DiscordReplyError({ messageId: interaction.id, cause }),
         });
         return;
     }
@@ -590,7 +597,7 @@ const handleShare = Effect.fn("CommitOverflow.handleShare")(function* (
                 content: responseMessage,
                 flags: MessageFlags.Ephemeral,
             }),
-        catch: (e) => new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+        catch: (cause) => new DiscordReplyError({ messageId: interaction.id, cause }),
     });
 });
 
@@ -632,20 +639,16 @@ const handlePinReaction = Effect.fn("CommitOverflow.handlePinReaction")(function
     const fullReaction = reaction.partial
         ? yield* Effect.tryPromise({
               try: () => reaction.fetch(),
-              catch: (e) =>
-                  new Error(
-                      `Failed to fetch reaction: ${e instanceof Error ? e.message : String(e)}`,
-                  ),
+              catch: (cause) =>
+                  new DiscordFetchError({ resource: "reaction", resourceId: reaction.message.id, cause }),
           })
         : reaction;
 
     const message = fullReaction.message.partial
         ? yield* Effect.tryPromise({
               try: () => fullReaction.message.fetch(),
-              catch: (e) =>
-                  new Error(
-                      `Failed to fetch message: ${e instanceof Error ? e.message : String(e)}`,
-                  ),
+              catch: (cause) =>
+                  new DiscordFetchError({ resource: "message", resourceId: fullReaction.message.id, cause }),
           })
         : fullReaction.message;
 
@@ -659,8 +662,7 @@ const handlePinReaction = Effect.fn("CommitOverflow.handlePinReaction")(function
 
     yield* Effect.tryPromise({
         try: () => message.pin(),
-        catch: (e) =>
-            new Error(`Failed to pin message: ${e instanceof Error ? e.message : String(e)}`),
+        catch: (cause) => new DiscordPinError({ messageId: message.id, action: "pin", cause }),
     });
 
     const durationMs = Date.now() - startTime;
@@ -673,7 +675,7 @@ const handlePinReaction = Effect.fn("CommitOverflow.handlePinReaction")(function
 
     yield* Effect.tryPromise({
         try: () => message.react("\u2705"),
-        catch: (e) => new Error(`Failed to react: ${e instanceof Error ? e.message : String(e)}`),
+        catch: (cause) => new DiscordReactError({ messageId: message.id, emoji: "checkmark", cause }),
     });
 });
 
@@ -699,20 +701,16 @@ const handleApproveReaction = Effect.fn("CommitOverflow.handleApproveReaction")(
     const fullReaction = reaction.partial
         ? yield* Effect.tryPromise({
               try: () => reaction.fetch(),
-              catch: (e) =>
-                  new Error(
-                      `Failed to fetch reaction: ${e instanceof Error ? e.message : String(e)}`,
-                  ),
+              catch: (cause) =>
+                  new DiscordFetchError({ resource: "reaction", resourceId: reaction.message.id, cause }),
           })
         : reaction;
 
     const message = fullReaction.message.partial
         ? yield* Effect.tryPromise({
               try: () => fullReaction.message.fetch(),
-              catch: (e) =>
-                  new Error(
-                      `Failed to fetch message: ${e instanceof Error ? e.message : String(e)}`,
-                  ),
+              catch: (cause) =>
+                  new DiscordFetchError({ resource: "message", resourceId: fullReaction.message.id, cause }),
           })
         : fullReaction.message;
 
@@ -721,8 +719,7 @@ const handleApproveReaction = Effect.fn("CommitOverflow.handleApproveReaction")(
 
     const member = yield* Effect.tryPromise({
         try: () => guild.members.fetch(user.id),
-        catch: (e) =>
-            new Error(`Failed to fetch member: ${e instanceof Error ? e.message : String(e)}`),
+        catch: (cause) => new DiscordFetchError({ resource: "member", resourceId: user.id, cause }),
     });
 
     const isOrganizer = member.roles.cache.has(ORGANIZER_ROLE_ID);
@@ -768,8 +765,8 @@ const handleApproveReaction = Effect.fn("CommitOverflow.handleApproveReaction")(
 
     const threadOwner = yield* Effect.tryPromise({
         try: () => guild.members.fetch(threadOwnerId),
-        catch: (e) =>
-            new Error(`Failed to fetch thread owner: ${e instanceof Error ? e.message : String(e)}`),
+        catch: (cause) =>
+            new DiscordFetchError({ resource: "thread_owner", resourceId: threadOwnerId, cause }),
     });
 
     yield* db.users.upsert(threadOwnerId, threadOwner.user.username);
@@ -799,8 +796,8 @@ const handleApproveReaction = Effect.fn("CommitOverflow.handleApproveReaction")(
     if (!isPrivate && !hasPrivateEmoji) {
         const forwardResult = yield* Effect.tryPromise({
             try: () => message.forward(COMMIT_OVERFLOW_FORWARD_THREAD_ID),
-            catch: (e) =>
-                new Error(`Failed to forward message: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (cause) =>
+                new DiscordSendError({ channelId: COMMIT_OVERFLOW_FORWARD_THREAD_ID, cause }),
         }).pipe(
             Effect.map((forwardedMessage) => forwardedMessage.id),
             Effect.catchAll((error) => {
@@ -831,7 +828,8 @@ const handleApproveReaction = Effect.fn("CommitOverflow.handleApproveReaction")(
 
     yield* Effect.tryPromise({
         try: () => message.react("\u2705"),
-        catch: (e) => new Error(`Failed to react: ${e instanceof Error ? e.message : String(e)}`),
+        catch: (cause) =>
+            new DiscordReactError({ messageId: message.id, emoji: "checkmark", cause }),
     });
 });
 
@@ -854,20 +852,16 @@ const handlePrivateReaction = Effect.fn("CommitOverflow.handlePrivateReaction")(
     const fullReaction = reaction.partial
         ? yield* Effect.tryPromise({
               try: () => reaction.fetch(),
-              catch: (e) =>
-                  new Error(
-                      `Failed to fetch reaction: ${e instanceof Error ? e.message : String(e)}`,
-                  ),
+              catch: (cause) =>
+                  new DiscordFetchError({ resource: "reaction", resourceId: reaction.message.id, cause }),
           })
         : reaction;
 
     const message = fullReaction.message.partial
         ? yield* Effect.tryPromise({
               try: () => fullReaction.message.fetch(),
-              catch: (e) =>
-                  new Error(
-                      `Failed to fetch message: ${e instanceof Error ? e.message : String(e)}`,
-                  ),
+              catch: (cause) =>
+                  new DiscordFetchError({ resource: "message", resourceId: fullReaction.message.id, cause }),
           })
         : fullReaction.message;
 
@@ -906,7 +900,8 @@ const handlePrivateReaction = Effect.fn("CommitOverflow.handlePrivateReaction")(
 
     yield* Effect.tryPromise({
         try: () => message.react("\u2705"),
-        catch: (e) => new Error(`Failed to react: ${e instanceof Error ? e.message : String(e)}`),
+        catch: (cause) =>
+            new DiscordReactError({ messageId: message.id, emoji: "checkmark", cause }),
     });
 });
 
@@ -933,20 +928,16 @@ const handleApproveReactionRemove = Effect.fn("CommitOverflow.handleApproveReact
         const fullReaction = reaction.partial
             ? yield* Effect.tryPromise({
                   try: () => reaction.fetch(),
-                  catch: (e) =>
-                      new Error(
-                          `Failed to fetch reaction: ${e instanceof Error ? e.message : String(e)}`,
-                      ),
+                  catch: (cause) =>
+                      new DiscordFetchError({ resource: "reaction", resourceId: reaction.message.id, cause }),
               })
             : reaction;
 
         const message = fullReaction.message.partial
             ? yield* Effect.tryPromise({
                   try: () => fullReaction.message.fetch(),
-                  catch: (e) =>
-                      new Error(
-                          `Failed to fetch message: ${e instanceof Error ? e.message : String(e)}`,
-                      ),
+                  catch: (cause) =>
+                      new DiscordFetchError({ resource: "message", resourceId: fullReaction.message.id, cause }),
               })
             : fullReaction.message;
 
@@ -984,10 +975,12 @@ const handleApproveReactionRemove = Effect.fn("CommitOverflow.handleApproveReact
         if (checkReaction) {
             yield* Effect.tryPromise({
                 try: () => checkReaction.users.remove(message.client.user?.id),
-                catch: (e) =>
-                    new Error(
-                        `Failed to remove reaction: ${e instanceof Error ? e.message : String(e)}`,
-                    ),
+                catch: (cause) =>
+                    new DiscordReactError({
+                        messageId: message.id,
+                        emoji: "checkmark_remove",
+                        cause,
+                    }),
             }).pipe(Effect.catchAll(() => Effect.void));
         }
 
@@ -1021,20 +1014,16 @@ const handlePrivateReactionRemove = Effect.fn("CommitOverflow.handlePrivateReact
         const fullReaction = reaction.partial
             ? yield* Effect.tryPromise({
                   try: () => reaction.fetch(),
-                  catch: (e) =>
-                      new Error(
-                          `Failed to fetch reaction: ${e instanceof Error ? e.message : String(e)}`,
-                      ),
+                  catch: (cause) =>
+                      new DiscordFetchError({ resource: "reaction", resourceId: reaction.message.id, cause }),
               })
             : reaction;
 
         const message = fullReaction.message.partial
             ? yield* Effect.tryPromise({
                   try: () => fullReaction.message.fetch(),
-                  catch: (e) =>
-                      new Error(
-                          `Failed to fetch message: ${e instanceof Error ? e.message : String(e)}`,
-                      ),
+                  catch: (cause) =>
+                      new DiscordFetchError({ resource: "message", resourceId: fullReaction.message.id, cause }),
               })
             : fullReaction.message;
 
@@ -1184,8 +1173,7 @@ export const handleWackmas = Effect.fn("Wackmas.handle")(
 
         yield* Effect.tryPromise({
             try: () => message.reply(WACKMAS_RESPONSE),
-            catch: (e) =>
-                new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (cause) => new DiscordReplyError({ messageId: message.id, cause }),
         }).pipe(
             Effect.tap(() =>
                 Effect.logInfo("wackmas response sent", {

@@ -27,6 +27,7 @@ import { handlePraise } from "../features/praise";
 import { handleGrokMessage } from "../features/summarize";
 import { handleVoiceTranscription } from "../features/voice-transcription";
 import { handleWelcomer } from "../features/welcomer";
+import { handleCodeMode } from "../features/code-mode/index.js";
 
 type MessageHandler = (message: Message) => Effect.Effect<void, unknown, unknown>;
 type ReactionHandler = (
@@ -59,12 +60,14 @@ const getFeatureFlags = (config: {
     HACK_NIGHT_PHOTOS_ENABLED: boolean;
     AUTO_THREAD_ENABLED: boolean;
     WELCOMER_ENABLED: boolean;
+    CODE_MODE_ENABLED: boolean;
 }) => ({
     commitOverflow: config.COMMIT_OVERFLOW_ENABLED,
     dashboard: config.DASHBOARD_ENABLED,
     hackNightPhotos: config.HACK_NIGHT_PHOTOS_ENABLED,
     autoThread: config.AUTO_THREAD_ENABLED,
     welcomer: config.WELCOMER_ENABLED,
+    codeMode: config.CODE_MODE_ENABLED,
 });
 
 const messageHandlers: MessageHandlerConfig[] = [
@@ -77,6 +80,7 @@ const messageHandlers: MessageHandlerConfig[] = [
     { handler: handleVoiceTranscription },
     { handler: handleDashboardMessage, featureFlag: "dashboard" },
     { handler: handleWackmas, featureFlag: "commitOverflow" },
+    { handler: handleCodeMode, featureFlag: "codeMode" },
 ];
 
 const reactionHandlers: ReactionHandlerConfig[] = [

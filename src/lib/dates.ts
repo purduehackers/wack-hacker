@@ -2,6 +2,8 @@ import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { Effect } from "effect";
 
+import { IntervalParseError } from "../errors";
+
 dayjs.extend(relativeTime);
 
 const DISCORD_EPOCH = 1420070400000n;
@@ -186,10 +188,7 @@ export const parseInterval = Effect.fn("parseInterval")(function* (interval: str
             const human = await import("human-interval");
             return human.default(interval);
         },
-        catch: (cause) =>
-            new Error(
-                `Failed to parse interval: ${cause instanceof Error ? cause.message : String(cause)}`,
-            ),
+        catch: (cause) => new IntervalParseError({ interval, cause }),
     });
 
     const durationMs = Date.now() - startMs;

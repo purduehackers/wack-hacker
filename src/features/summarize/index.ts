@@ -11,6 +11,13 @@ import { distance } from "fastest-levenshtein";
 
 import { dateToSnowflake, formatRelative, parseInterval } from "../../lib/dates";
 import { chunkMessage } from "../../lib/discord";
+import {
+    DiscordFetchError,
+    DiscordReplyError,
+    DiscordSendError,
+    DiscordThreadError,
+    ValidationError,
+} from "../../errors";
 import { AI } from "../../services";
 import { SUMMARIZE_SYSTEM_PROMPT, buildUserPrompt } from "./prompts";
 
@@ -63,7 +70,9 @@ const summarizeCore = Effect.fn("Summarize.core")(function* (
             timeframe: timeframe ?? "1 hour",
             duration_ms: Date.now() - startTime,
         });
-        return yield* Effect.fail(new Error("Invalid timeframe provided"));
+        return yield* Effect.fail(
+            new ValidationError({ field: "timeframe", message: "Invalid timeframe provided" }),
+        );
     }
 
     const resolvedTopic = topic || "whatever the most common theme of the previous messages is";
@@ -83,8 +92,8 @@ const summarizeCore = Effect.fn("Summarize.core")(function* (
     const fetchStart = Date.now();
     const messages = yield* Effect.tryPromise({
         try: () => channel.messages.fetch({ limit: 100, after: snowflake }),
-        catch: (e) =>
-            new Error(`Failed to fetch messages: ${e instanceof Error ? e.message : String(e)}`),
+        catch: (cause) =>
+            new DiscordFetchError({ resource: "messages", resourceId: channel.id, cause }),
     });
     const fetchDuration = Date.now() - fetchStart;
 
@@ -152,8 +161,8 @@ const summarizeCore = Effect.fn("Summarize.core")(function* (
                 autoArchiveDuration: 60,
                 reason: `Summarizing messages related to ${displayTopic} from ${formatted}.`,
             }) as Promise<PublicThreadChannel<false>>,
-        catch: (e) =>
-            new Error(`Failed to create thread: ${e instanceof Error ? e.message : String(e)}`),
+        catch: (cause) =>
+            new DiscordThreadError({ channelId: channel.id, operation: "create_summary_thread", cause }),
     });
     const threadDuration = Date.now() - threadStart;
 
@@ -178,8 +187,7 @@ const summarizeCore = Effect.fn("Summarize.core")(function* (
     for (const chunk of chunks) {
         yield* Effect.tryPromise({
             try: () => thread.send(chunk),
-            catch: (e) =>
-                new Error(`Failed to send message: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (cause) => new DiscordSendError({ channelId: thread.id, cause }),
         });
     }
     const sendDuration = Date.now() - sendStart;
@@ -235,8 +243,7 @@ export const handleSummarizeCommand = Effect.fn("Summarize.handleCommand")(
             });
             yield* Effect.tryPromise({
                 try: () => interaction.reply("Please provide a topic to summarize"),
-                catch: (e) =>
-                    new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+                catch: (cause) => new DiscordReplyError({ messageId: interaction.id, cause }),
             });
             return;
         }
@@ -249,8 +256,7 @@ export const handleSummarizeCommand = Effect.fn("Summarize.handleCommand")(
             });
             yield* Effect.tryPromise({
                 try: () => interaction.reply("This command can only be used in a channel"),
-                catch: (e) =>
-                    new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+                catch: (cause) => new DiscordReplyError({ messageId: interaction.id, cause }),
             });
             return;
         }
@@ -261,8 +267,7 @@ export const handleSummarizeCommand = Effect.fn("Summarize.handleCommand")(
                     content: `Summarizing messages related to ${topic} from ${timeframe ?? "1 hour"} ago.`,
                     flags: MessageFlags.Ephemeral,
                 }),
-            catch: (e) =>
-                new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+            catch: (cause) => new DiscordReplyError({ messageId: interaction.id, cause }),
         });
 
         yield* summarizeCore(interaction.channel as TextChannel, timeframe, topic);
