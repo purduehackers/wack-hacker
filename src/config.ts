@@ -23,6 +23,8 @@ export const AppConfig = makeEnv("AppConfig", {
   D1_ACCOUNT_ID: Env.string("D1_ACCOUNT_ID"),
   D1_DATABASE_ID: Env.string("D1_DATABASE_ID"),
   D1_API_TOKEN: Env.redacted("D1_API_TOKEN"),
+  VERCEL_API_TOKEN: Env.redacted("VERCEL_API_TOKEN"),
+  VERCEL_EDGE_CONFIG_ID: Env.string("VERCEL_EDGE_CONFIG_ID"),
   TZ: Env.stringOr("TZ", "America/Indiana/Indianapolis"),
   COMMIT_OVERFLOW_ENABLED: Env.booleanOr("COMMIT_OVERFLOW_ENABLED", false),
   DASHBOARD_ENABLED: Env.booleanOr("DASHBOARD_ENABLED", true),

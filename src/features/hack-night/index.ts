@@ -1,17 +1,23 @@
 import {
+    SlashCommandBuilder,
+    MessageFlags,
     ChannelType,
     ThreadAutoArchiveDuration,
+    type ChatInputCommandInteraction,
     type Message,
     type Client,
     type TextChannel,
 } from "discord.js";
-import { Duration, Effect, Option, Schedule } from "effect";
+import { Vercel } from "@vercel/sdk";
+import { Duration, Effect, Option, Redacted, Schedule } from "effect";
 
+import { AppConfig } from "../../config";
 import {
     HACK_NIGHT_CHANNEL_ID,
     HACK_NIGHT_PING_ROLE_ID,
     HACK_NIGHT_PHOTOGRAPHY_AWARD_ROLE_ID,
     HACK_NIGHT_MESSAGES,
+    ORGANIZER_ROLE_ID,
 } from "../../constants";
 import { generateEventSlug } from "../../lib/dates";
 import { randomItem } from "../../lib/discord";
@@ -536,3 +542,312 @@ export const cleanupHackNightThread = Effect.fn("HackNight.cleanupThread")(
 export const hackNightCreateSchedule = Schedule.cron("0 20 * * 5");
 
 export const hackNightCleanupSchedule = Schedule.cron("0 18 * * 0");
+
+const HACK_NIGHT_DEFAULT_EMOJI = "\u{1F319}";
+
+const TAILWIND_COLORS = [
+    "slate",
+    "gray",
+    "zinc",
+    "neutral",
+    "stone",
+    "red",
+    "orange",
+    "amber",
+    "yellow",
+    "lime",
+    "green",
+    "emerald",
+    "teal",
+    "cyan",
+    "sky",
+    "blue",
+    "indigo",
+    "violet",
+    "purple",
+    "fuchsia",
+    "pink",
+    "rose",
+] as const;
+
+export const initHnCommand = new SlashCommandBuilder()
+    .setName("init-hn")
+    .setDescription("Initialize hack night settings")
+    .addStringOption((option) =>
+        option
+            .setName("emoji")
+            .setDescription("The emoji to use as the channel prefix")
+            .setRequired(true),
+    )
+    .addStringOption((option) =>
+        option
+            .setName("version")
+            .setDescription("The semver version string (e.g. 6.17)")
+            .setRequired(true),
+    )
+    .addStringOption((option) =>
+        option
+            .setName("tagline")
+            .setDescription("A short tagline (<30 chars)")
+            .setRequired(true),
+    )
+    .addStringOption((option) =>
+        option
+            .setName("color")
+            .setDescription("A Tailwind color from the palette")
+            .setRequired(true)
+            .addChoices(
+                ...TAILWIND_COLORS.map((color) => ({
+                    name: color,
+                    value: color,
+                })),
+            ),
+    );
+
+export const resetHnCommand = new SlashCommandBuilder()
+    .setName("reset-hn")
+    .setDescription("Reset the hack night channel prefix to the moon emoji");
+
+const stripLeadingEmoji = (name: string): string => {
+    return name.replace(/^\p{Extended_Pictographic}/u, "");
+};
+
+const updateEdgeConfig = Effect.fn("HackNight.updateEdgeConfig")(
+    function* (version: string, tagline: string, color: string) {
+        const startTime = Date.now();
+        const config = yield* AppConfig;
+        const apiToken = Redacted.value(config.VERCEL_API_TOKEN);
+        const edgeConfigId = config.VERCEL_EDGE_CONFIG_ID;
+
+        yield* Effect.annotateCurrentSpan({
+            edge_config_id: edgeConfigId,
+            version,
+            tagline,
+            color,
+        });
+
+        const vercel = new Vercel({ bearerToken: apiToken });
+
+        yield* Effect.tryPromise({
+            try: () =>
+                vercel.edgeConfig.patchEdgeConfigItems({
+                    edgeConfigId,
+                    requestBody: {
+                        items: [
+                            { operation: "upsert", key: "dashboard_version", value: version },
+                            { operation: "upsert", key: "dashboard_tagline", value: tagline },
+                            { operation: "upsert", key: "dashboard_color", value: color },
+                        ],
+                    },
+                }),
+            catch: (cause) =>
+                new Error(
+                    `Failed to update edge config: ${cause instanceof Error ? cause.message : String(cause)}`,
+                ),
+        });
+
+        yield* Effect.logInfo("edge config updated", {
+            edge_config_id: edgeConfigId,
+            version,
+            tagline,
+            color,
+            duration_ms: Date.now() - startTime,
+        });
+    },
+    Effect.annotateLogs({ feature: "HackNight" }),
+);
+
+export const handleInitHnCommand = Effect.fn("HackNight.handleInitHn")(
+    function* (interaction: ChatInputCommandInteraction) {
+        const startTime = Date.now();
+
+        const memberRoles =
+            interaction.member && "cache" in interaction.member.roles
+                ? interaction.member.roles.cache
+                : null;
+        const isOrganizer = memberRoles?.has(ORGANIZER_ROLE_ID) ?? false;
+
+        if (!isOrganizer) {
+            yield* Effect.tryPromise({
+                try: () =>
+                    interaction.reply({
+                        content: "Only organizers can run this command.",
+                        flags: MessageFlags.Ephemeral,
+                    }),
+                catch: () => undefined,
+            });
+            return;
+        }
+
+        const emoji = interaction.options.getString("emoji", true);
+        const version = interaction.options.getString("version", true);
+        const tagline = interaction.options.getString("tagline", true);
+        const color = interaction.options.getString("color", true);
+
+        yield* Effect.annotateCurrentSpan({
+            user_id: interaction.user.id,
+            emoji,
+            version,
+            tagline,
+            color,
+        });
+
+        if (tagline.length >= 30) {
+            yield* Effect.tryPromise({
+                try: () =>
+                    interaction.reply({
+                        content: "Tagline must be less than 30 characters.",
+                        flags: MessageFlags.Ephemeral,
+                    }),
+                catch: () => undefined,
+            });
+            return;
+        }
+
+        yield* Effect.tryPromise({
+            try: () => interaction.deferReply({ flags: MessageFlags.Ephemeral }),
+            catch: (cause) =>
+                new Error(
+                    `Failed to defer reply: ${cause instanceof Error ? cause.message : String(cause)}`,
+                ),
+        });
+
+        const channel = yield* Effect.tryPromise({
+            try: () => interaction.client.channels.fetch(HACK_NIGHT_CHANNEL_ID),
+            catch: (e) =>
+                new Error(
+                    `Failed to fetch channel: ${e instanceof Error ? e.message : String(e)}`,
+                ),
+        });
+
+        if (!channel || !channel.isSendable()) {
+            yield* Effect.tryPromise({
+                try: () =>
+                    interaction.editReply({
+                        content: "Could not find the hack night channel.",
+                    }),
+                catch: () => undefined,
+            });
+            return;
+        }
+
+        const textChannel = channel as TextChannel;
+        const currentName = textChannel.name;
+        const strippedName = stripLeadingEmoji(currentName);
+        const newName = `${emoji}${strippedName}`;
+
+        yield* Effect.tryPromise({
+            try: () => textChannel.setName(newName),
+            catch: (cause) =>
+                new Error(
+                    `Failed to update channel name: ${cause instanceof Error ? cause.message : String(cause)}`,
+                ),
+        });
+
+        yield* updateEdgeConfig(version, tagline, color);
+
+        yield* Effect.tryPromise({
+            try: () =>
+                interaction.editReply({
+                    content: `Hack night initialized!\n- Channel: ${newName}\n- Version: ${version}\n- Tagline: ${tagline}\n- Color: ${color}`,
+                }),
+            catch: () => undefined,
+        });
+
+        yield* Effect.logInfo("hack night initialized", {
+            user_id: interaction.user.id,
+            emoji,
+            version,
+            tagline,
+            color,
+            previous_channel_name: currentName,
+            new_channel_name: newName,
+            duration_ms: Date.now() - startTime,
+        });
+    },
+    Effect.annotateLogs({ feature: "HackNight" }),
+);
+
+export const handleResetHnCommand = Effect.fn("HackNight.handleResetHn")(
+    function* (interaction: ChatInputCommandInteraction) {
+        const startTime = Date.now();
+
+        const memberRoles =
+            interaction.member && "cache" in interaction.member.roles
+                ? interaction.member.roles.cache
+                : null;
+        const isOrganizer = memberRoles?.has(ORGANIZER_ROLE_ID) ?? false;
+
+        if (!isOrganizer) {
+            yield* Effect.tryPromise({
+                try: () =>
+                    interaction.reply({
+                        content: "Only organizers can run this command.",
+                        flags: MessageFlags.Ephemeral,
+                    }),
+                catch: () => undefined,
+            });
+            return;
+        }
+
+        yield* Effect.annotateCurrentSpan({
+            user_id: interaction.user.id,
+        });
+
+        yield* Effect.tryPromise({
+            try: () => interaction.deferReply({ flags: MessageFlags.Ephemeral }),
+            catch: (cause) =>
+                new Error(
+                    `Failed to defer reply: ${cause instanceof Error ? cause.message : String(cause)}`,
+                ),
+        });
+
+        const channel = yield* Effect.tryPromise({
+            try: () => interaction.client.channels.fetch(HACK_NIGHT_CHANNEL_ID),
+            catch: (e) =>
+                new Error(
+                    `Failed to fetch channel: ${e instanceof Error ? e.message : String(e)}`,
+                ),
+        });
+
+        if (!channel || !channel.isSendable()) {
+            yield* Effect.tryPromise({
+                try: () =>
+                    interaction.editReply({
+                        content: "Could not find the hack night channel.",
+                    }),
+                catch: () => undefined,
+            });
+            return;
+        }
+
+        const textChannel = channel as TextChannel;
+        const currentName = textChannel.name;
+        const strippedName = stripLeadingEmoji(currentName);
+        const newName = `${HACK_NIGHT_DEFAULT_EMOJI}${strippedName}`;
+
+        yield* Effect.tryPromise({
+            try: () => textChannel.setName(newName),
+            catch: (cause) =>
+                new Error(
+                    `Failed to update channel name: ${cause instanceof Error ? cause.message : String(cause)}`,
+                ),
+        });
+
+        yield* Effect.tryPromise({
+            try: () =>
+                interaction.editReply({
+                    content: `Hack night channel reset to ${newName}.`,
+                }),
+            catch: () => undefined,
+        });
+
+        yield* Effect.logInfo("hack night channel reset", {
+            user_id: interaction.user.id,
+            previous_channel_name: currentName,
+            new_channel_name: newName,
+            duration_ms: Date.now() - startTime,
+        });
+    },
+    Effect.annotateLogs({ feature: "HackNight" }),
+);

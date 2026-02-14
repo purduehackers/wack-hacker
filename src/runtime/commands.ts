@@ -5,6 +5,12 @@ import { Effect } from "effect";
 import { AppConfig } from "../config";
 import { commitOverflowCommand, handleCommitOverflowCommand } from "../features/commit-overflow";
 import { doorOpenerCommand, handleDoorOpenerCommand } from "../features/door-opener";
+import {
+    initHnCommand,
+    handleInitHnCommand,
+    resetHnCommand,
+    handleResetHnCommand,
+} from "../features/hack-night";
 import { summarizeCommand, handleSummarizeCommand } from "../features/summarize";
 
 interface Command {
@@ -25,6 +31,12 @@ export const commands: Command[] = [
     {
         data: doorOpenerCommand as unknown as SlashCommandBuilder,
         execute: handleDoorOpenerCommand,
+        data: initHnCommand as unknown as SlashCommandBuilder,
+        execute: handleInitHnCommand,
+    },
+    {
+        data: resetHnCommand as unknown as SlashCommandBuilder,
+        execute: handleResetHnCommand,
     },
 ];
 
