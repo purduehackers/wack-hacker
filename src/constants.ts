@@ -77,3 +77,20 @@ export const HACK_NIGHT_MESSAGES = [
     "Hack Night is live! :D",
     "Hack Night is a go! :D",
 ] as const;
+
+export const MEETING_NOTES_DATABASE_ID = "";
+export const MEETING_NOTES_DEFAULT_DIRECTORY = "meeting-notes";
+export const MEETING_TRANSCRIPT_THREAD_AUTO_ARCHIVE_DURATION = 1440;
+
+export const MEETING_MAX_DISCORD_MESSAGE_LENGTH = 2_000;
+export const MEETING_LIVE_TRANSCRIPT_PREFIX = "[live] ";
+export const MEETING_LIVE_UPDATE_INTERVAL_MS = 400;
+
+export const MEETING_RECORDINGS_DIRECTORY = "recordings";
+export const MEETING_RECORDING_FILE_EXTENSION = ".wav";
+export const MEETING_AUDIO_SAMPLE_RATE = 48_000;
+
+export const ELEVENLABS_REALTIME_MODEL_ID = "scribe_v2_realtime";
+export const ELEVENLABS_BATCH_MODEL_ID = "scribe_v2";
+export const ELEVENLABS_NUM_SPEAKERS: number | undefined = undefined;
+export const ELEVENLABS_DIARIZATION_THRESHOLD: number | undefined = undefined;

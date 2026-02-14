@@ -15,18 +15,22 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.957.0",
+    "@discordjs/voice": "^0.19.0",
     "@effect/ai": "^0.33.0",
     "@effect/ai-openai": "^0.37.0",
     "@effect/platform": "^0.94.0",
     "@effect/platform-bun": "^0.87.0",
+    "@notionhq/client": "^5.9.0",
     "@octokit/rest": "^22.0.1",
     "@rayhanadev/env": "^1.0.0",
+    "@snazzah/davey": "^0.1.9",
     "dayjs": "^1.11.19",
     "discord.js": "^14.25.1",
     "drizzle-orm": "^1.0.0-beta.4-4605abe",
     "effect": "^3.19.13",
     "fastest-levenshtein": "^1.0.16",
     "human-interval": "^2.0.1",
+    "opusscript": "^0.1.1",
     "sharp": "^0.34.5"
   },
   "devDependencies": {

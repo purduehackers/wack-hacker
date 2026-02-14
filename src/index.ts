@@ -1,5 +1,5 @@
 import { Events, MessageFlags } from "discord.js";
-import { Effect, Layer, Logger, ManagedRuntime } from "effect";
+import { Cause, Effect, Exit, Layer, Logger, ManagedRuntime } from "effect";
 
 import { AppConfig } from "./config";
 import { type DiscordError, structuredError } from "./errors";
@@ -13,9 +13,11 @@ import {
     handleThreadCreate,
     startCronJobs,
 } from "./runtime";
+import { handleMeetingVoiceStateUpdate } from "./features/meeting-notes";
 import { ServicesLive, Discord } from "./services";
 
 const isDev = process.env.NODE_ENV !== "production";
+const requestedHealthPort = Number.parseInt(process.env.PORT ?? "3000", 10);
 
 const AppLayer = Layer.mergeAll(ServicesLive, AppConfig.Default).pipe((layer) =>
     isDev ? Layer.provide(layer, Logger.pretty) : layer,
@@ -24,6 +26,41 @@ const AppLayer = Layer.mergeAll(ServicesLive, AppConfig.Default).pipe((layer) =>
 const runtime = ManagedRuntime.make(AppLayer);
 
 type AppEffect<A, E = never> = Effect.Effect<A, E, never>;
+
+const createHealthServer = (): {
+    server: ReturnType<typeof Bun.serve> | null;
+    startup_error: string | null;
+} => {
+    const fetch = () =>
+        new Response("Wack Hacker is running!", {
+            headers: { "content-type": "text/plain" },
+        });
+
+    const candidatePorts = Array.from(new Set([requestedHealthPort, requestedHealthPort + 1, 0]));
+    let lastError: unknown = null;
+
+    for (const candidatePort of candidatePorts) {
+        try {
+            return {
+                server: Bun.serve({
+                    fetch,
+                    port: candidatePort,
+                }),
+                startup_error: null,
+            };
+        } catch (error) {
+            lastError = error;
+        }
+    }
+
+    return {
+        server: null,
+        startup_error: lastError instanceof Error ? lastError.message : String(lastError),
+    };
+};
+
+const healthServerResult = createHealthServer();
+const healthServer = healthServerResult.server;
 
 const program = Effect.gen(function* () {
     const startTime = Date.now();
@@ -34,11 +71,22 @@ const program = Effect.gen(function* () {
 
     const discord = yield* Discord;
 
-    const enabledCommands = yield* getEnabledCommands;
-    yield* discord.registerCommands(enabledCommands.map((c) => c.data));
-
     yield* discord.login();
     const client = yield* discord.awaitReady();
+    const commandClientId = client.application?.id ?? client.user.id;
+
+    const enabledCommands = yield* getEnabledCommands;
+    yield* discord.registerCommands(enabledCommands.map((c) => c.data), commandClientId).pipe(
+        Effect.catchTag("DiscordError", (error) =>
+            Effect.logWarning("discord command registration failed; startup continuing", {
+                ...structuredError(error),
+                service_name: "wack_hacker",
+                client_id: commandClientId,
+                command_count: enabledCommands.length,
+                reason: "registration_failed_startup_degraded",
+            }),
+        ),
+    );
 
     yield* startCronJobs(client);
 
@@ -265,36 +313,77 @@ const program = Effect.gen(function* () {
         void runtime.runPromise(reactionProgram);
     });
 
+    client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
+        const voiceStateStartTime = Date.now();
+
+        const voiceStateProgram = handleMeetingVoiceStateUpdate(oldState, newState).pipe(
+            Effect.tap(() =>
+                Effect.logDebug("voice state update handled", {
+                    guild_id: newState.guild.id,
+                    user_id: newState.id,
+                    old_channel_id: oldState.channelId ?? "none",
+                    new_channel_id: newState.channelId ?? "none",
+                    duration_ms: Date.now() - voiceStateStartTime,
+                }),
+            ),
+            Effect.catchAll((e) =>
+                Effect.logError("voice state update handling failed", {
+                    ...structuredError(e),
+                    guild_id: newState.guild.id,
+                    user_id: newState.id,
+                    old_channel_id: oldState.channelId ?? "none",
+                    new_channel_id: newState.channelId ?? "none",
+                    duration_ms: Date.now() - voiceStateStartTime,
+                }),
+            ),
+        ) as AppEffect<void>;
+
+        void runtime.runPromise(voiceStateProgram);
+    });
+
     const startupDuration = Date.now() - startTime;
     yield* Effect.logInfo("wack hacker started", {
         service_name: "wack_hacker",
         node_env: process.env.NODE_ENV ?? "development",
         duration_ms: startupDuration,
-        server_port: 3000,
+        health_server_enabled: healthServer !== null,
+        server_port: healthServer?.port ?? null,
+        server_requested_port: requestedHealthPort,
+        health_server_startup_error: healthServerResult.startup_error,
     });
 });
 
-Bun.serve({
-    fetch() {
-        return new Response("Wack Hacker is running!", {
-            headers: { "content-type": "text/plain" },
-        });
-    },
-    port: 3000,
-});
+const httpServerLogEffect =
+    healthServer === null
+        ? Effect.logWarning("http server startup skipped", {
+              service_name: "wack_hacker",
+              server_requested_port: requestedHealthPort,
+              reason: "all_port_bind_attempts_failed",
+              startup_error: healthServerResult.startup_error,
+          })
+        : Effect.logInfo("http server started", {
+              service_name: "wack_hacker",
+              server_port: healthServer.port,
+              server_requested_port: requestedHealthPort,
+              server_url: `http://localhost:${healthServer.port}`,
+              used_fallback_port: healthServer.port !== requestedHealthPort,
+          });
 
-void Effect.logInfo("http server started", {
-    service_name: "wack_hacker",
-    server_port: 3000,
-    server_url: `http://localhost:3000`,
-}).pipe(Effect.provide(AppLayer), Effect.runPromise);
+void httpServerLogEffect.pipe(Effect.provide(AppLayer), Effect.runPromise);
 
 const main = program.pipe(Effect.provide(AppLayer)) as AppEffect<void, DiscordError>;
 
-Effect.runPromise(main).catch((e) => {
+void Effect.runPromiseExit(main).then((exit) => {
+    if (Exit.isSuccess(exit)) {
+        return;
+    }
+
+    const squashedError = Cause.squash(exit.cause);
+
     void Effect.logError("fatal error during startup", {
         service_name: "wack_hacker",
-        ...structuredError(e),
+        ...structuredError(squashedError),
+        error_cause_pretty: Cause.pretty(exit.cause),
     })
         .pipe(Effect.provide(AppLayer), Effect.runPromise)
         .finally(() => process.exit(1));

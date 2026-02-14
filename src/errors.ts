@@ -63,11 +63,45 @@ export class ValidationError extends Data.TaggedError("ValidationError")<{
     message: string;
 }> {}
 
+export class MeetingAlreadyActive extends Data.TaggedError("MeetingAlreadyActive")<{
+    guildId: string;
+    activeChannelId: string;
+}> {}
+
+export class NoActiveMeeting extends Data.TaggedError("NoActiveMeeting")<{
+    guildId: string;
+}> {}
+
+export class NotInVoiceChannel extends Data.TaggedError("NotInVoiceChannel")<{
+    guildId: string;
+    userId: string;
+}> {}
+
+export class MeetingVoiceJoinFailed extends Data.TaggedError("MeetingVoiceJoinFailed")<{
+    guildId: string;
+    channelId: string;
+    cause: unknown;
+}> {}
+
+export class MeetingTranscriptionError extends Data.TaggedError("MeetingTranscriptionError")<{
+    operation: string;
+    cause: unknown;
+}> {}
+
+export class NotionError extends Data.TaggedError("NotionError")<{
+    operation: string;
+    cause: unknown;
+}> {}
+
 /**
  * Converts an unknown error into a structured object for logging.
  * Handles Effect tagged errors, standard Errors, and unknown values.
  */
 export const structuredError = (e: unknown) => ({
+    error_tag:
+        typeof e === "object" && e !== null && "_tag" in e
+            ? String((e as { _tag: unknown })._tag)
+            : undefined,
     error_type:
         typeof e === "object" && e !== null && "_tag" in e
             ? (e as { _tag: string })._tag
@@ -75,5 +109,25 @@ export const structuredError = (e: unknown) => ({
               ? e.constructor.name
               : "Unknown",
     error_message: e instanceof Error ? e.message : String(e),
+    error_cause_message:
+        typeof e === "object" && e !== null && "cause" in e
+            ? (() => {
+                  const cause = (e as { cause: unknown }).cause;
+                  if (cause instanceof Error) return cause.message;
+                  if (cause === undefined || cause === null) return undefined;
+                  return String(cause);
+              })()
+            : undefined,
+    error_cause_type:
+        typeof e === "object" && e !== null && "cause" in e
+            ? (() => {
+                  const cause = (e as { cause: unknown }).cause;
+                  if (cause instanceof Error) return cause.constructor.name;
+                  if (typeof cause === "object" && cause !== null && "name" in cause) {
+                      return String((cause as { name: unknown }).name);
+                  }
+                  return cause === undefined || cause === null ? undefined : typeof cause;
+              })()
+            : undefined,
     error_stack: e instanceof Error ? e.stack?.split("\n").slice(0, 5).join("\n") : undefined,
 });
