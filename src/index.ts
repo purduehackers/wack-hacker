@@ -1,9 +1,8 @@
 import { Events, MessageFlags } from "discord.js";
 import { Effect, Layer, Logger, ManagedRuntime } from "effect";
 
-import { type DiscordError, structuredError } from "./errors";
-
 import { AppConfig } from "./config";
+import { type DiscordError, structuredError } from "./errors";
 import {
     getEnabledCommands,
     findCommand,

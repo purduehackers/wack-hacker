@@ -1,3 +1,4 @@
+import { Vercel } from "@vercel/sdk";
 import {
     SlashCommandBuilder,
     MessageFlags,
@@ -8,7 +9,6 @@ import {
     type Client,
     type TextChannel,
 } from "discord.js";
-import { Vercel } from "@vercel/sdk";
 import { Duration, Effect, Option, Redacted, Schedule } from "effect";
 
 import { AppConfig } from "../../config";
@@ -19,9 +19,9 @@ import {
     HACK_NIGHT_MESSAGES,
     ORGANIZER_ROLE_ID,
 } from "../../constants";
+import { structuredError } from "../../errors";
 import { generateEventSlug } from "../../lib/dates";
 import { randomItem } from "../../lib/discord";
-import { structuredError } from "../../errors";
 import { Storage } from "../../services";
 
 export const handleHackNightImages = Effect.fn("HackNight.handleImages")(
@@ -586,10 +586,7 @@ export const initHnCommand = new SlashCommandBuilder()
             .setRequired(true),
     )
     .addStringOption((option) =>
-        option
-            .setName("tagline")
-            .setDescription("A short tagline (<30 chars)")
-            .setRequired(true),
+        option.setName("tagline").setDescription("A short tagline (<30 chars)").setRequired(true),
     )
     .addStringOption((option) =>
         option
@@ -715,9 +712,7 @@ export const handleInitHnCommand = Effect.fn("HackNight.handleInitHn")(
         const channel = yield* Effect.tryPromise({
             try: () => interaction.client.channels.fetch(HACK_NIGHT_CHANNEL_ID),
             catch: (e) =>
-                new Error(
-                    `Failed to fetch channel: ${e instanceof Error ? e.message : String(e)}`,
-                ),
+                new Error(`Failed to fetch channel: ${e instanceof Error ? e.message : String(e)}`),
         });
 
         if (!channel || !channel.isSendable()) {
@@ -805,9 +800,7 @@ export const handleResetHnCommand = Effect.fn("HackNight.handleResetHn")(
         const channel = yield* Effect.tryPromise({
             try: () => interaction.client.channels.fetch(HACK_NIGHT_CHANNEL_ID),
             catch: (e) =>
-                new Error(
-                    `Failed to fetch channel: ${e instanceof Error ? e.message : String(e)}`,
-                ),
+                new Error(`Failed to fetch channel: ${e instanceof Error ? e.message : String(e)}`),
         });
 
         if (!channel || !channel.isSendable()) {
