@@ -11,7 +11,6 @@ import { Effect } from "effect";
 
 import { AppConfig } from "../config";
 import { structuredError } from "../errors";
-
 import { handleAutoThread } from "../features/auto-thread";
 import {
     handleCommitOverflowReaction,
@@ -287,10 +286,7 @@ export const handleMessageReactionAdd = Effect.fn("Events.handleMessageReactionA
 });
 
 export const handleMessageReactionRemove = Effect.fn("Events.handleMessageReactionRemove")(
-    function* (
-        reaction: MessageReaction | PartialMessageReaction,
-        user: User | PartialUser,
-    ) {
+    function* (reaction: MessageReaction | PartialMessageReaction, user: User | PartialUser) {
         const startTime = Date.now();
         const emojiName = reaction.emoji.name ?? "unknown";
         const emojiId = reaction.emoji.id ?? "none";

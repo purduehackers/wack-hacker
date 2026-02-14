@@ -31,6 +31,8 @@ export const commands: Command[] = [
     {
         data: doorOpenerCommand as unknown as SlashCommandBuilder,
         execute: handleDoorOpenerCommand,
+    },
+    {
         data: initHnCommand as unknown as SlashCommandBuilder,
         execute: handleInitHnCommand,
     },

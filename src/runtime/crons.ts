@@ -5,7 +5,6 @@ import { Effect } from "effect";
 
 import { AppConfig } from "../config";
 import { structuredError } from "../errors";
-
 import {
     createHackNightThread,
     cleanupHackNightThread,

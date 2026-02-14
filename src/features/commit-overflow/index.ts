@@ -769,7 +769,9 @@ const handleApproveReaction = Effect.fn("CommitOverflow.handleApproveReaction")(
     const threadOwner = yield* Effect.tryPromise({
         try: () => guild.members.fetch(threadOwnerId),
         catch: (e) =>
-            new Error(`Failed to fetch thread owner: ${e instanceof Error ? e.message : String(e)}`),
+            new Error(
+                `Failed to fetch thread owner: ${e instanceof Error ? e.message : String(e)}`,
+            ),
     });
 
     yield* db.users.upsert(threadOwnerId, threadOwner.user.username);
@@ -800,7 +802,9 @@ const handleApproveReaction = Effect.fn("CommitOverflow.handleApproveReaction")(
         const forwardResult = yield* Effect.tryPromise({
             try: () => message.forward(COMMIT_OVERFLOW_FORWARD_THREAD_ID),
             catch: (e) =>
-                new Error(`Failed to forward message: ${e instanceof Error ? e.message : String(e)}`),
+                new Error(
+                    `Failed to forward message: ${e instanceof Error ? e.message : String(e)}`,
+                ),
         }).pipe(
             Effect.map((forwardedMessage) => forwardedMessage.id),
             Effect.catchAll((error) => {
@@ -911,10 +915,7 @@ const handlePrivateReaction = Effect.fn("CommitOverflow.handlePrivateReaction")(
 });
 
 const handleApproveReactionRemove = Effect.fn("CommitOverflow.handleApproveReactionRemove")(
-    function* (
-        reaction: MessageReaction | PartialMessageReaction,
-        user: User | PartialUser,
-    ) {
+    function* (reaction: MessageReaction | PartialMessageReaction, user: User | PartialUser) {
         const startTime = Date.now();
         const db = yield* Database;
 
@@ -1002,10 +1003,7 @@ const handleApproveReactionRemove = Effect.fn("CommitOverflow.handleApproveReact
 );
 
 const handlePrivateReactionRemove = Effect.fn("CommitOverflow.handlePrivateReactionRemove")(
-    function* (
-        reaction: MessageReaction | PartialMessageReaction,
-        user: User | PartialUser,
-    ) {
+    function* (reaction: MessageReaction | PartialMessageReaction, user: User | PartialUser) {
         const startTime = Date.now();
         const db = yield* Database;
 
@@ -1105,10 +1103,7 @@ export const handleCommitOverflowReactionRemove = (
     user: User | PartialUser,
 ) =>
     Effect.all(
-        [
-            handleApproveReactionRemove(reaction, user),
-            handlePrivateReactionRemove(reaction, user),
-        ],
+        [handleApproveReactionRemove(reaction, user), handlePrivateReactionRemove(reaction, user)],
         {
             concurrency: "unbounded",
             mode: "either",

@@ -44,6 +44,11 @@ export class DashboardError extends Data.TaggedError("DashboardError")<{
     cause: unknown;
 }> {}
 
+export class PhonebellError extends Data.TaggedError("PhonebellError")<{
+    operation: string;
+    cause: unknown;
+}> {}
+
 export class DashboardConnectionFailed extends Data.TaggedError("DashboardConnectionFailed")<{
     attempts: number;
     lastError: unknown;
