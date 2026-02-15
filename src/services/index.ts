@@ -7,6 +7,8 @@ import { Discord } from "./Discord";
 import { GitHub } from "./GitHub";
 import { MediaWiki } from "./MediaWiki";
 import { Phonebell } from "./Phonebell";
+import { MeetingNotes } from "./MeetingNotes";
+import { Notion } from "./Notion";
 import { Storage } from "./Storage";
 
 export const ServicesLive = Layer.mergeAll(
@@ -16,6 +18,8 @@ export const ServicesLive = Layer.mergeAll(
     GitHub.Default,
     MediaWiki.Default,
     Phonebell.Default,
+    Notion.Default,
+    MeetingNotes.Default,
     Dashboard.Default,
     Discord.Default,
 );
@@ -26,5 +30,7 @@ export { Storage, Storage as StorageLive, type ImageMetadata, type EventIndex } 
 export { GitHub, GitHub as GitHubLive } from "./GitHub";
 export { MediaWiki, MediaWiki as MediaWikiLive } from "./MediaWiki";
 export { Phonebell, Phonebell as PhonebellLive } from "./Phonebell";
+export { Notion, Notion as NotionLive } from "./Notion";
+export { MeetingNotes, MeetingNotes as MeetingNotesLive } from "./MeetingNotes";
 export { Dashboard, Dashboard as DashboardLive, type DiscordMessage } from "./Dashboard";
 export { Discord, Discord as DiscordLive } from "./Discord";

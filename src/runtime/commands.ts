@@ -11,6 +11,12 @@ import {
     resetHnCommand,
     handleResetHnCommand,
 } from "../features/hack-night";
+import {
+    startMeetingCommand,
+    handleStartMeetingCommand,
+    endMeetingCommand,
+    handleEndMeetingCommand,
+} from "../features/meeting-notes";
 import { summarizeCommand, handleSummarizeCommand } from "../features/summarize";
 
 interface Command {
@@ -40,6 +46,14 @@ export const commands: Command[] = [
         data: resetHnCommand as unknown as SlashCommandBuilder,
         execute: handleResetHnCommand,
     },
+    {
+        data: startMeetingCommand as unknown as SlashCommandBuilder,
+        execute: handleStartMeetingCommand,
+    },
+    {
+        data: endMeetingCommand as unknown as SlashCommandBuilder,
+        execute: handleEndMeetingCommand,
+    },
 ];
 
 export const getEnabledCommands = Effect.gen(function* () {
@@ -49,6 +63,9 @@ export const getEnabledCommands = Effect.gen(function* () {
     const enabledCommands = commands.filter((cmd) => {
         if (cmd.data.name === "commit-overflow") {
             return config.COMMIT_OVERFLOW_ENABLED;
+        }
+        if (cmd.data.name === "start-meeting" || cmd.data.name === "end-meeting") {
+            return config.MEETING_NOTES_ENABLED;
         }
         return true;
     });
@@ -63,6 +80,7 @@ export const getEnabledCommands = Effect.gen(function* () {
         duration_ms: durationMs,
         command_names: commandNames.join(","),
         commit_overflow_enabled: config.COMMIT_OVERFLOW_ENABLED,
+        meeting_notes_enabled: config.MEETING_NOTES_ENABLED,
     });
 
     yield* Effect.logInfo("commands filtered by enabled state", {
@@ -72,6 +90,7 @@ export const getEnabledCommands = Effect.gen(function* () {
         duration_ms: durationMs,
         command_names: commandNames.join(","),
         commit_overflow_enabled: config.COMMIT_OVERFLOW_ENABLED,
+        meeting_notes_enabled: config.MEETING_NOTES_ENABLED,
     });
 
     return enabledCommands;

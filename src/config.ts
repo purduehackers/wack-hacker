@@ -4,6 +4,8 @@ export const AppConfig = makeEnv("AppConfig", {
     DISCORD_CLIENT_ID: Env.string("DISCORD_CLIENT_ID"),
     DISCORD_BOT_TOKEN: Env.redacted("DISCORD_BOT_TOKEN"),
     GROQ_API_KEY: Env.redacted("GROQ_API_KEY"),
+    ELEVENLABS_API_KEY: Env.stringOr("ELEVENLABS_API_KEY", ""),
+    NOTION_API_KEY: Env.stringOr("NOTION_API_KEY", ""),
     GITHUB_TOKEN: Env.redacted("GITHUB_TOKEN"),
     MEDIAWIKI_BOT_KEY: Env.redacted("MEDIAWIKI_BOT_KEY"),
     PHACK_API_TOKEN: Env.redacted("PHACK_API_TOKEN"),
@@ -28,5 +30,6 @@ export const AppConfig = makeEnv("AppConfig", {
     HACK_NIGHT_PHOTOS_ENABLED: Env.booleanOr("HACK_NIGHT_PHOTOS_ENABLED", true),
     AUTO_THREAD_ENABLED: Env.booleanOr("AUTO_THREAD_ENABLED", true),
     WELCOMER_ENABLED: Env.booleanOr("WELCOMER_ENABLED", true),
+    MEETING_NOTES_ENABLED: Env.booleanOr("MEETING_NOTES_ENABLED", true),
     NODE_ENV: Env.stringOr("NODE_ENV", "development"),
 });

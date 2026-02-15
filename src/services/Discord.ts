@@ -33,20 +33,23 @@ export class Discord extends Effect.Service<Discord>()("Discord", {
 
         const registerCommands = Effect.fn("Discord.registerCommands")(function* (
             commands: { toJSON: () => unknown }[],
+            clientId?: string,
         ) {
+            const resolvedClientId = clientId ?? config.DISCORD_CLIENT_ID;
+
             yield* Effect.logDebug("registering discord commands", {
                 service_name: "Discord",
                 method: "registerCommands",
                 operation_type: "register_commands",
                 command_count: commands.length,
-                client_id: config.DISCORD_CLIENT_ID,
+                client_id: resolvedClientId,
             });
 
             const startTime = Date.now();
 
             yield* Effect.tryPromise({
                 try: async () => {
-                    await rest.put(Routes.applicationCommands(config.DISCORD_CLIENT_ID), {
+                    await rest.put(Routes.applicationCommands(resolvedClientId), {
                         body: commands.map((c) => c.toJSON()),
                     });
                 },
@@ -67,7 +70,7 @@ export class Discord extends Effect.Service<Discord>()("Discord", {
                 command_count: commands.length,
                 duration_ms,
                 latency_ms: duration_ms,
-                client_id: config.DISCORD_CLIENT_ID,
+                client_id: resolvedClientId,
             });
         });
 
