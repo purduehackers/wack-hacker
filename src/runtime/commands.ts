@@ -2,7 +2,7 @@ import type { ChatInputCommandInteraction, SlashCommandBuilder } from "discord.j
 
 import { Effect } from "effect";
 
-import { AppConfig } from "../config";
+import { FeatureFlags } from "../services";
 import { commitOverflowCommand, handleCommitOverflowCommand } from "../features/commit-overflow";
 import { doorOpenerCommand, handleDoorOpenerCommand } from "../features/door-opener";
 import {
@@ -58,14 +58,15 @@ export const commands: Command[] = [
 
 export const getEnabledCommands = Effect.gen(function* () {
     const startTime = Date.now();
-    const config = yield* AppConfig;
+    const ff = yield* FeatureFlags;
+    const flags = yield* ff.getFlags;
 
     const enabledCommands = commands.filter((cmd) => {
         if (cmd.data.name === "commit-overflow") {
-            return config.COMMIT_OVERFLOW_ENABLED;
+            return flags.commitOverflow;
         }
         if (cmd.data.name === "start-meeting" || cmd.data.name === "end-meeting") {
-            return config.MEETING_NOTES_ENABLED;
+            return flags.meetingNotes;
         }
         return true;
     });
@@ -79,8 +80,8 @@ export const getEnabledCommands = Effect.gen(function* () {
         disabled_commands_count: commands.length - enabledCommands.length,
         duration_ms: durationMs,
         command_names: commandNames.join(","),
-        commit_overflow_enabled: config.COMMIT_OVERFLOW_ENABLED,
-        meeting_notes_enabled: config.MEETING_NOTES_ENABLED,
+        commit_overflow_enabled: flags.commitOverflow,
+        meeting_notes_enabled: flags.meetingNotes,
     });
 
     yield* Effect.logInfo("commands filtered by enabled state", {
@@ -89,8 +90,8 @@ export const getEnabledCommands = Effect.gen(function* () {
         disabled_commands_count: commands.length - enabledCommands.length,
         duration_ms: durationMs,
         command_names: commandNames.join(","),
-        commit_overflow_enabled: config.COMMIT_OVERFLOW_ENABLED,
-        meeting_notes_enabled: config.MEETING_NOTES_ENABLED,
+        commit_overflow_enabled: flags.commitOverflow,
+        meeting_notes_enabled: flags.meetingNotes,
     });
 
     return enabledCommands;

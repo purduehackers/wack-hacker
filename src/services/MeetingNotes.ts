@@ -26,6 +26,7 @@ import {
 } from "../errors";
 
 import { AI } from "./AI";
+import { FeatureFlags } from "./FeatureFlags";
 import { Notion } from "./Notion";
 import {
     createDiarizedTranscript,
@@ -352,11 +353,12 @@ const formatCommittedTranscript = (
 };
 
 export class MeetingNotes extends Effect.Service<MeetingNotes>()("MeetingNotes", {
-    dependencies: [AppConfig.Default, AI.Default, Notion.Default],
+    dependencies: [AppConfig.Default, AI.Default, Notion.Default, FeatureFlags.Default],
     scoped: Effect.gen(function* () {
         const config = yield* AppConfig;
         const ai = yield* AI;
         const notion = yield* Notion;
+        const ff = yield* FeatureFlags;
 
         const sessionsRef = yield* SynchronizedRef.make(new Map<Snowflake, MeetingSession>());
 
@@ -1177,7 +1179,8 @@ export class MeetingNotes extends Effect.Service<MeetingNotes>()("MeetingNotes",
         };
 
         const startMeeting = Effect.fn("MeetingNotes.startMeeting")(function* (input: StartMeetingInput) {
-            if (!config.MEETING_NOTES_ENABLED) {
+            const flags = yield* ff.getFlags;
+            if (!flags.meetingNotes) {
                 return yield* Effect.fail(new FeatureDisabled({ feature: "meeting_notes" }));
             }
 

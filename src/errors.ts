@@ -93,6 +93,10 @@ export class NotionError extends Data.TaggedError("NotionError")<{
     cause: unknown;
 }> {}
 
+export class FeatureFlagError extends Data.TaggedError("FeatureFlagError")<{
+    cause: unknown;
+}> {}
+
 /**
  * Converts an unknown error into a structured object for logging.
  * Handles Effect tagged errors, standard Errors, and unknown values.

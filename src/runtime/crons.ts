@@ -3,8 +3,8 @@ import type { Schedule } from "effect";
 
 import { Effect } from "effect";
 
-import { AppConfig } from "../config";
 import { structuredError } from "../errors";
+import { FeatureFlags } from "../services";
 import {
     createHackNightThread,
     cleanupHackNightThread,
@@ -36,12 +36,13 @@ const cronJobs: CronJob[] = [
 
 export const startCronJobs = Effect.fn("Crons.startCronJobs")(function* (client: Client) {
     const startTime = Date.now();
-    const config = yield* AppConfig;
+    const ff = yield* FeatureFlags;
+    const flags = yield* ff.getFlags;
 
     const allJobs = cronJobs;
     const enabledJobs = cronJobs.filter((job) => {
         if (job.featureFlag === "hackNightPhotos") {
-            return config.HACK_NIGHT_PHOTOS_ENABLED;
+            return flags.hackNightPhotos;
         }
         return true;
     });
@@ -53,7 +54,7 @@ export const startCronJobs = Effect.fn("Crons.startCronJobs")(function* (client:
         enabled_jobs_count: enabledJobs.length,
         disabled_jobs_count: allJobs.length - enabledJobs.length,
         job_names: jobNames.join(","),
-        hack_night_photos_enabled: config.HACK_NIGHT_PHOTOS_ENABLED,
+        hack_night_photos_enabled: flags.hackNightPhotos,
     });
 
     yield* Effect.logInfo("cron jobs initialization started", {
@@ -61,7 +62,7 @@ export const startCronJobs = Effect.fn("Crons.startCronJobs")(function* (client:
         enabled_jobs_count: enabledJobs.length,
         disabled_jobs_count: allJobs.length - enabledJobs.length,
         job_names: jobNames.join(","),
-        hack_night_photos_enabled: config.HACK_NIGHT_PHOTOS_ENABLED,
+        hack_night_photos_enabled: flags.hackNightPhotos,
     });
 
     for (const job of enabledJobs) {

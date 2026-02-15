@@ -4,6 +4,7 @@ import { AI } from "./AI";
 import { Dashboard } from "./Dashboard";
 import { Database } from "./Database";
 import { Discord } from "./Discord";
+import { FeatureFlags } from "./FeatureFlags";
 import { GitHub } from "./GitHub";
 import { MediaWiki } from "./MediaWiki";
 import { Phonebell } from "./Phonebell";
@@ -22,6 +23,7 @@ export const ServicesLive = Layer.mergeAll(
     MeetingNotes.Default,
     Dashboard.Default,
     Discord.Default,
+    FeatureFlags.Default,
 );
 
 export { Database, Database as DatabaseLive } from "./Database";
@@ -34,3 +36,4 @@ export { Notion, Notion as NotionLive } from "./Notion";
 export { MeetingNotes, MeetingNotes as MeetingNotesLive } from "./MeetingNotes";
 export { Dashboard, Dashboard as DashboardLive, type DiscordMessage } from "./Dashboard";
 export { Discord, Discord as DiscordLive } from "./Discord";
+export { FeatureFlags, type Flags } from "./FeatureFlags";

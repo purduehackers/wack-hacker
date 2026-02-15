@@ -11,9 +11,9 @@ import {
 } from "discord.js";
 import { Effect } from "effect";
 
-import { AppConfig } from "../../config";
 import { MEETING_TRANSCRIPT_THREAD_AUTO_ARCHIVE_DURATION } from "../../constants";
 import { NotInVoiceChannel, structuredError } from "../../errors";
+import { FeatureFlags } from "../../services";
 import { MeetingNotes } from "../../services/MeetingNotes";
 
 export const startMeetingCommand = new SlashCommandBuilder()
@@ -108,9 +108,10 @@ const createTranscriptThread = Effect.fn("MeetingNotes.createTranscriptThread")(
 
 export const handleStartMeetingCommand = Effect.fn("MeetingNotes.handleStartMeetingCommand")(
     function* (interaction: ChatInputCommandInteraction) {
-        const config = yield* AppConfig;
+        const ff = yield* FeatureFlags;
+        const featureFlags = yield* ff.getFlags;
 
-        if (!config.MEETING_NOTES_ENABLED) {
+        if (!featureFlags.meetingNotes) {
             yield* Effect.tryPromise({
                 try: () =>
                     interaction.reply({
@@ -267,9 +268,10 @@ export const handleStartMeetingCommand = Effect.fn("MeetingNotes.handleStartMeet
 
 export const handleEndMeetingCommand = Effect.fn("MeetingNotes.handleEndMeetingCommand")(
     function* (interaction: ChatInputCommandInteraction) {
-        const config = yield* AppConfig;
+        const ff = yield* FeatureFlags;
+        const featureFlags = yield* ff.getFlags;
 
-        if (!config.MEETING_NOTES_ENABLED) {
+        if (!featureFlags.meetingNotes) {
             yield* Effect.tryPromise({
                 try: () =>
                     interaction.reply({
@@ -362,9 +364,10 @@ export const handleEndMeetingCommand = Effect.fn("MeetingNotes.handleEndMeetingC
 
 export const handleMeetingVoiceStateUpdate = Effect.fn("MeetingNotes.handleVoiceStateUpdate")(
     function* (oldState: VoiceState, newState: VoiceState) {
-        const config = yield* AppConfig;
+        const ff = yield* FeatureFlags;
+        const featureFlags = yield* ff.getFlags;
 
-        if (!config.MEETING_NOTES_ENABLED) {
+        if (!featureFlags.meetingNotes) {
             return;
         }
 
