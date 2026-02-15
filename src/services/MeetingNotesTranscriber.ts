@@ -1,6 +1,7 @@
 import { EndBehaviorType, type AudioReceiveStream, type VoiceConnection } from "@discordjs/voice";
-import { createWriteStream, mkdirSync, type WriteStream } from "node:fs";
+import { createWriteStream, type WriteStream } from "node:fs";
 import { open } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Snowflake } from "discord.js";
 import { opus } from "prism-media";
@@ -9,13 +10,13 @@ import {
     ELEVENLABS_REALTIME_MODEL_ID,
     MEETING_AUDIO_SAMPLE_RATE,
     MEETING_RECORDING_FILE_EXTENSION,
-    MEETING_RECORDINGS_DIRECTORY,
 } from "../constants";
 import { MeetingTranscriptionError } from "../errors";
 
 export interface TranscriptUpdate {
     readonly text: string;
     readonly isCommitted: boolean;
+    readonly speakerUserId: Snowflake | null;
 }
 
 const ELEVENLABS_TOKEN_URL = "https://api.elevenlabs.io/v1/single-use-token/realtime_scribe";
@@ -196,7 +197,10 @@ function createWavHeader(dataSizeBytes: number): Buffer {
 
 function buildRecordingPath(guildId: string): string {
     const timestamp = new Date().toISOString().replaceAll(":", "-").replaceAll(".", "-");
-    return join(MEETING_RECORDINGS_DIRECTORY, `${guildId}-${timestamp}${MEETING_RECORDING_FILE_EXTENSION}`);
+    return join(
+        tmpdir(),
+        `wack-hacker-meeting-${guildId}-${timestamp}${MEETING_RECORDING_FILE_EXTENSION}`,
+    );
 }
 
 export class MeetingSpeechTranscriber {
@@ -206,11 +210,15 @@ export class MeetingSpeechTranscriber {
     readonly #activeUserStreams = new Map<Snowflake, ActiveUserStream>();
     readonly #userAudioBuffers = new Map<Snowflake, UserAudioBuffer>();
     readonly #pendingMonoChunks: Buffer[] = [];
+    readonly #activeSpeakerUserIds = new Set<Snowflake>();
+    readonly #speakerStartTimes = new Map<Snowflake, number>();
     readonly #onSpeakerStart: (userId: string) => void;
+    readonly #onSpeakerEnd: (userId: string) => void;
     readonly #recordingPath: string;
     readonly #recordingStream: WriteStream;
 
     #recordedPcmBytes = 0;
+    #lastSpeakerUserId: Snowflake | null = null;
     #socket: WebSocket | null = null;
     #mixInterval: NodeJS.Timeout | null = null;
     #flushInterval: NodeJS.Timeout | null = null;
@@ -223,14 +231,20 @@ export class MeetingSpeechTranscriber {
         this.#elevenLabsApiKey = options.elevenLabsApiKey;
         this.#onTranscript = options.onTranscript;
 
-        mkdirSync(MEETING_RECORDINGS_DIRECTORY, { recursive: true });
-
         this.#recordingPath = buildRecordingPath(options.connection.joinConfig.guildId ?? "unknown-guild");
         this.#recordingStream = createWriteStream(this.#recordingPath);
         this.#recordingStream.write(createWavHeader(0));
 
         this.#onSpeakerStart = (userId): void => {
+            this.#activeSpeakerUserIds.add(userId);
+            this.#speakerStartTimes.set(userId, Date.now());
+            this.#lastSpeakerUserId = userId;
             this.subscribeToUser(userId);
+        };
+
+        this.#onSpeakerEnd = (userId): void => {
+            this.#activeSpeakerUserIds.delete(userId);
+            this.#speakerStartTimes.delete(userId);
         };
     }
 
@@ -384,6 +398,7 @@ export class MeetingSpeechTranscriber {
 
     private startVoiceCapture(): void {
         this.#connection.receiver.speaking.on("start", this.#onSpeakerStart);
+        this.#connection.receiver.speaking.on("end", this.#onSpeakerEnd);
 
         this.#mixInterval = setInterval((): void => {
             this.mixAndQueueFrame();
@@ -419,10 +434,40 @@ export class MeetingSpeechTranscriber {
             return;
         }
 
+        const speakerUserId = this.resolveCurrentSpeakerUserId();
+
         void this.#onTranscript({
             text: realtimeMessage.text,
             isCommitted: isCommittedTranscript,
+            speakerUserId,
         });
+    }
+
+    private resolveCurrentSpeakerUserId(): Snowflake | null {
+        if (this.#activeSpeakerUserIds.size === 1) {
+            const [speakerUserId] = this.#activeSpeakerUserIds;
+            this.#lastSpeakerUserId = speakerUserId ?? null;
+            return this.#lastSpeakerUserId;
+        }
+
+        if (this.#activeSpeakerUserIds.size > 1) {
+            let newestSpeakerUserId: Snowflake | null = null;
+            let newestTimestamp = -1;
+
+            for (const speakerUserId of this.#activeSpeakerUserIds) {
+                const startedAt = this.#speakerStartTimes.get(speakerUserId) ?? 0;
+
+                if (startedAt >= newestTimestamp) {
+                    newestTimestamp = startedAt;
+                    newestSpeakerUserId = speakerUserId;
+                }
+            }
+
+            this.#lastSpeakerUserId = newestSpeakerUserId;
+            return newestSpeakerUserId;
+        }
+
+        return this.#lastSpeakerUserId;
     }
 
     private subscribeToUser(userId: Snowflake): void {
@@ -594,6 +639,9 @@ export class MeetingSpeechTranscriber {
         }
 
         this.#connection.receiver.speaking.off("start", this.#onSpeakerStart);
+        this.#connection.receiver.speaking.off("end", this.#onSpeakerEnd);
+        this.#activeSpeakerUserIds.clear();
+        this.#speakerStartTimes.clear();
 
         for (const userId of this.#activeUserStreams.keys()) {
             this.cleanupUserStream(userId);

@@ -58,11 +58,27 @@ const getThreadParentChannel = (
 };
 
 const buildThreadName = (voiceChannelName: string): string => {
-    const timestamp = new Date().toISOString().replace("T", " ").slice(0, 16);
-    const candidateName = `meeting-${voiceChannelName}-${timestamp}`;
+    const candidateName = `🔴 Recording: Meeting in ${voiceChannelName}`;
 
     return candidateName.slice(0, 100);
 };
+
+const createNotesAnchorMessage = Effect.fn("MeetingNotes.createNotesAnchorMessage")(function* (
+    thread: ThreadChannel,
+) {
+    const message = yield* Effect.tryPromise({
+        try: () =>
+            thread.send(
+                "Meeting in progress. This message will be replaced with the final meeting notes when recording ends.",
+            ),
+        catch: (cause) =>
+            new Error(
+                `Failed to create meeting notes anchor message: ${cause instanceof Error ? cause.message : String(cause)}`,
+            ),
+    });
+
+    return message.id;
+});
 
 const createTranscriptThread = Effect.fn("MeetingNotes.createTranscriptThread")(
     function* (interaction: ChatInputCommandInteraction, voiceChannelName: string) {
@@ -151,10 +167,12 @@ export const handleStartMeetingCommand = Effect.fn("MeetingNotes.handleStartMeet
             }
 
             transcriptThread = yield* createTranscriptThread(interaction, voiceChannel.name);
+            const notesMessageId = yield* createNotesAnchorMessage(transcriptThread);
 
             const startResult = yield* meetingNotes.startMeeting({
                 channel: voiceChannel,
                 transcriptThread,
+                notesMessageId,
                 startedByUserId: interaction.user.id,
                 startedByTag: interaction.user.tag,
             });
