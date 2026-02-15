@@ -10,7 +10,6 @@ import type {
 import { Effect } from "effect";
 
 import { structuredError } from "../errors";
-import { FeatureFlags, type Flags } from "../services";
 import { handleAutoThread } from "../features/auto-thread";
 import {
     handleCommitOverflowReaction,
@@ -26,6 +25,7 @@ import { handlePraise } from "../features/praise";
 import { handleGrokMessage } from "../features/summarize";
 import { handleVoiceTranscription } from "../features/voice-transcription";
 import { handleWelcomer } from "../features/welcomer";
+import { FeatureFlags, type Flags } from "../services";
 
 type MessageHandler = (message: Message) => Effect.Effect<void, unknown, unknown>;
 type ReactionHandler = (

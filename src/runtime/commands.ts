@@ -2,7 +2,6 @@ import type { ChatInputCommandInteraction, SlashCommandBuilder } from "discord.j
 
 import { Effect } from "effect";
 
-import { FeatureFlags } from "../services";
 import { commitOverflowCommand, handleCommitOverflowCommand } from "../features/commit-overflow";
 import { doorOpenerCommand, handleDoorOpenerCommand } from "../features/door-opener";
 import {
@@ -18,6 +17,7 @@ import {
     handleEndMeetingCommand,
 } from "../features/meeting-notes";
 import { summarizeCommand, handleSummarizeCommand } from "../features/summarize";
+import { FeatureFlags } from "../services";
 
 interface Command {
     data: SlashCommandBuilder;

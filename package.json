@@ -25,6 +25,7 @@
     "@rayhanadev/env": "^1.0.0",
     "@snazzah/davey": "^0.1.9",
     "@vercel/edge-config": "^1.4.3",
+    "@vercel/sdk": "^1.19.1",
     "dayjs": "^1.11.19",
     "discord.js": "^14.25.1",
     "drizzle-orm": "^1.0.0-beta.4-4605abe",

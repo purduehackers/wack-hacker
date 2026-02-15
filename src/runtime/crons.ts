@@ -4,13 +4,13 @@ import type { Schedule } from "effect";
 import { Effect } from "effect";
 
 import { structuredError } from "../errors";
-import { FeatureFlags } from "../services";
 import {
     createHackNightThread,
     cleanupHackNightThread,
     hackNightCreateSchedule,
     hackNightCleanupSchedule,
 } from "../features/hack-night";
+import { FeatureFlags } from "../services";
 
 interface CronJob {
     name: string;

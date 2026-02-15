@@ -7,9 +7,9 @@ import { Discord } from "./Discord";
 import { FeatureFlags } from "./FeatureFlags";
 import { GitHub } from "./GitHub";
 import { MediaWiki } from "./MediaWiki";
-import { Phonebell } from "./Phonebell";
 import { MeetingNotes } from "./MeetingNotes";
 import { Notion } from "./Notion";
+import { Phonebell } from "./Phonebell";
 import { Storage } from "./Storage";
 
 export const ServicesLive = Layer.mergeAll(

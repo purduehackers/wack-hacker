@@ -1,4 +1,3 @@
-import { entersState, joinVoiceChannel, VoiceConnectionStatus, type VoiceConnection } from "@discordjs/voice";
 import type {
     Guild,
     GuildTextBasedChannel,
@@ -8,6 +7,13 @@ import type {
     VoiceBasedChannel,
     VoiceState,
 } from "discord.js";
+
+import {
+    entersState,
+    joinVoiceChannel,
+    VoiceConnectionStatus,
+    type VoiceConnection,
+} from "@discordjs/voice";
 import { Chunk, Duration, Effect, Fiber, PubSub, Ref, Stream, SynchronizedRef } from "effect";
 
 import { AppConfig } from "../config";
@@ -24,16 +30,15 @@ import {
     MeetingVoiceJoinFailed,
     NoActiveMeeting,
 } from "../errors";
-
 import { AI } from "./AI";
 import { FeatureFlags } from "./FeatureFlags";
-import { Notion } from "./Notion";
 import {
     createDiarizedTranscript,
     type DiarizedTranscript,
     type SpeakerTranscriptSegment,
 } from "./MeetingNotesDiarizedTranscript";
 import { MeetingSpeechTranscriber, type TranscriptUpdate } from "./MeetingNotesTranscriber";
+import { Notion } from "./Notion";
 
 const MAX_LIVE_TRANSCRIPT_LENGTH =
     MEETING_MAX_DISCORD_MESSAGE_LENGTH - MEETING_LIVE_TRANSCRIPT_PREFIX.length;
@@ -185,7 +190,10 @@ const normalizeMeetingNotesHeading = (line: string): string => {
         .toLowerCase();
 };
 
-const normalizeMeetingNotesOutput = (rawNotes: string, voiceTextPointerUrl: string | null): string => {
+const normalizeMeetingNotesOutput = (
+    rawNotes: string,
+    voiceTextPointerUrl: string | null,
+): string => {
     const sections: Record<MeetingNoteSection, Array<string>> = {
         summary: [],
         decisions: [],
@@ -241,14 +249,20 @@ const normalizeMeetingNotesOutput = (rawNotes: string, voiceTextPointerUrl: stri
         voiceTextPointerUrl &&
         !sections.summary.some((line) => line.includes(voiceTextPointerUrl))
     ) {
-        if (sections.summary.length > 0 && sections.summary[sections.summary.length - 1]?.trim().length > 0) {
+        if (
+            sections.summary.length > 0 &&
+            sections.summary[sections.summary.length - 1]?.trim().length > 0
+        ) {
             sections.summary.push("");
         }
         sections.summary.push(`${VOICE_TEXT_POINTER_SUMMARY_LABEL}: ${voiceTextPointerUrl}`);
     }
 
     const collapseSection = (section: ReadonlyArray<string>): string => {
-        return section.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+        return section
+            .join("\n")
+            .replace(/\n{3,}/g, "\n\n")
+            .trim();
     };
 
     return [
@@ -280,10 +294,7 @@ const buildSpeakerNameMap = (
     const uniqueSpeakerIds: string[] = [];
 
     for (const segment of segments) {
-        if (
-            segment.speakerId.length > 0 &&
-            !uniqueSpeakerIds.includes(segment.speakerId)
-        ) {
+        if (segment.speakerId.length > 0 && !uniqueSpeakerIds.includes(segment.speakerId)) {
             uniqueSpeakerIds.push(segment.speakerId);
         }
     }
@@ -444,70 +455,71 @@ export class MeetingNotes extends Effect.Service<MeetingNotes>()("MeetingNotes",
             },
         );
 
-        const clearLiveDraftMessage = Effect.fn("MeetingNotes.clearLiveDraftMessage")(
-            function* (session: MeetingSession) {
-                const draftMessageId = yield* Ref.get(session.draftMessageIdRef);
+        const clearLiveDraftMessage = Effect.fn("MeetingNotes.clearLiveDraftMessage")(function* (
+            session: MeetingSession,
+        ) {
+            const draftMessageId = yield* Ref.get(session.draftMessageIdRef);
 
-                if (!draftMessageId) {
-                    yield* Ref.set(session.draftTextRef, "");
-                    return;
-                }
-
-                yield* Effect.tryPromise({
-                    try: () => session.transcriptThread.messages.delete(draftMessageId),
-                    catch: () => undefined,
-                }).pipe(Effect.ignore);
-
-                yield* Ref.set(session.draftMessageIdRef, null);
+            if (!draftMessageId) {
                 yield* Ref.set(session.draftTextRef, "");
-            },
-        );
+                return;
+            }
 
-        const upsertLiveDraftMessage = Effect.fn("MeetingNotes.upsertLiveDraftMessage")(
-            function* (session: MeetingSession, transcript: string) {
-                const liveText = transcript.slice(0, MAX_LIVE_TRANSCRIPT_LENGTH);
-                const previousText = yield* Ref.get(session.draftTextRef);
+            yield* Effect.tryPromise({
+                try: () => session.transcriptThread.messages.delete(draftMessageId),
+                catch: () => undefined,
+            }).pipe(Effect.ignore);
 
-                if (liveText === previousText) {
-                    return;
-                }
+            yield* Ref.set(session.draftMessageIdRef, null);
+            yield* Ref.set(session.draftTextRef, "");
+        });
 
-                const draftMessageId = yield* Ref.get(session.draftMessageIdRef);
-                const message = `${MEETING_LIVE_TRANSCRIPT_PREFIX}${liveText}`;
+        const upsertLiveDraftMessage = Effect.fn("MeetingNotes.upsertLiveDraftMessage")(function* (
+            session: MeetingSession,
+            transcript: string,
+        ) {
+            const liveText = transcript.slice(0, MAX_LIVE_TRANSCRIPT_LENGTH);
+            const previousText = yield* Ref.get(session.draftTextRef);
 
-                if (!draftMessageId) {
-                    const sentMessage = yield* Effect.tryPromise({
-                        try: () => session.transcriptThread.send(message),
-                        catch: (cause) =>
-                            new MeetingTranscriptionError({
-                                operation: "upsertLiveDraftMessage.create",
-                                cause,
-                            }),
-                    });
+            if (liveText === previousText) {
+                return;
+            }
 
-                    yield* Ref.update(session.liveTranscriptMessageIdsRef, (messageIds) => [
-                        ...messageIds,
-                        sentMessage.id,
-                    ]);
-                    yield* Ref.set(session.draftMessageIdRef, sentMessage.id);
-                    yield* Ref.set(session.draftTextRef, liveText);
-                    return;
-                }
+            const draftMessageId = yield* Ref.get(session.draftMessageIdRef);
+            const message = `${MEETING_LIVE_TRANSCRIPT_PREFIX}${liveText}`;
 
-                const editResult = yield* Effect.tryPromise({
-                    try: () => session.transcriptThread.messages.edit(draftMessageId, message),
-                    catch: () => null,
+            if (!draftMessageId) {
+                const sentMessage = yield* Effect.tryPromise({
+                    try: () => session.transcriptThread.send(message),
+                    catch: (cause) =>
+                        new MeetingTranscriptionError({
+                            operation: "upsertLiveDraftMessage.create",
+                            cause,
+                        }),
                 });
 
-                if (editResult === null) {
-                    yield* Ref.set(session.draftMessageIdRef, null);
-                    yield* Ref.set(session.draftTextRef, "");
-                    return;
-                }
-
+                yield* Ref.update(session.liveTranscriptMessageIdsRef, (messageIds) => [
+                    ...messageIds,
+                    sentMessage.id,
+                ]);
+                yield* Ref.set(session.draftMessageIdRef, sentMessage.id);
                 yield* Ref.set(session.draftTextRef, liveText);
-            },
-        );
+                return;
+            }
+
+            const editResult = yield* Effect.tryPromise({
+                try: () => session.transcriptThread.messages.edit(draftMessageId, message),
+                catch: () => null,
+            });
+
+            if (editResult === null) {
+                yield* Ref.set(session.draftMessageIdRef, null);
+                yield* Ref.set(session.draftTextRef, "");
+                return;
+            }
+
+            yield* Ref.set(session.draftTextRef, liveText);
+        });
 
         const startLiveConsumer = Effect.fn("MeetingNotes.startLiveConsumer")(function* (
             session: Omit<
@@ -545,77 +557,78 @@ export class MeetingNotes extends Effect.Service<MeetingNotes>()("MeetingNotes",
             return yield* Effect.forkDaemon(consumer);
         });
 
-        const startCommittedConsumer = Effect.fn("MeetingNotes.startCommittedConsumer")(
-            function* (
-                session: Omit<
-                    MeetingSession,
-                    "liveConsumerFiber" | "committedConsumerFiber" | "transcriber" | "connection"
-                > & {
-                    readonly connection: VoiceConnection;
-                },
-            ) {
-                const consumer = Effect.scoped(
-                    Effect.gen(function* () {
-                        const queue = yield* PubSub.subscribe(session.transcriptPubSub);
+        const startCommittedConsumer = Effect.fn("MeetingNotes.startCommittedConsumer")(function* (
+            session: Omit<
+                MeetingSession,
+                "liveConsumerFiber" | "committedConsumerFiber" | "transcriber" | "connection"
+            > & {
+                readonly connection: VoiceConnection;
+            },
+        ) {
+            const consumer = Effect.scoped(
+                Effect.gen(function* () {
+                    const queue = yield* PubSub.subscribe(session.transcriptPubSub);
 
-                        const committedStream = Stream.fromQueue(queue).pipe(
-                            Stream.filter((update) => update.isCommitted),
-                            Stream.map((update) => ({
-                                text: update.text.trim(),
-                                speakerUserId: update.speakerUserId,
-                            })),
-                            Stream.filter((update) => update.text.length > 0),
-                            Stream.groupedWithin(6, "1 second"),
-                        );
+                    const committedStream = Stream.fromQueue(queue).pipe(
+                        Stream.filter((update) => update.isCommitted),
+                        Stream.map((update) => ({
+                            text: update.text.trim(),
+                            speakerUserId: update.speakerUserId,
+                        })),
+                        Stream.filter((update) => update.text.length > 0),
+                        Stream.groupedWithin(6, "1 second"),
+                    );
 
-                        yield* Stream.runForEach(committedStream, (chunk) =>
-                            Effect.gen(function* () {
-                                const committedSegments = Chunk.toReadonlyArray(chunk);
+                    yield* Stream.runForEach(committedStream, (chunk) =>
+                        Effect.gen(function* () {
+                            const committedSegments = Chunk.toReadonlyArray(chunk);
 
-                                if (committedSegments.length === 0) {
-                                    return;
-                                }
+                            if (committedSegments.length === 0) {
+                                return;
+                            }
 
-                                yield* clearLiveDraftMessage(session as MeetingSession).pipe(
-                                    Effect.catchAll(() => Effect.void),
-                                );
+                            yield* clearLiveDraftMessage(session as MeetingSession).pipe(
+                                Effect.catchAll(() => Effect.void),
+                            );
 
-                                for (const segment of committedSegments) {
-                                    yield* Ref.update(session.committedTranscriptRef, (segments) => [
-                                        ...segments,
-                                        segment,
-                                    ]);
-                                    yield* appendLiveTranscriptToThread(
-                                        session as MeetingSession,
-                                        segment.text,
-                                    ).pipe(
-                                        Effect.catchAll((cause) =>
-                                            Effect.logWarning("meeting committed transcript send failed", {
+                            for (const segment of committedSegments) {
+                                yield* Ref.update(session.committedTranscriptRef, (segments) => [
+                                    ...segments,
+                                    segment,
+                                ]);
+                                yield* appendLiveTranscriptToThread(
+                                    session as MeetingSession,
+                                    segment.text,
+                                ).pipe(
+                                    Effect.catchAll((cause) =>
+                                        Effect.logWarning(
+                                            "meeting committed transcript send failed",
+                                            {
                                                 guild_id: session.guildId,
                                                 transcript_thread_id: session.transcriptThreadId,
                                                 error_message: safeString(cause),
-                                            }),
+                                            },
                                         ),
-                                    );
-                                }
-                            }),
-                        );
-                    }),
-                );
+                                    ),
+                                );
+                            }
+                        }),
+                    );
+                }),
+            );
 
-                return yield* Effect.forkDaemon(consumer);
-            },
-        );
+            return yield* Effect.forkDaemon(consumer);
+        });
 
-        const removeSessionFromMap = Effect.fn("MeetingNotes.removeSessionFromMap")(
-            function* (guildId: Snowflake) {
-                yield* SynchronizedRef.update(sessionsRef, (sessions) => {
-                    const nextSessions = new Map(sessions);
-                    nextSessions.delete(guildId);
-                    return nextSessions;
-                });
-            },
-        );
+        const removeSessionFromMap = Effect.fn("MeetingNotes.removeSessionFromMap")(function* (
+            guildId: Snowflake,
+        ) {
+            yield* SynchronizedRef.update(sessionsRef, (sessions) => {
+                const nextSessions = new Map(sessions);
+                nextSessions.delete(guildId);
+                return nextSessions;
+            });
+        });
 
         const cleanupSessionResources = Effect.fn("MeetingNotes.cleanupSessionResources")(
             function* (session: MeetingSession) {
@@ -627,83 +640,83 @@ export class MeetingNotes extends Effect.Service<MeetingNotes>()("MeetingNotes",
             },
         );
 
-        const buildFinalTranscript = Effect.fn("MeetingNotes.buildFinalTranscript")(
-            function* (session: MeetingSession, recordingPath: string | null) {
-                const committedSegments = yield* Ref.get(session.committedTranscriptRef);
-                const participantUsernamesById = yield* Ref.get(session.participantUsernamesRef);
-                const committedWithSpeakerNames = formatCommittedTranscript(
-                    committedSegments,
-                    participantUsernamesById,
-                    session.startedByTag,
-                );
-                const committedTextOnly = committedSegments.map((segment) => segment.text).join("\n");
-                const committedFallback =
-                    committedWithSpeakerNames.trim().length > 0 ? committedWithSpeakerNames : committedTextOnly;
+        const buildFinalTranscript = Effect.fn("MeetingNotes.buildFinalTranscript")(function* (
+            session: MeetingSession,
+            recordingPath: string | null,
+        ) {
+            const committedSegments = yield* Ref.get(session.committedTranscriptRef);
+            const participantUsernamesById = yield* Ref.get(session.participantUsernamesRef);
+            const committedWithSpeakerNames = formatCommittedTranscript(
+                committedSegments,
+                participantUsernamesById,
+                session.startedByTag,
+            );
+            const committedTextOnly = committedSegments.map((segment) => segment.text).join("\n");
+            const committedFallback =
+                committedWithSpeakerNames.trim().length > 0
+                    ? committedWithSpeakerNames
+                    : committedTextOnly;
 
-                if (!recordingPath) {
-                    return {
-                        transcript: committedFallback,
-                        diarized: null as DiarizedTranscript | null,
-                    };
-                }
+            if (!recordingPath) {
+                return {
+                    transcript: committedFallback,
+                    diarized: null as DiarizedTranscript | null,
+                };
+            }
 
-                const diarizedResult = yield* Effect.tryPromise({
-                    try: () =>
-                        createDiarizedTranscript(
-                            config.ELEVENLABS_API_KEY,
-                            recordingPath,
-                        ),
-                    catch: (cause) =>
-                        new MeetingTranscriptionError({
-                            operation: "buildFinalTranscript.diarized",
-                            cause,
-                        }),
-                }).pipe(
-                    Effect.either,
-                );
+            const diarizedResult = yield* Effect.tryPromise({
+                try: () => createDiarizedTranscript(config.ELEVENLABS_API_KEY, recordingPath),
+                catch: (cause) =>
+                    new MeetingTranscriptionError({
+                        operation: "buildFinalTranscript.diarized",
+                        cause,
+                    }),
+            }).pipe(Effect.either);
 
-                if (diarizedResult._tag === "Left") {
-                    yield* Effect.logWarning("meeting diarized transcript failed using committed fallback", {
+            if (diarizedResult._tag === "Left") {
+                yield* Effect.logWarning(
+                    "meeting diarized transcript failed using committed fallback",
+                    {
                         guild_id: session.guildId,
                         channel_id: session.channelId,
                         transcript_thread_id: session.transcriptThreadId,
                         error_message: safeString(diarizedResult.left),
-                    });
-
-                    return {
-                        transcript: committedFallback,
-                        diarized: null as DiarizedTranscript | null,
-                    };
-                }
-
-                const diarized = diarizedResult.right;
-                const speakerNameMap = buildSpeakerNameMap(
-                    diarized.segments,
-                    Array.from(participantUsernamesById.values()),
-                    session.startedByTag,
+                    },
                 );
-                const formattedTranscript = formatSpeakerTranscript(diarized.segments, speakerNameMap);
-
-                if (formattedTranscript.trim().length > 0) {
-                    return {
-                        transcript: formattedTranscript,
-                        diarized,
-                    };
-                }
-
-                if (diarized.text.trim().length > 0) {
-                    return {
-                        transcript: diarized.text,
-                        diarized,
-                    };
-                }
 
                 return {
                     transcript: committedFallback,
+                    diarized: null as DiarizedTranscript | null,
+                };
+            }
+
+            const diarized = diarizedResult.right;
+            const speakerNameMap = buildSpeakerNameMap(
+                diarized.segments,
+                Array.from(participantUsernamesById.values()),
+                session.startedByTag,
+            );
+            const formattedTranscript = formatSpeakerTranscript(diarized.segments, speakerNameMap);
+
+            if (formattedTranscript.trim().length > 0) {
+                return {
+                    transcript: formattedTranscript,
                     diarized,
                 };
-            },
-        );
+            }
+
+            if (diarized.text.trim().length > 0) {
+                return {
+                    transcript: diarized.text,
+                    diarized,
+                };
+            }
+
+            return {
+                transcript: committedFallback,
+                diarized,
+            };
+        });
 
         const fetchUserMessagesInWindow = Effect.fn("MeetingNotes.fetchUserMessagesInWindow")(
             function* (options: {
@@ -774,28 +787,30 @@ export class MeetingNotes extends Effect.Service<MeetingNotes>()("MeetingNotes",
                     }
                 }
 
-                return messages.sort((left, right) => left.createdTimestamp - right.createdTimestamp);
+                return messages.sort(
+                    (left, right) => left.createdTimestamp - right.createdTimestamp,
+                );
             },
         );
 
-        const createVoiceTextPointerMessage = Effect.fn("MeetingNotes.createVoiceTextPointerMessage")(
-            function* (channel: VoiceBasedChannel) {
-                if (!channel.isTextBased()) {
-                    return null;
-                }
+        const createVoiceTextPointerMessage = Effect.fn(
+            "MeetingNotes.createVoiceTextPointerMessage",
+        )(function* (channel: VoiceBasedChannel) {
+            if (!channel.isTextBased()) {
+                return null;
+            }
 
-                const pointerMessage = yield* Effect.tryPromise({
-                    try: () => channel.send(VOICE_TEXT_POINTER_MESSAGE),
-                    catch: () => null,
-                });
+            const pointerMessage = yield* Effect.tryPromise({
+                try: () => channel.send(VOICE_TEXT_POINTER_MESSAGE),
+                catch: () => null,
+            });
 
-                if (!pointerMessage || !pointerMessage.inGuild()) {
-                    return null;
-                }
+            if (!pointerMessage || !pointerMessage.inGuild()) {
+                return null;
+            }
 
-                return pointerMessage.id;
-            },
-        );
+            return pointerMessage.id;
+        });
 
         const finalizeVoiceTextPointer = Effect.fn("MeetingNotes.finalizeVoiceTextPointer")(
             function* (session: MeetingSession, meetingEndedAtTimestamp: number) {
@@ -828,9 +843,7 @@ export class MeetingNotes extends Effect.Service<MeetingNotes>()("MeetingNotes",
                     endedAtTimestamp: meetingEndedAtTimestamp,
                     operation: "finalizeVoiceTextPointer.fetchTextMessages",
                     excludedMessageIds: new Set([pointerMessageId]),
-                }).pipe(
-                    Effect.catchAll(() => Effect.succeed([] as Array<Message<true>>)),
-                );
+                }).pipe(Effect.catchAll(() => Effect.succeed([] as Array<Message<true>>)));
 
                 const hasTextActivity = textMessages.some((message) => {
                     return message.content.trim().length > 0;
@@ -856,27 +869,29 @@ export class MeetingNotes extends Effect.Service<MeetingNotes>()("MeetingNotes",
             },
         );
 
-        const summarizeMeetingNotes = Effect.fn("MeetingNotes.summarizeMeetingNotes")(
-            function* (session: MeetingSession, transcript: string, voiceTextPointerUrl: string | null) {
-                const userPrompt = [
-                    `Meeting directory: ${MEETING_NOTES_DEFAULT_DIRECTORY}`,
-                    `Guild ID: ${session.guildId}`,
-                    `Voice Channel ID: ${session.channelId}`,
-                    `Transcript Thread ID: ${session.transcriptThreadId}`,
-                    "",
-                    "Transcript:",
-                    transcript.trim().length > 0 ? transcript : NO_TRANSCRIPT_AVAILABLE,
-                    "",
-                    `${VOICE_TEXT_POINTER_SUMMARY_LABEL}:`,
-                    voiceTextPointerUrl ?? "None",
-                ].join("\n");
+        const summarizeMeetingNotes = Effect.fn("MeetingNotes.summarizeMeetingNotes")(function* (
+            session: MeetingSession,
+            transcript: string,
+            voiceTextPointerUrl: string | null,
+        ) {
+            const userPrompt = [
+                `Meeting directory: ${MEETING_NOTES_DEFAULT_DIRECTORY}`,
+                `Guild ID: ${session.guildId}`,
+                `Voice Channel ID: ${session.channelId}`,
+                `Transcript Thread ID: ${session.transcriptThreadId}`,
+                "",
+                "Transcript:",
+                transcript.trim().length > 0 ? transcript : NO_TRANSCRIPT_AVAILABLE,
+                "",
+                `${VOICE_TEXT_POINTER_SUMMARY_LABEL}:`,
+                voiceTextPointerUrl ?? "None",
+            ].join("\n");
 
-                return yield* ai.chat({
-                    systemPrompt: NOTE_SYSTEM_PROMPT,
-                    userPrompt,
-                });
-            },
-        );
+            return yield* ai.chat({
+                systemPrompt: NOTE_SYSTEM_PROMPT,
+                userPrompt,
+            });
+        });
 
         const generateFinalMeetingTitle = Effect.fn("MeetingNotes.generateFinalMeetingTitle")(
             function* (session: MeetingSession, notes: string, transcript: string) {
@@ -904,9 +919,7 @@ export class MeetingNotes extends Effect.Service<MeetingNotes>()("MeetingNotes",
                         systemPrompt: TITLE_SYSTEM_PROMPT,
                         userPrompt,
                     })
-                    .pipe(
-                        Effect.catchAll(() => Effect.succeed(fallbackTitle)),
-                    );
+                    .pipe(Effect.catchAll(() => Effect.succeed(fallbackTitle)));
 
                 const sanitized = sanitizeThreadTitle(generatedTitle);
                 if (sanitized.length === 0) {
@@ -935,7 +948,8 @@ export class MeetingNotes extends Effect.Service<MeetingNotes>()("MeetingNotes",
                 if (session.notesMessageId) {
                     const notesMessageId = session.notesMessageId;
                     const edited = yield* Effect.tryPromise({
-                        try: () => session.transcriptThread.messages.edit(notesMessageId, firstChunk),
+                        try: () =>
+                            session.transcriptThread.messages.edit(notesMessageId, firstChunk),
                         catch: () => null,
                     });
 
@@ -962,191 +976,193 @@ export class MeetingNotes extends Effect.Service<MeetingNotes>()("MeetingNotes",
             },
         );
 
-        const finalizeSession = Effect.fn("MeetingNotes.finalizeSession")(
-            function* (session: MeetingSession, reason: "manual" | "auto_empty") {
-                const endStartedAt = Date.now();
-                const meetingEndedAtTimestamp = endStartedAt;
+        const finalizeSession = Effect.fn("MeetingNotes.finalizeSession")(function* (
+            session: MeetingSession,
+            reason: "manual" | "auto_empty",
+        ) {
+            const endStartedAt = Date.now();
+            const meetingEndedAtTimestamp = endStartedAt;
 
-                let recordingPath: string | null = null;
+            let recordingPath: string | null = null;
 
-                const stopResult = yield* Effect.tryPromise({
-                    try: () => session.transcriber.stop(),
-                    catch: (cause) =>
-                        new MeetingTranscriptionError({
-                            operation: "finalizeSession.stopTranscriber",
-                            cause,
-                        }),
-                }).pipe(Effect.either);
+            const stopResult = yield* Effect.tryPromise({
+                try: () => session.transcriber.stop(),
+                catch: (cause) =>
+                    new MeetingTranscriptionError({
+                        operation: "finalizeSession.stopTranscriber",
+                        cause,
+                    }),
+            }).pipe(Effect.either);
 
-                if (stopResult._tag === "Right") {
-                    recordingPath = stopResult.right;
-                } else {
-                    yield* Effect.logWarning("meeting transcriber stop failed", {
+            if (stopResult._tag === "Right") {
+                recordingPath = stopResult.right;
+            } else {
+                yield* Effect.logWarning("meeting transcriber stop failed", {
+                    guild_id: session.guildId,
+                    channel_id: session.channelId,
+                    transcript_thread_id: session.transcriptThreadId,
+                    error_message: safeString(stopResult.left),
+                });
+            }
+
+            yield* Effect.sync(() => session.connection.destroy()).pipe(Effect.ignore);
+            yield* cleanupSessionResources(session);
+
+            const { transcript } = yield* buildFinalTranscript(session, recordingPath);
+            const voiceTextPointerUrl = yield* finalizeVoiceTextPointer(
+                session,
+                meetingEndedAtTimestamp,
+            ).pipe(
+                Effect.catchAll((cause) =>
+                    Effect.gen(function* () {
+                        yield* Effect.logWarning("meeting voice text pointer finalize failed", {
+                            guild_id: session.guildId,
+                            channel_id: session.channelId,
+                            transcript_thread_id: session.transcriptThreadId,
+                            error_message: safeString(cause),
+                        });
+
+                        return null;
+                    }),
+                ),
+            );
+            const notes = yield* summarizeMeetingNotes(
+                session,
+                transcript,
+                voiceTextPointerUrl,
+            ).pipe(
+                Effect.catchAll((cause) =>
+                    Effect.succeed(
+                        `Summary generation failed.\n\nError: ${safeString(cause)}\n\nTranscript fallback:\n${transcript || NO_TRANSCRIPT_AVAILABLE}`,
+                    ),
+                ),
+            );
+            const normalizedNotes = normalizeMeetingNotesOutput(notes, voiceTextPointerUrl);
+
+            const title = yield* generateFinalMeetingTitle(session, normalizedNotes, transcript);
+
+            yield* Effect.tryPromise({
+                try: () => session.transcriptThread.setName(title, "Meeting ended"),
+                catch: () => undefined,
+            }).pipe(Effect.ignore);
+
+            yield* upsertFinalNotesMessage(session, normalizedNotes).pipe(
+                Effect.catchAll((cause) =>
+                    Effect.logWarning("meeting final notes thread send failed", {
                         guild_id: session.guildId,
-                        channel_id: session.channelId,
                         transcript_thread_id: session.transcriptThreadId,
-                        error_message: safeString(stopResult.left),
-                    });
-                }
+                        error_message: safeString(cause),
+                    }),
+                ),
+            );
 
-                yield* Effect.sync(() => session.connection.destroy()).pipe(Effect.ignore);
-                yield* cleanupSessionResources(session);
+            yield* Effect.tryPromise({
+                try: () => session.transcriptThread.send(FINAL_TRANSCRIPT_HEADER),
+                catch: () => undefined,
+            }).pipe(Effect.ignore);
 
-                const { transcript } = yield* buildFinalTranscript(session, recordingPath);
-                const voiceTextPointerUrl = yield* finalizeVoiceTextPointer(
-                    session,
-                    meetingEndedAtTimestamp,
-                ).pipe(
+            yield* appendTranscriptToThread(
+                session.transcriptThread,
+                transcript.trim().length > 0 ? transcript : NO_TRANSCRIPT_AVAILABLE,
+            ).pipe(
+                Effect.catchAll((cause) =>
+                    Effect.logWarning("meeting final transcript thread send failed", {
+                        guild_id: session.guildId,
+                        transcript_thread_id: session.transcriptThreadId,
+                        error_message: safeString(cause),
+                    }),
+                ),
+            );
+
+            const notionEntry = yield* notion
+                .createMeetingEntry({
+                    title,
+                    guildId: session.guildId,
+                    voiceChannelId: session.channelId,
+                    transcriptThreadId: session.transcriptThreadId,
+                    startedAt: session.startedAt,
+                    endedAt: new Date(),
+                    endedReason: reason,
+                })
+                .pipe(
                     Effect.catchAll((cause) =>
                         Effect.gen(function* () {
-                            yield* Effect.logWarning("meeting voice text pointer finalize failed", {
+                            yield* Effect.logError("meeting notion entry creation failed", {
                                 guild_id: session.guildId,
                                 channel_id: session.channelId,
                                 transcript_thread_id: session.transcriptThreadId,
                                 error_message: safeString(cause),
                             });
 
-                            return null;
-                        }),
-                    ),
-                );
-                const notes = yield* summarizeMeetingNotes(
-                    session,
-                    transcript,
-                    voiceTextPointerUrl,
-                ).pipe(
-                    Effect.catchAll((cause) =>
-                        Effect.succeed(
-                            `Summary generation failed.\n\nError: ${safeString(cause)}\n\nTranscript fallback:\n${transcript || NO_TRANSCRIPT_AVAILABLE}`,
-                        ),
-                    ),
-                );
-                const normalizedNotes = normalizeMeetingNotesOutput(notes, voiceTextPointerUrl);
-
-                const title = yield* generateFinalMeetingTitle(session, normalizedNotes, transcript);
-
-                yield* Effect.tryPromise({
-                    try: () => session.transcriptThread.setName(title, "Meeting ended"),
-                    catch: () => undefined,
-                }).pipe(Effect.ignore);
-
-                yield* upsertFinalNotesMessage(session, normalizedNotes).pipe(
-                    Effect.catchAll((cause) =>
-                        Effect.logWarning("meeting final notes thread send failed", {
-                            guild_id: session.guildId,
-                            transcript_thread_id: session.transcriptThreadId,
-                            error_message: safeString(cause),
+                            return {
+                                pageId: "",
+                                pageUrl: "",
+                            };
                         }),
                     ),
                 );
 
-                yield* Effect.tryPromise({
-                    try: () => session.transcriptThread.send(FINAL_TRANSCRIPT_HEADER),
-                    catch: () => undefined,
-                }).pipe(Effect.ignore);
-
-                yield* appendTranscriptToThread(
-                    session.transcriptThread,
-                    transcript.trim().length > 0 ? transcript : NO_TRANSCRIPT_AVAILABLE,
-                ).pipe(
-                    Effect.catchAll((cause) =>
-                        Effect.logWarning("meeting final transcript thread send failed", {
-                            guild_id: session.guildId,
-                            transcript_thread_id: session.transcriptThreadId,
-                            error_message: safeString(cause),
-                        }),
-                    ),
-                );
-
-                const notionEntry = yield* notion
-                    .createMeetingEntry({
-                        title,
-                        guildId: session.guildId,
-                        voiceChannelId: session.channelId,
-                        transcriptThreadId: session.transcriptThreadId,
-                        startedAt: session.startedAt,
-                        endedAt: new Date(),
-                        endedReason: reason,
-                    })
+            if (notionEntry.pageId) {
+                yield* notion
+                    .appendSections(notionEntry.pageId, [
+                        {
+                            heading: "Final Meeting Notes",
+                            content: normalizedNotes,
+                        },
+                        {
+                            heading: "Final Transcript",
+                            content:
+                                transcript.trim().length > 0 ? transcript : NO_TRANSCRIPT_AVAILABLE,
+                        },
+                    ])
                     .pipe(
                         Effect.catchAll((cause) =>
-                            Effect.gen(function* () {
-                                yield* Effect.logError("meeting notion entry creation failed", {
-                                    guild_id: session.guildId,
-                                    channel_id: session.channelId,
-                                    transcript_thread_id: session.transcriptThreadId,
-                                    error_message: safeString(cause),
-                                });
-
-                                return {
-                                    pageId: "",
-                                    pageUrl: "",
-                                };
+                            Effect.logError("meeting notion sections append failed", {
+                                guild_id: session.guildId,
+                                channel_id: session.channelId,
+                                transcript_thread_id: session.transcriptThreadId,
+                                notion_page_id: notionEntry.pageId,
+                                error_message: safeString(cause),
                             }),
                         ),
                     );
+            }
 
-                if (notionEntry.pageId) {
-                    yield* notion
-                        .appendSections(notionEntry.pageId, [
-                            {
-                                heading: "Final Meeting Notes",
-                                content: normalizedNotes,
-                            },
-                            {
-                                heading: "Final Transcript",
-                                content: transcript.trim().length > 0 ? transcript : NO_TRANSCRIPT_AVAILABLE,
-                            },
-                        ])
-                        .pipe(
-                            Effect.catchAll((cause) =>
-                                Effect.logError("meeting notion sections append failed", {
-                                    guild_id: session.guildId,
-                                    channel_id: session.channelId,
-                                    transcript_thread_id: session.transcriptThreadId,
-                                    notion_page_id: notionEntry.pageId,
-                                    error_message: safeString(cause),
-                                }),
-                            ),
-                        );
-                }
-
-                if (notionEntry.pageUrl) {
-                    yield* Effect.tryPromise({
-                        try: () =>
-                            session.transcriptThread.send(
-                                `Meeting notes saved to Notion: ${notionEntry.pageUrl}`,
-                            ),
-                        catch: () => undefined,
-                    }).pipe(Effect.ignore);
-                }
-
+            if (notionEntry.pageUrl) {
                 yield* Effect.tryPromise({
-                    try: () => session.transcriptThread.setLocked(true, "Meeting ended"),
+                    try: () =>
+                        session.transcriptThread.send(
+                            `Meeting notes saved to Notion: ${notionEntry.pageUrl}`,
+                        ),
                     catch: () => undefined,
                 }).pipe(Effect.ignore);
+            }
 
-                yield* Effect.tryPromise({
-                    try: () => session.transcriptThread.setArchived(true, "Meeting ended"),
-                    catch: () => undefined,
-                }).pipe(Effect.ignore);
+            yield* Effect.tryPromise({
+                try: () => session.transcriptThread.setLocked(true, "Meeting ended"),
+                catch: () => undefined,
+            }).pipe(Effect.ignore);
 
-                yield* Effect.logInfo("meeting finalization completed", {
-                    guild_id: session.guildId,
-                    channel_id: session.channelId,
-                    transcript_thread_id: session.transcriptThreadId,
-                    final_thread_name: title,
-                    started_by_user_id: session.startedByUserId,
-                    started_by_tag: session.startedByTag,
-                    ended_reason: reason,
-                    notion_page_url: notionEntry.pageUrl || null,
-                    voice_text_pointer_url: voiceTextPointerUrl,
-                    duration_ms: Date.now() - endStartedAt,
-                });
+            yield* Effect.tryPromise({
+                try: () => session.transcriptThread.setArchived(true, "Meeting ended"),
+                catch: () => undefined,
+            }).pipe(Effect.ignore);
 
-                return notionEntry.pageUrl || null;
-            },
-        );
+            yield* Effect.logInfo("meeting finalization completed", {
+                guild_id: session.guildId,
+                channel_id: session.channelId,
+                transcript_thread_id: session.transcriptThreadId,
+                final_thread_name: title,
+                started_by_user_id: session.startedByUserId,
+                started_by_tag: session.startedByTag,
+                ended_reason: reason,
+                notion_page_url: notionEntry.pageUrl || null,
+                voice_text_pointer_url: voiceTextPointerUrl,
+                duration_ms: Date.now() - endStartedAt,
+            });
+
+            return notionEntry.pageUrl || null;
+        });
 
         const cleanupOrphanedConnection = Effect.fn("MeetingNotes.cleanupOrphanedConnection")(
             function* (guildId: Snowflake, connection: VoiceConnection) {
@@ -1170,15 +1186,21 @@ export class MeetingNotes extends Effect.Service<MeetingNotes>()("MeetingNotes",
 
         const bindConnectionCleanup = (session: MeetingSession): void => {
             session.connection.once("error", () => {
-                void Effect.runPromise(cleanupOrphanedConnection(session.guildId, session.connection));
+                void Effect.runPromise(
+                    cleanupOrphanedConnection(session.guildId, session.connection),
+                );
             });
 
             session.connection.once(VoiceConnectionStatus.Destroyed, () => {
-                void Effect.runPromise(cleanupOrphanedConnection(session.guildId, session.connection));
+                void Effect.runPromise(
+                    cleanupOrphanedConnection(session.guildId, session.connection),
+                );
             });
         };
 
-        const startMeeting = Effect.fn("MeetingNotes.startMeeting")(function* (input: StartMeetingInput) {
+        const startMeeting = Effect.fn("MeetingNotes.startMeeting")(function* (
+            input: StartMeetingInput,
+        ) {
             const flags = yield* ff.getFlags;
             if (!flags.meetingNotes) {
                 return yield* Effect.fail(new FeatureDisabled({ feature: "meeting_notes" }));
@@ -1241,7 +1263,9 @@ export class MeetingNotes extends Effect.Service<MeetingNotes>()("MeetingNotes",
                 initialParticipantUsernames.set(member.id, member.user.username);
             }
 
-            const voiceTextPointerMessageId = yield* createVoiceTextPointerMessage(input.channel).pipe(
+            const voiceTextPointerMessageId = yield* createVoiceTextPointerMessage(
+                input.channel,
+            ).pipe(
                 Effect.catchAll((cause) =>
                     Effect.gen(function* () {
                         yield* Effect.logWarning("meeting voice text pointer send failed", {
@@ -1264,9 +1288,9 @@ export class MeetingNotes extends Effect.Service<MeetingNotes>()("MeetingNotes",
             const draftMessageIdRef = yield* Ref.make<Snowflake | null>(null);
             const draftTextRef = yield* Ref.make("");
             const liveTranscriptMessageIdsRef = yield* Ref.make<ReadonlyArray<Snowflake>>([]);
-            const committedTranscriptRef = yield* Ref.make<ReadonlyArray<CommittedTranscriptSegment>>(
-                [],
-            );
+            const committedTranscriptRef = yield* Ref.make<
+                ReadonlyArray<CommittedTranscriptSegment>
+            >([]);
 
             const baseSession = {
                 guildId: input.channel.guild.id,
@@ -1306,7 +1330,10 @@ export class MeetingNotes extends Effect.Service<MeetingNotes>()("MeetingNotes",
                         },
                     }),
                 catch: (cause) =>
-                    new MeetingTranscriptionError({ operation: "startMeeting.transcriberCreate", cause }),
+                    new MeetingTranscriptionError({
+                        operation: "startMeeting.transcriberCreate",
+                        cause,
+                    }),
             }).pipe(Effect.either);
 
             if (transcriberResult._tag === "Left") {
@@ -1435,10 +1462,7 @@ export class MeetingNotes extends Effect.Service<MeetingNotes>()("MeetingNotes",
             } satisfies EndMeetingResult;
         });
 
-        const countHumanParticipantsInChannel = (
-            guild: Guild,
-            channelId: Snowflake,
-        ): number => {
+        const countHumanParticipantsInChannel = (guild: Guild, channelId: Snowflake): number => {
             const channel = guild.channels.cache.get(channelId);
 
             if (!channel || !channel.isVoiceBased()) {
@@ -1456,68 +1480,74 @@ export class MeetingNotes extends Effect.Service<MeetingNotes>()("MeetingNotes",
             return participantCount;
         };
 
-        const handleVoiceStateUpdate = Effect.fn("MeetingNotes.handleVoiceStateUpdate")(
-            function* (oldState: VoiceState, newState: VoiceState) {
-                const session = yield* SynchronizedRef.get(sessionsRef).pipe(
-                    Effect.map((sessions) => sessions.get(newState.guild.id)),
-                );
+        const handleVoiceStateUpdate = Effect.fn("MeetingNotes.handleVoiceStateUpdate")(function* (
+            oldState: VoiceState,
+            newState: VoiceState,
+        ) {
+            const session = yield* SynchronizedRef.get(sessionsRef).pipe(
+                Effect.map((sessions) => sessions.get(newState.guild.id)),
+            );
 
-                if (!session) {
-                    return;
-                }
+            if (!session) {
+                return;
+            }
 
-                const affectedChannel =
-                    oldState.channelId === session.channelId || newState.channelId === session.channelId;
+            const affectedChannel =
+                oldState.channelId === session.channelId ||
+                newState.channelId === session.channelId;
 
-                if (!affectedChannel) {
-                    return;
-                }
+            if (!affectedChannel) {
+                return;
+            }
 
-                if (newState.channelId === session.channelId && newState.member && !newState.member.user.bot) {
-                    const joinedMember = newState.member;
-                    yield* Ref.set(session.hadHumanParticipantRef, true);
-                    yield* Ref.update(session.participantUsernamesRef, (currentUsernames) => {
-                        const nextUsernames = new Map(currentUsernames);
-                        nextUsernames.set(newState.id, joinedMember.user.username);
-                        return nextUsernames;
-                    });
-                    yield* Effect.sync(() => session.transcriber.subscribeUser(newState.id));
-                }
+            if (
+                newState.channelId === session.channelId &&
+                newState.member &&
+                !newState.member.user.bot
+            ) {
+                const joinedMember = newState.member;
+                yield* Ref.set(session.hadHumanParticipantRef, true);
+                yield* Ref.update(session.participantUsernamesRef, (currentUsernames) => {
+                    const nextUsernames = new Map(currentUsernames);
+                    nextUsernames.set(newState.id, joinedMember.user.username);
+                    return nextUsernames;
+                });
+                yield* Effect.sync(() => session.transcriber.subscribeUser(newState.id));
+            }
 
-                const humanParticipantCount = countHumanParticipantsInChannel(
-                    newState.guild,
-                    session.channelId,
-                );
+            const humanParticipantCount = countHumanParticipantsInChannel(
+                newState.guild,
+                session.channelId,
+            );
 
-                if (humanParticipantCount > 0) {
-                    yield* Ref.set(session.hadHumanParticipantRef, true);
-                    return;
-                }
+            if (humanParticipantCount > 0) {
+                yield* Ref.set(session.hadHumanParticipantRef, true);
+                return;
+            }
 
-                const hadHumanParticipant = yield* Ref.get(session.hadHumanParticipantRef);
+            const hadHumanParticipant = yield* Ref.get(session.hadHumanParticipantRef);
 
-                if (!hadHumanParticipant) {
-                    return;
-                }
+            if (!hadHumanParticipant) {
+                return;
+            }
 
-                yield* endMeeting({
-                    guildId: session.guildId,
-                    reason: "auto_empty",
-                }).pipe(Effect.catchAll(() => Effect.void));
-            },
-        );
+            yield* endMeeting({
+                guildId: session.guildId,
+                reason: "auto_empty",
+            }).pipe(Effect.catchAll(() => Effect.void));
+        });
 
         const hasMeeting = Effect.fn("MeetingNotes.hasMeeting")(function* (guildId: Snowflake) {
             const sessions = yield* SynchronizedRef.get(sessionsRef);
             return sessions.has(guildId);
         });
 
-        const getMeetingChannelId = Effect.fn("MeetingNotes.getMeetingChannelId")(
-            function* (guildId: Snowflake) {
-                const sessions = yield* SynchronizedRef.get(sessionsRef);
-                return sessions.get(guildId)?.channelId;
-            },
-        );
+        const getMeetingChannelId = Effect.fn("MeetingNotes.getMeetingChannelId")(function* (
+            guildId: Snowflake,
+        ) {
+            const sessions = yield* SynchronizedRef.get(sessionsRef);
+            return sessions.get(guildId)?.channelId;
+        });
 
         const destroyAllSessions = Effect.fn("MeetingNotes.destroyAllSessions")(function* () {
             const sessions = Array.from((yield* SynchronizedRef.get(sessionsRef)).values());
@@ -1527,9 +1557,7 @@ export class MeetingNotes extends Effect.Service<MeetingNotes>()("MeetingNotes",
             yield* Effect.forEach(
                 sessions,
                 (session) =>
-                    finalizeSession(session, "manual").pipe(
-                        Effect.catchAll(() => Effect.void),
-                    ),
+                    finalizeSession(session, "manual").pipe(Effect.catchAll(() => Effect.void)),
                 { concurrency: 1, discard: true },
             );
         });
