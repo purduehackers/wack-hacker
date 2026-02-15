@@ -24,12 +24,7 @@ export const AppConfig = makeEnv("AppConfig", {
     D1_API_TOKEN: Env.redacted("D1_API_TOKEN"),
     VERCEL_API_TOKEN: Env.redacted("VERCEL_API_TOKEN"),
     VERCEL_EDGE_CONFIG_ID: Env.string("VERCEL_EDGE_CONFIG_ID"),
+    FEATURE_FLAGS_EDGE_CONFIG: Env.string("FEATURE_FLAGS_EDGE_CONFIG"),
     TZ: Env.stringOr("TZ", "America/Indiana/Indianapolis"),
-    COMMIT_OVERFLOW_ENABLED: Env.booleanOr("COMMIT_OVERFLOW_ENABLED", false),
-    DASHBOARD_ENABLED: Env.booleanOr("DASHBOARD_ENABLED", true),
-    HACK_NIGHT_PHOTOS_ENABLED: Env.booleanOr("HACK_NIGHT_PHOTOS_ENABLED", true),
-    AUTO_THREAD_ENABLED: Env.booleanOr("AUTO_THREAD_ENABLED", true),
-    WELCOMER_ENABLED: Env.booleanOr("WELCOMER_ENABLED", true),
-    MEETING_NOTES_ENABLED: Env.booleanOr("MEETING_NOTES_ENABLED", true),
     NODE_ENV: Env.stringOr("NODE_ENV", "development"),
 });

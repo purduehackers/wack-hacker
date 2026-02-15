@@ -9,8 +9,8 @@ import type {
 
 import { Effect } from "effect";
 
-import { AppConfig } from "../config";
 import { structuredError } from "../errors";
+import { FeatureFlags, type Flags } from "../services";
 import { handleAutoThread } from "../features/auto-thread";
 import {
     handleCommitOverflowReaction,
@@ -39,32 +39,18 @@ type ThreadCreateHandler = (
 
 interface MessageHandlerConfig {
     handler: MessageHandler;
-    featureFlag?: keyof ReturnType<typeof getFeatureFlags>;
+    featureFlag?: keyof Flags;
 }
 
 interface ReactionHandlerConfig {
     handler: ReactionHandler;
-    featureFlag?: keyof ReturnType<typeof getFeatureFlags>;
+    featureFlag?: keyof Flags;
 }
 
 interface ThreadCreateHandlerConfig {
     handler: ThreadCreateHandler;
-    featureFlag?: keyof ReturnType<typeof getFeatureFlags>;
+    featureFlag?: keyof Flags;
 }
-
-const getFeatureFlags = (config: {
-    COMMIT_OVERFLOW_ENABLED: boolean;
-    DASHBOARD_ENABLED: boolean;
-    HACK_NIGHT_PHOTOS_ENABLED: boolean;
-    AUTO_THREAD_ENABLED: boolean;
-    WELCOMER_ENABLED: boolean;
-}) => ({
-    commitOverflow: config.COMMIT_OVERFLOW_ENABLED,
-    dashboard: config.DASHBOARD_ENABLED,
-    hackNightPhotos: config.HACK_NIGHT_PHOTOS_ENABLED,
-    autoThread: config.AUTO_THREAD_ENABLED,
-    welcomer: config.WELCOMER_ENABLED,
-});
 
 const messageHandlers: MessageHandlerConfig[] = [
     { handler: handleGrokMessage },
@@ -120,8 +106,8 @@ export const handleMessageCreate = Effect.fn("Events.handleMessageCreate")(funct
         attachments_count: message.attachments.size,
     });
 
-    const config = yield* AppConfig;
-    const flags = getFeatureFlags(config);
+    const ff = yield* FeatureFlags;
+    const flags = yield* ff.getFlags;
 
     const allHandlers = messageHandlers;
     const enabledHandlers = messageHandlers.filter((h) => !h.featureFlag || flags[h.featureFlag]);
@@ -216,8 +202,8 @@ export const handleMessageReactionAdd = Effect.fn("Events.handleMessageReactionA
         reaction_count: reaction.count ?? 0,
     });
 
-    const config = yield* AppConfig;
-    const flags = getFeatureFlags(config);
+    const ff = yield* FeatureFlags;
+    const flags = yield* ff.getFlags;
 
     const allHandlers = reactionHandlers;
     const enabledHandlers = reactionHandlers.filter((h) => !h.featureFlag || flags[h.featureFlag]);
@@ -311,8 +297,8 @@ export const handleMessageReactionRemove = Effect.fn("Events.handleMessageReacti
             emoji_id: emojiId,
         });
 
-        const config = yield* AppConfig;
-        const flags = getFeatureFlags(config);
+        const ff = yield* FeatureFlags;
+        const flags = yield* ff.getFlags;
 
         const allHandlers = reactionRemoveHandlers;
         const enabledHandlers = reactionRemoveHandlers.filter(
@@ -401,8 +387,8 @@ export const handleMessageDelete = Effect.fn("Events.handleMessageDelete")(funct
         author_id: message.author?.id,
     });
 
-    const config = yield* AppConfig;
-    const flags = getFeatureFlags(config);
+    const ff = yield* FeatureFlags;
+    const flags = yield* ff.getFlags;
 
     const allHandlers = messageDeleteHandlers;
     const enabledHandlers = messageDeleteHandlers.filter(
@@ -490,8 +476,8 @@ export const handleThreadCreate = Effect.fn("Events.handleThreadCreate")(functio
         newly_created: newlyCreated,
     });
 
-    const config = yield* AppConfig;
-    const flags = getFeatureFlags(config);
+    const ff = yield* FeatureFlags;
+    const flags = yield* ff.getFlags;
 
     const allHandlers = threadCreateHandlers;
     const enabledHandlers = threadCreateHandlers.filter(
