@@ -3,6 +3,7 @@ import { Cause, Effect, Exit, Layer, Logger, ManagedRuntime } from "effect";
 
 import { AppConfig } from "./config";
 import { type DiscordError, structuredError } from "./errors";
+import { handleMeetingVoiceStateUpdate } from "./features/meeting-notes";
 import {
     getEnabledCommands,
     findCommand,
@@ -13,7 +14,6 @@ import {
     handleThreadCreate,
     startCronJobs,
 } from "./runtime";
-import { handleMeetingVoiceStateUpdate } from "./features/meeting-notes";
 import { ServicesLive, Discord } from "./services";
 
 const isDev = process.env.NODE_ENV !== "production";
@@ -76,17 +76,22 @@ const program = Effect.gen(function* () {
     const commandClientId = client.application?.id ?? client.user.id;
 
     const enabledCommands = yield* getEnabledCommands;
-    yield* discord.registerCommands(enabledCommands.map((c) => c.data), commandClientId).pipe(
-        Effect.catchTag("DiscordError", (error) =>
-            Effect.logWarning("discord command registration failed; startup continuing", {
-                ...structuredError(error),
-                service_name: "wack_hacker",
-                client_id: commandClientId,
-                command_count: enabledCommands.length,
-                reason: "registration_failed_startup_degraded",
-            }),
-        ),
-    );
+    yield* discord
+        .registerCommands(
+            enabledCommands.map((c) => c.data),
+            commandClientId,
+        )
+        .pipe(
+            Effect.catchTag("DiscordError", (error) =>
+                Effect.logWarning("discord command registration failed; startup continuing", {
+                    ...structuredError(error),
+                    service_name: "wack_hacker",
+                    client_id: commandClientId,
+                    command_count: enabledCommands.length,
+                    reason: "registration_failed_startup_degraded",
+                }),
+            ),
+        );
 
     yield* startCronJobs(client);
 

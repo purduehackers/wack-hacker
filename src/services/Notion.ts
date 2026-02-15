@@ -116,12 +116,13 @@ export class Notion extends Effect.Service<Notion>()("Notion", {
 
             const database = yield* Effect.tryPromise({
                 try: () => notion.databases.retrieve({ database_id: MEETING_NOTES_DATABASE_ID }),
-                catch: (cause) =>
-                    new NotionError({ operation: "retrieveDatabase", cause }),
+                catch: (cause) => new NotionError({ operation: "retrieveDatabase", cause }),
             });
 
             const databaseProperties =
-                "properties" in database && database.properties && typeof database.properties === "object"
+                "properties" in database &&
+                database.properties &&
+                typeof database.properties === "object"
                     ? database.properties
                     : null;
 
@@ -146,7 +147,9 @@ export class Notion extends Effect.Service<Notion>()("Notion", {
                 return yield* Effect.fail(
                     new NotionError({
                         operation: "resolveTitleProperty",
-                        cause: new Error("No title property found on Notion meeting notes database."),
+                        cause: new Error(
+                            "No title property found on Notion meeting notes database.",
+                        ),
                     }),
                 );
             }
@@ -186,13 +189,11 @@ export class Notion extends Effect.Service<Notion>()("Notion", {
                             },
                         },
                     }),
-                catch: (cause) =>
-                    new NotionError({ operation: "createMeetingEntry", cause }),
+                catch: (cause) => new NotionError({ operation: "createMeetingEntry", cause }),
             }).pipe(Effect.timed);
 
             const durationMs = Duration.toMillis(duration);
-            const pageUrl =
-                "url" in page && typeof page.url === "string" ? page.url : "";
+            const pageUrl = "url" in page && typeof page.url === "string" ? page.url : "";
 
             yield* Effect.logInfo("notion meeting entry created", {
                 service_name: "Notion",
@@ -240,7 +241,8 @@ export class Notion extends Effect.Service<Notion>()("Notion", {
             for (const section of sections) {
                 blocks.push(headingBlock(section.heading) as Record<string, unknown>);
 
-                const sectionContent = section.content.trim().length > 0 ? section.content : "(empty)";
+                const sectionContent =
+                    section.content.trim().length > 0 ? section.content : "(empty)";
                 const contentChunks = chunkText(sectionContent);
 
                 for (const contentChunk of contentChunks) {

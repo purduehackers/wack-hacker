@@ -1,8 +1,9 @@
+import type { ThreadAutoArchiveDuration } from "discord.js";
+
 import {
     ChannelType,
     MessageFlags,
     SlashCommandBuilder,
-    ThreadAutoArchiveDuration,
     type ChatInputCommandInteraction,
     type NewsChannel,
     type TextChannel,
@@ -80,31 +81,32 @@ const createNotesAnchorMessage = Effect.fn("MeetingNotes.createNotesAnchorMessag
     return message.id;
 });
 
-const createTranscriptThread = Effect.fn("MeetingNotes.createTranscriptThread")(
-    function* (interaction: ChatInputCommandInteraction, voiceChannelName: string) {
-        const parentChannel = getThreadParentChannel(interaction);
+const createTranscriptThread = Effect.fn("MeetingNotes.createTranscriptThread")(function* (
+    interaction: ChatInputCommandInteraction,
+    voiceChannelName: string,
+) {
+    const parentChannel = getThreadParentChannel(interaction);
 
-        if (!parentChannel) {
-            return yield* Effect.fail(
-                new Error("Run this command in a text channel or thread with a text-channel parent."),
-            );
-        }
+    if (!parentChannel) {
+        return yield* Effect.fail(
+            new Error("Run this command in a text channel or thread with a text-channel parent."),
+        );
+    }
 
-        return yield* Effect.tryPromise({
-            try: () =>
-                parentChannel.threads.create({
-                    name: buildThreadName(voiceChannelName),
-                    autoArchiveDuration:
-                        MEETING_TRANSCRIPT_THREAD_AUTO_ARCHIVE_DURATION as ThreadAutoArchiveDuration,
-                    reason: `Realtime transcript thread created by ${interaction.user.tag}.`,
-                }),
-            catch: (cause) =>
-                new Error(
-                    `Failed to create transcript thread: ${cause instanceof Error ? cause.message : String(cause)}`,
-                ),
-        });
-    },
-);
+    return yield* Effect.tryPromise({
+        try: () =>
+            parentChannel.threads.create({
+                name: buildThreadName(voiceChannelName),
+                autoArchiveDuration:
+                    MEETING_TRANSCRIPT_THREAD_AUTO_ARCHIVE_DURATION as ThreadAutoArchiveDuration,
+                reason: `Realtime transcript thread created by ${interaction.user.tag}.`,
+            }),
+        catch: (cause) =>
+            new Error(
+                `Failed to create transcript thread: ${cause instanceof Error ? cause.message : String(cause)}`,
+            ),
+    });
+});
 
 export const handleStartMeetingCommand = Effect.fn("MeetingNotes.handleStartMeetingCommand")(
     function* (interaction: ChatInputCommandInteraction) {
@@ -266,101 +268,101 @@ export const handleStartMeetingCommand = Effect.fn("MeetingNotes.handleStartMeet
     },
 );
 
-export const handleEndMeetingCommand = Effect.fn("MeetingNotes.handleEndMeetingCommand")(
-    function* (interaction: ChatInputCommandInteraction) {
-        const ff = yield* FeatureFlags;
-        const featureFlags = yield* ff.getFlags;
+export const handleEndMeetingCommand = Effect.fn("MeetingNotes.handleEndMeetingCommand")(function* (
+    interaction: ChatInputCommandInteraction,
+) {
+    const ff = yield* FeatureFlags;
+    const featureFlags = yield* ff.getFlags;
 
-        if (!featureFlags.meetingNotes) {
-            yield* Effect.tryPromise({
-                try: () =>
-                    interaction.reply({
-                        content: "Meeting notes are currently disabled.",
-                        flags: MessageFlags.Ephemeral,
-                    }),
-                catch: () => undefined,
-            });
-            return;
-        }
-
-        if (!interaction.inCachedGuild()) {
-            yield* Effect.tryPromise({
-                try: () =>
-                    interaction.reply({
-                        content: "This command can only be used in a server.",
-                        flags: MessageFlags.Ephemeral,
-                    }),
-                catch: () => undefined,
-            });
-            return;
-        }
-
-        const meetingNotes = yield* MeetingNotes;
-
+    if (!featureFlags.meetingNotes) {
         yield* Effect.tryPromise({
-            try: () => interaction.deferReply({ flags: MessageFlags.Ephemeral }),
-            catch: (cause) =>
-                new Error(
-                    `Failed to defer command reply: ${cause instanceof Error ? cause.message : String(cause)}`,
-                ),
+            try: () =>
+                interaction.reply({
+                    content: "Meeting notes are currently disabled.",
+                    flags: MessageFlags.Ephemeral,
+                }),
+            catch: () => undefined,
         });
+        return;
+    }
 
-        yield* meetingNotes
-            .endMeeting({
-                guildId: interaction.guildId,
-                reason: "manual",
-            })
-            .pipe(
-                Effect.flatMap((result) =>
-                    Effect.tryPromise({
-                        try: () =>
-                            interaction.editReply({
-                                content: result.alreadyEnding
-                                    ? "Meeting finalization is already in progress."
-                                    : result.notionPageUrl
-                                      ? `Meeting ended for <#${result.channelId}>. Notes: ${result.notionPageUrl}`
-                                      : `Meeting ended for <#${result.channelId}>. Finalization completed without a Notion link.`,
-                            }),
-                        catch: () => undefined,
-                    }).pipe(Effect.asVoid),
-                ),
-                Effect.catchAll((cause) =>
-                    Effect.gen(function* () {
-                        const taggedCause =
-                            typeof cause === "object" && cause !== null && "_tag" in cause
-                                ? (cause as { _tag: string })
-                                : null;
+    if (!interaction.inCachedGuild()) {
+        yield* Effect.tryPromise({
+            try: () =>
+                interaction.reply({
+                    content: "This command can only be used in a server.",
+                    flags: MessageFlags.Ephemeral,
+                }),
+            catch: () => undefined,
+        });
+        return;
+    }
 
-                        if (taggedCause?._tag === "NoActiveMeeting") {
-                            yield* Effect.tryPromise({
-                                try: () =>
-                                    interaction.editReply({
-                                        content: "No active meeting is running in this server.",
-                                    }),
-                                catch: () => undefined,
-                            });
-                            return;
-                        }
+    const meetingNotes = yield* MeetingNotes;
 
-                        yield* Effect.logError("end meeting command failed", {
-                            ...structuredError(cause),
-                            guild_id: interaction.guildId,
-                            user_id: interaction.user.id,
-                            channel_id: interaction.channelId,
-                        });
+    yield* Effect.tryPromise({
+        try: () => interaction.deferReply({ flags: MessageFlags.Ephemeral }),
+        catch: (cause) =>
+            new Error(
+                `Failed to defer command reply: ${cause instanceof Error ? cause.message : String(cause)}`,
+            ),
+    });
 
+    yield* meetingNotes
+        .endMeeting({
+            guildId: interaction.guildId,
+            reason: "manual",
+        })
+        .pipe(
+            Effect.flatMap((result) =>
+                Effect.tryPromise({
+                    try: () =>
+                        interaction.editReply({
+                            content: result.alreadyEnding
+                                ? "Meeting finalization is already in progress."
+                                : result.notionPageUrl
+                                  ? `Meeting ended for <#${result.channelId}>. Notes: ${result.notionPageUrl}`
+                                  : `Meeting ended for <#${result.channelId}>. Finalization completed without a Notion link.`,
+                        }),
+                    catch: () => undefined,
+                }).pipe(Effect.asVoid),
+            ),
+            Effect.catchAll((cause) =>
+                Effect.gen(function* () {
+                    const taggedCause =
+                        typeof cause === "object" && cause !== null && "_tag" in cause
+                            ? (cause as { _tag: string })
+                            : null;
+
+                    if (taggedCause?._tag === "NoActiveMeeting") {
                         yield* Effect.tryPromise({
                             try: () =>
                                 interaction.editReply({
-                                    content: "Failed to end meeting. Please try again.",
+                                    content: "No active meeting is running in this server.",
                                 }),
                             catch: () => undefined,
                         });
-                    }),
-                ),
-            );
-    },
-);
+                        return;
+                    }
+
+                    yield* Effect.logError("end meeting command failed", {
+                        ...structuredError(cause),
+                        guild_id: interaction.guildId,
+                        user_id: interaction.user.id,
+                        channel_id: interaction.channelId,
+                    });
+
+                    yield* Effect.tryPromise({
+                        try: () =>
+                            interaction.editReply({
+                                content: "Failed to end meeting. Please try again.",
+                            }),
+                        catch: () => undefined,
+                    });
+                }),
+            ),
+        );
+});
 
 export const handleMeetingVoiceStateUpdate = Effect.fn("MeetingNotes.handleVoiceStateUpdate")(
     function* (oldState: VoiceState, newState: VoiceState) {

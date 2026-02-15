@@ -79,10 +79,12 @@ function buildSpeakerSegments(
     }
 
     return segments
-        .map((segment): SpeakerTranscriptSegment => ({
-            speakerId: segment.speakerId,
-            text: segment.text.trim(),
-        }))
+        .map(
+            (segment): SpeakerTranscriptSegment => ({
+                speakerId: segment.speakerId,
+                text: segment.text.trim(),
+            }),
+        )
         .filter((segment): boolean => segment.text.length > 0);
 }
 
@@ -142,7 +144,9 @@ export async function createDiarizedTranscript(
     if (speakerSegments.length > 0) {
         return {
             transcriptionId:
-                typeof parsedJson.transcription_id === "string" ? parsedJson.transcription_id : null,
+                typeof parsedJson.transcription_id === "string"
+                    ? parsedJson.transcription_id
+                    : null,
             text: parsedJson.text,
             segments: speakerSegments,
         };
@@ -160,7 +164,8 @@ export async function createDiarizedTranscript(
               ];
 
     return {
-        transcriptionId: typeof parsedJson.transcription_id === "string" ? parsedJson.transcription_id : null,
+        transcriptionId:
+            typeof parsedJson.transcription_id === "string" ? parsedJson.transcription_id : null,
         text: parsedJson.text,
         segments: fallbackSegments,
     };

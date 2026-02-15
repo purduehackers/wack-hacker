@@ -1,9 +1,10 @@
+import type { Snowflake } from "discord.js";
+
 import { EndBehaviorType, type AudioReceiveStream, type VoiceConnection } from "@discordjs/voice";
 import { createWriteStream, type WriteStream } from "node:fs";
 import { open } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Snowflake } from "discord.js";
 import { opus } from "prism-media";
 
 import {
@@ -167,7 +168,8 @@ function clampPcmSample(sample: number): number {
 
 function mixPcmFrame(targetFrame: Buffer, sourceFrame: Buffer): void {
     for (let byteOffset = 0; byteOffset < PCM_FRAME_BYTES; byteOffset += 2) {
-        const mixedSample = targetFrame.readInt16LE(byteOffset) + sourceFrame.readInt16LE(byteOffset);
+        const mixedSample =
+            targetFrame.readInt16LE(byteOffset) + sourceFrame.readInt16LE(byteOffset);
         targetFrame.writeInt16LE(clampPcmSample(mixedSample), byteOffset);
     }
 }
@@ -231,7 +233,9 @@ export class MeetingSpeechTranscriber {
         this.#elevenLabsApiKey = options.elevenLabsApiKey;
         this.#onTranscript = options.onTranscript;
 
-        this.#recordingPath = buildRecordingPath(options.connection.joinConfig.guildId ?? "unknown-guild");
+        this.#recordingPath = buildRecordingPath(
+            options.connection.joinConfig.guildId ?? "unknown-guild",
+        );
         this.#recordingStream = createWriteStream(this.#recordingPath);
         this.#recordingStream.write(createWavHeader(0));
 
@@ -248,7 +252,9 @@ export class MeetingSpeechTranscriber {
         };
     }
 
-    public static async create(options: CreateMeetingSpeechTranscriberOptions): Promise<MeetingSpeechTranscriber> {
+    public static async create(
+        options: CreateMeetingSpeechTranscriberOptions,
+    ): Promise<MeetingSpeechTranscriber> {
         const transcriber = new MeetingSpeechTranscriber(options);
 
         try {
@@ -305,7 +311,9 @@ export class MeetingSpeechTranscriber {
         if (!response.ok) {
             throw new MeetingTranscriptionError({
                 operation: "fetchRealtimeToken",
-                cause: new Error(`token request failed status=${response.status} body=${responseBody}`),
+                cause: new Error(
+                    `token request failed status=${response.status} body=${responseBody}`,
+                ),
             });
         }
 
@@ -331,7 +339,9 @@ export class MeetingSpeechTranscriber {
                     reject(
                         new MeetingTranscriptionError({
                             operation: "waitForSessionStarted",
-                            cause: new Error("timed out waiting for ElevenLabs realtime session startup"),
+                            cause: new Error(
+                                "timed out waiting for ElevenLabs realtime session startup",
+                            ),
                         }),
                     );
                 }
@@ -736,7 +746,12 @@ export class MeetingSpeechTranscriber {
         const fileHandle = await open(this.#recordingPath, "r+");
 
         try {
-            await fileHandle.write(createWavHeader(this.#recordedPcmBytes), 0, WAV_HEADER_SIZE_BYTES, 0);
+            await fileHandle.write(
+                createWavHeader(this.#recordedPcmBytes),
+                0,
+                WAV_HEADER_SIZE_BYTES,
+                0,
+            );
         } finally {
             await fileHandle.close();
         }
