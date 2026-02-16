@@ -7,3 +7,10 @@ services:
     restart: always
     env_file:
       - .env
+    networks:
+      - default
+      - interstate
+
+networks:
+  interstate:
+    external: true
