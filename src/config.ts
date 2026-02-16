@@ -13,7 +13,7 @@ export const AppConfig = makeEnv("AppConfig", {
         "PHONEBELL_OPEN_URL",
         "https://api.purduehackers.com/phonebell/open",
     ),
-    DASHBOARD_WS_URL: Env.stringOr("DASHBOARD_WS_URL", "ws://localhost:3001/discord/bot"),
+    DASHBOARD_WS_URL: Env.stringOr("DASHBOARD_WS_URL", "ws://api-v3:3000/discord/bot"),
     R2_ACCOUNT_ID: Env.string("R2_ACCOUNT_ID"),
     R2_ACCESS_KEY_ID: Env.redacted("R2_ACCESS_KEY_ID"),
     R2_SECRET_ACCESS_KEY: Env.redacted("R2_SECRET_ACCESS_KEY"),
