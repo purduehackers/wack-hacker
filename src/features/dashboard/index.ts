@@ -3,7 +3,7 @@ import type { Message } from "discord.js";
 import { Effect } from "effect";
 
 import { INTERNAL_CATEGORIES } from "../../constants";
-import { Dashboard } from "../../services";
+import { Dashboard, type DiscordMessage } from "../../services";
 
 export const handleDashboardMessage = Effect.fn("Dashboard.handleMessage")(
     function* (message: Message) {
@@ -54,10 +54,18 @@ export const handleDashboardMessage = Effect.fn("Dashboard.handleMessage")(
             return;
         }
 
-        const messagePayload = {
-            image: message.author.avatarURL(),
+        const messagePayload: DiscordMessage = {
+            id: message.id,
+            author: {
+                id: message.author.id,
+                name: message.author.globalName ?? message.author.username,
+                avatarHash: message.author.avatar,
+            },
+            channel: {
+                id: message.channel.id,
+                name: message.channel.name,
+            },
             timestamp: message.createdAt.toISOString(),
-            username: message.author.username,
             content: message.content,
             attachments:
                 message.attachments.size > 0
@@ -71,7 +79,7 @@ export const handleDashboardMessage = Effect.fn("Dashboard.handleMessage")(
             channel_id: message.channelId,
             message_id: message.id,
             content_length: message.content.length,
-            has_avatar: messagePayload.image !== null,
+            has_avatar: messagePayload.author.avatarHash !== null,
             attachment_count: message.attachments.size,
             has_attachments: message.attachments.size > 0,
         });

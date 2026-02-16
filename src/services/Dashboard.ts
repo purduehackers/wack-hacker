@@ -4,9 +4,17 @@ import { AppConfig } from "../config";
 import { DashboardError, DashboardConnectionFailed, structuredError } from "../errors";
 
 export interface DiscordMessage {
-    image: string | null;
+    id: string;
+    channel: {
+        name: string;
+        id: string;
+    };
+    author: {
+        id: string;
+        name: string;
+        avatarHash: string | null;
+    };
     timestamp: string;
-    username: string;
     content: string;
     attachments?: string[];
 }
@@ -290,7 +298,7 @@ export class Dashboard extends Effect.Service<Dashboard>()("Dashboard", {
                 const state = yield* Ref.get(stateRef);
 
                 yield* Effect.annotateCurrentSpan({
-                    username: message.username,
+                    username: message.author.name,
                     has_attachments:
                         message.attachments !== undefined && message.attachments.length > 0,
                     attachment_count: message.attachments?.length || 0,
@@ -303,7 +311,7 @@ export class Dashboard extends Effect.Service<Dashboard>()("Dashboard", {
                     method: "send",
                     operation_type: "websocket_send",
                     connection_state: state._tag.toLowerCase(),
-                    username: message.username,
+                    username: message.author.name,
                     content_length: message.content.length,
                     has_attachments:
                         message.attachments !== undefined && message.attachments.length > 0,
@@ -417,7 +425,7 @@ export class Dashboard extends Effect.Service<Dashboard>()("Dashboard", {
                         ready_state: ws.readyState,
                         duration_ms: durationMs,
                         latency_ms: durationMs,
-                        username: message.username,
+                        username: message.author.name,
                         content_length: message.content.length,
                         payload_size_bytes: payloadSize,
                         has_attachments:
@@ -436,7 +444,7 @@ export class Dashboard extends Effect.Service<Dashboard>()("Dashboard", {
                         ready_state: ws?.readyState || "null",
                         duration_ms: durationMs,
                         latency_ms: durationMs,
-                        username: message.username,
+                        username: message.author.name,
                         content_length: message.content.length,
                         ws_url: wsUrl,
                         reason: ws ? "socket_not_open" : "no_socket",
