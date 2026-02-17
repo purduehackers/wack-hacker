@@ -64,8 +64,18 @@ export const handleAutoThread = Effect.fn("AutoThread.handle")(
       guildId: message.guildId,
     });
 
-    const hasProjectLink = yield* containsUrl(message.content);
-    const hasAttachment = message.attachments.size > 0;
+    // Check the message itself and any forwarded message snapshots for links/attachments
+    let hasProjectLink = yield* containsUrl(message.content);
+    let hasAttachment = message.attachments.size > 0;
+
+    for (const [, snapshot] of message.messageSnapshots) {
+      if (!hasProjectLink && snapshot.content) {
+        hasProjectLink = yield* containsUrl(snapshot.content);
+      }
+      if (!hasAttachment && snapshot.attachments.size > 0) {
+        hasAttachment = true;
+      }
+    }
 
     yield* Effect.logDebug("message content analyzed", {
       channel_id: message.channelId,
