@@ -42,7 +42,16 @@ export const handleDashboardMessage = Effect.fn("Dashboard.handleMessage")(
         }
 
         const parentId = (message.channel as { parentId?: string | null }).parentId;
-        if (parentId && (INTERNAL_CATEGORIES as readonly string[]).includes(parentId)) {
+        const isInternalCategory = (id: string) =>
+            (INTERNAL_CATEGORIES as readonly string[]).includes(id);
+
+        const isInternal =
+            (parentId && isInternalCategory(parentId)) ||
+            (message.channel.isThread() &&
+                message.channel.parent?.parentId &&
+                isInternalCategory(message.channel.parent.parentId));
+
+        if (isInternal) {
             yield* Effect.logDebug("message ignored", {
                 reason: "internal_category",
                 user_id: message.author.id,
