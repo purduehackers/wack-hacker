@@ -172,7 +172,16 @@ export class Discord extends Effect.Service<Discord>()("Discord", {
             });
         });
 
-        return { client, rest, registerCommands, login, awaitReady, destroy } as const;
+        // Perform login and destroy as part of acquire/release
+        const readyClient = yield* Effect.acquireRelease(
+            Effect.gen(function* () {
+                yield* login();
+                return yield* awaitReady();
+            }),
+            destroy,
+        );
+
+        return { client: readyClient, rest, registerCommands } as const;
     }).pipe(Effect.annotateLogs({ service: "Discord" })),
 }) {}
 
