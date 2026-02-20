@@ -2,6 +2,7 @@ import { Effect, Ref, Duration, Schedule, Redacted } from "effect";
 
 import { AppConfig } from "../config";
 import { DashboardError, DashboardConnectionFailed, structuredError } from "../errors";
+import { DiscordRenderer } from "./DiscordRenderer";
 
 export interface DiscordMessage {
     id: string;
@@ -18,6 +19,9 @@ export interface DiscordMessage {
     content: string;
     attachments?: string[];
 }
+type RenderedDiscordMessage = Omit<DiscordMessage, "content"> & {
+    content: { markdown: string; html: string };
+};
 
 type ConnectionState =
     | { _tag: "Disconnected" }
@@ -30,9 +34,10 @@ const BASE_DELAY_MS = 1000;
 const MAX_DELAY_MS = 30000;
 
 export class Dashboard extends Effect.Service<Dashboard>()("Dashboard", {
-    dependencies: [AppConfig.Default],
+    dependencies: [AppConfig.Default, DiscordRenderer.Default],
     scoped: Effect.gen(function* () {
         const config = yield* AppConfig;
+        const renderer = yield* DiscordRenderer;
         const wsUrl = config.DASHBOARD_WS_URL;
         const apiToken = Redacted.value(config.PHACK_API_TOKEN);
         const stateRef = yield* Ref.make<ConnectionState>({ _tag: "Disconnected" });
@@ -410,7 +415,14 @@ export class Dashboard extends Effect.Service<Dashboard>()("Dashboard", {
                 })();
 
                 if (ws && ws.readyState === WebSocket.OPEN) {
-                    const messagePayload = JSON.stringify(message);
+                    const renderedMessage: RenderedDiscordMessage = {
+                        ...message,
+                        content: {
+                            markdown: message.content,
+                            html: yield* renderer.render(message.content),
+                        },
+                    };
+                    const messagePayload = JSON.stringify(renderedMessage);
                     const payloadSize = new Blob([messagePayload]).size;
 
                     ws.send(messagePayload);
