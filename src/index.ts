@@ -70,9 +70,7 @@ const program = Effect.gen(function* () {
     });
 
     const discord = yield* Discord;
-
-    yield* discord.login();
-    const client = yield* discord.awaitReady();
+    const client = discord.client;
     const commandClientId = client.application?.id ?? client.user.id;
 
     const enabledCommands = yield* getEnabledCommands;
@@ -374,11 +372,9 @@ const httpServerLogEffect =
               used_fallback_port: healthServer.port !== requestedHealthPort,
           });
 
-void httpServerLogEffect.pipe(Effect.provide(AppLayer), Effect.runPromise);
+runtime.runPromise(httpServerLogEffect);
 
-const main = program.pipe(Effect.provide(AppLayer)) as AppEffect<void, DiscordError>;
-
-void Effect.runPromiseExit(main).then((exit) => {
+runtime.runPromiseExit(program).then((exit) => {
     if (Exit.isSuccess(exit)) {
         return;
     }
@@ -390,6 +386,6 @@ void Effect.runPromiseExit(main).then((exit) => {
         ...structuredError(squashedError),
         error_cause_pretty: Cause.pretty(exit.cause),
     })
-        .pipe(Effect.provide(AppLayer), Effect.runPromise)
+        .pipe(runtime.runPromise)
         .finally(() => process.exit(1));
 });

@@ -19,7 +19,7 @@ interface CronJob {
     featureFlag?: string;
 }
 
-const cronJobs: CronJob[] = [
+const cronJobs = [
     {
         name: "hack-night-create",
         schedule: hackNightCreateSchedule,
@@ -32,7 +32,7 @@ const cronJobs: CronJob[] = [
         handler: cleanupHackNightThread,
         featureFlag: "hackNightPhotos",
     },
-];
+] satisfies CronJob[]; // Use satisfies instead of typing cronJobs so the compiler can infer the exact Effect dependencies
 
 export const startCronJobs = Effect.fn("Crons.startCronJobs")(function* (client: Client) {
     const startTime = Date.now();
