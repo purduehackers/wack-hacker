@@ -50,8 +50,15 @@ async function hydrateMention(
     mention: Mention,
 ): Promise<void> {
     if (mention.type === "user") {
-        const user = await client.users.fetch(mention.id).catch(() => null);
-        const name = user?.globalName ?? user?.username ?? "unknown user";
+        const guildFetchResults = await Promise.all(
+            client.guilds.cache.map((guild) => guild.members.fetch(mention.id).catch(() => null)),
+        );
+        const member = guildFetchResults.find((member) => member !== null);
+        const name =
+            member?.nickname ??
+            member?.user?.globalName ??
+            member?.user?.username ??
+            "unknown user";
         element.tagName = "span";
         element.properties = {
             className: ["mention", "mention-user"],
@@ -66,14 +73,10 @@ async function hydrateMention(
         };
         element.children = [{ type: "text", value: `#${name}` }];
     } else if (mention.type === "role") {
-        let role = null;
-        for (const guild of client.guilds.cache.values()) {
-            role = guild.roles.cache.get(mention.id) ?? null;
-            if (!role) {
-                role = await guild.roles.fetch(mention.id).catch(() => null);
-            }
-            if (role) break;
-        }
+        const guildFetchResults = await Promise.all(
+            client.guilds.cache.map((guild) => guild.roles.fetch(mention.id).catch(() => null)),
+        );
+        const role = guildFetchResults.find((role) => role !== null);
         const name = role?.name ?? "unknown-role";
         const color = role?.color ? `#${role.color.toString(16).padStart(6, "0")}` : null;
         const style =

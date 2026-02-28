@@ -67,7 +67,10 @@ export const handleDashboardMessage = Effect.fn("Dashboard.handleMessage")(
             id: message.id,
             author: {
                 id: message.author.id,
-                name: message.author.globalName ?? message.author.username,
+                name:
+                    message.member?.displayName ??
+                    message.author.globalName ??
+                    message.author.username,
                 avatarHash: message.author.avatar,
             },
             channel: {
