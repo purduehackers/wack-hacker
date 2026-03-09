@@ -20,7 +20,7 @@ import {
 import { handleWackmas } from "../features/commit-overflow";
 import { handleDashboardMessage } from "../features/dashboard";
 import { handleEvergreenIt } from "../features/evergreen";
-import { handleHackNightImages } from "../features/hack-night";
+import { handleHackNightImages, handleHackNightImageRemoval } from "../features/hack-night";
 import { handlePraise } from "../features/praise";
 import { handleGrokMessage } from "../features/summarize";
 import { handleVoiceTranscription } from "../features/voice-transcription";
@@ -66,6 +66,7 @@ const messageHandlers: MessageHandlerConfig[] = [
 
 const reactionHandlers: ReactionHandlerConfig[] = [
     { handler: handleCommitOverflowReaction, featureFlag: "commitOverflow" },
+    { handler: handleHackNightImageRemoval, featureFlag: "hackNightPhotos" },
 ];
 
 const reactionRemoveHandlers: ReactionHandlerConfig[] = [
