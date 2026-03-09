@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { Duration, Effect, Option, Redacted } from "effect";
 import sharp from "sharp";
 
@@ -394,6 +394,96 @@ export class Storage extends Effect.Service<Storage>()("Storage", {
             return buffer;
         });
 
+        const removeImagesForMessage = Effect.fn("Storage.removeImagesForMessage")(function* (
+            eventSlug: string,
+            discordMessageId: string,
+        ) {
+            yield* Effect.annotateCurrentSpan({
+                event_slug: eventSlug,
+                discord_message_id: discordMessageId,
+            });
+
+            const indexOpt = yield* getEventIndex(eventSlug);
+
+            if (Option.isNone(indexOpt)) {
+                yield* Effect.logDebug("no event index found for removal", {
+                    service_name: "Storage",
+                    method: "removeImagesForMessage",
+                    event_slug: eventSlug,
+                    discord_message_id: discordMessageId,
+                });
+                return 0;
+            }
+
+            const index = indexOpt.value;
+            const toRemove = index.images.filter((img) => img.discordMessageId === discordMessageId);
+
+            if (toRemove.length === 0) {
+                yield* Effect.logDebug("no images found for message", {
+                    service_name: "Storage",
+                    method: "removeImagesForMessage",
+                    event_slug: eventSlug,
+                    discord_message_id: discordMessageId,
+                    total_images: index.images.length,
+                });
+                return 0;
+            }
+
+            for (const img of toRemove) {
+                const key = `images/${eventSlug}/${img.filename}`;
+                yield* Effect.tryPromise({
+                    try: () => s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key })),
+                    catch: (e) => new StorageError({ operation: "removeImagesForMessage", key, cause: e }),
+                });
+
+                yield* Effect.logDebug("image file deleted", {
+                    service_name: "Storage",
+                    method: "removeImagesForMessage",
+                    event_slug: eventSlug,
+                    filename: img.filename,
+                    key,
+                });
+            }
+
+            index.images = index.images.filter((img) => img.discordMessageId !== discordMessageId);
+            index.lastUpdated = new Date().toISOString();
+
+            const key = `images/${eventSlug}/index.json`;
+            const indexJson = JSON.stringify(index, null, 2);
+
+            const [duration] = yield* Effect.tryPromise({
+                try: () =>
+                    s3.send(
+                        new PutObjectCommand({
+                            Bucket: bucket,
+                            Key: key,
+                            Body: indexJson,
+                            ContentType: "application/json",
+                        }),
+                    ),
+                catch: (e) =>
+                    new StorageError({
+                        operation: "removeImagesForMessage.updateIndex",
+                        key,
+                        cause: e,
+                    }),
+            }).pipe(Effect.timed);
+
+            const duration_ms = Duration.toMillis(duration);
+
+            yield* Effect.logInfo("images removed for message", {
+                service_name: "Storage",
+                method: "removeImagesForMessage",
+                event_slug: eventSlug,
+                discord_message_id: discordMessageId,
+                removed_count: toRemove.length,
+                remaining_count: index.images.length,
+                duration_ms,
+            });
+
+            return toRemove.length;
+        });
+
         return {
             generateEventSlug,
             uploadImage,
@@ -401,6 +491,7 @@ export class Storage extends Effect.Service<Storage>()("Storage", {
             updateEventIndex,
             isImageUploaded,
             downloadImage,
+            removeImagesForMessage,
         } as const;
     }).pipe(Effect.annotateLogs({ service: "Storage" })),
 }) {}

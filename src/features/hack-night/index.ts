@@ -6,6 +6,10 @@ import {
     ThreadAutoArchiveDuration,
     type ChatInputCommandInteraction,
     type Message,
+    type MessageReaction,
+    type PartialMessageReaction,
+    type User,
+    type PartialUser,
     type Client,
     type TextChannel,
 } from "discord.js";
@@ -218,6 +222,134 @@ export const handleHackNightImages = Effect.fn("HackNight.handleImages")(
                         }).pipe(Effect.ignore),
                     ),
                 ),
+            ),
+        ),
+    Effect.annotateLogs({ feature: "HackNight" }),
+);
+
+export const handleHackNightImageRemoval = Effect.fn("HackNight.handleImageRemoval")(
+    function* (
+        reaction: MessageReaction | PartialMessageReaction,
+        user: User | PartialUser,
+    ) {
+        const startTime = Date.now();
+        const storage = yield* Storage;
+
+        if (reaction.emoji.name !== "❌") {
+            return;
+        }
+
+        const message = reaction.message.partial
+            ? yield* Effect.tryPromise({
+                  try: () => reaction.message.fetch(),
+                  catch: (e) =>
+                      new Error(
+                          `Failed to fetch message: ${e instanceof Error ? e.message : String(e)}`,
+                      ),
+              })
+            : reaction.message;
+
+        const channel = message.channel;
+
+        if (!channel.isThread()) {
+            return;
+        }
+
+        if (!channel.name.startsWith("Hack Night Images - ")) {
+            return;
+        }
+
+        if (!message.author) {
+            yield* Effect.logDebug("message has no author", {
+                message_id: message.id,
+                channel_id: message.channelId,
+            });
+            return;
+        }
+
+        const isAuthor = user.id === message.author.id;
+        const member = yield* Effect.tryPromise({
+            try: () => channel.guild.members.fetch(user.id),
+            catch: (e) =>
+                new Error(
+                    `Failed to fetch member: ${e instanceof Error ? e.message : String(e)}`,
+                ),
+        });
+        const isOrganizer = member.roles.cache.has(ORGANIZER_ROLE_ID);
+
+        if (!isAuthor && !isOrganizer) {
+            yield* Effect.logDebug("image removal denied", {
+                message_id: message.id,
+                user_id: user.id,
+                author_id: message.author.id,
+                is_organizer: false,
+                reason: "not_author_or_organizer",
+            });
+            return;
+        }
+
+        yield* Effect.annotateCurrentSpan({
+            user_id: user.id,
+            message_id: message.id,
+            channel_id: message.channelId,
+            thread_id: channel.id,
+            is_author: isAuthor,
+            is_organizer: isOrganizer,
+        });
+
+        const threadStartDate = channel.createdAt;
+        if (!threadStartDate) {
+            yield* Effect.logWarning("thread missing created_at timestamp", {
+                message_id: message.id,
+                channel_id: message.channelId,
+                thread_id: channel.id,
+            });
+            return;
+        }
+
+        const eventSlug = yield* generateEventSlug(threadStartDate);
+
+        const removedCount = yield* storage.removeImagesForMessage(eventSlug, message.id);
+
+        if (removedCount === 0) {
+            yield* Effect.logDebug("no images to remove", {
+                event_slug: eventSlug,
+                message_id: message.id,
+                user_id: user.id,
+            });
+            return;
+        }
+
+        yield* Effect.tryPromise({
+            try: async () => {
+                const botReaction = message.reactions.cache.get("✅");
+                await botReaction?.users.remove(message.client.user?.id);
+            },
+            catch: () => undefined,
+        }).pipe(Effect.ignore);
+
+        yield* Effect.logInfo("hack night images removed", {
+            event_slug: eventSlug,
+            message_id: message.id,
+            channel_id: message.channelId,
+            thread_id: channel.id,
+            user_id: user.id,
+            author_id: message.author.id,
+            is_author: isAuthor,
+            is_organizer: isOrganizer,
+            removed_count: removedCount,
+            duration_ms: Date.now() - startTime,
+        });
+    },
+    (effect, reaction, user) =>
+        effect.pipe(
+            Effect.catchAll((e) =>
+                Effect.logError("hack night image removal failed", {
+                    ...structuredError(e),
+                    message_id: reaction.message.id,
+                    channel_id: reaction.message.channelId,
+                    user_id: user.id,
+                }),
             ),
         ),
     Effect.annotateLogs({ feature: "HackNight" }),
