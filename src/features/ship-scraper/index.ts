@@ -1,12 +1,72 @@
-import type { Message } from "discord.js";
+import { type ChatInputCommandInteraction, type Message, SlashCommandBuilder } from "discord.js";
 
 import { Effect } from "effect";
 
 import { AppConfig } from "../../config";
-import { SHIP_CHANNEL_ID } from "../../constants";
+import { ORGANIZER_ROLE_ID, SHIP_CHANNEL_ID } from "../../constants";
 import { containsUrl } from "../../lib/discord";
 import { ShipDatabase } from "../../services/ShipDatabase";
 import { Storage } from "../../services";
+
+export const deleteShipCommand = new SlashCommandBuilder()
+    .setName("delete-ship")
+    .setDescription("Delete a ship from the gallery website")
+    .addStringOption((option) =>
+        option
+            .setName("message_id")
+            .setDescription("The Discord message ID of the ship to delete")
+            .setRequired(true),
+    );
+
+export const handleDeleteShipCommand = Effect.fn("ShipScraper.handleDeleteCommand")(
+    function* (interaction: ChatInputCommandInteraction) {
+        const member = interaction.guild?.members.cache.get(interaction.user.id);
+        const isOrganizer = member?.roles.cache.has(ORGANIZER_ROLE_ID) ?? false;
+
+        if (!isOrganizer) {
+            yield* Effect.tryPromise({
+                try: () =>
+                    interaction.reply({
+                        content: "You must be an organizer to use this command.",
+                        ephemeral: true,
+                    }),
+                catch: (e) =>
+                    new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+            });
+            return;
+        }
+
+        const messageId = interaction.options.getString("message_id", true);
+
+        yield* Effect.annotateCurrentSpan({
+            user_id: interaction.user.id,
+            message_id: messageId,
+        });
+
+        yield* Effect.logInfo("delete ship command received", {
+            user_id: interaction.user.id,
+            message_id: messageId,
+        });
+
+        const shipDb = yield* ShipDatabase;
+        yield* shipDb.deleteByMessageId(messageId);
+
+        yield* Effect.tryPromise({
+            try: () =>
+                interaction.reply({
+                    content: `Ship with message ID \`${messageId}\` has been deleted from the gallery.`,
+                    ephemeral: true,
+                }),
+            catch: (e) => new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
+        });
+
+        yield* Effect.logInfo("ship deleted via command", {
+            user_id: interaction.user.id,
+            message_id: messageId,
+        });
+    },
+    Effect.annotateLogs({ feature: "ShipScraper" }),
+);
 
 export const handleShipScraper = Effect.fn("ShipScraper.handle")(
     function* (message: Message) {
