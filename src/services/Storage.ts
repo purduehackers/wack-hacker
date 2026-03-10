@@ -125,7 +125,9 @@ export class Storage extends Effect.Service<Storage>()("Storage", {
             imageBuffer: Buffer,
             eventSlug: string,
             filename: string,
+            options?: { bucket?: string },
         ) {
+            const targetBucket = options?.bucket ?? bucket;
             const originalSize = imageBuffer.length;
 
             yield* Effect.annotateCurrentSpan({
@@ -158,7 +160,7 @@ export class Storage extends Effect.Service<Storage>()("Storage", {
                 event_slug: eventSlug,
                 filename,
                 key,
-                bucket: bucket,
+                bucket: targetBucket,
                 original_size_bytes: originalSize,
                 processed_size_bytes: processedSize,
                 compression_ratio: originalSize > 0 ? processedSize / originalSize : 0,
@@ -168,7 +170,7 @@ export class Storage extends Effect.Service<Storage>()("Storage", {
                 try: () =>
                     s3.send(
                         new PutObjectCommand({
-                            Bucket: bucket,
+                            Bucket: targetBucket,
                             Key: key,
                             Body: processedBuffer,
                             ContentType: "image/jpeg",
@@ -191,7 +193,7 @@ export class Storage extends Effect.Service<Storage>()("Storage", {
                 event_slug: eventSlug,
                 filename,
                 key,
-                bucket: bucket,
+                bucket: targetBucket,
                 original_size_bytes: originalSize,
                 processed_size_bytes: processedSize,
                 compression_ratio: originalSize > 0 ? processedSize / originalSize : 0,

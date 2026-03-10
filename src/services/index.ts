@@ -11,10 +11,12 @@ import { MediaWiki } from "./MediaWiki";
 import { MeetingNotes } from "./MeetingNotes";
 import { Notion } from "./Notion";
 import { Phonebell } from "./Phonebell";
+import { ShipDatabase } from "./ShipDatabase";
 import { Storage } from "./Storage";
 
 export const ServicesLive = Layer.mergeAll(
     Database.Default,
+    ShipDatabase.Default,
     AI.Default,
     Storage.Default,
     GitHub.Default,
@@ -40,3 +42,4 @@ export { Dashboard, Dashboard as DashboardLive, type DiscordMessage } from "./Da
 export { Discord, Discord as DiscordLive } from "./Discord";
 export { DiscordRenderer } from "./DiscordRenderer";
 export { FeatureFlags, type Flags } from "./FeatureFlags";
+export { ShipDatabase } from "./ShipDatabase";
