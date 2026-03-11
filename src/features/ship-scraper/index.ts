@@ -20,6 +20,7 @@ export const deleteShipCommand = new SlashCommandBuilder()
 
 export const handleDeleteShipCommand = Effect.fn("ShipScraper.handleDeleteCommand")(
     function* (interaction: ChatInputCommandInteraction) {
+        const startTime = Date.now();
         const member = interaction.guild?.members.cache.get(interaction.user.id);
         const isOrganizer = member?.roles.cache.has(ORGANIZER_ROLE_ID) ?? false;
 
@@ -63,6 +64,7 @@ export const handleDeleteShipCommand = Effect.fn("ShipScraper.handleDeleteComman
         yield* Effect.logInfo("ship deleted via command", {
             user_id: interaction.user.id,
             message_id: messageId,
+            duration_ms: Date.now() - startTime,
         });
     },
     Effect.annotateLogs({ feature: "ShipScraper" }),
@@ -70,6 +72,8 @@ export const handleDeleteShipCommand = Effect.fn("ShipScraper.handleDeleteComman
 
 export const handleShipScraper = Effect.fn("ShipScraper.handle")(
     function* (message: Message) {
+        const startTime = Date.now();
+
         if (message.author.bot) return;
         if (message.channelId !== SHIP_CHANNEL_ID) return;
 
@@ -165,6 +169,7 @@ export const handleShipScraper = Effect.fn("ShipScraper.handle")(
             message_id: message.id,
             user_id: message.author.id,
             attachment_count: uploadedAttachments.length,
+            duration_ms: Date.now() - startTime,
         });
     },
     Effect.annotateLogs({ feature: "ShipScraper" }),
