@@ -382,27 +382,27 @@ export class Storage extends Effect.Service<Storage>()("Storage", {
             return found;
         });
 
-        const downloadImage = Effect.fn("Storage.downloadImage")(function* (url: string) {
+        const downloadMedia = Effect.fn("Storage.downloadMedia")(function* (url: string) {
             yield* Effect.annotateCurrentSpan({ url });
 
-            yield* Effect.logDebug("image download initiated", {
+            yield* Effect.logDebug("media download initiated", {
                 service_name: "Storage",
-                method: "downloadImage",
+                method: "downloadMedia",
                 operation_type: "download",
                 url,
             });
 
             const [duration, response] = yield* Effect.tryPromise({
                 try: () => fetch(url),
-                catch: (e) => new StorageError({ operation: "downloadImage", cause: e }),
+                catch: (e) => new StorageError({ operation: "downloadMedia", cause: e }),
             }).pipe(Effect.timed);
 
             const duration_ms = Duration.toMillis(duration);
 
             if (!response.ok) {
-                yield* Effect.logError("image download failed", {
+                yield* Effect.logError("media download failed", {
                     service_name: "Storage",
-                    method: "downloadImage",
+                    method: "downloadMedia",
                     operation_type: "download",
                     url,
                     http_status: response.status,
@@ -413,7 +413,7 @@ export class Storage extends Effect.Service<Storage>()("Storage", {
 
                 return yield* Effect.fail(
                     new StorageError({
-                        operation: "downloadImage",
+                        operation: "downloadMedia",
                         cause: new Error(`Failed to download: ${response.statusText}`),
                     }),
                 );
@@ -421,7 +421,7 @@ export class Storage extends Effect.Service<Storage>()("Storage", {
 
             const buffer = yield* Effect.tryPromise({
                 try: async () => Buffer.from(await response.arrayBuffer()),
-                catch: (e) => new StorageError({ operation: "downloadImage", cause: e }),
+                catch: (e) => new StorageError({ operation: "downloadMedia", cause: e }),
             });
 
             yield* Effect.annotateCurrentSpan({
@@ -429,9 +429,9 @@ export class Storage extends Effect.Service<Storage>()("Storage", {
                 size_bytes: buffer.length,
             });
 
-            yield* Effect.logInfo("image download completed", {
+            yield* Effect.logInfo("media download completed", {
                 service_name: "Storage",
-                method: "downloadImage",
+                method: "downloadMedia",
                 operation_type: "download",
                 url,
                 http_status: response.status,
@@ -540,7 +540,7 @@ export class Storage extends Effect.Service<Storage>()("Storage", {
             getEventIndex,
             updateEventIndex,
             isImageUploaded,
-            downloadImage,
+            downloadMedia,
             removeImagesForMessage,
         } as const;
     }).pipe(Effect.annotateLogs({ service: "Storage" })),

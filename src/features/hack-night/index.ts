@@ -128,7 +128,7 @@ export const handleHackNightImages = Effect.fn("HackNight.handleImages")(
       }
 
       const [downloadDuration, imageBuffer] = yield* Effect.timed(
-        storage.downloadImage(attachment.url),
+        storage.downloadMedia(attachment.url),
       );
 
       yield* Effect.annotateCurrentSpan({
