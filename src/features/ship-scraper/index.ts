@@ -74,10 +74,23 @@ export const handleShipScraper = Effect.fn("ShipScraper.handle")(
     function* (message: Message) {
         const startTime = Date.now();
 
-        if (message.author.bot) return;
-        if (message.channelId !== SHIP_CHANNEL_ID) return;
+        if (message.author.bot) {
+            yield* Effect.logDebug("message skipped", {
+                reason: "bot_author",
+                message_id: message.id,
+            });
+            return;
+        }
+        if (message.channelId !== SHIP_CHANNEL_ID) {
+            yield* Effect.logDebug("message skipped", {
+                reason: "wrong_channel",
+                message_id: message.id,
+                channel_id: message.channelId,
+            });
+            return;
+        }
 
-        yield* Effect.logInfo("ship message detected", {
+        yield* Effect.logDebug("ship message detected", {
             message_id: message.id,
             user_id: message.author.id,
             username: message.author.username,
