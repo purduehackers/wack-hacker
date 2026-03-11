@@ -25,6 +25,9 @@ export const AppConfig = makeEnv("AppConfig", {
     VERCEL_API_TOKEN: Env.redacted("VERCEL_API_TOKEN"),
     VERCEL_EDGE_CONFIG_ID: Env.string("VERCEL_EDGE_CONFIG_ID"),
     FEATURE_FLAGS_EDGE_CONFIG: Env.string("FEATURE_FLAGS_EDGE_CONFIG"),
+    SHIP_DATABASE_URL: Env.string("SHIP_DATABASE_URL"),
+    SHIP_DATABASE_AUTH_TOKEN: Env.redacted("SHIP_DATABASE_AUTH_TOKEN"),
+    SHIP_R2_BUCKET_NAME: Env.string("SHIP_R2_BUCKET_NAME"),
     TZ: Env.stringOr("TZ", "America/Indiana/Indianapolis"),
     NODE_ENV: Env.stringOr("NODE_ENV", "development"),
 });
