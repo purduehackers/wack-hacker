@@ -1,6 +1,6 @@
 import { type ChatInputCommandInteraction, type Message, SlashCommandBuilder } from "discord.js";
 
-import { Effect } from "effect";
+import { Effect, Match } from "effect";
 
 import { AppConfig } from "../../config";
 import { ORGANIZER_ROLE_ID, SHIP_CHANNEL_ID } from "../../constants";
@@ -126,21 +126,24 @@ export const handleShipScraper = Effect.fn("ShipScraper.handle")(
             const isMedia = ct.startsWith("image/") || ct.startsWith("video/");
             if (!isMedia) continue;
 
-            const buffer = yield* storage.downloadImage(attachment.url);
+            const buffer = yield* storage.downloadMedia(attachment.url);
             const defaultName = ct.startsWith("video/") ? "video.mp4" : "image.jpg";
             const filename = `${message.id}-${attachment.name ?? defaultName}`;
 
-            let key: string;
-            if (ct.startsWith("image/")) {
-                key = yield* storage.uploadImage(buffer, "ships", filename, {
-                    bucket: config.SHIP_R2_BUCKET_NAME,
-                });
-            } else {
-                // Videos: upload raw (no sharp processing)
-                key = yield* storage.uploadRaw(buffer, "ships", filename, ct, {
-                    bucket: config.SHIP_R2_BUCKET_NAME,
-                });
-            }
+            const key = yield* Match.value(ct).pipe(
+                Match.when(
+                    (ct) => ct.startsWith("image/"),
+                    () =>
+                        storage.uploadImage(buffer, "ships", filename, {
+                            bucket: config.SHIP_R2_BUCKET_NAME,
+                        }),
+                ),
+                Match.orElse(() =>
+                    storage.uploadRaw(buffer, "ships", filename, ct, {
+                        bucket: config.SHIP_R2_BUCKET_NAME,
+                    }),
+                ),
+            );
 
             uploadedAttachments.push({
                 key,
