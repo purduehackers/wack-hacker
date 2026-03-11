@@ -4,7 +4,7 @@ import { Effect } from "effect";
 
 import { AppConfig } from "../../config";
 import { ORGANIZER_ROLE_ID, SHIP_CHANNEL_ID } from "../../constants";
-import { containsUrl } from "../../lib/discord";
+import { containsUrl, replyEphemeral } from "../../lib/discord";
 import { ShipDatabase } from "../../services/ShipDatabase";
 import { Storage } from "../../services";
 
@@ -25,15 +25,7 @@ export const handleDeleteShipCommand = Effect.fn("ShipScraper.handleDeleteComman
         const isOrganizer = member?.roles.cache.has(ORGANIZER_ROLE_ID) ?? false;
 
         if (!isOrganizer) {
-            yield* Effect.tryPromise({
-                try: () =>
-                    interaction.reply({
-                        content: "You must be an organizer to use this command.",
-                        ephemeral: true,
-                    }),
-                catch: (e) =>
-                    new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
-            });
+            yield* replyEphemeral(interaction, "You must be an organizer to use this command.");
             return;
         }
 
@@ -44,22 +36,13 @@ export const handleDeleteShipCommand = Effect.fn("ShipScraper.handleDeleteComman
             message_id: messageId,
         });
 
-        yield* Effect.logInfo("delete ship command received", {
-            user_id: interaction.user.id,
-            message_id: messageId,
-        });
-
         const shipDb = yield* ShipDatabase;
         yield* shipDb.deleteByMessageId(messageId);
 
-        yield* Effect.tryPromise({
-            try: () =>
-                interaction.reply({
-                    content: `Ship with message ID \`${messageId}\` has been deleted from the gallery.`,
-                    ephemeral: true,
-                }),
-            catch: (e) => new Error(`Failed to reply: ${e instanceof Error ? e.message : String(e)}`),
-        });
+        yield* replyEphemeral(
+            interaction,
+            `Ship with message ID \`${messageId}\` has been deleted from the gallery.`,
+        );
 
         yield* Effect.logInfo("ship deleted via command", {
             user_id: interaction.user.id,
