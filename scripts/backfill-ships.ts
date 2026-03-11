@@ -130,7 +130,7 @@ async function processMessage(message: Message): Promise<void> {
         }
     }
 
-    const uploadedAttachments: Array<{ key: string; type: string; filename: string }> = [];
+    const uploadedAttachments: Array<{ key: string; type: string; filename: string; width?: number; height?: number }> = [];
 
     for (const attachment of allAttachments) {
         const ct = attachment.contentType ?? "";
@@ -141,7 +141,7 @@ async function processMessage(message: Message): Promise<void> {
             const buffer = await downloadAttachment(attachment.url);
             const fname = attachment.name ?? (ct.startsWith("video/") ? "video.mp4" : "image.jpg");
             const key = await uploadAttachment(buffer, message.id, fname, ct);
-            uploadedAttachments.push({ key, type: ct, filename: fname });
+            uploadedAttachments.push({ key, type: ct, filename: fname, width: attachment.width ?? undefined, height: attachment.height ?? undefined });
         } catch (e) {
             console.warn(`  Failed to upload attachment ${attachment.name}: ${e}`);
         }
