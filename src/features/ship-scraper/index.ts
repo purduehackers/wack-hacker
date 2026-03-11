@@ -119,7 +119,7 @@ export const handleShipScraper = Effect.fn("ShipScraper.handle")(
         }
 
         // Upload image attachments to R2, store keys
-        const uploadedAttachments: Array<{ key: string; type: string; filename: string }> = [];
+        const uploadedAttachments: Array<{ key: string; type: string; filename: string; width?: number; height?: number }> = [];
 
         for (const attachment of allAttachments) {
             const ct = attachment.contentType ?? "";
@@ -146,6 +146,8 @@ export const handleShipScraper = Effect.fn("ShipScraper.handle")(
                 key,
                 type: ct || "application/octet-stream",
                 filename: attachment.name ?? defaultName,
+                width: attachment.width ?? undefined,
+                height: attachment.height ?? undefined,
             });
         }
 
