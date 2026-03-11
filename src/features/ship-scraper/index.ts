@@ -136,12 +136,6 @@ export const handleShipScraper = Effect.fn("ShipScraper.handle")(
                 type: attachment.contentType ?? "image/jpeg",
                 filename: attachment.name ?? "image.jpg",
             });
-
-            yield* Effect.logInfo("ship attachment uploaded to r2", {
-                message_id: message.id,
-                key,
-                filename: attachment.name,
-            });
         }
 
         // Title from first line
@@ -165,6 +159,7 @@ export const handleShipScraper = Effect.fn("ShipScraper.handle")(
             message_id: message.id,
             user_id: message.author.id,
             attachment_count: uploadedAttachments.length,
+            uploaded_keys: uploadedAttachments.map((a) => a.key).join(","),
             duration_ms: Date.now() - startTime,
         });
     },
