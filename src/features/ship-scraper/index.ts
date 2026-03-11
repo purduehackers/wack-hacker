@@ -119,37 +119,48 @@ export const handleShipScraper = Effect.fn("ShipScraper.handle")(
         }
 
         // Upload image attachments to R2, store keys
-        const uploadedAttachments: Array<{ key: string; type: string; filename: string }> = [];
+        const uploadedAttachments: Array<{ key: string; type: string; filename: string; width?: number; height?: number }> = [];
 
         for (const attachment of allAttachments) {
-            const isImage = attachment.contentType?.startsWith("image/");
-            if (!isImage) continue;
+            const ct = attachment.contentType ?? "";
+            const isMedia = ct.startsWith("image/") || ct.startsWith("video/");
+            if (!isMedia) continue;
 
             const buffer = yield* storage.downloadImage(attachment.url);
-            const filename = `${message.id}-${attachment.name ?? "image.jpg"}`;
-            const key = yield* storage.uploadImage(buffer, "ships", filename, {
-                bucket: config.SHIP_R2_BUCKET_NAME,
-            });
+            const defaultName = ct.startsWith("video/") ? "video.mp4" : "image.jpg";
+            const filename = `${message.id}-${attachment.name ?? defaultName}`;
+
+            let key: string;
+            if (ct.startsWith("image/")) {
+                key = yield* storage.uploadImage(buffer, "ships", filename, {
+                    bucket: config.SHIP_R2_BUCKET_NAME,
+                });
+            } else {
+                // Videos: upload raw (no sharp processing)
+                key = yield* storage.uploadRaw(buffer, "ships", filename, ct, {
+                    bucket: config.SHIP_R2_BUCKET_NAME,
+                });
+            }
 
             uploadedAttachments.push({
                 key,
-                type: attachment.contentType ?? "image/jpeg",
-                filename: attachment.name ?? "image.jpg",
+                type: ct || "application/octet-stream",
+                filename: attachment.name ?? defaultName,
+                width: attachment.width ?? undefined,
+                height: attachment.height ?? undefined,
             });
         }
 
-        // Title from first line
-        const firstLine = content.split("\n")[0]?.trim() ?? "";
-        const title = firstLine.length > 100 ? firstLine.slice(0, 100) + "..." : firstLine || null;
-
         const avatarUrl = message.author.displayAvatarURL({ size: 128, extension: "png" });
+        const username =
+            message.member?.displayName ?? message.author.displayName ?? message.author.username;
 
         const shipId = yield* shipDb.insertShip({
             userId: message.author.id,
-            username: message.author.displayName ?? message.author.username,
+            username,
             avatarUrl,
             messageId: message.id,
-            title,
+            title: null,
             content,
             attachments: uploadedAttachments,
         });
