@@ -20,6 +20,7 @@
     "@effect/ai-openai": "^0.37.0",
     "@effect/platform": "^0.94.0",
     "@effect/platform-bun": "^0.87.0",
+    "@libsql/client": "^0.17.0",
     "@notionhq/client": "^5.9.0",
     "@octokit/rest": "^22.0.1",
     "@rayhanadev/env": "^1.0.0",

@@ -16,6 +16,7 @@ import {
     endMeetingCommand,
     handleEndMeetingCommand,
 } from "../features/meeting-notes";
+import { deleteShipCommand, handleDeleteShipCommand } from "../features/ship-scraper";
 import { summarizeCommand, handleSummarizeCommand } from "../features/summarize";
 import { FeatureFlags } from "../services";
 
@@ -53,6 +54,10 @@ export const commands: Command[] = [
     {
         data: endMeetingCommand as unknown as SlashCommandBuilder,
         execute: handleEndMeetingCommand,
+    },
+    {
+        data: deleteShipCommand as unknown as SlashCommandBuilder,
+        execute: handleDeleteShipCommand,
     },
 ];
 

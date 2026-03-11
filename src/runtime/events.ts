@@ -24,6 +24,7 @@ import { handleHackNightImages, handleHackNightImageRemoval } from "../features/
 import { handlePraise } from "../features/praise";
 import { handleGrokMessage } from "../features/summarize";
 import { handleVoiceTranscription } from "../features/voice-transcription";
+import { handleShipScraper } from "../features/ship-scraper";
 import { handleWelcomer } from "../features/welcomer";
 import { FeatureFlags, type Flags } from "../services";
 
@@ -62,6 +63,7 @@ const messageHandlers: MessageHandlerConfig[] = [
     { handler: handleVoiceTranscription },
     { handler: handleDashboardMessage, featureFlag: "dashboard" },
     { handler: handleWackmas, featureFlag: "commitOverflow" },
+    { handler: handleShipScraper, featureFlag: "shipScraper" },
 ];
 
 const reactionHandlers: ReactionHandlerConfig[] = [
