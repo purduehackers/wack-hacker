@@ -118,53 +118,6 @@ export const handleShipScraper = Effect.fn("ShipScraper.handle")(
             }
         }
 
-        // Resolve Discord mentions in content
-        if (content && message.guild) {
-            // User mentions: <@123> or <@!123>
-            const userMentionPattern = /<@!?(\d+)>/g;
-            for (const match of content.matchAll(userMentionPattern)) {
-                const userId = match[1];
-                try {
-                    const member = yield* Effect.tryPromise({
-                        try: () => message.guild!.members.fetch(userId!),
-                        catch: () => null,
-                    });
-                    if (member) {
-                        content = content.replace(match[0], `@${member.displayName}`);
-                    }
-                } catch {
-                    // leave as-is
-                }
-            }
-
-            // Channel mentions: <#123>
-            const channelMentionPattern = /<#(\d+)>/g;
-            for (const match of content.matchAll(channelMentionPattern)) {
-                const channelId = match[1];
-                try {
-                    const channel = yield* Effect.tryPromise({
-                        try: () => message.guild!.channels.fetch(channelId!),
-                        catch: () => null,
-                    });
-                    if (channel) {
-                        content = content.replace(match[0], `#${channel.name}`);
-                    }
-                } catch {
-                    // leave as-is
-                }
-            }
-
-            // Role mentions: <@&123>
-            const roleMentionPattern = /<@&(\d+)>/g;
-            for (const match of content.matchAll(roleMentionPattern)) {
-                const roleId = match[1];
-                const role = message.guild.roles.cache.get(roleId!);
-                if (role) {
-                    content = content.replace(match[0], `@${role.name}`);
-                }
-            }
-        }
-
         // Upload image attachments to R2, store keys
         const uploadedAttachments: Array<{ key: string; type: string; filename: string }> = [];
 
