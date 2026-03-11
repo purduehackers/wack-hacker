@@ -63,7 +63,7 @@ const messageHandlers: MessageHandlerConfig[] = [
     { handler: handleVoiceTranscription },
     { handler: handleDashboardMessage, featureFlag: "dashboard" },
     { handler: handleWackmas, featureFlag: "commitOverflow" },
-    { handler: handleShipScraper },
+    { handler: handleShipScraper, featureFlag: "shipScraper" },
 ];
 
 const reactionHandlers: ReactionHandlerConfig[] = [

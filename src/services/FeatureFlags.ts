@@ -11,6 +11,7 @@ export type Flags = {
     autoThread: boolean;
     welcomer: boolean;
     meetingNotes: boolean;
+    shipScraper: boolean;
 };
 
 export class FeatureFlags extends Effect.Service<FeatureFlags>()("FeatureFlags", {
@@ -60,6 +61,7 @@ export class FeatureFlags extends Effect.Service<FeatureFlags>()("FeatureFlags",
                 autoThread: raw.auto_thread ?? true,
                 welcomer: raw.welcomer ?? true,
                 meetingNotes: raw.meeting_notes ?? true,
+                shipScraper: raw.ship_scraper ?? true,
             };
 
             yield* Effect.logDebug("feature flags resolved", {
