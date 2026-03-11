@@ -130,31 +130,6 @@ async function processMessage(message: Message): Promise<void> {
         }
     }
 
-    // Resolve Discord mentions
-    if (content && message.guild) {
-        // User mentions: <@123> or <@!123>
-        for (const match of [...content.matchAll(/<@!?(\d+)>/g)]) {
-            try {
-                const member = await message.guild.members.fetch(match[1]!).catch(() => null);
-                if (member) content = content.replace(match[0], `@${member.displayName}`);
-            } catch {}
-        }
-
-        // Channel mentions: <#123>
-        for (const match of [...content.matchAll(/<#(\d+)>/g)]) {
-            try {
-                const channel = await message.guild.channels.fetch(match[1]!).catch(() => null);
-                if (channel) content = content.replace(match[0], `#${channel.name}`);
-            } catch {}
-        }
-
-        // Role mentions: <@&123>
-        for (const match of [...content.matchAll(/<@&(\d+)>/g)]) {
-            const role = message.guild.roles.cache.get(match[1]!);
-            if (role) content = content.replace(match[0], `@${role.name}`);
-        }
-    }
-
     const uploadedAttachments: Array<{ key: string; type: string; filename: string }> = [];
 
     for (const attachment of allAttachments) {
