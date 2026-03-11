@@ -1,20 +1,20 @@
 import { createClient } from "@libsql/client";
-import { Duration, Effect, Redacted } from "effect";
+import { Duration, Effect, Redacted, Schema } from "effect";
 
 import { AppConfig } from "../config";
 import { DatabaseError } from "../errors";
 
-interface ShipRow {
-    id: string;
-    user_id: string;
-    username: string;
-    avatar_url: string | null;
-    message_id: string | null;
-    title: string | null;
-    content: string | null;
-    attachments: string;
-    shipped_at: string;
-}
+export class ShipRow extends Schema.Class<ShipRow>("ShipRow")({
+    id: Schema.String,
+    user_id: Schema.String,
+    username: Schema.String,
+    avatar_url: Schema.NullOr(Schema.String),
+    message_id: Schema.NullOr(Schema.String),
+    title: Schema.NullOr(Schema.String),
+    content: Schema.NullOr(Schema.String),
+    attachments: Schema.String,
+    shipped_at: Schema.String,
+}) {}
 
 export class ShipDatabase extends Effect.Service<ShipDatabase>()("ShipDatabase", {
     dependencies: [AppConfig.Default],
