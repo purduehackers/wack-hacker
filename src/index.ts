@@ -372,9 +372,9 @@ const httpServerLogEffect =
               used_fallback_port: healthServer.port !== requestedHealthPort,
           });
 
-runtime.runPromise(httpServerLogEffect);
+void runtime.runPromise(httpServerLogEffect);
 
-runtime.runPromiseExit(program).then((exit) => {
+void runtime.runPromiseExit(program).then((exit) => {
     if (Exit.isSuccess(exit)) {
         return;
     }

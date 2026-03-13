@@ -30,7 +30,7 @@ export const handleDashboardMessage = Effect.fn("Dashboard.handleMessage")(
             return;
         }
 
-        if (message.channel.isDMBased()) {
+        if (!message.inGuild()) {
             yield* Effect.logDebug("message ignored", {
                 reason: "dm_channel",
                 user_id: message.author.id,
@@ -65,6 +65,7 @@ export const handleDashboardMessage = Effect.fn("Dashboard.handleMessage")(
 
         const messagePayload: DiscordMessage = {
             id: message.id,
+            guildId: message.guildId,
             author: {
                 id: message.author.id,
                 name:

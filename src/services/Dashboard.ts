@@ -6,6 +6,7 @@ import { DiscordRenderer } from "./DiscordRenderer";
 
 export interface DiscordMessage {
     id: string;
+    guildId: string;
     channel: {
         name: string;
         id: string;
@@ -19,7 +20,7 @@ export interface DiscordMessage {
     content: string;
     attachments?: string[];
 }
-type RenderedDiscordMessage = Omit<DiscordMessage, "content"> & {
+type RenderedDiscordMessage = Omit<DiscordMessage, "content" | "guildId"> & {
     content: { markdown: string; html: string };
 };
 
@@ -415,11 +416,12 @@ export class Dashboard extends Effect.Service<Dashboard>()("Dashboard", {
                 })();
 
                 if (ws && ws.readyState === WebSocket.OPEN) {
+					const { guildId, content, ...restOfMessage } = message;
                     const renderedMessage: RenderedDiscordMessage = {
-                        ...message,
+                        ...restOfMessage,
                         content: {
-                            markdown: message.content,
-                            html: yield* renderer.render(message.content),
+                            markdown: content,
+                            html: yield* renderer.render(guildId, content),
                         },
                     };
                     const messagePayload = JSON.stringify(renderedMessage);
