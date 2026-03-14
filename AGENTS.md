@@ -12,25 +12,25 @@ Prefer `Effect.gen` when writing Effect's. It is a powerful way to create
 an Effect in a async/await style, which is more readable and maintainable.
 
 ```ts
-import { Effect, Random } from "effect"
+import { Effect, Random } from "effect";
 
 Effect.gen(function* () {
   // Use `yield*` to run another Effect
-  yield* Effect.sleep("1 second")
+  yield* Effect.sleep("1 second");
 
-  const bool = yield* Random.nextBoolean
+  const bool = yield* Random.nextBoolean;
   if (bool) {
     // When failing with Effect.fail/die etc. always use `return yield*` so
     // TypeScript can correctly narrow conditional types
-    return yield* Effect.fail("Random boolean was true")
+    return yield* Effect.fail("Random boolean was true");
   }
 
   // You can return a success value directly
-  return "Returned value"
+  return "Returned value";
 }).pipe(
   // You can use the `pipe` method to add additional operations
   Effect.withSpan("tracing span"),
-)
+);
 ```
 
 ## Writing Effect functions
@@ -40,17 +40,17 @@ If you need to write a function that returns an Effect, prefer using
 and also add a span for observability.
 
 ```ts
-import { Effect, Random } from "effect"
+import { Effect, Random } from "effect";
 
 const myEffectFn = Effect.fn("myEffectFn")(
   function* (x: number, y: number) {
-    const bool = yield* Random.nextBoolean
+    const bool = yield* Random.nextBoolean;
     if (bool) {
       // When failing with Effect.fail/die etc. always use `return yield*` so
       // TypeScript can correctly narrow conditional types
-      return yield* Effect.fail("Random boolean was true")
+      return yield* Effect.fail("Random boolean was true");
     }
-    return x + y
+    return x + y;
   },
   // You can add "pipe" operations as additional arguments
   Effect.annotateLogs({
@@ -58,16 +58,16 @@ const myEffectFn = Effect.fn("myEffectFn")(
   }),
   // You can also access the arguments of the function in pipe operations
   (effect, x, y) => Effect.annotateLogs(effect, { x, y }),
-)
+);
 
 // call the Effect function
-myEffectFn(1, 2).pipe(Effect.runPromise)
+myEffectFn(1, 2).pipe(Effect.runPromise);
 
 // You can also omit the function span name if you don't need it
 const withNoSpan = Effect.fn(function* (x: number, y: number) {
-  yield* Effect.log("Calculating sum", { x, y })
-  return x + y
-})
+  yield* Effect.log("Calculating sum", { x, y });
+  return x + y;
+});
 ```
 
 ## Avoid try / catch
@@ -76,7 +76,7 @@ const withNoSpan = Effect.fn(function* (x: number, y: number) {
 catch`.
 
 ```ts
-import { Effect, Schema } from "effect"
+import { Effect, Schema } from "effect";
 
 // Use Schema to define a custom error type
 class JsonError extends Schema.TaggedError<JsonError>("JsonError")({
@@ -90,7 +90,7 @@ Effect.gen(function* () {
     try: () => JSON.parse('{"invalidJson": }'),
     // Use the catch block to transform the error into a specific one
     catch: (cause) => new JsonError({ cause }),
-  })
+  });
 
   // Use Effect.tryPromise to handle asynchronous errors
   const asyncResult = yield* Effect.tryPromise({
@@ -98,10 +98,10 @@ Effect.gen(function* () {
     try: () => fetch("https://api.example.com/data").then((res) => res.json()),
     // Use the catch block to transform the error into a specific one
     catch: (cause) => new JsonError({ cause }),
-  })
+  });
 
-  return { result, asyncResult }
-})
+  return { result, asyncResult };
+});
 ```
 
 ## Error handling with Effect
@@ -116,7 +116,7 @@ When you need to handle errors in Effect, use the following functions:
 - `Effect.catchIf`: to handle errors based on a condition.
 
 ```ts
-import { Effect, Random, Schema } from "effect"
+import { Effect, Random, Schema } from "effect";
 
 // Use Schema to define some custom error types
 class ErrorA extends Schema.TaggedError<ErrorA>("ErrorA")({
@@ -132,35 +132,27 @@ class ErrorC extends Schema.TaggedError<ErrorC>("ErrorC")({
 }) {}
 
 Effect.gen(function* () {
-  const number = yield* Random.nextIntBetween(1, 4)
+  const number = yield* Random.nextIntBetween(1, 4);
 
   if (number === 1) {
     // Simulate an error of type ErrorA
-    return yield* Effect.fail(
-      new ErrorA({ cause: new Error("Error A occurred") }),
-    )
+    return yield* Effect.fail(new ErrorA({ cause: new Error("Error A occurred") }));
   } else if (number === 2) {
     // Simulate an error of type ErrorB
-    return yield* Effect.fail(
-      new ErrorB({ cause: new Error("Error B occurred") }),
-    )
+    return yield* Effect.fail(new ErrorB({ cause: new Error("Error B occurred") }));
   } else if (number === 3) {
     // Simulate an error of type ErrorC
-    return yield* Effect.fail(
-      new ErrorC({ cause: new Error("Error C occurred") }),
-    )
+    return yield* Effect.fail(new ErrorC({ cause: new Error("Error C occurred") }));
   }
 
-  return "Success"
+  return "Success";
 }).pipe(
   // Handle all errors and recover from them
   Effect.catchAll((error) => Effect.log("Got an error:", error)),
   // Or handle a specific error
   Effect.catchTag("ErrorA", (error) => Effect.log("Caught ErrorA:", error)),
   // Or handle multiple specific errors with a single handler
-  Effect.catchTag("ErrorA", "ErrorB", (error) =>
-    Effect.log("Caught ErrorA / ErrorB:", error),
-  ),
+  Effect.catchTag("ErrorA", "ErrorB", (error) => Effect.log("Caught ErrorA / ErrorB:", error)),
   // Or handle multiple specific errors
   Effect.catchTags({
     ErrorA: (error) => Effect.log("Caught ErrorA:", error),
@@ -171,7 +163,7 @@ Effect.gen(function* () {
     (error) => error._tag === "ErrorC",
     (error) => Effect.log("Caught ErrorC:", error),
   ),
-)
+);
 ```
 
 ## Writing Effect services
@@ -183,7 +175,7 @@ reused across your application. They are a powerful way to structure your
 application and make it more maintainable.
 
 ```ts
-import { Effect, Schema } from "effect"
+import { Effect, Schema } from "effect";
 
 export class Database extends Effect.Service<Database>()("Database", {
   // If you are using other Effect services, you can list them here
@@ -193,19 +185,17 @@ export class Database extends Effect.Service<Database>()("Database", {
   scoped: Effect.gen(function* () {
     const query = Effect.fn("Database.query")(function* (sql: string) {
       // Add attributes to the current span for observability
-      yield* Effect.annotateCurrentSpan({ sql })
-      return { rows: [] } // Simulated result
-    })
+      yield* Effect.annotateCurrentSpan({ sql });
+      return { rows: [] }; // Simulated result
+    });
 
     // Return the service methods with `as const` to ensure type safety
-    return { query } as const
+    return { query } as const;
   }),
 }) {}
 
 // Use Schema to define a custom service error type
-export class UserServiceError extends Schema.TaggedError<UserServiceError>(
-  "UserServiceError",
-)({
+export class UserServiceError extends Schema.TaggedError<UserServiceError>("UserServiceError")({
   cause: Schema.optional(Schema.Defect),
 }) {}
 
@@ -220,15 +210,15 @@ export class UserService extends Effect.Service<UserService>()("UserService", {
     // Access other services at the top of the constructor
 
     // `yield*` the service class (it is actually a Context.Tag) to access it's interface
-    const database = yield* Database
+    const database = yield* Database;
 
     const getAll = database.query("SELECT * FROM users").pipe(
       Effect.map((result) => result.rows),
       // Map the errors to the custom service error type
       Effect.mapError((cause) => new UserServiceError({ cause })),
-    )
+    );
 
-    return { getAll } as const
+    return { getAll } as const;
   }),
 }) {}
 ```
@@ -239,31 +229,31 @@ Another way of using the Effect dependency injection system is to define
 services using `Context.Tag`.
 
 ```ts
-import { Effect, Context, Layer } from "effect"
+import { Effect, Context, Layer } from "effect";
 
 export class StripeClient extends Context.Tag("StripeClient")<
   StripeClient,
   {
-    readonly methodA: (arg: string) => Effect.Effect<string>
-    readonly methodB: (arg: number) => Effect.Effect<number>
+    readonly methodA: (arg: string) => Effect.Effect<string>;
+    readonly methodB: (arg: number) => Effect.Effect<number>;
   }
 >() {
   // Define a Layer for the service
   static readonly Default = Layer.succeed(StripeClient, {
     methodA: (arg) => Effect.succeed(`Result A: ${arg}`),
     methodB: (arg) => Effect.succeed(arg * 2),
-  })
+  });
 }
 
 Effect.gen(function* () {
   // Use `yield*` to access the service
-  const stripe = yield* StripeClient
+  const stripe = yield* StripeClient;
 
   // Call a method on the service
-  const resultA = yield* stripeClient.methodA("some argument")
-  const resultB = yield* stripeClient.methodB(42)
+  const resultA = yield* stripeClient.methodA("some argument");
+  const resultB = yield* stripeClient.methodB(42);
 
-  return { resultA, resultB }
+  return { resultA, resultB };
 }).pipe(
   // Provide the service implementation with Effect.provideService
   Effect.provideService(StripeClient, {
@@ -274,7 +264,7 @@ Effect.gen(function* () {
   // Essential: There should be only one `Effect.provide` in an Effect
   // application.
   Effect.provide(StripeClient.Default),
-)
+);
 ```
 
 To re-iterate an essential point: **There should be only one `Effect.provide` in
@@ -328,8 +318,8 @@ entities. It allows you to define multiple schemas for the same entity in one
 class, which allows you to have different views of the same data.
 
 ```ts
-import { DateTime, Option, Schema } from "effect"
-import { Model } from "@effect/sql"
+import { DateTime, Option, Schema } from "effect";
+import { Model } from "@effect/sql";
 
 export class User extends Model.Class<User>("User")({
   id: Model.Generated(UserId),
@@ -341,29 +331,29 @@ export class User extends Model.Class<User>("User")({
 }) {}
 
 // The schema to use when accessing the database
-User
+User;
 
 // The schema to use when sending data to the client
-User.json
+User.json;
 
 // The schemas to use when inserting data
-User.insert // For the database
-User.jsonCreate // When receiving data from the client
+User.insert; // For the database
+User.jsonCreate; // When receiving data from the client
 User.insert.make({
   firstName: "John",
   lastName: "Doe",
   dateOfBirth: Option.some(DateTime.unsafeNow()),
-})
+});
 
 // The schemas to use when updating data
-User.update // For the database
-User.jsonUpdate // When receiving data from the client
+User.update; // For the database
+User.jsonUpdate; // When receiving data from the client
 User.update.make({
   id: UserId.make(123),
   firstName: "Jane",
   lastName: "Doe",
   dateOfBirth: Option.some(DateTime.unsafeNow()),
-})
+});
 ```
 
 ## Adding observability
@@ -380,35 +370,35 @@ Use:
 - `Effect.log` to log messages with the Effect logging system.
 
 ```ts
-import { Effect } from "effect"
+import { Effect } from "effect";
 
 const withSpan = Effect.gen(function* () {
   // Add an attribute to the current span
   yield* Effect.annotateCurrentSpan({
     some: "annotation",
-  })
+  });
 
   // Log a message with the Effect logging system at different levels
-  yield* Effect.logInfo("This is a info message")
-  yield* Effect.logWarning("This is a warning message")
-  yield* Effect.logError("This is an error message")
-  yield* Effect.logFatal("This is an fatal message")
-  yield* Effect.logDebug("This is a debug message")
-  yield* Effect.logTrace("This is a trace message")
+  yield* Effect.logInfo("This is a info message");
+  yield* Effect.logWarning("This is a warning message");
+  yield* Effect.logError("This is an error message");
+  yield* Effect.logFatal("This is an fatal message");
+  yield* Effect.logDebug("This is a debug message");
+  yield* Effect.logTrace("This is a trace message");
 }).pipe(
   // Add a tracing span to the Effect
   Effect.withSpan("my-span"),
-)
+);
 
 const fnWithSpan = Effect.fn("myFunction")(function* (x: number, y: number) {
   // Add an attribute to the current span
-  yield* Effect.annotateCurrentSpan({ x, y })
+  yield* Effect.annotateCurrentSpan({ x, y });
 
   // Log a message with the Effect logging system
-  yield* Effect.logInfo("Calculating sum", { x, y })
+  yield* Effect.logInfo("Calculating sum", { x, y });
 
-  return x + y
-})
+  return x + y;
+});
 ```
 
 ## Testing Effect code
@@ -418,31 +408,31 @@ allows you to write tests in a readable and maintainable way. Use the
 `@effect/vitest` package to easily integrate Effect with Vitest.
 
 ```ts
-import { Effect, TestClock } from "effect"
-import { describe, it, assert } from "@effect/vitest"
+import { Effect, TestClock } from "effect";
+import { describe, it, assert } from "@effect/vitest";
 
-const effectToTest = Effect.succeed("Hello, World!")
+const effectToTest = Effect.succeed("Hello, World!");
 
 describe("My Effect tests", () => {
   // Always use `it.scoped` to run Effect tests
   it.scoped("should run an Effect and assert the result", () =>
     Effect.gen(function* () {
-      const result = yield* effectToTest
-      assert.strictEqual(result, "Hello, World!")
+      const result = yield* effectToTest;
+      assert.strictEqual(result, "Hello, World!");
     }),
-  )
+  );
 
   it.scoped("should handle errors in Effect", () =>
     Effect.gen(function* () {
-      const errorEffect = Effect.fail("An error occurred")
+      const errorEffect = Effect.fail("An error occurred");
 
       // Use `Effect.flip` to put the error in the success channel
-      const error = yield* errorEffect.pipe(Effect.flip)
+      const error = yield* errorEffect.pipe(Effect.flip);
 
-      assert.strictEqual(error, "An error occurred")
+      assert.strictEqual(error, "An error occurred");
     }),
-  )
-})
+  );
+});
 ```
 
 ## Common Effect modules
@@ -474,6 +464,7 @@ modules and packages.
 Wack Hacker is a Discord bot built with Effect.ts for the Purdue Hackers community. It provides features like auto-threading, commit tracking, voice transcription, photo management, and more.
 
 **Tech Stack:**
+
 - **Runtime**: Bun
 - **Framework**: Effect.ts (functional effects system)
 - **Database**: Cloudflare D1 (SQLite)
@@ -526,12 +517,14 @@ src/
 ### 1. Effect.ts Architecture
 
 All code is written using **Effect.ts**, a functional programming framework that provides:
+
 - **Type-safe error handling**: Errors are tracked in the type system
 - **Dependency injection**: Services are provided via `Layer`
 - **Observability**: Built-in tracing, logging, and metrics
 - **Composability**: Effects can be combined and transformed
 
 **Key principles:**
+
 - Use `Effect.gen` for generator-style async code
 - Use `Effect.fn` for reusable Effect functions
 - Never use `try/catch` - use `Effect.try` or `Effect.tryPromise`
@@ -546,20 +539,21 @@ Services are Effect-based abstractions over external systems:
 export class MyService extends Effect.Service<MyService>()("MyService", {
   dependencies: [OtherService.Default],
   scoped: Effect.gen(function* () {
-    const other = yield* OtherService
-    
+    const other = yield* OtherService;
+
     const myMethod = Effect.fn("MyService.myMethod")(function* (arg: string) {
-      yield* Effect.annotateCurrentSpan({ arg })
-      yield* Effect.logInfo("method called", { arg })
-      return `result: ${arg}`
-    })
-    
-    return { myMethod } as const
+      yield* Effect.annotateCurrentSpan({ arg });
+      yield* Effect.logInfo("method called", { arg });
+      return `result: ${arg}`;
+    });
+
+    return { myMethod } as const;
   }),
 }) {}
 ```
 
 **Existing services:**
+
 - `Discord`: Discord.js client lifecycle (login, ready state, commands)
 - `Database`: D1 database operations (users, commits tables)
 - `AI`: Groq API client (chat completions, audio transcription)
@@ -576,11 +570,12 @@ Features are self-contained modules in `src/features/`:
 // Each feature exports handler functions
 export const handleMyFeature = Effect.fn("handleMyFeature")(function* (message: Message) {
   // Feature logic here
-  yield* Effect.logInfo("feature executed", { message_id: message.id })
-})
+  yield* Effect.logInfo("feature executed", { message_id: message.id });
+});
 ```
 
 **Feature characteristics:**
+
 - Export handler functions (no classes needed)
 - Use Effect.fn for automatic tracing spans
 - Import services via `yield* ServiceName`
@@ -592,6 +587,7 @@ export const handleMyFeature = Effect.fn("handleMyFeature")(function* (message: 
 All logs follow the **wide logging format** (see loggingsucks.com):
 
 **Rules:**
+
 1. **All log levels are lowercase**: `logInfo`, `logDebug`, `logError`, `logWarning`
 2. **One log per operation**: Include all relevant context in a single log entry
 3. **Rich key-value pairs**: Use `snake_case` keys (e.g., `user_id`, `duration_ms`)
@@ -599,23 +595,26 @@ All logs follow the **wide logging format** (see loggingsucks.com):
 5. **Comprehensive context**: user IDs, message IDs, channel IDs, operation results
 
 **Example:**
+
 ```typescript
 const startTime = Date.now();
 
-yield* Effect.logInfo("operation completed", {
-  user_id: message.author.id,
-  username: message.author.username,
-  message_id: message.id,
-  channel_id: message.channelId,
-  operation_type: "thread_creation",
-  thread_id: thread.id,
-  thread_name: thread.name,
-  duration_ms: Date.now() - startTime,
-  status: "success",
-});
+yield *
+  Effect.logInfo("operation completed", {
+    user_id: message.author.id,
+    username: message.author.username,
+    message_id: message.id,
+    channel_id: message.channelId,
+    operation_type: "thread_creation",
+    thread_id: thread.id,
+    thread_name: thread.name,
+    duration_ms: Date.now() - startTime,
+    status: "success",
+  });
 ```
 
 **When to log:**
+
 - Operation start (debug level)
 - Early returns/filters (debug level with reason)
 - Successful completion (info level with full context)
@@ -627,10 +626,12 @@ yield* Effect.logInfo("operation completed", {
 Located in `src/db/schema.ts`, uses Drizzle ORM:
 
 **Tables:**
+
 - `users`: Discord users with thread IDs
 - `commits`: Commit tracking (approved commits, dates)
 
 **Database operations:**
+
 - All operations are wrapped in `Effect.fn`
 - Include timing and context in logs
 - Use `Effect.tryPromise` for async operations
@@ -649,6 +650,7 @@ export const AppConfig = makeEnv("AppConfig", {
 ```
 
 **Environment variables:**
+
 - Discord API credentials
 - Cloudflare credentials (R2, D1)
 - Third-party API keys (GitHub, Groq, MediaWiki)
@@ -658,12 +660,14 @@ export const AppConfig = makeEnv("AppConfig", {
 ### 7. Constants
 
 Discord-specific IDs are in `src/constants.ts`:
+
 - Channel IDs (auto-thread channels, forums)
 - Role IDs (organizer, bishop, wacky role)
 - Emoji definitions
 - Channel name patterns
 
 **When adding new features:**
+
 - Add required channel/role IDs to constants
 - Use descriptive names
 - Export as named constants
@@ -675,11 +679,12 @@ Discord-specific IDs are in `src/constants.ts`:
 1. **Create feature folder**: `src/features/my-feature/`
 2. **Create index.ts**: Export handler functions
 3. **Define handler signature**:
+
    ```typescript
    export const handleMyFeature = Effect.fn("handleMyFeature")(
      function* (message: Message) {
        const startTime = Date.now();
-       
+
        // Early returns with debug logs
        if (message.author.bot) {
          yield* Effect.logDebug("message skipped", {
@@ -688,17 +693,17 @@ Discord-specific IDs are in `src/constants.ts`:
          });
          return;
        }
-       
+
        // Main logic
        yield* Effect.logInfo("feature started", { message_id: message.id });
-       
+
        // Use services
        const discord = yield* Discord;
        const database = yield* Database;
-       
+
        // Perform operations
        const result = yield* someOperation;
-       
+
        // Final comprehensive log
        yield* Effect.logInfo("feature completed", {
          message_id: message.id,
@@ -710,18 +715,21 @@ Discord-specific IDs are in `src/constants.ts`:
      Effect.annotateLogs({ feature: "my_feature" }),
    );
    ```
+
 4. **Register in runtime**: Add to `src/runtime/events.ts` handlers array
 5. **Add feature flag**: Add to `src/config.ts` if toggleable
 
 ### Working with Discord.js
 
 **Message handling:**
+
 - Check `message.author.bot` early
 - Check channel type (`isDMBased()`, `isThread()`)
 - Fetch related data with `Effect.tryPromise`
 - Use helper functions from `src/lib/discord.ts`
 
 **Interaction handling:**
+
 - Commands are registered in `src/runtime/commands.ts`
 - Use `interaction.reply()` for responses
 - Use ephemeral flags for private messages
@@ -730,15 +738,17 @@ Discord-specific IDs are in `src/constants.ts`:
 ### Working with Services
 
 **Using a service:**
-```typescript
-const discord = yield* Discord;
-const client = yield* discord.awaitReady();
 
-const database = yield* Database;
-const user = yield* database.users.get(userId);
+```typescript
+const discord = yield * Discord;
+const client = yield * discord.awaitReady();
+
+const database = yield * Database;
+const user = yield * database.users.get(userId);
 ```
 
 **Adding a new service:**
+
 1. Create `src/services/MyService.ts`
 2. Extend `Effect.Service`
 3. Define dependencies
@@ -749,56 +759,61 @@ const user = yield* database.users.get(userId);
 ### Error Handling
 
 **Define custom errors:**
+
 ```typescript
-export class MyFeatureError extends Schema.TaggedError<MyFeatureError>(
-  "MyFeatureError"
-)({
+export class MyFeatureError extends Schema.TaggedError<MyFeatureError>("MyFeatureError")({
   cause: Schema.optional(Schema.Defect),
   message: Schema.String,
 }) {}
 ```
 
 **Handle errors:**
+
 ```typescript
-yield* myOperation.pipe(
-  Effect.catchTag("MyFeatureError", (error) =>
-    Effect.logError("operation failed", {
-      error_type: error._tag,
-      error_message: error.message,
-    })
-  ),
-  Effect.catchAll((error) =>
-    Effect.logError("unexpected error", {
-      error: String(error),
-    })
-  ),
-);
+yield *
+  myOperation.pipe(
+    Effect.catchTag("MyFeatureError", (error) =>
+      Effect.logError("operation failed", {
+        error_type: error._tag,
+        error_message: error.message,
+      }),
+    ),
+    Effect.catchAll((error) =>
+      Effect.logError("unexpected error", {
+        error: String(error),
+      }),
+    ),
+  );
 ```
 
 ### Performance Timing
 
 **Always track timing:**
+
 ```typescript
 const startTime = Date.now();
 
-const [result, duration] = yield* myOperation.pipe(Effect.timed);
+const [result, duration] = yield * myOperation.pipe(Effect.timed);
 
-yield* Effect.logInfo("operation completed", {
-  duration_ms: Duration.toMillis(duration),
-  // or manually:
-  duration_ms: Date.now() - startTime,
-});
+yield *
+  Effect.logInfo("operation completed", {
+    duration_ms: Duration.toMillis(duration),
+    // or manually:
+    duration_ms: Date.now() - startTime,
+  });
 ```
 
 ## Development Workflow
 
 ### Setup
+
 ```bash
 bun install
 cp .env.example .env  # Add your credentials
 ```
 
 ### Running
+
 ```bash
 bun dev              # Development mode
 bun start            # Production mode
@@ -806,12 +821,14 @@ bun run build        # Compile to binary
 ```
 
 ### Database
+
 ```bash
 bun run db:generate  # Generate migrations
 bun run db:push      # Push schema to D1
 ```
 
 ### Linting & Formatting
+
 ```bash
 bun run lint         # Run oxlint
 bun run format       # Run oxfmt
@@ -820,6 +837,7 @@ bun run format       # Run oxfmt
 ## Best Practices
 
 ### DO ✅
+
 - Use `Effect.fn` for all functions that return Effects
 - Add comprehensive logging with wide event format
 - Use lowercase log levels (`logInfo`, `logDebug`, `logError`)
@@ -832,6 +850,7 @@ bun run format       # Run oxfmt
 - Use meaningful variable names with `snake_case` in logs
 
 ### DON'T ❌
+
 - Never use `try/catch` (use `Effect.try` instead)
 - Never use uppercase log levels (INFO, ERROR, etc.)
 - Never use `console.log` (use `Effect.logInfo` instead)
@@ -855,7 +874,7 @@ describe("MyFeature", () => {
     Effect.gen(function* () {
       const result = yield* handleMyFeature(mockMessage);
       assert.strictEqual(result.status, "success");
-    })
+    }),
   );
 });
 ```
@@ -863,18 +882,23 @@ describe("MyFeature", () => {
 ## Common Issues & Solutions
 
 ### Issue: "Cannot find service"
+
 **Solution**: Ensure service is in `ServicesLive` layer and dependencies are correct
 
-### Issue: "yield* outside generator"
+### Issue: "yield\* outside generator"
+
 **Solution**: Use `Effect.gen(function* () { ... })` or `Effect.fn` wrapper
 
 ### Issue: TypeScript errors in logs
+
 **Solution**: Ensure all log key names use `snake_case` and values are serializable
 
 ### Issue: Missing environment variables
+
 **Solution**: Check `.env` file and `src/config.ts` definitions
 
 ### Issue: Database not found
+
 **Solution**: Run `bun run db:push` to sync schema to D1
 
 ## Additional Resources

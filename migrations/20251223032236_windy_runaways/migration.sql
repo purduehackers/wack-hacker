@@ -1,1 +1,0 @@
-ALTER TABLE `commits` RENAME COLUMN `commit_day` TO `committed_at`;

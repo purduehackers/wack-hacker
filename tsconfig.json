@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "lib": ["ESNext", "DOM"],
+    "lib": ["ESNext", "DOM", "esnext.disposable"],
     "target": "ESNext",
     "module": "ESNext",
     "moduleDetection": "force",
@@ -24,10 +24,6 @@
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false,
 
-    "plugins": [
-      {
-        "name": "@effect/language-service"
-      }
-    ]
+    "plugins": [{ "name": "@effect/language-service" }, { "name": "workflow" }]
   }
 }
