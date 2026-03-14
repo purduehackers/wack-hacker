@@ -1,19 +1,49 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["typescript", "import"],
-  "env": {
-    "browser": true,
-    "node": true
-  },
+  "jsPlugins": ["@factory/eslint-plugin"],
   "rules": {
-    "typescript/no-explicit-any": "warn",
-    "typescript/consistent-type-imports": "error",
-    "import/no-cycle": "error"
+    "@factory/no-exported-string-union-types": "error",
+    "@factory/structured-logging": "error",
+    "@factory/enum-file-organization": "error",
+    "@factory/types-file-organization": "error",
+    "@factory/constants-file-organization": "error",
+    "@factory/errors-file-organization": "error",
+    "@factory/test-utils-organization": "off",
+    "@factory/test-file-location": "off",
+    "@factory/no-exported-function-expressions": "error",
+    "@factory/require-test-files": "off",
+    "@factory/require-tsx-test-stories-files": "off",
+    "@factory/require-route-middleware": "off",
+    "@factory/require-v0-route-handle-middleware": "off",
+    "@factory/require-v0-strict-schemas": "off",
+    "@factory/no-log-exception-with-throw": "error",
+    "@factory/filename-match-export": "off",
+    "@factory/restrict-tsx-components": "error",
+    "@factory/no-dynamic-styled-components": "error",
+    "@factory/no-plain-html-text-elements": "error",
+    "@factory/no-use-effect-in-hooks": "error",
+    "@factory/jest-mock-absolute-paths": "off",
+    "@factory/jest-mock-require-actual": "off",
+    "@factory/no-unstable-mock-module": "off"
   },
-  "ignorePatterns": [
-    "**/node_modules/**",
-    "**/dist/**",
-    "**/*.min.js",
-    ".orb/**"
-  ]
+  "settings": {
+    "jsdoc": {
+      "ignorePrivate": false,
+      "ignoreInternal": false,
+      "ignoreReplacesDocs": true,
+      "overrideReplacesDocs": true,
+      "augmentsExtendsReplacesDocs": false,
+      "implementsReplacesDocs": false,
+      "exemptDestructuredRootsFromChecks": false,
+      "tagNamePreference": {}
+    },
+    "vitest": {
+      "typecheck": true
+    }
+  },
+  "env": {
+    "builtin": true
+  },
+  "globals": {},
+  "ignorePatterns": ["node_modules", "dist", "coverage", "vercel.ts"]
 }

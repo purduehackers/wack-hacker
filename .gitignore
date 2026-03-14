@@ -173,5 +173,8 @@ dist
 
 # Finder (MacOS) folder config
 .DS_Store
+
+# vercel
 .vercel
 .env*.local
+.swc

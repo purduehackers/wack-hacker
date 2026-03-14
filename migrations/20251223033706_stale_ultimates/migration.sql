@@ -1,1 +1,0 @@
-ALTER TABLE `commit_overflow_profiles` ADD `timezone` text DEFAULT 'America/Indiana/Indianapolis' NOT NULL;
