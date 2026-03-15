@@ -10,14 +10,23 @@
     "prepare": "effect-language-service patch"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.58",
     "@chat-adapter/discord": "^4.20.1",
     "@chat-adapter/state-redis": "^4.20.1",
+    "@linear/sdk": "^77.0.0",
+    "@notionhq/client": "^5.13.0",
+    "@octokit/auth-app": "^8.2.0",
     "@vercel/config": "^0.0.39",
+    "@workflow/ai": "^4.0.1-beta.56",
+    "ai": "^6.0.116",
     "chat": "^4.20.1",
+    "gray-matter": "^4.0.3",
     "hono": "^4.12.8",
     "nitro": "^3.0.260311-beta",
+    "octokit": "^5.0.5",
     "rollup": "^4.59.0",
-    "workflow": "^4.2.0-beta.70"
+    "workflow": "^4.2.0-beta.70",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@effect/language-service": "^0.80.0",

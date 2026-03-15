@@ -1,71 +1,145 @@
+import type { UIMessageChunk } from "ai";
+
+import { DurableAgent } from "@workflow/ai/agent";
 import { Message, type Thread } from "chat";
-import { createHook, getWorkflowMetadata } from "workflow";
+import { join } from "node:path";
+import { createHook, getWritable, getWorkflowMetadata } from "workflow";
 
 import type { ThreadState } from "../../lib/bot/types";
 import type { ChatTurnPayload } from "./types";
 
-async function loadBot() {
-  const { bot } = await import("../../lib/bot");
-  await bot.initialize();
-  return bot;
-}
+import { createChatTools } from "../../lib/ai/chat/tools";
+import { AgentContext } from "../../lib/ai/context";
+import { DiscordRole } from "../../lib/ai/context/enums";
 
-export async function chatSession(payload: string) {
+const ORGANIZER_PROMPT_PATH = join(import.meta.dir, "../../lib/ai/chat/prompts/SYSTEM.md");
+const PUBLIC_PROMPT_PATH = join(import.meta.dir, "../../lib/ai/chat/prompts/SYSTEM_PUBLIC.md");
+
+/**
+ * Multi-turn chat workflow.
+ *
+ * 1. Parses the serialized payload back into Chat SDK objects
+ * 2. Creates a DurableAgent with role-gated tools
+ * 3. Runs the first turn and posts the response to Discord
+ * 4. Suspends via a hook, awaiting follow-up messages
+ * 5. Each subsequent message runs another turn until "done"
+ *
+ * `getWritable()` feeds workflow observability (`npx workflow web`);
+ * Discord delivery happens via `thread.post()` in steps.
+ */
+export async function chatWorkflow(payload: string) {
   "use workflow";
+
   const { workflowRunId } = getWorkflowMetadata();
-  const { thread, message } = await parsePayload(payload);
+  const { thread, message, context } = await parsePayload(payload);
+
+  const promptPath =
+    context.role === DiscordRole.Public ? PUBLIC_PROMPT_PATH : ORGANIZER_PROMPT_PATH;
+  const rawPrompt = await loadPrompt(promptPath);
+  const system = context.buildInstructions(rawPrompt);
+
+  const writable = getWritable<UIMessageChunk>();
+  const agent = new DurableAgent({
+    model: "anthropic/claude-sonnet-4",
+    system,
+    tools: createChatTools(context),
+  });
+
+  const messages: Array<{ role: "user" | "assistant"; content: string }> = [
+    { role: "user", content: message.text },
+  ];
+
+  const firstReply = await runTurn(agent, messages, writable);
+  await postToThread(thread, firstReply);
+
   using hook = createHook<ChatTurnPayload>({ token: workflowRunId });
-  await reply(
-    thread,
-    "Session started. Reply in this thread and send `done` when you want to stop.",
-  );
-  if (!(await handleTurn(thread, message))) {
-    return;
-  }
   for await (const event of hook) {
-    const next = Message.fromJSON(event.message);
-    if (!(await handleTurn(thread, next))) {
-      return;
+    const next = await deserializeMessage(event.message);
+    const text = next.text.trim();
+
+    if (text.toLowerCase() === "done") {
+      await closeSession(thread);
+      break;
     }
+
+    messages.push({ role: "user", content: text });
+    const reply = await runTurn(agent, messages, writable);
+    await postToThread(thread, reply);
+  }
+
+  const writer = writable.getWriter();
+  await writer.close();
+}
+
+// ---------------------------------------------------------------------------
+// Steps — each function below runs as a durable workflow step.
+// ---------------------------------------------------------------------------
+
+/** Run one agent turn, append response to history, return the text. */
+async function runTurn(
+  agent: DurableAgent,
+  messages: Array<{ role: "user" | "assistant"; content: string }>,
+  writable: WritableStream<UIMessageChunk>,
+) {
+  const result = await agent.stream({
+    messages,
+    writable,
+    maxSteps: 10,
+    preventClose: true,
+  });
+
+  const text = result.steps?.at(-1)?.text ?? "";
+  if (text) {
+    messages.push({ role: "assistant", content: text });
+  }
+  return text;
+}
+
+/** Post a text response to the Discord thread. */
+async function postToThread(thread: Thread<ThreadState>, text: string) {
+  "use step";
+  await initBot();
+  if (text) {
+    await thread.post(text);
   }
 }
 
+/** Deserialize a payload string back into Chat SDK Thread + Message + AgentContext. */
 async function parsePayload(payload: string) {
   "use step";
-  const bot = await loadBot();
+  const bot = await initBot();
   return JSON.parse(payload, bot.reviver()) as {
     thread: Thread<ThreadState>;
     message: Message;
+    context: AgentContext;
   };
 }
 
-async function reply(thread: Thread<ThreadState>, text: string) {
+/** Reconstruct a Chat SDK Message from its serialized form. */
+async function deserializeMessage(serialized: any) {
   "use step";
-  await loadBot();
-  await thread.post(text);
+  await initBot();
+  return Message.fromJSON(serialized);
 }
 
-async function close(thread: Thread<ThreadState>) {
+/** Read a prompt markdown file from disk. */
+async function loadPrompt(path: string) {
   "use step";
-  await loadBot();
+  return Bun.file(path).text();
+}
+
+/** End the session: notify the user, unsubscribe, and clear state. */
+async function closeSession(thread: Thread<ThreadState>) {
+  "use step";
+  await initBot();
   await thread.post("Session closed.");
   await thread.unsubscribe();
   await thread.setState({}, { replace: true });
 }
 
-async function generateReply(text: string) {
-  "use step";
-  // Replace this with AI SDK calls, database work, or other business logic.
-  return `You said: ${text}`;
-}
-
-async function handleTurn(thread: Thread<ThreadState>, message: Message) {
-  const text = message.text.trim();
-  if (text.toLowerCase() === "done") {
-    await close(thread);
-    return false;
-  }
-  const response = await generateReply(text);
-  await reply(thread, response);
-  return true;
+/** Lazy-import and initialize the Chat SDK bot singleton. */
+async function initBot() {
+  const { bot } = await import("../../lib/bot");
+  await bot.initialize();
+  return bot;
 }
