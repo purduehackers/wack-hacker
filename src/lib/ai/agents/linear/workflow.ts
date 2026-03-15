@@ -26,12 +26,14 @@ const skills = new SkillSystem({
  * Runs a DurableAgent with progressive tool disclosure via the skill system.
  * Base tools (search, retrieve, suggest, aggregate) are always available.
  * Write tools are guided by `load_skill` instructions.
+ * Tools marked with `SkillSystem.admin()` are stripped for non-admin users.
  */
-export async function linearAgent(task: string) {
+export async function linearAgent(task: string, isAdmin = false) {
   "use workflow";
 
   const system = await loadSystemPrompt();
-  const tools = await buildTools();
+  const allTools = await buildTools();
+  const tools = isAdmin ? allTools : SkillSystem.filterAdmin(allTools);
   const writable = getWritable<UIMessageChunk>();
 
   const agent = new DurableAgent({
@@ -72,6 +74,7 @@ async function buildTools() {
     initiativeUpdates,
     reminders,
     customerRequests,
+    users,
   ] = await Promise.all([
     import("./tools/base"),
     import("./tools/issues"),
@@ -85,6 +88,7 @@ async function buildTools() {
     import("./tools/initiative-updates"),
     import("./tools/reminders"),
     import("./tools/customer-requests"),
+    import("./tools/users"),
   ]);
 
   const tools: ToolSet = {
@@ -101,6 +105,7 @@ async function buildTools() {
     ...initiativeUpdates,
     ...reminders,
     ...customerRequests,
+    ...users,
   };
 
   return tools;
