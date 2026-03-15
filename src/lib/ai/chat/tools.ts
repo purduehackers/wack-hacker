@@ -20,12 +20,19 @@ const delegationSchema = z.object({
  */
 export function createChatTools(ctx: AgentContext) {
   const tools: ToolSet = { documentation };
+  const isAdmin = ctx.role === DiscordRole.DivisionLead;
 
-  if (ctx.role === DiscordRole.Organizer || ctx.role === DiscordRole.DivisionLead) {
+  if (ctx.role === DiscordRole.Organizer || isAdmin) {
     tools.linear = tool({
       description: `Delegate to the Linear agent for project management — issues, projects, initiatives, documents, comments, cycles, labels, teams, and users. Forward the user's request verbatim.`,
       inputSchema: delegationSchema,
-      execute: ({ task }) => launchAgent("linear", task),
+      execute: ({ task }) => launchAgent("linear", task, isAdmin),
+    });
+
+    tools.github = tool({
+      description: `Delegate to the GitHub agent for repository management — repos, issues, pull requests, code search, CI/CD workflows, deployments, packages, projects, secrets, and org settings. Forward the user's request verbatim.`,
+      inputSchema: delegationSchema,
+      execute: ({ task }) => launchAgent("github", task, isAdmin),
     });
   }
 
@@ -34,14 +41,15 @@ export function createChatTools(ctx: AgentContext) {
 
 const AGENT_LOADERS = {
   linear: () => import("../agents/linear/workflow").then((m) => m.linearAgent),
+  github: () => import("../agents/github/workflow").then((m) => m.githubAgent),
 } as const;
 
 /** Launch a domain agent as a child workflow and await its text result. */
-async function launchAgent(name: keyof typeof AGENT_LOADERS, task: string) {
+async function launchAgent(name: keyof typeof AGENT_LOADERS, task: string, isAdmin: boolean) {
   "use step";
   try {
     const workflow = await AGENT_LOADERS[name]();
-    const run = await start(workflow, [task]);
+    const run = await start(workflow, [task, isAdmin]);
     return await run.returnValue;
   } catch {
     return `The ${name} agent is not yet available.`;
