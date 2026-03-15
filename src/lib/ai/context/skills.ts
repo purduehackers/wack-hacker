@@ -8,20 +8,23 @@ import type { Skill } from "./types";
 /**
  * Progressive disclosure skill system for domain agents.
  *
- * Reads SKILL.md files (YAML frontmatter + markdown body) from a directory,
+ * Discovers SKILL.md files by scanning subdirectories of `skillsDir`,
  * caches them, and provides a `load_skill` AI tool that returns the full
  * skill bundle wrapped in XML so the model treats it as authoritative guidance.
  */
-export class SkillSystem<const T extends readonly string[]> {
-  readonly skillNames: T;
+export class SkillSystem {
+  readonly skillNames: string[];
   readonly baseToolNames: readonly string[];
   private readonly skillsDir: string;
   private cache: Record<string, Skill> | null = null;
 
-  constructor(config: { skillsDir: string; skillNames: T; baseToolNames: readonly string[] }) {
+  constructor(config: { skillsDir: string; baseToolNames: readonly string[] }) {
     this.skillsDir = config.skillsDir;
-    this.skillNames = config.skillNames;
     this.baseToolNames = config.baseToolNames;
+    this.skillNames = Array.from(
+      new Bun.Glob("*/SKILL.md").scanSync({ cwd: config.skillsDir }),
+      (path) => path.split("/")[0],
+    ).sort();
   }
 
   /** Load all skills into the cache (no-op if already loaded). */
@@ -75,9 +78,7 @@ export class SkillSystem<const T extends readonly string[]> {
     return tool({
       description: `Load a skill to enable its tools and guidance for this session. Call this BEFORE performing a task. Available skills: ${this.skillNames.join(", ")}`,
       inputSchema: z.object({
-        skill: z
-          .enum(this.skillNames as unknown as [string, ...string[]])
-          .describe("The skill to load"),
+        skill: z.enum(this.skillNames as [string, ...string[]]).describe("The skill to load"),
       }),
       execute: async ({ skill }) => {
         const skills = await this.getSkills();
