@@ -14,6 +14,8 @@
     "@chat-adapter/discord": "^4.20.1",
     "@chat-adapter/state-redis": "^4.20.1",
     "@linear/sdk": "^77.0.0",
+    "@noble/ciphers": "^2.1.1",
+    "@noble/curves": "^2.0.1",
     "@notionhq/client": "^5.13.0",
     "@octokit/auth-app": "^8.2.0",
     "@vercel/config": "^0.0.39",
