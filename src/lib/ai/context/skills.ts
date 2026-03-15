@@ -1,9 +1,11 @@
-import { tool } from "ai";
+import { tool, type ToolSet } from "ai";
 import matter from "gray-matter";
 import { join } from "node:path";
 import { z } from "zod";
 
 import type { Skill } from "./types";
+
+const ADMIN_MARKER = Symbol("admin");
 
 /**
  * Progressive disclosure skill system for domain agents.
@@ -25,6 +27,23 @@ export class SkillSystem {
       new Bun.Glob("*/SKILL.md").scanSync({ cwd: config.skillsDir }),
       (path) => path.split("/")[0],
     ).sort();
+  }
+
+  /** Mark a tool as requiring admin (Division Lead) access. */
+  static admin<T>(t: T) {
+    (t as any)[ADMIN_MARKER] = true;
+    return t;
+  }
+
+  /** Return a copy of the ToolSet with admin-marked tools removed. */
+  static filterAdmin(tools: ToolSet) {
+    const filtered: ToolSet = {};
+    for (const [name, t] of Object.entries(tools)) {
+      if (!(t as any)[ADMIN_MARKER]) {
+        filtered[name] = t;
+      }
+    }
+    return filtered;
   }
 
   /** Load all skills into the cache (no-op if already loaded). */
