@@ -1,8 +1,8 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { env } from "../../../../../env";
 import { octokit } from "../client";
-import { ORG } from "../constants";
 
 /** List workflow definitions in a repository. */
 export const list_workflows = tool({
@@ -14,7 +14,7 @@ export const list_workflows = tool({
   }),
   execute: async ({ repo, per_page, page }) => {
     const { data } = await octokit.rest.actions.listRepoWorkflows({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       per_page: per_page ?? 30,
       page: page ?? 1,
@@ -63,7 +63,7 @@ export const list_workflow_runs = tool({
   execute: async ({ repo, workflow_id, branch, status, per_page, page }) => {
     if (workflow_id) {
       const { data } = await octokit.rest.actions.listWorkflowRuns({
-        owner: ORG,
+        owner: env.GITHUB_ORG,
         repo,
         workflow_id,
         branch,
@@ -87,7 +87,7 @@ export const list_workflow_runs = tool({
       });
     }
     const { data } = await octokit.rest.actions.listWorkflowRunsForRepo({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       branch,
       status: status as any,
@@ -119,7 +119,7 @@ export const get_workflow_run = tool({
   }),
   execute: async ({ repo, run_id }) => {
     const { data } = await octokit.rest.actions.getWorkflowRun({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       run_id,
     });
@@ -153,7 +153,7 @@ export const trigger_workflow = tool({
   }),
   execute: async ({ repo, workflow_id, ref, inputs }) => {
     await octokit.rest.actions.createWorkflowDispatch({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       workflow_id,
       ref,
@@ -172,7 +172,7 @@ export const cancel_workflow_run = tool({
   }),
   execute: async ({ repo, run_id }) => {
     await octokit.rest.actions.cancelWorkflowRun({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       run_id,
     });
@@ -189,7 +189,7 @@ export const rerun_workflow = tool({
   }),
   execute: async ({ repo, run_id }) => {
     await octokit.rest.actions.reRunWorkflow({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       run_id,
     });
@@ -209,7 +209,7 @@ export const list_workflow_jobs = tool({
   }),
   execute: async ({ repo, run_id, filter, per_page, page }) => {
     const { data } = await octokit.rest.actions.listJobsForWorkflowRun({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       run_id,
       filter: filter ?? "latest",
@@ -246,7 +246,7 @@ export const download_artifact = tool({
   }),
   execute: async ({ repo, artifact_id }) => {
     const { url } = await octokit.rest.actions.downloadArtifact({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       artifact_id,
       archive_format: "zip",

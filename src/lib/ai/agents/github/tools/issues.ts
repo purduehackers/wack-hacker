@@ -1,8 +1,8 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { env } from "../../../../../env";
 import { octokit } from "../client";
-import { ORG } from "../constants";
 
 /** Create a new issue in a repository. */
 export const create_issue = tool({
@@ -17,7 +17,7 @@ export const create_issue = tool({
   }),
   execute: async ({ repo, ...input }) => {
     const { data } = await octokit.rest.issues.create({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       ...input,
     });
@@ -45,7 +45,7 @@ export const update_issue = tool({
   }),
   execute: async ({ repo, issue_number, ...input }) => {
     const { data } = await octokit.rest.issues.update({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       issue_number,
       ...input,
@@ -70,7 +70,7 @@ export const list_issue_comments = tool({
   }),
   execute: async ({ repo, issue_number, per_page, page }) => {
     const { data } = await octokit.rest.issues.listComments({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       issue_number,
       per_page: per_page ?? 30,
@@ -99,7 +99,7 @@ export const create_issue_comment = tool({
   }),
   execute: async ({ repo, issue_number, body }) => {
     const { data } = await octokit.rest.issues.createComment({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       issue_number,
       body,
@@ -118,7 +118,7 @@ export const update_issue_comment = tool({
   }),
   execute: async ({ repo, comment_id, body }) => {
     const { data } = await octokit.rest.issues.updateComment({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       comment_id,
       body,
@@ -136,7 +136,7 @@ export const delete_issue_comment = tool({
   }),
   execute: async ({ repo, comment_id }) => {
     await octokit.rest.issues.deleteComment({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       comment_id,
     });
@@ -159,7 +159,7 @@ export const manage_labels = tool({
     switch (action) {
       case "create": {
         const { data } = await octokit.rest.issues.createLabel({
-          owner: ORG,
+          owner: env.GITHUB_ORG,
           repo,
           name,
           color,
@@ -169,7 +169,7 @@ export const manage_labels = tool({
       }
       case "update": {
         const { data } = await octokit.rest.issues.updateLabel({
-          owner: ORG,
+          owner: env.GITHUB_ORG,
           repo,
           name,
           new_name,
@@ -179,7 +179,7 @@ export const manage_labels = tool({
         return JSON.stringify({ name: data.name, color: data.color });
       }
       case "delete":
-        await octokit.rest.issues.deleteLabel({ owner: ORG, repo, name });
+        await octokit.rest.issues.deleteLabel({ owner: env.GITHUB_ORG, repo, name });
         return JSON.stringify({ deleted: true, name });
     }
   },
@@ -201,7 +201,7 @@ export const manage_milestones = tool({
     switch (action) {
       case "create": {
         const { data } = await octokit.rest.issues.createMilestone({
-          owner: ORG,
+          owner: env.GITHUB_ORG,
           repo,
           title: input.title!,
           description: input.description,
@@ -212,7 +212,7 @@ export const manage_milestones = tool({
       }
       case "update": {
         const { data } = await octokit.rest.issues.updateMilestone({
-          owner: ORG,
+          owner: env.GITHUB_ORG,
           repo,
           milestone_number: milestone_number!,
           title: input.title,
@@ -224,7 +224,7 @@ export const manage_milestones = tool({
       }
       case "delete":
         await octokit.rest.issues.deleteMilestone({
-          owner: ORG,
+          owner: env.GITHUB_ORG,
           repo,
           milestone_number: milestone_number!,
         });

@@ -1,9 +1,9 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { env } from "../../../../../env";
 import { SkillSystem } from "../../../context/skills";
 import { octokit } from "../client";
-import { ORG } from "../constants";
 
 export const list_org_members = tool({
   description: `List members of the purduehackers organization. Optionally filter by role (all, admin, member). Returns login, ID, avatar URL, and profile URL.`,
@@ -14,7 +14,7 @@ export const list_org_members = tool({
   }),
   execute: async ({ role, per_page, page }) => {
     const { data } = await octokit.rest.orgs.listMembers({
-      org: ORG,
+      org: env.GITHUB_ORG,
       role: role ?? "all",
       per_page: per_page ?? 30,
       page: page ?? 1,
@@ -36,7 +36,10 @@ export const get_org_member = tool({
     username: z.string().describe("GitHub username"),
   }),
   execute: async ({ username }) => {
-    const { data } = await octokit.rest.orgs.getMembershipForUser({ org: ORG, username });
+    const { data } = await octokit.rest.orgs.getMembershipForUser({
+      org: env.GITHUB_ORG,
+      username,
+    });
     return JSON.stringify({ user: data.user?.login, role: data.role, state: data.state });
   },
 });
@@ -49,7 +52,7 @@ export const list_teams = tool({
   }),
   execute: async ({ per_page, page }) => {
     const { data } = await octokit.rest.teams.list({
-      org: ORG,
+      org: env.GITHUB_ORG,
       per_page: per_page ?? 30,
       page: page ?? 1,
     });
@@ -72,7 +75,7 @@ export const get_team = tool({
     team_slug: z.string().describe("Team slug (e.g. 'engineering')"),
   }),
   execute: async ({ team_slug }) => {
-    const { data } = await octokit.rest.teams.getByName({ org: ORG, team_slug });
+    const { data } = await octokit.rest.teams.getByName({ org: env.GITHUB_ORG, team_slug });
     return JSON.stringify({
       id: data.id,
       name: data.name,
@@ -94,7 +97,7 @@ export const list_team_members = tool({
   }),
   execute: async ({ team_slug, role, per_page, page }) => {
     const { data } = await octokit.rest.teams.listMembersInOrg({
-      org: ORG,
+      org: env.GITHUB_ORG,
       team_slug,
       role: role ?? "all",
       per_page: per_page ?? 30,
@@ -113,7 +116,7 @@ export const list_repo_webhooks = tool({
   }),
   execute: async ({ repo, per_page, page }) => {
     const { data } = await octokit.rest.repos.listWebhooks({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       per_page: per_page ?? 30,
       page: page ?? 1,
@@ -139,7 +142,7 @@ export const invite_org_member = SkillSystem.admin(
     }),
     execute: async ({ username, role }) => {
       const { data } = await octokit.rest.orgs.setMembershipForUser({
-        org: ORG,
+        org: env.GITHUB_ORG,
         username,
         role: role ?? "member",
       });
@@ -155,7 +158,7 @@ export const remove_org_member = SkillSystem.admin(
       username: z.string().describe("GitHub username to remove"),
     }),
     execute: async ({ username }) => {
-      await octokit.rest.orgs.removeMembershipForUser({ org: ORG, username });
+      await octokit.rest.orgs.removeMembershipForUser({ org: env.GITHUB_ORG, username });
       return JSON.stringify({ removed: true, username });
     },
   }),
@@ -171,7 +174,7 @@ export const add_team_member = SkillSystem.admin(
     }),
     execute: async ({ team_slug, username, role }) => {
       const { data } = await octokit.rest.teams.addOrUpdateMembershipForUserInOrg({
-        org: ORG,
+        org: env.GITHUB_ORG,
         team_slug,
         username,
         role: role ?? "member",
@@ -189,7 +192,11 @@ export const remove_team_member = SkillSystem.admin(
       username: z.string().describe("GitHub username"),
     }),
     execute: async ({ team_slug, username }) => {
-      await octokit.rest.teams.removeMembershipForUserInOrg({ org: ORG, team_slug, username });
+      await octokit.rest.teams.removeMembershipForUserInOrg({
+        org: env.GITHUB_ORG,
+        team_slug,
+        username,
+      });
       return JSON.stringify({ removed: true, team_slug, username });
     },
   }),
@@ -207,7 +214,7 @@ export const create_webhook = tool({
   }),
   execute: async ({ repo, url, content_type, secret, events, active }) => {
     const { data } = await octokit.rest.repos.createWebhook({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       config: { url, content_type: content_type ?? "json", secret },
       events,
@@ -234,7 +241,7 @@ export const update_webhook = tool({
     if (content_type) config.content_type = content_type;
     if (secret) config.secret = secret;
     const { data } = await octokit.rest.repos.updateWebhook({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       hook_id,
       config: Object.keys(config).length > 0 ? config : undefined,
@@ -252,7 +259,7 @@ export const delete_webhook = tool({
     hook_id: z.number().describe("Webhook ID"),
   }),
   execute: async ({ repo, hook_id }) => {
-    await octokit.rest.repos.deleteWebhook({ owner: ORG, repo, hook_id });
+    await octokit.rest.repos.deleteWebhook({ owner: env.GITHUB_ORG, repo, hook_id });
     return JSON.stringify({ deleted: true, hook_id });
   },
 });
@@ -265,7 +272,7 @@ export const list_org_webhooks = tool({
   }),
   execute: async ({ per_page, page }) => {
     const { data } = await octokit.rest.orgs.listWebhooks({
-      org: ORG,
+      org: env.GITHUB_ORG,
       per_page: per_page ?? 30,
       page: page ?? 1,
     });

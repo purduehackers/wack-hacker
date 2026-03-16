@@ -5,8 +5,8 @@ import { u32, u8 } from "@noble/hashes/utils.js";
 import { tool } from "ai";
 import { z } from "zod";
 
+import { env } from "../../../../../env";
 import { octokit } from "../client";
-import { ORG } from "../constants";
 
 // NaCl "expand 32-byte k" sigma constant
 const SIGMA = new Uint32Array([1634760805, 857760878, 2036477234, 1797285236]);
@@ -66,7 +66,7 @@ export const list_repo_secrets = tool({
   }),
   execute: async ({ repo, per_page, page }) => {
     const { data } = await octokit.rest.actions.listRepoSecrets({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       per_page: per_page ?? 30,
       page: page ?? 1,
@@ -90,10 +90,13 @@ export const create_or_update_repo_secret = tool({
     value: z.string().describe("Secret value (will be encrypted)"),
   }),
   execute: async ({ repo, secret_name, value }) => {
-    const { data: keyData } = await octokit.rest.actions.getRepoPublicKey({ owner: ORG, repo });
+    const { data: keyData } = await octokit.rest.actions.getRepoPublicKey({
+      owner: env.GITHUB_ORG,
+      repo,
+    });
     const encrypted = encryptSecret(value, keyData.key);
     await octokit.rest.actions.createOrUpdateRepoSecret({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       secret_name,
       encrypted_value: encrypted,
@@ -110,7 +113,7 @@ export const delete_repo_secret = tool({
     secret_name: z.string().describe("Secret name"),
   }),
   execute: async ({ repo, secret_name }) => {
-    await octokit.rest.actions.deleteRepoSecret({ owner: ORG, repo, secret_name });
+    await octokit.rest.actions.deleteRepoSecret({ owner: env.GITHUB_ORG, repo, secret_name });
     return JSON.stringify({ deleted: true, secret_name });
   },
 });
@@ -128,7 +131,7 @@ export const list_repo_variables = tool({
   }),
   execute: async ({ repo, per_page, page }) => {
     const { data } = await octokit.rest.actions.listRepoVariables({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       per_page: per_page ?? 30,
       page: page ?? 1,
@@ -154,10 +157,10 @@ export const create_or_update_repo_variable = tool({
   }),
   execute: async ({ repo, name, value }) => {
     try {
-      await octokit.rest.actions.updateRepoVariable({ owner: ORG, repo, name, value });
+      await octokit.rest.actions.updateRepoVariable({ owner: env.GITHUB_ORG, repo, name, value });
     } catch (e: any) {
       if (e.status === 404) {
-        await octokit.rest.actions.createRepoVariable({ owner: ORG, repo, name, value });
+        await octokit.rest.actions.createRepoVariable({ owner: env.GITHUB_ORG, repo, name, value });
       } else throw e;
     }
     return JSON.stringify({ created_or_updated: true, name });
@@ -171,7 +174,7 @@ export const delete_repo_variable = tool({
     name: z.string().describe("Variable name"),
   }),
   execute: async ({ repo, name }) => {
-    await octokit.rest.actions.deleteRepoVariable({ owner: ORG, repo, name });
+    await octokit.rest.actions.deleteRepoVariable({ owner: env.GITHUB_ORG, repo, name });
     return JSON.stringify({ deleted: true, name });
   },
 });
@@ -188,7 +191,7 @@ export const list_org_secrets = tool({
   }),
   execute: async ({ per_page, page }) => {
     const { data } = await octokit.rest.actions.listOrgSecrets({
-      org: ORG,
+      org: env.GITHUB_ORG,
       per_page: per_page ?? 30,
       page: page ?? 1,
     });
@@ -216,10 +219,10 @@ export const create_or_update_org_secret = tool({
       .describe("Repo IDs (required when visibility is 'selected')"),
   }),
   execute: async ({ secret_name, value, visibility, selected_repository_ids }) => {
-    const { data: keyData } = await octokit.rest.actions.getOrgPublicKey({ org: ORG });
+    const { data: keyData } = await octokit.rest.actions.getOrgPublicKey({ org: env.GITHUB_ORG });
     const encrypted = encryptSecret(value, keyData.key);
     await octokit.rest.actions.createOrUpdateOrgSecret({
-      org: ORG,
+      org: env.GITHUB_ORG,
       secret_name,
       encrypted_value: encrypted,
       key_id: keyData.key_id,
@@ -236,7 +239,7 @@ export const delete_org_secret = tool({
     secret_name: z.string().describe("Secret name"),
   }),
   execute: async ({ secret_name }) => {
-    await octokit.rest.actions.deleteOrgSecret({ org: ORG, secret_name });
+    await octokit.rest.actions.deleteOrgSecret({ org: env.GITHUB_ORG, secret_name });
     return JSON.stringify({ deleted: true, secret_name });
   },
 });
@@ -253,7 +256,7 @@ export const list_org_variables = tool({
   }),
   execute: async ({ per_page, page }) => {
     const { data } = await octokit.rest.actions.listOrgVariables({
-      org: ORG,
+      org: env.GITHUB_ORG,
       per_page: per_page ?? 30,
       page: page ?? 1,
     });
@@ -281,7 +284,7 @@ export const create_or_update_org_variable = tool({
   execute: async ({ name, value, visibility, selected_repository_ids }) => {
     try {
       await octokit.rest.actions.updateOrgVariable({
-        org: ORG,
+        org: env.GITHUB_ORG,
         name,
         value,
         visibility,
@@ -290,7 +293,7 @@ export const create_or_update_org_variable = tool({
     } catch (e: any) {
       if (e.status === 404) {
         await octokit.rest.actions.createOrgVariable({
-          org: ORG,
+          org: env.GITHUB_ORG,
           name,
           value,
           visibility,
@@ -308,7 +311,7 @@ export const delete_org_variable = tool({
     name: z.string().describe("Variable name"),
   }),
   execute: async ({ name }) => {
-    await octokit.rest.actions.deleteOrgVariable({ org: ORG, name });
+    await octokit.rest.actions.deleteOrgVariable({ org: env.GITHUB_ORG, name });
     return JSON.stringify({ deleted: true, name });
   },
 });

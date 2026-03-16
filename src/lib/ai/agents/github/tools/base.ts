@@ -1,8 +1,8 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { env } from "../../../../../env";
 import { octokit } from "../client";
-import { ORG } from "../constants";
 
 /** List repositories in the purduehackers organization with optional filters. */
 export const list_repositories = tool({
@@ -16,7 +16,7 @@ export const list_repositories = tool({
   }),
   execute: async ({ type, sort, per_page, page }) => {
     const { data } = await octokit.rest.repos.listForOrg({
-      org: ORG,
+      org: env.GITHUB_ORG,
       type: type ?? "all",
       sort: sort ?? "updated",
       per_page: per_page ?? 30,
@@ -48,7 +48,7 @@ export const get_repository = tool({
     repo: z.string().describe("Repository name (e.g. 'my-repo')"),
   }),
   execute: async ({ repo }) => {
-    const { data } = await octokit.rest.repos.get({ owner: ORG, repo });
+    const { data } = await octokit.rest.repos.get({ owner: env.GITHUB_ORG, repo });
     return JSON.stringify({
       name: data.name,
       full_name: data.full_name,
@@ -106,7 +106,7 @@ export const search_code = tool({
       return `Code search failed (${response.status}).`;
     }
 
-    const data = (await response.JSON.stringify()) as {
+    const data = (await response.json()) as {
       facets?: { count?: number };
       hits?: {
         hits?: Array<{
@@ -150,7 +150,7 @@ export const search_issues = tool({
   }),
   execute: async ({ query, sort, order, per_page, page }) => {
     const { data } = await octokit.rest.search.issuesAndPullRequests({
-      q: `${query} org:${ORG}`,
+      q: `${query} org:${env.GITHUB_ORG}`,
       sort,
       order,
       per_page: per_page ?? 20,

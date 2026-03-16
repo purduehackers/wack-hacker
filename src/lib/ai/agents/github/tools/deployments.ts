@@ -1,8 +1,8 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { env } from "../../../../../env";
 import { octokit } from "../client";
-import { ORG } from "../constants";
 
 /** List deployments for a repository. */
 export const list_deployments = tool({
@@ -16,7 +16,7 @@ export const list_deployments = tool({
   }),
   execute: async ({ repo, environment, ref, per_page, page }) => {
     const { data } = await octokit.rest.repos.listDeployments({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       environment,
       ref,
@@ -50,7 +50,7 @@ export const create_deployment = tool({
   }),
   execute: async ({ repo, ...input }) => {
     const { data } = await octokit.rest.repos.createDeployment({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       ...input,
     });
@@ -81,7 +81,7 @@ export const create_deployment_status = tool({
   }),
   execute: async ({ repo, deployment_id, ...input }) => {
     const { data } = await octokit.rest.repos.createDeploymentStatus({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       deployment_id,
       ...input,
@@ -102,7 +102,7 @@ export const get_pages_info = tool({
   }),
   execute: async ({ repo }) => {
     try {
-      const { data } = await octokit.rest.repos.getPages({ owner: ORG, repo });
+      const { data } = await octokit.rest.repos.getPages({ owner: env.GITHUB_ORG, repo });
       return JSON.stringify({
         url: data.url,
         html_url: data.html_url,
@@ -131,7 +131,7 @@ export const list_pages_builds = tool({
   }),
   execute: async ({ repo, per_page, page }) => {
     const { data } = await octokit.rest.repos.listPagesBuilds({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       per_page: per_page ?? 10,
       page: page ?? 1,
@@ -156,7 +156,7 @@ export const trigger_pages_build = tool({
   }),
   execute: async ({ repo }) => {
     const { data } = await octokit.rest.repos.requestPagesBuild({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
     });
     return JSON.stringify({ status: data.status, url: data.url });
