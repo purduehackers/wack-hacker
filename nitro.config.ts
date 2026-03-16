@@ -6,7 +6,7 @@ export default defineConfig({
   },
   vercel: {
     functions: {
-      maxDuration: 10 * 60 * 1000,
+      maxDuration: 10 * 60,
     },
   },
 });
