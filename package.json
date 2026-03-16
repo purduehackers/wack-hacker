@@ -21,6 +21,7 @@
     "@notionhq/client": "^5.13.0",
     "@octokit/auth-app": "^8.2.0",
     "@vercel/config": "^0.0.39",
+    "@vercel/functions": "^3.4.3",
     "@workflow/ai": "^4.0.1-beta.56",
     "ai": "^6.0.116",
     "chat": "^4.20.1",

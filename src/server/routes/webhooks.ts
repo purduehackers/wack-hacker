@@ -1,3 +1,4 @@
+import { waitUntil } from "@vercel/functions";
 import { Hono } from "hono";
 
 import { bot } from "../../lib/bot";
@@ -14,9 +15,7 @@ app.post("/:platform", async (c) => {
     return c.text(`Unknown platform: ${platform}`, 404);
   }
 
-  return handler(c.req.raw, {
-    waitUntil: (task) => c.executionCtx.waitUntil(task),
-  });
+  return handler(c.req.raw, { waitUntil });
 });
 
 export default app;

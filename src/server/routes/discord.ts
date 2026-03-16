@@ -1,3 +1,4 @@
+import { waitUntil } from "@vercel/functions";
 import { Hono } from "hono";
 
 import { bot } from "../../lib/bot";
@@ -17,7 +18,7 @@ app.get("/gateway", async (c) => {
   const durationMs = 10 * 60 * 1000;
 
   return discord.startGatewayListener(
-    { waitUntil: (task: Promise<unknown>) => c.executionCtx.waitUntil(task) },
+    { waitUntil },
     durationMs,
     undefined,
     webhookUrl,
