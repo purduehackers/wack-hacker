@@ -12,4 +12,5 @@ export const bot = new Chat<typeof adapters, ThreadState>({
   userName: "wack-hacker",
   adapters,
   state: createRedisState(),
+  logger: "debug",
 }).registerSingleton();
