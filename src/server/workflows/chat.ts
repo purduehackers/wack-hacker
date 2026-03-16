@@ -2,7 +2,6 @@ import type { UIMessageChunk } from "ai";
 
 import { DurableAgent } from "@workflow/ai/agent";
 import { Message, type Thread } from "chat";
-import { join } from "node:path";
 import { createHook, getWritable, getWorkflowMetadata } from "workflow";
 
 import type { ThreadState } from "../../lib/bot/types";
@@ -11,9 +10,6 @@ import type { ChatTurnPayload } from "./types";
 import { createChatTools } from "../../lib/ai/chat/tools";
 import { AgentContext } from "../../lib/ai/context";
 import { DiscordRole } from "../../lib/ai/context/enums";
-
-const ORGANIZER_PROMPT_PATH = join(import.meta.dir, "../../lib/ai/chat/prompts/SYSTEM.md");
-const PUBLIC_PROMPT_PATH = join(import.meta.dir, "../../lib/ai/chat/prompts/SYSTEM_PUBLIC.md");
 
 /**
  * Multi-turn chat workflow.
@@ -33,9 +29,8 @@ export async function chatWorkflow(payload: string) {
   const { workflowRunId } = getWorkflowMetadata();
   const { thread, message, context } = await parsePayload(payload);
 
-  const promptPath =
-    context.role === DiscordRole.Public ? PUBLIC_PROMPT_PATH : ORGANIZER_PROMPT_PATH;
-  const rawPrompt = await loadPrompt(promptPath);
+  const isPublic = context.role === DiscordRole.Public;
+  const rawPrompt = await loadPrompt(isPublic ? "SYSTEM_PUBLIC.md" : "SYSTEM.md");
   const system = context.buildInstructions(rawPrompt);
 
   const writable = getWritable<UIMessageChunk>();
@@ -122,10 +117,12 @@ async function deserializeMessage(serialized: any) {
   return Message.fromJSON(serialized);
 }
 
-/** Read a prompt markdown file from disk. */
-async function loadPrompt(path: string) {
+/** Read a prompt markdown file from disk. Path is relative to the prompts directory. */
+async function loadPrompt(filename: string) {
   "use step";
-  return Bun.file(path).text();
+  const path = await import("node:path");
+  const dir = path.join(__dirname, "../../lib/ai/chat/prompts");
+  return Bun.file(path.join(dir, filename)).text();
 }
 
 /** End the session: notify the user, unsubscribe, and clear state. */
