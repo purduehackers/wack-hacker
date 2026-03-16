@@ -28,8 +28,8 @@ Common property value formats for create/update:
 - email: `{ "email": "user@example.com" }`
 - people: `{ "people": [{ "id": "user-uuid" }] }` (resolve via list_users)
 - relation: `{ "relation": [{ "id": "page-uuid" }] }` (resolve via search_notion)
-</property_formats>
-</creating>
+  </property_formats>
+  </creating>
 
 <content>
 Page body content is read and written as Notion-flavored markdown via the native markdown API.
@@ -43,6 +43,7 @@ Page body content is read and written as Notion-flavored markdown via the native
 Notion-flavored markdown syntax reference:
 
 Basic blocks:
+
 - `# Heading 1`, `## Heading 2`, `### Heading 3` (h4-h6 convert to h4)
 - `- Bulleted item` and `1. Numbered item`
 - `- [ ] To-do` and `- [x] Completed to-do`
@@ -52,6 +53,7 @@ Basic blocks:
 - Use tabs for indentation — child blocks are indented one tab deeper than their parent.
 
 Inline formatting:
+
 - `**bold**`, `*italic*`, `~~strikethrough~~`, `` `inline code` ``
 - `[link text](URL)` for links
 - `$equation$` for inline math
@@ -60,6 +62,7 @@ Inline formatting:
 - Colors: gray, brown, orange, yellow, green, blue, purple, pink, red (add `_bg` suffix for background)
 
 Callouts:
+
 ```
 <callout icon="💡" color="yellow_bg">
 	Callout content here
@@ -68,15 +71,18 @@ Callouts:
 ```
 
 Toggle blocks:
+
 ```
 <details>
 <summary>Toggle title</summary>
 	Content revealed when opened
 </details>
 ```
+
 Or toggle headings: `# Heading {toggle="true"}`
 
 Columns:
+
 ```
 <columns>
 	<column>
@@ -89,6 +95,7 @@ Columns:
 ```
 
 Tables (HTML):
+
 ```
 <table header-row="true">
 	<tr>
@@ -103,6 +110,7 @@ Tables (HTML):
 ```
 
 Block equations:
+
 ```
 $$
 E = mc^2
@@ -110,26 +118,30 @@ $$
 ```
 
 Media:
+
 - Images: `![Caption](URL)`
 - Video: `<video src="URL">Caption</video>`
 - Audio: `<audio src="URL">Caption</audio>`
 - File: `<file src="URL">Caption</file>`
 
 Page/database references:
+
 - `<page url="notion-url">Page Title</page>`
 - `<database url="notion-url">Database Title</database>`
 
 Mentions:
+
 - `<mention-user url="user-url">Name</mention-user>`
 - `<mention-page url="page-url">Page Title</mention-page>`
 - `<mention-date start="2024-01-15"/>`
 - `<mention-date start="2024-01-15" end="2024-01-20"/>`
 
 Other:
+
 - `<table_of_contents/>` for a table of contents block
 - `<empty-block/>` for an empty paragraph
-</markdown_syntax>
-</content>
+  </markdown_syntax>
+  </content>
 
 <updating>
 - Update only the properties the user asked for. Don't touch other fields.
@@ -142,6 +154,7 @@ Other:
 </updating>
 
 <property_retrieval>
+
 - Use retrieve_page for a summary of all properties with inline values.
 - Use retrieve_page_property for paginated properties (relations with many items, rollups, formulas). Pass the property_id from retrieve_page results.
-</property_retrieval>
+  </property_retrieval>

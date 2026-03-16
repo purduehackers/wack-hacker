@@ -1,8 +1,8 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { env } from "../../../../../env";
 import { octokit } from "../client";
-import { ORG } from "../constants";
 
 export const create_repository = tool({
   description: `Create a new repository in the purduehackers organization. Returns the repo name, URL, visibility, and default branch.`,
@@ -16,7 +16,7 @@ export const create_repository = tool({
   }),
   execute: async (input) => {
     const { data } = await octokit.rest.repos.createInOrg({
-      org: ORG,
+      org: env.GITHUB_ORG,
       name: input.name,
       description: input.description,
       private: input.private ?? true,
@@ -51,7 +51,7 @@ export const update_repository = tool({
     delete_branch_on_merge: z.boolean().optional(),
   }),
   execute: async ({ repo, ...settings }) => {
-    const { data } = await octokit.rest.repos.update({ owner: ORG, repo, ...settings });
+    const { data } = await octokit.rest.repos.update({ owner: env.GITHUB_ORG, repo, ...settings });
     return JSON.stringify({
       name: data.name,
       html_url: data.html_url,
@@ -68,8 +68,8 @@ export const delete_repository = tool({
     repo: z.string().describe("Repository name to delete"),
   }),
   execute: async ({ repo }) => {
-    await octokit.rest.repos.delete({ owner: ORG, repo });
-    return JSON.stringify({ deleted: true, repo: `${ORG}/${repo}` });
+    await octokit.rest.repos.delete({ owner: env.GITHUB_ORG, repo });
+    return JSON.stringify({ deleted: true, repo: `${env.GITHUB_ORG}/${repo}` });
   },
 });
 
@@ -83,7 +83,7 @@ export const list_branches = tool({
   }),
   execute: async ({ repo, ...opts }) => {
     const { data } = await octokit.rest.repos.listBranches({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       protected: opts.protected,
       per_page: opts.per_page ?? 30,
@@ -101,7 +101,11 @@ export const get_branch_protection = tool({
   }),
   execute: async ({ repo, branch }) => {
     try {
-      const { data } = await octokit.rest.repos.getBranchProtection({ owner: ORG, repo, branch });
+      const { data } = await octokit.rest.repos.getBranchProtection({
+        owner: env.GITHUB_ORG,
+        repo,
+        branch,
+      });
       return JSON.stringify({
         required_status_checks: data.required_status_checks,
         enforce_admins: data.enforce_admins?.enabled,
@@ -155,7 +159,7 @@ export const set_branch_protection = tool({
   }),
   execute: async ({ repo, branch, ...rules }) => {
     await octokit.rest.repos.updateBranchProtection({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       branch,
       required_status_checks: rules.required_status_checks ?? null,
@@ -174,7 +178,7 @@ export const delete_branch_protection = tool({
     branch: z.string().describe("Branch name"),
   }),
   execute: async ({ repo, branch }) => {
-    await octokit.rest.repos.deleteBranchProtection({ owner: ORG, repo, branch });
+    await octokit.rest.repos.deleteBranchProtection({ owner: env.GITHUB_ORG, repo, branch });
     return JSON.stringify({ deleted: true, repo, branch });
   },
 });

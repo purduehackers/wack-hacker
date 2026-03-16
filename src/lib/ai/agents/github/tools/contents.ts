@@ -1,8 +1,8 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { env } from "../../../../../env";
 import { octokit } from "../client";
-import { ORG } from "../constants";
 
 /** Get the content of a file or list a directory in a repository. */
 export const get_file_content = tool({
@@ -14,7 +14,7 @@ export const get_file_content = tool({
   }),
   execute: async ({ repo, path, ref }) => {
     const { data } = await octokit.rest.repos.getContent({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       path,
       ref,
@@ -52,7 +52,7 @@ export const create_or_update_file = tool({
   }),
   execute: async ({ repo, path, content, message, branch, sha }) => {
     const { data } = await octokit.rest.repos.createOrUpdateFileContents({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       path,
       message,
@@ -81,7 +81,7 @@ export const delete_file = tool({
   }),
   execute: async ({ repo, path, message, sha, branch }) => {
     await octokit.rest.repos.deleteFile({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       path,
       message,
@@ -102,7 +102,7 @@ export const get_directory_tree = tool({
   execute: async ({ repo, tree_sha }) => {
     const sha = tree_sha ?? "HEAD";
     const { data } = await octokit.rest.git.getTree({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       tree_sha: sha,
       recursive: "1",
@@ -129,7 +129,7 @@ export const list_commits = tool({
   }),
   execute: async ({ repo, ...opts }) => {
     const { data } = await octokit.rest.repos.listCommits({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       sha: opts.sha,
       path: opts.path,
@@ -159,7 +159,7 @@ export const get_commit = tool({
   }),
   execute: async ({ repo, ref }) => {
     const { data } = await octokit.rest.repos.getCommit({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       ref,
     });
@@ -190,7 +190,7 @@ export const compare_commits = tool({
   }),
   execute: async ({ repo, base, head }) => {
     const { data } = await octokit.rest.repos.compareCommitsWithBasehead({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       basehead: `${base}...${head}`,
     });

@@ -1,8 +1,8 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { env } from "../../../../../env";
 import { octokit } from "../client";
-import { ORG } from "../constants";
 
 /** Create a new pull request. */
 export const create_pull_request = tool({
@@ -17,7 +17,7 @@ export const create_pull_request = tool({
   }),
   execute: async ({ repo, ...input }) => {
     const { data } = await octokit.rest.pulls.create({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       ...input,
     });
@@ -44,7 +44,7 @@ export const update_pull_request = tool({
   }),
   execute: async ({ repo, pull_number, ...input }) => {
     const { data } = await octokit.rest.pulls.update({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       pull_number,
       ...input,
@@ -70,7 +70,7 @@ export const merge_pull_request = tool({
   }),
   execute: async ({ repo, pull_number, ...input }) => {
     const { data } = await octokit.rest.pulls.merge({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       pull_number,
       ...input,
@@ -90,7 +90,7 @@ export const list_pr_reviews = tool({
   }),
   execute: async ({ repo, pull_number, per_page, page }) => {
     const { data } = await octokit.rest.pulls.listReviews({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       pull_number,
       per_page: per_page ?? 30,
@@ -120,7 +120,7 @@ export const create_pr_review = tool({
   }),
   execute: async ({ repo, pull_number, body, event }) => {
     const { data } = await octokit.rest.pulls.createReview({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       pull_number,
       body,
@@ -141,7 +141,7 @@ export const list_pr_files = tool({
   }),
   execute: async ({ repo, pull_number, per_page, page }) => {
     const { data } = await octokit.rest.pulls.listFiles({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       pull_number,
       per_page: per_page ?? 30,
@@ -171,7 +171,7 @@ export const list_pr_comments = tool({
   }),
   execute: async ({ repo, pull_number, per_page, page }) => {
     const { data } = await octokit.rest.pulls.listReviewComments({
-      owner: ORG,
+      owner: env.GITHUB_ORG,
       repo,
       pull_number,
       per_page: per_page ?? 30,

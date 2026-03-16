@@ -1,8 +1,8 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { env } from "../../../../../env";
 import { octokit } from "../client";
-import { ORG } from "../constants";
 
 const packageTypeSchema = z.enum(["npm", "maven", "rubygems", "docker", "nuget", "container"]);
 
@@ -16,7 +16,7 @@ export const list_packages = tool({
   }),
   execute: async ({ package_type, per_page, page }) => {
     const { data } = await octokit.rest.packages.listPackagesForOrganization({
-      org: ORG,
+      org: env.GITHUB_ORG,
       package_type,
       per_page: per_page ?? 30,
       page: page ?? 1,
@@ -44,7 +44,7 @@ export const get_package = tool({
   }),
   execute: async ({ package_type, package_name }) => {
     const { data } = await octokit.rest.packages.getPackageForOrganization({
-      org: ORG,
+      org: env.GITHUB_ORG,
       package_type,
       package_name,
     });
@@ -71,7 +71,7 @@ export const list_package_versions = tool({
   }),
   execute: async ({ package_type, package_name, per_page, page }) => {
     const { data } = await octokit.rest.packages.getAllPackageVersionsForPackageOwnedByOrg({
-      org: ORG,
+      org: env.GITHUB_ORG,
       package_type,
       package_name,
       per_page: per_page ?? 20,
@@ -100,7 +100,7 @@ export const delete_package_version = tool({
   }),
   execute: async ({ package_type, package_name, package_version_id }) => {
     await octokit.rest.packages.deletePackageVersionForOrg({
-      org: ORG,
+      org: env.GITHUB_ORG,
       package_type,
       package_name,
       package_version_id,

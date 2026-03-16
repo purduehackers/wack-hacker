@@ -1,8 +1,8 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { env } from "../../../../../env";
 import { octokit } from "../client";
-import { ORG } from "../constants";
 
 /** List GitHub Projects v2 in the organization. */
 export const list_org_projects = tool({
@@ -35,7 +35,7 @@ export const list_org_projects = tool({
           }
         }
       }`,
-      { org: ORG, first: first ?? 20, after },
+      { org: env.GITHUB_ORG, first: first ?? 20, after },
     );
     return JSON.stringify({
       projects: organization.projectsV2.nodes,
@@ -77,7 +77,7 @@ export const get_project = tool({
           }
         }
       }`,
-      { org: ORG, number: project_number },
+      { org: env.GITHUB_ORG, number: project_number },
     );
     return JSON.stringify(organization.projectV2);
   },
@@ -141,7 +141,7 @@ export const list_project_items = tool({
           }
         }
       }`,
-      { org: ORG, number: project_number, first: first ?? 20, after },
+      { org: env.GITHUB_ORG, number: project_number, first: first ?? 20, after },
     );
     const items = organization.projectV2.items;
     return JSON.stringify({
