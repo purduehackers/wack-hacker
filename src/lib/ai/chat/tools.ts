@@ -40,6 +40,12 @@ export function createChatTools(ctx: AgentContext) {
       inputSchema: delegationSchema,
       execute: ({ task }) => launchAgent("notion", task, isAdmin),
     });
+
+    tools.discord = tool({
+      description: `Delegate to the Discord agent for server management — channels, roles, members, messages, webhooks, scheduled events, threads, and emojis. Forward the user's request verbatim.`,
+      inputSchema: delegationSchema,
+      execute: ({ task }) => launchAgent("discord", task, isAdmin),
+    });
   }
 
   return tools;
@@ -49,6 +55,7 @@ const AGENT_LOADERS = {
   linear: () => import("../agents/linear/workflow").then((m) => m.linearAgent),
   github: () => import("../agents/github/workflow").then((m) => m.githubAgent),
   notion: () => import("../agents/notion/workflow").then((m) => m.notionAgent),
+  discord: () => import("../agents/discord/workflow").then((m) => m.discordAgent),
 } as const;
 
 /** Launch a domain agent as a child workflow and await its text result. */

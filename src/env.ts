@@ -7,6 +7,8 @@ export const env = z
     DISCORD_BOT_TOKEN: z.string(),
     DISCORD_APPLICATION_ID: z.string(),
     DISCORD_PUBLIC_KEY: z.string(),
+    DISCORD_GUILD_ID: z.string(),
+    GITHUB_ORG: z.string().default("purduehackers"),
     LINEAR_API_KEY: z.string(),
     NOTION_TOKEN: z.string(),
     GITHUB_APP_ID: z.string(),
