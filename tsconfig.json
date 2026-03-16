@@ -24,6 +24,6 @@
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false,
 
-    "plugins": [{ "name": "@effect/language-service" }, { "name": "workflow" }]
-  }
+    "plugins": [{ "name": "@effect/language-service" }, { "name": "workflow" }],
+  },
 }

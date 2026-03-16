@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { env } from "../../../../env";
+import { env } from "../../../../env.ts";
 
 const PHACK_ASK_URL = "https://ask.purduehackers.com/api/query";
 

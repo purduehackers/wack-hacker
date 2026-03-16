@@ -1,5 +1,5 @@
-/** @jsxImportSource chat */
 import { Card, CardText, Button, Actions, Fields, Field } from "chat";
+import { jsx, jsxs } from "chat/jsx-runtime";
 import { createHook } from "workflow";
 
 /**
@@ -19,7 +19,12 @@ export async function requestApproval(opts: {
     token: `approval:${opts.token}`,
   });
 
-  await postApprovalCard(opts.thread, opts.description, opts.reason, opts.token);
+  await postApprovalCard(
+    opts.thread,
+    opts.description,
+    opts.reason,
+    opts.token,
+  );
 
   // Workflow suspends here until the onAction handler resumes the hook
   return hook;
@@ -34,24 +39,33 @@ async function postApprovalCard(
   token: string,
 ) {
   "use step";
-  const { bot } = await import("../../lib/bot");
+  const { bot } = await import("../../bot");
   await bot.initialize();
 
   await thread.post(
-    <Card title="Approval Required">
-      <CardText>{description}</CardText>
-      <Fields>
-        <Field label="Reason" value={reason} />
-      </Fields>
-      <Actions>
-        <Button id={`approval:approve:${token}`} style="primary">
-          Approve
-        </Button>
-        <Button id={`approval:deny:${token}`} style="danger">
-          Deny
-        </Button>
-      </Actions>
-    </Card>,
+    jsxs(Card, {
+      title: "Approval Required",
+      children: [
+        jsx(CardText, { children: description }),
+        jsx(Fields, {
+          children: jsx(Field, { label: "Reason", value: reason }),
+        }),
+        jsxs(Actions, {
+          children: [
+            jsx(Button, {
+              id: `approval:approve:${token}`,
+              style: "primary",
+              children: "Approve",
+            }),
+            jsx(Button, {
+              id: `approval:deny:${token}`,
+              style: "danger",
+              children: "Deny",
+            }),
+          ],
+        }),
+      ],
+    }),
   );
 }
 

@@ -2,7 +2,7 @@ import { tool } from "ai";
 import { Routes } from "discord-api-types/v10";
 import { z } from "zod";
 
-import { env } from "../../../../../env";
+import { env } from "../../../../../env.ts";
 import { discord } from "../client";
 
 // ---------------------------------------------------------------------------
@@ -18,16 +18,36 @@ export const create_role = tool({
       .string()
       .optional()
       .describe("Hex color (e.g. '#FF0000') — will be converted to integer"),
-    hoist: z.boolean().optional().describe("Display role members separately in the sidebar"),
-    mentionable: z.boolean().optional().describe("Allow anyone to mention this role"),
-    position: z.number().optional().describe("Role position (higher = more authority)"),
-    icon: z.string().optional().describe("Role icon image URL (requires server boost level 2+)"),
+    hoist: z
+      .boolean()
+      .optional()
+      .describe("Display role members separately in the sidebar"),
+    mentionable: z
+      .boolean()
+      .optional()
+      .describe("Allow anyone to mention this role"),
+    position: z
+      .number()
+      .optional()
+      .describe("Role position (higher = more authority)"),
+    icon: z
+      .string()
+      .optional()
+      .describe("Role icon image URL (requires server boost level 2+)"),
     unicode_emoji: z
       .string()
       .optional()
       .describe("Unicode emoji for the role icon (alternative to image icon)"),
   }),
-  execute: async ({ name, color, hoist, mentionable, position, icon, unicode_emoji }) => {
+  execute: async ({
+    name,
+    color,
+    hoist,
+    mentionable,
+    position,
+    icon,
+    unicode_emoji,
+  }) => {
     const body: Record<string, any> = { name };
     if (color) body.color = parseInt(color.replace("#", ""), 16);
     if (hoist !== undefined) body.hoist = hoist;
@@ -69,14 +89,27 @@ export const edit_role = tool({
       .string()
       .nullable()
       .optional()
-      .describe("Role icon image URL (requires server boost level 2+, null to remove)"),
+      .describe(
+        "Role icon image URL (requires server boost level 2+, null to remove)",
+      ),
     unicode_emoji: z
       .string()
       .nullable()
       .optional()
-      .describe("Unicode emoji for the role icon (alternative to image icon, null to remove)"),
+      .describe(
+        "Unicode emoji for the role icon (alternative to image icon, null to remove)",
+      ),
   }),
-  execute: async ({ role_id, name, color, hoist, mentionable, position, icon, unicode_emoji }) => {
+  execute: async ({
+    role_id,
+    name,
+    color,
+    hoist,
+    mentionable,
+    position,
+    icon,
+    unicode_emoji,
+  }) => {
     const body: Record<string, any> = {};
     if (name) body.name = name;
     if (color) body.color = parseInt(color.replace("#", ""), 16);
@@ -85,9 +118,12 @@ export const edit_role = tool({
     if (icon !== undefined) body.icon = icon;
     if (unicode_emoji !== undefined) body.unicode_emoji = unicode_emoji;
 
-    const edited = (await discord.patch(Routes.guildRole(env.DISCORD_GUILD_ID, role_id), {
-      body,
-    })) as any;
+    const edited = (await discord.patch(
+      Routes.guildRole(env.DISCORD_GUILD_ID, role_id),
+      {
+        body,
+      },
+    )) as any;
 
     if (position !== undefined) {
       await discord.patch(Routes.guildRoles(env.DISCORD_GUILD_ID), {
@@ -112,7 +148,9 @@ export const delete_role = tool({
   }),
   execute: async ({ role_id }) => {
     // Fetch the role first to get its name
-    const roles = (await discord.get(Routes.guildRoles(env.DISCORD_GUILD_ID))) as any[];
+    const roles = (await discord.get(
+      Routes.guildRoles(env.DISCORD_GUILD_ID),
+    )) as any[];
     const role = roles.find((r) => r.id === role_id);
     if (!role) return JSON.stringify({ error: "Role not found" });
     await discord.delete(Routes.guildRole(env.DISCORD_GUILD_ID, role_id));
@@ -128,7 +166,9 @@ export const assign_role = tool({
     role_id: z.string().describe("Role ID to assign"),
   }),
   execute: async ({ member_id, role_id }) => {
-    await discord.put(Routes.guildMemberRole(env.DISCORD_GUILD_ID, member_id, role_id));
+    await discord.put(
+      Routes.guildMemberRole(env.DISCORD_GUILD_ID, member_id, role_id),
+    );
     return JSON.stringify({ success: true, member: member_id, role: role_id });
   },
 });
@@ -141,7 +181,9 @@ export const remove_role = tool({
     role_id: z.string().describe("Role ID to remove"),
   }),
   execute: async ({ member_id, role_id }) => {
-    await discord.delete(Routes.guildMemberRole(env.DISCORD_GUILD_ID, member_id, role_id));
+    await discord.delete(
+      Routes.guildMemberRole(env.DISCORD_GUILD_ID, member_id, role_id),
+    );
     return JSON.stringify({ success: true, member: member_id, role: role_id });
   },
 });

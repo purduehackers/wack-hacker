@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { env } from "../../../../../env";
+import { env } from "../../../../../env.ts";
 import { SkillSystem } from "../../../context/skills";
 import { octokit } from "../client";
 
@@ -40,7 +40,11 @@ export const get_org_member = tool({
       org: env.GITHUB_ORG,
       username,
     });
-    return JSON.stringify({ user: data.user?.login, role: data.role, state: data.state });
+    return JSON.stringify({
+      user: data.user?.login,
+      role: data.role,
+      state: data.state,
+    });
   },
 });
 
@@ -75,7 +79,10 @@ export const get_team = tool({
     team_slug: z.string().describe("Team slug (e.g. 'engineering')"),
   }),
   execute: async ({ team_slug }) => {
-    const { data } = await octokit.rest.teams.getByName({ org: env.GITHUB_ORG, team_slug });
+    const { data } = await octokit.rest.teams.getByName({
+      org: env.GITHUB_ORG,
+      team_slug,
+    });
     return JSON.stringify({
       id: data.id,
       name: data.name,
@@ -103,7 +110,9 @@ export const list_team_members = tool({
       per_page: per_page ?? 30,
       page: page ?? 1,
     });
-    return JSON.stringify(data.map((m) => ({ login: m.login, id: m.id, html_url: m.html_url })));
+    return JSON.stringify(
+      data.map((m) => ({ login: m.login, id: m.id, html_url: m.html_url })),
+    );
   },
 });
 
@@ -138,7 +147,10 @@ export const invite_org_member = SkillSystem.admin(
     description: `Invite a GitHub user to the purduehackers organization or update their role. Role can be "admin" or "member" (default).`,
     inputSchema: z.object({
       username: z.string().describe("GitHub username to invite"),
-      role: z.enum(["admin", "member"]).optional().describe("Org role (default: member)"),
+      role: z
+        .enum(["admin", "member"])
+        .optional()
+        .describe("Org role (default: member)"),
     }),
     execute: async ({ username, role }) => {
       const { data } = await octokit.rest.orgs.setMembershipForUser({
@@ -146,7 +158,11 @@ export const invite_org_member = SkillSystem.admin(
         username,
         role: role ?? "member",
       });
-      return JSON.stringify({ user: data.user?.login, role: data.role, state: data.state });
+      return JSON.stringify({
+        user: data.user?.login,
+        role: data.role,
+        state: data.state,
+      });
     },
   }),
 );
@@ -158,7 +174,10 @@ export const remove_org_member = SkillSystem.admin(
       username: z.string().describe("GitHub username to remove"),
     }),
     execute: async ({ username }) => {
-      await octokit.rest.orgs.removeMembershipForUser({ org: env.GITHUB_ORG, username });
+      await octokit.rest.orgs.removeMembershipForUser({
+        org: env.GITHUB_ORG,
+        username,
+      });
       return JSON.stringify({ removed: true, username });
     },
   }),
@@ -170,15 +189,19 @@ export const add_team_member = SkillSystem.admin(
     inputSchema: z.object({
       team_slug: z.string().describe("Team slug"),
       username: z.string().describe("GitHub username"),
-      role: z.enum(["member", "maintainer"]).optional().describe("Team role (default: member)"),
+      role: z
+        .enum(["member", "maintainer"])
+        .optional()
+        .describe("Team role (default: member)"),
     }),
     execute: async ({ team_slug, username, role }) => {
-      const { data } = await octokit.rest.teams.addOrUpdateMembershipForUserInOrg({
-        org: env.GITHUB_ORG,
-        team_slug,
-        username,
-        role: role ?? "member",
-      });
+      const { data } =
+        await octokit.rest.teams.addOrUpdateMembershipForUserInOrg({
+          org: env.GITHUB_ORG,
+          team_slug,
+          username,
+          role: role ?? "member",
+        });
       return JSON.stringify({ username, role: data.role, state: data.state });
     },
   }),
@@ -208,8 +231,13 @@ export const create_webhook = tool({
     repo: z.string().describe("Repository name"),
     url: z.string().describe("Webhook payload URL"),
     content_type: z.enum(["json", "form"]).optional(),
-    secret: z.string().optional().describe("Webhook secret for signature verification"),
-    events: z.array(z.string()).describe("Events to subscribe to (e.g. ['push', 'pull_request'])"),
+    secret: z
+      .string()
+      .optional()
+      .describe("Webhook secret for signature verification"),
+    events: z
+      .array(z.string())
+      .describe("Events to subscribe to (e.g. ['push', 'pull_request'])"),
     active: z.boolean().optional(),
   }),
   execute: async ({ repo, url, content_type, secret, events, active }) => {
@@ -220,7 +248,11 @@ export const create_webhook = tool({
       events,
       active: active ?? true,
     });
-    return JSON.stringify({ id: data.id, active: data.active, events: data.events });
+    return JSON.stringify({
+      id: data.id,
+      active: data.active,
+      events: data.events,
+    });
   },
 });
 
@@ -235,7 +267,15 @@ export const update_webhook = tool({
     events: z.array(z.string()).optional(),
     active: z.boolean().optional(),
   }),
-  execute: async ({ repo, hook_id, url, content_type, secret, events, active }) => {
+  execute: async ({
+    repo,
+    hook_id,
+    url,
+    content_type,
+    secret,
+    events,
+    active,
+  }) => {
     const config: Record<string, string> = {};
     if (url) config.url = url;
     if (content_type) config.content_type = content_type;
@@ -248,7 +288,11 @@ export const update_webhook = tool({
       events,
       active,
     });
-    return JSON.stringify({ id: data.id, active: data.active, events: data.events });
+    return JSON.stringify({
+      id: data.id,
+      active: data.active,
+      events: data.events,
+    });
   },
 });
 
@@ -259,7 +303,11 @@ export const delete_webhook = tool({
     hook_id: z.number().describe("Webhook ID"),
   }),
   execute: async ({ repo, hook_id }) => {
-    await octokit.rest.repos.deleteWebhook({ owner: env.GITHUB_ORG, repo, hook_id });
+    await octokit.rest.repos.deleteWebhook({
+      owner: env.GITHUB_ORG,
+      repo,
+      hook_id,
+    });
     return JSON.stringify({ deleted: true, hook_id });
   },
 });

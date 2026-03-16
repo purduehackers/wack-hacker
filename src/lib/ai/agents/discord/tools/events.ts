@@ -2,7 +2,7 @@ import { tool } from "ai";
 import { Routes } from "discord-api-types/v10";
 import { z } from "zod";
 
-import { env } from "../../../../../env";
+import { env } from "../../../../../env.ts";
 import { discord } from "../client";
 
 // ---------------------------------------------------------------------------
@@ -37,7 +37,9 @@ function summarizeEvent(e: any) {
     location: e.entity_metadata?.location ?? null,
     userCount: e.user_count ?? null,
     creatorId: e.creator_id ?? null,
-    image: e.image ? `https://cdn.discordapp.com/guild-events/${e.id}/${e.image}.png` : null,
+    image: e.image
+      ? `https://cdn.discordapp.com/guild-events/${e.id}/${e.image}.png`
+      : null,
   };
 }
 
@@ -50,9 +52,12 @@ export const list_events = tool({
     "List all scheduled events in the server. Returns event details including name, description, times, type, location, and attendee count.",
   inputSchema: z.object({}),
   execute: async () => {
-    const events = (await discord.get(Routes.guildScheduledEvents(env.DISCORD_GUILD_ID), {
-      query: new URLSearchParams({ with_user_count: "true" }),
-    })) as any[];
+    const events = (await discord.get(
+      Routes.guildScheduledEvents(env.DISCORD_GUILD_ID),
+      {
+        query: new URLSearchParams({ with_user_count: "true" }),
+      },
+    )) as any[];
     return JSON.stringify(events.map(summarizeEvent));
   },
 });
@@ -68,12 +73,18 @@ export const create_event = tool({
       .string()
       .optional()
       .describe("End time (ISO 8601 string, required for external events)"),
-    type: z.enum(["voice", "stage", "external"]).default("external").describe("Event type"),
+    type: z
+      .enum(["voice", "stage", "external"])
+      .default("external")
+      .describe("Event type"),
     channel_id: z
       .string()
       .optional()
       .describe("Voice/stage channel ID (required for voice/stage events)"),
-    location: z.string().optional().describe("Location string (required for external events)"),
+    location: z
+      .string()
+      .optional()
+      .describe("Location string (required for external events)"),
     image: z.string().optional().describe("Cover image URL"),
   }),
   execute: async ({
@@ -100,9 +111,12 @@ export const create_event = tool({
     if (location) body.entity_metadata = { location };
     if (image) body.image = image;
 
-    const event = (await discord.post(Routes.guildScheduledEvents(env.DISCORD_GUILD_ID), {
-      body,
-    })) as any;
+    const event = (await discord.post(
+      Routes.guildScheduledEvents(env.DISCORD_GUILD_ID),
+      {
+        body,
+      },
+    )) as any;
 
     return JSON.stringify({
       id: event.id,
@@ -121,19 +135,29 @@ export const edit_event = tool({
     event_id: z.string().describe("Event ID"),
     name: z.string().optional().describe("New event name"),
     description: z.string().optional().describe("New description"),
-    scheduled_start: z.string().optional().describe("New start time (ISO 8601)"),
+    scheduled_start: z
+      .string()
+      .optional()
+      .describe("New start time (ISO 8601)"),
     scheduled_end: z.string().optional().describe("New end time (ISO 8601)"),
-    location: z.string().optional().describe("New location (external events only)"),
+    location: z
+      .string()
+      .optional()
+      .describe("New location (external events only)"),
     image: z.string().optional().describe("New cover image URL"),
     status: z
       .enum(["scheduled", "active", "completed", "canceled"])
       .optional()
-      .describe("New event status (e.g. 'active' to start, 'completed' or 'canceled' to end)"),
+      .describe(
+        "New event status (e.g. 'active' to start, 'completed' or 'canceled' to end)",
+      ),
     channel_id: z
       .string()
       .nullable()
       .optional()
-      .describe("Voice/stage channel ID (null to clear, for voice/stage events)"),
+      .describe(
+        "Voice/stage channel ID (null to clear, for voice/stage events)",
+      ),
   }),
   execute: async ({
     event_id,
@@ -182,7 +206,9 @@ export const delete_event = tool({
     const event = (await discord.get(
       Routes.guildScheduledEvent(env.DISCORD_GUILD_ID, event_id),
     )) as any;
-    await discord.delete(Routes.guildScheduledEvent(env.DISCORD_GUILD_ID, event_id));
+    await discord.delete(
+      Routes.guildScheduledEvent(env.DISCORD_GUILD_ID, event_id),
+    );
     return JSON.stringify({ success: true, deleted: event.name });
   },
 });

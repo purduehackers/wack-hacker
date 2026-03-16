@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { env } from "../../../../../env";
+import { env } from "../../../../../env.ts";
 import { octokit } from "../client";
 
 /** List deployments for a repository. */
@@ -43,7 +43,10 @@ export const create_deployment = tool({
   inputSchema: z.object({
     repo: z.string().describe("Repository name"),
     ref: z.string().describe("Branch, tag, or SHA to deploy"),
-    environment: z.string().optional().describe("Environment (e.g. 'production', 'staging')"),
+    environment: z
+      .string()
+      .optional()
+      .describe("Environment (e.g. 'production', 'staging')"),
     description: z.string().optional(),
     auto_merge: z.boolean().optional(),
     required_contexts: z.array(z.string()).optional(),
@@ -73,10 +76,21 @@ export const create_deployment_status = tool({
     repo: z.string().describe("Repository name"),
     deployment_id: z.number().describe("Deployment ID"),
     state: z
-      .enum(["error", "failure", "inactive", "in_progress", "queued", "pending", "success"])
+      .enum([
+        "error",
+        "failure",
+        "inactive",
+        "in_progress",
+        "queued",
+        "pending",
+        "success",
+      ])
       .describe("Deployment state"),
     description: z.string().optional(),
-    environment_url: z.string().optional().describe("URL of the deployed environment"),
+    environment_url: z
+      .string()
+      .optional()
+      .describe("URL of the deployed environment"),
     log_url: z.string().optional(),
   }),
   execute: async ({ repo, deployment_id, ...input }) => {
@@ -102,7 +116,10 @@ export const get_pages_info = tool({
   }),
   execute: async ({ repo }) => {
     try {
-      const { data } = await octokit.rest.repos.getPages({ owner: env.GITHUB_ORG, repo });
+      const { data } = await octokit.rest.repos.getPages({
+        owner: env.GITHUB_ORG,
+        repo,
+      });
       return JSON.stringify({
         url: data.url,
         html_url: data.html_url,

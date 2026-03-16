@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { env } from "../../../../../env";
+import { env } from "../../../../../env.ts";
 import { octokit } from "../client";
 
 /** Get the content of a file or list a directory in a repository. */
@@ -10,7 +10,10 @@ export const get_file_content = tool({
   inputSchema: z.object({
     repo: z.string().describe("Repository name"),
     path: z.string().describe("File or directory path"),
-    ref: z.string().optional().describe("Branch/tag/SHA (defaults to default branch)"),
+    ref: z
+      .string()
+      .optional()
+      .describe("Branch/tag/SHA (defaults to default branch)"),
   }),
   execute: async ({ repo, path, ref }) => {
     const { data } = await octokit.rest.repos.getContent({
@@ -21,7 +24,12 @@ export const get_file_content = tool({
     });
     if (Array.isArray(data)) {
       return JSON.stringify(
-        data.map((f) => ({ name: f.name, path: f.path, type: f.type, size: f.size })),
+        data.map((f) => ({
+          name: f.name,
+          path: f.path,
+          type: f.type,
+          size: f.size,
+        })),
       );
     }
     if (data.type === "file" && "content" in data) {
@@ -31,11 +39,19 @@ export const get_file_content = tool({
         path: data.path,
         size: data.size,
         sha: data.sha,
-        content: content.length > 50000 ? content.slice(0, 50000) + "\n...(truncated)" : content,
+        content:
+          content.length > 50000
+            ? content.slice(0, 50000) + "\n...(truncated)"
+            : content,
         html_url: data.html_url,
       });
     }
-    return JSON.stringify({ name: data.name, path: data.path, type: data.type, size: data.size });
+    return JSON.stringify({
+      name: data.name,
+      path: data.path,
+      type: data.type,
+      size: data.size,
+    });
   },
 });
 
@@ -45,10 +61,18 @@ export const create_or_update_file = tool({
   inputSchema: z.object({
     repo: z.string().describe("Repository name"),
     path: z.string().describe("File path"),
-    content: z.string().describe("File content (plain text, will be base64-encoded)"),
+    content: z
+      .string()
+      .describe("File content (plain text, will be base64-encoded)"),
     message: z.string().describe("Commit message"),
-    branch: z.string().optional().describe("Branch (defaults to default branch)"),
-    sha: z.string().optional().describe("SHA of the file being replaced (required for update)"),
+    branch: z
+      .string()
+      .optional()
+      .describe("Branch (defaults to default branch)"),
+    sha: z
+      .string()
+      .optional()
+      .describe("SHA of the file being replaced (required for update)"),
   }),
   execute: async ({ repo, path, content, message, branch, sha }) => {
     const { data } = await octokit.rest.repos.createOrUpdateFileContents({
@@ -97,7 +121,10 @@ export const get_directory_tree = tool({
   description: `Get the full recursive directory tree of a repository. Returns all file and directory paths with their types and sizes. Useful for understanding project structure. May be truncated for very large repos.`,
   inputSchema: z.object({
     repo: z.string().describe("Repository name"),
-    tree_sha: z.string().optional().describe("Tree SHA or branch name (defaults to HEAD)"),
+    tree_sha: z
+      .string()
+      .optional()
+      .describe("Tree SHA or branch name (defaults to HEAD)"),
   }),
   execute: async ({ repo, tree_sha }) => {
     const sha = tree_sha ?? "HEAD";
@@ -110,7 +137,11 @@ export const get_directory_tree = tool({
     return JSON.stringify({
       sha: data.sha,
       truncated: data.truncated,
-      tree: data.tree.map((t) => ({ path: t.path, type: t.type, size: t.size })),
+      tree: data.tree.map((t) => ({
+        path: t.path,
+        type: t.type,
+        size: t.size,
+      })),
     });
   },
 });
@@ -121,7 +152,10 @@ export const list_commits = tool({
   inputSchema: z.object({
     repo: z.string().describe("Repository name"),
     sha: z.string().optional().describe("Branch or SHA to list from"),
-    path: z.string().optional().describe("Filter to commits affecting this path"),
+    path: z
+      .string()
+      .optional()
+      .describe("Filter to commits affecting this path"),
     since: z.string().optional().describe("ISO 8601 date to filter from"),
     until: z.string().optional().describe("ISO 8601 date to filter to"),
     per_page: z.number().max(100).optional(),
