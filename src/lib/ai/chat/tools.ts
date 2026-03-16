@@ -34,6 +34,12 @@ export function createChatTools(ctx: AgentContext) {
       inputSchema: delegationSchema,
       execute: ({ task }) => launchAgent("github", task, isAdmin),
     });
+
+    tools.notion = tool({
+      description: `Delegate to the Notion agent for workspace content — pages, databases, comments, and users. Use for direct Notion operations (reading/writing pages, querying databases), not for general questions (use documentation instead). Forward the user's request verbatim.`,
+      inputSchema: delegationSchema,
+      execute: ({ task }) => launchAgent("notion", task, isAdmin),
+    });
   }
 
   return tools;
@@ -42,6 +48,7 @@ export function createChatTools(ctx: AgentContext) {
 const AGENT_LOADERS = {
   linear: () => import("../agents/linear/workflow").then((m) => m.linearAgent),
   github: () => import("../agents/github/workflow").then((m) => m.githubAgent),
+  notion: () => import("../agents/notion/workflow").then((m) => m.notionAgent),
 } as const;
 
 /** Launch a domain agent as a child workflow and await its text result. */
