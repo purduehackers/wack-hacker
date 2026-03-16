@@ -8,4 +8,9 @@ export const config: VercelConfig = {
       schedule: "*/9 * * * *",
     },
   ],
+  functions: {
+    "src/server/routes/discord.ts": {
+      maxDuration: "max",
+    },
+  },
 };
