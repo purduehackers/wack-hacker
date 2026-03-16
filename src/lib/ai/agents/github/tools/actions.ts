@@ -4,8 +4,6 @@ import { z } from "zod";
 import { octokit } from "../client";
 import { ORG } from "../constants";
 
-const json = JSON.stringify;
-
 /** List workflow definitions in a repository. */
 export const list_workflows = tool({
   description: `List CI/CD workflows defined in a repository's .github/workflows directory. Returns each workflow's ID, name, file path, state, and URL.`,
@@ -21,7 +19,7 @@ export const list_workflows = tool({
       per_page: per_page ?? 30,
       page: page ?? 1,
     });
-    return json({
+    return JSON.stringify({
       total_count: data.total_count,
       workflows: data.workflows.map((w) => ({
         id: w.id,
@@ -73,7 +71,7 @@ export const list_workflow_runs = tool({
         per_page: per_page ?? 10,
         page: page ?? 1,
       });
-      return json({
+      return JSON.stringify({
         total_count: data.total_count,
         runs: data.workflow_runs.map((r) => ({
           id: r.id,
@@ -96,7 +94,7 @@ export const list_workflow_runs = tool({
       per_page: per_page ?? 10,
       page: page ?? 1,
     });
-    return json({
+    return JSON.stringify({
       total_count: data.total_count,
       runs: data.workflow_runs.map((r) => ({
         id: r.id,
@@ -125,7 +123,7 @@ export const get_workflow_run = tool({
       repo,
       run_id,
     });
-    return json({
+    return JSON.stringify({
       id: data.id,
       name: data.name,
       status: data.status,
@@ -161,7 +159,7 @@ export const trigger_workflow = tool({
       ref,
       inputs,
     });
-    return json({ triggered: true, workflow_id, ref });
+    return JSON.stringify({ triggered: true, workflow_id, ref });
   },
 });
 
@@ -178,7 +176,7 @@ export const cancel_workflow_run = tool({
       repo,
       run_id,
     });
-    return json({ cancelled: true, run_id });
+    return JSON.stringify({ cancelled: true, run_id });
   },
 });
 
@@ -195,7 +193,7 @@ export const rerun_workflow = tool({
       repo,
       run_id,
     });
-    return json({ rerun: true, run_id });
+    return JSON.stringify({ rerun: true, run_id });
   },
 });
 
@@ -218,7 +216,7 @@ export const list_workflow_jobs = tool({
       per_page: per_page ?? 30,
       page: page ?? 1,
     });
-    return json({
+    return JSON.stringify({
       total_count: data.total_count,
       jobs: data.jobs.map((j) => ({
         id: j.id,
@@ -253,6 +251,6 @@ export const download_artifact = tool({
       artifact_id,
       archive_format: "zip",
     });
-    return json({ download_url: url });
+    return JSON.stringify({ download_url: url });
   },
 });

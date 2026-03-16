@@ -4,8 +4,6 @@ import { z } from "zod";
 import { octokit } from "../client";
 import { ORG } from "../constants";
 
-const json = JSON.stringify;
-
 export const create_repository = tool({
   description: `Create a new repository in the purduehackers organization. Returns the repo name, URL, visibility, and default branch.`,
   inputSchema: z.object({
@@ -26,7 +24,7 @@ export const create_repository = tool({
       gitignore_template: input.gitignore_template,
       license_template: input.license_template,
     });
-    return json({
+    return JSON.stringify({
       name: data.name,
       full_name: data.full_name,
       html_url: data.html_url,
@@ -54,7 +52,7 @@ export const update_repository = tool({
   }),
   execute: async ({ repo, ...settings }) => {
     const { data } = await octokit.rest.repos.update({ owner: ORG, repo, ...settings });
-    return json({
+    return JSON.stringify({
       name: data.name,
       html_url: data.html_url,
       private: data.private,
@@ -71,7 +69,7 @@ export const delete_repository = tool({
   }),
   execute: async ({ repo }) => {
     await octokit.rest.repos.delete({ owner: ORG, repo });
-    return json({ deleted: true, repo: `${ORG}/${repo}` });
+    return JSON.stringify({ deleted: true, repo: `${ORG}/${repo}` });
   },
 });
 
@@ -91,7 +89,7 @@ export const list_branches = tool({
       per_page: opts.per_page ?? 30,
       page: opts.page ?? 1,
     });
-    return json(data.map((b) => ({ name: b.name, protected: b.protected })));
+    return JSON.stringify(data.map((b) => ({ name: b.name, protected: b.protected })));
   },
 });
 
@@ -104,7 +102,7 @@ export const get_branch_protection = tool({
   execute: async ({ repo, branch }) => {
     try {
       const { data } = await octokit.rest.repos.getBranchProtection({ owner: ORG, repo, branch });
-      return json({
+      return JSON.stringify({
         required_status_checks: data.required_status_checks,
         enforce_admins: data.enforce_admins?.enabled,
         required_pull_request_reviews: data.required_pull_request_reviews
@@ -119,7 +117,8 @@ export const get_branch_protection = tool({
         restrictions: data.restrictions,
       });
     } catch (e: any) {
-      if (e.status === 404) return json({ protected: false, message: "No protection rules set" });
+      if (e.status === 404)
+        return JSON.stringify({ protected: false, message: "No protection rules set" });
       throw e;
     }
   },
@@ -164,7 +163,7 @@ export const set_branch_protection = tool({
       required_pull_request_reviews: rules.required_pull_request_reviews ?? null,
       restrictions: rules.restrictions ?? null,
     });
-    return json({ updated: true, repo, branch });
+    return JSON.stringify({ updated: true, repo, branch });
   },
 });
 
@@ -176,6 +175,6 @@ export const delete_branch_protection = tool({
   }),
   execute: async ({ repo, branch }) => {
     await octokit.rest.repos.deleteBranchProtection({ owner: ORG, repo, branch });
-    return json({ deleted: true, repo, branch });
+    return JSON.stringify({ deleted: true, repo, branch });
   },
 });

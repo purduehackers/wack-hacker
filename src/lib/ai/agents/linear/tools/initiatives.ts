@@ -3,8 +3,6 @@ import { z } from "zod";
 
 import { linear } from "../client";
 
-const json = JSON.stringify;
-
 export const create_initiative = tool({
   description:
     "Create an initiative (strategic goal grouping multiple projects). Supports owner, status (Planned/Active/Completed), target date, and Markdown content.",
@@ -20,7 +18,7 @@ export const create_initiative = tool({
     const payload = await linear.createInitiative({ ...rest, status: status as any });
     const initiative = await payload.initiative;
     if (!initiative) return "Failed to create initiative";
-    return json({ id: initiative.id, name: initiative.name, url: initiative.url });
+    return JSON.stringify({ id: initiative.id, name: initiative.name, url: initiative.url });
   },
 });
 
@@ -39,7 +37,7 @@ export const update_initiative = tool({
     const payload = await linear.updateInitiative(id, { ...rest, status: status as any });
     const initiative = await payload.initiative;
     if (!initiative) return "Failed to update initiative";
-    return json({ id: initiative.id, name: initiative.name, url: initiative.url });
+    return JSON.stringify({ id: initiative.id, name: initiative.name, url: initiative.url });
   },
 });
 
@@ -48,7 +46,7 @@ export const list_initiatives = tool({
   inputSchema: z.object({}),
   execute: async () => {
     const r = await linear.initiatives();
-    return json(
+    return JSON.stringify(
       r.nodes.map((i) => ({
         id: i.id,
         name: i.name,
@@ -66,6 +64,8 @@ export const query_initiative_activity = tool({
   execute: async ({ id }) => {
     const initiative = await linear.initiative(id);
     const history = await initiative.history();
-    return json({ history: history.nodes.map((h) => ({ id: h.id, createdAt: h.createdAt })) });
+    return JSON.stringify({
+      history: history.nodes.map((h) => ({ id: h.id, createdAt: h.createdAt })),
+    });
   },
 });

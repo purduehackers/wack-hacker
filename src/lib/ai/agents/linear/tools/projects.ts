@@ -3,8 +3,6 @@ import { z } from "zod";
 
 import { linear } from "../client";
 
-const json = JSON.stringify;
-
 export const create_project = tool({
   description:
     "Create a project. Requires name and at least one teamId. Supports lead, members, dates, priority, and Markdown content.",
@@ -23,7 +21,7 @@ export const create_project = tool({
     const payload = await linear.createProject(input);
     const project = await payload.project;
     if (!project) return "Failed to create project";
-    return json({ id: project.id, name: project.name, url: project.url });
+    return JSON.stringify({ id: project.id, name: project.name, url: project.url });
   },
 });
 
@@ -45,7 +43,7 @@ export const update_project = tool({
     const payload = await linear.updateProject(id, input);
     const project = await payload.project;
     if (!project) return "Failed to update project";
-    return json({ id: project.id, name: project.name, url: project.url });
+    return JSON.stringify({ id: project.id, name: project.name, url: project.url });
   },
 });
 
@@ -62,7 +60,7 @@ export const create_project_milestone = tool({
     const payload = await linear.createProjectMilestone(input);
     const milestone = await payload.projectMilestone;
     if (!milestone) return "Failed to create milestone";
-    return json({ id: milestone.id, name: milestone.name });
+    return JSON.stringify({ id: milestone.id, name: milestone.name });
   },
 });
 
@@ -78,7 +76,7 @@ export const update_project_milestone = tool({
     const payload = await linear.updateProjectMilestone(id, input);
     const milestone = await payload.projectMilestone;
     if (!milestone) return "Failed to update milestone";
-    return json({ id: milestone.id, name: milestone.name });
+    return JSON.stringify({ id: milestone.id, name: milestone.name });
   },
 });
 
@@ -93,7 +91,7 @@ export const query_project_activity = tool({
       project.projectUpdates(),
       project.comments(),
     ]);
-    return json({
+    return JSON.stringify({
       history: history.nodes.map((h) => ({ id: h.id, createdAt: h.createdAt })),
       updates: updates.nodes.map((u) => ({
         id: u.id,

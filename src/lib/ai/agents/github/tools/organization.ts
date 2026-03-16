@@ -5,8 +5,6 @@ import { SkillSystem } from "../../../context/skills";
 import { octokit } from "../client";
 import { ORG } from "../constants";
 
-const json = JSON.stringify;
-
 export const list_org_members = tool({
   description: `List members of the purduehackers organization. Optionally filter by role (all, admin, member). Returns login, ID, avatar URL, and profile URL.`,
   inputSchema: z.object({
@@ -21,7 +19,7 @@ export const list_org_members = tool({
       per_page: per_page ?? 30,
       page: page ?? 1,
     });
-    return json(
+    return JSON.stringify(
       data.map((m) => ({
         login: m.login,
         id: m.id,
@@ -39,7 +37,7 @@ export const get_org_member = tool({
   }),
   execute: async ({ username }) => {
     const { data } = await octokit.rest.orgs.getMembershipForUser({ org: ORG, username });
-    return json({ user: data.user?.login, role: data.role, state: data.state });
+    return JSON.stringify({ user: data.user?.login, role: data.role, state: data.state });
   },
 });
 
@@ -55,7 +53,7 @@ export const list_teams = tool({
       per_page: per_page ?? 30,
       page: page ?? 1,
     });
-    return json(
+    return JSON.stringify(
       data.map((t) => ({
         id: t.id,
         name: t.name,
@@ -75,7 +73,7 @@ export const get_team = tool({
   }),
   execute: async ({ team_slug }) => {
     const { data } = await octokit.rest.teams.getByName({ org: ORG, team_slug });
-    return json({
+    return JSON.stringify({
       id: data.id,
       name: data.name,
       slug: data.slug,
@@ -102,7 +100,7 @@ export const list_team_members = tool({
       per_page: per_page ?? 30,
       page: page ?? 1,
     });
-    return json(data.map((m) => ({ login: m.login, id: m.id, html_url: m.html_url })));
+    return JSON.stringify(data.map((m) => ({ login: m.login, id: m.id, html_url: m.html_url })));
   },
 });
 
@@ -120,7 +118,7 @@ export const list_repo_webhooks = tool({
       per_page: per_page ?? 30,
       page: page ?? 1,
     });
-    return json(
+    return JSON.stringify(
       data.map((w) => ({
         id: w.id,
         name: w.name,
@@ -145,7 +143,7 @@ export const invite_org_member = SkillSystem.admin(
         username,
         role: role ?? "member",
       });
-      return json({ user: data.user?.login, role: data.role, state: data.state });
+      return JSON.stringify({ user: data.user?.login, role: data.role, state: data.state });
     },
   }),
 );
@@ -158,7 +156,7 @@ export const remove_org_member = SkillSystem.admin(
     }),
     execute: async ({ username }) => {
       await octokit.rest.orgs.removeMembershipForUser({ org: ORG, username });
-      return json({ removed: true, username });
+      return JSON.stringify({ removed: true, username });
     },
   }),
 );
@@ -178,7 +176,7 @@ export const add_team_member = SkillSystem.admin(
         username,
         role: role ?? "member",
       });
-      return json({ username, role: data.role, state: data.state });
+      return JSON.stringify({ username, role: data.role, state: data.state });
     },
   }),
 );
@@ -192,7 +190,7 @@ export const remove_team_member = SkillSystem.admin(
     }),
     execute: async ({ team_slug, username }) => {
       await octokit.rest.teams.removeMembershipForUserInOrg({ org: ORG, team_slug, username });
-      return json({ removed: true, team_slug, username });
+      return JSON.stringify({ removed: true, team_slug, username });
     },
   }),
 );
@@ -215,7 +213,7 @@ export const create_webhook = tool({
       events,
       active: active ?? true,
     });
-    return json({ id: data.id, active: data.active, events: data.events });
+    return JSON.stringify({ id: data.id, active: data.active, events: data.events });
   },
 });
 
@@ -243,7 +241,7 @@ export const update_webhook = tool({
       events,
       active,
     });
-    return json({ id: data.id, active: data.active, events: data.events });
+    return JSON.stringify({ id: data.id, active: data.active, events: data.events });
   },
 });
 
@@ -255,7 +253,7 @@ export const delete_webhook = tool({
   }),
   execute: async ({ repo, hook_id }) => {
     await octokit.rest.repos.deleteWebhook({ owner: ORG, repo, hook_id });
-    return json({ deleted: true, hook_id });
+    return JSON.stringify({ deleted: true, hook_id });
   },
 });
 
@@ -271,7 +269,7 @@ export const list_org_webhooks = tool({
       per_page: per_page ?? 30,
       page: page ?? 1,
     });
-    return json(
+    return JSON.stringify(
       data.map((w) => ({
         id: w.id,
         name: w.name,

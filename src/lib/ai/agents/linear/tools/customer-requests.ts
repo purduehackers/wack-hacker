@@ -3,8 +3,6 @@ import { z } from "zod";
 
 import { linear } from "../client";
 
-const json = JSON.stringify;
-
 export const create_customer_need = tool({
   description:
     "Create a customer request (feedback/need) attached to an issue or project. Links a customer to the work item with optional importance and body.",
@@ -19,7 +17,7 @@ export const create_customer_need = tool({
     const payload = await linear.createCustomerNeed(input);
     const need = await payload.need;
     if (!need) return "Failed to create customer need";
-    return json({ id: need.id });
+    return JSON.stringify({ id: need.id });
   },
 });
 
@@ -35,7 +33,7 @@ export const update_customer_need = tool({
   }),
   execute: async ({ id, ...input }) => {
     const payload = await linear.updateCustomerNeed(id, input);
-    return json({ success: payload.success });
+    return JSON.stringify({ success: payload.success });
   },
 });
 
@@ -44,6 +42,8 @@ export const list_customer_needs = tool({
   inputSchema: z.object({}),
   execute: async () => {
     const r = await linear.customerNeeds();
-    return json(r.nodes.map((n) => ({ id: n.id, priority: n.priority, createdAt: n.createdAt })));
+    return JSON.stringify(
+      r.nodes.map((n) => ({ id: n.id, priority: n.priority, createdAt: n.createdAt })),
+    );
   },
 });

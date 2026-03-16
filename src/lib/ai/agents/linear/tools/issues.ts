@@ -4,8 +4,6 @@ import { z } from "zod";
 import { linear, applyIssueRelations } from "../client";
 import { issueFields, issueRelationSchema } from "../constants";
 
-const json = JSON.stringify;
-
 export const create_issue = tool({
   description:
     "Create a new issue. Requires title and teamId. Supports setting assignee, status, priority, labels, project, due date, parent (sub-issue via parentId), and relations to other issues. Returns the issue identifier, title, and URL.",
@@ -22,7 +20,7 @@ export const create_issue = tool({
     const relations = relationships?.length
       ? await applyIssueRelations(issue.id, relationships)
       : [];
-    return json({
+    return JSON.stringify({
       id: issue.id,
       identifier: issue.identifier,
       title: issue.title,
@@ -47,7 +45,7 @@ export const update_issue = tool({
     const relations = issueRelations?.length
       ? await applyIssueRelations(issue.id, issueRelations)
       : [];
-    return json({
+    return JSON.stringify({
       id: issue.id,
       identifier: issue.identifier,
       title: issue.title,
@@ -63,7 +61,7 @@ export const delete_issue = tool({
   inputSchema: z.object({ id: z.string() }),
   execute: async ({ id }) => {
     const payload = await linear.deleteIssue(id);
-    return json({ success: payload.success });
+    return JSON.stringify({ success: payload.success });
   },
 });
 
@@ -74,7 +72,7 @@ export const query_issue_activity = tool({
   execute: async ({ id }) => {
     const issue = await linear.issue(id);
     const [history, comments] = await Promise.all([issue.history(), issue.comments()]);
-    return json({
+    return JSON.stringify({
       history: history.nodes.map((h) => ({ id: h.id, createdAt: h.createdAt })),
       comments: comments.nodes.map((c) => ({
         id: c.id,

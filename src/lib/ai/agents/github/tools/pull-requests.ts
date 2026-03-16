@@ -4,8 +4,6 @@ import { z } from "zod";
 import { octokit } from "../client";
 import { ORG } from "../constants";
 
-const json = JSON.stringify;
-
 /** Create a new pull request. */
 export const create_pull_request = tool({
   description: `Create a new pull request in a repository. Specify the head branch (with changes) and base branch (to merge into). Supports draft PRs and Markdown body. Returns the PR number, title, URL, and state.`,
@@ -23,7 +21,7 @@ export const create_pull_request = tool({
       repo,
       ...input,
     });
-    return json({
+    return JSON.stringify({
       number: data.number,
       title: data.title,
       html_url: data.html_url,
@@ -51,7 +49,7 @@ export const update_pull_request = tool({
       pull_number,
       ...input,
     });
-    return json({
+    return JSON.stringify({
       number: data.number,
       title: data.title,
       html_url: data.html_url,
@@ -77,7 +75,7 @@ export const merge_pull_request = tool({
       pull_number,
       ...input,
     });
-    return json({ merged: data.merged, sha: data.sha, message: data.message });
+    return JSON.stringify({ merged: data.merged, sha: data.sha, message: data.message });
   },
 });
 
@@ -98,7 +96,7 @@ export const list_pr_reviews = tool({
       per_page: per_page ?? 30,
       page: page ?? 1,
     });
-    return json(
+    return JSON.stringify(
       data.map((r) => ({
         id: r.id,
         user: r.user?.login,
@@ -128,7 +126,7 @@ export const create_pr_review = tool({
       body,
       event,
     });
-    return json({ id: data.id, state: data.state, html_url: data.html_url });
+    return JSON.stringify({ id: data.id, state: data.state, html_url: data.html_url });
   },
 });
 
@@ -149,7 +147,7 @@ export const list_pr_files = tool({
       per_page: per_page ?? 30,
       page: page ?? 1,
     });
-    return json(
+    return JSON.stringify(
       data.map((f) => ({
         filename: f.filename,
         status: f.status,
@@ -179,7 +177,7 @@ export const list_pr_comments = tool({
       per_page: per_page ?? 30,
       page: page ?? 1,
     });
-    return json(
+    return JSON.stringify(
       data.map((c) => ({
         id: c.id,
         body: c.body,
