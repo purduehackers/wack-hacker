@@ -1,6 +1,6 @@
 import { LinearClient, type IssueRelationType } from "@linear/sdk";
 
-import { env } from "../../../../env";
+import { env } from "../../../../env.ts";
 
 export const linear = new LinearClient({ apiKey: env.LINEAR_API_KEY });
 
@@ -33,13 +33,20 @@ export async function applyIssueRelations(
     if (rel.type === "unrelatedTo") {
       const target = await linear.issue(rel.issueId);
       const issue = await linear.issue(issueId);
-      const [fwd, inv] = await Promise.all([issue.relations(), issue.inverseRelations()]);
+      const [fwd, inv] = await Promise.all([
+        issue.relations(),
+        issue.inverseRelations(),
+      ]);
       const toDelete = [
         ...fwd.nodes.filter((r) => r.relatedIssueId === target.id),
         ...inv.nodes.filter((r) => r.issueId === target.id),
       ];
       await Promise.all(toDelete.map((r) => linear.deleteIssueRelation(r.id)));
-      results.push({ type: "unrelatedTo", target: rel.issueId, removed: toDelete.length });
+      results.push({
+        type: "unrelatedTo",
+        target: rel.issueId,
+        removed: toDelete.length,
+      });
       continue;
     }
 

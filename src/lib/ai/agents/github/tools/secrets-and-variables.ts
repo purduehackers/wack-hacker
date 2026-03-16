@@ -5,7 +5,7 @@ import { u32, u8 } from "@noble/hashes/utils.js";
 import { tool } from "ai";
 import { z } from "zod";
 
-import { env } from "../../../../../env";
+import { env } from "../../../../../env.ts";
 import { octokit } from "../client";
 
 // NaCl "expand 32-byte k" sigma constant
@@ -27,7 +27,9 @@ function boxBeforenm(sharedSecret: Uint8Array) {
  * Ephemeral X25519 keypair → HSalsa20 key derivation → XSalsa20-Poly1305.
  */
 function encryptSecret(value: string, publicKeyBase64: string) {
-  const recipientPub = Uint8Array.from(atob(publicKeyBase64), (c) => c.charCodeAt(0));
+  const recipientPub = Uint8Array.from(atob(publicKeyBase64), (c) =>
+    c.charCodeAt(0),
+  );
   const ephemeralPriv = x25519.utils.randomSecretKey();
   const ephemeralPub = x25519.getPublicKey(ephemeralPriv);
 
@@ -113,7 +115,11 @@ export const delete_repo_secret = tool({
     secret_name: z.string().describe("Secret name"),
   }),
   execute: async ({ repo, secret_name }) => {
-    await octokit.rest.actions.deleteRepoSecret({ owner: env.GITHUB_ORG, repo, secret_name });
+    await octokit.rest.actions.deleteRepoSecret({
+      owner: env.GITHUB_ORG,
+      repo,
+      secret_name,
+    });
     return JSON.stringify({ deleted: true, secret_name });
   },
 });
@@ -157,10 +163,20 @@ export const create_or_update_repo_variable = tool({
   }),
   execute: async ({ repo, name, value }) => {
     try {
-      await octokit.rest.actions.updateRepoVariable({ owner: env.GITHUB_ORG, repo, name, value });
+      await octokit.rest.actions.updateRepoVariable({
+        owner: env.GITHUB_ORG,
+        repo,
+        name,
+        value,
+      });
     } catch (e: any) {
       if (e.status === 404) {
-        await octokit.rest.actions.createRepoVariable({ owner: env.GITHUB_ORG, repo, name, value });
+        await octokit.rest.actions.createRepoVariable({
+          owner: env.GITHUB_ORG,
+          repo,
+          name,
+          value,
+        });
       } else throw e;
     }
     return JSON.stringify({ created_or_updated: true, name });
@@ -174,7 +190,11 @@ export const delete_repo_variable = tool({
     name: z.string().describe("Variable name"),
   }),
   execute: async ({ repo, name }) => {
-    await octokit.rest.actions.deleteRepoVariable({ owner: env.GITHUB_ORG, repo, name });
+    await octokit.rest.actions.deleteRepoVariable({
+      owner: env.GITHUB_ORG,
+      repo,
+      name,
+    });
     return JSON.stringify({ deleted: true, name });
   },
 });
@@ -212,14 +232,23 @@ export const create_or_update_org_secret = tool({
   inputSchema: z.object({
     secret_name: z.string().describe("Secret name"),
     value: z.string().describe("Secret value (will be encrypted)"),
-    visibility: z.enum(["all", "private", "selected"]).describe("Repository visibility scope"),
+    visibility: z
+      .enum(["all", "private", "selected"])
+      .describe("Repository visibility scope"),
     selected_repository_ids: z
       .array(z.number())
       .optional()
       .describe("Repo IDs (required when visibility is 'selected')"),
   }),
-  execute: async ({ secret_name, value, visibility, selected_repository_ids }) => {
-    const { data: keyData } = await octokit.rest.actions.getOrgPublicKey({ org: env.GITHUB_ORG });
+  execute: async ({
+    secret_name,
+    value,
+    visibility,
+    selected_repository_ids,
+  }) => {
+    const { data: keyData } = await octokit.rest.actions.getOrgPublicKey({
+      org: env.GITHUB_ORG,
+    });
     const encrypted = encryptSecret(value, keyData.key);
     await octokit.rest.actions.createOrUpdateOrgSecret({
       org: env.GITHUB_ORG,
@@ -239,7 +268,10 @@ export const delete_org_secret = tool({
     secret_name: z.string().describe("Secret name"),
   }),
   execute: async ({ secret_name }) => {
-    await octokit.rest.actions.deleteOrgSecret({ org: env.GITHUB_ORG, secret_name });
+    await octokit.rest.actions.deleteOrgSecret({
+      org: env.GITHUB_ORG,
+      secret_name,
+    });
     return JSON.stringify({ deleted: true, secret_name });
   },
 });
@@ -278,7 +310,9 @@ export const create_or_update_org_variable = tool({
   inputSchema: z.object({
     name: z.string().describe("Variable name"),
     value: z.string().describe("Variable value"),
-    visibility: z.enum(["all", "private", "selected"]).describe("Repository visibility scope"),
+    visibility: z
+      .enum(["all", "private", "selected"])
+      .describe("Repository visibility scope"),
     selected_repository_ids: z.array(z.number()).optional(),
   }),
   execute: async ({ name, value, visibility, selected_repository_ids }) => {

@@ -1,7 +1,7 @@
 import { createAppAuth } from "@octokit/auth-app";
 import { Octokit } from "octokit";
 
-import { env } from "../../../../env";
+import { env } from "../../../../env.ts";
 
 export const octokit = new Octokit({
   authStrategy: createAppAuth,

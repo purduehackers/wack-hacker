@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { env } from "../../../../../env";
+import { env } from "../../../../../env.ts";
 import { octokit } from "../client";
 
 export const create_repository = tool({
@@ -9,10 +9,19 @@ export const create_repository = tool({
   inputSchema: z.object({
     name: z.string().describe("Repository name"),
     description: z.string().optional(),
-    private: z.boolean().optional().describe("Whether the repo is private (default true)"),
+    private: z
+      .boolean()
+      .optional()
+      .describe("Whether the repo is private (default true)"),
     auto_init: z.boolean().optional().describe("Initialize with a README"),
-    gitignore_template: z.string().optional().describe("Gitignore template (e.g. 'Node')"),
-    license_template: z.string().optional().describe("License template (e.g. 'mit')"),
+    gitignore_template: z
+      .string()
+      .optional()
+      .describe("Gitignore template (e.g. 'Node')"),
+    license_template: z
+      .string()
+      .optional()
+      .describe("License template (e.g. 'mit')"),
   }),
   execute: async (input) => {
     const { data } = await octokit.rest.repos.createInOrg({
@@ -51,7 +60,11 @@ export const update_repository = tool({
     delete_branch_on_merge: z.boolean().optional(),
   }),
   execute: async ({ repo, ...settings }) => {
-    const { data } = await octokit.rest.repos.update({ owner: env.GITHUB_ORG, repo, ...settings });
+    const { data } = await octokit.rest.repos.update({
+      owner: env.GITHUB_ORG,
+      repo,
+      ...settings,
+    });
     return JSON.stringify({
       name: data.name,
       html_url: data.html_url,
@@ -77,7 +90,10 @@ export const list_branches = tool({
   description: `List branches for a repository. Optionally filter to only protected branches. Returns branch name and protection status.`,
   inputSchema: z.object({
     repo: z.string().describe("Repository name"),
-    protected: z.boolean().optional().describe("Filter to protected branches only"),
+    protected: z
+      .boolean()
+      .optional()
+      .describe("Filter to protected branches only"),
     per_page: z.number().max(100).optional(),
     page: z.number().optional(),
   }),
@@ -89,7 +105,9 @@ export const list_branches = tool({
       per_page: opts.per_page ?? 30,
       page: opts.page ?? 1,
     });
-    return JSON.stringify(data.map((b) => ({ name: b.name, protected: b.protected })));
+    return JSON.stringify(
+      data.map((b) => ({ name: b.name, protected: b.protected })),
+    );
   },
 });
 
@@ -112,8 +130,10 @@ export const get_branch_protection = tool({
         required_pull_request_reviews: data.required_pull_request_reviews
           ? {
               required_approving_review_count:
-                data.required_pull_request_reviews.required_approving_review_count,
-              dismiss_stale_reviews: data.required_pull_request_reviews.dismiss_stale_reviews,
+                data.required_pull_request_reviews
+                  .required_approving_review_count,
+              dismiss_stale_reviews:
+                data.required_pull_request_reviews.dismiss_stale_reviews,
               require_code_owner_reviews:
                 data.required_pull_request_reviews.require_code_owner_reviews,
             }
@@ -122,7 +142,10 @@ export const get_branch_protection = tool({
       });
     } catch (e: any) {
       if (e.status === 404)
-        return JSON.stringify({ protected: false, message: "No protection rules set" });
+        return JSON.stringify({
+          protected: false,
+          message: "No protection rules set",
+        });
       throw e;
     }
   },
@@ -164,7 +187,8 @@ export const set_branch_protection = tool({
       branch,
       required_status_checks: rules.required_status_checks ?? null,
       enforce_admins: rules.enforce_admins ?? null,
-      required_pull_request_reviews: rules.required_pull_request_reviews ?? null,
+      required_pull_request_reviews:
+        rules.required_pull_request_reviews ?? null,
       restrictions: rules.restrictions ?? null,
     });
     return JSON.stringify({ updated: true, repo, branch });
@@ -178,7 +202,11 @@ export const delete_branch_protection = tool({
     branch: z.string().describe("Branch name"),
   }),
   execute: async ({ repo, branch }) => {
-    await octokit.rest.repos.deleteBranchProtection({ owner: env.GITHUB_ORG, repo, branch });
+    await octokit.rest.repos.deleteBranchProtection({
+      owner: env.GITHUB_ORG,
+      repo,
+      branch,
+    });
     return JSON.stringify({ deleted: true, repo, branch });
   },
 });

@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { env } from "../../../../../env";
+import { env } from "../../../../../env.ts";
 import { octokit } from "../client";
 
 /** List workflow definitions in a repository. */
@@ -37,7 +37,10 @@ export const list_workflow_runs = tool({
   description: `List workflow runs for a repository. Optionally filter by workflow ID/filename, branch, or status. Returns run ID, name, status, conclusion, branch, and timestamps. If no workflow_id is given, lists runs across all workflows.`,
   inputSchema: z.object({
     repo: z.string().describe("Repository name"),
-    workflow_id: z.union([z.number(), z.string()]).optional().describe("Workflow ID or filename"),
+    workflow_id: z
+      .union([z.number(), z.string()])
+      .optional()
+      .describe("Workflow ID or filename"),
     branch: z.string().optional(),
     status: z
       .enum([
@@ -149,7 +152,10 @@ export const trigger_workflow = tool({
       .union([z.number(), z.string()])
       .describe("Workflow ID or filename (e.g. 'deploy.yml')"),
     ref: z.string().describe("Branch or tag to run the workflow on"),
-    inputs: z.record(z.string(), z.string()).optional().describe("Workflow input parameters"),
+    inputs: z
+      .record(z.string(), z.string())
+      .optional()
+      .describe("Workflow input parameters"),
   }),
   execute: async ({ repo, workflow_id, ref, inputs }) => {
     await octokit.rest.actions.createWorkflowDispatch({

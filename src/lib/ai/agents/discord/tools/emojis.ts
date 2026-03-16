@@ -2,7 +2,7 @@ import { tool } from "ai";
 import { Routes } from "discord-api-types/v10";
 import { z } from "zod";
 
-import { env } from "../../../../../env";
+import { env } from "../../../../../env.ts";
 import { discord } from "../client";
 
 // ---------------------------------------------------------------------------
@@ -29,7 +29,9 @@ export const list_emojis = tool({
     "List all custom emojis in the server. Returns emoji IDs, names, animation status, image URLs, and role restrictions.",
   inputSchema: z.object({}),
   execute: async () => {
-    const emojis = (await discord.get(Routes.guildEmojis(env.DISCORD_GUILD_ID))) as any[];
+    const emojis = (await discord.get(
+      Routes.guildEmojis(env.DISCORD_GUILD_ID),
+    )) as any[];
     return JSON.stringify(emojis.map(summarizeEmoji));
   },
 });
@@ -38,8 +40,14 @@ export const create_emoji = tool({
   description:
     "Create a custom emoji from an image URL. The image must be PNG, JPG, or GIF and under 256KB. You can restrict usage to specific roles.",
   inputSchema: z.object({
-    name: z.string().describe("Emoji name (2-32 characters, alphanumeric and underscores only)"),
-    url: z.string().describe("Image URL for the emoji (PNG, JPG, or GIF; max 256KB)"),
+    name: z
+      .string()
+      .describe(
+        "Emoji name (2-32 characters, alphanumeric and underscores only)",
+      ),
+    url: z
+      .string()
+      .describe("Image URL for the emoji (PNG, JPG, or GIF; max 256KB)"),
     roles: z
       .array(z.string())
       .optional()
@@ -56,9 +64,12 @@ export const create_emoji = tool({
     const body: Record<string, any> = { name, image: dataUri };
     if (roles) body.roles = roles;
 
-    const emoji = (await discord.post(Routes.guildEmojis(env.DISCORD_GUILD_ID), {
-      body,
-    })) as any;
+    const emoji = (await discord.post(
+      Routes.guildEmojis(env.DISCORD_GUILD_ID),
+      {
+        body,
+      },
+    )) as any;
 
     return JSON.stringify({
       id: emoji.id,
@@ -78,16 +89,21 @@ export const edit_emoji = tool({
     roles: z
       .array(z.string())
       .optional()
-      .describe("New role IDs that can use this emoji (empty array for everyone)"),
+      .describe(
+        "New role IDs that can use this emoji (empty array for everyone)",
+      ),
   }),
   execute: async ({ emoji_id, name, roles }) => {
     const body: Record<string, any> = {};
     if (name) body.name = name;
     if (roles) body.roles = roles;
 
-    const edited = (await discord.patch(Routes.guildEmoji(env.DISCORD_GUILD_ID, emoji_id), {
-      body,
-    })) as any;
+    const edited = (await discord.patch(
+      Routes.guildEmoji(env.DISCORD_GUILD_ID, emoji_id),
+      {
+        body,
+      },
+    )) as any;
 
     return JSON.stringify({
       id: edited.id,
@@ -107,7 +123,9 @@ export const delete_emoji = tool({
   }),
   execute: async ({ emoji_id }) => {
     // Fetch emoji first to get its name
-    const emoji = (await discord.get(Routes.guildEmoji(env.DISCORD_GUILD_ID, emoji_id))) as any;
+    const emoji = (await discord.get(
+      Routes.guildEmoji(env.DISCORD_GUILD_ID, emoji_id),
+    )) as any;
     await discord.delete(Routes.guildEmoji(env.DISCORD_GUILD_ID, emoji_id));
     return JSON.stringify({ success: true, deleted: emoji.name });
   },

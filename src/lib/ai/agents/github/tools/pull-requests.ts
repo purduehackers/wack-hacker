@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { env } from "../../../../../env";
+import { env } from "../../../../../env.ts";
 import { octokit } from "../client";
 
 /** Create a new pull request. */
@@ -75,7 +75,11 @@ export const merge_pull_request = tool({
       pull_number,
       ...input,
     });
-    return JSON.stringify({ merged: data.merged, sha: data.sha, message: data.message });
+    return JSON.stringify({
+      merged: data.merged,
+      sha: data.sha,
+      message: data.message,
+    });
   },
 });
 
@@ -116,7 +120,9 @@ export const create_pr_review = tool({
     repo: z.string().describe("Repository name"),
     pull_number: z.number().describe("PR number"),
     body: z.string().optional().describe("Review body"),
-    event: z.enum(["APPROVE", "REQUEST_CHANGES", "COMMENT"]).describe("Review action"),
+    event: z
+      .enum(["APPROVE", "REQUEST_CHANGES", "COMMENT"])
+      .describe("Review action"),
   }),
   execute: async ({ repo, pull_number, body, event }) => {
     const { data } = await octokit.rest.pulls.createReview({
@@ -126,7 +132,11 @@ export const create_pr_review = tool({
       body,
       event,
     });
-    return JSON.stringify({ id: data.id, state: data.state, html_url: data.html_url });
+    return JSON.stringify({
+      id: data.id,
+      state: data.state,
+      html_url: data.html_url,
+    });
   },
 });
 

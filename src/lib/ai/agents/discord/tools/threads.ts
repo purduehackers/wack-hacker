@@ -2,7 +2,7 @@ import { tool } from "ai";
 import { Routes } from "discord-api-types/v10";
 import { z } from "zod";
 
-import { env } from "../../../../../env";
+import { env } from "../../../../../env.ts";
 import { discord } from "../client";
 
 // ---------------------------------------------------------------------------
@@ -41,7 +41,9 @@ export const list_threads = tool({
     channel_id: z
       .string()
       .optional()
-      .describe("Channel ID to list threads from (omit for all active server threads)"),
+      .describe(
+        "Channel ID to list threads from (omit for all active server threads)",
+      ),
     include_archived: z
       .boolean()
       .default(false)
@@ -50,8 +52,12 @@ export const list_threads = tool({
   execute: async ({ channel_id, include_archived }) => {
     if (channel_id) {
       // Get active threads for the guild, then filter by channel
-      const active = (await discord.get(Routes.guildActiveThreads(env.DISCORD_GUILD_ID))) as any;
-      const channelThreads = (active.threads ?? []).filter((t: any) => t.parent_id === channel_id);
+      const active = (await discord.get(
+        Routes.guildActiveThreads(env.DISCORD_GUILD_ID),
+      )) as any;
+      const channelThreads = (active.threads ?? []).filter(
+        (t: any) => t.parent_id === channel_id,
+      );
       const threads = channelThreads.map(summarizeThread);
 
       if (include_archived) {
@@ -67,7 +73,9 @@ export const list_threads = tool({
     }
 
     // All active threads in the guild
-    const active = (await discord.get(Routes.guildActiveThreads(env.DISCORD_GUILD_ID))) as any;
+    const active = (await discord.get(
+      Routes.guildActiveThreads(env.DISCORD_GUILD_ID),
+    )) as any;
     return JSON.stringify((active.threads ?? []).map(summarizeThread));
   },
 });
@@ -81,7 +89,9 @@ export const create_thread = tool({
     message_id: z
       .string()
       .optional()
-      .describe("Message ID to start the thread from (omit for standalone thread)"),
+      .describe(
+        "Message ID to start the thread from (omit for standalone thread)",
+      ),
     auto_archive_duration: z
       .enum(["60", "1440", "4320", "10080"])
       .optional()
@@ -92,11 +102,16 @@ export const create_thread = tool({
       .enum(["public", "private"])
       .default("public")
       .describe("Thread type (public or private)"),
-    slowmode: z.number().optional().describe("Slowmode delay in seconds (0 to disable)"),
+    slowmode: z
+      .number()
+      .optional()
+      .describe("Slowmode delay in seconds (0 to disable)"),
     invitable: z
       .boolean()
       .optional()
-      .describe("Whether non-moderators can invite others (private threads only)"),
+      .describe(
+        "Whether non-moderators can invite others (private threads only)",
+      ),
   }),
   execute: async ({
     channel_id,
@@ -108,20 +123,27 @@ export const create_thread = tool({
     invitable,
   }) => {
     const body: Record<string, any> = { name };
-    if (auto_archive_duration) body.auto_archive_duration = Number(auto_archive_duration);
+    if (auto_archive_duration)
+      body.auto_archive_duration = Number(auto_archive_duration);
     if (slowmode !== undefined) body.rate_limit_per_user = slowmode;
 
     if (message_id) {
       // Start thread from a message
-      const thread = (await discord.post(Routes.threads(channel_id, message_id), { body })) as any;
+      const thread = (await discord.post(
+        Routes.threads(channel_id, message_id),
+        { body },
+      )) as any;
       return JSON.stringify(summarizeThread(thread));
     }
 
     // Standalone thread
     body.type = type === "private" ? 12 : 11; // 12=private, 11=public
-    if (invitable !== undefined && type === "private") body.invitable = invitable;
+    if (invitable !== undefined && type === "private")
+      body.invitable = invitable;
 
-    const thread = (await discord.post(Routes.threads(channel_id), { body })) as any;
+    const thread = (await discord.post(Routes.threads(channel_id), {
+      body,
+    })) as any;
     return JSON.stringify(summarizeThread(thread));
   },
 });
@@ -132,20 +154,30 @@ export const edit_thread = tool({
   inputSchema: z.object({
     thread_id: z.string().describe("Thread ID"),
     name: z.string().optional().describe("New thread name"),
-    archived: z.boolean().optional().describe("Archive or unarchive the thread"),
+    archived: z
+      .boolean()
+      .optional()
+      .describe("Archive or unarchive the thread"),
     locked: z
       .boolean()
       .optional()
-      .describe("Lock or unlock the thread (prevents non-moderators from unarchiving)"),
+      .describe(
+        "Lock or unlock the thread (prevents non-moderators from unarchiving)",
+      ),
     auto_archive_duration: z
       .enum(["60", "1440", "4320", "10080"])
       .optional()
       .describe("Auto-archive after minutes of inactivity"),
-    slowmode: z.number().optional().describe("Slowmode delay in seconds (0 to disable)"),
+    slowmode: z
+      .number()
+      .optional()
+      .describe("Slowmode delay in seconds (0 to disable)"),
     invitable: z
       .boolean()
       .optional()
-      .describe("Whether non-moderators can invite others to the thread (private threads only)"),
+      .describe(
+        "Whether non-moderators can invite others to the thread (private threads only)",
+      ),
   }),
   execute: async ({
     thread_id,
@@ -160,7 +192,8 @@ export const edit_thread = tool({
     if (name) body.name = name;
     if (archived !== undefined) body.archived = archived;
     if (locked !== undefined) body.locked = locked;
-    if (auto_archive_duration) body.auto_archive_duration = Number(auto_archive_duration);
+    if (auto_archive_duration)
+      body.auto_archive_duration = Number(auto_archive_duration);
     if (slowmode !== undefined) body.rate_limit_per_user = slowmode;
     if (invitable !== undefined) body.invitable = invitable;
 
