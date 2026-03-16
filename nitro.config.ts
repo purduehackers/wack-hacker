@@ -4,4 +4,9 @@ export default defineConfig({
   routes: {
     "/**": "./src/index.ts",
   },
+  vercel: {
+    functions: {
+      maxDuration: 10 * 60 * 1000,
+    },
+  },
 });

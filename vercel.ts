@@ -8,9 +8,4 @@ export const config: VercelConfig = {
       schedule: "*/9 * * * *",
     },
   ],
-  functions: {
-    "api/**": {
-      maxDuration: "max",
-    },
-  },
 };
