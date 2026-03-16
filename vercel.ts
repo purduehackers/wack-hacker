@@ -9,7 +9,7 @@ export const config: VercelConfig = {
     },
   ],
   functions: {
-    "src/server/routes/discord.ts": {
+    "api/**": {
       maxDuration: "max",
     },
   },
