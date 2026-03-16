@@ -3,8 +3,6 @@ import { z } from "zod";
 
 import { linear } from "../client";
 
-const json = JSON.stringify;
-
 export const create_document = tool({
   description:
     "Create a Markdown document attached to exactly one parent: a project, initiative, issue, or cycle. Requires title and at least one parent ID.",
@@ -21,7 +19,7 @@ export const create_document = tool({
     const payload = await linear.createDocument(input);
     const doc = await payload.document;
     if (!doc) return "Failed to create document";
-    return json({ id: doc.id, title: doc.title, url: doc.url });
+    return JSON.stringify({ id: doc.id, title: doc.title, url: doc.url });
   },
 });
 
@@ -39,6 +37,6 @@ export const update_document = tool({
     const payload = await linear.updateDocument(id, input);
     const doc = await payload.document;
     if (!doc) return "Failed to update document";
-    return json({ id: doc.id, title: doc.title, url: doc.url });
+    return JSON.stringify({ id: doc.id, title: doc.title, url: doc.url });
   },
 });

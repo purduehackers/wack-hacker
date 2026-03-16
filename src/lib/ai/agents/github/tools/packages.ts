@@ -4,8 +4,6 @@ import { z } from "zod";
 import { octokit } from "../client";
 import { ORG } from "../constants";
 
-const json = JSON.stringify;
-
 const packageTypeSchema = z.enum(["npm", "maven", "rubygems", "docker", "nuget", "container"]);
 
 /** List packages in the organization. */
@@ -23,7 +21,7 @@ export const list_packages = tool({
       per_page: per_page ?? 30,
       page: page ?? 1,
     });
-    return json(
+    return JSON.stringify(
       data.map((p) => ({
         id: p.id,
         name: p.name,
@@ -50,7 +48,7 @@ export const get_package = tool({
       package_type,
       package_name,
     });
-    return json({
+    return JSON.stringify({
       id: data.id,
       name: data.name,
       package_type: data.package_type,
@@ -79,7 +77,7 @@ export const list_package_versions = tool({
       per_page: per_page ?? 20,
       page: page ?? 1,
     });
-    return json(
+    return JSON.stringify(
       data.map((v) => ({
         id: v.id,
         name: v.name,
@@ -107,6 +105,6 @@ export const delete_package_version = tool({
       package_name,
       package_version_id,
     });
-    return json({ deleted: true });
+    return JSON.stringify({ deleted: true });
   },
 });

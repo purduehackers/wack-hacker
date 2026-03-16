@@ -4,8 +4,6 @@ import { z } from "zod";
 import { octokit } from "../client";
 import { ORG } from "../constants";
 
-const json = JSON.stringify;
-
 /** Get the content of a file or list a directory in a repository. */
 export const get_file_content = tool({
   description: `Get the content of a file or list entries in a directory. For files, returns the decoded content (truncated at 50k chars), SHA, and URL. For directories, returns a list of entries with name, path, type, and size. Use the 'ref' param to read from a specific branch or tag.`,
@@ -22,11 +20,13 @@ export const get_file_content = tool({
       ref,
     });
     if (Array.isArray(data)) {
-      return json(data.map((f) => ({ name: f.name, path: f.path, type: f.type, size: f.size })));
+      return JSON.stringify(
+        data.map((f) => ({ name: f.name, path: f.path, type: f.type, size: f.size })),
+      );
     }
     if (data.type === "file" && "content" in data) {
       const content = Buffer.from(data.content, "base64").toString("utf-8");
-      return json({
+      return JSON.stringify({
         name: data.name,
         path: data.path,
         size: data.size,
@@ -35,7 +35,7 @@ export const get_file_content = tool({
         html_url: data.html_url,
       });
     }
-    return json({ name: data.name, path: data.path, type: data.type, size: data.size });
+    return JSON.stringify({ name: data.name, path: data.path, type: data.type, size: data.size });
   },
 });
 
@@ -60,7 +60,7 @@ export const create_or_update_file = tool({
       branch,
       sha,
     });
-    return json({
+    return JSON.stringify({
       path: data.content?.path,
       sha: data.content?.sha,
       html_url: data.content?.html_url,
@@ -88,7 +88,7 @@ export const delete_file = tool({
       sha,
       branch,
     });
-    return json({ deleted: true, path });
+    return JSON.stringify({ deleted: true, path });
   },
 });
 
@@ -107,7 +107,7 @@ export const get_directory_tree = tool({
       tree_sha: sha,
       recursive: "1",
     });
-    return json({
+    return JSON.stringify({
       sha: data.sha,
       truncated: data.truncated,
       tree: data.tree.map((t) => ({ path: t.path, type: t.type, size: t.size })),
@@ -138,7 +138,7 @@ export const list_commits = tool({
       per_page: opts.per_page ?? 20,
       page: opts.page ?? 1,
     });
-    return json(
+    return JSON.stringify(
       data.map((c) => ({
         sha: c.sha.slice(0, 7),
         message: c.commit.message,
@@ -163,7 +163,7 @@ export const get_commit = tool({
       repo,
       ref,
     });
-    return json({
+    return JSON.stringify({
       sha: data.sha,
       message: data.commit.message,
       author: data.commit.author?.name,
@@ -194,7 +194,7 @@ export const compare_commits = tool({
       repo,
       basehead: `${base}...${head}`,
     });
-    return json({
+    return JSON.stringify({
       status: data.status,
       ahead_by: data.ahead_by,
       behind_by: data.behind_by,

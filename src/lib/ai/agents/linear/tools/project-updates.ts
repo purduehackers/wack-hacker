@@ -4,8 +4,6 @@ import { z } from "zod";
 import { linear } from "../client";
 import { healthSchema } from "../constants";
 
-const json = JSON.stringify;
-
 export const query_project_updates = tool({
   description:
     "List recent project status updates with body, health, date, and URL. Pull prior updates before drafting a new one to match tone.",
@@ -16,7 +14,7 @@ export const query_project_updates = tool({
   execute: async ({ projectId, first }) => {
     const project = await linear.project(projectId);
     const updates = await project.projectUpdates({ first });
-    return json(
+    return JSON.stringify(
       updates.nodes.map((u) => ({
         id: u.id,
         body: u.body?.slice(0, 1000),
@@ -46,7 +44,7 @@ export const create_project_update = tool({
     });
     const update = await payload.projectUpdate;
     if (!update) return "Failed to create project update";
-    return json({ id: update.id, url: update.url });
+    return JSON.stringify({ id: update.id, url: update.url });
   },
 });
 
@@ -62,6 +60,6 @@ export const update_project_update = tool({
     const payload = await linear.updateProjectUpdate(id, { ...rest, health: health as any });
     const update = await payload.projectUpdate;
     if (!update) return "Failed to update project update";
-    return json({ id: update.id, url: update.url });
+    return JSON.stringify({ id: update.id, url: update.url });
   },
 });

@@ -3,8 +3,6 @@ import { z } from "zod";
 
 import { linear } from "../client";
 
-const json = JSON.stringify;
-
 export const set_reminder = tool({
   description:
     "Set a reminder on an issue. Triggers a Linear notification at the specified time. One reminder per issue (replaces any existing). Resolve the issue ID via search_entities first.",
@@ -16,6 +14,6 @@ export const set_reminder = tool({
     const payload = await linear.issueReminder(issueId, new Date(reminderAt));
     const issue = await payload.issue;
     if (!issue) return "Failed to set reminder";
-    return json({ id: issue.id, identifier: issue.identifier, url: issue.url });
+    return JSON.stringify({ id: issue.id, identifier: issue.identifier, url: issue.url });
   },
 });

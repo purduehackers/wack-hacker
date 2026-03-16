@@ -4,8 +4,6 @@ import { z } from "zod";
 import { octokit } from "../client";
 import { ORG } from "../constants";
 
-const json = JSON.stringify;
-
 /** List deployments for a repository. */
 export const list_deployments = tool({
   description: `List deployments for a repository. Optionally filter by environment name or ref (branch/tag/SHA). Returns deployment ID, ref, environment, description, creator, and timestamps.`,
@@ -25,7 +23,7 @@ export const list_deployments = tool({
       per_page: per_page ?? 20,
       page: page ?? 1,
     });
-    return json(
+    return JSON.stringify(
       data.map((d) => ({
         id: d.id,
         ref: d.ref,
@@ -57,14 +55,14 @@ export const create_deployment = tool({
       ...input,
     });
     if ("id" in data) {
-      return json({
+      return JSON.stringify({
         id: data.id,
         ref: data.ref,
         environment: data.environment,
         created_at: data.created_at,
       });
     }
-    return json({ message: data.message });
+    return JSON.stringify({ message: data.message });
   },
 });
 
@@ -88,7 +86,11 @@ export const create_deployment_status = tool({
       deployment_id,
       ...input,
     });
-    return json({ id: data.id, state: data.state, environment_url: data.environment_url });
+    return JSON.stringify({
+      id: data.id,
+      state: data.state,
+      environment_url: data.environment_url,
+    });
   },
 });
 
@@ -101,7 +103,7 @@ export const get_pages_info = tool({
   execute: async ({ repo }) => {
     try {
       const { data } = await octokit.rest.repos.getPages({ owner: ORG, repo });
-      return json({
+      return JSON.stringify({
         url: data.url,
         html_url: data.html_url,
         status: data.status,
@@ -110,7 +112,10 @@ export const get_pages_info = tool({
       });
     } catch (e: any) {
       if (e.status === 404)
-        return json({ enabled: false, message: "GitHub Pages is not enabled for this repository" });
+        return JSON.stringify({
+          enabled: false,
+          message: "GitHub Pages is not enabled for this repository",
+        });
       throw e;
     }
   },
@@ -131,7 +136,7 @@ export const list_pages_builds = tool({
       per_page: per_page ?? 10,
       page: page ?? 1,
     });
-    return json(
+    return JSON.stringify(
       data.map((b) => ({
         status: b.status,
         error: b.error,
@@ -154,6 +159,6 @@ export const trigger_pages_build = tool({
       owner: ORG,
       repo,
     });
-    return json({ status: data.status, url: data.url });
+    return JSON.stringify({ status: data.status, url: data.url });
   },
 });

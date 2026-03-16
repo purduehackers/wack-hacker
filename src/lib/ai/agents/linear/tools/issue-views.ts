@@ -3,8 +3,6 @@ import { z } from "zod";
 
 import { linear, issueFilter } from "../client";
 
-const json = JSON.stringify;
-
 export const query_issue_view = tool({
   description:
     "Query issues with filters. Supports filtering by team, project, assignee, status, label, and cycle. Returns identifier, title, priority, state, assignee, and URL for each issue. Paged (max 50).",
@@ -36,6 +34,6 @@ export const query_issue_view = tool({
         };
       }),
     );
-    return json(results);
+    return JSON.stringify(results);
   },
 });

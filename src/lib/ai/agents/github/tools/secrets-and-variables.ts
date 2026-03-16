@@ -8,8 +8,6 @@ import { z } from "zod";
 import { octokit } from "../client";
 import { ORG } from "../constants";
 
-const json = JSON.stringify;
-
 // NaCl "expand 32-byte k" sigma constant
 const SIGMA = new Uint32Array([1634760805, 857760878, 2036477234, 1797285236]);
 const ZEROS = new Uint32Array(4);
@@ -73,7 +71,7 @@ export const list_repo_secrets = tool({
       per_page: per_page ?? 30,
       page: page ?? 1,
     });
-    return json({
+    return JSON.stringify({
       total_count: data.total_count,
       secrets: data.secrets.map((s) => ({
         name: s.name,
@@ -101,7 +99,7 @@ export const create_or_update_repo_secret = tool({
       encrypted_value: encrypted,
       key_id: keyData.key_id,
     });
-    return json({ created_or_updated: true, secret_name });
+    return JSON.stringify({ created_or_updated: true, secret_name });
   },
 });
 
@@ -113,7 +111,7 @@ export const delete_repo_secret = tool({
   }),
   execute: async ({ repo, secret_name }) => {
     await octokit.rest.actions.deleteRepoSecret({ owner: ORG, repo, secret_name });
-    return json({ deleted: true, secret_name });
+    return JSON.stringify({ deleted: true, secret_name });
   },
 });
 
@@ -135,7 +133,7 @@ export const list_repo_variables = tool({
       per_page: per_page ?? 30,
       page: page ?? 1,
     });
-    return json({
+    return JSON.stringify({
       total_count: data.total_count,
       variables: data.variables.map((v) => ({
         name: v.name,
@@ -162,7 +160,7 @@ export const create_or_update_repo_variable = tool({
         await octokit.rest.actions.createRepoVariable({ owner: ORG, repo, name, value });
       } else throw e;
     }
-    return json({ created_or_updated: true, name });
+    return JSON.stringify({ created_or_updated: true, name });
   },
 });
 
@@ -174,7 +172,7 @@ export const delete_repo_variable = tool({
   }),
   execute: async ({ repo, name }) => {
     await octokit.rest.actions.deleteRepoVariable({ owner: ORG, repo, name });
-    return json({ deleted: true, name });
+    return JSON.stringify({ deleted: true, name });
   },
 });
 
@@ -194,7 +192,7 @@ export const list_org_secrets = tool({
       per_page: per_page ?? 30,
       page: page ?? 1,
     });
-    return json({
+    return JSON.stringify({
       total_count: data.total_count,
       secrets: data.secrets.map((s) => ({
         name: s.name,
@@ -228,7 +226,7 @@ export const create_or_update_org_secret = tool({
       visibility,
       selected_repository_ids,
     });
-    return json({ created_or_updated: true, secret_name });
+    return JSON.stringify({ created_or_updated: true, secret_name });
   },
 });
 
@@ -239,7 +237,7 @@ export const delete_org_secret = tool({
   }),
   execute: async ({ secret_name }) => {
     await octokit.rest.actions.deleteOrgSecret({ org: ORG, secret_name });
-    return json({ deleted: true, secret_name });
+    return JSON.stringify({ deleted: true, secret_name });
   },
 });
 
@@ -259,7 +257,7 @@ export const list_org_variables = tool({
       per_page: per_page ?? 30,
       page: page ?? 1,
     });
-    return json({
+    return JSON.stringify({
       total_count: data.total_count,
       variables: data.variables.map((v) => ({
         name: v.name,
@@ -300,7 +298,7 @@ export const create_or_update_org_variable = tool({
         });
       } else throw e;
     }
-    return json({ created_or_updated: true, name });
+    return JSON.stringify({ created_or_updated: true, name });
   },
 });
 
@@ -311,6 +309,6 @@ export const delete_org_variable = tool({
   }),
   execute: async ({ name }) => {
     await octokit.rest.actions.deleteOrgVariable({ org: ORG, name });
-    return json({ deleted: true, name });
+    return JSON.stringify({ deleted: true, name });
   },
 });

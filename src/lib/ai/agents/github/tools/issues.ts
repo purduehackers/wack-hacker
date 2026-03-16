@@ -4,8 +4,6 @@ import { z } from "zod";
 import { octokit } from "../client";
 import { ORG } from "../constants";
 
-const json = JSON.stringify;
-
 /** Create a new issue in a repository. */
 export const create_issue = tool({
   description: `Create a new issue in a repository. Supports Markdown body, assignees, labels, and milestone. Returns the issue number, title, URL, and state.`,
@@ -23,7 +21,7 @@ export const create_issue = tool({
       repo,
       ...input,
     });
-    return json({
+    return JSON.stringify({
       number: data.number,
       title: data.title,
       html_url: data.html_url,
@@ -52,7 +50,7 @@ export const update_issue = tool({
       issue_number,
       ...input,
     });
-    return json({
+    return JSON.stringify({
       number: data.number,
       title: data.title,
       html_url: data.html_url,
@@ -78,7 +76,7 @@ export const list_issue_comments = tool({
       per_page: per_page ?? 30,
       page: page ?? 1,
     });
-    return json(
+    return JSON.stringify(
       data.map((c) => ({
         id: c.id,
         body: c.body,
@@ -106,7 +104,7 @@ export const create_issue_comment = tool({
       issue_number,
       body,
     });
-    return json({ id: data.id, html_url: data.html_url });
+    return JSON.stringify({ id: data.id, html_url: data.html_url });
   },
 });
 
@@ -125,7 +123,7 @@ export const update_issue_comment = tool({
       comment_id,
       body,
     });
-    return json({ id: data.id, html_url: data.html_url });
+    return JSON.stringify({ id: data.id, html_url: data.html_url });
   },
 });
 
@@ -142,7 +140,7 @@ export const delete_issue_comment = tool({
       repo,
       comment_id,
     });
-    return json({ deleted: true });
+    return JSON.stringify({ deleted: true });
   },
 });
 
@@ -167,7 +165,7 @@ export const manage_labels = tool({
           color,
           description,
         });
-        return json({ name: data.name, color: data.color });
+        return JSON.stringify({ name: data.name, color: data.color });
       }
       case "update": {
         const { data } = await octokit.rest.issues.updateLabel({
@@ -178,11 +176,11 @@ export const manage_labels = tool({
           color,
           description,
         });
-        return json({ name: data.name, color: data.color });
+        return JSON.stringify({ name: data.name, color: data.color });
       }
       case "delete":
         await octokit.rest.issues.deleteLabel({ owner: ORG, repo, name });
-        return json({ deleted: true, name });
+        return JSON.stringify({ deleted: true, name });
     }
   },
 });
@@ -210,7 +208,7 @@ export const manage_milestones = tool({
           state: input.state,
           due_on: input.due_on,
         });
-        return json({ number: data.number, title: data.title, html_url: data.html_url });
+        return JSON.stringify({ number: data.number, title: data.title, html_url: data.html_url });
       }
       case "update": {
         const { data } = await octokit.rest.issues.updateMilestone({
@@ -222,7 +220,7 @@ export const manage_milestones = tool({
           state: input.state,
           due_on: input.due_on,
         });
-        return json({ number: data.number, title: data.title, html_url: data.html_url });
+        return JSON.stringify({ number: data.number, title: data.title, html_url: data.html_url });
       }
       case "delete":
         await octokit.rest.issues.deleteMilestone({
@@ -230,7 +228,7 @@ export const manage_milestones = tool({
           repo,
           milestone_number: milestone_number!,
         });
-        return json({ deleted: true });
+        return JSON.stringify({ deleted: true });
     }
   },
 });

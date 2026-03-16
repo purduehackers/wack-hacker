@@ -4,8 +4,6 @@ import { z } from "zod";
 import { octokit } from "../client";
 import { ORG } from "../constants";
 
-const json = JSON.stringify;
-
 /** List repositories in the purduehackers organization with optional filters. */
 export const list_repositories = tool({
   description:
@@ -24,7 +22,7 @@ export const list_repositories = tool({
       per_page: per_page ?? 30,
       page: page ?? 1,
     });
-    return json(
+    return JSON.stringify(
       data.map((r) => ({
         name: r.name,
         full_name: r.full_name,
@@ -51,7 +49,7 @@ export const get_repository = tool({
   }),
   execute: async ({ repo }) => {
     const { data } = await octokit.rest.repos.get({ owner: ORG, repo });
-    return json({
+    return JSON.stringify({
       name: data.name,
       full_name: data.full_name,
       description: data.description,
@@ -108,7 +106,7 @@ export const search_code = tool({
       return `Code search failed (${response.status}).`;
     }
 
-    const data = (await response.json()) as {
+    const data = (await response.JSON.stringify()) as {
       facets?: { count?: number };
       hits?: {
         hits?: Array<{
@@ -133,7 +131,7 @@ export const search_code = tool({
         ?.trim(),
     }));
 
-    return json({ total: data.facets?.count ?? results.length, results });
+    return JSON.stringify({ total: data.facets?.count ?? results.length, results });
   },
 });
 
@@ -158,7 +156,7 @@ export const search_issues = tool({
       per_page: per_page ?? 20,
       page: page ?? 1,
     });
-    return json({
+    return JSON.stringify({
       total_count: data.total_count,
       items: data.items.map((i) => ({
         number: i.number,

@@ -3,8 +3,6 @@ import { z } from "zod";
 
 import { linear, issueFilter } from "../client";
 
-const json = JSON.stringify;
-
 export const search_entities = tool({
   description:
     "Search Linear entities by keyword. Use for finding issues, projects, documents, initiatives, users, teams, customers, or labels. Returns IDs, names/identifiers, and URLs. Use entityType 'User' to resolve a person's name to their Linear user ID.",
@@ -26,21 +24,21 @@ export const search_entities = tool({
     switch (entityType) {
       case "Issue": {
         const r = await linear.searchIssues(query);
-        return json(
+        return JSON.stringify(
           r.nodes.map((i) => ({ id: i.id, identifier: i.identifier, title: i.title, url: i.url })),
         );
       }
       case "Project": {
         const r = await linear.searchProjects(query);
-        return json(r.nodes.map((p) => ({ id: p.id, name: p.name, url: p.url })));
+        return JSON.stringify(r.nodes.map((p) => ({ id: p.id, name: p.name, url: p.url })));
       }
       case "Document": {
         const r = await linear.searchDocuments(query);
-        return json(r.nodes.map((d) => ({ id: d.id, title: d.title, url: d.url })));
+        return JSON.stringify(r.nodes.map((d) => ({ id: d.id, title: d.title, url: d.url })));
       }
       case "Initiative": {
         const r = await linear.initiatives();
-        return json(
+        return JSON.stringify(
           r.nodes
             .filter(
               (i) => i.name.toLowerCase().includes(q) || i.description?.toLowerCase().includes(q),
@@ -50,7 +48,7 @@ export const search_entities = tool({
       }
       case "User": {
         const r = await linear.users();
-        return json(
+        return JSON.stringify(
           r.nodes
             .filter((u) => u.name.toLowerCase().includes(q))
             .map((u) => ({ id: u.id, name: u.name, email: u.email })),
@@ -58,7 +56,7 @@ export const search_entities = tool({
       }
       case "Team": {
         const r = await linear.teams();
-        return json(
+        return JSON.stringify(
           r.nodes
             .filter((t) => t.name.toLowerCase().includes(q) || t.key.toLowerCase().includes(q))
             .map((t) => ({ id: t.id, name: t.name, key: t.key })),
@@ -66,7 +64,7 @@ export const search_entities = tool({
       }
       case "Customer": {
         const r = await linear.customers();
-        return json(
+        return JSON.stringify(
           r.nodes
             .filter((c) => c.name.toLowerCase().includes(q))
             .map((c) => ({ id: c.id, name: c.name })),
@@ -74,7 +72,7 @@ export const search_entities = tool({
       }
       case "IssueLabel": {
         const r = await linear.issueLabels();
-        return json(
+        return JSON.stringify(
           r.nodes
             .filter((l) => l.name.toLowerCase().includes(q))
             .map((l) => ({ id: l.id, name: l.name })),
@@ -175,7 +173,7 @@ export const retrieve_entities = tool({
         }
       }),
     );
-    return json(results);
+    return JSON.stringify(results);
   },
 });
 
@@ -209,36 +207,38 @@ export const suggest_property_values = tool({
       case "Issue.assigneeId": {
         const r = await linear.users();
         const items = q ? r.nodes.filter((u) => u.name.toLowerCase().includes(q)) : r.nodes;
-        return json(items.map((u) => ({ id: u.id, name: u.name })));
+        return JSON.stringify(items.map((u) => ({ id: u.id, name: u.name })));
       }
       case "Issue.stateId": {
         if (!scopeId) return "Team scope required for status lookup";
         const r = await linear.workflowStates({ filter: { team: { id: { eq: scopeId } } } });
-        return json(r.nodes.map((s) => ({ id: s.id, name: s.name, type: s.type })));
+        return JSON.stringify(r.nodes.map((s) => ({ id: s.id, name: s.name, type: s.type })));
       }
       case "Issue.labelIds": {
         const r = await linear.issueLabels();
         const items = q ? r.nodes.filter((l) => l.name.toLowerCase().includes(q)) : r.nodes;
-        return json(items.map((l) => ({ id: l.id, name: l.name })));
+        return JSON.stringify(items.map((l) => ({ id: l.id, name: l.name })));
       }
       case "Issue.teamId": {
         const r = await linear.teams();
-        return json(r.nodes.map((t) => ({ id: t.id, name: t.name, key: t.key })));
+        return JSON.stringify(r.nodes.map((t) => ({ id: t.id, name: t.name, key: t.key })));
       }
       case "Issue.projectId": {
         const r = await linear.projects();
-        return json(r.nodes.map((p) => ({ id: p.id, name: p.name })));
+        return JSON.stringify(r.nodes.map((p) => ({ id: p.id, name: p.name })));
       }
       case "Issue.cycleId": {
         if (!scopeId) return "Team scope required for cycle lookup";
         const r = await linear.cycles({ filter: { team: { id: { eq: scopeId } } } });
-        return json(r.nodes.map((c) => ({ id: c.id, name: c.name, number: c.number })));
+        return JSON.stringify(r.nodes.map((c) => ({ id: c.id, name: c.name, number: c.number })));
       }
       case "Issue.projectMilestoneId": {
         if (!scopeId) return "Project scope required for milestone lookup";
         const project = await linear.project(scopeId);
         const r = await project.projectMilestones();
-        return json(r.nodes.map((m) => ({ id: m.id, name: m.name, targetDate: m.targetDate })));
+        return JSON.stringify(
+          r.nodes.map((m) => ({ id: m.id, name: m.name, targetDate: m.targetDate })),
+        );
       }
     }
   },

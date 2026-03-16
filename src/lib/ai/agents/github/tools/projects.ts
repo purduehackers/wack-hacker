@@ -4,8 +4,6 @@ import { z } from "zod";
 import { octokit } from "../client";
 import { ORG } from "../constants";
 
-const json = JSON.stringify;
-
 /** List GitHub Projects v2 in the organization. */
 export const list_org_projects = tool({
   description: `List GitHub Projects v2 in the purduehackers organization. Returns each project's node ID, title, number, URL, closed status, and description. Supports cursor-based pagination.`,
@@ -39,7 +37,7 @@ export const list_org_projects = tool({
       }`,
       { org: ORG, first: first ?? 20, after },
     );
-    return json({
+    return JSON.stringify({
       projects: organization.projectsV2.nodes,
       pageInfo: organization.projectsV2.pageInfo,
     });
@@ -81,7 +79,7 @@ export const get_project = tool({
       }`,
       { org: ORG, number: project_number },
     );
-    return json(organization.projectV2);
+    return JSON.stringify(organization.projectV2);
   },
 });
 
@@ -146,7 +144,7 @@ export const list_project_items = tool({
       { org: ORG, number: project_number, first: first ?? 20, after },
     );
     const items = organization.projectV2.items;
-    return json({
+    return JSON.stringify({
       items: items.nodes.map((n) => ({
         id: n.id,
         type: n.type,
@@ -181,7 +179,7 @@ export const create_project_item = tool({
       }`,
       { projectId: project_id, contentId: content_id },
     );
-    return json({ item_id: addProjectV2ItemById.item.id });
+    return JSON.stringify({ item_id: addProjectV2ItemById.item.id });
   },
 });
 
@@ -210,7 +208,7 @@ export const update_project_item = tool({
       }`,
       { projectId: project_id, itemId: item_id, fieldId: field_id, value },
     );
-    return json({ updated: true, item_id });
+    return JSON.stringify({ updated: true, item_id });
   },
 });
 
@@ -230,6 +228,6 @@ export const delete_project_item = tool({
       }`,
       { projectId: project_id, itemId: item_id },
     );
-    return json({ deleted: true, item_id });
+    return JSON.stringify({ deleted: true, item_id });
   },
 });

@@ -4,8 +4,6 @@ import { z } from "zod";
 import { linear } from "../client";
 import { healthSchema } from "../constants";
 
-const json = JSON.stringify;
-
 export const query_initiative_updates = tool({
   description: "List recent initiative status updates with body, health, date, and URL.",
   inputSchema: z.object({
@@ -15,7 +13,7 @@ export const query_initiative_updates = tool({
   execute: async ({ initiativeId, first }) => {
     const initiative = await linear.initiative(initiativeId);
     const updates = await initiative.initiativeUpdates({ first });
-    return json(
+    return JSON.stringify(
       updates.nodes.map((u) => ({
         id: u.id,
         body: u.body?.slice(0, 1000),
@@ -45,7 +43,7 @@ export const create_initiative_update = tool({
     });
     const update = await payload.initiativeUpdate;
     if (!update) return "Failed to create initiative update";
-    return json({ id: update.id, url: update.url });
+    return JSON.stringify({ id: update.id, url: update.url });
   },
 });
 
@@ -61,6 +59,6 @@ export const update_initiative_update = tool({
     const payload = await linear.updateInitiativeUpdate(id, { ...rest, health: health as any });
     const update = await payload.initiativeUpdate;
     if (!update) return "Failed to update initiative update";
-    return json({ id: update.id, url: update.url });
+    return JSON.stringify({ id: update.id, url: update.url });
   },
 });

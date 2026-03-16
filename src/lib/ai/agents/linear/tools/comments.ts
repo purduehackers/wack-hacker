@@ -3,8 +3,6 @@ import { z } from "zod";
 
 import { linear } from "../client";
 
-const json = JSON.stringify;
-
 export const create_comment = tool({
   description:
     "Post a Markdown comment on an issue. Requires the issue's UUID (resolve via search_entities first).",
@@ -13,7 +11,7 @@ export const create_comment = tool({
     const payload = await linear.createComment(input);
     const comment = await payload.comment;
     if (!comment) return "Failed to create comment";
-    return json({ id: comment.id, url: comment.url });
+    return JSON.stringify({ id: comment.id, url: comment.url });
   },
 });
 
@@ -24,7 +22,7 @@ export const edit_comment = tool({
     const payload = await linear.updateComment(id, { body });
     const comment = await payload.comment;
     if (!comment) return "Failed to edit comment";
-    return json({ id: comment.id, url: comment.url });
+    return JSON.stringify({ id: comment.id, url: comment.url });
   },
 });
 
@@ -33,6 +31,6 @@ export const delete_comment = tool({
   inputSchema: z.object({ id: z.string() }),
   execute: async ({ id }) => {
     const payload = await linear.deleteComment(id);
-    return json({ success: payload.success });
+    return JSON.stringify({ success: payload.success });
   },
 });

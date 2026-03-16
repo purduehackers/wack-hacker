@@ -4,15 +4,13 @@ import { z } from "zod";
 import { SkillSystem } from "../../../context/skills";
 import { linear } from "../client";
 
-const json = JSON.stringify;
-
 export const list_users = tool({
   description:
     "List all workspace members. Returns name, display name, email, role flags (admin/owner/guest), active status, and profile URL.",
   inputSchema: z.object({}),
   execute: async () => {
     const r = await linear.users();
-    return json(
+    return JSON.stringify(
       r.nodes.map((u) => ({
         id: u.id,
         name: u.name,
@@ -36,7 +34,7 @@ export const get_user = tool({
   }),
   execute: async ({ id }) => {
     const u = await linear.user(id);
-    return json({
+    return JSON.stringify({
       id: u.id,
       name: u.name,
       displayName: u.displayName,
@@ -62,7 +60,7 @@ export const get_user_teams = tool({
   execute: async ({ id }) => {
     const u = await linear.user(id);
     const teams = await u.teams();
-    return json(teams.nodes.map((t) => ({ id: t.id, name: t.name, key: t.key })));
+    return JSON.stringify(teams.nodes.map((t) => ({ id: t.id, name: t.name, key: t.key })));
   },
 });
 
@@ -89,7 +87,7 @@ export const get_user_assigned_issues = tool({
         };
       }),
     );
-    return json(results);
+    return JSON.stringify(results);
   },
 });
 
@@ -103,7 +101,7 @@ export const suspend_user = SkillSystem.admin(
     execute: async ({ id }) => {
       const u = await linear.user(id);
       const payload = await u.suspend();
-      return json({ success: payload.success });
+      return JSON.stringify({ success: payload.success });
     },
   }),
 );
@@ -117,7 +115,7 @@ export const unsuspend_user = SkillSystem.admin(
     execute: async ({ id }) => {
       const u = await linear.user(id);
       const payload = await u.unsuspend();
-      return json({ success: payload.success });
+      return JSON.stringify({ success: payload.success });
     },
   }),
 );
@@ -137,7 +135,7 @@ export const invite_user = SkillSystem.admin(
       const payload = await linear.createOrganizationInvite({ email, role: role as any });
       const invite = await payload.organizationInvite;
       if (!invite) return "Failed to send invite";
-      return json({
+      return JSON.stringify({
         id: invite.id,
         email: invite.email,
         role: invite.role,
@@ -167,7 +165,7 @@ export const list_invites = SkillSystem.admin(
           };
         }),
       );
-      return json(results);
+      return JSON.stringify(results);
     },
   }),
 );
@@ -180,7 +178,7 @@ export const delete_invite = SkillSystem.admin(
     }),
     execute: async ({ id }) => {
       const payload = await linear.deleteOrganizationInvite(id);
-      return json({ success: payload.success });
+      return JSON.stringify({ success: payload.success });
     },
   }),
 );
