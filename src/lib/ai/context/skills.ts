@@ -1,6 +1,4 @@
 import { tool, type ToolSet } from "ai";
-import matter from "gray-matter";
-import { join } from "node:path";
 import { z } from "zod";
 
 import type { Skill } from "./types";
@@ -13,9 +11,13 @@ const ADMIN_MARKER = Symbol("admin");
  * Discovers SKILL.md files by scanning subdirectories of `skillsDir`,
  * caches them, and provides a `load_skill` AI tool that returns the full
  * skill bundle wrapped in XML so the model treats it as authoritative guidance.
+ *
+ * All file I/O is deferred to method calls (not constructor) so this class
+ * can be instantiated at module top-level in workflow files without triggering
+ * Node.js module imports at bundle time.
  */
 export class SkillSystem {
-  readonly skillNames: string[];
+  skillNames: string[] | null = null;
   readonly baseToolNames: readonly string[];
   private readonly skillsDir: string;
   private cache: Record<string, Skill> | null = null;
@@ -23,10 +25,18 @@ export class SkillSystem {
   constructor(config: { skillsDir: string; baseToolNames: readonly string[] }) {
     this.skillsDir = config.skillsDir;
     this.baseToolNames = config.baseToolNames;
-    this.skillNames = Array.from(
-      new Bun.Glob("*/SKILL.md").scanSync({ cwd: config.skillsDir }),
-      (path) => path.split("/")[0],
-    ).sort();
+  }
+
+  /** Discover skill names from disk (lazy, cached). */
+  private async discoverSkills() {
+    if (!this.skillNames) {
+      const { readdirSync } = await import("node:fs");
+      this.skillNames = readdirSync(this.skillsDir, { withFileTypes: true })
+        .filter((d) => d.isDirectory())
+        .map((d) => d.name)
+        .sort();
+    }
+    return this.skillNames;
   }
 
   /** Mark a tool as requiring admin (Division Lead) access. */
@@ -49,8 +59,9 @@ export class SkillSystem {
   /** Load all skills into the cache (no-op if already loaded). */
   async getSkills() {
     if (!this.cache) {
+      const names = await this.discoverSkills();
       const entries = await Promise.all(
-        this.skillNames.map(async (name) => [name, await this.loadSkillFile(name)] as const),
+        names.map(async (name) => [name, await this.loadSkillFile(name)] as const),
       );
       this.cache = Object.fromEntries(entries);
     }
@@ -59,7 +70,9 @@ export class SkillSystem {
 
   /** Parse a single SKILL.md file from disk. */
   private async loadSkillFile(skillName: string) {
-    const raw = await Bun.file(join(this.skillsDir, skillName, "SKILL.md")).text();
+    const path = await import("node:path");
+    const matter = (await import("gray-matter")).default;
+    const raw = await Bun.file(path.join(this.skillsDir, skillName, "SKILL.md")).text();
     const { data, content } = matter(raw);
     return {
       name: (data.name as string) ?? skillName,
@@ -95,14 +108,15 @@ export class SkillSystem {
    */
   createLoadSkillTool(onLoad?: (skill: string) => void) {
     return tool({
-      description: `Load a skill to enable its tools and guidance for this session. Call this BEFORE performing a task. Available skills: ${this.skillNames.join(", ")}`,
+      description: `Load a skill to enable its tools and guidance for this session. Call this BEFORE performing a task.`,
       inputSchema: z.object({
-        skill: z.enum(this.skillNames as [string, ...string[]]).describe("The skill to load"),
+        skill: z.string().describe("The skill to load"),
       }),
       execute: async ({ skill }) => {
         const skills = await this.getSkills();
+        const names = Object.keys(skills);
         const s = skills[skill];
-        if (!s) return `Unknown skill: ${skill}. Available: ${this.skillNames.join(", ")}`;
+        if (!s) return `Unknown skill: ${skill}. Available: ${names.join(", ")}`;
         onLoad?.(skill);
         const toolList = s.toolNames.length > 0 ? s.toolNames.join(", ") : "none";
         return `Loaded skill: ${s.name}
