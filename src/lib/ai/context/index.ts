@@ -48,17 +48,6 @@ export class AgentContext {
     return new AgentContext(thread, DiscordContext.fromMessage(message), opts);
   }
 
-  /** Type guard for plain objects matching the AgentContext shape. */
-  static is(value: unknown): value is SerializedAgentContext {
-    return (
-      typeof value === "object" &&
-      value !== null &&
-      "userId" in value &&
-      "role" in value &&
-      "date" in value
-    );
-  }
-
   /** Reconstruct an AgentContext from a plain JSON object (e.g. after workflow deserialization). */
   static fromJSON(data: SerializedAgentContext) {
     return Object.assign(Object.create(AgentContext.prototype), data) as AgentContext;
