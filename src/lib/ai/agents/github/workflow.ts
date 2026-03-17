@@ -27,8 +27,11 @@ async function setup() {
   const skills = new SkillSystem({
     storageBase: "agents:github:prompts",
     baseToolNames: [
-      "load_skill", "list_repositories", "get_repository",
-      "search_code", "search_issues",
+      "load_skill",
+      "list_repositories",
+      "get_repository",
+      "search_code",
+      "search_issues",
     ],
   });
 

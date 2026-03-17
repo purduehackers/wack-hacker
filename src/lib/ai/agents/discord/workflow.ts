@@ -26,8 +26,11 @@ async function setup() {
   const skills = new SkillSystem({
     storageBase: "agents:discord:prompts",
     baseToolNames: [
-      "load_skill", "get_server_info", "list_channels",
-      "list_roles", "search_members",
+      "load_skill",
+      "get_server_info",
+      "list_channels",
+      "list_roles",
+      "search_members",
     ],
   });
 

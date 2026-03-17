@@ -17,12 +17,7 @@ app.get("/gateway", async (c) => {
   const webhookUrl = `${baseUrl}/api/webhooks/discord`;
   const durationMs = 10 * 60 * 1000;
 
-  return discord.startGatewayListener(
-    { waitUntil },
-    durationMs,
-    undefined,
-    webhookUrl,
-  );
+  return discord.startGatewayListener({ waitUntil }, durationMs, undefined, webhookUrl);
 });
 
 export default app;

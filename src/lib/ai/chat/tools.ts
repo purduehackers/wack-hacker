@@ -5,7 +5,7 @@ import { z } from "zod";
 import type { AgentContext } from "../context";
 
 import { documentation } from "../agents/docs/tools";
-import { DiscordRole } from "../context/enums";
+import { DiscordRole } from "../context/constants";
 
 const delegationSchema = z.object({
   task: z.string().describe("The task to delegate, forwarded verbatim"),

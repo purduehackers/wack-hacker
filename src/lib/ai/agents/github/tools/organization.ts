@@ -110,9 +110,7 @@ export const list_team_members = tool({
       per_page: per_page ?? 30,
       page: page ?? 1,
     });
-    return JSON.stringify(
-      data.map((m) => ({ login: m.login, id: m.id, html_url: m.html_url })),
-    );
+    return JSON.stringify(data.map((m) => ({ login: m.login, id: m.id, html_url: m.html_url })));
   },
 });
 
@@ -147,10 +145,7 @@ export const invite_org_member = SkillSystem.admin(
     description: `Invite a GitHub user to the purduehackers organization or update their role. Role can be "admin" or "member" (default).`,
     inputSchema: z.object({
       username: z.string().describe("GitHub username to invite"),
-      role: z
-        .enum(["admin", "member"])
-        .optional()
-        .describe("Org role (default: member)"),
+      role: z.enum(["admin", "member"]).optional().describe("Org role (default: member)"),
     }),
     execute: async ({ username, role }) => {
       const { data } = await octokit.rest.orgs.setMembershipForUser({
@@ -189,19 +184,15 @@ export const add_team_member = SkillSystem.admin(
     inputSchema: z.object({
       team_slug: z.string().describe("Team slug"),
       username: z.string().describe("GitHub username"),
-      role: z
-        .enum(["member", "maintainer"])
-        .optional()
-        .describe("Team role (default: member)"),
+      role: z.enum(["member", "maintainer"]).optional().describe("Team role (default: member)"),
     }),
     execute: async ({ team_slug, username, role }) => {
-      const { data } =
-        await octokit.rest.teams.addOrUpdateMembershipForUserInOrg({
-          org: env.GITHUB_ORG,
-          team_slug,
-          username,
-          role: role ?? "member",
-        });
+      const { data } = await octokit.rest.teams.addOrUpdateMembershipForUserInOrg({
+        org: env.GITHUB_ORG,
+        team_slug,
+        username,
+        role: role ?? "member",
+      });
       return JSON.stringify({ username, role: data.role, state: data.state });
     },
   }),
@@ -231,13 +222,8 @@ export const create_webhook = tool({
     repo: z.string().describe("Repository name"),
     url: z.string().describe("Webhook payload URL"),
     content_type: z.enum(["json", "form"]).optional(),
-    secret: z
-      .string()
-      .optional()
-      .describe("Webhook secret for signature verification"),
-    events: z
-      .array(z.string())
-      .describe("Events to subscribe to (e.g. ['push', 'pull_request'])"),
+    secret: z.string().optional().describe("Webhook secret for signature verification"),
+    events: z.array(z.string()).describe("Events to subscribe to (e.g. ['push', 'pull_request'])"),
     active: z.boolean().optional(),
   }),
   execute: async ({ repo, url, content_type, secret, events, active }) => {
@@ -267,15 +253,7 @@ export const update_webhook = tool({
     events: z.array(z.string()).optional(),
     active: z.boolean().optional(),
   }),
-  execute: async ({
-    repo,
-    hook_id,
-    url,
-    content_type,
-    secret,
-    events,
-    active,
-  }) => {
+  execute: async ({ repo, hook_id, url, content_type, secret, events, active }) => {
     const config: Record<string, string> = {};
     if (url) config.url = url;
     if (content_type) config.content_type = content_type;

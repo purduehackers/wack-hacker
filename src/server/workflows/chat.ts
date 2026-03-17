@@ -2,15 +2,16 @@ import type { UIMessageChunk } from "ai";
 
 import { DurableAgent } from "@workflow/ai/agent";
 import { Message, type Thread } from "chat";
-import { createHook, getWritable, getWorkflowMetadata } from "workflow";
 import { useStorage } from "nitro/storage";
+import { createHook, getWritable, getWorkflowMetadata } from "workflow";
 
 import type { ThreadState } from "../../lib/bot/types";
 import type { ChatTurnPayload } from "./types";
 
 import { createChatTools } from "../../lib/ai/chat/tools";
 import { AgentContext } from "../../lib/ai/context";
-import { DiscordRole } from "../../lib/ai/context/enums";
+import { DiscordRole } from "../../lib/ai/context/constants";
+import { MetaError } from "../../lib/errors";
 
 /**
  * Multi-turn chat workflow.
@@ -122,7 +123,7 @@ async function deserializeMessage(serialized: any) {
 async function loadPrompt(filename: string) {
   "use step";
   const prompt = await useStorage("assets/prompts").getItem<string>(`chat:prompts:${filename}`);
-  if (!prompt) throw new Error(`Prompt not found: ${filename}`);
+  if (!prompt) throw new MetaError("Prompt not found", { filename });
   return prompt;
 }
 

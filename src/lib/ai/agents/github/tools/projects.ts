@@ -8,11 +8,7 @@ import { octokit } from "../client";
 export const list_org_projects = tool({
   description: `List GitHub Projects v2 in the purduehackers organization. Returns each project's node ID, title, number, URL, closed status, and description. Supports cursor-based pagination.`,
   inputSchema: z.object({
-    first: z
-      .number()
-      .max(50)
-      .optional()
-      .describe("Number of projects to fetch (max 50)"),
+    first: z.number().max(50).optional().describe("Number of projects to fetch (max 50)"),
     after: z.string().optional().describe("Cursor for pagination"),
   }),
   execute: async ({ first, after }) => {
@@ -179,12 +175,8 @@ export const list_project_items = tool({
 export const create_project_item = tool({
   description: `Add an existing issue or pull request to a GitHub Project v2. Requires the project's node ID (from list_org_projects or get_project) and the issue/PR's node ID. Returns the new project item's ID.`,
   inputSchema: z.object({
-    project_id: z
-      .string()
-      .describe("Project node ID (from list_org_projects or get_project)"),
-    content_id: z
-      .string()
-      .describe("Node ID of the issue or pull request to add"),
+    project_id: z.string().describe("Project node ID (from list_org_projects or get_project)"),
+    content_id: z.string().describe("Node ID of the issue or pull request to add"),
   }),
   execute: async ({ project_id, content_id }) => {
     const { addProjectV2ItemById } = await octokit.graphql<{

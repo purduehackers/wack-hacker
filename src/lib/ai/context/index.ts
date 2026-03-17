@@ -2,9 +2,9 @@ import type { Message, Thread } from "chat";
 
 import type { ThreadState } from "../../bot/types";
 import type { ChannelInfo, ThreadInfo } from "./types";
+import type { DiscordRole as DiscordRoleValue } from "./types";
 
 import { DiscordContext } from "./discord";
-import { DiscordRole } from "./enums";
 
 /**
  * Agent execution context injected into every agent's system prompt.
@@ -18,7 +18,7 @@ export class AgentContext {
   readonly thread?: ThreadInfo;
   readonly date: string;
   readonly recentMessages?: string;
-  readonly role: DiscordRole;
+  readonly role: DiscordRoleValue;
 
   constructor(
     thread: Thread<ThreadState>,

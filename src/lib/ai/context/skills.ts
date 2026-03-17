@@ -4,6 +4,8 @@ import { z } from "zod";
 
 import type { Skill } from "./types";
 
+import { MetaError } from "../../errors";
+
 const ADMIN_MARKER = Symbol("admin");
 
 function getPromptStorage() {
@@ -81,7 +83,7 @@ export class SkillSystem {
     const raw = await getPromptStorage().getItem<string>(
       `${this.storageBase}:skills:${skillName}:SKILL.md`,
     );
-    if (!raw) throw new Error(`Skill file not found: ${skillName}`);
+    if (!raw) throw new MetaError("Skill file not found", { skillName });
     const { data, content } = matter(raw);
     return {
       name: (data.name as string) ?? skillName,
@@ -139,7 +141,7 @@ ${s.instructions}
   /** Load a prompt template and replace `{{SKILL_METADATA}}` with the skill list. */
   async resolveSystemPrompt(storageKey: string) {
     const template = await getPromptStorage().getItem<string>(storageKey);
-    if (!template) throw new Error(`Prompt not found: ${storageKey}`);
+    if (!template) throw new MetaError("Prompt not found", { storageKey });
     const metadata = await this.getSkillMetadata();
     return template.replace("{{SKILL_METADATA}}", metadata);
   }

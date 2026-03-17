@@ -5,8 +5,9 @@ import type {
   Snowflake,
 } from "discord-api-types/v10";
 
-import { ORGANIZER_ROLE_ID, DIVISION_LEAD_ROLE_ID } from "./constants";
-import { DiscordRole } from "./enums";
+import type { DiscordRole as DiscordRoleValue } from "./types";
+
+import { ORGANIZER_ROLE_ID, DIVISION_LEAD_ROLE_ID, DiscordRole } from "./constants";
 
 /**
  * Normalized Discord user identity and role, extracted from either
@@ -16,7 +17,7 @@ export class DiscordContext {
   readonly userId: string;
   readonly username: string;
   readonly nickname: string;
-  readonly role: DiscordRole;
+  readonly role: DiscordRoleValue;
 
   private constructor(opts: {
     userId: string;

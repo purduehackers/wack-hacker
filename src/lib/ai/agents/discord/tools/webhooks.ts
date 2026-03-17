@@ -15,9 +15,7 @@ function summarizeWebhook(w: any) {
     name: w.name,
     channelId: w.channel_id,
     url: w.url ?? null,
-    avatar: w.avatar
-      ? `https://cdn.discordapp.com/avatars/${w.id}/${w.avatar}.png`
-      : null,
+    avatar: w.avatar ? `https://cdn.discordapp.com/avatars/${w.id}/${w.avatar}.png` : null,
     createdAt: w.id, // Snowflake encodes creation time
   };
 }
@@ -38,9 +36,7 @@ export const list_webhooks = tool({
   execute: async ({ channel_id }) => {
     const webhooks = channel_id
       ? ((await discord.get(Routes.channelWebhooks(channel_id))) as any[])
-      : ((await discord.get(
-          Routes.guildWebhooks(env.DISCORD_GUILD_ID),
-        )) as any[]);
+      : ((await discord.get(Routes.guildWebhooks(env.DISCORD_GUILD_ID))) as any[]);
 
     return JSON.stringify(webhooks.map(summarizeWebhook));
   },
@@ -72,16 +68,12 @@ export const create_webhook = tool({
 });
 
 export const edit_webhook = tool({
-  description:
-    "Edit a webhook's name, avatar, or move it to a different channel.",
+  description: "Edit a webhook's name, avatar, or move it to a different channel.",
   inputSchema: z.object({
     webhook_id: z.string().describe("Webhook ID"),
     name: z.string().optional().describe("New webhook name"),
     avatar: z.string().optional().describe("New avatar URL"),
-    channel_id: z
-      .string()
-      .optional()
-      .describe("Move webhook to a different channel"),
+    channel_id: z.string().optional().describe("Move webhook to a different channel"),
   }),
   execute: async ({ webhook_id, name, avatar, channel_id }) => {
     const body: Record<string, any> = {};

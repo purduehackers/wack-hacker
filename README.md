@@ -65,13 +65,13 @@ This starts the Nitro dev server with hot reload. You'll need to:
 
 ### Scripts
 
-| Command | Description |
-|---------|-------------|
-| `bun dev` | Start dev server |
-| `bun run build` | Production build |
-| `bun run typecheck` | TypeScript check |
-| `bun run lint` | Lint with oxlint |
-| `bun run format` | Format with oxfmt |
+| Command             | Description       |
+| ------------------- | ----------------- |
+| `bun dev`           | Start dev server  |
+| `bun run build`     | Production build  |
+| `bun run typecheck` | TypeScript check  |
+| `bun run lint`      | Lint with oxlint  |
+| `bun run format`    | Format with oxfmt |
 
 ## Project structure
 

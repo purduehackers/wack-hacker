@@ -19,12 +19,7 @@ export async function requestApproval(opts: {
     token: `approval:${opts.token}`,
   });
 
-  await postApprovalCard(
-    opts.thread,
-    opts.description,
-    opts.reason,
-    opts.token,
-  );
+  await postApprovalCard(opts.thread, opts.description, opts.reason, opts.token);
 
   // Workflow suspends here until the onAction handler resumes the hook
   return hook;
