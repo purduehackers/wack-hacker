@@ -24,18 +24,15 @@ export async function githubAgent(task: string, isAdmin = false) {
 
 async function setup() {
   "use step";
-  const path = await import("node:path");
-  const baseDir = path.join(__dirname, "../lib/ai/agents/github");
-
   const skills = new SkillSystem({
-    skillsDir: path.join(baseDir, "prompts/skills"),
+    storageBase: "agents:github:prompts",
     baseToolNames: [
       "load_skill", "list_repositories", "get_repository",
       "search_code", "search_issues",
     ],
   });
 
-  const system = await skills.resolveSystemPrompt(path.join(baseDir, "prompts/SYSTEM.md"));
+  const system = await skills.resolveSystemPrompt("agents:github:prompts:SYSTEM.md");
   const domainTools = await import("./tools");
   const tools: ToolSet = { load_skill: skills.createLoadSkillTool(), ...domainTools };
 

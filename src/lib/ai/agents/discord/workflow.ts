@@ -23,18 +23,15 @@ export async function discordAgent(task: string, _isAdmin = false) {
 
 async function setup() {
   "use step";
-  const path = await import("node:path");
-  const baseDir = path.join(__dirname, "../lib/ai/agents/discord");
-
   const skills = new SkillSystem({
-    skillsDir: path.join(baseDir, "prompts/skills"),
+    storageBase: "agents:discord:prompts",
     baseToolNames: [
       "load_skill", "get_server_info", "list_channels",
       "list_roles", "search_members",
     ],
   });
 
-  const system = await skills.resolveSystemPrompt(path.join(baseDir, "prompts/SYSTEM.md"));
+  const system = await skills.resolveSystemPrompt("agents:discord:prompts:SYSTEM.md");
   const domainTools = await import("./tools");
   const tools: ToolSet = { load_skill: skills.createLoadSkillTool(), ...domainTools };
 

@@ -3,6 +3,7 @@ import type { UIMessageChunk } from "ai";
 import { DurableAgent } from "@workflow/ai/agent";
 import { Message, type Thread } from "chat";
 import { createHook, getWritable, getWorkflowMetadata } from "workflow";
+import { useStorage } from "nitro/storage";
 
 import type { ThreadState } from "../../lib/bot/types";
 import type { ChatTurnPayload } from "./types";
@@ -30,9 +31,7 @@ export async function chatWorkflow(payload: string) {
   const { thread, message, context } = await parsePayload(payload);
 
   const isPublic = context.role === DiscordRole.Public;
-  const rawPrompt = await loadPrompt(
-    isPublic ? "SYSTEM_PUBLIC.md" : "SYSTEM.md",
-  );
+  const rawPrompt = await loadPrompt(isPublic ? "SYSTEM_PUBLIC.md" : "SYSTEM.md");
   const system = context.buildInstructions(rawPrompt);
 
   const writable = getWritable<UIMessageChunk>();
@@ -119,13 +118,12 @@ async function deserializeMessage(serialized: any) {
   return Message.fromJSON(serialized);
 }
 
-/** Read a prompt markdown file from disk. Path is relative to the prompts directory. */
+/** Load a chat prompt from Nitro's bundled server assets. */
 async function loadPrompt(filename: string) {
   "use step";
-  const fs = await import("node:fs/promises");
-  const path = await import("node:path");
-  const dir = path.join(__dirname, "../../lib/ai/chat/prompts");
-  return fs.readFile(path.join(dir, filename), "utf-8");
+  const prompt = await useStorage("assets/prompts").getItem<string>(`chat:prompts:${filename}`);
+  if (!prompt) throw new Error(`Prompt not found: ${filename}`);
+  return prompt;
 }
 
 /** End the session: notify the user, unsubscribe, and clear state. */

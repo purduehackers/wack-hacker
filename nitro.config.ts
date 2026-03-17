@@ -4,6 +4,9 @@ export default defineConfig({
   routes: {
     "/**": "./src/index.ts",
   },
+  serverAssets: [
+    { baseName: "prompts", dir: "./src/lib/ai" },
+  ],
   vercel: {
     functions: {
       maxDuration: 10 * 60,

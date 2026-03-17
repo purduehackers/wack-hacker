@@ -24,18 +24,15 @@ export async function linearAgent(task: string, isAdmin = false) {
 
 async function setup() {
   "use step";
-  const path = await import("node:path");
-  const baseDir = path.join(__dirname, "../lib/ai/agents/linear");
-
   const skills = new SkillSystem({
-    skillsDir: path.join(baseDir, "prompts/skills"),
+    storageBase: "agents:linear:prompts",
     baseToolNames: [
       "load_skill", "search_entities", "retrieve_entities",
       "suggest_property_values", "aggregate_issues",
     ],
   });
 
-  const system = await skills.resolveSystemPrompt(path.join(baseDir, "prompts/SYSTEM.md"));
+  const system = await skills.resolveSystemPrompt("agents:linear:prompts:SYSTEM.md");
   const domainTools = await import("./tools");
   const tools: ToolSet = { load_skill: skills.createLoadSkillTool(), ...domainTools };
 
