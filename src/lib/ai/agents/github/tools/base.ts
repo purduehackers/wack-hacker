@@ -9,9 +9,7 @@ export const list_repositories = tool({
   description:
     "List repositories in the purduehackers org. Returns name, description, language, URL, and activity dates. Supports filtering by type and sorting.",
   inputSchema: z.object({
-    type: z
-      .enum(["all", "public", "private", "forks", "sources", "member"])
-      .optional(),
+    type: z.enum(["all", "public", "private", "forks", "sources", "member"]).optional(),
     sort: z.enum(["created", "updated", "pushed", "full_name"]).optional(),
     per_page: z.number().max(100).optional(),
     page: z.number().optional(),
@@ -84,9 +82,7 @@ export const search_code = tool({
   description:
     "Search code across purduehackers repositories using grep.app. Returns matching file paths, code snippets with line numbers, and repository info. Supports language and path filters.",
   inputSchema: z.object({
-    query: z
-      .string()
-      .describe("Code search query (e.g. 'useState', 'import express')"),
+    query: z.string().describe("Code search query (e.g. 'useState', 'import express')"),
     language: z
       .string()
       .optional()
@@ -94,13 +90,8 @@ export const search_code = tool({
     repo: z
       .string()
       .optional()
-      .describe(
-        "Specific repo in owner/repo format (e.g. 'purduehackers/my-repo')",
-      ),
-    path: z
-      .string()
-      .optional()
-      .describe("Directory path filter (e.g. 'src/components')"),
+      .describe("Specific repo in owner/repo format (e.g. 'purduehackers/my-repo')"),
+    path: z.string().optional().describe("Directory path filter (e.g. 'src/components')"),
   }),
   execute: async ({ query, language, repo, path }) => {
     const params = new URLSearchParams({ q: query });
@@ -114,8 +105,7 @@ export const search_code = tool({
     });
 
     if (!response.ok) {
-      if (response.status === 429)
-        return "Code search rate limited. Try again in a moment.";
+      if (response.status === 429) return "Code search rate limited. Try again in a moment.";
       return `Code search failed (${response.status}).`;
     }
 
@@ -158,9 +148,7 @@ export const search_issues = tool({
   inputSchema: z.object({
     query: z
       .string()
-      .describe(
-        "Search query with GitHub qualifiers (e.g. 'bug is:open', 'is:pr is:merged')",
-      ),
+      .describe("Search query with GitHub qualifiers (e.g. 'bug is:open', 'is:pr is:merged')"),
     sort: z.enum(["created", "updated", "comments"]).optional(),
     order: z.enum(["asc", "desc"]).optional(),
     per_page: z.number().max(100).optional(),

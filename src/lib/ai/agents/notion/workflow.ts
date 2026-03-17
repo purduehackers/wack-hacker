@@ -26,8 +26,11 @@ async function setup() {
   const skills = new SkillSystem({
     storageBase: "agents:notion:prompts",
     baseToolNames: [
-      "load_skill", "search_notion", "retrieve_page",
-      "retrieve_database", "list_users",
+      "load_skill",
+      "search_notion",
+      "retrieve_page",
+      "retrieve_database",
+      "list_users",
     ],
   });
 

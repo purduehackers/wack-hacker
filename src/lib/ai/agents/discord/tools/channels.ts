@@ -54,26 +54,11 @@ export const create_channel = tool({
     topic: z.string().optional().describe("Channel topic (text channels only)"),
     parent_id: z.string().optional().describe("Parent category ID"),
     nsfw: z.boolean().optional().describe("Whether the channel is NSFW"),
-    slowmode: z
-      .number()
-      .optional()
-      .describe("Slowmode delay in seconds (0 to disable)"),
-    position: z
-      .number()
-      .optional()
-      .describe("Channel position within its category"),
-    bitrate: z
-      .number()
-      .optional()
-      .describe("Bitrate in bits/sec for voice channels (e.g. 64000)"),
-    user_limit: z
-      .number()
-      .optional()
-      .describe("Max users for voice channels (0 for unlimited)"),
-    rtc_region: z
-      .string()
-      .optional()
-      .describe("Voice region override for voice channels"),
+    slowmode: z.number().optional().describe("Slowmode delay in seconds (0 to disable)"),
+    position: z.number().optional().describe("Channel position within its category"),
+    bitrate: z.number().optional().describe("Bitrate in bits/sec for voice channels (e.g. 64000)"),
+    user_limit: z.number().optional().describe("Max users for voice channels (0 for unlimited)"),
+    rtc_region: z.string().optional().describe("Voice region override for voice channels"),
     video_quality_mode: z
       .enum(["auto", "full"])
       .optional()
@@ -114,21 +99,15 @@ export const create_channel = tool({
     if (bitrate !== undefined) body.bitrate = bitrate;
     if (user_limit !== undefined) body.user_limit = user_limit;
     if (rtc_region) body.rtc_region = rtc_region;
-    if (video_quality_mode)
-      body.video_quality_mode = video_quality_mode === "full" ? 2 : 1;
+    if (video_quality_mode) body.video_quality_mode = video_quality_mode === "full" ? 2 : 1;
     if (default_auto_archive_duration)
-      body.default_auto_archive_duration = Number(
-        default_auto_archive_duration,
-      );
+      body.default_auto_archive_duration = Number(default_auto_archive_duration);
     if (default_thread_slowmode !== undefined)
       body.default_thread_rate_limit_per_user = default_thread_slowmode;
 
-    const channel = (await discord.post(
-      Routes.guildChannels(env.DISCORD_GUILD_ID),
-      {
-        body,
-      },
-    )) as any;
+    const channel = (await discord.post(Routes.guildChannels(env.DISCORD_GUILD_ID), {
+      body,
+    })) as any;
     return JSON.stringify(summarizeChannel(channel));
   },
 });
@@ -146,26 +125,15 @@ export const edit_channel = tool({
       .optional()
       .describe("New parent category ID (null to remove from category)"),
     nsfw: z.boolean().optional().describe("Whether the channel is NSFW"),
-    slowmode: z
-      .number()
-      .optional()
-      .describe("Slowmode delay in seconds (0 to disable)"),
+    slowmode: z.number().optional().describe("Slowmode delay in seconds (0 to disable)"),
     position: z.number().optional().describe("New position"),
-    bitrate: z
-      .number()
-      .optional()
-      .describe("Bitrate in bits/sec for voice channels (e.g. 64000)"),
-    user_limit: z
-      .number()
-      .optional()
-      .describe("Max users for voice channels (0 for unlimited)"),
+    bitrate: z.number().optional().describe("Bitrate in bits/sec for voice channels (e.g. 64000)"),
+    user_limit: z.number().optional().describe("Max users for voice channels (0 for unlimited)"),
     rtc_region: z
       .string()
       .nullable()
       .optional()
-      .describe(
-        "Voice region override for voice channels (null for automatic)",
-      ),
+      .describe("Voice region override for voice channels (null for automatic)"),
     video_quality_mode: z
       .enum(["auto", "full"])
       .optional()
@@ -204,12 +172,9 @@ export const edit_channel = tool({
     if (bitrate !== undefined) body.bitrate = bitrate;
     if (user_limit !== undefined) body.user_limit = user_limit;
     if (rtc_region !== undefined) body.rtc_region = rtc_region;
-    if (video_quality_mode)
-      body.video_quality_mode = video_quality_mode === "full" ? 2 : 1;
+    if (video_quality_mode) body.video_quality_mode = video_quality_mode === "full" ? 2 : 1;
     if (default_auto_archive_duration)
-      body.default_auto_archive_duration = Number(
-        default_auto_archive_duration,
-      );
+      body.default_auto_archive_duration = Number(default_auto_archive_duration);
     if (default_thread_slowmode !== undefined)
       body.default_thread_rate_limit_per_user = default_thread_slowmode;
 

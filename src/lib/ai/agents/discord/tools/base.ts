@@ -55,9 +55,7 @@ export const get_server_info = tool({
       presenceCount: guild.approximate_presence_count,
       ownerId: guild.owner_id,
       description: guild.description,
-      icon: guild.icon
-        ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png`
-        : null,
+      icon: guild.icon ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png` : null,
       banner: guild.banner
         ? `https://cdn.discordapp.com/banners/${guild.id}/${guild.banner}.png`
         : null,
@@ -74,9 +72,7 @@ export const list_channels = tool({
     "List all channels in the Discord server, organized by category. Returns channel IDs, names, types, topics, and positions. Use this to find the right channel before sending messages or performing channel operations.",
   inputSchema: z.object({}),
   execute: async () => {
-    const channels = (await discord.get(
-      Routes.guildChannels(env.DISCORD_GUILD_ID),
-    )) as any[];
+    const channels = (await discord.get(Routes.guildChannels(env.DISCORD_GUILD_ID))) as any[];
 
     const nonThread = channels.filter((ch) => ![10, 11, 12].includes(ch.type));
 
@@ -113,9 +109,7 @@ export const list_roles = tool({
     "List all roles in the Discord server with their colors, positions, and whether they are hoisted or mentionable. Use this to find role IDs before assigning or managing roles.",
   inputSchema: z.object({}),
   execute: async () => {
-    const roles = (await discord.get(
-      Routes.guildRoles(env.DISCORD_GUILD_ID),
-    )) as any[];
+    const roles = (await discord.get(Routes.guildRoles(env.DISCORD_GUILD_ID))) as any[];
     const sorted = roles.sort((a, b) => b.position - a.position);
     return JSON.stringify(
       sorted.map((r) => ({
@@ -138,29 +132,22 @@ export const search_members = tool({
   inputSchema: z.object({
     query: z
       .string()
-      .describe(
-        "Search query (matches username, display name, nickname, or a user ID)",
-      ),
+      .describe("Search query (matches username, display name, nickname, or a user ID)"),
     limit: z.number().max(100).default(10).describe("Max results (max 100)"),
   }),
   execute: async ({ query, limit }) => {
     // If the query looks like a Discord user ID, fetch directly
     if (/^\d{17,20}$/.test(query)) {
       try {
-        const member = (await discord.get(
-          Routes.guildMember(env.DISCORD_GUILD_ID, query),
-        )) as any;
+        const member = (await discord.get(Routes.guildMember(env.DISCORD_GUILD_ID, query))) as any;
         return JSON.stringify([summarizeMember(member)]);
       } catch {
         return JSON.stringify([]);
       }
     }
-    const members = (await discord.get(
-      Routes.guildMembersSearch(env.DISCORD_GUILD_ID),
-      {
-        query: new URLSearchParams({ query, limit: String(limit) }),
-      },
-    )) as any[];
+    const members = (await discord.get(Routes.guildMembersSearch(env.DISCORD_GUILD_ID), {
+      query: new URLSearchParams({ query, limit: String(limit) }),
+    })) as any[];
     return JSON.stringify(members.map(summarizeMember));
   },
 });

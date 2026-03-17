@@ -11,10 +11,7 @@ export const create_issue = tool({
     repo: z.string().describe("Repository name"),
     title: z.string().describe("Issue title"),
     body: z.string().optional().describe("Issue body (Markdown)"),
-    assignees: z
-      .array(z.string())
-      .optional()
-      .describe("GitHub usernames to assign"),
+    assignees: z.array(z.string()).optional().describe("GitHub usernames to assign"),
     labels: z.array(z.string()).optional().describe("Label names to apply"),
     milestone: z.number().optional().describe("Milestone number"),
   }),
@@ -155,10 +152,7 @@ export const manage_labels = tool({
     action: z.enum(["create", "update", "delete"]),
     name: z.string().describe("Label name"),
     new_name: z.string().optional().describe("New name (for update)"),
-    color: z
-      .string()
-      .optional()
-      .describe("Hex color without # (e.g. 'ff0000')"),
+    color: z.string().optional().describe("Hex color without # (e.g. 'ff0000')"),
     description: z.string().optional(),
   }),
   execute: async ({ repo, action, name, new_name, color, description }) => {
@@ -201,17 +195,11 @@ export const manage_milestones = tool({
   inputSchema: z.object({
     repo: z.string().describe("Repository name"),
     action: z.enum(["create", "update", "delete"]),
-    milestone_number: z
-      .number()
-      .optional()
-      .describe("Milestone number (for update/delete)"),
+    milestone_number: z.number().optional().describe("Milestone number (for update/delete)"),
     title: z.string().optional().describe("Title (for create/update)"),
     description: z.string().optional(),
     state: z.enum(["open", "closed"]).optional(),
-    due_on: z
-      .string()
-      .optional()
-      .describe("Due date ISO 8601 (e.g. '2025-12-31T00:00:00Z')"),
+    due_on: z.string().optional().describe("Due date ISO 8601 (e.g. '2025-12-31T00:00:00Z')"),
   }),
   execute: async ({ repo, action, milestone_number, ...input }) => {
     switch (action) {

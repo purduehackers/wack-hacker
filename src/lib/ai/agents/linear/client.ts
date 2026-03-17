@@ -33,10 +33,7 @@ export async function applyIssueRelations(
     if (rel.type === "unrelatedTo") {
       const target = await linear.issue(rel.issueId);
       const issue = await linear.issue(issueId);
-      const [fwd, inv] = await Promise.all([
-        issue.relations(),
-        issue.inverseRelations(),
-      ]);
+      const [fwd, inv] = await Promise.all([issue.relations(), issue.inverseRelations()]);
       const toDelete = [
         ...fwd.nodes.filter((r) => r.relatedIssueId === target.id),
         ...inv.nodes.filter((r) => r.issueId === target.id),

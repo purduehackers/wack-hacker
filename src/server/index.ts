@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 
-import { registerHandlers } from "../lib/bot/handlers";
 import { art } from "../lib/ascii";
+import { registerHandlers } from "../lib/bot/handlers";
 import discord from "./routes/discord";
 import webhooks from "./routes/webhooks";
 

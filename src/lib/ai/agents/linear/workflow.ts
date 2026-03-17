@@ -27,8 +27,11 @@ async function setup() {
   const skills = new SkillSystem({
     storageBase: "agents:linear:prompts",
     baseToolNames: [
-      "load_skill", "search_entities", "retrieve_entities",
-      "suggest_property_values", "aggregate_issues",
+      "load_skill",
+      "search_entities",
+      "retrieve_entities",
+      "suggest_property_values",
+      "aggregate_issues",
     ],
   });
 

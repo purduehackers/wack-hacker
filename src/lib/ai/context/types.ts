@@ -1,4 +1,6 @@
-import type { DiscordRole } from "./enums";
+import type { DiscordRole as DiscordRoleMap } from "./constants";
+
+export type DiscordRole = (typeof DiscordRoleMap)[keyof typeof DiscordRoleMap];
 
 export interface ChannelInfo {
   id: string;

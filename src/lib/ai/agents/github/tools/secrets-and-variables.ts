@@ -27,9 +27,7 @@ function boxBeforenm(sharedSecret: Uint8Array) {
  * Ephemeral X25519 keypair → HSalsa20 key derivation → XSalsa20-Poly1305.
  */
 function encryptSecret(value: string, publicKeyBase64: string) {
-  const recipientPub = Uint8Array.from(atob(publicKeyBase64), (c) =>
-    c.charCodeAt(0),
-  );
+  const recipientPub = Uint8Array.from(atob(publicKeyBase64), (c) => c.charCodeAt(0));
   const ephemeralPriv = x25519.utils.randomSecretKey();
   const ephemeralPub = x25519.getPublicKey(ephemeralPriv);
 
@@ -232,20 +230,13 @@ export const create_or_update_org_secret = tool({
   inputSchema: z.object({
     secret_name: z.string().describe("Secret name"),
     value: z.string().describe("Secret value (will be encrypted)"),
-    visibility: z
-      .enum(["all", "private", "selected"])
-      .describe("Repository visibility scope"),
+    visibility: z.enum(["all", "private", "selected"]).describe("Repository visibility scope"),
     selected_repository_ids: z
       .array(z.number())
       .optional()
       .describe("Repo IDs (required when visibility is 'selected')"),
   }),
-  execute: async ({
-    secret_name,
-    value,
-    visibility,
-    selected_repository_ids,
-  }) => {
+  execute: async ({ secret_name, value, visibility, selected_repository_ids }) => {
     const { data: keyData } = await octokit.rest.actions.getOrgPublicKey({
       org: env.GITHUB_ORG,
     });
@@ -310,9 +301,7 @@ export const create_or_update_org_variable = tool({
   inputSchema: z.object({
     name: z.string().describe("Variable name"),
     value: z.string().describe("Variable value"),
-    visibility: z
-      .enum(["all", "private", "selected"])
-      .describe("Repository visibility scope"),
+    visibility: z.enum(["all", "private", "selected"]).describe("Repository visibility scope"),
     selected_repository_ids: z.array(z.number()).optional(),
   }),
   execute: async ({ name, value, visibility, selected_repository_ids }) => {

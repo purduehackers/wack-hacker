@@ -120,9 +120,7 @@ export const create_pr_review = tool({
     repo: z.string().describe("Repository name"),
     pull_number: z.number().describe("PR number"),
     body: z.string().optional().describe("Review body"),
-    event: z
-      .enum(["APPROVE", "REQUEST_CHANGES", "COMMENT"])
-      .describe("Review action"),
+    event: z.enum(["APPROVE", "REQUEST_CHANGES", "COMMENT"]).describe("Review action"),
   }),
   execute: async ({ repo, pull_number, body, event }) => {
     const { data } = await octokit.rest.pulls.createReview({

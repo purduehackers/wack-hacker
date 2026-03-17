@@ -4,14 +4,7 @@ import { z } from "zod";
 import { env } from "../../../../../env.ts";
 import { octokit } from "../client";
 
-const packageTypeSchema = z.enum([
-  "npm",
-  "maven",
-  "rubygems",
-  "docker",
-  "nuget",
-  "container",
-]);
+const packageTypeSchema = z.enum(["npm", "maven", "rubygems", "docker", "nuget", "container"]);
 
 /** List packages in the organization. */
 export const list_packages = tool({
@@ -77,14 +70,13 @@ export const list_package_versions = tool({
     page: z.number().optional(),
   }),
   execute: async ({ package_type, package_name, per_page, page }) => {
-    const { data } =
-      await octokit.rest.packages.getAllPackageVersionsForPackageOwnedByOrg({
-        org: env.GITHUB_ORG,
-        package_type,
-        package_name,
-        per_page: per_page ?? 20,
-        page: page ?? 1,
-      });
+    const { data } = await octokit.rest.packages.getAllPackageVersionsForPackageOwnedByOrg({
+      org: env.GITHUB_ORG,
+      package_type,
+      package_name,
+      per_page: per_page ?? 20,
+      page: page ?? 1,
+    });
     return JSON.stringify(
       data.map((v) => ({
         id: v.id,
