@@ -34,7 +34,6 @@
     "std-env": "^4.0.0",
     "wack-hacker": ".",
     "workflow": "^4.2.0-beta.70",
-    "zlib-sync": "^0.1.10",
     "zod": "^4.3.6"
   },
   "devDependencies": {
