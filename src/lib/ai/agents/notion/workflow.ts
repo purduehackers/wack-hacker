@@ -23,18 +23,15 @@ export async function notionAgent(task: string, _isAdmin = false) {
 
 async function setup() {
   "use step";
-  const path = await import("node:path");
-  const baseDir = path.join(__dirname, "../lib/ai/agents/notion");
-
   const skills = new SkillSystem({
-    skillsDir: path.join(baseDir, "prompts/skills"),
+    storageBase: "agents:notion:prompts",
     baseToolNames: [
       "load_skill", "search_notion", "retrieve_page",
       "retrieve_database", "list_users",
     ],
   });
 
-  const system = await skills.resolveSystemPrompt(path.join(baseDir, "prompts/SYSTEM.md"));
+  const system = await skills.resolveSystemPrompt("agents:notion:prompts:SYSTEM.md");
   const domainTools = await import("./tools");
   const tools: ToolSet = { load_skill: skills.createLoadSkillTool(), ...domainTools };
 

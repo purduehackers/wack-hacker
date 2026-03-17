@@ -1,40 +1,47 @@
 import { tool, type ToolSet } from "ai";
+import { useStorage } from "nitro/storage";
 import { z } from "zod";
 
 import type { Skill } from "./types";
 
 const ADMIN_MARKER = Symbol("admin");
 
+function getPromptStorage() {
+  return useStorage("assets/prompts");
+}
+
 /**
  * Progressive disclosure skill system for domain agents.
  *
- * Discovers SKILL.md files by scanning subdirectories of `skillsDir`,
- * caches them, and provides a `load_skill` AI tool that returns the full
- * skill bundle wrapped in XML so the model treats it as authoritative guidance.
- *
- * All file I/O is deferred to method calls (not constructor) so this class
- * can be instantiated at module top-level in workflow files without triggering
- * Node.js module imports at bundle time.
+ * Discovers SKILL.md files by listing keys under `storageBase` in Nitro's
+ * `serverAssets` storage layer, caches them, and provides a `load_skill`
+ * AI tool that returns the full skill bundle wrapped in XML so the model
+ * treats it as authoritative guidance.
  */
 export class SkillSystem {
-  skillNames: string[] | null = null;
+  private skillNames: string[] | null = null;
   readonly baseToolNames: readonly string[];
-  private readonly skillsDir: string;
+  private readonly storageBase: string;
   private cache: Record<string, Skill> | null = null;
 
-  constructor(config: { skillsDir: string; baseToolNames: readonly string[] }) {
-    this.skillsDir = config.skillsDir;
+  constructor(config: { storageBase: string; baseToolNames: readonly string[] }) {
+    this.storageBase = config.storageBase;
     this.baseToolNames = config.baseToolNames;
   }
 
-  /** Discover skill names from disk (lazy, cached). */
+  /** Discover skill names by listing keys under the skills storage path. */
   private async discoverSkills() {
     if (!this.skillNames) {
-      const { readdirSync } = await import("node:fs");
-      this.skillNames = readdirSync(this.skillsDir, { withFileTypes: true })
-        .filter((d) => d.isDirectory())
-        .map((d) => d.name)
-        .sort();
+      const prefix = `${this.storageBase}:skills:`;
+      const keys = await getPromptStorage().getKeys(prefix);
+      const names = new Set<string>();
+      for (const key of keys) {
+        if (key.startsWith(prefix)) {
+          const skillName = key.slice(prefix.length).split(":")[0];
+          if (skillName) names.add(skillName);
+        }
+      }
+      this.skillNames = [...names].sort();
     }
     return this.skillNames;
   }
@@ -68,12 +75,13 @@ export class SkillSystem {
     return this.cache;
   }
 
-  /** Parse a single SKILL.md file from disk. */
+  /** Parse a single SKILL.md file from storage. */
   private async loadSkillFile(skillName: string) {
-    const fs = await import("node:fs/promises");
-    const path = await import("node:path");
     const matter = (await import("gray-matter")).default;
-    const raw = await fs.readFile(path.join(this.skillsDir, skillName, "SKILL.md"), "utf-8");
+    const raw = await getPromptStorage().getItem<string>(
+      `${this.storageBase}:skills:${skillName}:SKILL.md`,
+    );
+    if (!raw) throw new Error(`Skill file not found: ${skillName}`);
     const { data, content } = matter(raw);
     return {
       name: (data.name as string) ?? skillName,
@@ -95,12 +103,6 @@ export class SkillSystem {
     return Object.values(skills)
       .map((s) => `- ${s.name}: ${s.description}`)
       .join("\n");
-  }
-
-  /** Return the tool names unlocked by a given skill. */
-  async getSkillToolNames(skill: string) {
-    const skills = await this.getSkills();
-    return skills[skill]?.toolNames ?? [];
   }
 
   /**
@@ -135,9 +137,9 @@ ${s.instructions}
   }
 
   /** Load a prompt template and replace `{{SKILL_METADATA}}` with the skill list. */
-  async resolveSystemPrompt(templatePath: string) {
-    const fs = await import("node:fs/promises");
-    const template = await fs.readFile(templatePath, "utf-8");
+  async resolveSystemPrompt(storageKey: string) {
+    const template = await getPromptStorage().getItem<string>(storageKey);
+    if (!template) throw new Error(`Prompt not found: ${storageKey}`);
     const metadata = await this.getSkillMetadata();
     return template.replace("{{SKILL_METADATA}}", metadata);
   }
