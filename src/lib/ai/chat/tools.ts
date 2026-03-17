@@ -2,7 +2,7 @@ import { tool, type ToolSet } from "ai";
 import { start } from "workflow/api";
 import { z } from "zod";
 
-import type { AgentContext } from "../context";
+import type { SerializedAgentContext } from "../context/types";
 
 import { documentation } from "../agents/docs/tools";
 import { DiscordRole } from "../context/constants";
@@ -18,7 +18,7 @@ const delegationSchema = z.object({
  * Organizers and division leads additionally get delegation tools
  * that launch domain agent workflows as child workflows.
  */
-export function createChatTools(ctx: AgentContext) {
+export function createChatTools(ctx: SerializedAgentContext) {
   const tools: ToolSet = { documentation };
   const isAdmin = ctx.role === DiscordRole.DivisionLead;
 

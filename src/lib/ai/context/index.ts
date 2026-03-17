@@ -1,7 +1,7 @@
 import type { Message, Thread } from "chat";
 
 import type { ThreadState } from "../../bot/types";
-import type { ChannelInfo, ThreadInfo } from "./types";
+import type { ChannelInfo, SerializedAgentContext, ThreadInfo } from "./types";
 import type { DiscordRole as DiscordRoleValue } from "./types";
 
 import { DiscordContext } from "./discord";
@@ -46,6 +46,22 @@ export class AgentContext {
     opts?: { recentMessages?: string },
   ) {
     return new AgentContext(thread, DiscordContext.fromMessage(message), opts);
+  }
+
+  /** Type guard for plain objects matching the AgentContext shape. */
+  static is(value: unknown): value is SerializedAgentContext {
+    return (
+      typeof value === "object" &&
+      value !== null &&
+      "userId" in value &&
+      "role" in value &&
+      "date" in value
+    );
+  }
+
+  /** Reconstruct an AgentContext from a plain JSON object (e.g. after workflow deserialization). */
+  static fromJSON(data: SerializedAgentContext) {
+    return Object.assign(Object.create(AgentContext.prototype), data) as AgentContext;
   }
 
   /**
