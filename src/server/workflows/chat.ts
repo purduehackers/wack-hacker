@@ -7,10 +7,14 @@ import { createHook, getWritable, getWorkflowMetadata } from "workflow";
 import type { ThreadState } from "../../lib/bot/types";
 import type { ChatTurnPayload } from "./types";
 
-import { SYSTEM_PROMPT, SYSTEM_PUBLIC_PROMPT } from "../../lib/ai/chat/prompts/constants";
+import {
+  SYSTEM_PROMPT,
+  SYSTEM_PUBLIC_PROMPT,
+} from "../../lib/ai/chat/prompts/constants";
 import { createChatTools } from "../../lib/ai/chat/tools";
 import { AgentContext } from "../../lib/ai/context";
 import { DiscordRole } from "../../lib/ai/context/constants";
+import type { SerializedAgentContext } from "../../lib/ai/context/types";
 
 /**
  * Multi-turn chat workflow.
@@ -32,7 +36,7 @@ export async function chatWorkflow(payload: string) {
 
   const isPublic = context.role === DiscordRole.Public;
   const rawPrompt = isPublic ? SYSTEM_PUBLIC_PROMPT : SYSTEM_PROMPT;
-  const system = context.buildInstructions(rawPrompt);
+  const system = AgentContext.fromJSON(context).buildInstructions(rawPrompt);
 
   const writable = getWritable<UIMessageChunk>();
   const agent = new DurableAgent({
@@ -100,14 +104,14 @@ async function postToThread(thread: Thread<ThreadState>, text: string) {
   }
 }
 
-/** Deserialize a payload string back into Chat SDK Thread + Message + AgentContext. */
+/** Deserialize the workflow payload. Context is a plain object — use AgentContext.fromJSON to restore. */
 async function parsePayload(payload: string) {
   "use step";
   const bot = await initBot();
   return JSON.parse(payload, bot.reviver()) as {
     thread: Thread<ThreadState>;
     message: Message;
-    context: AgentContext;
+    context: SerializedAgentContext;
   };
 }
 
