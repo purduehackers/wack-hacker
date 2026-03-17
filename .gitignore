@@ -178,3 +178,4 @@ dist
 .vercel
 .env*.local
 .swc
+.output

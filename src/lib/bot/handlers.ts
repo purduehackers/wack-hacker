@@ -86,3 +86,10 @@ bot.onAction(async (event) => {
     // Hook may not exist or already resolved
   }
 });
+
+/** Registers all bot event handlers. Must be called at startup. */
+export function registerHandlers() {
+  // Handlers are registered as side effects above.
+  // This function exists so the bundler doesn't tree-shake the module.
+  console.log("[handlers] registered");
+}
