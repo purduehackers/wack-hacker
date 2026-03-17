@@ -5,6 +5,7 @@ import { getWritable } from "workflow";
 
 import { SkillSystem } from "../../context/skills";
 import { SKILLS, SYSTEM_PROMPT } from "./prompts/constants";
+import * as domainTools from "./tools";
 
 export async function githubAgent(task: string, isAdmin = false) {
   "use workflow";
@@ -31,7 +32,6 @@ async function setup() {
   });
 
   const system = skills.resolveSystemPrompt();
-  const domainTools = await import("./tools");
   const tools: ToolSet = { load_skill: skills.createLoadSkillTool(), ...domainTools };
 
   return { system, tools };

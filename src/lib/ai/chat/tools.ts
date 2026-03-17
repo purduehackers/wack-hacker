@@ -4,12 +4,23 @@ import { z } from "zod";
 
 import type { SerializedAgentContext } from "../context/types";
 
+import { discordAgent } from "../agents/discord/workflow";
 import { documentation } from "../agents/docs/tools";
+import { githubAgent } from "../agents/github/workflow";
+import { linearAgent } from "../agents/linear/workflow";
+import { notionAgent } from "../agents/notion/workflow";
 import { DiscordRole } from "../context/constants";
 
 const delegationSchema = z.object({
   task: z.string().describe("The task to delegate, forwarded verbatim"),
 });
+
+const AGENTS = {
+  linear: linearAgent,
+  github: githubAgent,
+  notion: notionAgent,
+  discord: discordAgent,
+} as const;
 
 /**
  * Build the tool set for the top-level chat agent.
@@ -51,19 +62,11 @@ export function createChatTools(ctx: SerializedAgentContext) {
   return tools;
 }
 
-const AGENT_LOADERS = {
-  linear: () => import("../agents/linear/workflow").then((m) => m.linearAgent),
-  github: () => import("../agents/github/workflow").then((m) => m.githubAgent),
-  notion: () => import("../agents/notion/workflow").then((m) => m.notionAgent),
-  discord: () => import("../agents/discord/workflow").then((m) => m.discordAgent),
-} as const;
-
 /** Launch a domain agent as a child workflow and await its text result. */
-async function launchAgent(name: keyof typeof AGENT_LOADERS, task: string, isAdmin: boolean) {
+async function launchAgent(name: keyof typeof AGENTS, task: string, isAdmin: boolean) {
   "use step";
   try {
-    const workflow = await AGENT_LOADERS[name]();
-    const run = await start(workflow, [task, isAdmin]);
+    const run = await start(AGENTS[name], [task, isAdmin]);
     return await run.returnValue;
   } catch {
     return `The ${name} agent is not yet available.`;
