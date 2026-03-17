@@ -1,17 +1,24 @@
-import type { ToolSet, UIMessageChunk } from "ai";
+import type { UIMessageChunk } from "ai";
 
 import { DurableAgent } from "@workflow/ai/agent";
 import { getWritable } from "workflow";
 
 import { SkillSystem } from "../../context/skills";
 import { SKILLS, SYSTEM_PROMPT } from "./prompts/constants";
-import * as domainTools from "./tools";
 
 export async function discordAgent(task: string, _isAdmin = false) {
   "use workflow";
 
-  const { system, tools } = await setup();
   const writable = getWritable<UIMessageChunk>();
+  return await run(task, writable);
+}
+
+async function run(task: string, writable: WritableStream<UIMessageChunk>) {
+  "use step";
+  const skills = new SkillSystem({ skills: SKILLS, systemPrompt: SYSTEM_PROMPT });
+  const system = skills.resolveSystemPrompt();
+  const domainTools = await import("./tools");
+  const tools = { load_skill: skills.createLoadSkillTool(), ...domainTools };
 
   const agent = new DurableAgent({ model: "anthropic/claude-sonnet-4", system, tools });
   const result = await agent.stream({
@@ -21,17 +28,4 @@ export async function discordAgent(task: string, _isAdmin = false) {
   });
 
   return result.steps?.at(-1)?.text ?? "";
-}
-
-async function setup() {
-  "use step";
-  const skills = new SkillSystem({
-    skills: SKILLS,
-    systemPrompt: SYSTEM_PROMPT,
-  });
-
-  const system = skills.resolveSystemPrompt();
-  const tools: ToolSet = { load_skill: skills.createLoadSkillTool(), ...domainTools };
-
-  return { system, tools };
 }
