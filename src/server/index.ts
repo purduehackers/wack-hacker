@@ -1,10 +1,11 @@
 import { Hono } from "hono";
 
 import { registerHandlers } from "../lib/bot/handlers";
-registerHandlers();
 import { art } from "../lib/ascii";
 import discord from "./routes/discord";
 import webhooks from "./routes/webhooks";
+
+registerHandlers();
 
 const api = new Hono();
 api.route("/webhooks", webhooks);

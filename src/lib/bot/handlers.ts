@@ -11,9 +11,7 @@ import { AgentContext } from "../ai/context";
 
 /** Start a new chat workflow for a first mention. */
 async function startSession(thread: Thread<ThreadState>, message: Message) {
-  console.log("[handlers] startSession", { threadId: thread.id });
   const context = AgentContext.fromMessage(thread, message);
-  console.log("[handlers] context created", { role: context.role });
 
   const run = await start(chatWorkflow, [
     JSON.stringify({
@@ -23,7 +21,6 @@ async function startSession(thread: Thread<ThreadState>, message: Message) {
       context,
     }),
   ]);
-  console.log("[handlers] workflow started", { runId: run.runId });
 
   await thread.setState({ runId: run.runId });
 }
@@ -31,7 +28,6 @@ async function startSession(thread: Thread<ThreadState>, message: Message) {
 /** Route a message to an existing workflow or start a new session. */
 async function routeTurn(thread: Thread<ThreadState>, message: Message) {
   const state = await thread.state;
-  console.log("[handlers] routeTurn", { threadId: thread.id, state });
   if (!state?.runId) {
     await startSession(thread, message);
     return;
@@ -42,54 +38,42 @@ async function routeTurn(thread: Thread<ThreadState>, message: Message) {
   });
 }
 
-bot.onNewMention(async (thread, message) => {
-  try {
-    console.log("[handlers] onNewMention", { threadId: thread.id, text: message.text });
-    await thread.subscribe();
-    console.log("[handlers] subscribed");
-    await routeTurn(thread, message);
-    console.log("[handlers] routeTurn complete");
-  } catch (err) {
-    console.error("[handlers] onNewMention error:", err);
-  }
-});
-
-bot.onSubscribedMessage(async (thread, message) => {
-  try {
-    console.log("[handlers] onSubscribedMessage", { threadId: thread.id, text: message.text });
-    await routeTurn(thread, message);
-    console.log("[handlers] routeTurn complete");
-  } catch (err) {
-    console.error("[handlers] onSubscribedMessage error:", err);
-  }
-});
-
 /**
- * Catch-all action handler for approval card buttons.
+ * Register all bot event handlers.
  *
- * Button ids are encoded as `approval:{approve|deny}:{hookToken}` because
- * the Discord adapter maps `<Button id>` to `custom_id` and discards the
- * `value` prop entirely.
+ * Must be called explicitly at startup — a bare side-effect import
+ * gets tree-shaken by the bundler.
  */
-bot.onAction(async (event) => {
-  const match = event.actionId.match(/^approval:(approve|deny):(.+)$/);
-  if (!match) return;
-
-  const approved = match[1] === "approve";
-  const token = match[2];
-  try {
-    await resumeHook(`approval:${token}`, {
-      approved,
-      userId: event.user.userId,
-    });
-  } catch {
-    // Hook may not exist or already resolved
-  }
-});
-
-/** Registers all bot event handlers. Must be called at startup. */
 export function registerHandlers() {
-  // Handlers are registered as side effects above.
-  // This function exists so the bundler doesn't tree-shake the module.
-  console.log("[handlers] registered");
+  bot.onNewMention(async (thread, message) => {
+    await thread.subscribe();
+    await routeTurn(thread, message);
+  });
+
+  bot.onSubscribedMessage(async (thread, message) => {
+    await routeTurn(thread, message);
+  });
+
+  /**
+   * Catch-all action handler for approval card buttons.
+   *
+   * Button ids are encoded as `approval:{approve|deny}:{hookToken}` because
+   * the Discord adapter maps `<Button id>` to `custom_id` and discards the
+   * `value` prop entirely.
+   */
+  bot.onAction(async (event) => {
+    const match = event.actionId.match(/^approval:(approve|deny):(.+)$/);
+    if (!match) return;
+
+    const approved = match[1] === "approve";
+    const token = match[2];
+    try {
+      await resumeHook(`approval:${token}`, {
+        approved,
+        userId: event.user.userId,
+      });
+    } catch {
+      // Hook may not exist or already resolved
+    }
+  });
 }
