@@ -2,16 +2,15 @@ import type { UIMessageChunk } from "ai";
 
 import { DurableAgent } from "@workflow/ai/agent";
 import { Message, type Thread } from "chat";
-import { useStorage } from "nitro/storage";
 import { createHook, getWritable, getWorkflowMetadata } from "workflow";
 
 import type { ThreadState } from "../../lib/bot/types";
 import type { ChatTurnPayload } from "./types";
 
+import { SYSTEM_PROMPT, SYSTEM_PUBLIC_PROMPT } from "../../lib/ai/chat/prompts/constants";
 import { createChatTools } from "../../lib/ai/chat/tools";
 import { AgentContext } from "../../lib/ai/context";
 import { DiscordRole } from "../../lib/ai/context/constants";
-import { MetaError } from "../../lib/errors";
 
 /**
  * Multi-turn chat workflow.
@@ -32,7 +31,7 @@ export async function chatWorkflow(payload: string) {
   const { thread, message, context } = await parsePayload(payload);
 
   const isPublic = context.role === DiscordRole.Public;
-  const rawPrompt = await loadPrompt(isPublic ? "SYSTEM_PUBLIC.md" : "SYSTEM.md");
+  const rawPrompt = isPublic ? SYSTEM_PUBLIC_PROMPT : SYSTEM_PROMPT;
   const system = context.buildInstructions(rawPrompt);
 
   const writable = getWritable<UIMessageChunk>();
@@ -117,14 +116,6 @@ async function deserializeMessage(serialized: any) {
   "use step";
   await initBot();
   return Message.fromJSON(serialized);
-}
-
-/** Load a chat prompt from Nitro's bundled server assets. */
-async function loadPrompt(filename: string) {
-  "use step";
-  const prompt = await useStorage("assets/prompts").getItem<string>(`chat:prompts:${filename}`);
-  if (!prompt) throw new MetaError("Prompt not found", { filename });
-  return prompt;
 }
 
 /** End the session: notify the user, unsubscribe, and clear state. */

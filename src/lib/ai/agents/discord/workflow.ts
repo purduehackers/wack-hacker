@@ -4,6 +4,7 @@ import { DurableAgent } from "@workflow/ai/agent";
 import { getWritable } from "workflow";
 
 import { SkillSystem } from "../../context/skills";
+import { SKILLS, SYSTEM_PROMPT } from "./prompts/constants";
 
 export async function discordAgent(task: string, _isAdmin = false) {
   "use workflow";
@@ -24,17 +25,11 @@ export async function discordAgent(task: string, _isAdmin = false) {
 async function setup() {
   "use step";
   const skills = new SkillSystem({
-    storageBase: "agents:discord:prompts",
-    baseToolNames: [
-      "load_skill",
-      "get_server_info",
-      "list_channels",
-      "list_roles",
-      "search_members",
-    ],
+    skills: SKILLS,
+    systemPrompt: SYSTEM_PROMPT,
   });
 
-  const system = await skills.resolveSystemPrompt("agents:discord:prompts:SYSTEM.md");
+  const system = skills.resolveSystemPrompt();
   const domainTools = await import("./tools");
   const tools: ToolSet = { load_skill: skills.createLoadSkillTool(), ...domainTools };
 
