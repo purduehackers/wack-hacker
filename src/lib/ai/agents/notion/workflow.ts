@@ -4,6 +4,7 @@ import { DurableAgent } from "@workflow/ai/agent";
 import { getWritable } from "workflow";
 
 import { SkillSystem } from "../../context/skills";
+import { SKILLS, SYSTEM_PROMPT } from "./prompts/constants";
 
 export async function notionAgent(task: string, _isAdmin = false) {
   "use workflow";
@@ -24,17 +25,11 @@ export async function notionAgent(task: string, _isAdmin = false) {
 async function setup() {
   "use step";
   const skills = new SkillSystem({
-    storageBase: "agents:notion:prompts",
-    baseToolNames: [
-      "load_skill",
-      "search_notion",
-      "retrieve_page",
-      "retrieve_database",
-      "list_users",
-    ],
+    skills: SKILLS,
+    systemPrompt: SYSTEM_PROMPT,
   });
 
-  const system = await skills.resolveSystemPrompt("agents:notion:prompts:SYSTEM.md");
+  const system = skills.resolveSystemPrompt();
   const domainTools = await import("./tools");
   const tools: ToolSet = { load_skill: skills.createLoadSkillTool(), ...domainTools };
 

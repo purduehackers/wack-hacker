@@ -1,51 +1,25 @@
 import { tool, type ToolSet } from "ai";
-import { useStorage } from "nitro/storage";
 import { z } from "zod";
 
 import type { Skill } from "./types";
 
-import { MetaError } from "../../errors";
-
 const ADMIN_MARKER = Symbol("admin");
-
-function getPromptStorage() {
-  return useStorage("assets/prompts");
-}
 
 /**
  * Progressive disclosure skill system for domain agents.
  *
- * Discovers SKILL.md files by listing keys under `storageBase` in Nitro's
- * `serverAssets` storage layer, caches them, and provides a `load_skill`
- * AI tool that returns the full skill bundle wrapped in XML so the model
- * treats it as authoritative guidance.
+ * Accepts pre-loaded skills and system prompt (generated at build time
+ * from SKILL.md files), and provides a `load_skill` AI tool that returns
+ * the full skill bundle wrapped in XML so the model treats it as
+ * authoritative guidance.
  */
 export class SkillSystem {
-  private skillNames: string[] | null = null;
-  readonly baseToolNames: readonly string[];
-  private readonly storageBase: string;
-  private cache: Record<string, Skill> | null = null;
+  private readonly skills: Record<string, Skill>;
+  private readonly systemPrompt: string;
 
-  constructor(config: { storageBase: string; baseToolNames: readonly string[] }) {
-    this.storageBase = config.storageBase;
-    this.baseToolNames = config.baseToolNames;
-  }
-
-  /** Discover skill names by listing keys under the skills storage path. */
-  private async discoverSkills() {
-    if (!this.skillNames) {
-      const prefix = `${this.storageBase}:skills:`;
-      const keys = await getPromptStorage().getKeys(prefix);
-      const names = new Set<string>();
-      for (const key of keys) {
-        if (key.startsWith(prefix)) {
-          const skillName = key.slice(prefix.length).split(":")[0];
-          if (skillName) names.add(skillName);
-        }
-      }
-      this.skillNames = [...names].sort();
-    }
-    return this.skillNames;
+  constructor(config: { skills: Record<string, Skill>; systemPrompt: string }) {
+    this.skills = config.skills;
+    this.systemPrompt = config.systemPrompt;
   }
 
   /** Mark a tool as requiring admin (Division Lead) access. */
@@ -65,46 +39,16 @@ export class SkillSystem {
     return filtered;
   }
 
-  /** Load all skills into the cache (no-op if already loaded). */
-  async getSkills() {
-    if (!this.cache) {
-      const names = await this.discoverSkills();
-      const entries = await Promise.all(
-        names.map(async (name) => [name, await this.loadSkillFile(name)] as const),
-      );
-      this.cache = Object.fromEntries(entries);
-    }
-    return this.cache;
-  }
-
-  /** Parse a single SKILL.md file from storage. */
-  private async loadSkillFile(skillName: string) {
-    const matter = (await import("gray-matter")).default;
-    const raw = await getPromptStorage().getItem<string>(
-      `${this.storageBase}:skills:${skillName}:SKILL.md`,
-    );
-    if (!raw) throw new MetaError("Skill file not found", { skillName });
-    const { data, content } = matter(raw);
-    return {
-      name: (data.name as string) ?? skillName,
-      description: (data.description as string) ?? "",
-      criteria: (data.criteria as string) ?? "",
-      instructions: content.trimStart(),
-      toolNames: data.tools
-        ? String(data.tools)
-            .split(",")
-            .map((t) => t.trim())
-            .filter(Boolean)
-        : [],
-    };
-  }
-
   /** Format `- name: description` lines for injection into a system prompt. */
-  async getSkillMetadata() {
-    const skills = await this.getSkills();
-    return Object.values(skills)
+  getSkillMetadata() {
+    return Object.values(this.skills)
       .map((s) => `- ${s.name}: ${s.description}`)
       .join("\n");
+  }
+
+  /** Resolve the system prompt by replacing `{{SKILL_METADATA}}` with the skill list. */
+  resolveSystemPrompt() {
+    return this.systemPrompt.replace("{{SKILL_METADATA}}", this.getSkillMetadata());
   }
 
   /**
@@ -118,9 +62,8 @@ export class SkillSystem {
         skill: z.string().describe("The skill to load"),
       }),
       execute: async ({ skill }) => {
-        const skills = await this.getSkills();
-        const names = Object.keys(skills);
-        const s = skills[skill];
+        const names = Object.keys(this.skills);
+        const s = this.skills[skill];
         if (!s) return `Unknown skill: ${skill}. Available: ${names.join(", ")}`;
         onLoad?.(skill);
         const toolList = s.toolNames.length > 0 ? s.toolNames.join(", ") : "none";
@@ -136,13 +79,5 @@ ${s.instructions}
 </loaded-skill>`;
       },
     });
-  }
-
-  /** Load a prompt template and replace `{{SKILL_METADATA}}` with the skill list. */
-  async resolveSystemPrompt(storageKey: string) {
-    const template = await getPromptStorage().getItem<string>(storageKey);
-    if (!template) throw new MetaError("Prompt not found", { storageKey });
-    const metadata = await this.getSkillMetadata();
-    return template.replace("{{SKILL_METADATA}}", metadata);
   }
 }

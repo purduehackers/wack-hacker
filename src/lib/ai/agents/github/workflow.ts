@@ -4,6 +4,7 @@ import { DurableAgent } from "@workflow/ai/agent";
 import { getWritable } from "workflow";
 
 import { SkillSystem } from "../../context/skills";
+import { SKILLS, SYSTEM_PROMPT } from "./prompts/constants";
 
 export async function githubAgent(task: string, isAdmin = false) {
   "use workflow";
@@ -25,17 +26,11 @@ export async function githubAgent(task: string, isAdmin = false) {
 async function setup() {
   "use step";
   const skills = new SkillSystem({
-    storageBase: "agents:github:prompts",
-    baseToolNames: [
-      "load_skill",
-      "list_repositories",
-      "get_repository",
-      "search_code",
-      "search_issues",
-    ],
+    skills: SKILLS,
+    systemPrompt: SYSTEM_PROMPT,
   });
 
-  const system = await skills.resolveSystemPrompt("agents:github:prompts:SYSTEM.md");
+  const system = skills.resolveSystemPrompt();
   const domainTools = await import("./tools");
   const tools: ToolSet = { load_skill: skills.createLoadSkillTool(), ...domainTools };
 
