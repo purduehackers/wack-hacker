@@ -70,9 +70,10 @@ export class SkillSystem {
 
   /** Parse a single SKILL.md file from disk. */
   private async loadSkillFile(skillName: string) {
+    const fs = await import("node:fs/promises");
     const path = await import("node:path");
     const matter = (await import("gray-matter")).default;
-    const raw = await Bun.file(path.join(this.skillsDir, skillName, "SKILL.md")).text();
+    const raw = await fs.readFile(path.join(this.skillsDir, skillName, "SKILL.md"), "utf-8");
     const { data, content } = matter(raw);
     return {
       name: (data.name as string) ?? skillName,
@@ -135,7 +136,8 @@ ${s.instructions}
 
   /** Load a prompt template and replace `{{SKILL_METADATA}}` with the skill list. */
   async resolveSystemPrompt(templatePath: string) {
-    const template = await Bun.file(templatePath).text();
+    const fs = await import("node:fs/promises");
+    const template = await fs.readFile(templatePath, "utf-8");
     const metadata = await this.getSkillMetadata();
     return template.replace("{{SKILL_METADATA}}", metadata);
   }
