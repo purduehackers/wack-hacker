@@ -20,6 +20,7 @@
     "@noble/curves": "^2.0.1",
     "@notionhq/client": "^5.13.0",
     "@octokit/auth-app": "^8.2.0",
+    "@t3-oss/env-core": "^0.13.10",
     "@vercel/config": "^0.0.40",
     "@vercel/functions": "^3.4.3",
     "@workflow/ai": "^4.0.1-beta.56",
