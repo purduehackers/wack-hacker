@@ -28,6 +28,8 @@ export const AppConfig = makeEnv("AppConfig", {
     SHIP_DATABASE_URL: Env.string("SHIP_DATABASE_URL"),
     SHIP_DATABASE_AUTH_TOKEN: Env.redacted("SHIP_DATABASE_AUTH_TOKEN"),
     SHIP_R2_BUCKET_NAME: Env.string("SHIP_R2_BUCKET_NAME"),
+    PRIVACY_DB_URL: Env.string("PRIVACY_DB_URL"),
+    PRIVACY_DB_API_KEY: Env.redacted("PRIVACY_DB_API_KEY"),
     TZ: Env.stringOr("TZ", "America/Indiana/Indianapolis"),
     NODE_ENV: Env.stringOr("NODE_ENV", "development"),
 });

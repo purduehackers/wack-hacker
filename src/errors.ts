@@ -49,6 +49,11 @@ export class PhonebellError extends Data.TaggedError("PhonebellError")<{
     cause: unknown;
 }> {}
 
+export class PrivacyDBError extends Data.TaggedError("PrivacyDBError")<{
+    operation: string;
+    cause: unknown;
+}> {}
+
 export class DashboardConnectionFailed extends Data.TaggedError("DashboardConnectionFailed")<{
     attempts: number;
     lastError: unknown;
