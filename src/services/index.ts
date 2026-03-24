@@ -38,7 +38,7 @@ export { Storage, Storage as StorageLive, type ImageMetadata, type EventIndex } 
 export { GitHub, GitHub as GitHubLive } from "./GitHub";
 export { MediaWiki, MediaWiki as MediaWikiLive } from "./MediaWiki";
 export { Phonebell, Phonebell as PhonebellLive } from "./Phonebell";
-export { PrivacyDB } from "./PrivacyDB";
+export { PrivacyDB, PrivacyDB as PrivacyDBLive } from "./PrivacyDB";
 export { Notion, Notion as NotionLive } from "./Notion";
 export { MeetingNotes, MeetingNotes as MeetingNotesLive } from "./MeetingNotes";
 export { Dashboard, Dashboard as DashboardLive, type DiscordMessage } from "./Dashboard";

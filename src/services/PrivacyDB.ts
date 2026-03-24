@@ -1,18 +1,7 @@
 import { Duration, Effect, Redacted } from "effect";
 
 import { AppConfig } from "../config";
-
-export class PrivacyDBError extends Error {
-    readonly _tag = "PrivacyDBError";
-    constructor(
-        readonly operation: string,
-        readonly cause: unknown,
-    ) {
-        super(
-            `PrivacyDB.${operation}: ${cause instanceof Error ? cause.message : String(cause)}`,
-        );
-    }
-}
+import { PrivacyDBError } from "../errors";
 
 export type Mode = "opt_in" | "opt_out_privacy" | "opt_out_collection";
 export type Project = "commit-overflow" | "ships";
@@ -43,6 +32,11 @@ export class PrivacyDB extends Effect.Service<PrivacyDB>()("PrivacyDB", {
         ) {
             const url = `${baseUrl}${path}`;
 
+            yield* Effect.annotateCurrentSpan({
+                http_method: method,
+                url,
+            });
+
             yield* Effect.logDebug("privacydb request initiated", {
                 service_name: "PrivacyDB",
                 method: "request",
@@ -60,7 +54,7 @@ export class PrivacyDB extends Effect.Service<PrivacyDB>()("PrivacyDB", {
                         },
                         body: body ? JSON.stringify(body) : undefined,
                     }),
-                catch: (cause) => new PrivacyDBError("request.fetch", cause),
+                catch: (cause) => new PrivacyDBError({ operation: "request.fetch", cause }),
             }).pipe(Effect.timed);
 
             const duration_ms = Duration.toMillis(duration);
@@ -68,7 +62,8 @@ export class PrivacyDB extends Effect.Service<PrivacyDB>()("PrivacyDB", {
             if (!response.ok) {
                 const text = yield* Effect.tryPromise({
                     try: () => response.text(),
-                    catch: () => new PrivacyDBError("request.readBody", "failed to read response"),
+                    catch: (cause) =>
+                        new PrivacyDBError({ operation: "request.readBody", cause }),
                 }).pipe(Effect.catchAll(() => Effect.succeed("")));
 
                 yield* Effect.logError("privacydb request failed", {
@@ -80,14 +75,17 @@ export class PrivacyDB extends Effect.Service<PrivacyDB>()("PrivacyDB", {
                     duration_ms,
                 });
 
-                yield* Effect.fail(
-                    new PrivacyDBError("request", `HTTP ${response.status}: ${text.slice(0, 200)}`),
+                return yield* Effect.fail(
+                    new PrivacyDBError({
+                        operation: "request",
+                        cause: `HTTP ${response.status}: ${text.slice(0, 200)}`,
+                    }),
                 );
             }
 
             const data = yield* Effect.tryPromise({
                 try: () => response.json() as Promise<T>,
-                catch: (cause) => new PrivacyDBError("request.parseJson", cause),
+                catch: (cause) => new PrivacyDBError({ operation: "request.parseJson", cause }),
             });
 
             yield* Effect.logDebug("privacydb request completed", {
@@ -102,6 +100,7 @@ export class PrivacyDB extends Effect.Service<PrivacyDB>()("PrivacyDB", {
         });
 
         const getPreferences = Effect.fn("PrivacyDB.getPreferences")(function* (userId: string) {
+            yield* Effect.annotateCurrentSpan({ user_id: userId });
             return yield* request<UserPreferences>("GET", `/preferences/${userId}`);
         });
 
@@ -110,6 +109,7 @@ export class PrivacyDB extends Effect.Service<PrivacyDB>()("PrivacyDB", {
             mode: Mode,
             reason?: string,
         ) {
+            yield* Effect.annotateCurrentSpan({ user_id: userId, mode });
             return yield* request<{ ok: boolean; wipe_results?: Record<string, { ok: boolean }> }>(
                 "PUT",
                 `/preferences/${userId}`,
@@ -120,6 +120,7 @@ export class PrivacyDB extends Effect.Service<PrivacyDB>()("PrivacyDB", {
         const resetPreferences = Effect.fn("PrivacyDB.resetPreferences")(function* (
             userId: string,
         ) {
+            yield* Effect.annotateCurrentSpan({ user_id: userId });
             return yield* request<{ ok: boolean }>("DELETE", `/preferences/${userId}`);
         });
 
@@ -129,6 +130,7 @@ export class PrivacyDB extends Effect.Service<PrivacyDB>()("PrivacyDB", {
             mode: Mode,
             reason?: string,
         ) {
+            yield* Effect.annotateCurrentSpan({ user_id: userId, project, mode });
             return yield* request<{ ok: boolean }>(
                 "PUT",
                 `/preferences/${userId}/${project}`,
@@ -140,6 +142,7 @@ export class PrivacyDB extends Effect.Service<PrivacyDB>()("PrivacyDB", {
             userId: string,
             project: Project,
         ) {
+            yield* Effect.annotateCurrentSpan({ user_id: userId, project });
             return yield* request<{ ok: boolean }>(
                 "DELETE",
                 `/preferences/${userId}/${project}`,

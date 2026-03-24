@@ -6,7 +6,8 @@ import {
 } from "discord.js";
 import { Effect } from "effect";
 
-import { structuredError } from "../../errors";
+import { DiscordError, structuredError } from "../../errors";
+import { safeReply } from "../../lib/discord";
 import { PrivacyDB, type Mode, type Project } from "../../services/PrivacyDB";
 
 const MODE_LABELS: Record<Mode, string> = {
@@ -118,39 +119,46 @@ export const handlePrivacyCommand = Effect.fn("Privacy.handleCommand")(
 
         const pdb = yield* PrivacyDB;
 
-        const reply = (content: string | EmbedBuilder) => {
-            const options =
-                content instanceof EmbedBuilder
-                    ? { embeds: [content], flags: MessageFlags.Ephemeral as number }
-                    : { content, flags: MessageFlags.Ephemeral as number };
+        const reply = (content: string) =>
+            safeReply(interaction, content, true);
 
-            return Effect.tryPromise({
-                try: async () => {
-                    if (interaction.replied || interaction.deferred) {
-                        await interaction.followUp(options);
-                    } else {
-                        await interaction.reply(options);
-                    }
-                },
+        const replyEmbed = (embed: EmbedBuilder) =>
+            Effect.tryPromise({
+                try: () =>
+                    interaction.replied || interaction.deferred
+                        ? interaction.followUp({ embeds: [embed], flags: MessageFlags.Ephemeral as number })
+                        : interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral as number }),
                 catch: (cause) =>
-                    new Error(
-                        `Failed to send response: ${cause instanceof Error ? cause.message : String(cause)}`,
-                    ),
+                    new DiscordError({
+                        action: "privacy.replyEmbed",
+                        cause,
+                    }),
             });
-        };
 
-        if (subcommand === "view") {
-            const prefs = yield* pdb.getPreferences(userId).pipe(
-                Effect.catchAll((error) =>
+        const withErrorReply = <A, E>(
+            effect: Effect.Effect<A, E>,
+            label: string,
+            userMessage: string,
+            context?: Record<string, unknown>,
+        ) =>
+            effect.pipe(
+                Effect.tapError((error) =>
                     Effect.gen(function* () {
-                        yield* Effect.logError("privacy view failed", {
+                        yield* Effect.logError(`privacy ${label} failed`, {
                             ...structuredError(error),
                             user_id: userId,
+                            ...context,
                         });
-                        yield* reply("Failed to fetch your privacy preferences. Please try again later.");
-                        return yield* Effect.fail(error);
+                        yield* reply(userMessage).pipe(Effect.ignore);
                     }),
                 ),
+            );
+
+        if (subcommand === "view") {
+            const prefs = yield* withErrorReply(
+                pdb.getPreferences(userId),
+                "view",
+                "Failed to fetch your privacy preferences. Please try again later.",
             );
 
             const overrideLines = Object.entries(prefs.overrides).map(
@@ -169,89 +177,58 @@ export const handlePrivacyCommand = Effect.fn("Privacy.handleCommand")(
                     },
                 );
 
-            yield* reply(embed);
+            yield* replyEmbed(embed);
         } else if (subcommand === "set") {
             const mode = interaction.options.getString("mode", true) as Mode;
             const reason = interaction.options.getString("reason") ?? undefined;
 
-            if (mode === "opt_out_collection") {
-                yield* reply(
-                    "**Warning:** Setting your mode to **Opt Out (no data collected)** will permanently delete all your data across all Purdue Hackers projects. " +
-                        "If you want to hide your data but keep it, use **Opt Out (hidden, data kept)** instead.\n\n" +
-                        "Run this command again to confirm. Your mode has been updated.",
-                ).pipe(Effect.ignore);
-            }
-
-            yield* pdb.setGlobalMode(userId, mode, reason).pipe(
-                Effect.catchAll((error) =>
-                    Effect.gen(function* () {
-                        yield* Effect.logError("privacy set failed", {
-                            ...structuredError(error),
-                            user_id: userId,
-                            mode,
-                        });
-                        yield* reply("Failed to update your privacy preferences. Please try again later.");
-                        return yield* Effect.fail(error);
-                    }),
-                ),
+            yield* withErrorReply(
+                pdb.setGlobalMode(userId, mode, reason),
+                "set",
+                "Failed to update your privacy preferences. Please try again later.",
+                { mode },
             );
 
-            yield* reply(`Your global privacy mode has been set to **${MODE_LABELS[mode]}**.`);
+            if (mode === "opt_out_collection") {
+                yield* reply(
+                    `Your global privacy mode has been set to **${MODE_LABELS[mode]}**.\n\n` +
+                        "**Warning:** This will permanently delete all your data across all Purdue Hackers projects. " +
+                        "If you want to hide your data but keep it, use `/privacy set` with **Opt Out (hidden, data kept)** instead.",
+                );
+            } else {
+                yield* reply(`Your global privacy mode has been set to **${MODE_LABELS[mode]}**.`);
+            }
         } else if (subcommand === "set-project") {
             const project = interaction.options.getString("project", true) as Project;
             const mode = interaction.options.getString("mode", true) as Mode;
             const reason = interaction.options.getString("reason") ?? undefined;
 
-            yield* pdb.setProjectOverride(userId, project, mode, reason).pipe(
-                Effect.catchAll((error) =>
-                    Effect.gen(function* () {
-                        yield* Effect.logError("privacy set-project failed", {
-                            ...structuredError(error),
-                            user_id: userId,
-                            project,
-                            mode,
-                        });
-                        yield* reply("Failed to update your project override. Please try again later.");
-                        return yield* Effect.fail(error);
-                    }),
-                ),
+            yield* withErrorReply(
+                pdb.setProjectOverride(userId, project, mode, reason),
+                "set-project",
+                "Failed to update your project override. Please try again later.",
+                { project, mode },
             );
 
             yield* reply(
                 `Your privacy mode for **${PROJECT_LABELS[project]}** has been set to **${MODE_LABELS[mode]}**.`,
             );
         } else if (subcommand === "reset") {
-            yield* pdb.resetPreferences(userId).pipe(
-                Effect.catchAll((error) =>
-                    Effect.gen(function* () {
-                        yield* Effect.logError("privacy reset failed", {
-                            ...structuredError(error),
-                            user_id: userId,
-                        });
-                        yield* reply("Failed to reset your privacy preferences. Please try again later.");
-                        return yield* Effect.fail(error);
-                    }),
-                ),
+            yield* withErrorReply(
+                pdb.resetPreferences(userId),
+                "reset",
+                "Failed to reset your privacy preferences. Please try again later.",
             );
 
             yield* reply("Your privacy preferences have been reset to the default (Opt In).");
         } else if (subcommand === "reset-project") {
             const project = interaction.options.getString("project", true) as Project;
 
-            yield* pdb.removeProjectOverride(userId, project).pipe(
-                Effect.catchAll((error) =>
-                    Effect.gen(function* () {
-                        yield* Effect.logError("privacy reset-project failed", {
-                            ...structuredError(error),
-                            user_id: userId,
-                            project,
-                        });
-                        yield* reply(
-                            "Failed to remove your project override. Please try again later.",
-                        );
-                        return yield* Effect.fail(error);
-                    }),
-                ),
+            yield* withErrorReply(
+                pdb.removeProjectOverride(userId, project),
+                "reset-project",
+                "Failed to remove your project override. Please try again later.",
+                { project },
             );
 
             yield* reply(
