@@ -16,6 +16,7 @@ import {
     endMeetingCommand,
     handleEndMeetingCommand,
 } from "../features/meeting-notes";
+import { privacyCommand, handlePrivacyCommand } from "../features/privacy";
 import { deleteShipCommand, handleDeleteShipCommand } from "../features/ship-scraper";
 import { summarizeCommand, handleSummarizeCommand } from "../features/summarize";
 import { FeatureFlags } from "../services";
@@ -58,6 +59,10 @@ export const commands: Command[] = [
     {
         data: deleteShipCommand as unknown as SlashCommandBuilder,
         execute: handleDeleteShipCommand,
+    },
+    {
+        data: privacyCommand as unknown as SlashCommandBuilder,
+        execute: handlePrivacyCommand,
     },
 ];
 

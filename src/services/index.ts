@@ -11,6 +11,7 @@ import { MediaWiki } from "./MediaWiki";
 import { MeetingNotes } from "./MeetingNotes";
 import { Notion } from "./Notion";
 import { Phonebell } from "./Phonebell";
+import { PrivacyDB } from "./PrivacyDB";
 import { ShipDatabase } from "./ShipDatabase";
 import { Storage } from "./Storage";
 
@@ -22,6 +23,7 @@ export const ServicesLive = Layer.mergeAll(
     GitHub.Default,
     MediaWiki.Default,
     Phonebell.Default,
+    PrivacyDB.Default,
     Notion.Default,
     MeetingNotes.Default,
     Dashboard.Default,
@@ -36,6 +38,7 @@ export { Storage, Storage as StorageLive, type ImageMetadata, type EventIndex } 
 export { GitHub, GitHub as GitHubLive } from "./GitHub";
 export { MediaWiki, MediaWiki as MediaWikiLive } from "./MediaWiki";
 export { Phonebell, Phonebell as PhonebellLive } from "./Phonebell";
+export { PrivacyDB } from "./PrivacyDB";
 export { Notion, Notion as NotionLive } from "./Notion";
 export { MeetingNotes, MeetingNotes as MeetingNotesLive } from "./MeetingNotes";
 export { Dashboard, Dashboard as DashboardLive, type DiscordMessage } from "./Dashboard";
