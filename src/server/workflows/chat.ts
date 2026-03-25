@@ -1,8 +1,7 @@
-import type { UIMessageChunk } from "ai";
+import { ToolLoopAgent, stepCountIs, type TextStreamPart, type ToolSet } from "ai";
 
-import { DurableAgent } from "@workflow/ai/agent";
-import { Message, type Thread } from "chat";
-import { createHook, getWritable, getWorkflowMetadata } from "workflow";
+import { Message, type Thread, type StreamEvent } from "chat";
+import { createHook, getWorkflowMetadata } from "workflow";
 
 import type { SerializedAgentContext } from "../../lib/ai/context/types";
 import type { ThreadState } from "../../lib/bot/types";
@@ -28,21 +27,20 @@ export async function chatWorkflow(payload: string) {
 
   const isPublic = context.role === DiscordRole.Public;
   const rawPrompt = isPublic ? SYSTEM_PUBLIC_PROMPT : SYSTEM_PROMPT;
-  const system = AgentContext.fromJSON(context).buildInstructions(rawPrompt);
+  const instructions = AgentContext.fromJSON(context).buildInstructions(rawPrompt);
 
-  const writable = getWritable<UIMessageChunk>();
-  const agent = new DurableAgent({
+  const agent = new ToolLoopAgent({
     model: "anthropic/claude-sonnet-4",
-    system,
+    instructions,
     tools: createChatTools(context),
+    stopWhen: stepCountIs(10),
   });
 
   const messages: Array<{ role: "user" | "assistant"; content: string }> = [
     { role: "user", content: messageText },
   ];
 
-  const firstReply = await runTurn(agent, messages, writable);
-  await postToThread(payload, firstReply);
+  await streamTurn(agent, messages, payload);
 
   using hook = createHook<ChatTurnPayload>({ token: workflowRunId });
   for await (const event of hook) {
@@ -55,16 +53,12 @@ export async function chatWorkflow(payload: string) {
     }
 
     messages.push({ role: "user", content: text });
-    const reply = await runTurn(agent, messages, writable);
-    await postToThread(payload, reply);
+    await streamTurn(agent, messages, payload);
   }
-
-  const writer = writable.getWriter();
-  await writer.close();
 }
 
 // ---------------------------------------------------------------------------
-// Steps — each function below runs as a durable workflow step.
+// Helpers
 // ---------------------------------------------------------------------------
 
 /** Extract plain-data context and message text without creating Chat SDK objects. */
@@ -77,32 +71,46 @@ async function extractContext(payload: string) {
   return { context: parsed.context, messageText: parsed.message.text };
 }
 
-/** Run one agent turn, append response to history, return the text. */
-async function runTurn(
-  agent: DurableAgent,
+/** Run one agent turn, streaming the response to Discord in real-time. */
+async function streamTurn(
+  agent: ToolLoopAgent,
   messages: Array<{ role: "user" | "assistant"; content: string }>,
-  writable: WritableStream<UIMessageChunk>,
+  payload: string,
 ) {
-  const result = await agent.stream({
-    messages,
-    writable,
-    maxSteps: 10,
-    preventClose: true,
-  });
+  const thread = await parseThread(payload);
 
-  const text = result.steps?.at(-1)?.text ?? "";
-  if (text) {
-    messages.push({ role: "assistant", content: text });
-  }
+  const result = await agent.stream({ messages });
+  await thread.post(
+    withToolProgress(result.fullStream) as AsyncIterable<string | StreamEvent>,
+  );
+
+  const text = await result.text;
+  if (text) messages.push({ role: "assistant", content: text });
   return text;
 }
 
-/** Reconstruct the thread from the raw payload and post a message. */
-async function postToThread(payload: string, text: string) {
-  "use step";
-  if (!text) return;
-  const thread = await parseThread(payload);
-  await thread.post(text);
+/**
+ * Stream transform that injects preliminary tool results as displayable text.
+ *
+ * Chat SDK's fromFullStream only renders text-delta and plain strings —
+ * tool-result events are silently skipped. This transform intercepts
+ * preliminary tool results (from async generator tools) and re-emits
+ * their string content so it appears in the Discord message.
+ */
+async function* withToolProgress(
+  fullStream: AsyncIterable<TextStreamPart<ToolSet>>,
+): AsyncIterable<TextStreamPart<ToolSet> | string> {
+  for await (const event of fullStream) {
+    yield event;
+
+    if (
+      event.type === "tool-result" &&
+      event.preliminary === true &&
+      typeof event.output === "string"
+    ) {
+      yield event.output;
+    }
+  }
 }
 
 /** Reconstruct a Chat SDK Message from its serialized form. */
