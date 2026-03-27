@@ -204,6 +204,53 @@ export class Storage extends Effect.Service<Storage>()("Storage", {
             return key;
         });
 
+        const uploadRaw = Effect.fn("Storage.uploadRaw")(function* (
+            buffer: Buffer,
+            prefix: string,
+            filename: string,
+            contentType: string,
+            options?: { bucket?: string },
+        ) {
+            const targetBucket = options?.bucket ?? bucket;
+            const key = `images/${prefix}/${filename}`;
+
+            yield* Effect.logDebug("storage raw upload initiated", {
+                service_name: "Storage",
+                method: "uploadRaw",
+                key,
+                bucket: targetBucket,
+                size_bytes: buffer.length,
+                content_type: contentType,
+            });
+
+            const [duration] = yield* Effect.tryPromise({
+                try: () =>
+                    s3.send(
+                        new PutObjectCommand({
+                            Bucket: targetBucket,
+                            Key: key,
+                            Body: buffer,
+                            ContentType: contentType,
+                        }),
+                    ),
+                catch: (e) => new StorageError({ operation: "uploadRaw", key, cause: e }),
+            }).pipe(Effect.timed);
+
+            const duration_ms = Duration.toMillis(duration);
+
+            yield* Effect.logInfo("storage raw upload completed", {
+                service_name: "Storage",
+                method: "uploadRaw",
+                key,
+                bucket: targetBucket,
+                size_bytes: buffer.length,
+                content_type: contentType,
+                duration_ms,
+            });
+
+            return key;
+        });
+
         const updateEventIndex = Effect.fn("Storage.updateEventIndex")(function* (
             eventSlug: string,
             newImage: ImageMetadata,
@@ -489,6 +536,7 @@ export class Storage extends Effect.Service<Storage>()("Storage", {
         return {
             generateEventSlug,
             uploadImage,
+            uploadRaw,
             getEventIndex,
             updateEventIndex,
             isImageUploaded,
