@@ -1,34 +1,19 @@
-import { createClient } from "@libsql/client";
-import { Duration, Effect, Redacted, Schema } from "effect";
+import { Duration, Effect, Redacted } from "effect";
 
 import { AppConfig } from "../config";
 import { DatabaseError } from "../errors";
-
-export class ShipRow extends Schema.Class<ShipRow>("ShipRow")({
-    id: Schema.String,
-    user_id: Schema.String,
-    username: Schema.String,
-    avatar_url: Schema.NullOr(Schema.String),
-    message_id: Schema.NullOr(Schema.String),
-    title: Schema.NullOr(Schema.String),
-    content: Schema.NullOr(Schema.String),
-    attachments: Schema.String,
-    shipped_at: Schema.String,
-}) {}
 
 export class ShipDatabase extends Effect.Service<ShipDatabase>()("ShipDatabase", {
     dependencies: [AppConfig.Default],
     scoped: Effect.gen(function* () {
         const config = yield* AppConfig;
 
-        const client = createClient({
-            url: config.SHIP_DATABASE_URL,
-            authToken: Redacted.value(config.SHIP_DATABASE_AUTH_TOKEN),
-        });
+        const apiUrl = config.SHIP_API_URL;
+        const apiKey = Redacted.value(config.SHIP_API_KEY);
 
         yield* Effect.logInfo("ship database service initialized", {
             service_name: "ShipDatabase",
-            url: config.SHIP_DATABASE_URL,
+            url: apiUrl,
         });
 
         const insertShip = Effect.fn("ShipDatabase.insertShip")(function* (data: {
@@ -40,12 +25,7 @@ export class ShipDatabase extends Effect.Service<ShipDatabase>()("ShipDatabase",
             content: string;
             attachments: Array<{ key: string; type: string; filename: string }>;
         }) {
-            const id = crypto.randomUUID();
-            const shippedAt = new Date().toISOString();
-            const attachmentsJson = JSON.stringify(data.attachments);
-
             yield* Effect.annotateCurrentSpan({
-                ship_id: id,
                 user_id: data.userId,
                 message_id: data.messageId,
             });
@@ -53,32 +33,30 @@ export class ShipDatabase extends Effect.Service<ShipDatabase>()("ShipDatabase",
             yield* Effect.logDebug("ship insert initiated", {
                 service_name: "ShipDatabase",
                 method: "insertShip",
-                ship_id: id,
                 user_id: data.userId,
                 message_id: data.messageId,
                 attachment_count: data.attachments.length,
             });
 
-            const [duration] = yield* Effect.tryPromise({
-                try: () =>
-                    client.execute({
-                        sql: `INSERT INTO ship (id, user_id, username, avatar_url, message_id, title, content, attachments, shipped_at)
-                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                        args: [
-                            id,
-                            data.userId,
-                            data.username,
-                            data.avatarUrl,
-                            data.messageId,
-                            data.title,
-                            data.content,
-                            attachmentsJson,
-                            shippedAt,
-                        ],
-                    }),
+            const [duration, response] = yield* Effect.tryPromise({
+                try: async () => {
+                    const res = await fetch(`${apiUrl}/api/ships`, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            Authorization: `Bearer ${apiKey}`,
+                        },
+                        body: JSON.stringify(data),
+                    });
+                    if (!res.ok) {
+                        throw new Error(`Ship API returned ${res.status}: ${await res.text()}`);
+                    }
+                    return (await res.json()) as { ok: boolean; id: string };
+                },
                 catch: (e) => new DatabaseError({ operation: "ShipDatabase.insertShip", cause: e }),
             }).pipe(Effect.timed);
 
+            const id = response.id;
             const duration_ms = Duration.toMillis(duration);
 
             yield* Effect.logInfo("ship inserted", {
@@ -99,11 +77,17 @@ export class ShipDatabase extends Effect.Service<ShipDatabase>()("ShipDatabase",
             yield* Effect.annotateCurrentSpan({ message_id: messageId });
 
             const [duration] = yield* Effect.tryPromise({
-                try: () =>
-                    client.execute({
-                        sql: `DELETE FROM ship WHERE message_id = ?`,
-                        args: [messageId],
-                    }),
+                try: async () => {
+                    const res = await fetch(`${apiUrl}/api/ships/${messageId}`, {
+                        method: "DELETE",
+                        headers: {
+                            Authorization: `Bearer ${apiKey}`,
+                        },
+                    });
+                    if (!res.ok) {
+                        throw new Error(`Ship API returned ${res.status}: ${await res.text()}`);
+                    }
+                },
                 catch: (e) =>
                     new DatabaseError({ operation: "ShipDatabase.deleteByMessageId", cause: e }),
             }).pipe(Effect.timed);
