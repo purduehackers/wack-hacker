@@ -1,4 +1,5 @@
 import type { Guild } from "discord.js";
+
 import {
     discordRemarkRehypeHandlers,
     remarkDiscord,

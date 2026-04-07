@@ -22,9 +22,9 @@ import { handleDashboardMessage } from "../features/dashboard";
 import { handleEvergreenIt } from "../features/evergreen";
 import { handleHackNightImages, handleHackNightImageRemoval } from "../features/hack-night";
 import { handlePraise } from "../features/praise";
+import { handleShipScraper } from "../features/ship-scraper";
 import { handleGrokMessage } from "../features/summarize";
 import { handleVoiceTranscription } from "../features/voice-transcription";
-import { handleShipScraper } from "../features/ship-scraper";
 import { handleWelcomer } from "../features/welcomer";
 import { FeatureFlags, type Flags } from "../services";
 

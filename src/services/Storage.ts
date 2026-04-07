@@ -1,4 +1,9 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import {
+    S3Client,
+    PutObjectCommand,
+    GetObjectCommand,
+    DeleteObjectCommand,
+} from "@aws-sdk/client-s3";
 import { Duration, Effect, Option, Redacted } from "effect";
 import sharp from "sharp";
 
@@ -418,7 +423,9 @@ export class Storage extends Effect.Service<Storage>()("Storage", {
             }
 
             const index = indexOpt.value;
-            const toRemove = index.images.filter((img) => img.discordMessageId === discordMessageId);
+            const toRemove = index.images.filter(
+                (img) => img.discordMessageId === discordMessageId,
+            );
 
             if (toRemove.length === 0) {
                 yield* Effect.logDebug("no images found for message", {
@@ -435,7 +442,8 @@ export class Storage extends Effect.Service<Storage>()("Storage", {
                 const key = `images/${eventSlug}/${img.filename}`;
                 yield* Effect.tryPromise({
                     try: () => s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key })),
-                    catch: (e) => new StorageError({ operation: "removeImagesForMessage", key, cause: e }),
+                    catch: (e) =>
+                        new StorageError({ operation: "removeImagesForMessage", key, cause: e }),
                 });
 
                 yield* Effect.logDebug("image file deleted", {

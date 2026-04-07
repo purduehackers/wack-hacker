@@ -1,12 +1,11 @@
 import { type ChatInputCommandInteraction, type Message, SlashCommandBuilder } from "discord.js";
-
 import { Effect } from "effect";
 
 import { AppConfig } from "../../config";
 import { ORGANIZER_ROLE_ID, SHIP_CHANNEL_ID } from "../../constants";
 import { containsUrl, replyEphemeral } from "../../lib/discord";
-import { ShipDatabase } from "../../services/ShipDatabase";
 import { Storage } from "../../services";
+import { ShipDatabase } from "../../services/ShipDatabase";
 
 export const deleteShipCommand = new SlashCommandBuilder()
     .setName("delete-ship")

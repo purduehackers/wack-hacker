@@ -416,7 +416,7 @@ export class Dashboard extends Effect.Service<Dashboard>()("Dashboard", {
                 })();
 
                 if (ws && ws.readyState === WebSocket.OPEN) {
-					const { guildId, content, ...restOfMessage } = message;
+                    const { guildId, content, ...restOfMessage } = message;
                     const renderedMessage: RenderedDiscordMessage = {
                         ...restOfMessage,
                         content: {

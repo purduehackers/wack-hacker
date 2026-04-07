@@ -1,4 +1,4 @@
-import type { ForumChannel, AnyThreadChannel } from "discord.js";
+import type { ForumChannel, AnyThreadChannel, PartialMessage } from "discord.js";
 
 import {
     SlashCommandBuilder,
@@ -1111,7 +1111,10 @@ export const handleCommitOverflowReactionRemove = (
     ).pipe(Effect.asVoid, Effect.annotateLogs({ feature: "commit_overflow" }));
 
 export const handleCommitOverflowMessageDelete = Effect.fn("CommitOverflow.handleMessageDelete")(
-    function* (message: Message) {
+    function* (message: Message | PartialMessage) {
+        // This handler was written before support for partial messages was added to delete event handlers.
+        if (message.partial) return;
+
         const startTime = Date.now();
         const db = yield* Database;
 

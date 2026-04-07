@@ -62,8 +62,7 @@ export class PrivacyDB extends Effect.Service<PrivacyDB>()("PrivacyDB", {
             if (!response.ok) {
                 const text = yield* Effect.tryPromise({
                     try: () => response.text(),
-                    catch: (cause) =>
-                        new PrivacyDBError({ operation: "request.readBody", cause }),
+                    catch: (cause) => new PrivacyDBError({ operation: "request.readBody", cause }),
                 }).pipe(Effect.catchAll(() => Effect.succeed("")));
 
                 yield* Effect.logError("privacydb request failed", {
@@ -131,11 +130,10 @@ export class PrivacyDB extends Effect.Service<PrivacyDB>()("PrivacyDB", {
             reason?: string,
         ) {
             yield* Effect.annotateCurrentSpan({ user_id: userId, project, mode });
-            return yield* request<{ ok: boolean }>(
-                "PUT",
-                `/preferences/${userId}/${project}`,
-                { mode, reason },
-            );
+            return yield* request<{ ok: boolean }>("PUT", `/preferences/${userId}/${project}`, {
+                mode,
+                reason,
+            });
         });
 
         const removeProjectOverride = Effect.fn("PrivacyDB.removeProjectOverride")(function* (
@@ -143,10 +141,7 @@ export class PrivacyDB extends Effect.Service<PrivacyDB>()("PrivacyDB", {
             project: Project,
         ) {
             yield* Effect.annotateCurrentSpan({ user_id: userId, project });
-            return yield* request<{ ok: boolean }>(
-                "DELETE",
-                `/preferences/${userId}/${project}`,
-            );
+            return yield* request<{ ok: boolean }>("DELETE", `/preferences/${userId}/${project}`);
         });
 
         return {

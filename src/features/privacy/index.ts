@@ -119,15 +119,20 @@ export const handlePrivacyCommand = Effect.fn("Privacy.handleCommand")(
 
         const pdb = yield* PrivacyDB;
 
-        const reply = (content: string) =>
-            safeReply(interaction, content, true);
+        const reply = (content: string) => safeReply(interaction, content, true);
 
         const replyEmbed = (embed: EmbedBuilder) =>
             Effect.tryPromise({
                 try: () =>
                     interaction.replied || interaction.deferred
-                        ? interaction.followUp({ embeds: [embed], flags: MessageFlags.Ephemeral as number })
-                        : interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral as number }),
+                        ? interaction.followUp({
+                              embeds: [embed],
+                              flags: MessageFlags.Ephemeral as number,
+                          })
+                        : interaction.reply({
+                              embeds: [embed],
+                              flags: MessageFlags.Ephemeral as number,
+                          }),
                 catch: (cause) =>
                     new DiscordError({
                         action: "privacy.replyEmbed",
