@@ -5,6 +5,8 @@ import type {
     User,
     PartialUser,
     AnyThreadChannel,
+    OmitPartialGroupDMChannel,
+    PartialMessage,
 } from "discord.js";
 
 import { Effect } from "effect";
@@ -22,13 +24,16 @@ import { handleDashboardMessage } from "../features/dashboard";
 import { handleEvergreenIt } from "../features/evergreen";
 import { handleHackNightImages, handleHackNightImageRemoval } from "../features/hack-night";
 import { handlePraise } from "../features/praise";
-import { handleShipScraper } from "../features/ship-scraper";
+import { handleShipScraper, handleShipMessageDelete } from "../features/ship-scraper";
 import { handleGrokMessage } from "../features/summarize";
 import { handleVoiceTranscription } from "../features/voice-transcription";
 import { handleWelcomer } from "../features/welcomer";
 import { FeatureFlags, type Flags } from "../services";
 
 type MessageHandler = (message: Message) => Effect.Effect<void, unknown, unknown>;
+type MessageDeleteHandler = (
+    message: OmitPartialGroupDMChannel<Message | PartialMessage>,
+) => Effect.Effect<void, unknown, unknown>;
 type ReactionHandler = (
     reaction: MessageReaction | PartialMessageReaction,
     user: User | PartialUser,
@@ -40,6 +45,11 @@ type ThreadCreateHandler = (
 
 interface MessageHandlerConfig {
     handler: MessageHandler;
+    featureFlag?: keyof Flags;
+}
+
+interface MessageDeleteHandlerConfig {
+    handler: MessageDeleteHandler;
     featureFlag?: keyof Flags;
 }
 
@@ -79,8 +89,9 @@ const threadCreateHandlers: ThreadCreateHandlerConfig[] = [
     { handler: handleCommitOverflowThreadCreate, featureFlag: "commitOverflow" },
 ];
 
-const messageDeleteHandlers: MessageHandlerConfig[] = [
+const messageDeleteHandlers: MessageDeleteHandlerConfig[] = [
     { handler: handleCommitOverflowMessageDelete, featureFlag: "commitOverflow" },
+    { handler: handleShipMessageDelete, featureFlag: "shipScraper" },
 ];
 
 export const handleMessageCreate = Effect.fn("Events.handleMessageCreate")(function* (
@@ -373,7 +384,7 @@ export const handleMessageReactionRemove = Effect.fn("Events.handleMessageReacti
 );
 
 export const handleMessageDelete = Effect.fn("Events.handleMessageDelete")(function* (
-    message: Message,
+    message: OmitPartialGroupDMChannel<Message | PartialMessage>,
 ) {
     const startTime = Date.now();
 

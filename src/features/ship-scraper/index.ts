@@ -1,4 +1,10 @@
-import { type ChatInputCommandInteraction, type Message, SlashCommandBuilder } from "discord.js";
+import {
+    type ChatInputCommandInteraction,
+    type Message,
+    type OmitPartialGroupDMChannel,
+    type PartialMessage,
+    SlashCommandBuilder,
+} from "discord.js";
 import { Effect } from "effect";
 
 import { AppConfig } from "../../config";
@@ -160,6 +166,40 @@ export const handleShipScraper = Effect.fn("ShipScraper.handle")(
             attachment_count: uploadedAttachments.length,
             uploaded_keys: uploadedAttachments.map((a) => a.key).join(","),
             duration_ms: Date.now() - startTime,
+        });
+    },
+    Effect.annotateLogs({ feature: "ShipScraper" }),
+);
+
+export const handleShipMessageDelete = Effect.fn("ShipScraper.handleDeleteMessage")(
+    function* (message: OmitPartialGroupDMChannel<Message | PartialMessage>) {
+        const startTime = performance.now();
+
+        if (message.channelId !== SHIP_CHANNEL_ID) {
+            yield* Effect.logDebug("message skipped", {
+                reason: "wrong_channel",
+                partial: message.partial,
+                message_id: message.id,
+                channel_id: message.channelId,
+            });
+            return;
+        }
+
+        yield* Effect.logDebug("ship message deletion detected", {
+            partial: message.partial,
+            message_id: message.id,
+            user_id: message.author?.id,
+            username: message.author?.username,
+        });
+
+        const shipDb = yield* ShipDatabase;
+        const deletedShipId = yield* shipDb.deleteByMessageId(message.id);
+
+        yield* Effect.logInfo("ship deleted from database", {
+            ship_id: deletedShipId,
+            message_id: message.id,
+            user_id: message.author?.id,
+            duration_ms: performance.now() - startTime,
         });
     },
     Effect.annotateLogs({ feature: "ShipScraper" }),

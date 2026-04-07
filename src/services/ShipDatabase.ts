@@ -76,7 +76,7 @@ export class ShipDatabase extends Effect.Service<ShipDatabase>()("ShipDatabase",
         ) {
             yield* Effect.annotateCurrentSpan({ message_id: messageId });
 
-            const [duration] = yield* Effect.tryPromise({
+            const [duration, deletedShipId] = yield* Effect.tryPromise({
                 try: async () => {
                     const res = await fetch(`${apiUrl}/api/ships/${messageId}`, {
                         method: "DELETE",
@@ -87,6 +87,8 @@ export class ShipDatabase extends Effect.Service<ShipDatabase>()("ShipDatabase",
                     if (!res.ok) {
                         throw new Error(`Ship API returned ${res.status}: ${await res.text()}`);
                     }
+                    const { id } = (await res.json()) as { ok: true; id: string };
+                    return id;
                 },
                 catch: (e) =>
                     new DatabaseError({ operation: "ShipDatabase.deleteByMessageId", cause: e }),
@@ -100,6 +102,8 @@ export class ShipDatabase extends Effect.Service<ShipDatabase>()("ShipDatabase",
                 message_id: messageId,
                 duration_ms,
             });
+
+            return deletedShipId;
         });
 
         return { insertShip, deleteByMessageId } as const;

@@ -261,8 +261,6 @@ const program = Effect.gen(function* () {
     client.on(Events.MessageDelete, async (message) => {
         const deleteStartTime = Date.now();
 
-        if (message.partial) return;
-
         const deleteProgram = handleMessageDelete(message).pipe(
             Effect.tap(() =>
                 Effect.logDebug("message delete handled", {
