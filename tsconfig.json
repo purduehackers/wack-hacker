@@ -25,5 +25,8 @@
     "noPropertyAccessFromIndexSignature": false,
 
     "plugins": [{ "name": "workflow" }],
-  },
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  }
 }
