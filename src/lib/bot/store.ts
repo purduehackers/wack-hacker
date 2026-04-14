@@ -1,5 +1,6 @@
 import { Redis } from "@upstash/redis";
 
+import { env } from "@/env";
 import type { ConversationState, RedisLike } from "./types";
 
 export type { ConversationState, RedisLike } from "./types";
@@ -19,7 +20,12 @@ export class ConversationStore {
   private redis: RedisLike;
 
   constructor(redis?: RedisLike) {
-    this.redis = redis ?? Redis.fromEnv();
+    this.redis =
+      redis ??
+      new Redis({
+        url: env.KV_REDIS_REST_URL,
+        token: env.KV_REDIS_REST_TOKEN,
+      });
   }
 
   private key(channelId: string, threadId?: string): string {
