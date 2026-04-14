@@ -16,6 +16,7 @@ import { admin, SkillRegistry } from "./skills/index.ts";
 import { createDelegationTool } from "./subagent.ts";
 
 const baseSpec = {
+  name: "test",
   description: "Test delegation",
   systemPrompt: "Domain rules.\n\n{{SKILL_MENU}}\n\nEnd.",
   tools: {

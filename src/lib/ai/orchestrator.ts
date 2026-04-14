@@ -55,5 +55,12 @@ export function createOrchestrator(context: AgentContext) {
     model: "anthropic/claude-sonnet-4.6",
     instructions,
     tools,
+    experimental_telemetry: {
+      isEnabled: true,
+      functionId: "orchestrator",
+      metadata: {
+        role: context.role,
+      },
+    },
   });
 }

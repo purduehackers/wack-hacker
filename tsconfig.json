@@ -37,6 +37,8 @@
   "include": [
     "next-env.d.ts",
     "instrumentation.ts",
+    "sentry.server.config.ts",
+    "sentry.edge.config.ts",
     "next.config.ts",
     "src/**/*.ts",
     "src/**/*.tsx",
