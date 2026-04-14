@@ -7,6 +7,8 @@ export const env = createEnv({
     DISCORD_BOT_TOKEN: z.string(),
     DISCORD_CLIENT_ID: z.string(),
     DISCORD_PUBLIC_KEY: z.string(),
+    INBOUND_SECRET: z.string(),
+    CRON_SECRET: z.string(),
     LINEAR_API_KEY: z.string(),
     NOTION_TOKEN: z.string(),
     GITHUB_APP_ID: z.string(),

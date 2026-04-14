@@ -7,12 +7,12 @@ import { Hono } from "hono";
 import type { TaskHandler, TaskEnvelope } from "@/lib/ai/tasks/types";
 
 import { env } from "@/env";
-import * as tasks from "@/lib/ai/tasks";
 import { TASK_TOPIC } from "@/lib/ai/tasks/constants";
 import { UnknownTaskError, InvalidTaskPayloadError } from "@/lib/ai/tasks/errors";
+import * as taskHandlers from "@/lib/ai/tasks/handlers";
 import { ConversationStore } from "@/lib/bot/store";
 
-const taskMap = new Map((Object.values(tasks) as TaskHandler[]).map((t) => [t.name, t]));
+const taskMap = new Map((Object.values(taskHandlers) as TaskHandler[]).map((h) => [h.name, h]));
 
 const MAX_RETRIES = 3;
 

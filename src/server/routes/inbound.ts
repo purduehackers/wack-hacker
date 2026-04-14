@@ -68,6 +68,13 @@ async function processEvent(packet: Packet, store: ConversationStore): Promise<v
 const route = new Hono();
 
 route.post("/inbound", async (c) => {
+  // Only the gateway relay (running in a separate function) should post here.
+  // A shared bearer secret keeps anyone else from forging Discord events.
+  const auth = c.req.header("authorization");
+  if (auth !== `Bearer ${env.INBOUND_SECRET}`) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
   const raw = await c.req.text();
   const store = new ConversationStore();
 

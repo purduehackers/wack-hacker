@@ -20,14 +20,17 @@ function getInboundUrl(): string {
   const base = process.env.VERCEL_URL
     ? `https://${process.env.VERCEL_URL}`
     : "http://localhost:3000";
-  return `${base}/api/protocol/inbound`;
+  return `${base}/api/discord/inbound`;
 }
 
 async function relay(url: string, packet: Packet): Promise<void> {
   try {
     await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${env.INBOUND_SECRET}`,
+      },
       body: PacketCodec.encode(packet),
     });
   } catch (err) {

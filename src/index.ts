@@ -8,6 +8,7 @@ import crons from "./server/routes/crons";
 import gateway from "./server/routes/gateway";
 import inbound from "./server/routes/inbound";
 import interactions from "./server/routes/interactions";
+import tasks from "./server/routes/tasks";
 
 initLogger({ env: { service: "wack-hacker" } });
 
@@ -19,6 +20,7 @@ discord.route("/", interactions);
 const api = new Hono();
 api.route("/discord", discord);
 api.route("/", crons);
+api.route("/", tasks);
 
 const app = new Hono<EvlogVariables>();
 app.use(cors());

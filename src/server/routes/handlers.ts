@@ -12,6 +12,11 @@ export const router = new EventRouter();
 router.onMention(handleMention);
 
 router.onMessage(async (packet, ctx) => {
+  // Mentions are already handled by `handleMention`, which calls `resumeHook`
+  // with the mention prefix stripped. Forwarding again here would duplicate
+  // the turn and push the un-stripped content into the conversation.
+  if (packet.data.content.startsWith(`<@${ctx.botUserId}>`)) return;
+
   const channelId = packet.data.channel.id;
   const threadId = packet.data.thread ? packet.data.channel.id : undefined;
   const existing = await ctx.store.get(channelId, threadId);

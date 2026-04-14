@@ -1,10 +1,13 @@
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
+
+const rootDir = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "src"),
+      "@": path.resolve(rootDir, "src"),
     },
   },
   test: {
@@ -30,10 +33,7 @@ export default defineConfig({
         "src/handlers/**",
         "src/lib/bot/integrations/**",
         "src/lib/ai/skills/generated/**",
-        "src/lib/ai/tools/discord/**",
-        "src/lib/ai/tools/github/**",
-        "src/lib/ai/tools/linear/**",
-        "src/lib/ai/tools/notion/**",
+        "src/lib/ai/tools/**",
       ],
       reporter: ["text", "lcov"],
       thresholds: {

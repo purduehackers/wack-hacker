@@ -1,3 +1,4 @@
+import { MessageType } from "discord-api-types/v10";
 import { log } from "evlog";
 
 import { defineCron } from "@/lib/bot/crons/define";
@@ -31,9 +32,16 @@ export const hackNightCreate = defineCron({
 
     await discord.channels.pinMessage(channelId, announcement.id);
 
-    const recent = await discord.channels.getMessages(channelId, { limit: 1 });
-    if (recent.length > 0) {
-      await discord.channels.deleteMessage(channelId, recent[0].id);
+    // Pinning produces a "ChannelPinnedMessage" system notice in the channel.
+    // Delete that notice (if Discord has emitted it yet) without touching the
+    // announcement itself — a naive delete-most-recent would race the pin and
+    // could wipe the announcement we just created.
+    const recent = await discord.channels.getMessages(channelId, { limit: 5 });
+    const pinNotice = recent.find(
+      (m) => m.type === MessageType.ChannelPinnedMessage && m.id !== announcement.id,
+    );
+    if (pinNotice) {
+      await discord.channels.deleteMessage(channelId, pinNotice.id);
     }
 
     const thread = await discord.channels.createThread(
