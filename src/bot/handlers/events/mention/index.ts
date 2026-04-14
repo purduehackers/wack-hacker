@@ -13,19 +13,20 @@ export async function handleMention(
   ctx: HandlerContext,
 ): Promise<void> {
   const { data } = packet;
-  const channelId = data.channel.id;
-  const threadId = data.thread ? data.channel.id : undefined;
+  const sourceChannelId = data.channel.id;
+  const alreadyInThread = Boolean(data.thread);
+  const lookupThreadId = alreadyInThread ? sourceChannelId : undefined;
 
   const content = stripBotMention(data.content, ctx.botUserId);
 
   if (!content) {
-    await ctx.discord.channels.createMessage(channelId, {
+    await ctx.discord.channels.createMessage(sourceChannelId, {
       content: "Hey! What can I help you with?",
     });
     return;
   }
 
-  const existing = await ctx.store.get(channelId, threadId);
+  const existing = await ctx.store.get(sourceChannelId, lookupThreadId);
 
   if (existing) {
     log.info("mention", `Resuming workflow ${existing.workflowRunId} for ${data.author.username}`);
@@ -36,14 +37,34 @@ export async function handleMention(
         authorId: data.author.id,
         authorUsername: data.author.username,
       });
-      await ctx.store.touch(channelId, threadId);
+      await ctx.store.touch(sourceChannelId, lookupThreadId);
       return;
     } catch (err) {
       log.info(
         "mention",
         `Workflow ${existing.workflowRunId} expired, starting fresh: ${String(err)}`,
       );
-      await ctx.store.delete(channelId, threadId);
+      await ctx.store.delete(sourceChannelId, lookupThreadId);
+    }
+  }
+
+  let conversationChannelId = sourceChannelId;
+  let conversationThreadId = lookupThreadId;
+
+  if (!alreadyInThread) {
+    try {
+      const threadName =
+        `${data.author.nickname ?? data.author.username} — ${content.slice(0, 54)}`.trim();
+      const thread = await ctx.discord.channels.createThread(
+        sourceChannelId,
+        { name: threadName, auto_archive_duration: 60 },
+        data.id,
+      );
+      conversationChannelId = thread.id;
+      conversationThreadId = thread.id;
+      log.info("mention", `Created thread ${thread.id} for ${data.author.username}`);
+    } catch (err) {
+      log.warn("mention", `Failed to create thread, replying in channel: ${String(err)}`);
     }
   }
 
@@ -53,7 +74,7 @@ export async function handleMention(
 
   const run = await start(chatWorkflow, [
     {
-      channelId,
+      channelId: conversationChannelId,
       content,
       context: agentContext.toJSON(),
     },
@@ -63,8 +84,8 @@ export async function handleMention(
 
   await ctx.store.set({
     workflowRunId: run.runId,
-    channelId,
-    threadId,
+    channelId: sourceChannelId,
+    threadId: conversationThreadId,
     startedAt: new Date().toISOString(),
   });
 }
