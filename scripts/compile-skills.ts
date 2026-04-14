@@ -4,8 +4,8 @@ import { readdir, readFile, mkdir, writeFile, access } from "node:fs/promises";
 import { join } from "node:path";
 import { parse as parseYAML } from "yaml";
 
-const SKILLS_DIR = join(import.meta.dirname, "..", "skills");
-const OUTPUT_DIR = join(import.meta.dirname, "..", "src", "lib", "ai", "skills", "generated");
+const SKILLS_DIR = join(import.meta.dirname, "..", "src", "lib", "ai", "skills");
+const OUTPUT_DIR = join(SKILLS_DIR, "generated");
 
 const ROLE_MAP: Record<string, string> = {
   public: "UserRole.Public",
@@ -103,7 +103,9 @@ async function dirExists(path: string): Promise<boolean> {
 
 async function main() {
   const topLevelEntries = await readdir(SKILLS_DIR, { withFileTypes: true });
-  const skillDirs = topLevelEntries.filter((e) => e.isDirectory()).map((e) => e.name);
+  const skillDirs = topLevelEntries
+    .filter((e) => e.isDirectory() && e.name !== "generated")
+    .map((e) => e.name);
 
   // ── Top-level skills (orchestrator manifest) ──
   const topSkills: Record<string, ParsedSkill> = {};

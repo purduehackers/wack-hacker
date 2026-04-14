@@ -4,17 +4,17 @@
     "ai-sdk": {
       "source": "vercel/ai",
       "sourceType": "github",
-      "computedHash": "58ce68f628890c3925aea2b5435a649251ac182057541045c68fc19a27aaa0ec"
+      "computedHash": "81af098a4ce6f0e323c1bd02b8e79df3bbaed57cbf1c4060f58ddc95de5545a1"
     },
     "chat-sdk": {
       "source": "vercel/chat",
       "sourceType": "github",
-      "computedHash": "cdd25b149ccf824b029644cff565d04dd49f1743bb1a5e8a649a3adfe82e977c"
+      "computedHash": "856702cc74bbd5e8d02115b9c5505426e08e3af395ea3f12bfde9e673b7ae22e"
     },
     "workflow": {
       "source": "vercel/workflow",
       "sourceType": "github",
-      "computedHash": "1b2310ae65a52ef542cb5070286fd51eeeee9fb36ba4e99a1a19bd3f50e88885"
+      "computedHash": "d196ee3765786dfae680a13c5f1d8ae1e1e54f51efd475ca396461091b78c0db"
     }
   }
 }
