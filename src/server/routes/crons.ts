@@ -3,10 +3,10 @@ import { REST } from "@discordjs/rest";
 import { log } from "evlog";
 import { Hono } from "hono";
 
-import type { CronHandler } from "@/lib/bot/crons/types";
+import type { CronHandler } from "@/bot/crons/types";
 
+import * as crons from "@/bot/handlers/crons";
 import { env } from "@/env";
-import * as crons from "@/lib/bot/handlers/crons";
 
 const cronMap = new Map((Object.values(crons) as CronHandler[]).map((c) => [c.name, c]));
 

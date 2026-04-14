@@ -14,7 +14,7 @@ vi.mock("@/lib/tasks/registry", () => ({
   removeTask: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("@/server/workflows/task", () => ({
+vi.mock("@/workflows/task", () => ({
   taskWorkflow: vi.fn(),
 }));
 

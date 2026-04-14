@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import type { TaskAction, TaskSchedule } from "../../../tasks/types.ts";
 
-import { taskWorkflow } from "../../../../server/workflows/task.ts";
+import { taskWorkflow } from "../../../../workflows/task.ts";
 import { nextOccurrence } from "../../../tasks/cron.ts";
 import { listTasks as listTasksFromRegistry, removeTask } from "../../../tasks/registry.ts";
 

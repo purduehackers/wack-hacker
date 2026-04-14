@@ -12,3 +12,10 @@ export { TEST_PUBLIC_KEY, signedRequest } from "./signing";
 export { createMockAPI, asAPI } from "./discord";
 export { toolOpts } from "../constants";
 export { TEST_SKILLS } from "./constants";
+export {
+  noopTool,
+  streamingTextModel,
+  installMockProvider,
+  uninstallMockProvider,
+  stepResult,
+} from "./ai";

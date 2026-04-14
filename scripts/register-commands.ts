@@ -1,8 +1,8 @@
 import { REST, Routes } from "discord.js";
 
-import type { SlashCommand } from "../src/lib/bot/commands/types";
+import type { SlashCommand } from "../src/bot/commands/types";
 
-import * as commands from "../src/lib/bot/handlers/commands";
+import * as commands from "../src/bot/handlers/commands";
 
 const token = process.env.DISCORD_BOT_TOKEN;
 const clientId = process.env.DISCORD_CLIENT_ID;

@@ -182,3 +182,6 @@ src/lib/ai/skills/generated/
 .env*.local
 .swc
 .output
+
+# workflow devkit generated routes
+src/app/.well-known/

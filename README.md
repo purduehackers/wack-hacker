@@ -2,7 +2,7 @@
 
 Wack Hacker is the AI-powered Discord bot for [Purdue Hackers](https://purduehackers.com). It coordinates specialized subagents to manage Linear, GitHub, Notion, and Discord — all from Discord threads.
 
-Built on [Nitro](https://nitro.build) + [Hono](https://hono.dev), [AI SDK](https://ai-sdk.dev) v6, and [Workflow DevKit](https://useworkflow.dev). Deployed on Vercel with Fluid Compute.
+Built on [Next.js](https://nextjs.org) App Router + [Hono](https://hono.dev) (via `hono/vercel`), [AI SDK](https://ai-sdk.dev) v6, and [Workflow DevKit](https://useworkflow.dev). Deployed on Vercel with Fluid Compute.
 
 ## Architecture
 
@@ -56,62 +56,68 @@ bun install
 bun dev
 ```
 
-Nitro dev server runs at `http://localhost:3000`. To take traffic you need to either:
+Next.js dev server runs at `http://localhost:3000`. To take traffic you need to either:
 
 - Hit `GET /api/discord/gateway` to spin up the discord.js gateway listener (it will relay packets to `/api/discord/inbound`), or
 - Point Discord's **Interactions Endpoint URL** at `{BASE_URL}/api/discord/interactions` for slash commands and component callbacks.
 
 ### Scripts
 
-| Command                  | Description                                                    |
-| ------------------------ | -------------------------------------------------------------- |
-| `bun dev`                | Start Nitro dev server                                         |
-| `bun run build`          | Compile skills → Nitro build → register slash commands         |
-| `bun run typecheck`      | `tsc --noEmit`                                                 |
-| `bun run lint`           | `oxlint --type-aware`                                          |
-| `bun run format`         | `oxfmt`                                                        |
-| `bun run test`           | Unit tests (vitest)                                            |
-| `bun run test:integration` | Integration tests                                            |
-| `bun run test:coverage`  | Coverage report (90% threshold)                                |
-| `bun run validate`       | `typecheck && lint && test`                                    |
-| `bun run knip`           | Unused-code report                                             |
+| Command                    | Description                                            |
+| -------------------------- | ------------------------------------------------------ |
+| `bun dev`                  | Start Next.js dev server                               |
+| `bun run build`            | Compile skills → `next build` → register slash commands |
+| `bun run typecheck`        | `tsc --noEmit`                                         |
+| `bun run lint`             | `oxlint --type-aware`                                  |
+| `bun run format`           | `oxfmt`                                                |
+| `bun run test`             | Unit tests (vitest)                                    |
+| `bun run test:integration` | Integration tests                                      |
+| `bun run test:coverage`    | Coverage report (90% threshold)                        |
+| `bun run validate`         | `typecheck && lint && test`                            |
+| `bun run knip`             | Unused-code report                                     |
 
 ## Project structure
 
 ```
 src/
-  index.ts                        — Hono app (mounts /api/discord, /api/crons, /api/tasks)
+  app/
+    route.ts                      — GET / (ASCII art)
+    api/
+      [[...route]]/route.ts       — hono/vercel catch-all (mounts @/server)
+      tasks/route.ts               — Vercel Queue consumer (experimentalTriggers)
   env.ts                          — Validated environment (T3 + Zod)
 
   server/
+    index.ts                      — Hono app (cors + evlog; mounts /api/discord, /api/crons)
     routes/
       gateway.ts                  — discord.js client loop (cron: */9 * * * *)
       inbound.ts                  — Packet relay → EventRouter (dedup + lock)
       interactions.ts             — Slash commands + message components (signature verified)
       crons.ts                    — Cron dispatcher
-      tasks.ts                    — Vercel Queue consumer
-    workflows/
-      chat.ts                     — Durable multi-turn conversation
-      task.ts                     — Scheduled task execution
-      types.ts                    — ChatPayload, TaskPayload
+      handlers.ts                 — EventRouter wiring (inbound dispatch)
+
+  workflows/
+    chat.ts                       — Durable multi-turn conversation
+    task.ts                       — Scheduled task execution
+    types.ts                      — ChatPayload, TaskPayload
+
+  bot/
+    router.ts                     — EventRouter (Packet → handler dispatch)
+    store.ts                      — ConversationStore (Upstash Redis)
+    mention.ts                    — Bot-mention detection + stripping
+    types.ts                      — HandlerContext, ConversationState
+    commands/                     — defineCommand + registry
+    components/                   — defineComponent + routing by custom_id
+    crons/                        — defineCron + registry
+    events/                       — defineEvent helpers
+    handlers/
+      commands/                   — ping, privacy, delete-ship, door-opener, hack-night
+      events/                     — mention, praise, voice-transcription, dashboard,
+                                    auto-thread, ship-scraper, hack-night-upload, …
+      crons/                      — periodic jobs
+    integrations/                 — external service clients
 
   lib/
-    bot/
-      router.ts                   — EventRouter (Packet → handler dispatch)
-      store.ts                    — ConversationStore (Upstash Redis)
-      mention.ts                  — Bot-mention detection + stripping
-      types.ts                    — HandlerContext, ConversationState
-      commands/                   — defineCommand + registry
-      components/                 — defineComponent + routing by custom_id
-      crons/                      — defineCron + registry
-      events/                     — defineEvent helpers
-      handlers/
-        commands/                 — ping, privacy, delete-ship, door-opener, hack-night
-        events/                   — mention, praise, voice-transcription, dashboard,
-                                    auto-thread, ship-scraper, hack-night-upload, …
-        crons/                    — periodic jobs
-      integrations/               — external service clients
-
     ai/
       orchestrator.ts             — createOrchestrator(ctx): flat top-level ToolLoopAgent
       delegates.ts                — buildDelegationTools(role) → linear/github/discord/notion
@@ -152,14 +158,15 @@ src/
 
     tasks/                        — TaskMeta registry + cron utilities
     protocol/                     — Packet types, codec, interaction verify
-    test/fixtures/                — shared test fixtures
+    test/fixtures/                — shared test fixtures (includes AI SDK mocks)
 
 scripts/
   compile-skills.ts               — Builds skills/generated/{manifest,domains}.ts
   register-commands.ts            — Registers slash commands with Discord
 
-vercel.ts                         — Cron + queue trigger config
-nitro.config.ts                   — Nitro runtime + workflow module
+vercel.ts                         — Framework, crons, per-function config
+next.config.ts                    — Next.js config + withWorkflow plugin
+instrumentation.ts                — initLogger on boot
 ```
 
 ## Skills
@@ -175,9 +182,8 @@ description: Manage Linear issues, projects, and initiatives
 criteria: When the user asks about issues, projects, cycles, or roadmaps in Linear
 tools: [linear_search_issues, linear_get_issue, ...]
 minRole: organizer
-mode: delegate        # delegate-mode only; the orchestrator is flat
+mode: delegate # delegate-mode only; the orchestrator is flat
 ---
-
 Full skill instructions in markdown. For a domain's top-level SKILL.md,
 this body becomes the subagent's system prompt (with {{SKILL_MENU}}
 substituted). For a sub-skill SKILL.md, this body is returned when the
@@ -208,11 +214,17 @@ Wrap any tool with `admin()` to restrict it to `UserRole.Admin`:
 ```ts
 import { admin } from "@/lib/ai/skills/admin";
 
-export const dangerous_tool = admin(tool({
-  description: "...",
-  inputSchema: z.object({ /* ... */ }),
-  execute: async (input) => { /* ... */ },
-}));
+export const dangerous_tool = admin(
+  tool({
+    description: "...",
+    inputSchema: z.object({
+      /* ... */
+    }),
+    execute: async (input) => {
+      /* ... */
+    },
+  }),
+);
 ```
 
 `filterAdmin()` strips these from the `ToolSet` passed to subagents when the user is not an admin.
@@ -221,10 +233,12 @@ export const dangerous_tool = admin(tool({
 
 `vercel.ts` configures:
 
+- **Framework** `nextjs` so Vercel's function-pattern check recognizes `src/app/**/route.ts` paths.
 - **Cron** `*/9 * * * *` → `/api/discord/gateway` keeps the gateway listener alive.
-- **Queue trigger** (`queue/v2beta`, topic `tasks`) → `/api/tasks` consumes scheduled task jobs.
+- **Queue trigger** (`queue/v2beta`, topic `tasks`) scoped to `src/app/api/tasks/route.ts` only — the Next.js App Router compiles this file into its own `.func`, so the trigger doesn't leak onto the rest of the Hono routes.
+- **maxDuration: 600** on both the queue consumer and the catch-all Hono function.
 
-Nitro builds to `.output/` with the Vercel preset. Fluid Compute handles concurrent invocations; default function timeout is 300s (gateway route needs the 10-minute max configured in `nitro.config.ts`).
+Next.js compiles each route file into its own Vercel function. Fluid Compute handles concurrent invocations.
 
 ## Testing
 
