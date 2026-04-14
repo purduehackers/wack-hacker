@@ -11,6 +11,7 @@ export default defineConfig({
         {
           type: "queue/v2beta",
           topic: "tasks",
+          consumer: "tasks",
         },
       ],
     },
