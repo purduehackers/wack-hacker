@@ -6,8 +6,8 @@ import { Hono } from "hono";
 
 import type { Packet } from "@/lib/protocol/types";
 
+import { ConversationStore } from "@/bot/store";
 import { env } from "@/env";
-import { ConversationStore } from "@/lib/bot/store";
 import { PacketCodec } from "@/lib/protocol/packets";
 
 import { router } from "./handlers";

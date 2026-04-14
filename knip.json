@@ -2,18 +2,13 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "tags": ["-lintignore"],
   "entry": [
-    "src/index.ts",
+    "src/app/**/route.ts",
     "src/server/**/*.ts",
-    "src/lib/bot/handlers/**/*.ts",
+    "src/bot/handlers/**/*.ts",
     "scripts/*.ts",
     "vercel.ts"
   ],
   "project": ["src/**/*.ts", "scripts/**/*.ts"],
   "ignoreExportsUsedInFile": true,
-  "ignore": [
-    "src/lib/ai/tools/linear/**",
-    "src/lib/ai/tools/github/**",
-    "src/lib/ai/tools/discord/**",
-    "src/lib/ai/tools/notion/**"
-  ]
+  "ignore": ["src/lib/ai/tools/**"]
 }

@@ -1,6 +1,6 @@
-import type { RedisLike } from "@/lib/bot/types";
+import type { RedisLike } from "@/bot/types";
 
-import { ConversationStore } from "@/lib/bot/store";
+import { ConversationStore } from "@/bot/store";
 
 export function createMemoryRedis(): RedisLike {
   const data = new Map<string, { value: unknown; expiresAt?: number }>();

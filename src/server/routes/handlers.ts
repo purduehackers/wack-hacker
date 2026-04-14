@@ -1,12 +1,12 @@
 import { log } from "evlog";
 import { resumeHook } from "workflow/api";
 
-import type { EventHandler } from "@/lib/bot/events/types";
+import type { EventHandler } from "@/bot/events/types";
 
-import * as userEvents from "@/lib/bot/handlers/events";
-import { handleMention } from "@/lib/bot/handlers/events";
-import { isBotMention } from "@/lib/bot/mention";
-import { EventRouter } from "@/lib/bot/router";
+import * as userEvents from "@/bot/handlers/events";
+import { handleMention } from "@/bot/handlers/events";
+import { isBotMention } from "@/bot/mention";
+import { EventRouter } from "@/bot/router";
 
 export const router = new EventRouter();
 

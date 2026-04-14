@@ -4,14 +4,14 @@ import { waitUntil } from "@vercel/functions";
 import { log } from "evlog";
 import { Hono } from "hono";
 
-import type { SlashCommand } from "@/lib/bot/commands/types";
-import type { ComponentHandler } from "@/lib/bot/components/types";
+import type { SlashCommand } from "@/bot/commands/types";
+import type { ComponentHandler } from "@/bot/components/types";
 import type { DiscordInteraction } from "@/lib/protocol/types";
 
+import { parseOptions } from "@/bot/commands/registry";
+import * as components from "@/bot/components";
+import * as commands from "@/bot/handlers/commands";
 import { env } from "@/env";
-import { parseOptions } from "@/lib/bot/commands/registry";
-import * as components from "@/lib/bot/components";
-import * as commands from "@/lib/bot/handlers/commands";
 import { InteractionType, InteractionResponseType } from "@/lib/protocol/constants";
 import { verifyInteraction } from "@/lib/protocol/verify";
 

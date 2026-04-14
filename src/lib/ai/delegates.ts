@@ -73,8 +73,3 @@ export function buildDelegationTools(role: UserRole): ToolSet {
   }
   return tools;
 }
-
-/** Get the tool name that activates when a delegate skill is loaded. */
-export function getDelegateToolName(skillName: string): string {
-  return DELEGATE_PREFIX + skillName;
-}
