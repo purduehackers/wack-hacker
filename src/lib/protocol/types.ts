@@ -1,6 +1,6 @@
 import type { APIMessage } from "discord-api-types/v10";
 
-import type { InteractionType } from "./enums";
+import type { InteractionType } from "./constants";
 
 export type DiscordMessage = APIMessage;
 

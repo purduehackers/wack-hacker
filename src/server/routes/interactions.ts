@@ -12,7 +12,7 @@ import { env } from "@/env";
 import { parseOptions } from "@/lib/bot/commands/registry";
 import * as components from "@/lib/bot/components";
 import * as commands from "@/lib/bot/handlers/commands";
-import { InteractionType, InteractionResponseType } from "@/lib/protocol/enums";
+import { InteractionType, InteractionResponseType } from "@/lib/protocol/constants";
 import { verifyInteraction } from "@/lib/protocol/verify";
 
 const commandMap = new Map((Object.values(commands) as SlashCommand[]).map((c) => [c.name, c]));

@@ -23,3 +23,43 @@ export const DISCORD_IDS = {
     ]),
   },
 } as const;
+
+/**
+ * `InteractionType` and `InteractionResponseType` use `as const` objects
+ * instead of `const enum` declarations so they survive bundlers and runtimes
+ * that execute TypeScript in strip-only mode (no value inlining). See the
+ * `UserRole` pattern in `src/lib/ai/constants.ts` for the same rationale.
+ */
+export const InteractionType = {
+  Ping: 1,
+  ApplicationCommand: 2,
+  MessageComponent: 3,
+  ApplicationCommandAutocomplete: 4,
+  ModalSubmit: 5,
+} as const;
+
+// eslint-disable-next-line @factory/constants-file-organization, @factory/types-file-organization
+export type InteractionType = (typeof InteractionType)[keyof typeof InteractionType];
+
+export const InteractionResponseType = {
+  Pong: 1,
+  ChannelMessageWithSource: 4,
+  DeferredChannelMessageWithSource: 5,
+  DeferredUpdateMessage: 6,
+  /**
+   * Sync twin of `DeferredUpdateMessage` — updates the component's message
+   * atomically with the interaction response (no defer). Unused: all current
+   * component handlers do async work and prefer the deferred variant.
+   */
+  UpdateMessage: 7,
+  ApplicationCommandAutocompleteResult: 8,
+  /**
+   * Returned to show a modal form in response to a command or component.
+   * Unused: no commands currently collect multi-field input via modals.
+   */
+  Modal: 9,
+} as const;
+
+// eslint-disable-next-line @factory/constants-file-organization, @factory/types-file-organization
+export type InteractionResponseType =
+  (typeof InteractionResponseType)[keyof typeof InteractionResponseType];

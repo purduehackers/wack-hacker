@@ -11,6 +11,7 @@ import type {
 import type { HandlerContext } from "./types";
 
 import { PacketCodec } from "../protocol/packets";
+import { isBotMention } from "./mention";
 
 export type { HandlerContext } from "./types";
 
@@ -70,8 +71,9 @@ export class EventRouter {
 
     switch (packet.type) {
       case "GATEWAY_MESSAGE_CREATE": {
-        const isMention = packet.data.content.startsWith(`<@${ctx.botUserId}>`);
-        if (isMention) await run(this.handlers.mention, packet);
+        if (isBotMention(packet.data.content, ctx.botUserId)) {
+          await run(this.handlers.mention, packet);
+        }
         await run(this.handlers.message, packet);
         break;
       }

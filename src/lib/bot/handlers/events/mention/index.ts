@@ -5,6 +5,7 @@ import type { HandlerContext } from "@/lib/bot/types";
 import type { MessageCreatePacketType } from "@/lib/protocol/types";
 
 import { AgentContext } from "@/lib/ai/context";
+import { stripBotMention } from "@/lib/bot/mention";
 import { chatWorkflow } from "@/server/workflows/chat";
 
 export async function handleMention(
@@ -15,10 +16,7 @@ export async function handleMention(
   const channelId = data.channel.id;
   const threadId = data.thread ? data.channel.id : undefined;
 
-  const mentionPrefix = `<@${ctx.botUserId}>`;
-  const content = data.content.startsWith(mentionPrefix)
-    ? data.content.slice(mentionPrefix.length).trim()
-    : data.content;
+  const content = stripBotMention(data.content, ctx.botUserId);
 
   if (!content) {
     await ctx.discord.channels.createMessage(channelId, {

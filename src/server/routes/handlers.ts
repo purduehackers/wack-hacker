@@ -5,6 +5,7 @@ import type { EventHandler } from "@/lib/bot/events/types";
 
 import * as userEvents from "@/lib/bot/handlers/events";
 import { handleMention } from "@/lib/bot/handlers/events";
+import { isBotMention } from "@/lib/bot/mention";
 import { EventRouter } from "@/lib/bot/router";
 
 export const router = new EventRouter();
@@ -15,7 +16,7 @@ router.onMessage(async (packet, ctx) => {
   // Mentions are already handled by `handleMention`, which calls `resumeHook`
   // with the mention prefix stripped. Forwarding again here would duplicate
   // the turn and push the un-stripped content into the conversation.
-  if (packet.data.content.startsWith(`<@${ctx.botUserId}>`)) return;
+  if (isBotMention(packet.data.content, ctx.botUserId)) return;
 
   const channelId = packet.data.channel.id;
   const threadId = packet.data.thread ? packet.data.channel.id : undefined;
