@@ -1,15 +1,15 @@
 import { API } from "@discordjs/core/http-only";
 import { REST } from "@discordjs/rest";
-import { handleCallback, send } from "@vercel/queue";
 import { log } from "evlog";
 
-import type { TaskEnvelope, TaskHandler } from "@/lib/ai/tasks/types";
+import type { TaskEnvelope, TaskHandler } from "@/lib/tasks/queue/types";
 
 import { ConversationStore } from "@/bot/store";
 import { env } from "@/env";
-import { TASK_TOPIC } from "@/lib/ai/tasks/constants";
-import { InvalidTaskPayloadError, UnknownTaskError } from "@/lib/ai/tasks/errors";
-import * as taskHandlers from "@/lib/ai/tasks/handlers";
+import { TASK_TOPIC } from "@/lib/tasks/queue/constants";
+import { InvalidTaskPayloadError, UnknownTaskError } from "@/lib/tasks/queue/errors";
+import * as taskHandlers from "@/lib/tasks/queue/handlers";
+import { handleCallback, send } from "@/lib/tasks/queue/client";
 
 const taskMap = new Map((Object.values(taskHandlers) as TaskHandler[]).map((h) => [h.name, h]));
 

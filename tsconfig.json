@@ -7,8 +7,6 @@
     "jsx": "react-jsx",
     "allowJs": true,
     "incremental": true,
-    "composite": true,
-    "declarationMap": true,
     "sourceMap": true,
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
