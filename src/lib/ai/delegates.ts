@@ -7,6 +7,7 @@ import { SKILL_MANIFEST as GITHUB_SUBSKILLS } from "./skills/generated/domains/g
 import { SKILL_MANIFEST as LINEAR_SUBSKILLS } from "./skills/generated/domains/linear.ts";
 import { SKILL_MANIFEST as NOTION_SUBSKILLS } from "./skills/generated/domains/notion.ts";
 import { SKILL_MANIFEST } from "./skills/generated/manifest.ts";
+import { SkillRegistry } from "./skills/registry.ts";
 import { createDelegationTool } from "./subagent.ts";
 import * as discordTools from "./tools/discord/index.ts";
 import * as githubTools from "./tools/github/index.ts";
@@ -53,12 +54,14 @@ const DOMAINS = {
   { tools: ToolSet; subSkills: unknown; baseToolNames: readonly string[] }
 >;
 
-/** Build delegation tools for every delegate-mode top-level skill. */
+const registry = new SkillRegistry(SKILL_MANIFEST);
+
+/** Build delegation tools for every delegate-mode skill the role can access. */
 export function buildDelegationTools(role: UserRole): ToolSet {
   const tools: ToolSet = {};
   for (const [name, config] of Object.entries(DOMAINS)) {
-    const skill = SKILL_MANIFEST[name];
-    if (skill?.mode !== "delegate") continue;
+    const skill = registry.loadSkill(name, role);
+    if (!skill || skill.mode !== "delegate") continue;
     tools[DELEGATE_PREFIX + name] = createDelegationTool(
       {
         description: skill.description,
