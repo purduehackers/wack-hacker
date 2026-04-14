@@ -1,3 +1,4 @@
+import { Redis } from "@upstash/redis";
 import { waitUntil } from "@vercel/functions";
 import { ActivityType, Client, Events, GatewayIntentBits, Partials } from "discord.js";
 import { log } from "evlog";
@@ -9,12 +10,11 @@ import { env } from "@/env";
 import { PacketCodec } from "@/lib/protocol/packets";
 import { isTextChannel } from "@/lib/protocol/utils";
 
-const VERCEL_MAX_FUNCTION_DURATION_MS = 10 * 60 * 1000;
-
-const extend = (ms: number) =>
-  new Promise<void>((resolve) => {
-    setTimeout(resolve, ms);
-  });
+const HOLD_MS = 10 * 60 * 1000;
+const LEADER_KEY = "gateway:leader";
+const LEASE_TTL_MS = 15_000;
+const POLL_INTERVAL_MS = 5_000;
+const HANDOFF_WAIT_MS = 8_000;
 
 function getInboundUrl(): string {
   const base = process.env.VERCEL_URL
@@ -35,6 +35,82 @@ async function relay(url: string, packet: Packet): Promise<void> {
     });
   } catch (err) {
     log.error("gateway", `Failed to relay packet: ${String(err)}`);
+  }
+}
+
+async function runGatewayListener(client: Client): Promise<void> {
+  const redis = Redis.fromEnv();
+  const listenerId = `gw-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const abort = new AbortController();
+
+  log.info("gateway", `listener ${listenerId} starting`);
+
+  const existing = await redis.get<string>(LEADER_KEY).catch(() => null);
+  await redis.set(LEADER_KEY, listenerId, { px: LEASE_TTL_MS });
+
+  if (existing && existing !== listenerId) {
+    log.info(
+      "gateway",
+      `prior leader ${existing} detected, waiting ${HANDOFF_WAIT_MS}ms for handoff`,
+    );
+    await new Promise((r) => setTimeout(r, HANDOFF_WAIT_MS));
+  }
+
+  const poll = setInterval(async () => {
+    if (abort.signal.aborted) return;
+    try {
+      const current = await redis.get<string>(LEADER_KEY);
+      if (current !== listenerId) {
+        log.info(
+          "gateway",
+          `leadership lost (current=${current ?? "null"}), aborting ${listenerId}`,
+        );
+        abort.abort();
+        return;
+      }
+      await redis.set(LEADER_KEY, listenerId, { px: LEASE_TTL_MS });
+    } catch (err) {
+      log.error("gateway", `lease poll failed: ${String(err)}`);
+    }
+  }, POLL_INTERVAL_MS);
+
+  try {
+    await client.login(env.DISCORD_BOT_TOKEN);
+    log.info("gateway", `login() resolved for ${listenerId}`);
+
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(() => {
+        log.info("gateway", `hold elapsed for ${listenerId}`);
+        resolve();
+      }, HOLD_MS);
+      abort.signal.addEventListener(
+        "abort",
+        () => {
+          clearTimeout(timer);
+          resolve();
+        },
+        { once: true },
+      );
+    });
+  } catch (err) {
+    log.error("gateway", `login/hold failed: ${String(err)}`);
+  } finally {
+    clearInterval(poll);
+    log.info("gateway", `destroying client ${listenerId}`);
+    try {
+      await client.destroy();
+    } catch (err) {
+      log.error("gateway", `destroy failed: ${String(err)}`);
+    }
+    try {
+      const current = await redis.get<string>(LEADER_KEY);
+      if (current === listenerId) {
+        await redis.del(LEADER_KEY);
+        log.info("gateway", `released lease for ${listenerId}`);
+      }
+    } catch (err) {
+      log.error("gateway", `lease release failed: ${String(err)}`);
+    }
   }
 }
 
@@ -66,7 +142,10 @@ function bindMessageHandlers(client: Client, inboundUrl: string): void {
         channel: { id: message.channel.id, name: message.channel.name },
         thread:
           message.channel.isThread() && message.channel.parent
-            ? { parentId: message.channel.parentId!, parentName: message.channel.parent.name }
+            ? {
+                parentId: message.channel.parentId!,
+                parentName: message.channel.parent.name,
+              }
             : undefined,
         content: message.content,
         guildId: message.guildId!,
@@ -146,7 +225,11 @@ function bindGuildHandlers(client: Client, inboundUrl: string): void {
     await relay(inboundUrl, {
       type: "GATEWAY_MESSAGE_DELETE",
       timestamp: new Date(),
-      data: { id: message.id, channelId: message.channelId, guildId: message.guildId },
+      data: {
+        id: message.id,
+        channelId: message.channelId,
+        guildId: message.guildId,
+      },
     });
   });
   client.on(Events.VoiceStateUpdate, async (_old, state) => {
@@ -210,12 +293,31 @@ route.get("/gateway", (c) => {
     log.info("gateway", `Logged in as ${client.user?.tag}`);
   });
 
+  client.on(Events.Error, (err) => {
+    log.error("gateway", `client error: ${String(err)}`);
+  });
+  client.on(Events.ShardError, (err, shardId) => {
+    log.error("gateway", `shard ${shardId} error: ${String(err)}`);
+  });
+  client.on(Events.ShardDisconnect, (event, shardId) => {
+    log.warn("gateway", `shard ${shardId} disconnect code=${event.code} reason=${event.reason}`);
+  });
+  client.on(Events.ShardReconnecting, (shardId) => {
+    log.info("gateway", `shard ${shardId} reconnecting`);
+  });
+  client.on(Events.ShardResume, (shardId, replayed) => {
+    log.info("gateway", `shard ${shardId} resumed, replayed ${replayed}`);
+  });
+  client.on("raw" as any, (packet: { t?: string | null; op?: number }) => {
+    if (packet?.t) log.info("gateway", `raw dispatch t=${packet.t}`);
+  });
+
   bindMessageHandlers(client, inboundUrl);
   bindGuildHandlers(client, inboundUrl);
 
-  void client.login(env.DISCORD_BOT_TOKEN);
+  const loginAndHold = runGatewayListener(client);
 
-  waitUntil(extend(VERCEL_MAX_FUNCTION_DURATION_MS));
+  waitUntil(loginAndHold);
 
   return c.json({ message: "ok" });
 });

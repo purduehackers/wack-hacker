@@ -1,7 +1,6 @@
-import { send } from "./client.ts";
-
 import type { TaskEnvelope } from "./types.ts";
 
+import { send } from "./client.ts";
 import { TASK_TOPIC } from "./constants.ts";
 
 export async function scheduleTask(

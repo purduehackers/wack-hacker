@@ -6,10 +6,10 @@ import type { TaskEnvelope, TaskHandler } from "@/lib/tasks/queue/types";
 
 import { ConversationStore } from "@/bot/store";
 import { env } from "@/env";
+import { handleCallback, send } from "@/lib/tasks/queue/client";
 import { TASK_TOPIC } from "@/lib/tasks/queue/constants";
 import { InvalidTaskPayloadError, UnknownTaskError } from "@/lib/tasks/queue/errors";
 import * as taskHandlers from "@/lib/tasks/queue/handlers";
-import { handleCallback, send } from "@/lib/tasks/queue/client";
 
 const taskMap = new Map((Object.values(taskHandlers) as TaskHandler[]).map((h) => [h.name, h]));
 
