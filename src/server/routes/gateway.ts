@@ -1,5 +1,6 @@
 import { Redis } from "@upstash/redis";
 import { waitUntil } from "@vercel/functions";
+import { getVercelOidcTokenSync } from "@vercel/functions/oidc";
 import { ActivityType, Client, Events, GatewayIntentBits, Partials } from "discord.js";
 import { log } from "evlog";
 import { Hono } from "hono";
@@ -21,13 +22,15 @@ const HANDOFF_WAIT_MS = 8_000;
 
 const ulid = monotonicFactory();
 
-async function relay(packet: Packet): Promise<void> {
+async function relay(packet: Packet, oidcToken: string): Promise<void> {
   try {
-    await send(DISCORD_EVENT_TOPIC, PacketCodec.encode(packet));
+    await send(DISCORD_EVENT_TOPIC, PacketCodec.encode(packet), { oidcToken });
   } catch (err) {
     log.error("gateway", `Failed to publish packet: ${String(err)}`);
   }
 }
+
+type Publish = (packet: Packet) => Promise<void>;
 
 async function runGatewayListener(client: Client): Promise<void> {
   const redis = Redis.fromEnv();
@@ -107,11 +110,11 @@ async function runGatewayListener(client: Client): Promise<void> {
 
 const route = new Hono();
 
-function bindMessageHandlers(client: Client): void {
+function bindMessageHandlers(client: Client, publish: Publish): void {
   client.on(Events.MessageCreate, async (message) => {
     if (message.author.bot || !isTextChannel(message.channel)) return;
 
-    await relay({
+    await publish({
       type: "GATEWAY_MESSAGE_CREATE",
       timestamp: new Date(),
       data: {
@@ -164,7 +167,7 @@ function bindMessageHandlers(client: Client): void {
     if (user.bot) return;
     const message = await reaction.message.fetch();
 
-    await relay({
+    await publish({
       type: "GATEWAY_MESSAGE_REACTION_ADD",
       timestamp: new Date(),
       data: {
@@ -181,7 +184,7 @@ function bindMessageHandlers(client: Client): void {
     if (user.bot) return;
     const message = await reaction.message.fetch();
 
-    await relay({
+    await publish({
       type: "GATEWAY_MESSAGE_REACTION_REMOVE",
       timestamp: new Date(),
       data: {
@@ -195,11 +198,11 @@ function bindMessageHandlers(client: Client): void {
   });
 }
 
-function bindGuildHandlers(client: Client): void {
+function bindGuildHandlers(client: Client, publish: Publish): void {
   client.on(Events.MessageUpdate, async (_old, message) => {
     if (!message.guildId || message.author?.bot) return;
 
-    await relay({
+    await publish({
       type: "GATEWAY_MESSAGE_UPDATE",
       timestamp: new Date(),
       data: {
@@ -213,7 +216,7 @@ function bindGuildHandlers(client: Client): void {
   client.on(Events.MessageDelete, async (message) => {
     if (!message.guildId) return;
 
-    await relay({
+    await publish({
       type: "GATEWAY_MESSAGE_DELETE",
       timestamp: new Date(),
       data: {
@@ -226,7 +229,7 @@ function bindGuildHandlers(client: Client): void {
   client.on(Events.VoiceStateUpdate, async (_old, state) => {
     if (!state.guild?.id) return;
 
-    await relay({
+    await publish({
       type: "GATEWAY_VOICE_STATE_UPDATE",
       timestamp: new Date(),
       data: {
@@ -243,7 +246,7 @@ function bindGuildHandlers(client: Client): void {
   client.on(Events.ThreadCreate, async (thread) => {
     if (!thread.guildId || !thread.parentId) return;
 
-    await relay({
+    await publish({
       type: "GATEWAY_THREAD_CREATE",
       timestamp: new Date(),
       data: {
@@ -258,6 +261,15 @@ function bindGuildHandlers(client: Client): void {
 }
 
 route.get("/gateway", (c) => {
+  let oidcToken: string;
+  try {
+    oidcToken = getVercelOidcTokenSync();
+  } catch (err) {
+    log.error("gateway", `OIDC token unavailable at route entry: ${String(err)}`);
+    return c.json({ error: "oidc unavailable" }, 500);
+  }
+  const publish: Publish = (packet) => relay(packet, oidcToken);
+
   const client = new Client({
     intents: [
       GatewayIntentBits.Guilds,
@@ -301,8 +313,8 @@ route.get("/gateway", (c) => {
     if (packet?.t) log.info("gateway", `raw dispatch t=${packet.t}`);
   });
 
-  bindMessageHandlers(client);
-  bindGuildHandlers(client);
+  bindMessageHandlers(client, publish);
+  bindGuildHandlers(client, publish);
 
   const loginAndHold = runGatewayListener(client);
 
