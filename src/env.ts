@@ -1,5 +1,5 @@
 import { createEnv } from "@t3-oss/env-core";
-import { vercel, upstashRedis } from "@t3-oss/env-core/presets-zod";
+import { vercel } from "@t3-oss/env-core/presets-zod";
 import { z } from "zod";
 
 export const env = createEnv({
@@ -7,6 +7,7 @@ export const env = createEnv({
     DISCORD_BOT_TOKEN: z.string(),
     DISCORD_CLIENT_ID: z.string(),
     DISCORD_PUBLIC_KEY: z.string(),
+    DISCORD_GUILD_ID: z.string(),
     INBOUND_SECRET: z.string(),
     CRON_SECRET: z.string(),
     LINEAR_API_KEY: z.string(),
@@ -29,10 +30,11 @@ export const env = createEnv({
     SHIP_R2_BUCKET_NAME: z.string(),
     SHIP_DATABASE_TURSO_DATABASE_URL: z.string(),
     SHIP_DATABASE_TURSO_AUTH_TOKEN: z.string(),
-    DISCORD_GUILD_ID: z.string(),
+    KV_REDIS_REST_URL: z.string(),
+    KV_REDIS_REST_TOKEN: z.string(),
     VERCEL_API_TOKEN: z.string(),
     VERCEL_EDGE_CONFIG_ID: z.string(),
   },
-  extends: [vercel(), upstashRedis()],
+  extends: [vercel()],
   runtimeEnv: process.env,
 });
