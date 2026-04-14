@@ -76,7 +76,7 @@ export const shipScraper = defineEvent({
       env.R2_SECRET_ACCESS_KEY,
       env.SHIP_R2_BUCKET_NAME,
     );
-    const shipDb = new ShipDatabase(env.SHIP_DATABASE_URL, env.SHIP_DATABASE_AUTH_TOKEN);
+    const shipDb = new ShipDatabase(env.SHIP_DATABASE_TURSO_DATABASE_URL, env.SHIP_DATABASE_TURSO_AUTH_TOKEN);
 
     const uploadedAttachments = await uploadImages(r2, messageId, attachments);
 

@@ -11,7 +11,7 @@ import { z } from "zod";
 
 import type { SubagentSpec } from "./types.ts";
 
-import { UserRole } from "./constants.ts";
+import { SUBAGENT_MODEL, SUBAGENT_PREAMBLE, UserRole } from "./constants.ts";
 import {
   SkillRegistry,
   createLoadSkillTool,
@@ -43,10 +43,10 @@ export function createDelegationTool(spec: SubagentSpec, role: UserRole) {
     execute: async function* ({ task }, { abortSignal }) {
       const registry = new SkillRegistry(spec.subSkills);
       const loadSkill = createLoadSkillTool(registry, role);
-      const instructions = spec.systemPrompt.replace(
+      const instructions = `${SUBAGENT_PREAMBLE}\n\n${spec.systemPrompt.replace(
         "{{SKILL_MENU}}",
         registry.buildSkillMenu(role),
-      );
+      )}`;
 
       const allTools: ToolSet = { ...spec.tools, loadSkill };
       const tools = role === UserRole.Admin ? allTools : filterAdmin(allTools);
@@ -55,7 +55,7 @@ export function createDelegationTool(spec: SubagentSpec, role: UserRole) {
       type ToolKey = keyof typeof tools;
 
       const agent = new ToolLoopAgent({
-        model: "anthropic/claude-sonnet-4.6",
+        model: SUBAGENT_MODEL,
         instructions,
         tools,
         stopWhen: stepCountIs(15),

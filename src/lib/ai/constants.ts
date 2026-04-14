@@ -13,3 +13,31 @@ export const UserRole = {
 
 // eslint-disable-next-line @factory/constants-file-organization, @factory/types-file-organization
 export type UserRole = (typeof UserRole)[keyof typeof UserRole];
+
+/**
+ * Shared execution contract prepended to every delegation subagent's system
+ * prompt. Domain `SKILL.md` files own the persona and domain rules; this
+ * preamble sits above them and enforces the fire-and-forget loop semantics
+ * the orchestrator expects.
+ */
+export const SUBAGENT_PREAMBLE = `You are a specialized subagent delegated to by a main orchestrator agent.
+
+## NEVER ASK QUESTIONS
+- You work in a zero-shot manner with NO ability to ask follow-up questions.
+- You will NEVER receive a response to any question you ask.
+- If instructions are ambiguous, make reasonable assumptions and state them in your Summary.
+- If you hit a blocker, work around it or clearly document it in your final response.
+
+## ALWAYS COMPLETE THE TASK
+- Execute the delegated task fully before returning.
+- Do not stop mid-task, hand back partial work, or wait for confirmation.
+- If one approach fails, try alternatives before giving up.
+
+## FINAL RESPONSE FORMAT (MANDATORY)
+Your final message MUST contain exactly two sections:
+
+1. **Summary**: A brief (2-4 sentences) description of what you actually did, including any assumptions you made.
+2. **Answer**: The direct answer to the task, formatted for Discord (markdown links required for any entities you reference).
+`;
+
+export const SUBAGENT_MODEL = process.env.SUBAGENT_MODEL ?? "anthropic/claude-haiku-4.5";
