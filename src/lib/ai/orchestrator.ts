@@ -1,16 +1,10 @@
 import { ToolLoopAgent, type ToolSet } from "ai";
 
 import { AgentContext } from "./context.ts";
-import { buildDelegationTools, getDelegateToolName } from "./delegates.ts";
-import { SKILL_MANIFEST } from "./skills/generated/manifest.ts";
-import { SkillRegistry, createLoadSkillTool, computeActiveTools } from "./skills/index.ts";
+import { buildDelegationTools } from "./delegates.ts";
 import { documentation } from "./tools/docs/index.ts";
 import { scheduleTask, listScheduledTasks, cancelTask } from "./tools/schedule/index.ts";
 import { currentTime } from "./tools/schedule/time.ts";
-
-const registry = new SkillRegistry(SKILL_MANIFEST);
-
-const ALWAYS_ON = ["currentTime", "loadSkill"] as const;
 
 const SYSTEM_PROMPT = `<identity>
 You are a helpful assistant for Purdue Hackers, embedded in Discord. You speak as "I" and keep responses concise and actionable.
@@ -20,15 +14,16 @@ You are a helpful assistant for Purdue Hackers, embedded in Discord. You speak a
 Today is {{DATE}}.
 </date>
 
-<skills>
-You have access to skill bundles that unlock tools and detailed guidance. Load the relevant skill using the loadSkill tool BEFORE using any domain-specific tools.
+<tools>
+You have direct access to these tools:
 
-{{SKILL_MENU}}
+- **currentTime** — get the current timestamp.
+- **documentation** — look up Purdue Hackers info (events, projects, history, culture, docs). Prefer this over notion for general informational questions. Relay the tool's answer directly without paraphrasing.
+- **scheduleTask / listScheduledTasks / cancelTask** — schedule one-time or recurring messages and agent prompts. Use action_type "message" for static content, "agent" for dynamic content. Always confirm the schedule with the user before creating it. Default the channel and user to the execution context. Recurring tasks use 5-field cron (minute hour day month weekday).
+- **delegate_linear / delegate_github / delegate_discord / delegate_notion** — forward a task to a focused domain subagent. Forward the user's wording verbatim; the subagent needs the exact phrasing. Wait for the subagent's final result.
 
-Before calling any tool, consider which skill best matches the user's intent. If the request spans multiple domains, plan the full sequence before starting.
-
-For delegate-mode skills (linear, github, discord, notion), loading the skill activates a delegation tool that forwards the task to a focused domain subagent. Forward the user's original message to the subagent verbatim when possible — subagents need the exact wording.
-</skills>
+Plan multi-step requests before starting. For requests that span multiple domains, delegate each in turn.
+</tools>
 
 <tone>
 - Concise and direct. No preamble, no filler.
@@ -45,39 +40,20 @@ For delegate-mode skills (linear, github, discord, notion), loading the skill ac
 </formatting>`;
 
 export function createOrchestrator(context: AgentContext) {
-  const role = context.role;
-  const skillMenu = registry.buildSkillMenu(role);
-  const instructions = context.buildInstructions(
-    SYSTEM_PROMPT.replace("{{SKILL_MENU}}", skillMenu),
-  );
+  const instructions = context.buildInstructions(SYSTEM_PROMPT);
 
   const tools: ToolSet = {
     currentTime,
-    loadSkill: createLoadSkillTool(registry, role),
     documentation,
     scheduleTask,
     listScheduledTasks,
     cancelTask,
-    ...buildDelegationTools(role),
+    ...buildDelegationTools(context.role),
   };
-
-  type ToolKey = keyof typeof tools;
 
   return new ToolLoopAgent({
     model: "anthropic/claude-sonnet-4.6",
     instructions,
     tools,
-    activeTools: [...ALWAYS_ON] as ToolKey[],
-    prepareStep: ({ steps }) => {
-      const active = computeActiveTools({
-        steps,
-        registry,
-        role,
-        baseToolNames: ALWAYS_ON,
-        skillToTools: (skill) =>
-          skill.mode === "delegate" ? [getDelegateToolName(skill.name)] : skill.toolNames,
-      });
-      return active ? { activeTools: active as ToolKey[] } : undefined;
-    },
   });
 }
