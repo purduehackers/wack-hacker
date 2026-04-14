@@ -7,6 +7,12 @@ export default defineConfig({
   vercel: {
     functions: {
       maxDuration: 10 * 60,
+      experimentalTriggers: [
+        {
+          type: "queue/v2beta",
+          topic: "tasks",
+        },
+      ],
     },
   },
 });
