@@ -8,4 +8,14 @@ export const config: VercelConfig = {
       schedule: "*/9 * * * *",
     },
   ],
+  functions: {
+    "api/tasks": {
+      experimentalTriggers: [
+        {
+          type: "queue/v2beta",
+          topic: "tasks",
+        },
+      ],
+    },
+  },
 };

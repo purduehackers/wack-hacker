@@ -1,14 +1,35 @@
 import { createEnv } from "@t3-oss/env-core";
-import { vercel } from "@t3-oss/env-core/presets-zod";
-import { upstashRedis } from "@t3-oss/env-core/presets-zod";
+import { vercel, upstashRedis } from "@t3-oss/env-core/presets-zod";
 import { z } from "zod";
 
 export const env = createEnv({
   server: {
     DISCORD_BOT_TOKEN: z.string(),
     DISCORD_CLIENT_ID: z.string(),
-    TURSO_AUTH_TOKEN: z.string(),
-    TURSO_DATABASE_URL: z.url(),
+    DISCORD_PUBLIC_KEY: z.string(),
+    LINEAR_API_KEY: z.string(),
+    NOTION_TOKEN: z.string(),
+    GITHUB_APP_ID: z.string(),
+    GITHUB_APP_PRIVATE_KEY: z.string(),
+    GITHUB_APP_INSTALLATION_ID: z.string(),
+    GITHUB_ORG: z.string(),
+    PHACK_ASK_API_KEY: z.string(),
+    GROQ_API_KEY: z.string(),
+    PHACK_API_TOKEN: z.string(),
+    PHONEBELL_OPEN_URL: z.string(),
+    DASHBOARD_URL: z.string(),
+    PRIVACY_DB_URL: z.string(),
+    PRIVACY_DB_API_KEY: z.string(),
+    R2_ACCOUNT_ID: z.string(),
+    R2_ACCESS_KEY_ID: z.string(),
+    R2_SECRET_ACCESS_KEY: z.string(),
+    EVENTS_R2_BUCKET_NAME: z.string(),
+    SHIP_R2_BUCKET_NAME: z.string(),
+    SHIP_DATABASE_URL: z.string(),
+    SHIP_DATABASE_AUTH_TOKEN: z.string(),
+    DISCORD_GUILD_ID: z.string(),
+    VERCEL_API_TOKEN: z.string(),
+    VERCEL_EDGE_CONFIG_ID: z.string(),
   },
   extends: [vercel(), upstashRedis()],
   runtimeEnv: process.env,
