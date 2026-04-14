@@ -27,7 +27,7 @@ export const deleteShip = defineCommand({
       return;
     }
 
-    const shipDb = new ShipDatabase(env.SHIP_DATABASE_URL, env.SHIP_DATABASE_AUTH_TOKEN);
+    const shipDb = new ShipDatabase(env.SHIP_DATABASE_TURSO_DATABASE_URL, env.SHIP_DATABASE_TURSO_AUTH_TOKEN);
     await shipDb.deleteByMessageId(messageId);
     await respond(ctx, `Ship with message ID \`${messageId}\` has been deleted from the gallery.`);
   },
