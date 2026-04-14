@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("@vercel/queue", () => ({
+vi.mock("./client.ts", () => ({
   send: vi.fn().mockResolvedValue({ messageId: "qmsg-1" }),
 }));
 
-const { send } = await import("@vercel/queue");
+const { send } = await import("./client.ts");
 const { scheduleTask } = await import("./schedule");
 
 const mockedSend = vi.mocked(send);

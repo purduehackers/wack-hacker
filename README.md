@@ -63,18 +63,18 @@ Next.js dev server runs at `http://localhost:3000`. To take traffic you need to 
 
 ### Scripts
 
-| Command                    | Description                                            |
-| -------------------------- | ------------------------------------------------------ |
-| `bun dev`                  | Start Next.js dev server                               |
+| Command                    | Description                                             |
+| -------------------------- | ------------------------------------------------------- |
+| `bun dev`                  | Start Next.js dev server                                |
 | `bun run build`            | Compile skills → `next build` → register slash commands |
-| `bun run typecheck`        | `tsc --noEmit`                                         |
-| `bun run lint`             | `oxlint --type-aware`                                  |
-| `bun run format`           | `oxfmt`                                                |
-| `bun run test`             | Unit tests (vitest)                                    |
-| `bun run test:integration` | Integration tests                                      |
-| `bun run test:coverage`    | Coverage report (90% threshold)                        |
-| `bun run validate`         | `typecheck && lint && test`                            |
-| `bun run knip`             | Unused-code report                                     |
+| `bun run typecheck`        | `tsc --noEmit`                                          |
+| `bun run lint`             | `oxlint --type-aware`                                   |
+| `bun run format`           | `oxfmt`                                                 |
+| `bun run test`             | Unit tests (vitest)                                     |
+| `bun run test:integration` | Integration tests                                       |
+| `bun run test:coverage`    | Coverage report (90% threshold)                         |
+| `bun run validate`         | `typecheck && lint && test`                             |
+| `bun run knip`             | Unused-code report                                      |
 
 ## Project structure
 

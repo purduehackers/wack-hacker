@@ -1,4 +1,4 @@
-import { send } from "@vercel/queue";
+import { send } from "./client.ts";
 
 import type { TaskEnvelope } from "./types.ts";
 
