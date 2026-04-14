@@ -1,6 +1,18 @@
 import type { APIMessage } from "discord-api-types/v10";
+import type { z } from "zod";
 
 import type { InteractionType } from "./constants";
+
+import type {
+  PacketSchema,
+  MessageCreatePacket,
+  MessageReactionAddPacket,
+  MessageReactionRemovePacket,
+  MessageDeletePacket,
+  MessageUpdatePacket,
+  VoiceStateUpdatePacket,
+  ThreadCreatePacket,
+} from "./packets";
 
 export type DiscordMessage = APIMessage;
 
@@ -37,23 +49,14 @@ export interface InteractionOption {
   options?: InteractionOption[];
 }
 
-import type { z } from "zod";
-
-import type {
-  PacketSchema,
-  MessageCreatePacket,
-  MessageReactionAddPacket,
-  MessageReactionRemovePacket,
-  MessageDeletePacket,
-  MessageUpdatePacket,
-  VoiceStateUpdatePacket,
-  ThreadCreatePacket,
-} from "./packets";
-
 export type Packet = z.infer<typeof PacketSchema>;
 export type MessageCreatePacketType = z.infer<typeof MessageCreatePacket>;
-export type MessageReactionAddPacketType = z.infer<typeof MessageReactionAddPacket>;
-export type MessageReactionRemovePacketType = z.infer<typeof MessageReactionRemovePacket>;
+export type MessageReactionAddPacketType = z.infer<
+  typeof MessageReactionAddPacket
+>;
+export type MessageReactionRemovePacketType = z.infer<
+  typeof MessageReactionRemovePacket
+>;
 export type MessageDeletePacketType = z.infer<typeof MessageDeletePacket>;
 export type MessageUpdatePacketType = z.infer<typeof MessageUpdatePacket>;
 export type VoiceStateUpdatePacketType = z.infer<typeof VoiceStateUpdatePacket>;
