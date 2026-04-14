@@ -19,6 +19,15 @@ export const config: VercelConfig = {
         },
       ],
     },
+    "src/app/api/discord/events/route.ts": {
+      maxDuration: 600,
+      experimentalTriggers: [
+        {
+          type: "queue/v2beta",
+          topic: "discord-events",
+        },
+      ],
+    },
     "src/app/api/[[...route]]/route.ts": {
       maxDuration: "max",
     },

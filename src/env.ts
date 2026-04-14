@@ -8,7 +8,6 @@ export const env = createEnv({
     DISCORD_CLIENT_ID: z.string(),
     DISCORD_PUBLIC_KEY: z.string(),
     DISCORD_GUILD_ID: z.string(),
-    INBOUND_SECRET: z.string(),
     CRON_SECRET: z.string(),
     LINEAR_API_KEY: z.string(),
     NOTION_TOKEN: z.string(),

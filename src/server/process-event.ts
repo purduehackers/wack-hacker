@@ -1,16 +1,13 @@
 import { API } from "@discordjs/core/http-only";
 import { REST } from "@discordjs/rest";
-import { waitUntil } from "@vercel/functions";
 import { log } from "evlog";
-import { Hono } from "hono";
 
 import type { Packet } from "@/lib/protocol/types";
 
 import { ConversationStore } from "@/bot/store";
 import { env } from "@/env";
-import { PacketCodec } from "@/lib/protocol/packets";
 
-import { router } from "./handlers";
+import { router } from "./routes/handlers";
 
 function getDedupKey(packet: Packet): string {
   switch (packet.type) {
@@ -36,9 +33,9 @@ function getMessageChannelId(packet: Packet): string | null {
   return packet.data.channel.id;
 }
 
-async function processEvent(packet: Packet, store: ConversationStore): Promise<void> {
+export async function processEvent(packet: Packet, store: ConversationStore): Promise<void> {
   if (!(await store.dedup(getDedupKey(packet)))) {
-    log.debug("inbound", `Dedup hit, skipping ${packet.type}`);
+    log.debug("events", `Dedup hit, skipping ${packet.type}`);
     return;
   }
 
@@ -52,7 +49,7 @@ async function processEvent(packet: Packet, store: ConversationStore): Promise<v
   if (lockChannel) {
     const token = await store.acquireLock(lockChannel);
     if (!token) {
-      log.warn("inbound", `Lock held for ${lockChannel}, dropping ${packet.type}`);
+      log.warn("events", `Lock held for ${lockChannel}, dropping ${packet.type}`);
       return;
     }
     try {
@@ -64,37 +61,3 @@ async function processEvent(packet: Packet, store: ConversationStore): Promise<v
     await router.dispatch(packet, ctx);
   }
 }
-
-const route = new Hono();
-
-route.post("/inbound", async (c) => {
-  // Only the gateway relay (running in a separate function) should post here.
-  // A shared bearer secret keeps anyone else from forging Discord events.
-  const auth = c.req.header("authorization");
-  if (auth !== `Bearer ${env.INBOUND_SECRET}`) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
-
-  const raw = await c.req.text();
-  const store = new ConversationStore();
-
-  let packet: Packet;
-  try {
-    packet = PacketCodec.decode(raw);
-  } catch (err) {
-    log.error("inbound", `Invalid packet: ${String(err)}`);
-    return c.json({ error: "Invalid packet" }, 400);
-  }
-
-  log.info("inbound", `Received ${packet.type}`);
-
-  waitUntil(
-    processEvent(packet, store).catch((err) =>
-      log.error("inbound", `Processing failed for ${packet.type}: ${String(err)}`),
-    ),
-  );
-
-  return c.json({ ok: true });
-});
-
-export default route;

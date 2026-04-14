@@ -4,12 +4,10 @@ import { cors } from "hono/cors";
 
 import crons from "./routes/crons";
 import gateway from "./routes/gateway";
-import inbound from "./routes/inbound";
 import interactions from "./routes/interactions";
 
 const discord = new Hono();
 discord.route("/", gateway);
-discord.route("/", inbound);
 discord.route("/", interactions);
 
 export const app = new Hono<EvlogVariables>().basePath("/api");

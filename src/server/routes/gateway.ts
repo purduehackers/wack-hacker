@@ -3,12 +3,15 @@ import { waitUntil } from "@vercel/functions";
 import { ActivityType, Client, Events, GatewayIntentBits, Partials } from "discord.js";
 import { log } from "evlog";
 import { Hono } from "hono";
+import { monotonicFactory } from "ulid";
 
 import type { Packet } from "@/lib/protocol/types";
 
 import { env } from "@/env";
 import { PacketCodec } from "@/lib/protocol/packets";
 import { isTextChannel } from "@/lib/protocol/utils";
+import { send } from "@/lib/tasks/queue/client";
+import { DISCORD_EVENT_TOPIC } from "@/lib/tasks/queue/constants";
 
 const HOLD_MS = 10 * 60 * 1000;
 const LEADER_KEY = "gateway:leader";
@@ -16,31 +19,19 @@ const LEASE_TTL_MS = 15_000;
 const POLL_INTERVAL_MS = 5_000;
 const HANDOFF_WAIT_MS = 8_000;
 
-function getInboundUrl(): string {
-  const base = process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : "http://localhost:3000";
-  return `${base}/api/discord/inbound`;
-}
+const ulid = monotonicFactory();
 
-async function relay(url: string, packet: Packet): Promise<void> {
+async function relay(packet: Packet): Promise<void> {
   try {
-    await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${env.INBOUND_SECRET}`,
-      },
-      body: PacketCodec.encode(packet),
-    });
+    await send(DISCORD_EVENT_TOPIC, PacketCodec.encode(packet));
   } catch (err) {
-    log.error("gateway", `Failed to relay packet: ${String(err)}`);
+    log.error("gateway", `Failed to publish packet: ${String(err)}`);
   }
 }
 
 async function runGatewayListener(client: Client): Promise<void> {
   const redis = Redis.fromEnv();
-  const listenerId = `gw-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const listenerId = `gw_${ulid()}`;
   const abort = new AbortController();
 
   log.info("gateway", `listener ${listenerId} starting`);
@@ -116,11 +107,11 @@ async function runGatewayListener(client: Client): Promise<void> {
 
 const route = new Hono();
 
-function bindMessageHandlers(client: Client, inboundUrl: string): void {
+function bindMessageHandlers(client: Client): void {
   client.on(Events.MessageCreate, async (message) => {
     if (message.author.bot || !isTextChannel(message.channel)) return;
 
-    await relay(inboundUrl, {
+    await relay({
       type: "GATEWAY_MESSAGE_CREATE",
       timestamp: new Date(),
       data: {
@@ -173,7 +164,7 @@ function bindMessageHandlers(client: Client, inboundUrl: string): void {
     if (user.bot) return;
     const message = await reaction.message.fetch();
 
-    await relay(inboundUrl, {
+    await relay({
       type: "GATEWAY_MESSAGE_REACTION_ADD",
       timestamp: new Date(),
       data: {
@@ -190,7 +181,7 @@ function bindMessageHandlers(client: Client, inboundUrl: string): void {
     if (user.bot) return;
     const message = await reaction.message.fetch();
 
-    await relay(inboundUrl, {
+    await relay({
       type: "GATEWAY_MESSAGE_REACTION_REMOVE",
       timestamp: new Date(),
       data: {
@@ -204,11 +195,11 @@ function bindMessageHandlers(client: Client, inboundUrl: string): void {
   });
 }
 
-function bindGuildHandlers(client: Client, inboundUrl: string): void {
+function bindGuildHandlers(client: Client): void {
   client.on(Events.MessageUpdate, async (_old, message) => {
     if (!message.guildId || message.author?.bot) return;
 
-    await relay(inboundUrl, {
+    await relay({
       type: "GATEWAY_MESSAGE_UPDATE",
       timestamp: new Date(),
       data: {
@@ -222,7 +213,7 @@ function bindGuildHandlers(client: Client, inboundUrl: string): void {
   client.on(Events.MessageDelete, async (message) => {
     if (!message.guildId) return;
 
-    await relay(inboundUrl, {
+    await relay({
       type: "GATEWAY_MESSAGE_DELETE",
       timestamp: new Date(),
       data: {
@@ -235,7 +226,7 @@ function bindGuildHandlers(client: Client, inboundUrl: string): void {
   client.on(Events.VoiceStateUpdate, async (_old, state) => {
     if (!state.guild?.id) return;
 
-    await relay(inboundUrl, {
+    await relay({
       type: "GATEWAY_VOICE_STATE_UPDATE",
       timestamp: new Date(),
       data: {
@@ -252,7 +243,7 @@ function bindGuildHandlers(client: Client, inboundUrl: string): void {
   client.on(Events.ThreadCreate, async (thread) => {
     if (!thread.guildId || !thread.parentId) return;
 
-    await relay(inboundUrl, {
+    await relay({
       type: "GATEWAY_THREAD_CREATE",
       timestamp: new Date(),
       data: {
@@ -267,8 +258,6 @@ function bindGuildHandlers(client: Client, inboundUrl: string): void {
 }
 
 route.get("/gateway", (c) => {
-  const inboundUrl = getInboundUrl();
-
   const client = new Client({
     intents: [
       GatewayIntentBits.Guilds,
@@ -312,8 +301,8 @@ route.get("/gateway", (c) => {
     if (packet?.t) log.info("gateway", `raw dispatch t=${packet.t}`);
   });
 
-  bindMessageHandlers(client, inboundUrl);
-  bindGuildHandlers(client, inboundUrl);
+  bindMessageHandlers(client);
+  bindGuildHandlers(client);
 
   const loginAndHold = runGatewayListener(client);
 

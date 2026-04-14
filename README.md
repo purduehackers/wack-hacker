@@ -8,8 +8,9 @@ Built on [Next.js](https://nextjs.org) App Router + [Hono](https://hono.dev) (vi
 
 ```
 Discord gateway (discord.js)
-  → /api/discord/inbound (packet relay, deduped + channel-locked)
-    → EventRouter dispatches Packet to registered handlers
+  → Vercel Queue "discord-events" (at-least-once, retried)
+    → /api/discord/events consumer (deduped + channel-locked)
+      → EventRouter dispatches Packet to registered handlers
       → mention handler → start(chatWorkflow)
         → Orchestrator ToolLoopAgent (Claude Sonnet 4.6 via AI Gateway)
           → Base tools: currentTime, documentation, schedule*
@@ -58,7 +59,7 @@ bun dev
 
 Next.js dev server runs at `http://localhost:3000`. To take traffic you need to either:
 
-- Hit `GET /api/discord/gateway` to spin up the discord.js gateway listener (it will relay packets to `/api/discord/inbound`), or
+- Hit `GET /api/discord/gateway` to spin up the discord.js gateway listener (it will publish packets to the `discord-events` queue, consumed by `/api/discord/events`), or
 - Point Discord's **Interactions Endpoint URL** at `{BASE_URL}/api/discord/interactions` for slash commands and component callbacks.
 
 ### Scripts
