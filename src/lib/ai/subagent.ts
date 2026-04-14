@@ -64,6 +64,14 @@ export function createDelegationTool(spec: SubagentSpec, role: UserRole) {
           const active = computeActiveTools({ steps, registry, role, baseToolNames });
           return active ? { activeTools: active as ToolKey[] } : undefined;
         },
+        experimental_telemetry: {
+          isEnabled: true,
+          functionId: `subagent.${spec.name}`,
+          metadata: {
+            role,
+            subagent: spec.name,
+          },
+        },
       });
 
       const result = await agent.stream({ prompt: task, abortSignal });

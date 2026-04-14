@@ -31,6 +31,8 @@ export interface SerializedAgentContext {
 }
 
 export interface SubagentSpec {
+  /** Stable identifier used for telemetry/tracing. */
+  name: string;
   /** Short description shown to the orchestrator as the delegation tool's description. */
   description: string;
   /** Full subagent system prompt. `{{SKILL_MENU}}` placeholder is replaced at runtime. */

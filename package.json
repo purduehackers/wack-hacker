@@ -26,6 +26,7 @@
     "@notionhq/client": "^5.18.0",
     "@octokit/auth-app": "^8.2.0",
     "@purduehackers/discord-markdown-utils": "^0.0.4",
+    "@sentry/nextjs": "^10.48.0",
     "@t3-oss/env-core": "^0.13.11",
     "@upstash/redis": "^1.37.0",
     "@vercel/functions": "^3.4.3",

@@ -20,7 +20,7 @@ export const config: VercelConfig = {
       ],
     },
     "src/app/api/[[...route]]/route.ts": {
-      maxDuration: 600,
+      maxDuration: "max",
     },
   },
 };

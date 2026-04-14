@@ -64,6 +64,7 @@ export function buildDelegationTools(role: UserRole): ToolSet {
     if (!skill || skill.mode !== "delegate") continue;
     tools[DELEGATE_PREFIX + name] = createDelegationTool(
       {
+        name,
         description: skill.description,
         systemPrompt: skill.instructions,
         ...config,

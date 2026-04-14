@@ -34,6 +34,7 @@ export const env = createEnv({
     KV_REST_API_TOKEN: z.string(),
     VERCEL_API_TOKEN: z.string(),
     VERCEL_EDGE_CONFIG_ID: z.string(),
+    SENTRY_DSN: z.string().optional(),
   },
   extends: [vercel()],
   runtimeEnv: process.env,
