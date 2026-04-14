@@ -1,6 +1,5 @@
 import { Redis } from "@upstash/redis";
 
-import { env } from "@/env";
 import type { TaskMeta } from "./types";
 
 function taskKey(id: string) {
@@ -15,10 +14,7 @@ function userKey(userId: string) {
 
 let redis: Redis;
 function getRedis() {
-  return (redis ??= new Redis({
-    url: env.KV_REDIS_REST_URL,
-    token: env.KV_REDIS_REST_TOKEN,
-  }));
+  return (redis ??= Redis.fromEnv());
 }
 
 export async function saveTask(meta: TaskMeta): Promise<void> {
