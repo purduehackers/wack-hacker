@@ -11,6 +11,28 @@ import { createOrchestrator } from "./orchestrator.ts";
 const EDIT_INTERVAL_MS = 1500;
 const MAX_LENGTH = 1900;
 
+export function formatFooter(meta: {
+  elapsedMs: number;
+  totalTokens: number | undefined;
+  toolCallCount: number;
+  stepCount: number;
+}): string {
+  const parts: string[] = [];
+  parts.push(`${(meta.elapsedMs / 1000).toFixed(1)}s`);
+  if (meta.totalTokens != null) parts.push(`${meta.totalTokens.toLocaleString("en-US")} tokens`);
+  if (meta.toolCallCount > 0)
+    parts.push(`${meta.toolCallCount} tool call${meta.toolCallCount !== 1 ? "s" : ""}`);
+  if (meta.stepCount > 1) parts.push(`${meta.stepCount} steps`);
+  return `-# ${parts.join(" · ")}`;
+}
+
+function truncateWithFooter(text: string, footer: string): string {
+  const separator = "\n\n";
+  const available = MAX_LENGTH - footer.length - separator.length;
+  const body = text.length > available ? text.slice(0, available) + "…" : text;
+  return body + separator + footer;
+}
+
 export function truncate(text: string): string {
   return text.length > MAX_LENGTH ? text.slice(0, MAX_LENGTH) + "…" : text;
 }
@@ -67,6 +89,7 @@ export async function streamTurn(
 
   log.info("streaming", `Turn started in ${channelId}`);
 
+  const startTime = Date.now();
   const result = await agent.stream(buildPrompt(content, agentCtx.attachments));
 
   const state = { text: "", activity: null as string | null, subagentPreview: "" };
@@ -125,8 +148,18 @@ export async function streamTurn(
     }
   }
 
+  const elapsedMs = Date.now() - startTime;
+  const [totalUsage, steps] = await Promise.all([result.totalUsage, result.steps]);
+  const toolCallCount = steps.reduce((sum, step) => sum + step.toolCalls.length, 0);
+  const footer = formatFooter({
+    elapsedMs,
+    totalTokens: totalUsage.totalTokens,
+    toolCallCount,
+    stepCount: steps.length,
+  });
+
   const finalText = state.text || "I didn't have anything to say.";
-  const final = truncate(finalText);
+  const final = truncateWithFooter(finalText, footer);
   try {
     await discord.channels.editMessage(channelId, msg.id, { content: final });
   } catch (err) {
@@ -134,7 +167,7 @@ export async function streamTurn(
     await discord.channels.createMessage(channelId, { content: final });
   }
 
-  log.info("streaming", `Turn complete, ${state.text.length} chars`);
+  log.info("streaming", `Turn complete, ${state.text.length} chars, ${totalUsage.totalTokens ?? "?"} tokens, ${elapsedMs}ms`);
 
   return { text: state.text };
 }
