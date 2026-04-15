@@ -1,9 +1,21 @@
 import type { MessageCreatePacketType } from "../protocol/types.ts";
-import type { ChannelInfo, ThreadInfo, Attachment, SerializedAgentContext } from "./types.ts";
+import type {
+  ChannelInfo,
+  ThreadInfo,
+  Attachment,
+  RecentMessage,
+  SerializedAgentContext,
+} from "./types.ts";
 
 import { UserRole } from "./constants.ts";
 
-export type { ChannelInfo, ThreadInfo, Attachment, SerializedAgentContext } from "./types.ts";
+export type {
+  ChannelInfo,
+  ThreadInfo,
+  Attachment,
+  RecentMessage,
+  SerializedAgentContext,
+} from "./types.ts";
 
 /** Discord role IDs for Purdue Hackers server. */
 const ROLE_IDS = {
@@ -20,6 +32,7 @@ export class AgentContext {
   readonly date: string;
   readonly attachments?: Attachment[];
   readonly memberRoles?: string[];
+  readonly recentMessages?: RecentMessage[];
 
   private constructor(data: SerializedAgentContext) {
     this.userId = data.userId;
@@ -30,6 +43,7 @@ export class AgentContext {
     this.date = data.date;
     this.attachments = data.attachments;
     this.memberRoles = data.memberRoles;
+    this.recentMessages = data.recentMessages;
   }
 
   /** Resolve Discord role IDs to an application-level access tier. */
@@ -86,6 +100,7 @@ export class AgentContext {
       date: this.date,
       attachments: this.attachments,
       memberRoles: this.memberRoles,
+      recentMessages: this.recentMessages,
     };
   }
 
@@ -96,6 +111,12 @@ export class AgentContext {
   private contextBlock(): string {
     const thread = this.thread
       ? `\nthread:\n  name: ${JSON.stringify(this.thread.name)}\n  id: "${this.thread.id}"\n  parent_channel: "#${this.thread.parentChannel.name}"`
+      : "";
+
+    const recentMsgs = this.recentMessages?.length
+      ? `\n\n<recent_channel_messages>\n${this.recentMessages
+          .map((m) => `[${m.timestamp}] ${m.author}: ${m.content}`)
+          .join("\n")}\n</recent_channel_messages>`
       : "";
 
     return `<execution_context>
@@ -109,6 +130,6 @@ channel:
   id: "${this.channel.id}"${thread}
 date: "${this.date}"
 \`\`\`
-</execution_context>`;
+</execution_context>${recentMsgs}`;
   }
 }

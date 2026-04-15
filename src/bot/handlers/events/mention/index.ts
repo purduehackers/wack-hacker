@@ -1,12 +1,59 @@
+import type { API } from "@discordjs/core/http-only";
 import { log } from "evlog";
 import { start, resumeHook } from "workflow/api";
 
 import type { HandlerContext } from "@/bot/types";
+import type { RecentMessage } from "@/lib/ai/types";
 import type { MessageCreatePacketType } from "@/lib/protocol/types";
 
 import { stripBotMention } from "@/bot/mention";
 import { AgentContext } from "@/lib/ai/context";
 import { chatWorkflow } from "@/workflows/chat";
+
+const MAX_RECENT_MESSAGES = 15;
+const MAX_TOTAL_CHARS = 4000;
+
+async function fetchRecentMessages(
+  discord: API,
+  channelId: string,
+  beforeMessageId: string,
+  botUserId: string,
+): Promise<RecentMessage[] | undefined> {
+  try {
+    const raw = await discord.channels.getMessages(channelId, {
+      before: beforeMessageId,
+      limit: MAX_RECENT_MESSAGES,
+    });
+
+    // Discord returns newest-first; filter and keep chronological order
+    const filtered = raw
+      .filter((m) => m.author.id !== botUserId && m.content?.trim())
+      .reverse();
+
+    // Prioritize newest messages within the char budget
+    const messages: RecentMessage[] = [];
+    let totalChars = 0;
+
+    for (let i = filtered.length - 1; i >= 0; i--) {
+      const m = filtered[i];
+      if (totalChars + m.content.length > MAX_TOTAL_CHARS) break;
+      totalChars += m.content.length;
+      messages.unshift({
+        author: (m.author as any).global_name ?? m.author.username,
+        content: m.content,
+        timestamp: new Date(m.timestamp).toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+      });
+    }
+
+    return messages.length > 0 ? messages : undefined;
+  } catch (err) {
+    log.warn("mention", `Failed to fetch recent messages: ${String(err)}`);
+    return undefined;
+  }
+}
 
 export async function handleMention(
   packet: MessageCreatePacketType,
@@ -70,13 +117,20 @@ export async function handleMention(
 
   const agentContext = AgentContext.fromPacket(packet);
 
+  const recentMessages = await fetchRecentMessages(
+    ctx.discord,
+    sourceChannelId,
+    data.id,
+    ctx.botUserId,
+  );
+
   log.info("mention", `Starting workflow for ${data.author.username} in ${data.channel.name}`);
 
   const run = await start(chatWorkflow, [
     {
       channelId: conversationChannelId,
       content,
-      context: agentContext.toJSON(),
+      context: { ...agentContext.toJSON(), recentMessages },
     },
   ]);
 
