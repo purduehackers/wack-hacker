@@ -58,7 +58,7 @@ const DOMAINS = {
 const registry = new SkillRegistry(SKILL_MANIFEST);
 
 /** Build delegation tools for every delegate-mode skill the role can access. */
-export function buildDelegationTools(role: UserRole, metrics?: SubagentMetrics): ToolSet {
+export function buildDelegationTools(role: UserRole, metrics: SubagentMetrics): ToolSet {
   const tools: ToolSet = {};
   for (const [name, config] of Object.entries(DOMAINS)) {
     const skill = registry.loadSkill(name, role);

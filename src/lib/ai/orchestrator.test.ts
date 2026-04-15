@@ -52,7 +52,7 @@ describe("createOrchestrator", () => {
   });
 
   async function drain(ctx: AgentContext) {
-    const agent = createOrchestrator(ctx);
+    const agent = createOrchestrator(ctx, { totalTokens: 0, toolCallCount: 0 });
     const result = await agent.stream({ prompt: "say hi" });
     const messages: UIMessage[] = [];
     // toUIMessageStream works but we just need to consume the stream so the

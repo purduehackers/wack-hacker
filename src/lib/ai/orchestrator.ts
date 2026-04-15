@@ -41,7 +41,7 @@ Plan multi-step requests before starting. For requests that span multiple domain
 - Never echo API keys, tokens, or secrets.
 </formatting>`;
 
-export function createOrchestrator(context: AgentContext, metrics?: SubagentMetrics) {
+export function createOrchestrator(context: AgentContext, metrics: SubagentMetrics) {
   const instructions = context.buildInstructions(SYSTEM_PROMPT);
 
   const tools: ToolSet = {

@@ -37,7 +37,7 @@ export type { SubagentSpec } from "./types.ts";
 export function createDelegationTool(
   spec: SubagentSpec,
   role: UserRole,
-  metrics?: SubagentMetrics,
+  metrics: SubagentMetrics,
 ) {
   return tool({
     description: spec.description,
@@ -86,11 +86,9 @@ export function createDelegationTool(
         yield message;
       }
 
-      if (metrics) {
-        const [usage, steps] = await Promise.all([result.totalUsage, result.steps]);
-        metrics.totalTokens += usage.totalTokens ?? 0;
-        metrics.toolCallCount += steps.reduce((sum, s) => sum + s.toolCalls.length, 0);
-      }
+      const [usage, steps] = await Promise.all([result.totalUsage, result.steps]);
+      metrics.totalTokens += usage.totalTokens ?? 0;
+      metrics.toolCallCount += steps.reduce((sum, s) => sum + s.toolCalls.length, 0);
     },
     toModelOutput: ({ output }) => {
       const message = output as UIMessage | undefined;
