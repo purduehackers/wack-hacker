@@ -9,7 +9,7 @@ import {
 } from "ai";
 import { z } from "zod";
 
-import type { SubagentSpec } from "./types.ts";
+import type { SubagentSpec, SubagentMetrics } from "./types.ts";
 
 import { SUBAGENT_MODEL, SUBAGENT_PREAMBLE, UserRole } from "./constants.ts";
 import {
@@ -34,7 +34,7 @@ export type { SubagentSpec } from "./types.ts";
  * message history stays lean (full execution details live in the UI stream,
  * not in the model context).
  */
-export function createDelegationTool(spec: SubagentSpec, role: UserRole) {
+export function createDelegationTool(spec: SubagentSpec, role: UserRole, metrics?: SubagentMetrics) {
   return tool({
     description: spec.description,
     inputSchema: z.object({
@@ -80,6 +80,12 @@ export function createDelegationTool(spec: SubagentSpec, role: UserRole) {
         stream: result.toUIMessageStream(),
       })) {
         yield message;
+      }
+
+      if (metrics) {
+        const [usage, steps] = await Promise.all([result.totalUsage, result.steps]);
+        metrics.totalTokens += usage.totalTokens ?? 0;
+        metrics.toolCallCount += steps.reduce((sum, s) => sum + s.toolCalls.length, 0);
       }
     },
     toModelOutput: ({ output }) => {

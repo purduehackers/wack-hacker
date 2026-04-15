@@ -71,7 +71,7 @@ describe("createOrchestrator", () => {
     const ctx = contextFromFixture();
     await drain(ctx);
 
-    expect(buildDelegationToolsMock).toHaveBeenCalledWith(ctx.role);
+    expect(buildDelegationToolsMock.mock.calls[0]![0]).toBe(ctx.role);
 
     const call = model.doStreamCalls[0]!;
     const toolNames = (call.tools ?? [])

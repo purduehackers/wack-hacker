@@ -1,5 +1,6 @@
 import type { ToolSet } from "ai";
 
+import type { SubagentMetrics } from "./types.ts";
 import type { UserRole } from "./constants.ts";
 
 import { SKILL_MANIFEST as DISCORD_SUBSKILLS } from "./skills/generated/domains/discord.ts";
@@ -57,7 +58,7 @@ const DOMAINS = {
 const registry = new SkillRegistry(SKILL_MANIFEST);
 
 /** Build delegation tools for every delegate-mode skill the role can access. */
-export function buildDelegationTools(role: UserRole): ToolSet {
+export function buildDelegationTools(role: UserRole, metrics?: SubagentMetrics): ToolSet {
   const tools: ToolSet = {};
   for (const [name, config] of Object.entries(DOMAINS)) {
     const skill = registry.loadSkill(name, role);
@@ -70,6 +71,7 @@ export function buildDelegationTools(role: UserRole): ToolSet {
         ...config,
       },
       role,
+      metrics,
     );
   }
   return tools;

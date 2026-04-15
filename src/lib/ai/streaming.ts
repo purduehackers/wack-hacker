@@ -3,7 +3,7 @@ import type { API } from "@discordjs/core/http-only";
 import { isTextUIPart, type UIMessage } from "ai";
 import { log } from "evlog";
 
-import type { SerializedAgentContext, Attachment } from "./types.ts";
+import type { SerializedAgentContext, Attachment, SubagentMetrics } from "./types.ts";
 
 import { AgentContext } from "./context.ts";
 import { createOrchestrator } from "./orchestrator.ts";
@@ -84,7 +84,8 @@ export async function streamTurn(
   serializedContext: SerializedAgentContext,
 ): Promise<{ text: string }> {
   const agentCtx = AgentContext.fromJSON(serializedContext);
-  const agent = createOrchestrator(agentCtx);
+  const subagentMetrics: SubagentMetrics = { totalTokens: 0, toolCallCount: 0 };
+  const agent = createOrchestrator(agentCtx, subagentMetrics);
   const msg = await discord.channels.createMessage(channelId, { content: "> Thinking..." });
 
   log.info("streaming", `Turn started in ${channelId}`);
@@ -150,11 +151,11 @@ export async function streamTurn(
 
   const elapsedMs = Date.now() - startTime;
   const [totalUsage, steps] = await Promise.all([result.totalUsage, result.steps]);
-  const toolCallCount = steps.reduce((sum, step) => sum + step.toolCalls.length, 0);
+  const orchestratorToolCalls = steps.reduce((sum, step) => sum + step.toolCalls.length, 0);
   const footer = formatFooter({
     elapsedMs,
-    totalTokens: totalUsage.totalTokens,
-    toolCallCount,
+    totalTokens: (totalUsage.totalTokens ?? 0) + subagentMetrics.totalTokens,
+    toolCallCount: orchestratorToolCalls + subagentMetrics.toolCallCount,
     stepCount: steps.length,
   });
 

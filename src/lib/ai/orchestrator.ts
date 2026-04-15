@@ -1,5 +1,7 @@
 import { ToolLoopAgent, type ToolSet } from "ai";
 
+import type { SubagentMetrics } from "./types.ts";
+
 import { AgentContext } from "./context.ts";
 import { buildDelegationTools } from "./delegates.ts";
 import { documentation } from "./tools/docs/index.ts";
@@ -39,7 +41,7 @@ Plan multi-step requests before starting. For requests that span multiple domain
 - Never echo API keys, tokens, or secrets.
 </formatting>`;
 
-export function createOrchestrator(context: AgentContext) {
+export function createOrchestrator(context: AgentContext, metrics?: SubagentMetrics) {
   const instructions = context.buildInstructions(SYSTEM_PROMPT);
 
   const tools: ToolSet = {
@@ -48,7 +50,7 @@ export function createOrchestrator(context: AgentContext) {
     scheduleTask,
     listScheduledTasks,
     cancelTask,
-    ...buildDelegationTools(context.role),
+    ...buildDelegationTools(context.role, metrics),
   };
 
   return new ToolLoopAgent({
