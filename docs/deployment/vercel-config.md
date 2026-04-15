@@ -8,9 +8,7 @@ import { type VercelConfig } from "@vercel/config/v1";
 export const config: VercelConfig = {
   framework: "nextjs",
   bunVersion: "1.x",
-  crons: [
-    { path: "/api/discord/gateway", schedule: "*/9 * * * *" },
-  ],
+  crons: [{ path: "/api/discord/gateway", schedule: "*/9 * * * *" }],
   functions: {
     "src/app/api/tasks/route.ts": {
       maxDuration: 600,
@@ -39,10 +37,10 @@ export const config: VercelConfig = {
 
 Two queue topics are configured, each scoped to **exactly one** route file:
 
-| Topic            | Route file                                  | Purpose                                  |
-| ---------------- | ------------------------------------------- | ---------------------------------------- |
-| `discord-events` | `src/app/api/discord/events/route.ts`       | Gateway packets → `EventRouter`          |
-| `tasks`          | `src/app/api/tasks/route.ts`                | Scheduled task wake-ups → `taskWorkflow` |
+| Topic            | Route file                            | Purpose                                  |
+| ---------------- | ------------------------------------- | ---------------------------------------- |
+| `discord-events` | `src/app/api/discord/events/route.ts` | Gateway packets → `EventRouter`          |
+| `tasks`          | `src/app/api/tasks/route.ts`          | Scheduled task wake-ups → `taskWorkflow` |
 
 Scoping is critical. Next.js compiles each route file into its own `.func` directory, and queue triggers attach to a single function. If you scoped `experimentalTriggers` to the catch-all (`[[...route]]`), every Hono route would suddenly be a queue consumer.
 

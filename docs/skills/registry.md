@@ -3,17 +3,17 @@
 `src/lib/ai/skills/registry.ts` defines `SkillRegistry`, instantiated with either the top-level manifest (for the orchestrator to discover delegates) or a per-domain manifest (for a subagent to discover sub-skills).
 
 ```ts
-const topLevel   = new SkillRegistry(SKILL_MANIFEST);                    // delegates.ts
-const domainReg  = new SkillRegistry(spec.subSkills);                    // subagent.ts
+const topLevel = new SkillRegistry(SKILL_MANIFEST); // delegates.ts
+const domainReg = new SkillRegistry(spec.subSkills); // subagent.ts
 ```
 
 ## API
 
-| Method                        | Purpose                                                                                  |
-| ----------------------------- | ---------------------------------------------------------------------------------------- |
-| `getAvailableSkills(role)`    | All skills whose `minRole` is ≤ the caller's role.                                       |
-| `loadSkill(name, role)`       | Returns the `SkillBundle` if it exists and `minRole` is satisfied; otherwise `null`.     |
-| `buildSkillMenu(role)`        | Renders the available skills as `<available_skills>` XML for injection into a system prompt. |
+| Method                     | Purpose                                                                                      |
+| -------------------------- | -------------------------------------------------------------------------------------------- |
+| `getAvailableSkills(role)` | All skills whose `minRole` is ≤ the caller's role.                                           |
+| `loadSkill(name, role)`    | Returns the `SkillBundle` if it exists and `minRole` is satisfied; otherwise `null`.         |
+| `buildSkillMenu(role)`     | Renders the available skills as `<available_skills>` XML for injection into a system prompt. |
 
 The role hierarchy is `public(0) < organizer(1) < admin(2)`, set by `ROLE_LEVEL` at the top of the file.
 

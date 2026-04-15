@@ -4,13 +4,13 @@
 
 ## Fields
 
-| Field                              | Source                                                                                                |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `userId`, `username`, `nickname`   | The Discord member who triggered the turn                                                             |
-| `channel`, `thread?`               | Where the conversation lives                                                                          |
-| `date`                             | Pre-formatted current date string (e.g. `"Wednesday, April 15, 2026"`)                                |
-| `attachments?`                     | Any files on the triggering message                                                                   |
-| `memberRoles?`                     | Discord role IDs from the member object                                                               |
+| Field                            | Source                                                                 |
+| -------------------------------- | ---------------------------------------------------------------------- |
+| `userId`, `username`, `nickname` | The Discord member who triggered the turn                              |
+| `channel`, `thread?`             | Where the conversation lives                                           |
+| `date`                           | Pre-formatted current date string (e.g. `"Wednesday, April 15, 2026"`) |
+| `attachments?`                   | Any files on the triggering message                                    |
+| `memberRoles?`                   | Discord role IDs from the member object                                |
 
 `role: UserRole` is a **getter** (not a stored field) that resolves at access time by checking `memberRoles` against the `ROLE_IDS` constant defined inside `context.ts` itself: admin first, then organizer, falling back to public. See [Role-based access](./roles.md).
 
@@ -41,7 +41,7 @@ Substitutes `{{DATE}}` in the base prompt and appends an `<execution_context>` b
 
 Example of what gets appended:
 
-```xml
+````xml
 <execution_context>
 ```yaml
 user:
@@ -56,6 +56,10 @@ thread:
   id: "555555555"
   parent_channel: "#bot-testing"
 date: "Wednesday, April 15, 2026"
-```
+````
+
 </execution_context>
+
+```
+
 ```
