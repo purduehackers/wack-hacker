@@ -37,6 +37,12 @@ export interface SerializedAgentContext {
   recentMessages?: RecentMessage[];
 }
 
+/** Mutable accumulator for subagent token/tool-call metrics. */
+export interface SubagentMetrics {
+  totalTokens: number;
+  toolCallCount: number;
+}
+
 export interface SubagentSpec {
   /** Stable identifier used for telemetry/tracing. */
   name: string;
