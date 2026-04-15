@@ -4,11 +4,11 @@ The orchestrator exposes three scheduling tools, all in `src/lib/ai/tools/schedu
 
 ## Tools
 
-| Tool                  | What it does                                                                            |
-| --------------------- | --------------------------------------------------------------------------------------- |
-| `scheduleTask`        | Validates the schedule (future date or parseable cron) and starts a `taskWorkflow`.     |
-| `listScheduledTasks`  | Reads from `registry.listTasks(opts?)`, optionally filtered by user.                    |
-| `cancelTask`          | Cancels the workflow run and removes the registry entry.                                |
+| Tool                 | What it does                                                                        |
+| -------------------- | ----------------------------------------------------------------------------------- |
+| `scheduleTask`       | Validates the schedule (future date or parseable cron) and starts a `taskWorkflow`. |
+| `listScheduledTasks` | Reads from `registry.listTasks(opts?)`, optionally filtered by user.                |
+| `cancelTask`         | Cancels the workflow run and removes the registry entry.                            |
 
 ## scheduleTask
 

@@ -168,7 +168,10 @@ export async function streamTurn(
     await discord.channels.createMessage(channelId, { content: final });
   }
 
-  log.info("streaming", `Turn complete, ${state.text.length} chars, ${totalUsage.totalTokens ?? "?"} tokens, ${elapsedMs}ms`);
+  log.info(
+    "streaming",
+    `Turn complete, ${state.text.length} chars, ${totalUsage.totalTokens ?? "?"} tokens, ${elapsedMs}ms`,
+  );
 
   return { text: state.text };
 }

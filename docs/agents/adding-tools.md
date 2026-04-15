@@ -23,7 +23,9 @@ If the tool is destructive or should only be callable by admins, wrap it:
 import { admin } from "@/lib/ai/skills/admin";
 
 export const dangerous_tool = admin(
-  tool({ /* ... */ }),
+  tool({
+    /* ... */
+  }),
 );
 ```
 

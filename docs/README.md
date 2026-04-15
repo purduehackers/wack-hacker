@@ -1,18 +1,18 @@
 # Wack Hacker Documentation
 
-Reference documentation for the Wack Hacker codebase. The top-level [README](../README.md) covers the elevator pitch and getting started; this folder is for working *inside* the project.
+Reference documentation for the Wack Hacker codebase. The top-level [README](../README.md) covers the elevator pitch and getting started; this folder is for working _inside_ the project.
 
 ## Contents
 
-| Section                                       | What's in it                                                                                                             |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| [Architecture](./architecture.md)              | High-level shape of the system, request flow, agent hierarchy, and skill system diagrams.                               |
-| [Discord layer](./discord/README.md)           | Gateway, interactions, `EventRouter`, queue consumer, and how to write commands/components/events/crons.                 |
-| [Agents](./agents/README.md)                   | Orchestrator, delegate subagents, `AgentContext`, role gating, `streamTurn`.                                             |
-| [Skills](./skills/README.md)                   | `SKILL.md` format, the registry, progressive disclosure, admin gating, and adding skills or whole delegate domains.      |
-| [Workflows & scheduling](./workflows/README.md)| Workflow DevKit usage (`chatWorkflow`, `taskWorkflow`), durable suspension, the tasks queue.                             |
-| [Deployment](./deployment/README.md)           | `vercel.ts`, queue triggers, environment variables, build pipeline.                                                      |
-| [Testing](./testing.md)                        | Vitest setup, unit vs integration suites, coverage thresholds.                                                           |
+| Section                                         | What's in it                                                                                                        |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| [Architecture](./architecture.md)               | High-level shape of the system, request flow, agent hierarchy, and skill system diagrams.                           |
+| [Discord layer](./discord/README.md)            | Gateway, interactions, `EventRouter`, queue consumer, and how to write commands/components/events/crons.            |
+| [Agents](./agents/README.md)                    | Orchestrator, delegate subagents, `AgentContext`, role gating, `streamTurn`.                                        |
+| [Skills](./skills/README.md)                    | `SKILL.md` format, the registry, progressive disclosure, admin gating, and adding skills or whole delegate domains. |
+| [Workflows & scheduling](./workflows/README.md) | Workflow DevKit usage (`chatWorkflow`, `taskWorkflow`), durable suspension, the tasks queue.                        |
+| [Deployment](./deployment/README.md)            | `vercel.ts`, queue triggers, environment variables, build pipeline.                                                 |
+| [Testing](./testing.md)                         | Vitest setup, unit vs integration suites, coverage thresholds.                                                      |
 
 ## Conventions
 

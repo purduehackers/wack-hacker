@@ -1,7 +1,7 @@
 import type { ToolSet } from "ai";
 
-import type { SubagentMetrics } from "./types.ts";
 import type { UserRole } from "./constants.ts";
+import type { SubagentMetrics } from "./types.ts";
 
 import { SKILL_MANIFEST as DISCORD_SUBSKILLS } from "./skills/generated/domains/discord.ts";
 import { SKILL_MANIFEST as GITHUB_SUBSKILLS } from "./skills/generated/domains/github.ts";
