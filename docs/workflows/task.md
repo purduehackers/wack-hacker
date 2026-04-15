@@ -16,8 +16,8 @@ The workflow uses its own `workflowRunId` as the task's persistent ID, so the ta
 
 ```ts
 type TaskMeta = {
-  id: string;                          // = workflowRunId
-  description: string;                  // human-readable
+  id: string; // = workflowRunId
+  description: string; // human-readable
   action:
     | { type: "message"; channelId: string; content: string }
     | { type: "agent"; channelId: string; prompt: string };
@@ -25,7 +25,7 @@ type TaskMeta = {
     | { type: "once"; at: string /* ISO 8601 */ }
     | { type: "recurring"; cron: string; timezone?: string };
   context: { userId: string; channelId: string };
-  createdAt: string;                    // ISO 8601
+  createdAt: string; // ISO 8601
 };
 ```
 
@@ -33,11 +33,11 @@ type TaskMeta = {
 
 `src/lib/tasks/registry.ts` persists tasks in Redis under three keys:
 
-| Key                     | Purpose                                 |
-| ----------------------- | --------------------------------------- |
-| `task:${id}`            | The full `TaskMeta` blob.               |
-| `tasks:all`             | Set of every task ID, for global lists. |
-| `tasks:user:${userId}`  | Set of one user's task IDs.             |
+| Key                    | Purpose                                 |
+| ---------------------- | --------------------------------------- |
+| `task:${id}`           | The full `TaskMeta` blob.               |
+| `tasks:all`            | Set of every task ID, for global lists. |
+| `tasks:user:${userId}` | Set of one user's task IDs.             |
 
 `saveTask`, `getTask`, `listTasks`, and `removeTask` all use these keys consistently. `listTasks({ userId })` uses a Redis pipeline to batch-fetch every task in the user's set.
 
@@ -77,7 +77,9 @@ const context = AgentContext.fromJSON({
   username: "system",
   nickname: "Scheduled Task",
   channel: { id: meta.action.channelId, name: "scheduled" },
-  date: now.toLocaleDateString("en-US", { /* weekday, year, month, day */ }),
+  date: now.toLocaleDateString("en-US", {
+    /* weekday, year, month, day */
+  }),
 });
 ```
 

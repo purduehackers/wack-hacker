@@ -41,11 +41,11 @@ Message updates and voice state updates include the timestamp so a burst of chan
 
 `ConversationStore` (in `src/bot/store.ts`) wraps Redis with three concerns:
 
-| Method                                                | Purpose                                                                                            |
-| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `get/set/delete/touch(channelId, threadId?)`          | Conversation state, keyed by `conversation:${threadId ?? channelId}`, 1h TTL.                      |
-| `dedup(key, ttlMs?)`                                  | Atomic `SET NX PX`. Returns `true` if the key was freshly written. Default TTL 5 min.              |
-| `acquireLock(key, ttlMs?) → token \| null`            | Generates a UUID, atomic `SET NX PX`. Returns the token on success, `null` if held. Default TTL 30s. |
-| `releaseLock(key, token)`                             | Lua script: only deletes if the stored token matches.                                              |
+| Method                                       | Purpose                                                                                              |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `get/set/delete/touch(channelId, threadId?)` | Conversation state, keyed by `conversation:${threadId ?? channelId}`, 1h TTL.                        |
+| `dedup(key, ttlMs?)`                         | Atomic `SET NX PX`. Returns `true` if the key was freshly written. Default TTL 5 min.                |
+| `acquireLock(key, ttlMs?) → token \| null`   | Generates a UUID, atomic `SET NX PX`. Returns the token on success, `null` if held. Default TTL 30s. |
+| `releaseLock(key, token)`                    | Lua script: only deletes if the stored token matches.                                                |
 
 The state-key rule (thread first, channel second) ensures parallel threads under the same parent channel don't collide. The caller never picks the lock token — `acquireLock` generates it internally and gives it back.

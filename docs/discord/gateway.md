@@ -12,8 +12,8 @@
 The relevant constants live at the top of `gateway.ts`:
 
 ```ts
-const HOLD_MS         = 10 * 60 * 1000;
-const LEASE_TTL_MS    = 15_000;
+const HOLD_MS = 10 * 60 * 1000;
+const LEASE_TTL_MS = 15_000;
 const POLL_INTERVAL_MS = 5_000;
 const HANDOFF_WAIT_MS = 8_000;
 ```

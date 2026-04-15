@@ -19,14 +19,14 @@ loadSkill and the listed tools become active.
 
 ## Frontmatter fields
 
-| Field         | Meaning                                                                                                       |
-| ------------- | ------------------------------------------------------------------------------------------------------------- |
+| Field         | Meaning                                                                                                        |
+| ------------- | -------------------------------------------------------------------------------------------------------------- |
 | `name`        | Stable identifier; matches the directory name.                                                                 |
 | `description` | One-line summary; used in the orchestrator's delegation tool description and in `{{SKILL_MENU}}`.              |
-| `criteria`    | Plain English describing when this skill should be picked. Helps the model route correctly.                   |
-| `tools`       | Array of tool names this skill unlocks. Names must match the actual tool exports in `src/lib/ai/tools/`.      |
-| `minRole`     | Lowest role that can see this skill: `public`, `organizer`, or `admin`.                                       |
-| `mode`        | `delegate` (top-level domains only — wrapped in a delegation tool) or `inline` (sub-skills inside a subagent).|
+| `criteria`    | Plain English describing when this skill should be picked. Helps the model route correctly.                    |
+| `tools`       | Array of tool names this skill unlocks. Names must match the actual tool exports in `src/lib/ai/tools/`.       |
+| `minRole`     | Lowest role that can see this skill: `public`, `organizer`, or `admin`.                                        |
+| `mode`        | `delegate` (top-level domains only — wrapped in a delegation tool) or `inline` (sub-skills inside a subagent). |
 
 The body is plain markdown. For a domain's top-level `SKILL.md`, you can include `{{SKILL_MENU}}` anywhere — the registry will substitute the role-filtered list of available sub-skills at runtime.
 

@@ -19,6 +19,12 @@ export interface Attachment {
   contentType?: string;
 }
 
+export interface RecentMessage {
+  author: string;
+  content: string;
+  timestamp: string;
+}
+
 export interface SerializedAgentContext {
   userId: string;
   username: string;
@@ -28,6 +34,7 @@ export interface SerializedAgentContext {
   date: string;
   attachments?: Attachment[];
   memberRoles?: string[];
+  recentMessages?: RecentMessage[];
 }
 
 export interface SubagentSpec {

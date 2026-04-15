@@ -4,12 +4,12 @@ Wack Hacker deploys to Vercel as a Next.js App Router project running on Fluid C
 
 ## Contents
 
-| Doc                                      | Topic                                                                                      |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------ |
-| [vercel.ts](./vercel-config.md)          | The typed project config: framework, cron, queue triggers, `maxDuration`.                  |
-| [Functions and routes](./functions.md)   | How Next.js route files compile into Vercel Functions, and which route does what.          |
-| [Environment variables](./env.md)        | Validation in `src/env.ts`, local pulling, grouping by purpose.                             |
-| [Build pipeline](./build.md)             | What `bun run build` actually does and in what order.                                       |
+| Doc                                    | Topic                                                                             |
+| -------------------------------------- | --------------------------------------------------------------------------------- |
+| [vercel.ts](./vercel-config.md)        | The typed project config: framework, cron, queue triggers, `maxDuration`.         |
+| [Functions and routes](./functions.md) | How Next.js route files compile into Vercel Functions, and which route does what. |
+| [Environment variables](./env.md)      | Validation in `src/env.ts`, local pulling, grouping by purpose.                   |
+| [Build pipeline](./build.md)           | What `bun run build` actually does and in what order.                             |
 
 ## Deploying
 
