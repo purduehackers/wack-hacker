@@ -132,14 +132,14 @@ See [Agents](./agents/README.md) for the full breakdown.
 
 ## Storage and platform
 
-| Service          | Purpose                                                                 |
-| ---------------- | ----------------------------------------------------------------------- |
-| AI Gateway       | `anthropic/claude-sonnet-4.6` (orchestrator) and `anthropic/claude-haiku-4.5` (subagents); routing, observability, model fallbacks |
-| Upstash Redis    | `ConversationStore`, dedup keys, per-channel locks, task registry        |
-| Turso (libSQL)   | Privacy preferences, ship submissions                                    |
-| Cloudflare R2    | Hack night event archives, ship uploads                                  |
-| Vercel Edge Config | Hack night `version` key (used by the `/init-hn` command)              |
-| Vercel Queues    | `discord-events` (gateway → consumer), `tasks` (scheduling)              |
+| Service            | Purpose                                                                                                                            |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| AI Gateway         | `anthropic/claude-sonnet-4.6` (orchestrator) and `anthropic/claude-haiku-4.5` (subagents); routing, observability, model fallbacks |
+| Upstash Redis      | `ConversationStore`, dedup keys, per-channel locks, task registry                                                                  |
+| Turso (libSQL)     | Privacy preferences, ship submissions                                                                                              |
+| Cloudflare R2      | Hack night event archives, ship uploads                                                                                            |
+| Vercel Edge Config | Hack night `version` key (used by the `/init-hn` command)                                                                          |
+| Vercel Queues      | `discord-events` (gateway → consumer), `tasks` (scheduling)                                                                        |
 
 ## Where things live
 

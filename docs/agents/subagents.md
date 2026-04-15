@@ -15,22 +15,22 @@ toModelOutput: ({ output }) => {
   const message = output as UIMessage | undefined;
   const lastText = message?.parts.findLast(isTextUIPart);
   return { type: "text", value: lastText?.text ?? "Task completed." };
-}
+};
 ```
 
-This is what actually goes into the orchestrator's message history — the full subagent transcript is *not* persisted, keeping the top-level context lean.
+This is what actually goes into the orchestrator's message history — the full subagent transcript is _not_ persisted, keeping the top-level context lean.
 
 ## Subagent configuration
 
-| Field         | Value                                                                                                      |
-| ------------- | ---------------------------------------------------------------------------------------------------------- |
-| Model         | `SUBAGENT_MODEL` constant in `src/lib/ai/constants.ts`, currently `anthropic/claude-haiku-4.5`             |
-| Instructions  | `SUBAGENT_PREAMBLE` + the domain's `SKILL.md` body, with `{{SKILL_MENU}}` substituted                      |
-| Tools         | All domain tools + `loadSkill`, then run through `filterAdmin(allTools)` when role is not admin            |
-| `activeTools` | Initially `[...spec.baseToolNames, "loadSkill"]` — discovery tools plus the always-present `loadSkill`     |
+| Field         | Value                                                                                                               |
+| ------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Model         | `SUBAGENT_MODEL` constant in `src/lib/ai/constants.ts`, currently `anthropic/claude-haiku-4.5`                      |
+| Instructions  | `SUBAGENT_PREAMBLE` + the domain's `SKILL.md` body, with `{{SKILL_MENU}}` substituted                               |
+| Tools         | All domain tools + `loadSkill`, then run through `filterAdmin(allTools)` when role is not admin                     |
+| `activeTools` | Initially `[...spec.baseToolNames, "loadSkill"]` — discovery tools plus the always-present `loadSkill`              |
 | `prepareStep` | Re-computes `activeTools` every step by scanning previous `loadSkill` calls — see [Skills](../skills/disclosure.md) |
-| `stopWhen`    | `stepCountIs(15)` — hard cap on tool calls per delegation                                                  |
-| Telemetry     | `experimental_telemetry: { isEnabled: true, functionId: "subagent.<name>", metadata: { role, subagent } }` |
+| `stopWhen`    | `stepCountIs(15)` — hard cap on tool calls per delegation                                                           |
+| Telemetry     | `experimental_telemetry: { isEnabled: true, functionId: "subagent.<name>", metadata: { role, subagent } }`          |
 
 ## SubagentSpec
 

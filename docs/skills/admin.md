@@ -23,8 +23,12 @@ import { z } from "zod";
 export const dangerous_tool = admin(
   tool({
     description: "...",
-    inputSchema: z.object({ /* ... */ }),
-    execute: async (input) => { /* ... */ },
+    inputSchema: z.object({
+      /* ... */
+    }),
+    execute: async (input) => {
+      /* ... */
+    },
   }),
 );
 ```

@@ -20,14 +20,14 @@ What the workflow does, top to bottom:
 2. Calls `runTurn(channelId, content, context)` for the initial turn. `runTurn` is marked `"use step"` and just delegates to `streamTurn` (see [Agents § streaming](../agents/streaming.md)).
 3. Opens a hook via `createHook<ChatHookEvent>({ token: workflowRunId })`. The hook accepts events of shape:
 
-    ```ts
-    interface ChatHookEvent {
-      type: "message" | "done";
-      content: string;
-      authorId: string;
-      authorUsername: string;
-    }
-    ```
+   ```ts
+   interface ChatHookEvent {
+     type: "message" | "done";
+     content: string;
+     authorId: string;
+     authorUsername: string;
+   }
+   ```
 
 4. Enters `for await (const event of hook)`, which **suspends** the workflow until something calls `resumeHook(workflowRunId, event)` from the outside.
 5. Each resumed message triggers another `runTurn`. A `"done"` event (or hook expiration) ends the loop.

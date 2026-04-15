@@ -21,8 +21,8 @@ GATEWAY_THREAD_CREATE             ThreadCreatePacket
 `PacketSchema` is the discriminated union, and `PacketCodec` is a `z.codec(z.string(), PacketSchema, ...)` that transparently handles the `timestamp` `Date` rehydration on decode:
 
 ```ts
-PacketCodec.encode(packet)  // → JSON string
-PacketCodec.decode(rawJson) // → Packet (timestamp is a Date, not a string)
+PacketCodec.encode(packet); // → JSON string
+PacketCodec.decode(rawJson); // → Packet (timestamp is a Date, not a string)
 ```
 
 Both ends of the queue use this — the gateway listener calls `encode` before `send(DISCORD_EVENT_TOPIC, ...)`, and the inbound consumer calls `decode` before dispatching to the router.
