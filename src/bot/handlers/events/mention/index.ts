@@ -35,16 +35,16 @@ async function fetchRecentMessages(
 
     for (let i = filtered.length - 1; i >= 0; i--) {
       const m = filtered[i];
-      if (totalChars + m.content.length > MAX_TOTAL_CHARS) break;
-      totalChars += m.content.length;
-      messages.unshift({
-        author: (m.author as any).global_name ?? m.author.username,
-        content: m.content,
-        timestamp: new Date(m.timestamp).toLocaleTimeString("en-US", {
-          hour: "numeric",
-          minute: "2-digit",
-        }),
+      const author = (m.author as any).global_name ?? m.author.username;
+      const timestamp = new Date(m.timestamp).toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
       });
+      // Budget accounts for the rendered line: "[timestamp] author: content\n"
+      const lineLength = timestamp.length + author.length + m.content.length + 5;
+      if (totalChars + lineLength > MAX_TOTAL_CHARS) continue;
+      totalChars += lineLength;
+      messages.unshift({ author, content: m.content, timestamp });
     }
 
     return messages.length > 0 ? messages : undefined;
