@@ -10,18 +10,19 @@ Once a delegation tool fires, the subagent looks like this:
 2. **Step N**: model calls `loadSkill("<name>")`.
 3. **`loader.ts`** (`createLoadSkillTool`) returns the skill body wrapped in XML:
 
-    ```xml
-    <skill name="...">
-    <description>...</description>
-    <criteria>...</criteria>
-    <instructions>
-    ...the markdown body...
-    </instructions>
-    <tools>tool1, tool2, ...</tools>
-    </skill>
-    ```
+   ```xml
+   <skill name="...">
+   <description>...</description>
+   <criteria>...</criteria>
+   <instructions>
+   ...the markdown body...
+   </instructions>
+   <tools>tool1, tool2, ...</tools>
+   </skill>
+   ```
 
-    If the skill doesn't exist or the role is too low, it returns an error string listing the available skill names instead — the model can see what went wrong and retry.
+   If the skill doesn't exist or the role is too low, it returns an error string listing the available skill names instead — the model can see what went wrong and retry.
+
 4. **`prepareStep`** runs before step N+1. It calls `computeActiveTools({ steps, registry, role, baseToolNames })` (`runtime.ts`), which scans the step history for every prior `loadSkill` call, resolves each skill name against the registry, and unions the resulting tool names with `baseToolNames`. If no skills have been loaded yet, `computeActiveTools` returns `undefined` and the subagent stays on the initial `activeTools`.
 5. **Step N+1**: the model now sees the newly unlocked tools in its `activeTools` and can call them.
 
@@ -36,7 +37,7 @@ function computeActiveTools<T extends ToolSet>(options: {
   role: UserRole;
   baseToolNames: readonly string[];
   skillToTools?: (skill: SkillBundle) => readonly string[];
-}): string[] | undefined
+}): string[] | undefined;
 ```
 
 The `skillToTools` override exists for tests and hypothetical non-standard skill shapes — in production, `skill.toolNames` is always the answer.
@@ -51,7 +52,7 @@ Inside `createDelegationTool`:
 prepareStep: ({ steps }) => {
   const active = computeActiveTools({ steps, registry, role, baseToolNames });
   return active ? { activeTools: active as ToolKey[] } : undefined;
-}
+};
 ```
 
 Returning `undefined` tells the agent to keep its current `activeTools`, so the initial `[...baseToolNames, "loadSkill"]` sticks until the model actually loads something.

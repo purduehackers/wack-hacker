@@ -6,7 +6,7 @@
 
 ```ts
 const EDIT_INTERVAL_MS = 1500;
-const MAX_LENGTH       = 1900;  // Discord's hard cap is 2000
+const MAX_LENGTH = 1900; // Discord's hard cap is 2000
 ```
 
 The 1.5-second debounce keeps Discord rate-limits happy while still feeling live. The 1900 cap leaves headroom for the `…` truncation suffix.
@@ -32,9 +32,9 @@ The 1.5-second debounce keeps Discord rate-limits happy while still feeling live
 ```ts
 function render(state: { text; activity; subagentPreview }): string {
   const parts = [];
-  if (state.activity)        parts.push(`-# ${state.activity}`);
+  if (state.activity) parts.push(`-# ${state.activity}`);
   if (state.subagentPreview) parts.push(`> ${preview.replaceAll("\n", "\n> ")}`);
-  if (state.text)            parts.push(state.text);
+  if (state.text) parts.push(state.text);
   return truncate(parts.join("\n\n") || "> Thinking...");
 }
 ```

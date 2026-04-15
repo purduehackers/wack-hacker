@@ -2,12 +2,12 @@
 
 `src/lib/ai/orchestrator.ts` exports `createOrchestrator(context: AgentContext)`, which returns a fresh `ToolLoopAgent` per turn.
 
-| Field         | Value                                                                                                                  |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Model         | `anthropic/claude-sonnet-4.6` (via Vercel AI Gateway)                                                                  |
+| Field         | Value                                                                                                                   |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Model         | `anthropic/claude-sonnet-4.6` (via Vercel AI Gateway)                                                                   |
 | System prompt | A static template; `context.buildInstructions()` substitutes `{{DATE}}` and appends an `<execution_context>` YAML block |
-| Tools         | A flat object of base tools + role-filtered delegate tools                                                             |
-| Telemetry     | `experimental_telemetry: { isEnabled: true, functionId: "orchestrator", metadata: { role } }`                          |
+| Tools         | A flat object of base tools + role-filtered delegate tools                                                              |
+| Telemetry     | `experimental_telemetry: { isEnabled: true, functionId: "orchestrator", metadata: { role } }`                           |
 
 The orchestrator is **flat**: all tools are visible from the start. There is no `prepareStep`, no `activeTools`, no skill gating. Every call to `createOrchestrator` builds a brand new agent, so any state you want across turns has to live in `AgentContext` or the workflow payload, not the agent itself.
 

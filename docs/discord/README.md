@@ -20,14 +20,14 @@ Crons are a third path entirely: `vercel.ts` schedules `GET /api/crons/:name`, w
 
 ## Contents
 
-| Doc | Topic |
-| --- | ----- |
-| [Gateway leader election](./gateway.md) | The `/api/discord/gateway` route, Redis-based leader election, the cron that keeps it alive. |
-| [EventRouter](./event-router.md) | The fluent dispatcher that fans packets out to handlers, including the mention-vs-message ordering. |
-| [Inbound consumer](./inbound.md) | Queue consumer, dedup, per-channel locking, retry policy, and the `ConversationStore` API. |
-| [Resuming a chat workflow](./chat-resume.md) | How both mention and message handlers feed messages back into a running `chatWorkflow`. |
-| [Writing handlers](./handlers.md) | `defineCommand`, `defineComponent`, `defineEvent`, `defineCron` — how to wire up each handler type. |
-| [Protocol](./protocol.md) | Packet schema, codec, and interaction signature verification. |
+| Doc                                          | Topic                                                                                               |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| [Gateway leader election](./gateway.md)      | The `/api/discord/gateway` route, Redis-based leader election, the cron that keeps it alive.        |
+| [EventRouter](./event-router.md)             | The fluent dispatcher that fans packets out to handlers, including the mention-vs-message ordering. |
+| [Inbound consumer](./inbound.md)             | Queue consumer, dedup, per-channel locking, retry policy, and the `ConversationStore` API.          |
+| [Resuming a chat workflow](./chat-resume.md) | How both mention and message handlers feed messages back into a running `chatWorkflow`.             |
+| [Writing handlers](./handlers.md)            | `defineCommand`, `defineComponent`, `defineEvent`, `defineCron` — how to wire up each handler type. |
+| [Protocol](./protocol.md)                    | Packet schema, codec, and interaction signature verification.                                       |
 
 ## Common gotchas
 

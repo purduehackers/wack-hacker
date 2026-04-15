@@ -1,33 +1,33 @@
 {
   "name": "@purduehackers/wack-hacker",
   "version": "0.1.0",
-  "description": "AI-powered Discord bot for Purdue Hackers. Coordinates specialized subagents to manage Discord, GitHub, Linear, and Notion from Discord threads.",
-  "license": "MIT",
-  "type": "module",
   "private": true,
+  "description": "AI-powered Discord bot for Purdue Hackers. Coordinates specialized subagents to manage Discord, GitHub, Linear, and Notion from Discord threads.",
+  "keywords": [
+    "ai",
+    "ai-agent",
+    "ai-sdk",
+    "discord",
+    "discord-bot",
+    "nextjs",
+    "purdue-hackers",
+    "vercel",
+    "workflow-devkit"
+  ],
   "homepage": "https://github.com/purduehackers/wack-hacker#readme",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/purduehackers/wack-hacker.git"
-  },
   "bugs": {
     "url": "https://github.com/purduehackers/wack-hacker/issues"
   },
+  "license": "MIT",
   "author": "Purdue Hackers (https://purduehackers.com)",
   "contributors": [
     "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
   ],
-  "keywords": [
-    "discord",
-    "discord-bot",
-    "ai",
-    "ai-agent",
-    "purdue-hackers",
-    "nextjs",
-    "vercel",
-    "ai-sdk",
-    "workflow-devkit"
-  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/purduehackers/wack-hacker.git"
+  },
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "bun scripts/compile-skills.ts && next build && bun scripts/register-commands.ts",
@@ -38,7 +38,8 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:coverage": "vitest run --coverage",
     "validate": "bun run typecheck && bun run lint && bun run test",
-    "knip": "knip"
+    "knip": "knip",
+    "prepare": "husky"
   },
   "dependencies": {
     "@ai-sdk/groq": "^3.0.35",
@@ -86,13 +87,24 @@
     "@typescript/native-preview": "^7.0.0-dev.20260414.1",
     "@vercel/config": "^0.1.1",
     "@vitest/coverage-istanbul": "^4.1.4",
+    "husky": "^9.1.7",
     "knip": "^6.4.1",
+    "lint-staged": "^16.4.0",
     "oxclippy": "^0.2.0",
     "oxfmt": "^0.45.0",
     "oxlint": "^1.60.0",
     "oxlint-tsgolint": "^0.21.0",
     "vitest": "^4.1.4",
     "yaml": "^2.8.3"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "oxfmt",
+      "oxlint --type-aware"
+    ],
+    "*.{json,jsonc}": [
+      "oxfmt"
+    ]
   },
   "engines": {
     "bun": "^1.3.10"
