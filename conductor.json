@@ -1,0 +1,7 @@
+{
+  "scripts": {
+    "setup": "bun install",
+    "run": "vc dev",
+    "archive": "rm -rf node_modules"
+  }
+}
