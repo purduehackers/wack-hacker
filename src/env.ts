@@ -33,6 +33,8 @@ export const env = createEnv({
     KV_REST_API_TOKEN: z.string(),
     VERCEL_API_TOKEN: z.string(),
     VERCEL_EDGE_CONFIG_ID: z.string(),
+    FIGMA_ACCESS_TOKEN: z.string(),
+    FIGMA_TEAM_ID: z.string(),
     SENTRY_DSN: z.string().optional(),
   },
   extends: [vercel()],
