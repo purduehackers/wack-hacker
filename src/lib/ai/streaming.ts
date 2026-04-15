@@ -26,10 +26,10 @@ export function formatFooter(meta: {
   return `-# ${parts.join(" · ")}`;
 }
 
-function truncateWithFooter(text: string, footer: string): string {
+export function truncateWithFooter(text: string, footer: string): string {
   const separator = "\n\n";
   const available = MAX_LENGTH - footer.length - separator.length;
-  const body = text.length > available ? text.slice(0, available) + "…" : text;
+  const body = text.length > available ? text.slice(0, available - 1) + "…" : text;
   return body + separator + footer;
 }
 
@@ -60,6 +60,27 @@ export function buildPrompt(content: string, attachments?: Attachment[]) {
   }
 
   return { messages: [{ role: "user" as const, content: userContent }] };
+}
+
+/** Collect metadata from the stream result and build the footer string. */
+async function buildFooter(
+  result: { totalUsage: PromiseLike<{ totalTokens?: number }>; steps: PromiseLike<{ toolCalls: unknown[] }[]> },
+  elapsedMs: number,
+  subagentMetrics: SubagentMetrics,
+): Promise<string> {
+  try {
+    const [totalUsage, steps] = await Promise.all([result.totalUsage, result.steps]);
+    const orchestratorToolCalls = steps.reduce((sum, step) => sum + step.toolCalls.length, 0);
+    return formatFooter({
+      elapsedMs,
+      totalTokens: (totalUsage.totalTokens ?? 0) + subagentMetrics.totalTokens,
+      toolCallCount: orchestratorToolCalls + subagentMetrics.toolCallCount,
+      stepCount: steps.length,
+    });
+  } catch (err) {
+    log.warn("streaming", `Failed to collect metadata: ${String(err)}`);
+    return formatFooter({ elapsedMs, totalTokens: undefined, toolCallCount: 0, stepCount: 0 });
+  }
 }
 
 /** Extract the latest text from a subagent's UIMessage for inline preview. */
@@ -150,14 +171,7 @@ export async function streamTurn(
   }
 
   const elapsedMs = Date.now() - startTime;
-  const [totalUsage, steps] = await Promise.all([result.totalUsage, result.steps]);
-  const orchestratorToolCalls = steps.reduce((sum, step) => sum + step.toolCalls.length, 0);
-  const footer = formatFooter({
-    elapsedMs,
-    totalTokens: (totalUsage.totalTokens ?? 0) + subagentMetrics.totalTokens,
-    toolCallCount: orchestratorToolCalls + subagentMetrics.toolCallCount,
-    stepCount: steps.length,
-  });
+  const footer = await buildFooter(result, elapsedMs, subagentMetrics);
 
   const finalText = state.text || "I didn't have anything to say.";
   const final = truncateWithFooter(finalText, footer);
@@ -168,10 +182,7 @@ export async function streamTurn(
     await discord.channels.createMessage(channelId, { content: final });
   }
 
-  log.info(
-    "streaming",
-    `Turn complete, ${state.text.length} chars, ${totalUsage.totalTokens ?? "?"} tokens, ${elapsedMs}ms`,
-  );
+  log.info("streaming", `Turn complete, ${state.text.length} chars, ${elapsedMs}ms`);
 
   return { text: state.text };
 }

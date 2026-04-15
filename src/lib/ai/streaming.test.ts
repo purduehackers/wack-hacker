@@ -2,7 +2,13 @@ import { describe, it, expect, vi } from "vitest";
 
 import { createMockAPI, asAPI, messagePacket } from "../test/fixtures/index.ts";
 import { AgentContext } from "./context.ts";
-import { truncate, buildPrompt, streamTurn, formatFooter } from "./streaming.ts";
+import {
+  truncate,
+  truncateWithFooter,
+  buildPrompt,
+  streamTurn,
+  formatFooter,
+} from "./streaming.ts";
 
 function mockOrchestrator(
   textChunks: string[],
@@ -238,5 +244,30 @@ describe("formatFooter", () => {
     expect(
       formatFooter({ elapsedMs: 500, totalTokens: undefined, toolCallCount: 0, stepCount: 1 }),
     ).toBe("-# 0.5s");
+  });
+});
+
+describe("truncateWithFooter", () => {
+  const footer = "-# 1.0s · 100 tokens";
+
+  it("appends footer to short text", () => {
+    const result = truncateWithFooter("Hello!", footer);
+    expect(result).toBe(`Hello!\n\n${footer}`);
+  });
+
+  it("truncates body when text + footer exceeds limit", () => {
+    const longText = "a".repeat(1900);
+    const result = truncateWithFooter(longText, footer);
+    expect(result.length).toBeLessThanOrEqual(1900);
+    expect(result).toContain("…");
+    expect(result.endsWith(`\n\n${footer}`)).toBe(true);
+  });
+
+  it("preserves text exactly at available limit", () => {
+    const available = 1900 - footer.length - 2; // 2 for "\n\n"
+    const text = "a".repeat(available);
+    const result = truncateWithFooter(text, footer);
+    expect(result).toBe(`${text}\n\n${footer}`);
+    expect(result.length).toBe(1900);
   });
 });
