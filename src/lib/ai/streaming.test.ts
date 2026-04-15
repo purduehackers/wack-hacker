@@ -145,7 +145,7 @@ describe("buildPrompt", () => {
   });
 });
 
-describe("streamTurn", () => {
+describe("streamTurn: basic streaming", () => {
   it("streams text and edits discord message", async () => {
     const discord = createMockAPI();
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
@@ -205,6 +205,26 @@ describe("streamTurn", () => {
     vi.restoreAllMocks();
   });
 
+  it("uses fallback text when stream produces no content", async () => {
+    const orchestrator = await import("./orchestrator");
+    vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue(mockOrchestrator([]) as any);
+
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    const result = await streamTurn(asAPI(discord), "ch-1", "hello", ctx.toJSON());
+
+    expect(result.text).toBe("");
+    const edits = discord.callsTo("channels.editMessage");
+    const lastEdit = edits[edits.length - 1];
+    const body = lastEdit[2] as { content: string };
+    expect(body.content).toContain("I didn't have anything to say.");
+    expect(body.content).toMatch(/-# .+s/);
+
+    vi.restoreAllMocks();
+  });
+});
+
+describe("streamTurn: tool events and metadata", () => {
   it("shows tool activity for tool-input-start events", async () => {
     const orchestrator = await import("./orchestrator");
     vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue(
@@ -286,24 +306,6 @@ describe("streamTurn", () => {
     const body = lastEdit[2] as { content: string };
     // Should still have a footer with just time, no tokens/tools
     expect(body.content).toMatch(/-# \d+\.\ds$/);
-
-    vi.restoreAllMocks();
-  });
-
-  it("uses fallback text when stream produces no content", async () => {
-    const orchestrator = await import("./orchestrator");
-    vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue(mockOrchestrator([]) as any);
-
-    const discord = createMockAPI();
-    const ctx = AgentContext.fromPacket(messagePacket("hello"));
-    const result = await streamTurn(asAPI(discord), "ch-1", "hello", ctx.toJSON());
-
-    expect(result.text).toBe("");
-    const edits = discord.callsTo("channels.editMessage");
-    const lastEdit = edits[edits.length - 1];
-    const body = lastEdit[2] as { content: string };
-    expect(body.content).toContain("I didn't have anything to say.");
-    expect(body.content).toMatch(/-# .+s/);
 
     vi.restoreAllMocks();
   });
