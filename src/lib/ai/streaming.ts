@@ -3,13 +3,38 @@ import type { API } from "@discordjs/core/http-only";
 import { isTextUIPart, type UIMessage } from "ai";
 import { log } from "evlog";
 
-import type { SerializedAgentContext, Attachment } from "./types.ts";
+import type { SerializedAgentContext, Attachment, SubagentMetrics } from "./types.ts";
 
 import { AgentContext } from "./context.ts";
 import { createOrchestrator } from "./orchestrator.ts";
 
 const EDIT_INTERVAL_MS = 1500;
 const MAX_LENGTH = 1900;
+
+interface FooterMeta {
+  elapsedMs: number;
+  totalTokens: number | undefined;
+  toolCallCount: number;
+  stepCount: number;
+}
+
+export function formatFooter({ elapsedMs, totalTokens, toolCallCount, stepCount }: FooterMeta) {
+  const parts = [`${(elapsedMs / 1000).toFixed(1)}s`];
+
+  if (totalTokens != null) parts.push(`${totalTokens.toLocaleString("en-US")} tokens`);
+  if (toolCallCount === 1) parts.push("1 tool call");
+  else if (toolCallCount > 1) parts.push(`${toolCallCount} tool calls`);
+  if (stepCount > 1) parts.push(`${stepCount} steps`);
+
+  return `-# ${parts.join(" · ")}`;
+}
+
+export function truncateWithFooter(text: string, footer: string): string {
+  const separator = "\n\n";
+  const available = MAX_LENGTH - footer.length - separator.length;
+  const body = text.length > available ? text.slice(0, available - 1) + "…" : text;
+  return body + separator + footer;
+}
 
 export function truncate(text: string): string {
   return text.length > MAX_LENGTH ? text.slice(0, MAX_LENGTH) + "…" : text;
@@ -62,19 +87,21 @@ export async function streamTurn(
   serializedContext: SerializedAgentContext,
 ): Promise<{ text: string }> {
   const agentCtx = AgentContext.fromJSON(serializedContext);
-  const agent = createOrchestrator(agentCtx);
+  const subagentMetrics: SubagentMetrics = { totalTokens: 0, toolCallCount: 0 };
+  const agent = createOrchestrator(agentCtx, subagentMetrics);
   const msg = await discord.channels.createMessage(channelId, { content: "> Thinking..." });
 
   log.info("streaming", `Turn started in ${channelId}`);
 
+  const startTime = Date.now();
   const result = await agent.stream(buildPrompt(content, agentCtx.attachments));
 
   const state = { text: "", activity: null as string | null, subagentPreview: "" };
   let lastEdit = Date.now();
   let lastRendered = "> Thinking...";
 
-  const flush = async (force = false) => {
-    if (!force && Date.now() - lastEdit < EDIT_INTERVAL_MS) return;
+  const flush = async () => {
+    if (Date.now() - lastEdit < EDIT_INTERVAL_MS) return;
     const content = render(state);
     if (content === lastRendered) return;
     lastEdit = Date.now();
@@ -94,17 +121,14 @@ export async function streamTurn(
         state.subagentPreview = "";
         await flush();
         break;
-
       case "tool-input-start":
         state.activity = `Calling \`${event.toolName}\`...`;
         state.subagentPreview = "";
         await flush();
         break;
-
-      case "tool-result": {
+      case "tool-result":
         // Subagent delegation tools yield UIMessage snapshots as preliminary
-        // results. Pull out the latest text so the user sees subagent progress
-        // inline while the parent waits for the final output.
+        // results. Pull out the latest text so the user sees subagent progress.
         if (event.preliminary && event.output && typeof event.output === "object") {
           const preview = previewSubagentText(event.output as UIMessage);
           if (preview) {
@@ -112,21 +136,33 @@ export async function streamTurn(
             await flush();
           }
         } else {
-          // Non-preliminary tool result — tool finished. Clear the activity
-          // line so the next step's text delta has a clean slate.
           state.activity = null;
           state.subagentPreview = "";
         }
         break;
-      }
-
       default:
         break;
     }
   }
 
+  const elapsedMs = Date.now() - startTime;
+  let footer: string;
+  try {
+    const [totalUsage, steps] = await Promise.all([result.totalUsage, result.steps]);
+    const orchestratorToolCalls = steps.reduce((sum, step) => sum + step.toolCalls.length, 0);
+    footer = formatFooter({
+      elapsedMs,
+      totalTokens: (totalUsage.totalTokens ?? 0) + subagentMetrics.totalTokens,
+      toolCallCount: orchestratorToolCalls + subagentMetrics.toolCallCount,
+      stepCount: steps.length,
+    });
+  } catch (err) {
+    log.warn("streaming", `Failed to collect metadata: ${String(err)}`);
+    footer = formatFooter({ elapsedMs, totalTokens: undefined, toolCallCount: 0, stepCount: 0 });
+  }
+
   const finalText = state.text || "I didn't have anything to say.";
-  const final = truncate(finalText);
+  const final = truncateWithFooter(finalText, footer);
   try {
     await discord.channels.editMessage(channelId, msg.id, { content: final });
   } catch (err) {
@@ -134,7 +170,7 @@ export async function streamTurn(
     await discord.channels.createMessage(channelId, { content: final });
   }
 
-  log.info("streaming", `Turn complete, ${state.text.length} chars`);
+  log.info("streaming", `Turn complete, ${state.text.length} chars, ${elapsedMs}ms`);
 
   return { text: state.text };
 }

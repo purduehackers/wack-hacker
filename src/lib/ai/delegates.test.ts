@@ -50,7 +50,7 @@ vi.mock("@/lib/ai/tools/notion", () => ({}));
 
 // Stub createDelegationTool so we can see what spec each domain was passed.
 vi.mock("@/lib/ai/subagent", () => ({
-  createDelegationTool: vi.fn((spec: unknown, role: unknown) => ({
+  createDelegationTool: vi.fn((spec: unknown, role: unknown, _metrics: unknown) => ({
     __marker: "delegation-tool",
     spec,
     role,
@@ -64,32 +64,32 @@ const createDelegationToolMock = vi.mocked(createDelegationTool);
 describe("buildDelegationTools", () => {
   it("returns an empty set for public users (all delegate skills are gated above public)", () => {
     createDelegationToolMock.mockClear();
-    const tools = buildDelegationTools(UserRole.Public);
+    const tools = buildDelegationTools(UserRole.Public, { totalTokens: 0, toolCallCount: 0 });
     expect(tools).toEqual({});
     expect(createDelegationToolMock).not.toHaveBeenCalled();
   });
 
   it("exposes only organizer-accessible delegate skills to organizers", () => {
     createDelegationToolMock.mockClear();
-    const tools = buildDelegationTools(UserRole.Organizer);
+    const tools = buildDelegationTools(UserRole.Organizer, { totalTokens: 0, toolCallCount: 0 });
     expect(Object.keys(tools).sort()).toEqual(["delegate_linear"]);
   });
 
   it("exposes every delegate skill to admins", () => {
     createDelegationToolMock.mockClear();
-    const tools = buildDelegationTools(UserRole.Admin);
+    const tools = buildDelegationTools(UserRole.Admin, { totalTokens: 0, toolCallCount: 0 });
     expect(Object.keys(tools).sort()).toEqual(["delegate_github", "delegate_linear"]);
   });
 
   it("skips inline-mode skills even when the role qualifies", () => {
     createDelegationToolMock.mockClear();
-    const tools = buildDelegationTools(UserRole.Admin);
+    const tools = buildDelegationTools(UserRole.Admin, { totalTokens: 0, toolCallCount: 0 });
     expect(tools).not.toHaveProperty("delegate_discord");
   });
 
   it("passes the skill description and instructions through to createDelegationTool", () => {
     createDelegationToolMock.mockClear();
-    buildDelegationTools(UserRole.Admin);
+    buildDelegationTools(UserRole.Admin, { totalTokens: 0, toolCallCount: 0 });
 
     const linearCall = createDelegationToolMock.mock.calls.find(
       ([spec]) => (spec as { description: string }).description === "Linear delegate",

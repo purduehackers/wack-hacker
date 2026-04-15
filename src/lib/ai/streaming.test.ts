@@ -2,18 +2,53 @@ import { describe, it, expect, vi } from "vitest";
 
 import { createMockAPI, asAPI, messagePacket } from "../test/fixtures/index.ts";
 import { AgentContext } from "./context.ts";
-import { truncate, buildPrompt, streamTurn } from "./streaming.ts";
+import {
+  truncate,
+  truncateWithFooter,
+  buildPrompt,
+  streamTurn,
+  formatFooter,
+} from "./streaming.ts";
 
-function mockOrchestrator(textChunks: string[]) {
+type StreamEvent = Record<string, unknown>;
+
+function mockOrchestrator(
+  textChunks: string[],
+  options?: {
+    toolCallsPerStep?: number;
+    stepCount?: number;
+    extraEvents?: StreamEvent[];
+    totalUsage?: Promise<unknown>;
+    steps?: Promise<unknown>;
+  },
+) {
+  const stepCount = options?.stepCount ?? 1;
+  const toolCallsPerStep = options?.toolCallsPerStep ?? 0;
   return {
     stream: () =>
       Promise.resolve({
         fullStream: (async function* () {
+          for (const evt of options?.extraEvents ?? []) yield evt;
           for (const text of textChunks) {
             yield { type: "text-delta", text };
           }
           yield { type: "finish" };
         })(),
+        totalUsage:
+          options?.totalUsage ??
+          Promise.resolve({ inputTokens: 100, outputTokens: 50, totalTokens: 150 }),
+        steps:
+          options?.steps ??
+          Promise.resolve(
+            Array.from({ length: stepCount }, (_, i) => ({
+              stepNumber: i,
+              toolCalls: Array.from({ length: toolCallsPerStep }, () => ({
+                type: "tool-call",
+                toolName: "mock",
+                args: {},
+              })),
+            })),
+          ),
       }),
   } as any;
 }
@@ -110,7 +145,7 @@ describe("buildPrompt", () => {
   });
 });
 
-describe("streamTurn", () => {
+describe("streamTurn: basic streaming", () => {
   it("streams text and edits discord message", async () => {
     const discord = createMockAPI();
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
@@ -126,7 +161,9 @@ describe("streamTurn", () => {
     const edits = discord.callsTo("channels.editMessage");
     expect(edits.length).toBeGreaterThanOrEqual(1);
     const lastEdit = edits[edits.length - 1];
-    expect(lastEdit[2]).toEqual({ content: "Hello world!" });
+    const body = lastEdit[2] as { content: string };
+    expect(body.content).toContain("Hello world!");
+    expect(body.content).toMatch(/-# .+s · 150 tokens/);
   });
 
   it("falls back to createMessage when editMessage fails", async () => {
@@ -170,14 +207,7 @@ describe("streamTurn", () => {
 
   it("uses fallback text when stream produces no content", async () => {
     const orchestrator = await import("./orchestrator");
-    vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue({
-      stream: () =>
-        Promise.resolve({
-          fullStream: (async function* () {
-            yield { type: "finish" };
-          })(),
-        }),
-    } as any);
+    vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue(mockOrchestrator([]) as any);
 
     const discord = createMockAPI();
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
@@ -186,8 +216,154 @@ describe("streamTurn", () => {
     expect(result.text).toBe("");
     const edits = discord.callsTo("channels.editMessage");
     const lastEdit = edits[edits.length - 1];
-    expect(lastEdit[2]).toEqual({ content: "I didn't have anything to say." });
+    const body = lastEdit[2] as { content: string };
+    expect(body.content).toContain("I didn't have anything to say.");
+    expect(body.content).toMatch(/-# .+s/);
 
     vi.restoreAllMocks();
+  });
+});
+
+describe("streamTurn: tool events and metadata", () => {
+  it("shows tool activity for tool-input-start events", async () => {
+    const orchestrator = await import("./orchestrator");
+    vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue(
+      mockOrchestrator(["Done."], {
+        extraEvents: [{ type: "tool-input-start", toolName: "search_entities" }],
+      }) as any,
+    );
+
+    const realNow = Date.now;
+    let now = realNow.call(Date);
+    vi.spyOn(Date, "now").mockImplementation(() => {
+      now += 2000;
+      return now;
+    });
+
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    await streamTurn(asAPI(discord), "ch-1", "hello", ctx.toJSON());
+
+    const edits = discord.callsTo("channels.editMessage");
+    const editBodies = edits.map((e) => (e[2] as { content: string }).content);
+    expect(editBodies.some((c) => c.includes("Calling `search_entities`"))).toBe(true);
+
+    vi.restoreAllMocks();
+  });
+
+  it("shows subagent preview for preliminary tool-result events", async () => {
+    const orchestrator = await import("./orchestrator");
+    vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue(
+      mockOrchestrator(["Final answer."], {
+        extraEvents: [
+          { type: "tool-input-start", toolName: "delegate_linear" },
+          {
+            type: "tool-result",
+            preliminary: true,
+            output: {
+              parts: [{ type: "text", text: "Searching Linear..." }],
+            },
+          },
+          { type: "tool-result", preliminary: false, output: null },
+        ],
+      }) as any,
+    );
+
+    const realNow = Date.now;
+    let now = realNow.call(Date);
+    vi.spyOn(Date, "now").mockImplementation(() => {
+      now += 2000;
+      return now;
+    });
+
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    await streamTurn(asAPI(discord), "ch-1", "hello", ctx.toJSON());
+
+    const edits = discord.callsTo("channels.editMessage");
+    const editBodies = edits.map((e) => (e[2] as { content: string }).content);
+    expect(editBodies.some((c) => c.includes("Searching Linear..."))).toBe(true);
+
+    vi.restoreAllMocks();
+  });
+
+  it("falls back to time-only footer when metadata promises reject", async () => {
+    const orchestrator = await import("./orchestrator");
+    vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue(
+      mockOrchestrator(["Response."], {
+        totalUsage: Promise.reject(new Error("usage unavailable")),
+        steps: Promise.reject(new Error("steps unavailable")),
+      }) as any,
+    );
+
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    const result = await streamTurn(asAPI(discord), "ch-1", "hello", ctx.toJSON());
+
+    expect(result.text).toBe("Response.");
+    const edits = discord.callsTo("channels.editMessage");
+    const lastEdit = edits[edits.length - 1];
+    const body = lastEdit[2] as { content: string };
+    // Should still have a footer with just time, no tokens/tools
+    expect(body.content).toMatch(/-# \d+\.\ds$/);
+
+    vi.restoreAllMocks();
+  });
+});
+
+describe("formatFooter", () => {
+  it("shows all metadata when present", () => {
+    expect(
+      formatFooter({ elapsedMs: 3200, totalTokens: 1423, toolCallCount: 4, stepCount: 3 }),
+    ).toBe("-# 3.2s · 1,423 tokens · 4 tool calls · 3 steps");
+  });
+
+  it("omits tool calls when zero", () => {
+    expect(
+      formatFooter({ elapsedMs: 1000, totalTokens: 500, toolCallCount: 0, stepCount: 1 }),
+    ).toBe("-# 1.0s · 500 tokens");
+  });
+
+  it("omits steps when only 1", () => {
+    expect(
+      formatFooter({ elapsedMs: 2500, totalTokens: 800, toolCallCount: 2, stepCount: 1 }),
+    ).toBe("-# 2.5s · 800 tokens · 2 tool calls");
+  });
+
+  it("uses singular for 1 tool call", () => {
+    expect(
+      formatFooter({ elapsedMs: 1000, totalTokens: 100, toolCallCount: 1, stepCount: 2 }),
+    ).toBe("-# 1.0s · 100 tokens · 1 tool call · 2 steps");
+  });
+
+  it("omits tokens when undefined", () => {
+    expect(
+      formatFooter({ elapsedMs: 500, totalTokens: undefined, toolCallCount: 0, stepCount: 1 }),
+    ).toBe("-# 0.5s");
+  });
+});
+
+describe("truncateWithFooter", () => {
+  const footer = "-# 1.0s · 100 tokens";
+
+  it("appends footer to short text", () => {
+    const result = truncateWithFooter("Hello!", footer);
+    expect(result).toBe(`Hello!\n\n${footer}`);
+  });
+
+  it("truncates body when text + footer exceeds limit", () => {
+    const longText = "a".repeat(1900);
+    const result = truncateWithFooter(longText, footer);
+    expect(result.length).toBeLessThanOrEqual(1900);
+    expect(result).toContain("…");
+    expect(result.endsWith(`\n\n${footer}`)).toBe(true);
+  });
+
+  it("preserves text exactly at available limit", () => {
+    const available = 1900 - footer.length - 2; // 2 for "\n\n"
+    const text = "a".repeat(available);
+    const result = truncateWithFooter(text, footer);
+    expect(result).toBe(`${text}\n\n${footer}`);
+    expect(result.length).toBe(1900);
   });
 });
