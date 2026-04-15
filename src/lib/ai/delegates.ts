@@ -6,6 +6,7 @@ import { SKILL_MANIFEST as DISCORD_SUBSKILLS } from "./skills/generated/domains/
 import { SKILL_MANIFEST as GITHUB_SUBSKILLS } from "./skills/generated/domains/github.ts";
 import { SKILL_MANIFEST as LINEAR_SUBSKILLS } from "./skills/generated/domains/linear.ts";
 import { SKILL_MANIFEST as NOTION_SUBSKILLS } from "./skills/generated/domains/notion.ts";
+import { SKILL_MANIFEST as SENTRY_SUBSKILLS } from "./skills/generated/domains/sentry.ts";
 import { SKILL_MANIFEST } from "./skills/generated/manifest.ts";
 import { SkillRegistry } from "./skills/registry.ts";
 import { createDelegationTool } from "./subagent.ts";
@@ -13,6 +14,7 @@ import * as discordTools from "./tools/discord/index.ts";
 import * as githubTools from "./tools/github/index.ts";
 import * as linearTools from "./tools/linear/index.ts";
 import * as notionTools from "./tools/notion/index.ts";
+import * as sentryTools from "./tools/sentry/index.ts";
 
 const DELEGATE_PREFIX = "delegate_";
 
@@ -48,6 +50,11 @@ const DOMAINS = {
     tools: notionTools as unknown as ToolSet,
     subSkills: NOTION_SUBSKILLS,
     baseToolNames: ["search_notion", "retrieve_page", "retrieve_database", "list_users"],
+  },
+  sentry: {
+    tools: sentryTools as unknown as ToolSet,
+    subSkills: SENTRY_SUBSKILLS,
+    baseToolNames: ["list_sentry_projects", "search_sentry_issues", "get_sentry_issue"],
   },
 } as const satisfies Record<
   string,
