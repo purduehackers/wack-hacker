@@ -40,4 +40,4 @@ Your final message MUST contain exactly two sections:
 2. **Answer**: The direct answer to the task, formatted for Discord (markdown links required for any entities you reference).
 `;
 
-export const SUBAGENT_MODEL = process.env.SUBAGENT_MODEL ?? "anthropic/claude-haiku-4.5";
+export const SUBAGENT_MODEL = "anthropic/claude-haiku-4.5";
