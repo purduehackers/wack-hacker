@@ -11,18 +11,21 @@ import { createOrchestrator } from "./orchestrator.ts";
 const EDIT_INTERVAL_MS = 1500;
 const MAX_LENGTH = 1900;
 
-export function formatFooter(meta: {
+interface FooterMeta {
   elapsedMs: number;
   totalTokens: number | undefined;
   toolCallCount: number;
   stepCount: number;
-}): string {
-  const parts: string[] = [];
-  parts.push(`${(meta.elapsedMs / 1000).toFixed(1)}s`);
-  if (meta.totalTokens != null) parts.push(`${meta.totalTokens.toLocaleString("en-US")} tokens`);
-  if (meta.toolCallCount > 0)
-    parts.push(`${meta.toolCallCount} tool call${meta.toolCallCount !== 1 ? "s" : ""}`);
-  if (meta.stepCount > 1) parts.push(`${meta.stepCount} steps`);
+}
+
+export function formatFooter({ elapsedMs, totalTokens, toolCallCount, stepCount }: FooterMeta) {
+  const parts = [`${(elapsedMs / 1000).toFixed(1)}s`];
+
+  if (totalTokens != null) parts.push(`${totalTokens.toLocaleString("en-US")} tokens`);
+  if (toolCallCount === 1) parts.push("1 tool call");
+  else if (toolCallCount > 1) parts.push(`${toolCallCount} tool calls`);
+  if (stepCount > 1) parts.push(`${stepCount} steps`);
+
   return `-# ${parts.join(" · ")}`;
 }
 
@@ -62,30 +65,6 @@ export function buildPrompt(content: string, attachments?: Attachment[]) {
   return { messages: [{ role: "user" as const, content: userContent }] };
 }
 
-/** Collect metadata from the stream result and build the footer string. */
-async function buildFooter(
-  result: {
-    totalUsage: PromiseLike<{ totalTokens?: number }>;
-    steps: PromiseLike<{ toolCalls: unknown[] }[]>;
-  },
-  elapsedMs: number,
-  subagentMetrics: SubagentMetrics,
-): Promise<string> {
-  try {
-    const [totalUsage, steps] = await Promise.all([result.totalUsage, result.steps]);
-    const orchestratorToolCalls = steps.reduce((sum, step) => sum + step.toolCalls.length, 0);
-    return formatFooter({
-      elapsedMs,
-      totalTokens: (totalUsage.totalTokens ?? 0) + subagentMetrics.totalTokens,
-      toolCallCount: orchestratorToolCalls + subagentMetrics.toolCallCount,
-      stepCount: steps.length,
-    });
-  } catch (err) {
-    log.warn("streaming", `Failed to collect metadata: ${String(err)}`);
-    return formatFooter({ elapsedMs, totalTokens: undefined, toolCallCount: 0, stepCount: 0 });
-  }
-}
-
 /** Extract the latest text from a subagent's UIMessage for inline preview. */
 function previewSubagentText(message: UIMessage): string {
   const last = message.parts.findLast(isTextUIPart);
@@ -121,8 +100,8 @@ export async function streamTurn(
   let lastEdit = Date.now();
   let lastRendered = "> Thinking...";
 
-  const flush = async (force = false) => {
-    if (!force && Date.now() - lastEdit < EDIT_INTERVAL_MS) return;
+  const flush = async () => {
+    if (Date.now() - lastEdit < EDIT_INTERVAL_MS) return;
     const content = render(state);
     if (content === lastRendered) return;
     lastEdit = Date.now();
@@ -142,17 +121,14 @@ export async function streamTurn(
         state.subagentPreview = "";
         await flush();
         break;
-
       case "tool-input-start":
         state.activity = `Calling \`${event.toolName}\`...`;
         state.subagentPreview = "";
         await flush();
         break;
-
-      case "tool-result": {
+      case "tool-result":
         // Subagent delegation tools yield UIMessage snapshots as preliminary
-        // results. Pull out the latest text so the user sees subagent progress
-        // inline while the parent waits for the final output.
+        // results. Pull out the latest text so the user sees subagent progress.
         if (event.preliminary && event.output && typeof event.output === "object") {
           const preview = previewSubagentText(event.output as UIMessage);
           if (preview) {
@@ -160,21 +136,30 @@ export async function streamTurn(
             await flush();
           }
         } else {
-          // Non-preliminary tool result — tool finished. Clear the activity
-          // line so the next step's text delta has a clean slate.
           state.activity = null;
           state.subagentPreview = "";
         }
         break;
-      }
-
       default:
         break;
     }
   }
 
   const elapsedMs = Date.now() - startTime;
-  const footer = await buildFooter(result, elapsedMs, subagentMetrics);
+  let footer: string;
+  try {
+    const [totalUsage, steps] = await Promise.all([result.totalUsage, result.steps]);
+    const orchestratorToolCalls = steps.reduce((sum, step) => sum + step.toolCalls.length, 0);
+    footer = formatFooter({
+      elapsedMs,
+      totalTokens: (totalUsage.totalTokens ?? 0) + subagentMetrics.totalTokens,
+      toolCallCount: orchestratorToolCalls + subagentMetrics.toolCallCount,
+      stepCount: steps.length,
+    });
+  } catch (err) {
+    log.warn("streaming", `Failed to collect metadata: ${String(err)}`);
+    footer = formatFooter({ elapsedMs, totalTokens: undefined, toolCallCount: 0, stepCount: 0 });
+  }
 
   const finalText = state.text || "I didn't have anything to say.";
   const final = truncateWithFooter(finalText, footer);
