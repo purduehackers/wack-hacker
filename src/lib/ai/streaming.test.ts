@@ -10,9 +10,18 @@ import {
   formatFooter,
 } from "./streaming.ts";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type StreamEvent = Record<string, any>;
+
 function mockOrchestrator(
   textChunks: string[],
-  options?: { toolCallsPerStep?: number; stepCount?: number },
+  options?: {
+    toolCallsPerStep?: number;
+    stepCount?: number;
+    extraEvents?: StreamEvent[];
+    totalUsage?: Promise<unknown>;
+    steps?: Promise<unknown>;
+  },
 ) {
   const stepCount = options?.stepCount ?? 1;
   const toolCallsPerStep = options?.toolCallsPerStep ?? 0;
@@ -20,28 +29,29 @@ function mockOrchestrator(
     stream: () =>
       Promise.resolve({
         fullStream: (async function* () {
+          for (const evt of options?.extraEvents ?? []) yield evt;
           for (const text of textChunks) {
             yield { type: "text-delta", text };
           }
           yield { type: "finish" };
         })(),
-        totalUsage: Promise.resolve({
-          inputTokens: 100,
-          outputTokens: 50,
-          totalTokens: 150,
-        }),
-        steps: Promise.resolve(
-          Array.from({ length: stepCount }, (_, i) => ({
-            stepNumber: i,
-            toolCalls: Array.from({ length: toolCallsPerStep }, () => ({
-              type: "tool-call",
-              toolName: "mock",
-              args: {},
+        totalUsage:
+          options?.totalUsage ??
+          Promise.resolve({ inputTokens: 100, outputTokens: 50, totalTokens: 150 }),
+        steps:
+          options?.steps ??
+          Promise.resolve(
+            Array.from({ length: stepCount }, (_, i) => ({
+              stepNumber: i,
+              toolCalls: Array.from({ length: toolCallsPerStep }, () => ({
+                type: "tool-call",
+                toolName: "mock",
+                args: {},
+              })),
             })),
-          })),
-        ),
+          ),
       }),
-  } as any;
+  } as any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
 vi.mock("./orchestrator", () => ({
@@ -192,6 +202,91 @@ describe("streamTurn", () => {
 
     expect(result.text).toBe("Hello world!");
     expect(editCount).toBeGreaterThanOrEqual(2);
+
+    vi.restoreAllMocks();
+  });
+
+  it("shows tool activity for tool-input-start events", async () => {
+    const orchestrator = await import("./orchestrator");
+    vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue(
+      mockOrchestrator(["Done."], {
+        extraEvents: [{ type: "tool-input-start", toolName: "search_entities" }],
+      }) as any,
+    );
+
+    const realNow = Date.now;
+    let now = realNow.call(Date);
+    vi.spyOn(Date, "now").mockImplementation(() => {
+      now += 2000;
+      return now;
+    });
+
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    await streamTurn(asAPI(discord), "ch-1", "hello", ctx.toJSON());
+
+    const edits = discord.callsTo("channels.editMessage");
+    const editBodies = edits.map((e) => (e[2] as { content: string }).content);
+    expect(editBodies.some((c) => c.includes("Calling `search_entities`"))).toBe(true);
+
+    vi.restoreAllMocks();
+  });
+
+  it("shows subagent preview for preliminary tool-result events", async () => {
+    const orchestrator = await import("./orchestrator");
+    vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue(
+      mockOrchestrator(["Final answer."], {
+        extraEvents: [
+          { type: "tool-input-start", toolName: "delegate_linear" },
+          {
+            type: "tool-result",
+            preliminary: true,
+            output: {
+              parts: [{ type: "text", text: "Searching Linear..." }],
+            },
+          },
+          { type: "tool-result", preliminary: false, output: null },
+        ],
+      }) as any,
+    );
+
+    const realNow = Date.now;
+    let now = realNow.call(Date);
+    vi.spyOn(Date, "now").mockImplementation(() => {
+      now += 2000;
+      return now;
+    });
+
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    await streamTurn(asAPI(discord), "ch-1", "hello", ctx.toJSON());
+
+    const edits = discord.callsTo("channels.editMessage");
+    const editBodies = edits.map((e) => (e[2] as { content: string }).content);
+    expect(editBodies.some((c) => c.includes("Searching Linear..."))).toBe(true);
+
+    vi.restoreAllMocks();
+  });
+
+  it("falls back to time-only footer when metadata promises reject", async () => {
+    const orchestrator = await import("./orchestrator");
+    vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue(
+      mockOrchestrator(["Response."], {
+        totalUsage: Promise.reject(new Error("usage unavailable")),
+        steps: Promise.reject(new Error("steps unavailable")),
+      }) as any,
+    );
+
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    const result = await streamTurn(asAPI(discord), "ch-1", "hello", ctx.toJSON());
+
+    expect(result.text).toBe("Response.");
+    const edits = discord.callsTo("channels.editMessage");
+    const lastEdit = edits[edits.length - 1];
+    const body = lastEdit[2] as { content: string };
+    // Should still have a footer with just time, no tokens/tools
+    expect(body.content).toMatch(/-# \d+\.\ds$/);
 
     vi.restoreAllMocks();
   });
