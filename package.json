@@ -100,7 +100,7 @@
   "lint-staged": {
     "*.{ts,tsx}": [
       "oxfmt",
-      "oxlint --type-aware"
+      "oxlint"
     ],
     "*.{json,jsonc}": [
       "oxfmt"
