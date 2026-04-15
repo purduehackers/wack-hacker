@@ -56,10 +56,6 @@ thread:
   id: "555555555"
   parent_channel: "#bot-testing"
 date: "Wednesday, April 15, 2026"
-````
-
+```
 </execution_context>
-
-```
-
-```
+````
