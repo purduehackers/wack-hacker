@@ -12,7 +12,6 @@ import { AgentContext } from "@/lib/ai/context";
 import { chatWorkflow } from "@/workflows/chat";
 
 const MAX_RECENT_MESSAGES = 15;
-const MAX_TOTAL_CHARS = 4000;
 
 async function fetchRecentMessages(
   discord: API,
@@ -27,25 +26,17 @@ async function fetchRecentMessages(
     });
 
     // Discord returns newest-first; filter and keep chronological order
-    const filtered = raw.filter((m) => m.author.id !== botUserId && m.content?.trim()).reverse();
-
-    // Prioritize newest messages within the char budget
-    const messages: RecentMessage[] = [];
-    let totalChars = 0;
-
-    for (let i = filtered.length - 1; i >= 0; i--) {
-      const m = filtered[i];
-      const author = (m.author as any).global_name ?? m.author.username;
-      const timestamp = new Date(m.timestamp).toLocaleTimeString("en-US", {
-        hour: "numeric",
-        minute: "2-digit",
-      });
-      // Budget accounts for the rendered line: "[timestamp] author: content\n"
-      const lineLength = timestamp.length + author.length + m.content.length + 5;
-      if (totalChars + lineLength > MAX_TOTAL_CHARS) continue;
-      totalChars += lineLength;
-      messages.unshift({ author, content: m.content, timestamp });
-    }
+    const messages: RecentMessage[] = raw
+      .filter((m) => m.author.id !== botUserId && m.content?.trim())
+      .reverse()
+      .map((m) => ({
+        author: (m.author as any).global_name ?? m.author.username,
+        content: m.content,
+        timestamp: new Date(m.timestamp).toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+      }));
 
     return messages.length > 0 ? messages : undefined;
   } catch (err) {
