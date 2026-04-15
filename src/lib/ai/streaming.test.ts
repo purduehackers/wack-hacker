@@ -146,8 +146,9 @@ describe("streamTurn", () => {
     const edits = discord.callsTo("channels.editMessage");
     expect(edits.length).toBeGreaterThanOrEqual(1);
     const lastEdit = edits[edits.length - 1];
-    expect(lastEdit[2].content).toContain("Hello world!");
-    expect(lastEdit[2].content).toMatch(/-# .+s · 150 tokens/);
+    const body = lastEdit[2] as { content: string };
+    expect(body.content).toContain("Hello world!");
+    expect(body.content).toMatch(/-# .+s · 150 tokens/);
   });
 
   it("falls back to createMessage when editMessage fails", async () => {
@@ -191,9 +192,7 @@ describe("streamTurn", () => {
 
   it("uses fallback text when stream produces no content", async () => {
     const orchestrator = await import("./orchestrator");
-    vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue(
-      mockOrchestrator([]) as any,
-    );
+    vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue(mockOrchestrator([]) as any);
 
     const discord = createMockAPI();
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
@@ -202,8 +201,9 @@ describe("streamTurn", () => {
     expect(result.text).toBe("");
     const edits = discord.callsTo("channels.editMessage");
     const lastEdit = edits[edits.length - 1];
-    expect(lastEdit[2].content).toContain("I didn't have anything to say.");
-    expect(lastEdit[2].content).toMatch(/-# .+s/);
+    const body = lastEdit[2] as { content: string };
+    expect(body.content).toContain("I didn't have anything to say.");
+    expect(body.content).toMatch(/-# .+s/);
 
     vi.restoreAllMocks();
   });
@@ -211,32 +211,32 @@ describe("streamTurn", () => {
 
 describe("formatFooter", () => {
   it("shows all metadata when present", () => {
-    expect(formatFooter({ elapsedMs: 3200, totalTokens: 1423, toolCallCount: 4, stepCount: 3 })).toBe(
-      "-# 3.2s · 1,423 tokens · 4 tool calls · 3 steps",
-    );
+    expect(
+      formatFooter({ elapsedMs: 3200, totalTokens: 1423, toolCallCount: 4, stepCount: 3 }),
+    ).toBe("-# 3.2s · 1,423 tokens · 4 tool calls · 3 steps");
   });
 
   it("omits tool calls when zero", () => {
-    expect(formatFooter({ elapsedMs: 1000, totalTokens: 500, toolCallCount: 0, stepCount: 1 })).toBe(
-      "-# 1.0s · 500 tokens",
-    );
+    expect(
+      formatFooter({ elapsedMs: 1000, totalTokens: 500, toolCallCount: 0, stepCount: 1 }),
+    ).toBe("-# 1.0s · 500 tokens");
   });
 
   it("omits steps when only 1", () => {
-    expect(formatFooter({ elapsedMs: 2500, totalTokens: 800, toolCallCount: 2, stepCount: 1 })).toBe(
-      "-# 2.5s · 800 tokens · 2 tool calls",
-    );
+    expect(
+      formatFooter({ elapsedMs: 2500, totalTokens: 800, toolCallCount: 2, stepCount: 1 }),
+    ).toBe("-# 2.5s · 800 tokens · 2 tool calls");
   });
 
   it("uses singular for 1 tool call", () => {
-    expect(formatFooter({ elapsedMs: 1000, totalTokens: 100, toolCallCount: 1, stepCount: 2 })).toBe(
-      "-# 1.0s · 100 tokens · 1 tool call · 2 steps",
-    );
+    expect(
+      formatFooter({ elapsedMs: 1000, totalTokens: 100, toolCallCount: 1, stepCount: 2 }),
+    ).toBe("-# 1.0s · 100 tokens · 1 tool call · 2 steps");
   });
 
   it("omits tokens when undefined", () => {
-    expect(formatFooter({ elapsedMs: 500, totalTokens: undefined, toolCallCount: 0, stepCount: 1 })).toBe(
-      "-# 0.5s",
-    );
+    expect(
+      formatFooter({ elapsedMs: 500, totalTokens: undefined, toolCallCount: 0, stepCount: 1 }),
+    ).toBe("-# 0.5s");
   });
 });
