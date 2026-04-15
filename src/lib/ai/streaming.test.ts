@@ -10,8 +10,7 @@ import {
   formatFooter,
 } from "./streaming.ts";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type StreamEvent = Record<string, any>;
+type StreamEvent = Record<string, unknown>;
 
 function mockOrchestrator(
   textChunks: string[],
@@ -51,7 +50,7 @@ function mockOrchestrator(
             })),
           ),
       }),
-  } as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  } as any;
 }
 
 vi.mock("./orchestrator", () => ({
