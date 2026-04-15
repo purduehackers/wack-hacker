@@ -1,4 +1,5 @@
 import type { API } from "@discordjs/core/http-only";
+
 import { log } from "evlog";
 import { start, resumeHook } from "workflow/api";
 
@@ -26,9 +27,7 @@ async function fetchRecentMessages(
     });
 
     // Discord returns newest-first; filter and keep chronological order
-    const filtered = raw
-      .filter((m) => m.author.id !== botUserId && m.content?.trim())
-      .reverse();
+    const filtered = raw.filter((m) => m.author.id !== botUserId && m.content?.trim()).reverse();
 
     // Prioritize newest messages within the char budget
     const messages: RecentMessage[] = [];
