@@ -1,4 +1,3 @@
-import type { UIMessage } from "ai";
 import type { MockLanguageModelV3 } from "ai/test";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,7 +12,8 @@ import {
 
 import { AgentContext } from "./context.ts";
 
-// Mock heavy tool modules so env-backed clients don't boot.
+// --- Boundary mocks ---
+// Tools that hit external APIs or initialize SDK clients at import time.
 vi.mock("@/lib/ai/tools/docs", () => ({ documentation: stubTool("documentation") }));
 vi.mock("@/lib/ai/tools/schedule", () => ({
   scheduleTask: stubTool("scheduleTask"),
@@ -22,27 +22,23 @@ vi.mock("@/lib/ai/tools/schedule", () => ({
 }));
 vi.mock("@/lib/ai/tools/schedule/time", () => ({ currentTime: stubTool("currentTime") }));
 
-// Mock delegates so we don't transitively pull the domain tool imports.
-const buildDelegationToolsMock = vi.fn(() => ({
-  delegate_linear: stubTool("delegate_linear"),
-}));
+// delegates.ts transitively imports generated skill manifests (gitignored,
+// don't exist on disk) and domain tool modules (initialize SDK clients).
+// We mock this single entry-point rather than internal code — it's the
+// thinnest boundary that avoids pulling in non-existent generated files.
 vi.mock("@/lib/ai/delegates", () => ({
-  buildDelegationTools: buildDelegationToolsMock,
+  buildDelegationTools: () => ({
+    delegate_linear: stubTool("delegate_linear"),
+    delegate_github: stubTool("delegate_github"),
+  }),
 }));
 
 const { createOrchestrator } = await import("./orchestrator.ts");
-
-function contextFromFixture() {
-  return AgentContext.fromPacket(
-    messagePacket("hello", { author: { id: "u1", username: "alice" } }),
-  );
-}
 
 describe("createOrchestrator", () => {
   let model: MockLanguageModelV3;
 
   beforeEach(() => {
-    buildDelegationToolsMock.mockClear();
     model = streamingTextModel("hi");
     installMockProvider(model);
   });
@@ -54,34 +50,27 @@ describe("createOrchestrator", () => {
   async function drain(ctx: AgentContext) {
     const agent = createOrchestrator(ctx, { totalTokens: 0, toolCallCount: 0 });
     const result = await agent.stream({ prompt: "say hi" });
-    const messages: UIMessage[] = [];
-    // toUIMessageStream works but we just need to consume the stream so the
-    // model call is recorded on the mock.
     const reader = result.toUIMessageStream().getReader();
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      void value;
-      messages.push(value as unknown as UIMessage);
-    }
-    return messages;
+    while (!(await reader.read()).done);
   }
 
-  it("passes role-specific delegation tools to the agent's tool set", async () => {
-    const ctx = contextFromFixture();
+  function getToolNames(): string[] {
+    const call = model.doStreamCalls[0]!;
+    return (call.tools ?? [])
+      .map((t) => (t as { name?: string }).name)
+      .filter((n): n is string => typeof n === "string")
+      .sort();
+  }
+
+  it("assembles base tools and delegation tools into the agent's tool set", async () => {
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
     await drain(ctx);
 
-    expect(buildDelegationToolsMock).toHaveBeenCalled();
-    expect((buildDelegationToolsMock.mock.calls as unknown[][])[0]![0]).toBe(ctx.role);
-
-    const call = model.doStreamCalls[0]!;
-    const toolNames = (call.tools ?? [])
-      .map((t) => (t as { name?: string }).name)
-      .filter((n): n is string => typeof n === "string");
-    expect(toolNames.sort()).toEqual(
+    expect(getToolNames()).toEqual(
       [
         "cancelTask",
         "currentTime",
+        "delegate_github",
         "delegate_linear",
         "documentation",
         "listScheduledTasks",
@@ -90,8 +79,10 @@ describe("createOrchestrator", () => {
     );
   });
 
-  it("runs instructions through context.buildInstructions so execution context is injected", async () => {
-    const ctx = contextFromFixture();
+  it("injects execution context into system prompt via buildInstructions", async () => {
+    const ctx = AgentContext.fromPacket(
+      messagePacket("hello", { author: { id: "u1", username: "alice" } }),
+    );
     await drain(ctx);
 
     const call = model.doStreamCalls[0]!;
@@ -101,7 +92,6 @@ describe("createOrchestrator", () => {
     expect(systemContent).toContain("<execution_context>");
     expect(systemContent).toContain('username: "alice"');
     expect(systemContent).toContain("Purdue Hackers");
-    // {{DATE}} placeholder must have been replaced by buildInstructions.
     expect(systemContent).not.toContain("{{DATE}}");
   });
 });

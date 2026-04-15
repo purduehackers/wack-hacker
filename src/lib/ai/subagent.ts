@@ -34,11 +34,7 @@ export type { SubagentSpec } from "./types.ts";
  * message history stays lean (full execution details live in the UI stream,
  * not in the model context).
  */
-export function createDelegationTool(
-  spec: SubagentSpec,
-  role: UserRole,
-  metrics: SubagentMetrics,
-) {
+export function createDelegationTool(spec: SubagentSpec, role: UserRole, metrics: SubagentMetrics) {
   return tool({
     description: spec.description,
     inputSchema: z.object({

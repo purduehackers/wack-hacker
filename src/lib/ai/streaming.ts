@@ -64,7 +64,10 @@ export function buildPrompt(content: string, attachments?: Attachment[]) {
 
 /** Collect metadata from the stream result and build the footer string. */
 async function buildFooter(
-  result: { totalUsage: PromiseLike<{ totalTokens?: number }>; steps: PromiseLike<{ toolCalls: unknown[] }[]> },
+  result: {
+    totalUsage: PromiseLike<{ totalTokens?: number }>;
+    steps: PromiseLike<{ toolCalls: unknown[] }[]>;
+  },
   elapsedMs: number,
   subagentMetrics: SubagentMetrics,
 ): Promise<string> {
