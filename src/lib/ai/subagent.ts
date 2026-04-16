@@ -85,14 +85,18 @@ export function createDelegationTool(spec: SubagentSpec, role: UserRole, metrics
       }
 
       const [usage, steps] = await Promise.all([result.totalUsage, result.steps]);
-      const subagentTokens = usage.totalTokens ?? 0;
-      const subagentToolCalls = steps.reduce((sum, s) => sum + s.toolCalls.length, 0);
-      metrics.totalTokens += subagentTokens;
-      metrics.toolCallCount += subagentToolCalls;
+      const tokensBefore = metrics.totalTokens;
+      const toolCallsBefore = metrics.toolCallCount;
+      metrics.totalTokens += usage.totalTokens ?? 0;
+      metrics.toolCallCount += steps.reduce((sum, s) => sum + s.toolCalls.length, 0);
 
       countMetric("ai.subagent.completed", { domain: spec.name });
-      recordDistribution("ai.subagent.tokens", subagentTokens, { domain: spec.name });
-      recordDistribution("ai.subagent.tool_calls", subagentToolCalls, { domain: spec.name });
+      recordDistribution("ai.subagent.tokens", metrics.totalTokens - tokensBefore, {
+        domain: spec.name,
+      });
+      recordDistribution("ai.subagent.tool_calls", metrics.toolCallCount - toolCallsBefore, {
+        domain: spec.name,
+      });
     },
     toModelOutput: ({ output }) => {
       const message = output as UIMessage | undefined;
