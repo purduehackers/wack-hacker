@@ -53,6 +53,12 @@ vi.mock("@/lib/ai/tools/notion", () => ({
   retrieve_database: stubTool("retrieve_database"),
   list_users: stubTool("list_users"),
 }));
+vi.mock("@/lib/ai/tools/sentry", () => ({
+  list_projects: stubTool("list_projects"),
+  get_project: stubTool("get_project"),
+  search_issues: stubTool("search_issues"),
+  get_issue: stubTool("get_issue"),
+}));
 
 const { createOrchestrator } = await import("./orchestrator.ts");
 
@@ -113,6 +119,7 @@ describe("createOrchestrator", () => {
         "delegate_github",
         "delegate_linear",
         "delegate_notion",
+        "delegate_sentry",
       ]),
     );
   });
