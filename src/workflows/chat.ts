@@ -42,11 +42,12 @@ export async function chatWorkflow(payload: ChatPayload) {
 
   const { channelId, content, context } = payload;
   const { workflowRunId } = getWorkflowMetadata();
+  let currentContext = context;
 
   log.info("workflow", `Chat started: ${workflowRunId}`);
   countMetric("workflow.chat.started");
 
-  await runTurn(channelId, content, context);
+  await runTurn(channelId, content, currentContext);
 
   using hook = createHook<ChatHookEvent>({ token: workflowRunId });
 
@@ -60,10 +61,10 @@ export async function chatWorkflow(payload: ChatPayload) {
 
     log.info("workflow", `Follow-up from ${event.authorUsername}: ${workflowRunId}`);
     countMetric("workflow.chat.followup");
-    const turnContext = event.recentMessages
-      ? { ...context, recentMessages: event.recentMessages }
-      : context;
-    await runTurn(channelId, event.content, turnContext);
+    if (event.recentMessages) {
+      currentContext = { ...currentContext, recentMessages: event.recentMessages };
+    }
+    await runTurn(channelId, event.content, currentContext);
   }
 
   await cleanupConversation(channelId);
