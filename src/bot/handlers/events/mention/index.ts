@@ -67,11 +67,13 @@ export async function handleMention(
   if (existing) {
     log.info("mention", `Resuming workflow ${existing.workflowRunId} for ${data.author.username}`);
     try {
+      const recentMessages = await fetchRecentMessages(ctx.discord, sourceChannelId, data.id);
       await resumeHook(existing.workflowRunId, {
         type: "message" as const,
         content,
         authorId: data.author.id,
         authorUsername: data.author.username,
+        recentMessages,
       });
       await ctx.store.touch(sourceChannelId, lookupThreadId);
       return;

@@ -3,7 +3,7 @@ import { REST } from "@discordjs/rest";
 import { log } from "evlog";
 import { createHook, getWorkflowMetadata } from "workflow";
 
-import type { SerializedAgentContext } from "@/lib/ai/types";
+import type { RecentMessage, SerializedAgentContext } from "@/lib/ai/types";
 
 import { ConversationStore } from "@/bot/store";
 import { streamTurn } from "@/lib/ai/streaming";
@@ -18,6 +18,7 @@ interface ChatHookEvent {
   content: string;
   authorId: string;
   authorUsername: string;
+  recentMessages?: RecentMessage[];
 }
 
 async function runTurn(
@@ -59,7 +60,10 @@ export async function chatWorkflow(payload: ChatPayload) {
 
     log.info("workflow", `Follow-up from ${event.authorUsername}: ${workflowRunId}`);
     countMetric("workflow.chat.followup");
-    await runTurn(channelId, event.content, context);
+    const turnContext = event.recentMessages
+      ? { ...context, recentMessages: event.recentMessages }
+      : context;
+    await runTurn(channelId, event.content, turnContext);
   }
 
   await cleanupConversation(channelId);
