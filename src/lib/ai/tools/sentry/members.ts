@@ -22,7 +22,6 @@ export const list_members = tool({
   description:
     "List members in the Sentry organization. Returns name, email, role, pending status, and team slugs.",
   inputSchema: z.object({
-    per_page: z.number().max(100).optional(),
     cursor: z.string().optional().describe("Pagination cursor"),
   }),
   execute: async ({ cursor }) => {
@@ -85,7 +84,6 @@ export const list_teams = tool({
   description:
     "List teams in the Sentry organization. Returns slug, name, member count, and date created.",
   inputSchema: z.object({
-    per_page: z.number().max(100).optional(),
     cursor: z.string().optional().describe("Pagination cursor"),
   }),
   execute: async ({ cursor }) => {
@@ -131,7 +129,6 @@ export const list_team_members = tool({
   description: "List members of a Sentry team.",
   inputSchema: z.object({
     team_slug: z.string().describe("Team slug"),
-    per_page: z.number().max(100).optional(),
     cursor: z.string().optional().describe("Pagination cursor"),
   }),
   execute: async ({ team_slug, cursor }) => {

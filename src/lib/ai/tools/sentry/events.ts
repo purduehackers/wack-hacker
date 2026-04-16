@@ -16,7 +16,6 @@ export const list_issue_events = tool({
     "List events (occurrences) for a Sentry issue. Returns event ID, title, timestamp, and tags.",
   inputSchema: z.object({
     issue_id: z.string().describe("Sentry issue ID (numeric)"),
-    per_page: z.number().max(100).optional(),
     cursor: z.string().optional().describe("Pagination cursor"),
   }),
   execute: async ({ issue_id, cursor }) => {

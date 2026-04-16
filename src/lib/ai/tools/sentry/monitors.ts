@@ -73,7 +73,6 @@ export const list_monitor_checkins = tool({
     "List check-ins for a cron monitor. Shows status (ok, missed, error, in_progress), duration, and timestamps.",
   inputSchema: z.object({
     monitor_slug: z.string().describe("Monitor slug"),
-    per_page: z.number().max(100).optional(),
     cursor: z.string().optional().describe("Pagination cursor"),
   }),
   execute: async ({ monitor_slug, cursor }) => {
@@ -156,7 +155,7 @@ export const update_monitor = tool({
         name: name ?? (current.name as string),
         slug: slug ?? (current.slug as string),
         config: monitorConfig,
-        project: ((current.project as Record<string, unknown> | undefined)?.slug as string) ?? "",
+        project: (current.project as Record<string, unknown> | undefined)?.slug as string,
       },
     });
     const { data } = unwrapResult(result, "updateMonitor");
