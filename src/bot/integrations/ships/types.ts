@@ -2,6 +2,8 @@ export interface ShipAttachment {
   key: string;
   type: string;
   filename: string;
+  width?: number;
+  height?: number;
 }
 
 export interface ShipRecord {
