@@ -17,6 +17,7 @@ router.onMessage(async (packet, ctx) => {
   // with the mention prefix stripped. Forwarding again here would duplicate
   // the turn and push the un-stripped content into the conversation.
   if (isBotMention(packet.data.content, ctx.botUserId)) return;
+  if (packet.data.thread) return;
 
   const channelId = packet.data.channel.id;
   const threadId = packet.data.thread ? packet.data.channel.id : undefined;
