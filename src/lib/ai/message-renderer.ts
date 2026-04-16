@@ -170,6 +170,11 @@ export class MessageRenderer {
       for (const part of reSplit) {
         chunks.push(part);
       }
+      // Enforce MAX_MESSAGES cap — merge overflow into the last allowed chunk
+      if (chunks.length > MAX_MESSAGES) {
+        const overflow = chunks.splice(MAX_MESSAGES - 1);
+        chunks.push(overflow.join(" ").slice(0, available - 1) + "…");
+      }
       chunks[chunks.length - 1] += separator + footer;
     }
 
@@ -201,6 +206,6 @@ export class MessageRenderer {
     if (this.subagentPreview) parts.push(`> ${this.subagentPreview.replaceAll("\n", "\n> ")}`);
     if (this.text) parts.push(this.text);
     const body = parts.join("\n\n") || "> Thinking...";
-    return body.length > MAX_LENGTH ? body.slice(0, MAX_LENGTH) + "…" : body;
+    return body.length > MAX_LENGTH ? body.slice(0, MAX_LENGTH - 1) + "…" : body;
   }
 }

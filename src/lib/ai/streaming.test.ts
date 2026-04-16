@@ -294,6 +294,30 @@ describe("streamTurn: tool events and metadata", () => {
 
     vi.restoreAllMocks();
   });
+});
+
+describe("streamTurn: tool event edge cases", () => {
+  it("ignores empty subagent preview from preliminary tool-result", async () => {
+    const orchestrator = await import("./orchestrator");
+    vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue(
+      mockOrchestrator(["Done."], {
+        extraEvents: [
+          {
+            type: "tool-result",
+            preliminary: true,
+            output: { parts: [{ type: "text", text: "" }] },
+          },
+        ],
+      }) as any,
+    );
+
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    const result = await streamTurn(asAPI(discord), "ch-1", "hello", ctx.toJSON());
+
+    expect(result.text).toBe("Done.");
+    vi.restoreAllMocks();
+  });
 
   it("falls back to time-only footer when metadata promises reject", async () => {
     const orchestrator = await import("./orchestrator");

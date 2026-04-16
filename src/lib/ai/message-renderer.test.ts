@@ -121,6 +121,14 @@ describe("MessageRenderer.splitText", () => {
     expect(chunks[4].endsWith("…")).toBe(true);
   });
 
+  it("handles text that splits with empty remainder", () => {
+    // "a".repeat(10) split at maxLength=10: first chunk is exactly 10, remainder is empty
+    const text = "a".repeat(10) + " " + "b".repeat(5);
+    const chunks = MessageRenderer.splitText(text, 10);
+    expect(chunks).toHaveLength(2);
+    expect(chunks[1]).toBe("b".repeat(5));
+  });
+
   it("respects custom maxLength", () => {
     const text = "a".repeat(20);
     const chunks = MessageRenderer.splitText(text, 10);
@@ -167,6 +175,15 @@ describe("MessageRenderer.splitWithFooter", () => {
     }
     expect(result[result.length - 1]).toContain(footer);
   });
+
+  it("enforces MAX_MESSAGES cap even when re-splitting for footer", () => {
+    // 9500 chars of no-space text forces 5 chunks from splitText,
+    // then re-splitting the last chunk could exceed 5 total
+    const text = "a".repeat(9500);
+    const result = MessageRenderer.splitWithFooter(text, footer);
+    expect(result.length).toBeLessThanOrEqual(5);
+    expect(result[result.length - 1]).toContain(footer);
+  });
 });
 
 describe("MessageRenderer instance", () => {
@@ -191,6 +208,28 @@ describe("MessageRenderer instance", () => {
     expect(renderer.content).toBe("Hello world!");
   });
 
+  it("flush skips edit when content is unchanged", async () => {
+    const discord = createMockAPI();
+    const renderer = new MessageRenderer(asAPI(discord), "ch-1");
+
+    const realNow = Date.now;
+    let now = realNow.call(Date);
+    vi.spyOn(Date, "now").mockImplementation(() => {
+      now += 2000;
+      return now;
+    });
+
+    await renderer.init();
+    // Append empty string — text stays "", render returns "> Thinking..." (same as lastRendered)
+    await renderer.appendText("");
+
+    // Only the init createMessage, no edits since rendered content didn't change
+    const edits = discord.callsTo("channels.editMessage");
+    expect(edits).toHaveLength(0);
+
+    vi.restoreAllMocks();
+  });
+
   it("appendText triggers rate-limited edit", async () => {
     const discord = createMockAPI();
     const renderer = new MessageRenderer(asAPI(discord), "ch-1");
@@ -207,6 +246,33 @@ describe("MessageRenderer instance", () => {
 
     const edits = discord.callsTo("channels.editMessage");
     expect(edits.length).toBeGreaterThanOrEqual(1);
+
+    vi.restoreAllMocks();
+  });
+});
+
+describe("MessageRenderer: mid-stream truncation", () => {
+  it("truncates long text during streaming to MAX_LENGTH", async () => {
+    const discord = createMockAPI();
+    const renderer = new MessageRenderer(asAPI(discord), "ch-1");
+
+    const realNow = Date.now;
+    let now = realNow.call(Date);
+    vi.spyOn(Date, "now").mockImplementation(() => {
+      now += 2000;
+      return now;
+    });
+
+    await renderer.init();
+    await renderer.appendText("a".repeat(2500));
+
+    const edits = discord.callsTo("channels.editMessage");
+    expect(edits.length).toBeGreaterThanOrEqual(1);
+    const lastEdit = edits[edits.length - 1];
+    const body = lastEdit[2] as { content: string };
+    // Should be truncated to exactly 1900 chars (1899 + ellipsis)
+    expect(body.content).toHaveLength(1900);
+    expect(body.content.endsWith("…")).toBe(true);
 
     vi.restoreAllMocks();
   });
