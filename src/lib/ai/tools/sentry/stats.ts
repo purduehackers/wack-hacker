@@ -39,7 +39,7 @@ export const get_org_stats = tool({
         groupBy: group ? [group] : ["outcome"],
         field: (field ?? "sum(quantity)") as "sum(quantity)" | "sum(times_seen)",
         statsPeriod: stat_period ?? "24h",
-        interval,
+        interval: interval ?? "1h",
         project: project_slug ? [project_slug] : undefined,
       },
     });
