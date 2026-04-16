@@ -2,13 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 
 import { createMockAPI, asAPI, messagePacket } from "../test/fixtures/index.ts";
 import { AgentContext } from "./context.ts";
-import {
-  truncate,
-  truncateWithFooter,
-  buildPrompt,
-  streamTurn,
-  formatFooter,
-} from "./streaming.ts";
+import { buildPrompt, streamTurn } from "./streaming.ts";
 
 type StreamEvent = Record<string, unknown>;
 
@@ -56,26 +50,6 @@ function mockOrchestrator(
 vi.mock("./orchestrator", () => ({
   createOrchestrator: vi.fn(() => mockOrchestrator(["Hello ", "world!"])),
 }));
-
-describe("truncate", () => {
-  it("returns short text unchanged", () => {
-    expect(truncate("hello")).toBe("hello");
-  });
-
-  it("truncates text exceeding 1900 chars", () => {
-    const result = truncate("a".repeat(2000));
-    expect(result).toHaveLength(1901);
-    expect(result.endsWith("…")).toBe(true);
-  });
-
-  it("returns exactly 1900 chars unchanged", () => {
-    expect(truncate("a".repeat(1900))).toHaveLength(1900);
-  });
-
-  it("returns empty string unchanged", () => {
-    expect(truncate("")).toBe("");
-  });
-});
 
 function getMessageContent(result: ReturnType<typeof buildPrompt>) {
   if (!("messages" in result) || !result.messages) throw new Error("expected messages");
@@ -238,6 +212,26 @@ describe("streamTurn: basic streaming", () => {
   });
 });
 
+describe("streamTurn: multi-message splitting", () => {
+  it("splits long responses across multiple messages", async () => {
+    const orchestrator = await import("./orchestrator");
+    const longText = "a".repeat(3000);
+    vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue(
+      mockOrchestrator([longText]) as any,
+    );
+
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    await streamTurn(asAPI(discord), "ch-1", "hello", ctx.toJSON());
+
+    // Initial "Thinking..." + at least one overflow chunk
+    const sends = discord.callsTo("channels.createMessage");
+    expect(sends.length).toBeGreaterThanOrEqual(2);
+
+    vi.restoreAllMocks();
+  });
+});
+
 describe("streamTurn: tool events and metadata", () => {
   it("shows tool activity for tool-input-start events", async () => {
     const orchestrator = await import("./orchestrator");
@@ -300,6 +294,30 @@ describe("streamTurn: tool events and metadata", () => {
 
     vi.restoreAllMocks();
   });
+});
+
+describe("streamTurn: tool event edge cases", () => {
+  it("ignores empty subagent preview from preliminary tool-result", async () => {
+    const orchestrator = await import("./orchestrator");
+    vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue(
+      mockOrchestrator(["Done."], {
+        extraEvents: [
+          {
+            type: "tool-result",
+            preliminary: true,
+            output: { parts: [{ type: "text", text: "" }] },
+          },
+        ],
+      }) as any,
+    );
+
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    const result = await streamTurn(asAPI(discord), "ch-1", "hello", ctx.toJSON());
+
+    expect(result.text).toBe("Done.");
+    vi.restoreAllMocks();
+  });
 
   it("falls back to time-only footer when metadata promises reject", async () => {
     const orchestrator = await import("./orchestrator");
@@ -322,62 +340,5 @@ describe("streamTurn: tool events and metadata", () => {
     expect(body.content).toMatch(/-# \d+\.\ds$/);
 
     vi.restoreAllMocks();
-  });
-});
-
-describe("formatFooter", () => {
-  it("shows all metadata when present", () => {
-    expect(
-      formatFooter({ elapsedMs: 3200, totalTokens: 1423, toolCallCount: 4, stepCount: 3 }),
-    ).toBe("-# 3.2s · 1,423 tokens · 4 tool calls · 3 steps");
-  });
-
-  it("omits tool calls when zero", () => {
-    expect(
-      formatFooter({ elapsedMs: 1000, totalTokens: 500, toolCallCount: 0, stepCount: 1 }),
-    ).toBe("-# 1.0s · 500 tokens");
-  });
-
-  it("omits steps when only 1", () => {
-    expect(
-      formatFooter({ elapsedMs: 2500, totalTokens: 800, toolCallCount: 2, stepCount: 1 }),
-    ).toBe("-# 2.5s · 800 tokens · 2 tool calls");
-  });
-
-  it("uses singular for 1 tool call", () => {
-    expect(
-      formatFooter({ elapsedMs: 1000, totalTokens: 100, toolCallCount: 1, stepCount: 2 }),
-    ).toBe("-# 1.0s · 100 tokens · 1 tool call · 2 steps");
-  });
-
-  it("omits tokens when undefined", () => {
-    expect(
-      formatFooter({ elapsedMs: 500, totalTokens: undefined, toolCallCount: 0, stepCount: 1 }),
-    ).toBe("-# 0.5s");
-  });
-});
-
-describe("truncateWithFooter", () => {
-  const footer = "-# 1.0s · 100 tokens";
-
-  it("appends footer to short text", () => {
-    const result = truncateWithFooter("Hello!", footer);
-    expect(result).toBe(`Hello!\n\n${footer}`);
-  });
-
-  it("truncates body when text + footer exceeds limit", () => {
-    const longText = "a".repeat(1900);
-    const result = truncateWithFooter(longText, footer);
-    expect(result.length).toBeLessThanOrEqual(1900);
-    expect(result).toContain("…");
-    expect(result.endsWith(`\n\n${footer}`)).toBe(true);
-  });
-
-  it("preserves text exactly at available limit", () => {
-    const available = 1900 - footer.length - 2; // 2 for "\n\n"
-    const text = "a".repeat(available);
-    const result = truncateWithFooter(text, footer);
-    expect(result).toBe(`${text}\n\n${footer}`);
-    expect(result.length).toBe(1900);
   });
 });

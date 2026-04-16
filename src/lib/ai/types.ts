@@ -37,6 +37,13 @@ export interface SerializedAgentContext {
   recentMessages?: RecentMessage[];
 }
 
+export interface FooterMeta {
+  elapsedMs: number;
+  totalTokens: number | undefined;
+  toolCallCount: number;
+  stepCount: number;
+}
+
 /** Mutable accumulator for subagent token/tool-call metrics. */
 export interface SubagentMetrics {
   totalTokens: number;

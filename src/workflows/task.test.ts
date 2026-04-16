@@ -39,7 +39,12 @@ vi.mock("@/lib/tasks/cron", () => ({
 
 vi.mock("@/lib/ai/streaming", () => ({
   streamTurn: vi.fn(async () => ({ text: "Agent reply." })),
-  truncateWithFooter: vi.fn((text: string, footer: string) => `${text}\n\n${footer}`),
+}));
+
+vi.mock("@/lib/ai/message-renderer", () => ({
+  MessageRenderer: {
+    splitWithFooter: vi.fn((text: string, footer: string) => [`${text}\n\n${footer}`]),
+  },
 }));
 
 const { taskWorkflow } = await import("./task.ts");
