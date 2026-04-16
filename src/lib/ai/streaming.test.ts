@@ -319,6 +319,31 @@ describe("streamTurn: tool event edge cases", () => {
     vi.restoreAllMocks();
   });
 
+  it("handles undefined totalTokens in usage", async () => {
+    const orchestrator = await import("./orchestrator");
+    vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue(
+      mockOrchestrator(["Ok."], {
+        totalUsage: Promise.resolve({
+          inputTokens: undefined,
+          outputTokens: undefined,
+          totalTokens: undefined,
+        }),
+      }) as any,
+    );
+
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    const result = await streamTurn(asAPI(discord), "ch-1", "hello", ctx.toJSON());
+
+    expect(result.text).toBe("Ok.");
+    const edits = discord.callsTo("channels.editMessage");
+    const lastEdit = edits[edits.length - 1];
+    const body = lastEdit[2] as { content: string };
+    expect(body.content).toContain("0 tokens");
+
+    vi.restoreAllMocks();
+  });
+
   it("falls back to time-only footer when metadata promises reject", async () => {
     const orchestrator = await import("./orchestrator");
     vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue(
