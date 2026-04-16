@@ -41,6 +41,12 @@ vi.mock("@/lib/ai/tools/discord", () => ({
   list_roles: stubTool("list_roles"),
   search_members: stubTool("search_members"),
 }));
+vi.mock("@/lib/ai/tools/figma", () => ({
+  get_file: stubTool("get_file"),
+  list_projects: stubTool("list_projects"),
+  list_project_files: stubTool("list_project_files"),
+  search_files: stubTool("search_files"),
+}));
 vi.mock("@/lib/ai/tools/notion", () => ({
   search_notion: stubTool("search_notion"),
   retrieve_page: stubTool("retrieve_page"),
@@ -103,6 +109,7 @@ describe("createOrchestrator", () => {
       expect.arrayContaining([
         ...BASE_TOOLS,
         "delegate_discord",
+        "delegate_figma",
         "delegate_github",
         "delegate_linear",
         "delegate_notion",

@@ -32,6 +32,15 @@ vi.mock("@/lib/ai/skills/generated/manifest", () => ({
       mode: "inline",
       instructions: "Discord instructions.",
     },
+    figma: {
+      name: "figma",
+      description: "Figma delegate",
+      criteria: "when asked about Figma",
+      toolNames: [],
+      minRole: UserRole.Organizer,
+      mode: "delegate",
+      instructions: "Figma instructions.",
+    },
     // notion is intentionally omitted — buildDelegationTools should tolerate missing domains.
   },
 }));
@@ -40,12 +49,14 @@ vi.mock("@/lib/ai/skills/generated/manifest", () => ({
 vi.mock("@/lib/ai/skills/generated/domains/linear", () => ({ SKILL_MANIFEST: {} }));
 vi.mock("@/lib/ai/skills/generated/domains/github", () => ({ SKILL_MANIFEST: {} }));
 vi.mock("@/lib/ai/skills/generated/domains/discord", () => ({ SKILL_MANIFEST: {} }));
+vi.mock("@/lib/ai/skills/generated/domains/figma", () => ({ SKILL_MANIFEST: {} }));
 vi.mock("@/lib/ai/skills/generated/domains/notion", () => ({ SKILL_MANIFEST: {} }));
 
 // Stub the heavy tool index modules so env-backed SDK clients don't initialize.
 vi.mock("@/lib/ai/tools/linear", () => ({}));
 vi.mock("@/lib/ai/tools/github", () => ({}));
 vi.mock("@/lib/ai/tools/discord", () => ({}));
+vi.mock("@/lib/ai/tools/figma", () => ({}));
 vi.mock("@/lib/ai/tools/notion", () => ({}));
 
 // Stub createDelegationTool so we can see what spec each domain was passed.
@@ -72,13 +83,17 @@ describe("buildDelegationTools", () => {
   it("exposes only organizer-accessible delegate skills to organizers", () => {
     createDelegationToolMock.mockClear();
     const tools = buildDelegationTools(UserRole.Organizer, { totalTokens: 0, toolCallCount: 0 });
-    expect(Object.keys(tools).sort()).toEqual(["delegate_linear"]);
+    expect(Object.keys(tools).sort()).toEqual(["delegate_figma", "delegate_linear"]);
   });
 
   it("exposes every delegate skill to admins", () => {
     createDelegationToolMock.mockClear();
     const tools = buildDelegationTools(UserRole.Admin, { totalTokens: 0, toolCallCount: 0 });
-    expect(Object.keys(tools).sort()).toEqual(["delegate_github", "delegate_linear"]);
+    expect(Object.keys(tools).sort()).toEqual([
+      "delegate_figma",
+      "delegate_github",
+      "delegate_linear",
+    ]);
   });
 
   it("skips inline-mode skills even when the role qualifies", () => {

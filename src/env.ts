@@ -15,6 +15,8 @@ export const env = createEnv({
     GITHUB_APP_PRIVATE_KEY: z.string(),
     GITHUB_APP_INSTALLATION_ID: z.string(),
     GITHUB_ORG: z.string(),
+    FIGMA_ACCESS_TOKEN: z.string(),
+    FIGMA_TEAM_ID: z.string(),
     PHACK_ASK_API_KEY: z.string(),
     GROQ_API_KEY: z.string(),
     PHACK_API_TOKEN: z.string(),
