@@ -7,6 +7,7 @@ import type { CronHandler } from "@/bot/crons/types";
 
 import * as crons from "@/bot/handlers/crons";
 import { env } from "@/env";
+import { countMetric, recordDuration } from "@/lib/metrics";
 
 const cronMap = new Map((Object.values(crons) as CronHandler[]).map((c) => [c.name, c]));
 
@@ -27,9 +28,18 @@ route.get("/crons/:name", async (c) => {
 
   log.info("crons", `Running ${name}`);
 
+  const startTime = Date.now();
   const discord = new API(new REST({ version: "10" }).setToken(env.DISCORD_BOT_TOKEN));
-  await cron.handle(discord);
-  return c.json({ ok: true, cron: name });
+  try {
+    await cron.handle(discord);
+    countMetric("cron.completed", { name });
+    return c.json({ ok: true, cron: name });
+  } catch (err) {
+    countMetric("cron.error", { name });
+    throw err;
+  } finally {
+    recordDuration("cron.duration", Date.now() - startTime, { name });
+  }
 });
 
 export default route;
