@@ -85,6 +85,7 @@ export async function streamTurn(
   channelId: string,
   content: string,
   serializedContext: SerializedAgentContext,
+  taskId?: string,
 ): Promise<{ text: string }> {
   const agentCtx = AgentContext.fromJSON(serializedContext);
   const subagentMetrics: SubagentMetrics = { totalTokens: 0, toolCallCount: 0 };
@@ -160,6 +161,8 @@ export async function streamTurn(
     log.warn("streaming", `Failed to collect metadata: ${String(err)}`);
     footer = formatFooter({ elapsedMs, totalTokens: undefined, toolCallCount: 0, stepCount: 0 });
   }
+
+  if (taskId) footer += `\n-# Task: ${taskId}`;
 
   const finalText = state.text || "I didn't have anything to say.";
   const final = truncateWithFooter(finalText, footer);

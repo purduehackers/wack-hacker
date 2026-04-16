@@ -6,7 +6,7 @@ import { sleep, getWorkflowMetadata } from "workflow";
 import type { TaskMeta } from "@/lib/tasks/types";
 
 import { AgentContext } from "@/lib/ai/context";
-import { streamTurn } from "@/lib/ai/streaming";
+import { streamTurn, truncateWithFooter } from "@/lib/ai/streaming";
 import { nextOccurrence } from "@/lib/tasks/cron";
 import { saveTask, removeTask, getTask } from "@/lib/tasks/registry";
 
@@ -35,9 +35,11 @@ async function executeAction(meta: TaskMeta) {
   "use step";
   const discord = new API(new REST({ version: "10" }).setToken(process.env.DISCORD_BOT_TOKEN!));
 
+  const taskFooter = `-# Task: ${meta.id}`;
+
   if (meta.action.type === "message") {
     await discord.channels.createMessage(meta.action.channelId, {
-      content: meta.action.content,
+      content: truncateWithFooter(meta.action.content, taskFooter),
     });
     log.info("task-workflow", `Sent message for task ${meta.id}`);
   } else if (meta.action.type === "agent") {
@@ -54,7 +56,7 @@ async function executeAction(meta: TaskMeta) {
         day: "numeric",
       }),
     });
-    await streamTurn(discord, meta.action.channelId, meta.action.prompt, context.toJSON());
+    await streamTurn(discord, meta.action.channelId, meta.action.prompt, context.toJSON(), meta.id);
     log.info("task-workflow", `Ran agent for task ${meta.id}`);
   }
 }
