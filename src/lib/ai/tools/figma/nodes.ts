@@ -18,11 +18,9 @@ export const get_file_nodes = tool({
     depth: z.number().min(1).max(4).optional().describe("How deep to traverse each node subtree"),
   }),
   execute: async ({ file_key, node_ids, depth }) => {
-    const ids = node_ids.join(",");
-    const depthParam = depth ? `&depth=${depth}` : "";
-    const data = await figma.get<GetFileNodesResponse>(
-      `/v1/files/${file_key}/nodes?ids=${ids}${depthParam}`,
-    );
+    const params = new URLSearchParams({ ids: node_ids.join(",") });
+    if (depth) params.set("depth", String(depth));
+    const data = await figma.get<GetFileNodesResponse>(`/v1/files/${file_key}/nodes?${params}`);
     return JSON.stringify(data.nodes);
   },
 });
@@ -42,10 +40,12 @@ export const get_images = tool({
       .describe("Scale factor for raster formats (0.01–4)"),
   }),
   execute: async ({ file_key, node_ids, format, scale }) => {
-    const ids = node_ids.join(",");
-    const data = await figma.get<GetImagesResponse>(
-      `/v1/images/${file_key}?ids=${ids}&format=${format}&scale=${scale}`,
-    );
+    const params = new URLSearchParams({
+      ids: node_ids.join(","),
+      format,
+      scale: String(scale),
+    });
+    const data = await figma.get<GetImagesResponse>(`/v1/images/${file_key}?${params}`);
     return JSON.stringify(data.images);
   },
 });

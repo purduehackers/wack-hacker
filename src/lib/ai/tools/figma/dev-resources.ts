@@ -19,9 +19,11 @@ export const list_dev_resources = tool({
     node_ids: z.array(z.string()).optional().describe("Filter to specific node IDs"),
   }),
   execute: async ({ file_key, node_ids }) => {
-    const params = node_ids?.length ? `?node_ids=${node_ids.join(",")}` : "";
+    const search = new URLSearchParams();
+    if (node_ids?.length) search.set("node_ids", node_ids.join(","));
+    const qs = search.toString();
     const data = await figma.get<GetDevResourcesResponse>(
-      `/v1/files/${file_key}/dev_resources${params}`,
+      `/v1/files/${file_key}/dev_resources${qs ? `?${qs}` : ""}`,
     );
     return JSON.stringify(data.dev_resources);
   },

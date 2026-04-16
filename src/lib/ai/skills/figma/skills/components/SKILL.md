@@ -27,6 +27,6 @@ mode: inline
 <styles>
 - list_team_styles returns published color, text, effect, and grid styles.
 - list_file_styles scopes to a single file.
-- get_style returns type-specific details (e.g., color values, font family/size).
+- get_style returns summarized style metadata (key, name, description, style type).
 - Style types: FILL, TEXT, EFFECT, GRID.
 </styles>

@@ -13,7 +13,8 @@ mode: inline
 </listing>
 
 <creating>
-- create_webhook requires event_type, team_id, endpoint (callback URL), and optionally passcode and description.
+- create_webhook requires event_type, endpoint (callback URL), and passcode. Optionally accepts description.
+- The team is determined automatically from the configured environment; do not ask the user for a team_id.
 - Event types include: FILE_UPDATE, FILE_DELETE, FILE_VERSION_UPDATE, LIBRARY_PUBLISH, and more.
 </creating>
 

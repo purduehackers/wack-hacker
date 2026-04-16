@@ -16,7 +16,7 @@ mode: inline
 
 <modifying>
 - modify_variables is a bulk operation that can create, update, and delete variables and collections in a single call.
-- The request body contains optional arrays: variableCollections, variables, variableModes.
+- The request body contains optional arrays using the tool's input keys: variable_collections, variables, variable_modes.
 - Each entry specifies an action: "CREATE", "UPDATE", or "DELETE".
 - Always read current variables first before modifying.
 - Only modify when the user explicitly asks.
