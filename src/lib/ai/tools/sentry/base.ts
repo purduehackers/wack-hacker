@@ -1,35 +1,14 @@
+import {
+  listAnOrganization_sProjects,
+  retrieveAProject,
+  listAnOrganization_sIssues,
+  retrieveAnIssue,
+  unwrapResult,
+} from "@sentry/api";
 import { tool } from "ai";
 import { z } from "zod";
 
-import { sentryOrg, sentryGet } from "./client.ts";
-
-interface SentryProject {
-  id: string;
-  slug: string;
-  name: string;
-  platform: string | null;
-  dateCreated: string;
-  status: string;
-}
-
-interface SentryIssue {
-  id: string;
-  shortId: string;
-  title: string;
-  culprit: string;
-  status: string;
-  level: string;
-  count: string;
-  userCount: number;
-  firstSeen: string;
-  lastSeen: string;
-  permalink: string;
-  project: { slug: string };
-  metadata: Record<string, unknown>;
-  type: string;
-  priority: string;
-  assignedTo: { name: string; type: string } | null;
-}
+import { sentryOpts, sentryOrg } from "./client.ts";
 
 /** List all projects in the Sentry organization. */
 export const list_projects = tool({
@@ -37,9 +16,13 @@ export const list_projects = tool({
     "List all projects in the Sentry organization. Returns slug, name, platform, date created, and status.",
   inputSchema: z.object({}),
   execute: async () => {
-    const data = await sentryGet<SentryProject[]>(`/organizations/${sentryOrg()}/projects/`);
+    const result = await listAnOrganization_sProjects({
+      ...sentryOpts(),
+      path: { organization_id_or_slug: sentryOrg() },
+    });
+    const { data } = unwrapResult(result, "listProjects");
     return JSON.stringify(
-      data.map((p) => ({
+      (data as Array<Record<string, unknown>>).map((p) => ({
         id: p.id,
         slug: p.slug,
         name: p.name,
@@ -59,7 +42,14 @@ export const get_project = tool({
     project_slug: z.string().describe("Project slug (e.g. 'my-nextjs-app')"),
   }),
   execute: async ({ project_slug }) => {
-    const data = await sentryGet(`/projects/${sentryOrg()}/${project_slug}/`);
+    const result = await retrieveAProject({
+      ...sentryOpts(),
+      path: {
+        organization_id_or_slug: sentryOrg(),
+        project_id_or_slug: project_slug,
+      },
+    });
+    const { data } = unwrapResult(result, "getProject");
     return JSON.stringify(data);
   },
 });
@@ -75,16 +65,19 @@ export const search_issues = tool({
     per_page: z.number().max(100).optional(),
     cursor: z.string().optional().describe("Pagination cursor from previous response"),
   }),
-  execute: async ({ query, project_slug, sort, per_page, cursor }) => {
-    const params = new URLSearchParams();
-    if (query) params.set("query", query);
-    if (project_slug) params.set("project", project_slug);
-    if (sort) params.set("sort", sort);
-    if (per_page) params.set("per_page", String(per_page));
-    if (cursor) params.set("cursor", cursor);
-    const data = await sentryGet<SentryIssue[]>(`/organizations/${sentryOrg()}/issues/?${params}`);
+  execute: async ({ query, sort, cursor }) => {
+    const result = await listAnOrganization_sIssues({
+      ...sentryOpts(),
+      path: { organization_id_or_slug: sentryOrg() },
+      query: {
+        query,
+        sort: sort as "date" | "freq" | "new" | undefined,
+        cursor,
+      },
+    });
+    const { data } = unwrapResult(result, "searchIssues");
     return JSON.stringify(
-      data.map((i) => ({
+      (data as Array<Record<string, unknown>>).map((i) => ({
         id: i.id,
         shortId: i.shortId,
         title: i.title,
@@ -95,7 +88,7 @@ export const search_issues = tool({
         firstSeen: i.firstSeen,
         lastSeen: i.lastSeen,
         permalink: i.permalink,
-        project: i.project?.slug,
+        project: (i.project as Record<string, unknown> | undefined)?.slug,
       })),
     );
   },
@@ -109,24 +102,32 @@ export const get_issue = tool({
     issue_id: z.string().describe("Sentry issue ID (numeric)"),
   }),
   execute: async ({ issue_id }) => {
-    const data = await sentryGet<SentryIssue>(`/issues/${issue_id}/`);
+    const result = await retrieveAnIssue({
+      ...sentryOpts(),
+      path: {
+        organization_id_or_slug: sentryOrg(),
+        issue_id,
+      },
+    });
+    const { data } = unwrapResult(result, "getIssue");
+    const d = data as Record<string, unknown>;
     return JSON.stringify({
-      id: data.id,
-      shortId: data.shortId,
-      title: data.title,
-      culprit: data.culprit,
-      status: data.status,
-      level: data.level,
-      count: data.count,
-      userCount: data.userCount,
-      firstSeen: data.firstSeen,
-      lastSeen: data.lastSeen,
-      permalink: data.permalink,
-      assignedTo: data.assignedTo,
-      project: data.project?.slug,
-      metadata: data.metadata,
-      type: data.type,
-      priority: data.priority,
+      id: d.id,
+      shortId: d.shortId,
+      title: d.title,
+      culprit: d.culprit,
+      status: d.status,
+      level: d.level,
+      count: d.count,
+      userCount: d.userCount,
+      firstSeen: d.firstSeen,
+      lastSeen: d.lastSeen,
+      permalink: d.permalink,
+      assignedTo: d.assignedTo,
+      project: (d.project as Record<string, unknown> | undefined)?.slug,
+      metadata: d.metadata,
+      type: d.type,
+      priority: d.priority,
     });
   },
 });

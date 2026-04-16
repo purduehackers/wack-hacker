@@ -1,35 +1,18 @@
+import {
+  deprecatedListAProject_sIssueAlertRules,
+  deprecatedRetrieveAnIssueAlertRuleForAProject,
+  deprecatedCreateAnIssueAlertRuleForAProject,
+  deprecatedUpdateAnIssueAlertRule,
+  deprecatedDeleteAnIssueAlertRule,
+  deprecatedListAnOrganization_sMetricAlertRules,
+  deprecatedRetrieveAMetricAlertRuleForAnOrganization,
+  unwrapResult,
+} from "@sentry/api";
 import { tool } from "ai";
 import { z } from "zod";
 
 import { admin } from "../../skills/index.ts";
-import { sentryOrg, sentryGet, sentryMutate } from "./client.ts";
-
-interface SentryAlertRule {
-  id: string;
-  name: string;
-  dateCreated: string;
-  conditions: unknown[];
-  actions: unknown[];
-  actionMatch: string;
-  frequency: number;
-  environment: string | null;
-  status: string;
-}
-
-interface SentryMetricAlertRule {
-  id: string;
-  name: string;
-  dateCreated: string;
-  aggregate: string;
-  query: string;
-  timeWindow: number;
-  resolveThreshold: number | null;
-  thresholdType: number;
-  triggers: unknown[];
-  projects: string[];
-  environment: string | null;
-  status: number;
-}
+import { sentryOpts, sentryOrg } from "./client.ts";
 
 /** List issue alert rules for a project. */
 export const list_alert_rules = tool({
@@ -38,11 +21,16 @@ export const list_alert_rules = tool({
     project_slug: z.string().describe("Project slug"),
   }),
   execute: async ({ project_slug }) => {
-    const data = await sentryGet<SentryAlertRule[]>(
-      `/projects/${sentryOrg()}/${project_slug}/rules/`,
-    );
+    const result = await deprecatedListAProject_sIssueAlertRules({
+      ...sentryOpts(),
+      path: {
+        organization_id_or_slug: sentryOrg(),
+        project_id_or_slug: project_slug,
+      },
+    });
+    const { data } = unwrapResult(result, "listAlertRules");
     return JSON.stringify(
-      data.map((r) => ({
+      (data as Array<Record<string, unknown>>).map((r) => ({
         id: r.id,
         name: r.name,
         dateCreated: r.dateCreated,
@@ -50,8 +38,8 @@ export const list_alert_rules = tool({
         frequency: r.frequency,
         environment: r.environment,
         status: r.status,
-        conditionCount: r.conditions.length,
-        actionCount: r.actions.length,
+        conditionCount: (r.conditions as unknown[])?.length ?? 0,
+        actionCount: (r.actions as unknown[])?.length ?? 0,
       })),
     );
   },
@@ -65,9 +53,15 @@ export const get_alert_rule = tool({
     rule_id: z.string().describe("Alert rule ID"),
   }),
   execute: async ({ project_slug, rule_id }) => {
-    const data = await sentryGet<SentryAlertRule>(
-      `/projects/${sentryOrg()}/${project_slug}/rules/${rule_id}/`,
-    );
+    const result = await deprecatedRetrieveAnIssueAlertRuleForAProject({
+      ...sentryOpts(),
+      path: {
+        organization_id_or_slug: sentryOrg(),
+        project_id_or_slug: project_slug,
+        rule_id: Number(rule_id),
+      },
+    });
+    const { data } = unwrapResult(result, "getAlertRule");
     return JSON.stringify(data);
   },
 });
@@ -101,14 +95,22 @@ export const create_alert_rule = tool({
     frequency,
     environment,
   }) => {
-    const data = await sentryMutate(`/projects/${sentryOrg()}/${project_slug}/rules/`, "POST", {
-      name,
-      conditions,
-      actions,
-      actionMatch: action_match ?? "all",
-      frequency: frequency ?? 30,
-      environment,
+    const result = await deprecatedCreateAnIssueAlertRuleForAProject({
+      ...sentryOpts(),
+      path: {
+        organization_id_or_slug: sentryOrg(),
+        project_id_or_slug: project_slug,
+      },
+      body: {
+        name,
+        conditions,
+        actions,
+        actionMatch: action_match ?? "all",
+        frequency: frequency ?? 30,
+        environment,
+      },
     });
+    const { data } = unwrapResult(result, "createAlertRule");
     return JSON.stringify(data);
   },
 });
@@ -127,18 +129,38 @@ export const update_alert_rule = tool({
     environment: z.string().optional(),
   }),
   execute: async ({ project_slug, rule_id, ...input }) => {
-    const body: Record<string, unknown> = {};
-    if (input.name !== undefined) body.name = input.name;
-    if (input.conditions !== undefined) body.conditions = input.conditions;
-    if (input.actions !== undefined) body.actions = input.actions;
-    if (input.action_match !== undefined) body.actionMatch = input.action_match;
-    if (input.frequency !== undefined) body.frequency = input.frequency;
-    if (input.environment !== undefined) body.environment = input.environment;
-    const data = await sentryMutate(
-      `/projects/${sentryOrg()}/${project_slug}/rules/${rule_id}/`,
-      "PUT",
-      body,
-    );
+    // The SDK requires all body fields; we fetch first then merge
+    const getResult = await deprecatedRetrieveAnIssueAlertRuleForAProject({
+      ...sentryOpts(),
+      path: {
+        organization_id_or_slug: sentryOrg(),
+        project_id_or_slug: project_slug,
+        rule_id: Number(rule_id),
+      },
+    });
+    const { data: existing } = unwrapResult(getResult, "getAlertRuleForUpdate");
+    const e = existing as Record<string, unknown>;
+
+    const result = await deprecatedUpdateAnIssueAlertRule({
+      ...sentryOpts(),
+      path: {
+        organization_id_or_slug: sentryOrg(),
+        project_id_or_slug: project_slug,
+        rule_id: Number(rule_id),
+      },
+      body: {
+        name: input.name ?? (e.name as string),
+        conditions: (input.conditions ?? e.conditions) as Array<Record<string, unknown>>,
+        actions: (input.actions ?? e.actions) as Array<Record<string, unknown>>,
+        actionMatch: (input.action_match ?? e.actionMatch) as "all" | "any" | "none",
+        frequency: (input.frequency ?? e.frequency) as number,
+        environment:
+          input.environment !== undefined
+            ? input.environment
+            : (e.environment as string | undefined),
+      },
+    });
+    const { data } = unwrapResult(result, "updateAlertRule");
     return JSON.stringify(data);
   },
 });
@@ -152,7 +174,15 @@ export const delete_alert_rule = admin(
       rule_id: z.string().describe("Alert rule ID"),
     }),
     execute: async ({ project_slug, rule_id }) => {
-      await sentryMutate(`/projects/${sentryOrg()}/${project_slug}/rules/${rule_id}/`, "DELETE");
+      const result = await deprecatedDeleteAnIssueAlertRule({
+        ...sentryOpts(),
+        path: {
+          organization_id_or_slug: sentryOrg(),
+          project_id_or_slug: project_slug,
+          rule_id: Number(rule_id),
+        },
+      });
+      unwrapResult(result, "deleteAlertRule");
       return JSON.stringify({ deleted: true });
     },
   }),
@@ -165,14 +195,14 @@ export const list_metric_alert_rules = tool({
   inputSchema: z.object({
     project_slug: z.string().optional().describe("Filter by project slug"),
   }),
-  execute: async ({ project_slug }) => {
-    const params = new URLSearchParams();
-    if (project_slug) params.set("project", project_slug);
-    const data = await sentryGet<SentryMetricAlertRule[]>(
-      `/organizations/${sentryOrg()}/alert-rules/?${params}`,
-    );
+  execute: async () => {
+    const result = await deprecatedListAnOrganization_sMetricAlertRules({
+      ...sentryOpts(),
+      path: { organization_id_or_slug: sentryOrg() },
+    });
+    const { data } = unwrapResult(result, "listMetricAlertRules");
     return JSON.stringify(
-      data.map((r) => ({
+      (data as Array<Record<string, unknown>>).map((r) => ({
         id: r.id,
         name: r.name,
         dateCreated: r.dateCreated,
@@ -195,9 +225,14 @@ export const get_metric_alert_rule = tool({
     alert_rule_id: z.string().describe("Metric alert rule ID"),
   }),
   execute: async ({ alert_rule_id }) => {
-    const data = await sentryGet<SentryMetricAlertRule>(
-      `/organizations/${sentryOrg()}/alert-rules/${alert_rule_id}/`,
-    );
+    const result = await deprecatedRetrieveAMetricAlertRuleForAnOrganization({
+      ...sentryOpts(),
+      path: {
+        organization_id_or_slug: sentryOrg(),
+        alert_rule_id: Number(alert_rule_id),
+      },
+    });
+    const { data } = unwrapResult(result, "getMetricAlertRule");
     return JSON.stringify(data);
   },
 });

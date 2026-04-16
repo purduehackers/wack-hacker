@@ -1,24 +1,14 @@
+import {
+  listAnIssue_sEvents,
+  retrieveAnEventForAProject,
+  retrieveAnIssueEvent,
+  listAProject_sErrorEvents,
+  unwrapResult,
+} from "@sentry/api";
 import { tool } from "ai";
 import { z } from "zod";
 
-import { sentryOrg, sentryGet } from "./client.ts";
-
-interface SentryEvent {
-  eventID: string;
-  id: string;
-  title: string;
-  message: string;
-  dateCreated: string;
-  tags: Array<{ key: string; value: string }>;
-}
-
-interface SentryEventDetail extends SentryEvent {
-  context: Record<string, unknown>;
-  contexts: Record<string, unknown>;
-  entries: Array<{ type: string; data: unknown }>;
-  sdk: { name: string; version: string } | null;
-  user: Record<string, unknown> | null;
-}
+import { sentryOpts, sentryOrg } from "./client.ts";
 
 /** List events (occurrences) for a Sentry issue. */
 export const list_issue_events = tool({
@@ -29,13 +19,18 @@ export const list_issue_events = tool({
     per_page: z.number().max(100).optional(),
     cursor: z.string().optional().describe("Pagination cursor"),
   }),
-  execute: async ({ issue_id, per_page, cursor }) => {
-    const params = new URLSearchParams();
-    if (per_page) params.set("per_page", String(per_page));
-    if (cursor) params.set("cursor", cursor);
-    const data = await sentryGet<SentryEvent[]>(`/issues/${issue_id}/events/?${params}`);
+  execute: async ({ issue_id, cursor }) => {
+    const result = await listAnIssue_sEvents({
+      ...sentryOpts(),
+      path: {
+        organization_id_or_slug: sentryOrg(),
+        issue_id: Number(issue_id),
+      },
+      query: { cursor },
+    });
+    const { data } = unwrapResult(result, "listIssueEvents");
     return JSON.stringify(
-      data.map((e) => ({
+      (data as Array<Record<string, unknown>>).map((e) => ({
         eventID: e.eventID,
         title: e.title,
         message: e.message,
@@ -55,19 +50,26 @@ export const get_event = tool({
     event_id: z.string().describe("Event ID"),
   }),
   execute: async ({ project_slug, event_id }) => {
-    const data = await sentryGet<SentryEventDetail>(
-      `/projects/${sentryOrg()}/${project_slug}/events/${event_id}/`,
-    );
+    const result = await retrieveAnEventForAProject({
+      ...sentryOpts(),
+      path: {
+        organization_id_or_slug: sentryOrg(),
+        project_id_or_slug: project_slug,
+        event_id,
+      },
+    });
+    const { data } = unwrapResult(result, "getEvent");
+    const d = data as Record<string, unknown>;
     return JSON.stringify({
-      eventID: data.eventID,
-      title: data.title,
-      message: data.message,
-      dateCreated: data.dateCreated,
-      tags: data.tags,
-      contexts: data.contexts,
-      entries: data.entries,
-      user: data.user,
-      sdk: data.sdk,
+      eventID: d.eventID,
+      title: d.title,
+      message: d.message,
+      dateCreated: d.dateCreated,
+      tags: d.tags,
+      contexts: d.contexts,
+      entries: d.entries,
+      user: d.user,
+      sdk: d.sdk,
     });
   },
 });
@@ -80,17 +82,26 @@ export const get_latest_event = tool({
     issue_id: z.string().describe("Sentry issue ID (numeric)"),
   }),
   execute: async ({ issue_id }) => {
-    const data = await sentryGet<SentryEventDetail>(`/issues/${issue_id}/events/latest/`);
+    const result = await retrieveAnIssueEvent({
+      ...sentryOpts(),
+      path: {
+        organization_id_or_slug: sentryOrg(),
+        issue_id: Number(issue_id),
+        event_id: "latest",
+      },
+    });
+    const { data } = unwrapResult(result, "getLatestEvent");
+    const d = data as Record<string, unknown>;
     return JSON.stringify({
-      eventID: data.eventID,
-      title: data.title,
-      message: data.message,
-      dateCreated: data.dateCreated,
-      tags: data.tags,
-      contexts: data.contexts,
-      entries: data.entries,
-      user: data.user,
-      sdk: data.sdk,
+      eventID: d.eventID,
+      title: d.title,
+      message: d.message,
+      dateCreated: d.dateCreated,
+      tags: d.tags,
+      contexts: d.contexts,
+      entries: d.entries,
+      user: d.user,
+      sdk: d.sdk,
     });
   },
 });
@@ -105,16 +116,18 @@ export const list_project_events = tool({
     per_page: z.number().max(100).optional(),
     cursor: z.string().optional().describe("Pagination cursor"),
   }),
-  execute: async ({ project_slug, query, per_page, cursor }) => {
-    const params = new URLSearchParams();
-    if (query) params.set("query", query);
-    if (per_page) params.set("per_page", String(per_page));
-    if (cursor) params.set("cursor", cursor);
-    const data = await sentryGet<SentryEvent[]>(
-      `/projects/${sentryOrg()}/${project_slug}/events/?${params}`,
-    );
+  execute: async ({ project_slug, cursor }) => {
+    const result = await listAProject_sErrorEvents({
+      ...sentryOpts(),
+      path: {
+        organization_id_or_slug: sentryOrg(),
+        project_id_or_slug: project_slug,
+      },
+      query: { cursor },
+    });
+    const { data } = unwrapResult(result, "listProjectEvents");
     return JSON.stringify(
-      data.map((e) => ({
+      (data as Array<Record<string, unknown>>).map((e) => ({
         eventID: e.eventID,
         title: e.title,
         message: e.message,

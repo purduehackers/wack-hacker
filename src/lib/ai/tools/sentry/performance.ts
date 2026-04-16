@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { sentryOrg, sentryGet } from "./client.ts";
+import { sentryGet, sentryOrg } from "./client.ts";
 
 /** List transactions with performance metrics using the Discover API. */
 export const list_transactions = tool({

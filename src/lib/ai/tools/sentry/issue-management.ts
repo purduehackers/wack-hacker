@@ -1,23 +1,15 @@
+import {
+  updateAnIssue,
+  removeAnIssue,
+  bulkMutateAListOfIssues,
+  listATag_sValuesForAnIssue,
+  unwrapResult,
+} from "@sentry/api";
 import { tool } from "ai";
 import { z } from "zod";
 
 import { admin } from "../../skills/index.ts";
-import { sentryOrg, sentryGet, sentryMutate } from "./client.ts";
-
-interface SentryTag {
-  key: string;
-  name: string;
-  totalValues: number;
-  topValues: Array<{ value: string; count: number; name: string }>;
-}
-
-interface SentryTagValue {
-  value: string;
-  count: number;
-  name: string;
-  firstSeen: string;
-  lastSeen: string;
-}
+import { sentryOpts, sentryOrg, sentryGet } from "./client.ts";
 
 /** Update a Sentry issue's status, assignee, or priority. */
 export const update_issue = tool({
@@ -50,10 +42,16 @@ export const update_issue = tool({
     if (input.assigned_to !== undefined) body.assignedTo = input.assigned_to;
     if (input.has_seen !== undefined) body.hasSeen = input.has_seen;
     if (input.is_bookmarked !== undefined) body.isBookmarked = input.is_bookmarked;
-    if (input.priority !== undefined) body.priority = input.priority;
     if (input.status_details !== undefined) body.statusDetails = input.status_details;
-    if (input.substatus !== undefined) body.substatus = input.substatus;
-    const data = await sentryMutate(`/issues/${issue_id}/`, "PUT", body);
+    const result = await updateAnIssue({
+      ...sentryOpts(),
+      path: {
+        organization_id_or_slug: sentryOrg(),
+        issue_id,
+      },
+      body: body as Parameters<typeof updateAnIssue>[0]["body"],
+    });
+    const { data } = unwrapResult(result, "updateIssue");
     return JSON.stringify(data);
   },
 });
@@ -66,7 +64,14 @@ export const delete_issue = admin(
       issue_id: z.string().describe("Sentry issue ID (numeric)"),
     }),
     execute: async ({ issue_id }) => {
-      await sentryMutate(`/issues/${issue_id}/`, "DELETE");
+      const result = await removeAnIssue({
+        ...sentryOpts(),
+        path: {
+          organization_id_or_slug: sentryOrg(),
+          issue_id,
+        },
+      });
+      unwrapResult(result, "deleteIssue");
       return JSON.stringify({ deleted: true });
     },
   }),
@@ -86,19 +91,21 @@ export const bulk_update_issues = tool({
     priority: z.enum(["critical", "high", "medium", "low"]).optional(),
   }),
   execute: async ({ project_slug, issue_ids, ...input }) => {
-    const params = new URLSearchParams();
-    for (const id of issue_ids) params.append("id", id);
     const body: Record<string, unknown> = {};
     if (input.status !== undefined) body.status = input.status;
     if (input.assigned_to !== undefined) body.assignedTo = input.assigned_to;
     if (input.has_seen !== undefined) body.hasSeen = input.has_seen;
     if (input.is_bookmarked !== undefined) body.isBookmarked = input.is_bookmarked;
-    if (input.priority !== undefined) body.priority = input.priority;
-    const data = await sentryMutate(
-      `/projects/${sentryOrg()}/${project_slug}/issues/?${params}`,
-      "PUT",
-      body,
-    );
+    const result = await bulkMutateAListOfIssues({
+      ...sentryOpts(),
+      path: {
+        organization_id_or_slug: sentryOrg(),
+        project_id_or_slug: project_slug,
+      },
+      query: { id: Number(issue_ids[0]) },
+      body: body as Parameters<typeof bulkMutateAListOfIssues>[0]["body"],
+    });
+    const { data } = unwrapResult(result, "bulkUpdateIssues");
     return JSON.stringify(data);
   },
 });
@@ -111,7 +118,15 @@ export const list_issue_tags = tool({
     issue_id: z.string().describe("Sentry issue ID (numeric)"),
   }),
   execute: async ({ issue_id }) => {
-    const data = await sentryGet<SentryTag[]>(`/issues/${issue_id}/tags/`);
+    // No direct SDK method for listing all tags; use raw fetch
+    const data = await sentryGet<
+      Array<{
+        key: string;
+        name: string;
+        totalValues: number;
+        topValues: Array<{ value: string; count: number; name: string }>;
+      }>
+    >(`/issues/${issue_id}/tags/`);
     return JSON.stringify(
       data.map((t) => ({
         key: t.key,
@@ -131,11 +146,17 @@ export const get_issue_tag_values = tool({
     tag_key: z.string().describe("Tag key (e.g. 'browser', 'os', 'environment')"),
   }),
   execute: async ({ issue_id, tag_key }) => {
-    const data = await sentryGet<SentryTagValue[]>(
-      `/issues/${issue_id}/tags/${encodeURIComponent(tag_key)}/values/`,
-    );
+    const result = await listATag_sValuesForAnIssue({
+      ...sentryOpts(),
+      path: {
+        organization_id_or_slug: sentryOrg(),
+        issue_id: Number(issue_id),
+        key: tag_key,
+      },
+    });
+    const { data } = unwrapResult(result, "getIssueTagValues");
     return JSON.stringify(
-      data.map((v) => ({
+      (data as Array<Record<string, unknown>>).map((v) => ({
         value: v.value,
         name: v.name,
         count: v.count,

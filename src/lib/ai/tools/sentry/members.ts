@@ -1,38 +1,21 @@
+import {
+  listAnOrganization_sMembers,
+  retrieveAnOrganizationMember,
+  listAnOrganization_sTeams,
+  retrieveATeam,
+  listATeam_sMembers,
+  createANewTeam,
+  updateATeam,
+  deleteATeam,
+  addAnOrganizationMemberToATeam,
+  deleteAnOrganizationMemberFromATeam,
+  unwrapResult,
+} from "@sentry/api";
 import { tool } from "ai";
 import { z } from "zod";
 
 import { admin } from "../../skills/index.ts";
-import { sentryGet, sentryMutate, sentryOrg } from "./client.ts";
-
-interface SentryMember {
-  id: string;
-  email: string;
-  name: string;
-  role: string;
-  roleName: string;
-  pending: boolean;
-  expired: boolean;
-  dateCreated: string;
-  user: { id: string; username: string; name: string; avatarUrl: string } | null;
-  teams: string[];
-}
-
-interface SentryTeam {
-  id: string;
-  slug: string;
-  name: string;
-  dateCreated: string;
-  memberCount: number;
-  hasAccess: boolean;
-}
-
-interface SentryTeamMember {
-  id: string;
-  email: string;
-  name: string;
-  role: string;
-  user: { id: string; username: string; name: string } | null;
-}
+import { sentryOpts, sentryOrg } from "./client.ts";
 
 /** List members in the Sentry organization. */
 export const list_members = tool({
@@ -42,15 +25,15 @@ export const list_members = tool({
     per_page: z.number().max(100).optional(),
     cursor: z.string().optional().describe("Pagination cursor"),
   }),
-  execute: async ({ per_page, cursor }) => {
-    const params = new URLSearchParams();
-    if (per_page) params.set("per_page", String(per_page));
-    if (cursor) params.set("cursor", cursor);
-    const data = await sentryGet<SentryMember[]>(
-      `/organizations/${sentryOrg()}/members/?${params}`,
-    );
+  execute: async ({ cursor }) => {
+    const result = await listAnOrganization_sMembers({
+      ...sentryOpts(),
+      path: { organization_id_or_slug: sentryOrg() },
+      query: { cursor },
+    });
+    const { data } = unwrapResult(result, "listMembers");
     return JSON.stringify(
-      data.map((m) => ({
+      (data as Array<Record<string, unknown>>).map((m) => ({
         id: m.id,
         email: m.email,
         name: m.name,
@@ -59,7 +42,7 @@ export const list_members = tool({
         pending: m.pending,
         expired: m.expired,
         dateCreated: m.dateCreated,
-        username: m.user?.username,
+        username: (m.user as Record<string, unknown> | null)?.username,
         teams: m.teams,
       })),
     );
@@ -73,20 +56,26 @@ export const get_member = tool({
     member_id: z.string().describe("Member ID"),
   }),
   execute: async ({ member_id }) => {
-    const data = await sentryGet<SentryMember>(
-      `/organizations/${sentryOrg()}/members/${member_id}/`,
-    );
+    const result = await retrieveAnOrganizationMember({
+      ...sentryOpts(),
+      path: {
+        organization_id_or_slug: sentryOrg(),
+        member_id,
+      },
+    });
+    const { data } = unwrapResult(result, "getMember");
+    const d = data as Record<string, unknown>;
     return JSON.stringify({
-      id: data.id,
-      email: data.email,
-      name: data.name,
-      role: data.role,
-      roleName: data.roleName,
-      pending: data.pending,
-      expired: data.expired,
-      dateCreated: data.dateCreated,
-      user: data.user,
-      teams: data.teams,
+      id: d.id,
+      email: d.email,
+      name: d.name,
+      role: d.role,
+      roleName: d.roleName,
+      pending: d.pending,
+      expired: d.expired,
+      dateCreated: d.dateCreated,
+      user: d.user,
+      teams: d.teams,
     });
   },
 });
@@ -99,13 +88,15 @@ export const list_teams = tool({
     per_page: z.number().max(100).optional(),
     cursor: z.string().optional().describe("Pagination cursor"),
   }),
-  execute: async ({ per_page, cursor }) => {
-    const params = new URLSearchParams();
-    if (per_page) params.set("per_page", String(per_page));
-    if (cursor) params.set("cursor", cursor);
-    const data = await sentryGet<SentryTeam[]>(`/organizations/${sentryOrg()}/teams/?${params}`);
+  execute: async ({ cursor }) => {
+    const result = await listAnOrganization_sTeams({
+      ...sentryOpts(),
+      path: { organization_id_or_slug: sentryOrg() },
+      query: { cursor },
+    });
+    const { data } = unwrapResult(result, "listTeams");
     return JSON.stringify(
-      data.map((t) => ({
+      (data as Array<Record<string, unknown>>).map((t) => ({
         id: t.id,
         slug: t.slug,
         name: t.name,
@@ -123,7 +114,14 @@ export const get_team = tool({
     team_slug: z.string().describe("Team slug"),
   }),
   execute: async ({ team_slug }) => {
-    const data = await sentryGet<SentryTeam>(`/teams/${sentryOrg()}/${team_slug}/`);
+    const result = await retrieveATeam({
+      ...sentryOpts(),
+      path: {
+        organization_id_or_slug: sentryOrg(),
+        team_id_or_slug: team_slug,
+      },
+    });
+    const { data } = unwrapResult(result, "getTeam");
     return JSON.stringify(data);
   },
 });
@@ -136,20 +134,23 @@ export const list_team_members = tool({
     per_page: z.number().max(100).optional(),
     cursor: z.string().optional().describe("Pagination cursor"),
   }),
-  execute: async ({ team_slug, per_page, cursor }) => {
-    const params = new URLSearchParams();
-    if (per_page) params.set("per_page", String(per_page));
-    if (cursor) params.set("cursor", cursor);
-    const data = await sentryGet<SentryTeamMember[]>(
-      `/teams/${sentryOrg()}/${team_slug}/members/?${params}`,
-    );
+  execute: async ({ team_slug, cursor }) => {
+    const result = await listATeam_sMembers({
+      ...sentryOpts(),
+      path: {
+        organization_id_or_slug: sentryOrg(),
+        team_id_or_slug: team_slug,
+      },
+      query: { cursor },
+    });
+    const { data } = unwrapResult(result, "listTeamMembers");
     return JSON.stringify(
-      data.map((m) => ({
+      (data as Array<Record<string, unknown>>).map((m) => ({
         id: m.id,
         email: m.email,
         name: m.name,
         role: m.role,
-        username: m.user?.username,
+        username: (m.user as Record<string, unknown> | null)?.username,
       })),
     );
   },
@@ -164,10 +165,12 @@ export const create_team = admin(
       slug: z.string().optional().describe("Team slug (auto-generated from name if omitted)"),
     }),
     execute: async ({ name, slug }) => {
-      const data = await sentryMutate(`/organizations/${sentryOrg()}/teams/`, "POST", {
-        name,
-        slug,
+      const result = await createANewTeam({
+        ...sentryOpts(),
+        path: { organization_id_or_slug: sentryOrg() },
+        body: { name, slug },
       });
+      const { data } = unwrapResult(result, "createTeam");
       return JSON.stringify(data);
     },
   }),
@@ -182,11 +185,16 @@ export const update_team = admin(
       name: z.string().optional().describe("New team name"),
       slug: z.string().optional().describe("New team slug"),
     }),
-    execute: async ({ team_slug, name, slug }) => {
-      const body: Record<string, unknown> = {};
-      if (name !== undefined) body.name = name;
-      if (slug !== undefined) body.slug = slug;
-      const data = await sentryMutate(`/teams/${sentryOrg()}/${team_slug}/`, "PUT", body);
+    execute: async ({ team_slug, slug }) => {
+      const result = await updateATeam({
+        ...sentryOpts(),
+        path: {
+          organization_id_or_slug: sentryOrg(),
+          team_id_or_slug: team_slug,
+        },
+        body: { slug: slug ?? team_slug },
+      });
+      const { data } = unwrapResult(result, "updateTeam");
       return JSON.stringify(data);
     },
   }),
@@ -200,7 +208,14 @@ export const delete_team = admin(
       team_slug: z.string().describe("Team slug"),
     }),
     execute: async ({ team_slug }) => {
-      await sentryMutate(`/teams/${sentryOrg()}/${team_slug}/`, "DELETE");
+      const result = await deleteATeam({
+        ...sentryOpts(),
+        path: {
+          organization_id_or_slug: sentryOrg(),
+          team_id_or_slug: team_slug,
+        },
+      });
+      unwrapResult(result, "deleteTeam");
       return JSON.stringify({ deleted: true });
     },
   }),
@@ -215,10 +230,15 @@ export const add_team_member = admin(
       team_slug: z.string().describe("Team slug"),
     }),
     execute: async ({ member_id, team_slug }) => {
-      const data = await sentryMutate(
-        `/organizations/${sentryOrg()}/members/${member_id}/teams/${team_slug}/`,
-        "POST",
-      );
+      const result = await addAnOrganizationMemberToATeam({
+        ...sentryOpts(),
+        path: {
+          organization_id_or_slug: sentryOrg(),
+          member_id,
+          team_id_or_slug: team_slug,
+        },
+      });
+      const { data } = unwrapResult(result, "addTeamMember");
       return JSON.stringify(data);
     },
   }),
@@ -233,10 +253,15 @@ export const remove_team_member = admin(
       team_slug: z.string().describe("Team slug"),
     }),
     execute: async ({ member_id, team_slug }) => {
-      await sentryMutate(
-        `/organizations/${sentryOrg()}/members/${member_id}/teams/${team_slug}/`,
-        "DELETE",
-      );
+      const result = await deleteAnOrganizationMemberFromATeam({
+        ...sentryOpts(),
+        path: {
+          organization_id_or_slug: sentryOrg(),
+          member_id,
+          team_id_or_slug: team_slug,
+        },
+      });
+      unwrapResult(result, "removeTeamMember");
       return JSON.stringify({ removed: true });
     },
   }),

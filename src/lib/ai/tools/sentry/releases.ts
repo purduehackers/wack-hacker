@@ -1,34 +1,16 @@
+import {
+  listAnOrganization_sReleases,
+  retrieveAnOrganization_sRelease,
+  createANewReleaseForAnOrganization,
+  listARelease_sDeploys,
+  createADeploy,
+  listAnOrganizationRelease_sCommits,
+  unwrapResult,
+} from "@sentry/api";
 import { tool } from "ai";
 import { z } from "zod";
 
-import { sentryOrg, sentryGet, sentryMutate } from "./client.ts";
-
-interface SentryRelease {
-  version: string;
-  dateCreated: string;
-  dateReleased: string | null;
-  shortVersion: string;
-  newGroups: number;
-  commitCount: number;
-  projects: Array<{ slug: string; name: string }>;
-  lastDeploy: { environment: string; dateFinished: string } | null;
-}
-
-interface SentryDeploy {
-  id: string;
-  environment: string;
-  dateStarted: string | null;
-  dateFinished: string;
-  name: string | null;
-}
-
-interface SentryCommit {
-  id: string;
-  message: string;
-  dateCreated: string;
-  author: { name: string; email: string } | null;
-  repository: { name: string } | null;
-}
+import { sentryOpts, sentryOrg } from "./client.ts";
 
 /** List releases for the organization. */
 export const list_releases = tool({
@@ -40,24 +22,22 @@ export const list_releases = tool({
     per_page: z.number().max(100).optional(),
     cursor: z.string().optional().describe("Pagination cursor"),
   }),
-  execute: async ({ project_slug, query, per_page, cursor }) => {
-    const params = new URLSearchParams();
-    if (project_slug) params.set("project", project_slug);
-    if (query) params.set("query", query);
-    if (per_page) params.set("per_page", String(per_page));
-    if (cursor) params.set("cursor", cursor);
-    const data = await sentryGet<SentryRelease[]>(
-      `/organizations/${sentryOrg()}/releases/?${params}`,
-    );
+  execute: async ({ query, cursor }) => {
+    const result = await listAnOrganization_sReleases({
+      ...sentryOpts(),
+      path: { organization_id_or_slug: sentryOrg() },
+      query: { query, cursor },
+    });
+    const { data } = unwrapResult(result, "listReleases");
     return JSON.stringify(
-      data.map((r) => ({
+      (data as Array<Record<string, unknown>>).map((r) => ({
         version: r.version,
         shortVersion: r.shortVersion,
         dateCreated: r.dateCreated,
         dateReleased: r.dateReleased,
         newGroups: r.newGroups,
         commitCount: r.commitCount,
-        projects: r.projects.map((p) => p.slug),
+        projects: (r.projects as Array<Record<string, unknown>>)?.map((p) => p.slug),
         lastDeploy: r.lastDeploy,
       })),
     );
@@ -71,9 +51,14 @@ export const get_release = tool({
     version: z.string().describe("Release version (e.g. '1.0.0' or a commit SHA)"),
   }),
   execute: async ({ version }) => {
-    const data = await sentryGet<SentryRelease>(
-      `/organizations/${sentryOrg()}/releases/${encodeURIComponent(version)}/`,
-    );
+    const result = await retrieveAnOrganization_sRelease({
+      ...sentryOpts(),
+      path: {
+        organization_id_or_slug: sentryOrg(),
+        version,
+      },
+    });
+    const { data } = unwrapResult(result, "getRelease");
     return JSON.stringify(data);
   },
 });
@@ -89,12 +74,17 @@ export const create_release = tool({
     date_released: z.string().optional().describe("ISO 8601 release date"),
   }),
   execute: async ({ version, projects, ref, date_released }) => {
-    const data = await sentryMutate(`/organizations/${sentryOrg()}/releases/`, "POST", {
-      version,
-      projects,
-      ref,
-      dateReleased: date_released,
+    const result = await createANewReleaseForAnOrganization({
+      ...sentryOpts(),
+      path: { organization_id_or_slug: sentryOrg() },
+      body: {
+        version,
+        projects,
+        ref,
+        dateReleased: date_released,
+      },
     });
+    const { data } = unwrapResult(result, "createRelease");
     return JSON.stringify(data);
   },
 });
@@ -106,9 +96,14 @@ export const list_release_deploys = tool({
     version: z.string().describe("Release version"),
   }),
   execute: async ({ version }) => {
-    const data = await sentryGet<SentryDeploy[]>(
-      `/organizations/${sentryOrg()}/releases/${encodeURIComponent(version)}/deploys/`,
-    );
+    const result = await listARelease_sDeploys({
+      ...sentryOpts(),
+      path: {
+        organization_id_or_slug: sentryOrg(),
+        version,
+      },
+    });
+    const { data } = unwrapResult(result, "listReleaseDeploys");
     return JSON.stringify(data);
   },
 });
@@ -125,16 +120,20 @@ export const create_deploy = tool({
     name: z.string().optional().describe("Optional deploy name"),
   }),
   execute: async ({ version, environment, date_started, date_finished, name }) => {
-    const data = await sentryMutate(
-      `/organizations/${sentryOrg()}/releases/${encodeURIComponent(version)}/deploys/`,
-      "POST",
-      {
+    const result = await createADeploy({
+      ...sentryOpts(),
+      path: {
+        organization_id_or_slug: sentryOrg(),
+        version,
+      },
+      body: {
         environment,
         dateStarted: date_started,
         dateFinished: date_finished,
         name,
       },
-    );
+    });
+    const { data } = unwrapResult(result, "createDeploy");
     return JSON.stringify(data);
   },
 });
@@ -146,16 +145,21 @@ export const list_release_commits = tool({
     version: z.string().describe("Release version"),
   }),
   execute: async ({ version }) => {
-    const data = await sentryGet<SentryCommit[]>(
-      `/organizations/${sentryOrg()}/releases/${encodeURIComponent(version)}/commits/`,
-    );
+    const result = await listAnOrganizationRelease_sCommits({
+      ...sentryOpts(),
+      path: {
+        organization_id_or_slug: sentryOrg(),
+        version,
+      },
+    });
+    const { data } = unwrapResult(result, "listReleaseCommits");
     return JSON.stringify(
-      data.map((c) => ({
+      (data as Array<Record<string, unknown>>).map((c) => ({
         id: c.id,
         message: c.message,
         dateCreated: c.dateCreated,
         author: c.author,
-        repository: c.repository?.name,
+        repository: (c.repository as Record<string, unknown> | null)?.name,
       })),
     );
   },

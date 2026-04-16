@@ -3,19 +3,6 @@ import { z } from "zod";
 
 import { sentryGet, sentryOrg } from "./client.ts";
 
-interface TraceEvent {
-  event_id: string;
-  span_id: string;
-  transaction: string;
-  "transaction.duration": number;
-  "transaction.op": string;
-  project_slug: string;
-  timestamp: string;
-  children: TraceEvent[];
-  errors: unknown[];
-  performance_issues: unknown[];
-}
-
 /** Get a full distributed trace by trace ID. */
 export const get_trace = tool({
   description:
@@ -27,7 +14,7 @@ export const get_trace = tool({
   execute: async ({ trace_id, project_slug }) => {
     const params = new URLSearchParams();
     if (project_slug) params.set("project", project_slug);
-    const data = await sentryGet<TraceEvent[]>(
+    const data = await sentryGet(
       `/organizations/${sentryOrg()}/events-trace/${trace_id}/?${params}`,
     );
     return JSON.stringify(data);

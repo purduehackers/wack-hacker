@@ -1,35 +1,16 @@
+import {
+  retrieveMonitorsForAnOrganization,
+  retrieveAMonitor,
+  retrieveCheckInsForAMonitor,
+  updateAMonitor,
+  deleteAMonitorOrMonitorEnvironments,
+  unwrapResult,
+} from "@sentry/api";
 import { tool } from "ai";
 import { z } from "zod";
 
 import { admin } from "../../skills/index.ts";
-import { sentryGet, sentryMutate, sentryOrg } from "./client.ts";
-
-interface SentryMonitor {
-  id: string;
-  slug: string;
-  name: string;
-  status: string;
-  type: string;
-  config: {
-    schedule_type: string;
-    schedule: string | [number, string];
-    checkin_margin: number | null;
-    max_runtime: number | null;
-    timezone: string;
-  };
-  project: { slug: string; id: string };
-  dateCreated: string;
-  lastCheckIn: string | null;
-  nextCheckIn: string | null;
-}
-
-interface SentryCheckIn {
-  id: string;
-  status: string;
-  duration: number | null;
-  dateCreated: string;
-  environment: string | null;
-}
+import { sentryOpts, sentryOrg } from "./client.ts";
 
 /** List cron monitors for the organization. */
 export const list_monitors = tool({
@@ -40,24 +21,23 @@ export const list_monitors = tool({
     per_page: z.number().max(100).optional(),
     cursor: z.string().optional().describe("Pagination cursor"),
   }),
-  execute: async ({ project_slug, per_page, cursor }) => {
-    const params = new URLSearchParams();
-    if (project_slug) params.set("project", project_slug);
-    if (per_page) params.set("per_page", String(per_page));
-    if (cursor) params.set("cursor", cursor);
-    const data = await sentryGet<SentryMonitor[]>(
-      `/organizations/${sentryOrg()}/monitors/?${params}`,
-    );
+  execute: async ({ cursor }) => {
+    const result = await retrieveMonitorsForAnOrganization({
+      ...sentryOpts(),
+      path: { organization_id_or_slug: sentryOrg() },
+      query: { cursor },
+    });
+    const { data } = unwrapResult(result, "listMonitors");
     return JSON.stringify(
-      data.map((m) => ({
+      (data as Array<Record<string, unknown>>).map((m) => ({
         id: m.id,
         slug: m.slug,
         name: m.name,
         status: m.status,
-        schedule: m.config.schedule,
-        scheduleType: m.config.schedule_type,
-        timezone: m.config.timezone,
-        project: m.project?.slug,
+        schedule: (m.config as Record<string, unknown>)?.schedule,
+        scheduleType: (m.config as Record<string, unknown>)?.schedule_type,
+        timezone: (m.config as Record<string, unknown>)?.timezone,
+        project: (m.project as Record<string, unknown> | undefined)?.slug,
         lastCheckIn: m.lastCheckIn,
         nextCheckIn: m.nextCheckIn,
       })),
@@ -73,9 +53,14 @@ export const get_monitor = tool({
     monitor_slug: z.string().describe("Monitor slug"),
   }),
   execute: async ({ monitor_slug }) => {
-    const data = await sentryGet<SentryMonitor>(
-      `/organizations/${sentryOrg()}/monitors/${monitor_slug}/`,
-    );
+    const result = await retrieveAMonitor({
+      ...sentryOpts(),
+      path: {
+        organization_id_or_slug: sentryOrg(),
+        monitor_id_or_slug: monitor_slug,
+      },
+    });
+    const { data } = unwrapResult(result, "getMonitor");
     return JSON.stringify(data);
   },
 });
@@ -89,13 +74,16 @@ export const list_monitor_checkins = tool({
     per_page: z.number().max(100).optional(),
     cursor: z.string().optional().describe("Pagination cursor"),
   }),
-  execute: async ({ monitor_slug, per_page, cursor }) => {
-    const params = new URLSearchParams();
-    if (per_page) params.set("per_page", String(per_page));
-    if (cursor) params.set("cursor", cursor);
-    const data = await sentryGet<SentryCheckIn[]>(
-      `/organizations/${sentryOrg()}/monitors/${monitor_slug}/checkins/?${params}`,
-    );
+  execute: async ({ monitor_slug, cursor }) => {
+    const result = await retrieveCheckInsForAMonitor({
+      ...sentryOpts(),
+      path: {
+        organization_id_or_slug: sentryOrg(),
+        monitor_id_or_slug: monitor_slug,
+      },
+      query: { cursor },
+    });
+    const { data } = unwrapResult(result, "listMonitorCheckins");
     return JSON.stringify(data);
   },
 });
@@ -134,21 +122,42 @@ export const update_monitor = tool({
     max_runtime,
     timezone,
   }) => {
-    const body: Record<string, unknown> = {};
-    if (name !== undefined) body.name = name;
-    if (slug !== undefined) body.slug = slug;
-    const config: Record<string, unknown> = {};
-    if (schedule_type !== undefined) config.schedule_type = schedule_type;
-    if (schedule !== undefined) config.schedule = schedule;
-    if (checkin_margin !== undefined) config.checkin_margin = checkin_margin;
-    if (max_runtime !== undefined) config.max_runtime = max_runtime;
-    if (timezone !== undefined) config.timezone = timezone;
-    if (Object.keys(config).length > 0) body.config = config;
-    const data = await sentryMutate(
-      `/organizations/${sentryOrg()}/monitors/${monitor_slug}/`,
-      "PUT",
-      body,
-    );
+    // Fetch current monitor to get required fields for the SDK
+    const getResult = await retrieveAMonitor({
+      ...sentryOpts(),
+      path: {
+        organization_id_or_slug: sentryOrg(),
+        monitor_id_or_slug: monitor_slug,
+      },
+    });
+    const { data: existing } = unwrapResult(getResult, "getMonitorForUpdate");
+    const current = existing as Record<string, unknown>;
+    const currentConfig = current.config as Record<string, unknown>;
+
+    const monitorConfig: Parameters<typeof updateAMonitor>[0]["body"]["config"] = {
+      schedule_type: (schedule_type ?? currentConfig.schedule_type) as "crontab" | "interval",
+      schedule: schedule ?? currentConfig.schedule,
+      checkin_margin: checkin_margin ?? (currentConfig.checkin_margin as number | undefined),
+      max_runtime: max_runtime ?? (currentConfig.max_runtime as number | undefined),
+      timezone: (timezone ?? currentConfig.timezone) as Parameters<
+        typeof updateAMonitor
+      >[0]["body"]["config"]["timezone"],
+    };
+
+    const result = await updateAMonitor({
+      ...sentryOpts(),
+      path: {
+        organization_id_or_slug: sentryOrg(),
+        monitor_id_or_slug: monitor_slug,
+      },
+      body: {
+        name: name ?? (current.name as string),
+        slug: slug ?? (current.slug as string),
+        config: monitorConfig,
+        project: ((current.project as Record<string, unknown> | undefined)?.slug as string) ?? "",
+      },
+    });
+    const { data } = unwrapResult(result, "updateMonitor");
     return JSON.stringify(data);
   },
 });
@@ -161,7 +170,14 @@ export const delete_monitor = admin(
       monitor_slug: z.string().describe("Monitor slug"),
     }),
     execute: async ({ monitor_slug }) => {
-      await sentryMutate(`/organizations/${sentryOrg()}/monitors/${monitor_slug}/`, "DELETE");
+      const result = await deleteAMonitorOrMonitorEnvironments({
+        ...sentryOpts(),
+        path: {
+          organization_id_or_slug: sentryOrg(),
+          monitor_id_or_slug: monitor_slug,
+        },
+      });
+      unwrapResult(result, "deleteMonitor");
       return JSON.stringify({ deleted: true });
     },
   }),

@@ -1,7 +1,12 @@
+import {
+  retrieveEventCountsForAnOrganizationV2,
+  retrieveEventCountsForAProject,
+  unwrapResult,
+} from "@sentry/api";
 import { tool } from "ai";
 import { z } from "zod";
 
-import { sentryGet, sentryOrg } from "./client.ts";
+import { sentryOpts, sentryOrg } from "./client.ts";
 
 /** Get organization usage stats over time. */
 export const get_org_stats = tool({
@@ -30,15 +35,18 @@ export const get_org_stats = tool({
       .describe("Time bucket interval (e.g. '1h', '1d'). Defaults to '1h'."),
     project_slug: z.string().optional().describe("Filter to a specific project slug"),
   }),
-  execute: async ({ stat, group, field, stat_period, interval, project_slug }) => {
-    const params = new URLSearchParams();
-    if (stat) params.set("stat", stat);
-    if (group) params.set("groupBy", group);
-    params.set("field", field ?? "sum(quantity)");
-    params.set("statsPeriod", stat_period ?? "24h");
-    params.set("interval", interval ?? "1h");
-    if (project_slug) params.set("project", project_slug);
-    const data = await sentryGet(`/organizations/${sentryOrg()}/stats_v2/?${params}`);
+  execute: async ({ group, field, stat_period, interval }) => {
+    const result = await retrieveEventCountsForAnOrganizationV2({
+      ...sentryOpts(),
+      path: { organization_id_or_slug: sentryOrg() },
+      query: {
+        groupBy: group ? [group] : ["outcome"],
+        field: (field ?? "sum(quantity)") as "sum(quantity)" | "sum(times_seen)",
+        statsPeriod: stat_period ?? "24h",
+        interval,
+      },
+    });
+    const { data } = unwrapResult(result, "getOrgStats");
     return JSON.stringify(data);
   },
 });
@@ -58,11 +66,16 @@ export const get_project_stats = tool({
       .optional()
       .describe("Time range (e.g. '24h', '7d'). Defaults to '24h'."),
   }),
-  execute: async ({ project_slug, stat, stat_period }) => {
-    const params = new URLSearchParams();
-    if (stat) params.set("stat", stat);
-    params.set("statsPeriod", stat_period ?? "24h");
-    const data = await sentryGet(`/projects/${sentryOrg()}/${project_slug}/stats/?${params}`);
+  execute: async ({ project_slug, stat }) => {
+    const result = await retrieveEventCountsForAProject({
+      ...sentryOpts(),
+      path: {
+        organization_id_or_slug: sentryOrg(),
+        project_id_or_slug: project_slug,
+      },
+      query: { stat: stat as "received" | "rejected" | "blacklisted" | undefined },
+    });
+    const { data } = unwrapResult(result, "getProjectStats");
     return JSON.stringify(data);
   },
 });

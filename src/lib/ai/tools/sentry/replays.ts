@@ -1,23 +1,8 @@
+import { listAnOrganization_sReplays, retrieveAReplayInstance, unwrapResult } from "@sentry/api";
 import { tool } from "ai";
 import { z } from "zod";
 
-import { sentryGet, sentryOrg } from "./client.ts";
-
-interface SentryReplay {
-  id: string;
-  title: string;
-  project_id: string;
-  duration: number;
-  count_errors: number;
-  count_segments: number;
-  started_at: string;
-  finished_at: string;
-  urls: string[];
-  user: { id: string; username: string; email: string; ip_address: string } | null;
-  os: { name: string; version: string } | null;
-  browser: { name: string; version: string } | null;
-  activity: number;
-}
+import { sentryOpts, sentryOrg } from "./client.ts";
 
 /** List session replays. */
 export const list_replays = tool({
@@ -35,25 +20,26 @@ export const list_replays = tool({
     per_page: z.number().max(100).optional(),
     stat_period: z.string().optional().describe("Time range (e.g. '24h', '7d'). Defaults to '7d'."),
   }),
-  execute: async ({ project_slug, query, sort, per_page, stat_period }) => {
-    const params = new URLSearchParams();
-    params.set("statsPeriod", stat_period ?? "7d");
-    if (project_slug) params.set("project", project_slug);
-    if (query) params.set("query", query);
-    if (sort) params.set("sort", sort);
-    if (per_page) params.set("per_page", String(per_page));
-    const data = await sentryGet<{ data: SentryReplay[] }>(
-      `/organizations/${sentryOrg()}/replays/?${params}`,
-    );
+  execute: async ({ query, sort, stat_period }) => {
+    const result = await listAnOrganization_sReplays({
+      ...sentryOpts(),
+      path: { organization_id_or_slug: sentryOrg() },
+      query: {
+        statsPeriod: stat_period ?? "7d",
+        query,
+        sort,
+      },
+    });
+    const { data } = unwrapResult(result, "listReplays");
     return JSON.stringify(
-      data.data.map((r) => ({
+      (data as Array<Record<string, unknown>>).map((r) => ({
         id: r.id,
         title: r.title,
         duration: r.duration,
         countErrors: r.count_errors,
         startedAt: r.started_at,
         finishedAt: r.finished_at,
-        urls: r.urls?.slice(0, 10),
+        urls: (r.urls as string[] | undefined)?.slice(0, 10),
         user: r.user,
         browser: r.browser,
         os: r.os,
@@ -71,10 +57,15 @@ export const get_replay = tool({
     project_slug: z.string().describe("Project slug"),
     replay_id: z.string().describe("Replay ID"),
   }),
-  execute: async ({ project_slug, replay_id }) => {
-    const data = await sentryGet<{ data: SentryReplay }>(
-      `/projects/${sentryOrg()}/${project_slug}/replays/${replay_id}/`,
-    );
-    return JSON.stringify(data.data);
+  execute: async ({ replay_id }) => {
+    const result = await retrieveAReplayInstance({
+      ...sentryOpts(),
+      path: {
+        organization_id_or_slug: sentryOrg(),
+        replay_id,
+      },
+    });
+    const { data } = unwrapResult(result, "getReplay");
+    return JSON.stringify(data);
   },
 });
