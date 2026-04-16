@@ -1,0 +1,15 @@
+name: Post-Deploy Gateway Ping
+
+on:
+  deployment_status:
+
+jobs:
+  ping-gateway:
+    name: Ping Discord Gateway
+    if: >-
+      github.event.deployment_status.state == 'success' &&
+      github.event.deployment.environment == 'Production'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping gateway endpoint
+        run: curl -fsSL https://wack.purduehackers.com/api/discord/gateway
