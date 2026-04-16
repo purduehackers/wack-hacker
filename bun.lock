@@ -18,6 +18,7 @@
         "@notionhq/client": "^5.18.0",
         "@octokit/auth-app": "^8.2.0",
         "@purduehackers/discord-markdown-utils": "^0.0.4",
+        "@sentry/api": "^0.113.0",
         "@sentry/nextjs": "^10.48.0",
         "@t3-oss/env-core": "^0.13.11",
         "@upstash/redis": "^1.37.0",
@@ -905,6 +906,8 @@
     "@sentry-internal/replay": ["@sentry-internal/replay@10.48.0", "", { "dependencies": { "@sentry-internal/browser-utils": "10.48.0", "@sentry/core": "10.48.0" } }, "sha512-sevRTePfuk4PNuz9KAKpmTZEomAU0aLXyIhOwA0OnUDdxPhkY8kq5lwDbuxTHv6DQUjUX3YgFbY45VH1JEqHKA=="],
 
     "@sentry-internal/replay-canvas": ["@sentry-internal/replay-canvas@10.48.0", "", { "dependencies": { "@sentry-internal/replay": "10.48.0", "@sentry/core": "10.48.0" } }, "sha512-9nWuN2z4O+iwbTfuYV5ZmngBgJU/ZxfOo47A5RJP3Nu/kl59aJ1lUhILYOKyeNOIC/JyeERmpIcTxnlPXQzZ3Q=="],
+
+    "@sentry/api": ["@sentry/api@0.113.0", "", {}, "sha512-28W0Oykb/O+6kH8F+OEd8070N4z7ctawlyUtEvnNZNlaLviDC9Is1X/0JiK2Xb9y2ZNbkWf+/H1y5hXr0WTIOw=="],
 
     "@sentry/babel-plugin-component-annotate": ["@sentry/babel-plugin-component-annotate@5.2.0", "", {}, "sha512-8LbOI5Kzb5F0+7LVQPi2+zGz1iPiRRFhM+7uZ/ZQ33L9BmDOYNIy3xWxCfMw2JCuMXXaxF47XCjGmR22/B0WPg=="],
 
