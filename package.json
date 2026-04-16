@@ -46,6 +46,7 @@
     "@aws-sdk/client-s3": "^3.1030.0",
     "@discordjs/core": "^2.4.0",
     "@discordjs/rest": "^2.6.1",
+    "@figma/rest-api-spec": "^0.37.0",
     "@libsql/client": "^0.17.2",
     "@linear/sdk": "^81.0.0",
     "@noble/ciphers": "^2.2.0",
