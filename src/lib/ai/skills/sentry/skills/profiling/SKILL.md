@@ -9,7 +9,7 @@ mode: inline
 
 <flamegraph>
 - get_flamegraph returns CPU time distribution across function calls.
-- Requires project_id (numeric) and transaction name.
+- Requires project_slug and transaction name.
 - Useful for identifying which functions consume the most CPU time.
 </flamegraph>
 

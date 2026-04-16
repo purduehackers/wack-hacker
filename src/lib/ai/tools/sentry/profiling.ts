@@ -8,16 +8,16 @@ export const get_flamegraph = tool({
   description:
     "Get flamegraph profiling data for a transaction. Shows CPU time distribution across function calls. Useful for identifying performance bottlenecks.",
   inputSchema: z.object({
-    project_id: z.string().describe("Project ID"),
+    project_slug: z.string().describe("Project slug"),
     transaction: z.string().describe("Transaction name (e.g. 'GET /api/users')"),
     stat_period: z
       .string()
       .optional()
       .describe("Time range (e.g. '24h', '7d'). Defaults to '24h'."),
   }),
-  execute: async ({ project_id, transaction, stat_period }) => {
+  execute: async ({ project_slug, transaction, stat_period }) => {
     const params = new URLSearchParams();
-    params.set("project", project_id);
+    params.set("project", project_slug);
     params.set("query", `transaction:"${transaction}"`);
     params.set("statsPeriod", stat_period ?? "24h");
     const data = await sentryGet(`/organizations/${sentryOrg()}/profiling/flamegraph/?${params}`);
@@ -30,7 +30,7 @@ export const list_profiled_functions = tool({
   description:
     "List the slowest profiled functions. Shows function name, package, self-time, and total-time. Useful for finding CPU-heavy code.",
   inputSchema: z.object({
-    project_id: z.string().describe("Project ID"),
+    project_slug: z.string().describe("Project slug"),
     transaction: z.string().optional().describe("Filter by transaction name"),
     sort: z
       .enum(["p75()", "p95()", "p99()", "count()", "avg()"])
@@ -42,9 +42,9 @@ export const list_profiled_functions = tool({
       .optional()
       .describe("Time range (e.g. '24h', '7d'). Defaults to '24h'."),
   }),
-  execute: async ({ project_id, transaction, sort, per_page, stat_period }) => {
+  execute: async ({ project_slug, transaction, sort, per_page, stat_period }) => {
     const params = new URLSearchParams();
-    params.set("project", project_id);
+    params.set("project", project_slug);
     params.set("statsPeriod", stat_period ?? "24h");
     if (transaction) params.set("query", `transaction:"${transaction}"`);
     if (sort) params.set("sort", `-${sort}`);

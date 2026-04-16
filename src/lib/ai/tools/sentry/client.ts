@@ -8,13 +8,13 @@ export function sentryOrg(): string {
 
 export async function sentryFetch(path: string, options?: RequestInit): Promise<Response> {
   const url = path.startsWith("http") ? path : `${BASE_URL}${path}`;
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${env.SENTRY_AUTH_TOKEN}`,
-    "Content-Type": "application/json",
-  };
   const response = await fetch(url, {
     ...options,
-    headers,
+    headers: {
+      Authorization: `Bearer ${env.SENTRY_AUTH_TOKEN}`,
+      "Content-Type": "application/json",
+      ...(options?.headers as Record<string, string> | undefined),
+    },
     signal: options?.signal ?? AbortSignal.timeout(15_000),
   });
   if (!response.ok) {

@@ -109,9 +109,11 @@ export const update_monitor = tool({
     slug: z.string().optional().describe("New monitor slug"),
     schedule_type: z.enum(["crontab", "interval"]).optional().describe("Schedule type"),
     schedule: z
-      .string()
+      .union([z.string(), z.tuple([z.number(), z.enum(["minute", "hour", "day"])])])
       .optional()
-      .describe("Crontab expression (e.g. '0 * * * *') or interval value"),
+      .describe(
+        "Crontab expression string (e.g. '0 * * * *') or interval tuple (e.g. [10, 'minute'])",
+      ),
     checkin_margin: z
       .number()
       .optional()

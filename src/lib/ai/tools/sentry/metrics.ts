@@ -8,11 +8,11 @@ export const list_metrics = tool({
   description:
     "List available custom metrics (counters, distributions, gauges, sets) in the Sentry organization.",
   inputSchema: z.object({
-    project_id: z.string().optional().describe("Filter by project ID"),
+    project_slug: z.string().optional().describe("Filter by project slug"),
   }),
-  execute: async ({ project_id }) => {
+  execute: async ({ project_slug }) => {
     const params = new URLSearchParams();
-    if (project_id) params.set("project", project_id);
+    if (project_slug) params.set("project", project_slug);
     const data = await sentryGet(`/organizations/${sentryOrg()}/metrics/meta/?${params}`);
     return JSON.stringify(data);
   },
@@ -31,7 +31,7 @@ export const query_metrics = tool({
     op: z
       .enum(["sum", "count", "avg", "min", "max", "p50", "p75", "p90", "p95", "p99"])
       .describe("Aggregation operation"),
-    project_id: z.string().optional().describe("Filter by project ID"),
+    project_slug: z.string().optional().describe("Filter by project slug"),
     stat_period: z
       .string()
       .optional()
@@ -43,12 +43,12 @@ export const query_metrics = tool({
     group_by: z.string().optional().describe("Tag key to group results by"),
     query: z.string().optional().describe("Tag filter query (e.g. 'environment:production')"),
   }),
-  execute: async ({ mri, op, project_id, stat_period, interval, group_by, query }) => {
+  execute: async ({ mri, op, project_slug, stat_period, interval, group_by, query }) => {
     const params = new URLSearchParams();
     params.set("field", `${op}(${mri})`);
     params.set("statsPeriod", stat_period ?? "24h");
     params.set("interval", interval ?? "1h");
-    if (project_id) params.set("project", project_id);
+    if (project_slug) params.set("project", project_slug);
     if (group_by) params.set("groupBy", group_by);
     if (query) params.set("query", query);
     const data = await sentryGet(`/organizations/${sentryOrg()}/metrics/data/?${params}`);
@@ -60,12 +60,12 @@ export const query_metrics = tool({
 export const list_metric_tags = tool({
   description: "List tag keys available for custom metrics filtering and grouping.",
   inputSchema: z.object({
-    project_id: z.string().optional().describe("Filter by project ID"),
+    project_slug: z.string().optional().describe("Filter by project slug"),
     metric: z.string().optional().describe("Filter by metric MRI"),
   }),
-  execute: async ({ project_id, metric }) => {
+  execute: async ({ project_slug, metric }) => {
     const params = new URLSearchParams();
-    if (project_id) params.set("project", project_id);
+    if (project_slug) params.set("project", project_slug);
     if (metric) params.set("metric", metric);
     const data = await sentryGet(`/organizations/${sentryOrg()}/metrics/tags/?${params}`);
     return JSON.stringify(data);
@@ -77,12 +77,12 @@ export const get_metric_tag_values = tool({
   description: "Get values for a specific metric tag key.",
   inputSchema: z.object({
     tag_key: z.string().describe("Tag key to list values for"),
-    project_id: z.string().optional().describe("Filter by project ID"),
+    project_slug: z.string().optional().describe("Filter by project slug"),
     metric: z.string().optional().describe("Filter by metric MRI"),
   }),
-  execute: async ({ tag_key, project_id, metric }) => {
+  execute: async ({ tag_key, project_slug, metric }) => {
     const params = new URLSearchParams();
-    if (project_id) params.set("project", project_id);
+    if (project_slug) params.set("project", project_slug);
     if (metric) params.set("metric", metric);
     const data = await sentryGet(
       `/organizations/${sentryOrg()}/metrics/tags/${encodeURIComponent(tag_key)}/?${params}`,

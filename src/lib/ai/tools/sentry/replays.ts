@@ -24,7 +24,7 @@ export const list_replays = tool({
   description:
     "List session replays for the organization. Returns replay ID, duration, error count, URLs visited, user info, and browser/OS.",
   inputSchema: z.object({
-    project_id: z.string().optional().describe("Filter by project ID"),
+    project_slug: z.string().optional().describe("Filter by project slug"),
     query: z
       .string()
       .optional()
@@ -35,10 +35,10 @@ export const list_replays = tool({
     per_page: z.number().max(100).optional(),
     stat_period: z.string().optional().describe("Time range (e.g. '24h', '7d'). Defaults to '7d'."),
   }),
-  execute: async ({ project_id, query, sort, per_page, stat_period }) => {
+  execute: async ({ project_slug, query, sort, per_page, stat_period }) => {
     const params = new URLSearchParams();
     params.set("statsPeriod", stat_period ?? "7d");
-    if (project_id) params.set("project", project_id);
+    if (project_slug) params.set("project", project_slug);
     if (query) params.set("query", query);
     if (sort) params.set("sort", sort);
     if (per_page) params.set("per_page", String(per_page));

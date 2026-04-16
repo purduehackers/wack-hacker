@@ -17,7 +17,7 @@ When delegated to, you have access to these skill bundles (loaded via `load_skil
 - releases: Create and manage releases and deploys; view release health
 - alerts: List, create, update, and delete issue and metric alert rules
 - performance: Query transaction performance, latency, and throughput data
-- issue-management: Update, resolve, ignore, assign, merge, and tag issues
+- issue-management: Update, resolve, ignore, assign, delete, and tag issues
 - members: List and manage organization members and teams; view team membership
 - stats: View organization and project usage statistics and event volume
 - metrics: Query custom metrics — counters, distributions, gauges, and sets

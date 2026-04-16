@@ -22,11 +22,11 @@ export const get_trace = tool({
     "Get a full distributed trace by trace ID. Returns the complete trace waterfall with all transactions, spans, errors, and performance issues.",
   inputSchema: z.object({
     trace_id: z.string().describe("Trace ID (32-character hex string)"),
-    project_id: z.string().optional().describe("Project ID to scope the trace lookup"),
+    project_slug: z.string().optional().describe("Project slug to scope the trace lookup"),
   }),
-  execute: async ({ trace_id, project_id }) => {
+  execute: async ({ trace_id, project_slug }) => {
     const params = new URLSearchParams();
-    if (project_id) params.set("project", project_id);
+    if (project_slug) params.set("project", project_slug);
     const data = await sentryGet<TraceEvent[]>(
       `/organizations/${sentryOrg()}/events-trace/${trace_id}/?${params}`,
     );

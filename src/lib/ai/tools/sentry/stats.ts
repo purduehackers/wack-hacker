@@ -28,16 +28,16 @@ export const get_org_stats = tool({
       .string()
       .optional()
       .describe("Time bucket interval (e.g. '1h', '1d'). Defaults to '1h'."),
-    project_id: z.string().optional().describe("Filter to a specific project ID"),
+    project_slug: z.string().optional().describe("Filter to a specific project slug"),
   }),
-  execute: async ({ stat, group, field, stat_period, interval, project_id }) => {
+  execute: async ({ stat, group, field, stat_period, interval, project_slug }) => {
     const params = new URLSearchParams();
     if (stat) params.set("stat", stat);
     if (group) params.set("groupBy", group);
     params.set("field", field ?? "sum(quantity)");
     params.set("statsPeriod", stat_period ?? "24h");
     params.set("interval", interval ?? "1h");
-    if (project_id) params.set("project", project_id);
+    if (project_slug) params.set("project", project_slug);
     const data = await sentryGet(`/organizations/${sentryOrg()}/stats_v2/?${params}`);
     return JSON.stringify(data);
   },
