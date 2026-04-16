@@ -17,7 +17,6 @@ async function fetchRecentMessages(
   discord: API,
   channelId: string,
   beforeMessageId: string,
-  botUserId: string,
 ): Promise<RecentMessage[] | undefined> {
   try {
     const raw = await discord.channels.getMessages(channelId, {
@@ -25,9 +24,9 @@ async function fetchRecentMessages(
       limit: MAX_RECENT_MESSAGES,
     });
 
-    // Discord returns newest-first; filter and keep chronological order
+    // Discord returns newest-first; keep chronological order
     const messages: RecentMessage[] = raw
-      .filter((m) => m.author.id !== botUserId && m.content?.trim())
+      .filter((m) => m.content?.trim())
       .reverse()
       .map((m) => ({
         author: (m.author as any).global_name ?? m.author.username,
@@ -107,12 +106,7 @@ export async function handleMention(
 
   const agentContext = AgentContext.fromPacket(packet);
 
-  const recentMessages = await fetchRecentMessages(
-    ctx.discord,
-    sourceChannelId,
-    data.id,
-    ctx.botUserId,
-  );
+  const recentMessages = await fetchRecentMessages(ctx.discord, sourceChannelId, data.id);
 
   log.info("mention", `Starting workflow for ${data.author.username} in ${data.channel.name}`);
 
