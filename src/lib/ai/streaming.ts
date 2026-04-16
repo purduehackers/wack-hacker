@@ -3,6 +3,8 @@ import type { API } from "@discordjs/core/http-only";
 import { isTextUIPart, type UIMessage } from "ai";
 import { log } from "evlog";
 
+import { countMetric, recordDistribution, recordDuration } from "@/lib/metrics";
+
 import type { SerializedAgentContext, Attachment, SubagentMetrics } from "./types.ts";
 
 import { AgentContext } from "./context.ts";
@@ -86,14 +88,21 @@ export async function streamTurn(
   try {
     const [totalUsage, steps] = await Promise.all([result.totalUsage, result.steps]);
     const orchestratorToolCalls = steps.reduce((sum, step) => sum + step.toolCalls.length, 0);
+    const totalTokens = (totalUsage.totalTokens ?? 0) + subagentMetrics.totalTokens;
+    const toolCallCount = orchestratorToolCalls + subagentMetrics.toolCallCount;
     await renderer.finalize({
       elapsedMs,
-      totalTokens: (totalUsage.totalTokens ?? 0) + subagentMetrics.totalTokens,
-      toolCallCount: orchestratorToolCalls + subagentMetrics.toolCallCount,
+      totalTokens,
+      toolCallCount,
       stepCount: steps.length,
     });
+
+    recordDistribution("ai.turn.tokens", totalTokens);
+    recordDistribution("ai.turn.tool_calls", toolCallCount);
+    recordDistribution("ai.turn.steps", steps.length);
   } catch (err) {
     log.warn("streaming", `Failed to collect metadata: ${String(err)}`);
+    countMetric("ai.turn.metadata_error");
     await renderer.finalize({
       elapsedMs,
       totalTokens: undefined,
@@ -101,6 +110,9 @@ export async function streamTurn(
       stepCount: 0,
     });
   }
+
+  countMetric("ai.turn.completed");
+  recordDuration("ai.turn.duration", elapsedMs);
 
   log.info("streaming", `Turn complete, ${renderer.content.length} chars, ${elapsedMs}ms`);
 
