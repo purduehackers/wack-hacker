@@ -18,7 +18,7 @@ interface ChatHookEvent {
   content: string;
   authorId: string;
   authorUsername: string;
-  recentMessages?: RecentMessage[];
+  recentMessages: RecentMessage[] | undefined;
 }
 
 async function runTurn(
