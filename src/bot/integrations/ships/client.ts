@@ -28,12 +28,24 @@ export class ShipDatabase {
     return id;
   }
 
-  async deleteByMessageId(messageId: string): Promise<string | null> {
+  async deleteByMessageId(
+    messageId: string,
+  ): Promise<{ id: string; attachmentKeys: string[] } | null> {
     const result = await this.db.execute({
-      sql: "DELETE FROM ship WHERE message_id = ? RETURNING id",
+      sql: "DELETE FROM ship WHERE message_id = ? RETURNING id, attachments",
       args: [messageId],
     });
     const row = result.rows[0];
-    return row ? (row.id as string) : null;
+    if (!row) return null;
+
+    let attachmentKeys: string[] = [];
+    try {
+      const parsed = JSON.parse(row.attachments as string) as Array<{ key: string }>;
+      attachmentKeys = parsed.map((a) => a.key);
+    } catch {
+      // attachments column may be empty or malformed
+    }
+
+    return { id: row.id as string, attachmentKeys };
   }
 }
