@@ -43,7 +43,7 @@ vi.mock("@/lib/ai/streaming", () => ({
 }));
 
 const { taskWorkflow } = await import("./task.ts");
-const streaming = await import("@/lib/ai/streaming.ts");
+const streaming = await import("@/lib/ai/streaming");
 
 beforeEach(() => {
   vi.clearAllMocks();
