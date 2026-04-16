@@ -129,7 +129,5 @@ export const autoThread = defineEvent({
         });
       }
     }
-
-    await ctx.discord.channels.edit(thread.id, { archived: true, locked: true });
   },
 });
