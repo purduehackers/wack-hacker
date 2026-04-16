@@ -6,6 +6,7 @@ import type { Packet } from "@/lib/protocol/types";
 
 import { ConversationStore } from "@/bot/store";
 import { env } from "@/env";
+import { countMetric, recordDuration } from "@/lib/metrics";
 
 import { router } from "./routes/handlers";
 
@@ -36,6 +37,7 @@ function getMessageChannelId(packet: Packet): string | null {
 export async function processEvent(packet: Packet, store: ConversationStore): Promise<void> {
   if (!(await store.dedup(getDedupKey(packet)))) {
     log.debug("events", `Dedup hit, skipping ${packet.type}`);
+    countMetric("event.dedup_hit", { type: packet.type });
     return;
   }
 
@@ -45,11 +47,13 @@ export async function processEvent(packet: Packet, store: ConversationStore): Pr
     botUserId: env.DISCORD_CLIENT_ID,
   };
 
+  const startTime = Date.now();
   const lockChannel = getMessageChannelId(packet);
   if (lockChannel) {
     const token = await store.acquireLock(lockChannel);
     if (!token) {
       log.warn("events", `Lock held for ${lockChannel}, dropping ${packet.type}`);
+      countMetric("event.lock_contention", { type: packet.type });
       return;
     }
     try {
@@ -60,4 +64,7 @@ export async function processEvent(packet: Packet, store: ConversationStore): Pr
   } else {
     await router.dispatch(packet, ctx);
   }
+
+  countMetric("event.processed", { type: packet.type });
+  recordDuration("event.process_duration", Date.now() - startTime, { type: packet.type });
 }

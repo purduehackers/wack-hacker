@@ -7,6 +7,7 @@ import type { SerializedAgentContext } from "@/lib/ai/types";
 
 import { ConversationStore } from "@/bot/store";
 import { streamTurn } from "@/lib/ai/streaming";
+import { countMetric } from "@/lib/metrics";
 
 import type { ChatPayload } from "./types";
 
@@ -42,6 +43,7 @@ export async function chatWorkflow(payload: ChatPayload) {
   const { workflowRunId } = getWorkflowMetadata();
 
   log.info("workflow", `Chat started: ${workflowRunId}`);
+  countMetric("workflow.chat.started");
 
   await runTurn(channelId, content, context);
 
@@ -50,11 +52,13 @@ export async function chatWorkflow(payload: ChatPayload) {
   for await (const event of hook) {
     if (event.type === "done") {
       log.info("workflow", `Chat ended by user: ${workflowRunId}`);
+      countMetric("workflow.chat.ended");
       break;
     }
     if (!event.content) continue;
 
     log.info("workflow", `Follow-up from ${event.authorUsername}: ${workflowRunId}`);
+    countMetric("workflow.chat.followup");
     await runTurn(channelId, event.content, context);
   }
 

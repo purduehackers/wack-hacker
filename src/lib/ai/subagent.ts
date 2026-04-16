@@ -9,6 +9,8 @@ import {
 } from "ai";
 import { z } from "zod";
 
+import { countMetric, recordDistribution } from "@/lib/metrics";
+
 import type { SubagentSpec, SubagentMetrics } from "./types.ts";
 
 import { SUBAGENT_MODEL, SUBAGENT_PREAMBLE, UserRole } from "./constants.ts";
@@ -83,8 +85,14 @@ export function createDelegationTool(spec: SubagentSpec, role: UserRole, metrics
       }
 
       const [usage, steps] = await Promise.all([result.totalUsage, result.steps]);
-      metrics.totalTokens += usage.totalTokens ?? 0;
-      metrics.toolCallCount += steps.reduce((sum, s) => sum + s.toolCalls.length, 0);
+      const subagentTokens = usage.totalTokens ?? 0;
+      const subagentToolCalls = steps.reduce((sum, s) => sum + s.toolCalls.length, 0);
+      metrics.totalTokens += subagentTokens;
+      metrics.toolCallCount += subagentToolCalls;
+
+      countMetric("ai.subagent.completed", { domain: spec.name });
+      recordDistribution("ai.subagent.tokens", subagentTokens, { domain: spec.name });
+      recordDistribution("ai.subagent.tool_calls", subagentToolCalls, { domain: spec.name });
     },
     toModelOutput: ({ output }) => {
       const message = output as UIMessage | undefined;

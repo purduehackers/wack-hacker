@@ -12,6 +12,7 @@ import { parseOptions } from "@/bot/commands/registry";
 import * as components from "@/bot/components";
 import * as commands from "@/bot/handlers/commands";
 import { env } from "@/env";
+import { countMetric } from "@/lib/metrics";
 import { InteractionType, InteractionResponseType } from "@/lib/protocol/constants";
 import { verifyInteraction } from "@/lib/protocol/verify";
 
@@ -46,6 +47,7 @@ route.post("/interactions", async (c) => {
     }
 
     log.info("interactions", `Executing /${name}`);
+    countMetric("interaction.command", { command: name });
 
     const discord = new API(new REST({ version: "10" }).setToken(env.DISCORD_BOT_TOKEN));
     waitUntil(
@@ -57,6 +59,7 @@ route.post("/interactions", async (c) => {
         })
         .catch((err) => {
           log.error("interactions", `/${name} failed: ${err}`);
+          countMetric("interaction.command_error", { command: name });
           discord.interactions
             .editReply(interaction.application_id, interaction.token, {
               content: `Error executing /${name}.`,
@@ -79,6 +82,7 @@ route.post("/interactions", async (c) => {
 
     if (handler) {
       log.info("interactions", `Handling component ${prefix}`);
+      countMetric("interaction.component", { prefix });
       const discord = new API(new REST({ version: "10" }).setToken(env.DISCORD_BOT_TOKEN));
       waitUntil(
         handler.handle({ interaction, discord, customId }).catch((err) => {
