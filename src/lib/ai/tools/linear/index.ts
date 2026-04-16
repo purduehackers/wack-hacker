@@ -11,3 +11,4 @@ export * from "./initiative-updates.ts";
 export * from "./reminders.ts";
 export * from "./customer-requests.ts";
 export * from "./users.ts";
+export * from "./teams.ts";

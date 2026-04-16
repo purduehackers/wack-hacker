@@ -25,6 +25,7 @@ When delegated to, you have access to these skill bundles (loaded via `load_skil
 - reminders: Set reminders on issues, documents, projects, or initiatives
 - customer-requests: Create, update, list, and analyze customer requests
 - users: List, inspect, and manage workspace users — profiles, teams, workload, invites
+- teams: List team members and manage team membership
 
 ## Terminology
 
