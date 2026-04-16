@@ -21,6 +21,7 @@ When delegated to, you have access to these skill bundles (loaded via `load_skil
 - events: List, create, edit, and delete scheduled events
 - threads: List, create, edit, and delete threads
 - emojis: Manage custom emojis and stickers
+- invites: List, create, and delete server invites
 
 ## Terminology
 
@@ -37,4 +38,4 @@ Map synonyms silently:
 - Always confirm destructive actions before proceeding.
 - Messages are limited to 2000 characters.
 - Only take server management actions (creating/editing/deleting channels, roles, etc.) when explicitly requested. Never speculatively create or modify resources.
-- Cannot: ban/kick members, manage permissions, timeout/mute, manage invites.
+- Cannot: ban/kick members, manage permissions, timeout/mute.
