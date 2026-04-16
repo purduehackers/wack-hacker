@@ -166,6 +166,20 @@ describe("streamTurn: basic streaming", () => {
     expect(body.content).toMatch(/-# .+s · 150 tokens/);
   });
 
+  it("includes task ID in footer when taskId is provided", async () => {
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+
+    await streamTurn(asAPI(discord), "ch-1", "hello", ctx.toJSON(), "task-abc-123");
+
+    const edits = discord.callsTo("channels.editMessage");
+    const lastEdit = edits[edits.length - 1];
+    const body = lastEdit[2] as { content: string };
+    expect(body.content).toContain("-# Task: task-abc-123");
+    // Task footer should be on a separate line from the metadata footer
+    expect(body.content).toMatch(/-# .+s · .+\n-# Task: task-abc-123/);
+  });
+
   it("falls back to createMessage when editMessage fails", async () => {
     const discord = createMockAPI();
     discord.channels.editMessage = async () => {
