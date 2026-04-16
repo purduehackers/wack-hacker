@@ -16,7 +16,7 @@ export const get_org_stats = tool({
     stat: z
       .enum(["received", "rejected", "blacklisted", "filtered"])
       .optional()
-      .describe("Stat category to query. Defaults to 'received'."),
+      .describe("Stat category to query"),
     group: z
       .enum(["outcome", "category", "reason", "project"])
       .optional()
@@ -73,7 +73,9 @@ export const get_project_stats = tool({
         organization_id_or_slug: sentryOrg(),
         project_id_or_slug: project_slug,
       },
-      query: { stat: stat as "received" | "rejected" | "blacklisted" | undefined },
+      query: {
+        stat: (stat ?? "received") as "received" | "rejected" | "blacklisted",
+      },
     });
     const { data } = unwrapResult(result, "getProjectStats");
     return JSON.stringify(data);

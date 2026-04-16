@@ -14,6 +14,11 @@ export function sentryOpts() {
   };
 }
 
+/** Escape a value for use in Sentry search query `field:"value"` syntax. */
+export function escapeQuery(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
 const BASE_URL = "https://sentry.io/api/0";
 
 /** GET helper for endpoints not covered by generated SDK methods. */

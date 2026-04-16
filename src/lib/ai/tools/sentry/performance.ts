@@ -2,7 +2,7 @@ import { queryExploreEventsInTableFormat, unwrapResult } from "@sentry/api";
 import { tool } from "ai";
 import { z } from "zod";
 
-import { sentryGet, sentryOpts, sentryOrg } from "./client.ts";
+import { escapeQuery, sentryGet, sentryOpts, sentryOrg } from "./client.ts";
 
 /** List transactions with performance metrics using the Discover API. */
 export const list_transactions = tool({
@@ -56,7 +56,7 @@ export const get_transaction_summary = tool({
   execute: async ({ project_slug, transaction, y_axis, stat_period }) => {
     const data = await sentryGet(`/organizations/${sentryOrg()}/events-stats/`, {
       project: project_slug,
-      query: `transaction:"${transaction}"`,
+      query: `transaction:"${escapeQuery(transaction)}"`,
       yAxis: y_axis ?? "p95(transaction.duration)",
       statsPeriod: stat_period ?? "24h",
     });

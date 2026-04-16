@@ -2,7 +2,7 @@ import { queryExploreEventsInTableFormat, unwrapResult } from "@sentry/api";
 import { tool } from "ai";
 import { z } from "zod";
 
-import { sentryGet, sentryOpts, sentryOrg } from "./client.ts";
+import { escapeQuery, sentryGet, sentryOpts, sentryOrg } from "./client.ts";
 
 /** Get flamegraph profiling data for a transaction. */
 export const get_flamegraph = tool({
@@ -19,7 +19,7 @@ export const get_flamegraph = tool({
   execute: async ({ project_slug, transaction, stat_period }) => {
     const data = await sentryGet(`/organizations/${sentryOrg()}/profiling/flamegraph/`, {
       project: project_slug,
-      query: `transaction:"${transaction}"`,
+      query: `transaction:"${escapeQuery(transaction)}"`,
       statsPeriod: stat_period ?? "24h",
     });
     return JSON.stringify(data);
@@ -52,7 +52,7 @@ export const list_profiled_functions = tool({
         dataset: "profile_functions",
         field: defaultFields,
         statsPeriod: stat_period ?? "24h",
-        query: transaction ? `transaction:"${transaction}"` : undefined,
+        query: transaction ? `transaction:"${escapeQuery(transaction)}"` : undefined,
         sort: sort ? `-${sort}` : "-p75()",
         per_page,
       },
