@@ -113,10 +113,11 @@ export class AgentContext {
       ? `\nthread:\n  name: ${JSON.stringify(this.thread.name)}\n  id: "${this.thread.id}"\n  parent_channel: "#${this.thread.parentChannel.name}"`
       : "";
 
+    const msgTag = this.thread ? "recent_thread_messages" : "recent_channel_messages";
     const recentMsgs = this.recentMessages?.length
-      ? `\n\n<recent_channel_messages>\n${this.recentMessages
+      ? `\n\n<${msgTag}>\n${this.recentMessages
           .map((m) => `[${m.timestamp}] ${m.author}: ${m.content}`)
-          .join("\n")}\n</recent_channel_messages>`
+          .join("\n")}\n</${msgTag}>`
       : "";
 
     return `<execution_context>

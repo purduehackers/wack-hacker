@@ -161,4 +161,26 @@ describe("AgentContext.buildInstructions", () => {
     expect(result).toContain("thread:");
     expect(result).toContain("parent_channel");
   });
+
+  it("uses recent_thread_messages tag when in a thread", () => {
+    const ctx = AgentContext.fromJSON({
+      ...AgentContext.fromPacket(
+        messagePacket("hello", { thread: { parentId: "p1", parentName: "parent" } }),
+      ).toJSON(),
+      recentMessages: [{ author: "bob", content: "hey", timestamp: "1:00 PM" }],
+    });
+    const result = ctx.buildInstructions("Base.");
+    expect(result).toContain("<recent_thread_messages>");
+    expect(result).not.toContain("<recent_channel_messages>");
+  });
+
+  it("uses recent_channel_messages tag when not in a thread", () => {
+    const ctx = AgentContext.fromJSON({
+      ...AgentContext.fromPacket(messagePacket("hello")).toJSON(),
+      recentMessages: [{ author: "bob", content: "hey", timestamp: "1:00 PM" }],
+    });
+    const result = ctx.buildInstructions("Base.");
+    expect(result).toContain("<recent_channel_messages>");
+    expect(result).not.toContain("<recent_thread_messages>");
+  });
 });
