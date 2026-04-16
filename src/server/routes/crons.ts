@@ -30,11 +30,16 @@ route.get("/crons/:name", async (c) => {
 
   const startTime = Date.now();
   const discord = new API(new REST({ version: "10" }).setToken(env.DISCORD_BOT_TOKEN));
-  await cron.handle(discord);
-
-  countMetric("cron.completed", { name });
-  recordDuration("cron.duration", Date.now() - startTime, { name });
-  return c.json({ ok: true, cron: name });
+  try {
+    await cron.handle(discord);
+    countMetric("cron.completed", { name });
+    return c.json({ ok: true, cron: name });
+  } catch (err) {
+    countMetric("cron.error", { name });
+    throw err;
+  } finally {
+    recordDuration("cron.duration", Date.now() - startTime, { name });
+  }
 });
 
 export default route;

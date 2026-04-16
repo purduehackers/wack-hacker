@@ -97,8 +97,6 @@ export async function streamTurn(
       stepCount: steps.length,
     });
 
-    countMetric("ai.turn.completed");
-    recordDuration("ai.turn.duration", elapsedMs);
     recordDistribution("ai.turn.tokens", totalTokens);
     recordDistribution("ai.turn.tool_calls", toolCallCount);
     recordDistribution("ai.turn.steps", steps.length);
@@ -112,6 +110,9 @@ export async function streamTurn(
       stepCount: 0,
     });
   }
+
+  countMetric("ai.turn.completed");
+  recordDuration("ai.turn.duration", elapsedMs);
 
   log.info("streaming", `Turn complete, ${renderer.content.length} chars, ${elapsedMs}ms`);
 

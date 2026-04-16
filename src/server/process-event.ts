@@ -49,22 +49,27 @@ export async function processEvent(packet: Packet, store: ConversationStore): Pr
 
   const startTime = Date.now();
   const lockChannel = getMessageChannelId(packet);
-  if (lockChannel) {
-    const token = await store.acquireLock(lockChannel);
-    if (!token) {
-      log.warn("events", `Lock held for ${lockChannel}, dropping ${packet.type}`);
-      countMetric("event.lock_contention", { type: packet.type });
-      return;
-    }
-    try {
+  try {
+    if (lockChannel) {
+      const token = await store.acquireLock(lockChannel);
+      if (!token) {
+        log.warn("events", `Lock held for ${lockChannel}, dropping ${packet.type}`);
+        countMetric("event.lock_contention", { type: packet.type });
+        return;
+      }
+      try {
+        await router.dispatch(packet, ctx);
+      } finally {
+        await store.releaseLock(lockChannel, token);
+      }
+    } else {
       await router.dispatch(packet, ctx);
-    } finally {
-      await store.releaseLock(lockChannel, token);
     }
-  } else {
-    await router.dispatch(packet, ctx);
+    countMetric("event.processed", { type: packet.type });
+  } catch (err) {
+    countMetric("event.error", { type: packet.type });
+    throw err;
+  } finally {
+    recordDuration("event.process_duration", Date.now() - startTime, { type: packet.type });
   }
-
-  countMetric("event.processed", { type: packet.type });
-  recordDuration("event.process_duration", Date.now() - startTime, { type: packet.type });
 }
