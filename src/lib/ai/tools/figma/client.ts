@@ -25,7 +25,7 @@ class FigmaClient {
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
     const headers: Record<string, string> = {
-      Authorization: `Bearer ${env.FIGMA_ACCESS_TOKEN}`,
+      "X-Figma-Token": env.FIGMA_ACCESS_TOKEN,
     };
     if (body !== undefined) {
       headers["Content-Type"] = "application/json";
