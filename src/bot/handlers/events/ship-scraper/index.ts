@@ -30,25 +30,41 @@ function collectFromSnapshots(data: MessageData): {
   return { content, attachments };
 }
 
-async function uploadImages(
+function isMedia(contentType: string | undefined): boolean {
+  if (!contentType) return false;
+  return contentType.startsWith("image/") || contentType.startsWith("video/");
+}
+
+async function uploadMedia(
   r2: R2Storage,
   messageId: string,
-  imageList: Attachment[],
-): Promise<Array<{ key: string; type: string; filename: string }>> {
-  const uploaded: Array<{ key: string; type: string; filename: string }> = [];
+  mediaList: Attachment[],
+): Promise<
+  Array<{ key: string; type: string; filename: string; width?: number; height?: number }>
+> {
+  const uploaded: Array<{
+    key: string;
+    type: string;
+    filename: string;
+    width?: number;
+    height?: number;
+  }> = [];
 
-  for (const item of imageList) {
-    if (!item.contentType?.startsWith("image/")) continue;
+  for (const item of mediaList) {
+    if (!isMedia(item.contentType)) continue;
 
     try {
       const buffer = await r2.downloadBuffer(item.url);
-      const fname = `${messageId}-${item.filename}`;
+      const defaultName = item.contentType?.startsWith("video/") ? "video.mp4" : "image.jpg";
+      const fname = `${messageId}-${item.filename ?? defaultName}`;
       const key = `images/ships/${fname}`;
-      await r2.uploadBuffer(key, buffer, item.contentType ?? "image/jpeg");
+      await r2.uploadBuffer(key, buffer, item.contentType ?? "application/octet-stream");
       uploaded.push({
         key,
-        type: item.contentType ?? "image/jpeg",
-        filename: item.filename,
+        type: item.contentType ?? "application/octet-stream",
+        filename: item.filename ?? defaultName,
+        width: item.width ?? undefined,
+        height: item.height ?? undefined,
       });
     } catch (err) {
       log.warn("ship-scraper", `Failed to upload ${item.filename}: ${String(err)}`);
@@ -81,7 +97,7 @@ export const shipScraper = defineEvent({
       env.SHIP_DATABASE_TURSO_AUTH_TOKEN,
     );
 
-    const uploadedAttachments = await uploadImages(r2, messageId, attachments);
+    const uploadedAttachments = await uploadMedia(r2, messageId, attachments);
 
     const firstLine = content.split("\n")[0]?.trim() ?? "";
     const title = firstLine.length > 100 ? firstLine.slice(0, 100) + "..." : firstLine || null;

@@ -125,6 +125,8 @@ function bindMessageHandlers(client: Client, publish: Publish): void {
           filename: a.name,
           contentType: a.contentType ?? undefined,
           size: a.size,
+          width: a.width ?? undefined,
+          height: a.height ?? undefined,
         })),
         author: {
           id: message.author.id,
@@ -157,6 +159,8 @@ function bindMessageHandlers(client: Client, publish: Publish): void {
             filename: a.name,
             contentType: a.contentType ?? undefined,
             size: a.size,
+            width: a.width ?? undefined,
+            height: a.height ?? undefined,
           })),
         })),
       },

@@ -4,5 +4,6 @@ export * from "./voice-transcription";
 export * from "./dashboard";
 export * from "./auto-thread";
 export * from "./ship-scraper";
+export * from "./ship-scraper/delete";
 export * from "./hack-night-upload";
 export * from "./hack-night-reaction";
