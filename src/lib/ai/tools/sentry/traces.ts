@@ -12,10 +12,9 @@ export const get_trace = tool({
     project_slug: z.string().optional().describe("Project slug to scope the trace lookup"),
   }),
   execute: async ({ trace_id, project_slug }) => {
-    const params = new URLSearchParams();
-    if (project_slug) params.set("project", project_slug);
     const data = await sentryGet(
-      `/organizations/${sentryOrg()}/events-trace/${trace_id}/?${params}`,
+      `/organizations/${sentryOrg()}/events-trace/${trace_id}/`,
+      project_slug ? { project: project_slug } : undefined,
     );
     return JSON.stringify(data);
   },
@@ -36,20 +35,16 @@ export const list_traces = tool({
       .describe("Time range (e.g. '24h', '7d'). Defaults to '24h'."),
   }),
   execute: async ({ project_slug, query, sort, per_page, stat_period }) => {
-    const params = new URLSearchParams();
-    params.set("dataset", "discover");
-    params.set("project", project_slug);
-    params.set("statsPeriod", stat_period ?? "24h");
-    params.append("field", "trace");
-    params.append("field", "transaction");
-    params.append("field", "count()");
-    params.append("field", "min(timestamp)");
-    params.append("field", "max(timestamp)");
-    if (query) params.set("query", `event.type:transaction ${query}`);
-    else params.set("query", "event.type:transaction");
-    if (sort) params.set("sort", sort);
-    if (per_page) params.set("per_page", String(per_page));
-    const data = await sentryGet(`/organizations/${sentryOrg()}/events/?${params}`);
+    const fields = ["trace", "transaction", "count()", "min(timestamp)", "max(timestamp)"];
+    const data = await sentryGet(`/organizations/${sentryOrg()}/events/`, {
+      dataset: "discover",
+      project: project_slug,
+      statsPeriod: stat_period ?? "24h",
+      field: fields,
+      query: query ? `event.type:transaction ${query}` : "event.type:transaction",
+      sort,
+      per_page,
+    });
     return JSON.stringify(data);
   },
 });

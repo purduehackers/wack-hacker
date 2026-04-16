@@ -1,7 +1,8 @@
+import { queryExploreEventsInTableFormat, unwrapResult } from "@sentry/api";
 import { tool } from "ai";
 import { z } from "zod";
 
-import { sentryGet, sentryOrg } from "./client.ts";
+import { sentryGet, sentryOpts, sentryOrg } from "./client.ts";
 
 /** List transactions with performance metrics using the Discover API. */
 export const list_transactions = tool({
@@ -21,15 +22,15 @@ export const list_transactions = tool({
       .describe("Time range (e.g. '24h', '7d', '14d'). Defaults to '24h'."),
   }),
   execute: async ({ project_slug, fields, query, sort, per_page, stat_period }) => {
-    const params = new URLSearchParams();
-    params.set("dataset", "discover");
-    params.set("project", project_slug);
-    params.set("statsPeriod", stat_period ?? "24h");
-    for (const f of fields) params.append("field", f);
-    if (query) params.set("query", query);
-    if (sort) params.set("sort", sort);
-    if (per_page) params.set("per_page", String(per_page));
-    const data = await sentryGet(`/organizations/${sentryOrg()}/events/?${params}`);
+    const data = await sentryGet(`/organizations/${sentryOrg()}/events/`, {
+      dataset: "discover",
+      project: project_slug,
+      statsPeriod: stat_period ?? "24h",
+      field: fields,
+      query,
+      sort,
+      per_page,
+    });
     return JSON.stringify(data);
   },
 });
@@ -53,12 +54,12 @@ export const get_transaction_summary = tool({
       .describe("Time range (e.g. '24h', '7d'). Defaults to '24h'."),
   }),
   execute: async ({ project_slug, transaction, y_axis, stat_period }) => {
-    const params = new URLSearchParams();
-    params.set("project", project_slug);
-    params.set("query", `transaction:"${transaction}"`);
-    params.set("yAxis", y_axis ?? "p95(transaction.duration)");
-    params.set("statsPeriod", stat_period ?? "24h");
-    const data = await sentryGet(`/organizations/${sentryOrg()}/events-stats/?${params}`);
+    const data = await sentryGet(`/organizations/${sentryOrg()}/events-stats/`, {
+      project: project_slug,
+      query: `transaction:"${transaction}"`,
+      yAxis: y_axis ?? "p95(transaction.duration)",
+      statsPeriod: stat_period ?? "24h",
+    });
     return JSON.stringify(data);
   },
 });
@@ -83,17 +84,21 @@ export const list_spans = tool({
     per_page: z.number().max(100).optional(),
     stat_period: z.string().optional().describe("Time range (e.g. '24h', '7d')"),
   }),
-  execute: async ({ project_slug, fields, query, sort, per_page, stat_period }) => {
-    const params = new URLSearchParams();
-    params.set("dataset", "spansIndexed");
-    params.set("project", project_slug);
-    params.set("statsPeriod", stat_period ?? "24h");
+  execute: async ({ fields, query, sort, per_page, stat_period }) => {
     const defaultFields = ["span.op", "span.description", "avg(span.duration)", "count()"];
-    for (const f of fields ?? defaultFields) params.append("field", f);
-    if (query) params.set("query", query);
-    if (sort) params.set("sort", sort);
-    if (per_page) params.set("per_page", String(per_page));
-    const data = await sentryGet(`/organizations/${sentryOrg()}/events/?${params}`);
+    const result = await queryExploreEventsInTableFormat({
+      ...sentryOpts(),
+      path: { organization_id_or_slug: sentryOrg() },
+      query: {
+        dataset: "spans",
+        field: fields ?? defaultFields,
+        statsPeriod: stat_period ?? "24h",
+        query,
+        sort,
+        per_page,
+      },
+    });
+    const { data } = unwrapResult(result, "listSpans");
     return JSON.stringify(data);
   },
 });

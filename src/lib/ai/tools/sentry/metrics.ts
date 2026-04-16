@@ -11,9 +11,9 @@ export const list_metrics = tool({
     project_slug: z.string().optional().describe("Filter by project slug"),
   }),
   execute: async ({ project_slug }) => {
-    const params = new URLSearchParams();
-    if (project_slug) params.set("project", project_slug);
-    const data = await sentryGet(`/organizations/${sentryOrg()}/metrics/meta/?${params}`);
+    const data = await sentryGet(`/organizations/${sentryOrg()}/metrics/meta/`, {
+      project: project_slug,
+    });
     return JSON.stringify(data);
   },
 });
@@ -44,14 +44,14 @@ export const query_metrics = tool({
     query: z.string().optional().describe("Tag filter query (e.g. 'environment:production')"),
   }),
   execute: async ({ mri, op, project_slug, stat_period, interval, group_by, query }) => {
-    const params = new URLSearchParams();
-    params.set("field", `${op}(${mri})`);
-    params.set("statsPeriod", stat_period ?? "24h");
-    params.set("interval", interval ?? "1h");
-    if (project_slug) params.set("project", project_slug);
-    if (group_by) params.set("groupBy", group_by);
-    if (query) params.set("query", query);
-    const data = await sentryGet(`/organizations/${sentryOrg()}/metrics/data/?${params}`);
+    const data = await sentryGet(`/organizations/${sentryOrg()}/metrics/data/`, {
+      field: `${op}(${mri})`,
+      statsPeriod: stat_period ?? "24h",
+      interval: interval ?? "1h",
+      project: project_slug,
+      groupBy: group_by,
+      query,
+    });
     return JSON.stringify(data);
   },
 });
@@ -64,10 +64,10 @@ export const list_metric_tags = tool({
     metric: z.string().optional().describe("Filter by metric MRI"),
   }),
   execute: async ({ project_slug, metric }) => {
-    const params = new URLSearchParams();
-    if (project_slug) params.set("project", project_slug);
-    if (metric) params.set("metric", metric);
-    const data = await sentryGet(`/organizations/${sentryOrg()}/metrics/tags/?${params}`);
+    const data = await sentryGet(`/organizations/${sentryOrg()}/metrics/tags/`, {
+      project: project_slug,
+      metric,
+    });
     return JSON.stringify(data);
   },
 });
@@ -81,11 +81,9 @@ export const get_metric_tag_values = tool({
     metric: z.string().optional().describe("Filter by metric MRI"),
   }),
   execute: async ({ tag_key, project_slug, metric }) => {
-    const params = new URLSearchParams();
-    if (project_slug) params.set("project", project_slug);
-    if (metric) params.set("metric", metric);
     const data = await sentryGet(
-      `/organizations/${sentryOrg()}/metrics/tags/${encodeURIComponent(tag_key)}/?${params}`,
+      `/organizations/${sentryOrg()}/metrics/tags/${encodeURIComponent(tag_key)}/`,
+      { project: project_slug, metric },
     );
     return JSON.stringify(data);
   },

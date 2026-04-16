@@ -16,9 +16,24 @@ export function sentryOpts() {
 
 const BASE_URL = "https://sentry.io/api/0";
 
-/** Raw GET helper for endpoints not covered by the SDK. */
-export async function sentryGet<T = unknown>(path: string): Promise<T> {
-  const url = path.startsWith("http") ? path : `${BASE_URL}${path}`;
+/** GET helper for endpoints not covered by generated SDK methods. */
+export async function sentryGet<T = unknown>(
+  path: string,
+  query?: Record<string, unknown>,
+): Promise<T> {
+  const url = new URL(path.startsWith("http") ? path : `${BASE_URL}${path}`);
+  if (query) {
+    for (const [key, value] of Object.entries(query)) {
+      if (value === undefined || value === null) continue;
+      if (Array.isArray(value)) {
+        for (const v of value) url.searchParams.append(key, String(v));
+      } else if (typeof value === "object") {
+        url.searchParams.set(key, JSON.stringify(value));
+      } else {
+        url.searchParams.set(key, String(value));
+      }
+    }
+  }
   const response = await fetch(url, {
     headers: {
       Authorization: `Bearer ${env.SENTRY_AUTH_TOKEN}`,

@@ -1,7 +1,12 @@
+import {
+  queryExploreEventsInTableFormat,
+  queryExploreEventsInTimeseriesFormat,
+  unwrapResult,
+} from "@sentry/api";
 import { tool } from "ai";
 import { z } from "zod";
 
-import { sentryGet, sentryOrg } from "./client.ts";
+import { sentryOpts, sentryOrg } from "./client.ts";
 
 /** Search structured logs. */
 export const search_logs = tool({
@@ -21,18 +26,21 @@ export const search_logs = tool({
       .optional()
       .describe("Time range (e.g. '1h', '24h', '7d'). Defaults to '24h'."),
   }),
-  execute: async ({ project_slug, query, fields, sort, per_page, stat_period }) => {
-    const params = new URLSearchParams();
-    params.set("dataset", "ourlogs");
-    params.set("project", project_slug);
-    params.set("statsPeriod", stat_period ?? "24h");
+  execute: async ({ fields, query, sort, per_page, stat_period }) => {
     const defaultFields = ["message", "severity_text", "timestamp", "trace_id"];
-    for (const f of fields ?? defaultFields) params.append("field", f);
-    if (query) params.set("query", query);
-    if (sort) params.set("sort", sort);
-    else params.set("sort", "-timestamp");
-    if (per_page) params.set("per_page", String(per_page));
-    const data = await sentryGet(`/organizations/${sentryOrg()}/events/?${params}`);
+    const result = await queryExploreEventsInTableFormat({
+      ...sentryOpts(),
+      path: { organization_id_or_slug: sentryOrg() },
+      query: {
+        dataset: "logs",
+        field: fields ?? defaultFields,
+        statsPeriod: stat_period ?? "24h",
+        query,
+        sort: sort ?? "-timestamp",
+        per_page,
+      },
+    });
+    const { data } = unwrapResult(result, "searchLogs");
     return JSON.stringify(data);
   },
 });
@@ -53,14 +61,18 @@ export const get_log_stats = tool({
       .optional()
       .describe("Time range (e.g. '24h', '7d'). Defaults to '24h'."),
   }),
-  execute: async ({ project_slug, query, y_axis, stat_period }) => {
-    const params = new URLSearchParams();
-    params.set("dataset", "ourlogs");
-    params.set("project", project_slug);
-    params.set("yAxis", y_axis ?? "count()");
-    params.set("statsPeriod", stat_period ?? "24h");
-    if (query) params.set("query", query);
-    const data = await sentryGet(`/organizations/${sentryOrg()}/events-stats/?${params}`);
+  execute: async ({ query, y_axis, stat_period }) => {
+    const result = await queryExploreEventsInTimeseriesFormat({
+      ...sentryOpts(),
+      path: { organization_id_or_slug: sentryOrg() },
+      query: {
+        dataset: "logs",
+        statsPeriod: stat_period ?? "24h",
+        yAxis: y_axis ?? "count()",
+        query,
+      },
+    });
+    const { data } = unwrapResult(result, "getLogStats");
     return JSON.stringify(data);
   },
 });

@@ -1,7 +1,8 @@
+import { queryExploreEventsInTableFormat, unwrapResult } from "@sentry/api";
 import { tool } from "ai";
 import { z } from "zod";
 
-import { sentryGet, sentryOrg } from "./client.ts";
+import { sentryGet, sentryOpts, sentryOrg } from "./client.ts";
 
 /** Get flamegraph profiling data for a transaction. */
 export const get_flamegraph = tool({
@@ -16,11 +17,11 @@ export const get_flamegraph = tool({
       .describe("Time range (e.g. '24h', '7d'). Defaults to '24h'."),
   }),
   execute: async ({ project_slug, transaction, stat_period }) => {
-    const params = new URLSearchParams();
-    params.set("project", project_slug);
-    params.set("query", `transaction:"${transaction}"`);
-    params.set("statsPeriod", stat_period ?? "24h");
-    const data = await sentryGet(`/organizations/${sentryOrg()}/profiling/flamegraph/?${params}`);
+    const data = await sentryGet(`/organizations/${sentryOrg()}/profiling/flamegraph/`, {
+      project: project_slug,
+      query: `transaction:"${transaction}"`,
+      statsPeriod: stat_period ?? "24h",
+    });
     return JSON.stringify(data);
   },
 });
@@ -42,14 +43,21 @@ export const list_profiled_functions = tool({
       .optional()
       .describe("Time range (e.g. '24h', '7d'). Defaults to '24h'."),
   }),
-  execute: async ({ project_slug, transaction, sort, per_page, stat_period }) => {
-    const params = new URLSearchParams();
-    params.set("project", project_slug);
-    params.set("statsPeriod", stat_period ?? "24h");
-    if (transaction) params.set("query", `transaction:"${transaction}"`);
-    if (sort) params.set("sort", `-${sort}`);
-    if (per_page) params.set("per_page", String(per_page));
-    const data = await sentryGet(`/organizations/${sentryOrg()}/profiling/functions/?${params}`);
+  execute: async ({ transaction, sort, per_page, stat_period }) => {
+    const defaultFields = ["function", "package", "p75()", "p95()", "count()", "sum()"];
+    const result = await queryExploreEventsInTableFormat({
+      ...sentryOpts(),
+      path: { organization_id_or_slug: sentryOrg() },
+      query: {
+        dataset: "profile_functions",
+        field: defaultFields,
+        statsPeriod: stat_period ?? "24h",
+        query: transaction ? `transaction:"${transaction}"` : undefined,
+        sort: sort ? `-${sort}` : "-p75()",
+        per_page,
+      },
+    });
+    const { data } = unwrapResult(result, "listProfiledFunctions");
     return JSON.stringify(data);
   },
 });
