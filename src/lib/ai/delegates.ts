@@ -4,6 +4,7 @@ import type { UserRole } from "./constants.ts";
 import type { SubagentMetrics } from "./types.ts";
 
 import { SKILL_MANIFEST as DISCORD_SUBSKILLS } from "./skills/generated/domains/discord.ts";
+import { SKILL_MANIFEST as FIGMA_SUBSKILLS } from "./skills/generated/domains/figma.ts";
 import { SKILL_MANIFEST as GITHUB_SUBSKILLS } from "./skills/generated/domains/github.ts";
 import { SKILL_MANIFEST as LINEAR_SUBSKILLS } from "./skills/generated/domains/linear.ts";
 import { SKILL_MANIFEST as NOTION_SUBSKILLS } from "./skills/generated/domains/notion.ts";
@@ -11,6 +12,7 @@ import { SKILL_MANIFEST } from "./skills/generated/manifest.ts";
 import { SkillRegistry } from "./skills/registry.ts";
 import { createDelegationTool } from "./subagent.ts";
 import * as discordTools from "./tools/discord/index.ts";
+import * as figmaTools from "./tools/figma/index.ts";
 import * as githubTools from "./tools/github/index.ts";
 import * as linearTools from "./tools/linear/index.ts";
 import * as notionTools from "./tools/notion/index.ts";
@@ -44,6 +46,11 @@ const DOMAINS = {
     tools: discordTools as unknown as ToolSet,
     subSkills: DISCORD_SUBSKILLS,
     baseToolNames: ["get_server_info", "list_channels", "list_roles", "search_members"],
+  },
+  figma: {
+    tools: figmaTools as unknown as ToolSet,
+    subSkills: FIGMA_SUBSKILLS,
+    baseToolNames: ["get_file", "list_projects", "list_project_files", "search_files"],
   },
   notion: {
     tools: notionTools as unknown as ToolSet,
