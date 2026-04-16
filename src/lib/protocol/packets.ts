@@ -9,6 +9,8 @@ const MessageDataAttachment = z.object({
   filename: z.string(),
   contentType: z.string().optional(),
   size: z.number(),
+  width: z.number().optional(),
+  height: z.number().optional(),
 });
 
 const MessageDataAuthor = z.object({
