@@ -1,3 +1,9 @@
+import type {
+  GetFileResponse,
+  GetProjectFilesResponse,
+  GetTeamProjectsResponse,
+} from "@figma/rest-api-spec";
+
 import { tool } from "ai";
 import { z } from "zod";
 
@@ -7,7 +13,7 @@ import { figma, figmaFileUrl } from "./client.ts";
 // Helpers
 // ---------------------------------------------------------------------------
 
-function summarizeFile(f: any, projectName?: string) {
+function summarizeFile(f: GetProjectFilesResponse["files"][number], projectName?: string) {
   return {
     key: f.key,
     name: f.name,
@@ -35,7 +41,7 @@ export const get_file = tool({
       .describe("How deep to traverse the node tree (1 = pages only, max 4)"),
   }),
   execute: async ({ file_key, depth }) => {
-    const file = (await figma.get(`/v1/files/${file_key}?depth=${depth}`)) as any;
+    const file = await figma.get<GetFileResponse>(`/v1/files/${file_key}?depth=${depth}`);
     return JSON.stringify({
       name: file.name,
       lastModified: file.lastModified,
@@ -51,9 +57,9 @@ export const list_projects = tool({
   description: "List all projects in the team. Returns project IDs and names.",
   inputSchema: z.object({}),
   execute: async () => {
-    const data = (await figma.get(`/v1/teams/${figma.teamId}/projects`)) as any;
+    const data = await figma.get<GetTeamProjectsResponse>(`/v1/teams/${figma.teamId}/projects`);
     return JSON.stringify(
-      data.projects.map((p: any) => ({
+      data.projects.map((p) => ({
         id: p.id,
         name: p.name,
       })),
@@ -68,8 +74,8 @@ export const list_project_files = tool({
     project_id: z.string().describe("The project ID"),
   }),
   execute: async ({ project_id }) => {
-    const data = (await figma.get(`/v1/projects/${project_id}/files`)) as any;
-    return JSON.stringify(data.files.map((f: any) => summarizeFile(f)));
+    const data = await figma.get<GetProjectFilesResponse>(`/v1/projects/${project_id}/files`);
+    return JSON.stringify(data.files.map((f) => summarizeFile(f)));
   },
 });
 
@@ -81,13 +87,13 @@ export const search_files = tool({
     limit: z.number().max(50).default(10).describe("Max results to return"),
   }),
   execute: async ({ query, limit }) => {
-    const data = (await figma.get(`/v1/teams/${figma.teamId}/projects`)) as any;
+    const data = await figma.get<GetTeamProjectsResponse>(`/v1/teams/${figma.teamId}/projects`);
     const lowerQuery = query.toLowerCase();
-    const matches: any[] = [];
+    const matches: ReturnType<typeof summarizeFile>[] = [];
 
     for (const proj of data.projects) {
       if (matches.length >= limit) break;
-      const files = (await figma.get(`/v1/projects/${proj.id}/files`)) as any;
+      const files = await figma.get<GetProjectFilesResponse>(`/v1/projects/${proj.id}/files`);
       for (const f of files.files) {
         if (matches.length >= limit) break;
         if (f.name.toLowerCase().includes(lowerQuery)) {

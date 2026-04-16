@@ -1,3 +1,11 @@
+import type {
+  GetTeamWebhooksResponse,
+  PostWebhookRequestBody,
+  WebhookV2,
+  WebhookV2Event,
+  WebhookV2Status,
+} from "@figma/rest-api-spec";
+
 import { tool } from "ai";
 import { z } from "zod";
 
@@ -8,15 +16,15 @@ import { figma } from "./client.ts";
 // Helpers
 // ---------------------------------------------------------------------------
 
-function summarizeWebhook(w: any) {
+function summarizeWebhook(w: WebhookV2) {
   return {
     id: w.id,
     eventType: w.event_type,
-    teamId: w.team_id,
+    context: w.context,
+    contextId: w.context_id,
     endpoint: w.endpoint,
     status: w.status,
     description: w.description,
-    createdAt: w.created_at,
   };
 }
 
@@ -29,8 +37,8 @@ export const list_team_webhooks = admin(
     description: "List all webhooks configured for the team.",
     inputSchema: z.object({}),
     execute: async () => {
-      const data = (await figma.get(`/v2/teams/${figma.teamId}/webhooks`)) as any;
-      return JSON.stringify(data.webhooks?.map(summarizeWebhook) ?? []);
+      const data = await figma.get<GetTeamWebhooksResponse>(`/v2/teams/${figma.teamId}/webhooks`);
+      return JSON.stringify(data.webhooks.map(summarizeWebhook));
     },
   }),
 );
@@ -42,19 +50,20 @@ export const create_webhook = admin(
     inputSchema: z.object({
       event_type: z.string().describe("The event type to subscribe to"),
       endpoint: z.string().describe("The callback URL"),
-      passcode: z.string().optional().describe("Passcode for verifying webhook payloads"),
+      passcode: z.string().describe("Passcode for verifying webhook payloads"),
       description: z.string().optional().describe("Description of the webhook"),
     }),
     execute: async ({ event_type, endpoint, passcode, description }) => {
-      const body: Record<string, unknown> = {
-        event_type,
-        team_id: figma.teamId,
+      const body: PostWebhookRequestBody = {
+        event_type: event_type as WebhookV2Event,
+        context: "team",
+        context_id: figma.teamId,
         endpoint,
+        passcode,
       };
-      if (passcode) body.passcode = passcode;
       if (description) body.description = description;
-      const result = await figma.post("/v2/webhooks", body);
-      return JSON.stringify(result);
+      const result = await figma.post<WebhookV2>("/v2/webhooks", body);
+      return JSON.stringify(summarizeWebhook(result));
     },
   }),
 );
@@ -66,7 +75,7 @@ export const get_webhook = admin(
       webhook_id: z.string().describe("The webhook ID"),
     }),
     execute: async ({ webhook_id }) => {
-      const data = (await figma.get(`/v2/webhooks/${webhook_id}`)) as any;
+      const data = await figma.get<WebhookV2>(`/v2/webhooks/${webhook_id}`);
       return JSON.stringify(summarizeWebhook(data));
     },
   }),
@@ -77,19 +86,22 @@ export const update_webhook = admin(
     description: "Update webhook configuration — endpoint, passcode, description, or status.",
     inputSchema: z.object({
       webhook_id: z.string().describe("The webhook ID"),
-      endpoint: z.string().optional().describe("New callback URL"),
-      passcode: z.string().optional().describe("New passcode"),
+      event_type: z.string().describe("The event type"),
+      endpoint: z.string().describe("Callback URL"),
+      passcode: z.string().describe("Passcode for verification"),
       description: z.string().optional().describe("New description"),
       status: z.enum(["ACTIVE", "PAUSED"]).optional().describe("Webhook status"),
     }),
-    execute: async ({ webhook_id, endpoint, passcode, description, status }) => {
-      const body: Record<string, unknown> = {};
-      if (endpoint) body.endpoint = endpoint;
-      if (passcode) body.passcode = passcode;
+    execute: async ({ webhook_id, event_type, endpoint, passcode, description, status }) => {
+      const body: Record<string, unknown> = {
+        event_type: event_type as WebhookV2Event,
+        endpoint,
+        passcode,
+      };
       if (description) body.description = description;
-      if (status) body.status = status;
-      const result = await figma.put(`/v2/webhooks/${webhook_id}`, body);
-      return JSON.stringify(result);
+      if (status) body.status = status as WebhookV2Status;
+      const result = await figma.put<WebhookV2>(`/v2/webhooks/${webhook_id}`, body);
+      return JSON.stringify(summarizeWebhook(result));
     },
   }),
 );
@@ -101,8 +113,8 @@ export const delete_webhook = admin(
       webhook_id: z.string().describe("The webhook ID to delete"),
     }),
     execute: async ({ webhook_id }) => {
-      await figma.delete(`/v2/webhooks/${webhook_id}`);
-      return JSON.stringify({ deleted: true });
+      const result = await figma.delete<WebhookV2>(`/v2/webhooks/${webhook_id}`);
+      return JSON.stringify(summarizeWebhook(result));
     },
   }),
 );

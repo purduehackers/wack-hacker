@@ -1,3 +1,9 @@
+import type {
+  GetFileNodesResponse,
+  GetImageFillsResponse,
+  GetImagesResponse,
+} from "@figma/rest-api-spec";
+
 import { tool } from "ai";
 import { z } from "zod";
 
@@ -14,7 +20,9 @@ export const get_file_nodes = tool({
   execute: async ({ file_key, node_ids, depth }) => {
     const ids = node_ids.join(",");
     const depthParam = depth ? `&depth=${depth}` : "";
-    const data = (await figma.get(`/v1/files/${file_key}/nodes?ids=${ids}${depthParam}`)) as any;
+    const data = await figma.get<GetFileNodesResponse>(
+      `/v1/files/${file_key}/nodes?ids=${ids}${depthParam}`,
+    );
     return JSON.stringify(data.nodes);
   },
 });
@@ -35,9 +43,9 @@ export const get_images = tool({
   }),
   execute: async ({ file_key, node_ids, format, scale }) => {
     const ids = node_ids.join(",");
-    const data = (await figma.get(
+    const data = await figma.get<GetImagesResponse>(
       `/v1/images/${file_key}?ids=${ids}&format=${format}&scale=${scale}`,
-    )) as any;
+    );
     return JSON.stringify(data.images);
   },
 });
@@ -49,7 +57,7 @@ export const get_image_fills = tool({
     file_key: z.string().describe("The file key"),
   }),
   execute: async ({ file_key }) => {
-    const data = (await figma.get(`/v1/files/${file_key}/images`)) as any;
-    return JSON.stringify(data.meta?.images ?? {});
+    const data = await figma.get<GetImageFillsResponse>(`/v1/files/${file_key}/images`);
+    return JSON.stringify(data.meta.images);
   },
 });

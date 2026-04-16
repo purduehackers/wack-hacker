@@ -1,3 +1,11 @@
+import type {
+  GetDevResourcesResponse,
+  PostDevResourcesRequestBody,
+  PostDevResourcesResponse,
+  PutDevResourcesRequestBody,
+  PutDevResourcesResponse,
+} from "@figma/rest-api-spec";
+
 import { tool } from "ai";
 import { z } from "zod";
 
@@ -12,8 +20,10 @@ export const list_dev_resources = tool({
   }),
   execute: async ({ file_key, node_ids }) => {
     const params = node_ids?.length ? `?node_ids=${node_ids.join(",")}` : "";
-    const data = (await figma.get(`/v1/files/${file_key}/dev_resources${params}`)) as any;
-    return JSON.stringify(data.dev_resources ?? []);
+    const data = await figma.get<GetDevResourcesResponse>(
+      `/v1/files/${file_key}/dev_resources${params}`,
+    );
+    return JSON.stringify(data.dev_resources);
   },
 });
 
@@ -34,7 +44,13 @@ export const create_dev_resources = tool({
       .describe("Dev resources to create"),
   }),
   execute: async ({ file_key, dev_resources }) => {
-    const result = await figma.post(`/v1/files/${file_key}/dev_resources`, { dev_resources });
+    const body: PostDevResourcesRequestBody = {
+      dev_resources: dev_resources.map((r) => ({
+        ...r,
+        file_key,
+      })),
+    };
+    const result = await figma.post<PostDevResourcesResponse>("/v1/dev_resources", body);
     return JSON.stringify(result);
   },
 });
@@ -42,16 +58,17 @@ export const create_dev_resources = tool({
 export const update_dev_resource = tool({
   description: "Update an existing dev resource's URL or name.",
   inputSchema: z.object({
-    file_key: z.string().describe("The file key"),
     dev_resource_id: z.string().describe("The dev resource ID to update"),
     url: z.string().optional().describe("New URL"),
     name: z.string().optional().describe("New display name"),
   }),
-  execute: async ({ file_key, dev_resource_id, url, name }) => {
-    const body: Record<string, string> = {};
-    if (url) body.url = url;
-    if (name) body.name = name;
-    const result = await figma.put(`/v1/files/${file_key}/dev_resources/${dev_resource_id}`, body);
+  execute: async ({ dev_resource_id, url, name }) => {
+    const entry: PutDevResourcesRequestBody["dev_resources"][number] = { id: dev_resource_id };
+    if (url) entry.url = url;
+    if (name) entry.name = name;
+    const result = await figma.put<PutDevResourcesResponse>("/v1/dev_resources", {
+      dev_resources: [entry],
+    });
     return JSON.stringify(result);
   },
 });

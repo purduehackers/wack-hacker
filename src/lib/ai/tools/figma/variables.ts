@@ -1,3 +1,10 @@
+import type {
+  GetLocalVariablesResponse,
+  GetPublishedVariablesResponse,
+  PostVariablesRequestBody,
+  PostVariablesResponse,
+} from "@figma/rest-api-spec";
+
 import { tool } from "ai";
 import { z } from "zod";
 
@@ -10,7 +17,9 @@ export const get_local_variables = tool({
     file_key: z.string().describe("The file key"),
   }),
   execute: async ({ file_key }) => {
-    const data = (await figma.get(`/v1/files/${file_key}/variables/local`)) as any;
+    const data = await figma.get<GetLocalVariablesResponse>(
+      `/v1/files/${file_key}/variables/local`,
+    );
     return JSON.stringify(data.meta);
   },
 });
@@ -22,7 +31,9 @@ export const get_published_variables = tool({
     file_key: z.string().describe("The file key"),
   }),
   execute: async ({ file_key }) => {
-    const data = (await figma.get(`/v1/files/${file_key}/variables/published`)) as any;
+    const data = await figma.get<GetPublishedVariablesResponse>(
+      `/v1/files/${file_key}/variables/published`,
+    );
     return JSON.stringify(data.meta);
   },
 });
@@ -46,11 +57,14 @@ export const modify_variables = tool({
       .describe("Variable mutations (action + fields)"),
   }),
   execute: async ({ file_key, variable_collections, variable_modes, variables }) => {
-    const body: Record<string, unknown> = {};
-    if (variable_collections) body.variableCollections = variable_collections;
-    if (variable_modes) body.variableModes = variable_modes;
-    if (variables) body.variables = variables;
-    const result = await figma.post(`/v1/files/${file_key}/variables`, body);
+    const body: PostVariablesRequestBody = {};
+    if (variable_collections)
+      body.variableCollections =
+        variable_collections as PostVariablesRequestBody["variableCollections"];
+    if (variable_modes)
+      body.variableModes = variable_modes as PostVariablesRequestBody["variableModes"];
+    if (variables) body.variables = variables as PostVariablesRequestBody["variables"];
+    const result = await figma.post<PostVariablesResponse>(`/v1/files/${file_key}/variables`, body);
     return JSON.stringify(result);
   },
 });

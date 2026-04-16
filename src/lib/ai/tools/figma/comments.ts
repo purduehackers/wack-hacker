@@ -1,3 +1,5 @@
+import type { Comment, GetCommentsResponse } from "@figma/rest-api-spec";
+
 import { tool } from "ai";
 import { z } from "zod";
 
@@ -7,11 +9,11 @@ import { figma } from "./client.ts";
 // Helpers
 // ---------------------------------------------------------------------------
 
-function summarizeComment(c: any) {
+function summarizeComment(c: Comment) {
   return {
     id: c.id,
     message: c.message,
-    author: c.user?.handle,
+    author: c.user.handle,
     createdAt: c.created_at,
     resolvedAt: c.resolved_at,
     orderId: c.order_id,
@@ -35,9 +37,9 @@ export const list_comments = tool({
       .describe("If true, returns comment message as markdown instead of plain text"),
   }),
   execute: async ({ file_key, as_md }) => {
-    const data = (await figma.get(
+    const data = await figma.get<GetCommentsResponse>(
       `/v1/files/${file_key}/comments${as_md ? "?as_md=true" : ""}`,
-    )) as any;
+    );
     return JSON.stringify(data.comments.map(summarizeComment));
   },
 });
@@ -61,7 +63,7 @@ export const create_comment = tool({
     } else if (node_id) {
       body.client_meta = { node_id, node_offset: { x: 0, y: 0 } };
     }
-    const result = await figma.post(`/v1/files/${file_key}/comments`, body);
+    const result = await figma.post<Comment>(`/v1/files/${file_key}/comments`, body);
     return JSON.stringify(result);
   },
 });
@@ -86,10 +88,8 @@ export const add_reaction = tool({
     emoji: z.string().describe('Emoji shortcode (e.g., ":thumbsup:", ":heart:")'),
   }),
   execute: async ({ file_key, comment_id, emoji }) => {
-    const result = await figma.post(`/v1/files/${file_key}/comments/${comment_id}/reactions`, {
-      emoji,
-    });
-    return JSON.stringify(result);
+    await figma.post(`/v1/files/${file_key}/comments/${comment_id}/reactions`, { emoji });
+    return JSON.stringify({ success: true });
   },
 });
 

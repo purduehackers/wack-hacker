@@ -1,3 +1,5 @@
+import type { GetFileVersionsResponse } from "@figma/rest-api-spec";
+
 import { tool } from "ai";
 import { z } from "zod";
 
@@ -19,14 +21,16 @@ export const list_versions = tool({
     if (after) params.set("after", after);
     const qs = params.toString();
 
-    const data = (await figma.get(`/v1/files/${file_key}/versions${qs ? `?${qs}` : ""}`)) as any;
+    const data = await figma.get<GetFileVersionsResponse>(
+      `/v1/files/${file_key}/versions${qs ? `?${qs}` : ""}`,
+    );
     return JSON.stringify({
-      versions: data.versions.map((v: any) => ({
+      versions: data.versions.map((v) => ({
         id: v.id,
         label: v.label,
         description: v.description,
         createdAt: v.created_at,
-        user: v.user?.handle,
+        user: v.user.handle,
       })),
       pagination: data.pagination,
     });
