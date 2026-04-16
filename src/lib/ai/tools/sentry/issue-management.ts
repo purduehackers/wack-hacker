@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { admin } from "../../skills/index.ts";
 import { sentryOrg, sentryGet, sentryMutate } from "./client.ts";
 
 interface SentryTag {
@@ -58,16 +59,18 @@ export const update_issue = tool({
 });
 
 /** Delete a Sentry issue permanently. */
-export const delete_issue = tool({
-  description: "Permanently delete a Sentry issue. This action cannot be undone.",
-  inputSchema: z.object({
-    issue_id: z.string().describe("Sentry issue ID (numeric)"),
+export const delete_issue = admin(
+  tool({
+    description: "Permanently delete a Sentry issue. This action cannot be undone.",
+    inputSchema: z.object({
+      issue_id: z.string().describe("Sentry issue ID (numeric)"),
+    }),
+    execute: async ({ issue_id }) => {
+      await sentryMutate(`/issues/${issue_id}/`, "DELETE");
+      return JSON.stringify({ deleted: true });
+    },
   }),
-  execute: async ({ issue_id }) => {
-    await sentryMutate(`/issues/${issue_id}/`, "DELETE");
-    return JSON.stringify({ deleted: true });
-  },
-});
+);
 
 /** Bulk update multiple issues at once. */
 export const bulk_update_issues = tool({

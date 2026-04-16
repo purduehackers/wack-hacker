@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { admin } from "../../skills/index.ts";
 import { sentryGet, sentryMutate, sentryOrg } from "./client.ts";
 
 interface SentryMember {
@@ -155,75 +156,88 @@ export const list_team_members = tool({
 });
 
 /** Create a new team. */
-export const create_team = tool({
-  description: "Create a new team in the Sentry organization.",
-  inputSchema: z.object({
-    name: z.string().describe("Team name"),
-    slug: z.string().optional().describe("Team slug (auto-generated from name if omitted)"),
+export const create_team = admin(
+  tool({
+    description: "Create a new team in the Sentry organization.",
+    inputSchema: z.object({
+      name: z.string().describe("Team name"),
+      slug: z.string().optional().describe("Team slug (auto-generated from name if omitted)"),
+    }),
+    execute: async ({ name, slug }) => {
+      const data = await sentryMutate(`/organizations/${sentryOrg()}/teams/`, "POST", {
+        name,
+        slug,
+      });
+      return JSON.stringify(data);
+    },
   }),
-  execute: async ({ name, slug }) => {
-    const data = await sentryMutate(`/organizations/${sentryOrg()}/teams/`, "POST", { name, slug });
-    return JSON.stringify(data);
-  },
-});
+);
 
 /** Update an existing team. */
-export const update_team = tool({
-  description: "Update a Sentry team's name or slug.",
-  inputSchema: z.object({
-    team_slug: z.string().describe("Current team slug"),
-    name: z.string().optional().describe("New team name"),
-    slug: z.string().optional().describe("New team slug"),
+export const update_team = admin(
+  tool({
+    description: "Update a Sentry team's name or slug.",
+    inputSchema: z.object({
+      team_slug: z.string().describe("Current team slug"),
+      name: z.string().optional().describe("New team name"),
+      slug: z.string().optional().describe("New team slug"),
+    }),
+    execute: async ({ team_slug, name, slug }) => {
+      const body: Record<string, unknown> = {};
+      if (name !== undefined) body.name = name;
+      if (slug !== undefined) body.slug = slug;
+      const data = await sentryMutate(`/teams/${sentryOrg()}/${team_slug}/`, "PUT", body);
+      return JSON.stringify(data);
+    },
   }),
-  execute: async ({ team_slug, name, slug }) => {
-    const body: Record<string, unknown> = {};
-    if (name !== undefined) body.name = name;
-    if (slug !== undefined) body.slug = slug;
-    const data = await sentryMutate(`/teams/${sentryOrg()}/${team_slug}/`, "PUT", body);
-    return JSON.stringify(data);
-  },
-});
+);
 
 /** Delete a team. */
-export const delete_team = tool({
-  description: "Permanently delete a Sentry team. This action cannot be undone.",
-  inputSchema: z.object({
-    team_slug: z.string().describe("Team slug"),
+export const delete_team = admin(
+  tool({
+    description: "Permanently delete a Sentry team. This action cannot be undone.",
+    inputSchema: z.object({
+      team_slug: z.string().describe("Team slug"),
+    }),
+    execute: async ({ team_slug }) => {
+      await sentryMutate(`/teams/${sentryOrg()}/${team_slug}/`, "DELETE");
+      return JSON.stringify({ deleted: true });
+    },
   }),
-  execute: async ({ team_slug }) => {
-    await sentryMutate(`/teams/${sentryOrg()}/${team_slug}/`, "DELETE");
-    return JSON.stringify({ deleted: true });
-  },
-});
+);
 
 /** Add a member to a team. */
-export const add_team_member = tool({
-  description: "Add an organization member to a Sentry team.",
-  inputSchema: z.object({
-    member_id: z.string().describe("Organization member ID"),
-    team_slug: z.string().describe("Team slug"),
+export const add_team_member = admin(
+  tool({
+    description: "Add an organization member to a Sentry team.",
+    inputSchema: z.object({
+      member_id: z.string().describe("Organization member ID"),
+      team_slug: z.string().describe("Team slug"),
+    }),
+    execute: async ({ member_id, team_slug }) => {
+      const data = await sentryMutate(
+        `/organizations/${sentryOrg()}/members/${member_id}/teams/${team_slug}/`,
+        "POST",
+      );
+      return JSON.stringify(data);
+    },
   }),
-  execute: async ({ member_id, team_slug }) => {
-    const data = await sentryMutate(
-      `/organizations/${sentryOrg()}/members/${member_id}/teams/${team_slug}/`,
-      "POST",
-    );
-    return JSON.stringify(data);
-  },
-});
+);
 
 /** Remove a member from a team. */
-export const remove_team_member = tool({
-  description: "Remove a member from a Sentry team.",
-  inputSchema: z.object({
-    member_id: z.string().describe("Organization member ID"),
-    team_slug: z.string().describe("Team slug"),
+export const remove_team_member = admin(
+  tool({
+    description: "Remove a member from a Sentry team.",
+    inputSchema: z.object({
+      member_id: z.string().describe("Organization member ID"),
+      team_slug: z.string().describe("Team slug"),
+    }),
+    execute: async ({ member_id, team_slug }) => {
+      await sentryMutate(
+        `/organizations/${sentryOrg()}/members/${member_id}/teams/${team_slug}/`,
+        "DELETE",
+      );
+      return JSON.stringify({ removed: true });
+    },
   }),
-  execute: async ({ member_id, team_slug }) => {
-    await sentryMutate(
-      `/organizations/${sentryOrg()}/members/${member_id}/teams/${team_slug}/`,
-      "DELETE",
-    );
-    return JSON.stringify({ removed: true });
-  },
-});
+);

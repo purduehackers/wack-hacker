@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { admin } from "../../skills/index.ts";
 import { sentryGet, sentryMutate, sentryOrg } from "./client.ts";
 
 interface SentryMonitor {
@@ -151,13 +152,15 @@ export const update_monitor = tool({
 });
 
 /** Delete a cron monitor. */
-export const delete_monitor = tool({
-  description: "Permanently delete a Sentry cron monitor. This action cannot be undone.",
-  inputSchema: z.object({
-    monitor_slug: z.string().describe("Monitor slug"),
+export const delete_monitor = admin(
+  tool({
+    description: "Permanently delete a Sentry cron monitor. This action cannot be undone.",
+    inputSchema: z.object({
+      monitor_slug: z.string().describe("Monitor slug"),
+    }),
+    execute: async ({ monitor_slug }) => {
+      await sentryMutate(`/organizations/${sentryOrg()}/monitors/${monitor_slug}/`, "DELETE");
+      return JSON.stringify({ deleted: true });
+    },
   }),
-  execute: async ({ monitor_slug }) => {
-    await sentryMutate(`/organizations/${sentryOrg()}/monitors/${monitor_slug}/`, "DELETE");
-    return JSON.stringify({ deleted: true });
-  },
-});
+);

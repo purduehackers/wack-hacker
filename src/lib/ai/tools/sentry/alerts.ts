@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { admin } from "../../skills/index.ts";
 import { sentryOrg, sentryGet, sentryMutate } from "./client.ts";
 
 interface SentryAlertRule {
@@ -143,17 +144,19 @@ export const update_alert_rule = tool({
 });
 
 /** Delete an issue alert rule. */
-export const delete_alert_rule = tool({
-  description: "Permanently delete a Sentry issue alert rule. This action cannot be undone.",
-  inputSchema: z.object({
-    project_slug: z.string().describe("Project slug"),
-    rule_id: z.string().describe("Alert rule ID"),
+export const delete_alert_rule = admin(
+  tool({
+    description: "Permanently delete a Sentry issue alert rule. This action cannot be undone.",
+    inputSchema: z.object({
+      project_slug: z.string().describe("Project slug"),
+      rule_id: z.string().describe("Alert rule ID"),
+    }),
+    execute: async ({ project_slug, rule_id }) => {
+      await sentryMutate(`/projects/${sentryOrg()}/${project_slug}/rules/${rule_id}/`, "DELETE");
+      return JSON.stringify({ deleted: true });
+    },
   }),
-  execute: async ({ project_slug, rule_id }) => {
-    await sentryMutate(`/projects/${sentryOrg()}/${project_slug}/rules/${rule_id}/`, "DELETE");
-    return JSON.stringify({ deleted: true });
-  },
-});
+);
 
 /** List metric alert rules for the organization. */
 export const list_metric_alert_rules = tool({
