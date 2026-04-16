@@ -84,7 +84,7 @@ export const list_spans = tool({
     per_page: z.number().max(100).optional(),
     stat_period: z.string().optional().describe("Time range (e.g. '24h', '7d')"),
   }),
-  execute: async ({ fields, query, sort, per_page, stat_period }) => {
+  execute: async ({ project_slug, fields, query, sort, per_page, stat_period }) => {
     const defaultFields = ["span.op", "span.description", "avg(span.duration)", "count()"];
     const result = await queryExploreEventsInTableFormat({
       ...sentryOpts(),
@@ -92,6 +92,7 @@ export const list_spans = tool({
       query: {
         dataset: "spans",
         field: fields ?? defaultFields,
+        project: project_slug ? ([project_slug] as unknown as number[]) : undefined,
         statsPeriod: stat_period ?? "24h",
         query,
         sort,

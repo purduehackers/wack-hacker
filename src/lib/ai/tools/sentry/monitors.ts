@@ -18,14 +18,16 @@ export const list_monitors = tool({
     "List cron monitors (scheduled jobs) in the Sentry organization. Returns name, status, schedule, and last/next check-in times.",
   inputSchema: z.object({
     project_slug: z.string().optional().describe("Filter by project slug"),
-    per_page: z.number().max(100).optional(),
     cursor: z.string().optional().describe("Pagination cursor"),
   }),
-  execute: async ({ cursor }) => {
+  execute: async ({ project_slug, cursor }) => {
     const result = await retrieveMonitorsForAnOrganization({
       ...sentryOpts(),
       path: { organization_id_or_slug: sentryOrg() },
-      query: { cursor },
+      query: {
+        project: project_slug ? ([project_slug] as unknown as number[]) : undefined,
+        cursor,
+      },
     });
     const { data } = unwrapResult(result, "listMonitors");
     return JSON.stringify(

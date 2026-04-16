@@ -26,7 +26,7 @@ export const search_logs = tool({
       .optional()
       .describe("Time range (e.g. '1h', '24h', '7d'). Defaults to '24h'."),
   }),
-  execute: async ({ fields, query, sort, per_page, stat_period }) => {
+  execute: async ({ project_slug, fields, query, sort, per_page, stat_period }) => {
     const defaultFields = ["message", "severity_text", "timestamp", "trace_id"];
     const result = await queryExploreEventsInTableFormat({
       ...sentryOpts(),
@@ -34,6 +34,7 @@ export const search_logs = tool({
       query: {
         dataset: "logs",
         field: fields ?? defaultFields,
+        project: project_slug ? ([project_slug] as unknown as number[]) : undefined,
         statsPeriod: stat_period ?? "24h",
         query,
         sort: sort ?? "-timestamp",
@@ -61,12 +62,13 @@ export const get_log_stats = tool({
       .optional()
       .describe("Time range (e.g. '24h', '7d'). Defaults to '24h'."),
   }),
-  execute: async ({ query, y_axis, stat_period }) => {
+  execute: async ({ project_slug, query, y_axis, stat_period }) => {
     const result = await queryExploreEventsInTimeseriesFormat({
       ...sentryOpts(),
       path: { organization_id_or_slug: sentryOrg() },
       query: {
         dataset: "logs",
+        project: project_slug ? ([project_slug] as unknown as number[]) : undefined,
         statsPeriod: stat_period ?? "24h",
         yAxis: y_axis ?? "count()",
         query,

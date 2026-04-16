@@ -185,14 +185,14 @@ export const update_team = admin(
       name: z.string().optional().describe("New team name"),
       slug: z.string().optional().describe("New team slug"),
     }),
-    execute: async ({ team_slug, slug }) => {
+    execute: async ({ team_slug, name, slug }) => {
       const result = await updateATeam({
         ...sentryOpts(),
         path: {
           organization_id_or_slug: sentryOrg(),
           team_id_or_slug: team_slug,
         },
-        body: { slug: slug ?? team_slug },
+        body: { name, slug: slug ?? team_slug } as Parameters<typeof updateATeam>[0]["body"],
       });
       const { data } = unwrapResult(result, "updateTeam");
       return JSON.stringify(data);

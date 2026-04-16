@@ -19,14 +19,16 @@ export const list_releases = tool({
   inputSchema: z.object({
     project_slug: z.string().optional().describe("Filter by project slug"),
     query: z.string().optional().describe("Filter by version string"),
-    per_page: z.number().max(100).optional(),
     cursor: z.string().optional().describe("Pagination cursor"),
   }),
-  execute: async ({ query, cursor }) => {
+  execute: async ({ project_slug, query, cursor }) => {
     const result = await listAnOrganization_sReleases({
       ...sentryOpts(),
       path: { organization_id_or_slug: sentryOrg() },
-      query: { query, cursor },
+      query: {
+        query: project_slug ? `${query ?? ""} project:${project_slug}`.trim() : query,
+        cursor,
+      },
     });
     const { data } = unwrapResult(result, "listReleases");
     return JSON.stringify(

@@ -192,9 +192,7 @@ export const delete_alert_rule = admin(
 export const list_metric_alert_rules = tool({
   description:
     "List metric alert rules for the Sentry organization. Metric alerts trigger on aggregate data like error count or latency.",
-  inputSchema: z.object({
-    project_slug: z.string().optional().describe("Filter by project slug"),
-  }),
+  inputSchema: z.object({}),
   execute: async () => {
     const result = await deprecatedListAnOrganization_sMetricAlertRules({
       ...sentryOpts(),

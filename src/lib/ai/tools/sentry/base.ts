@@ -65,13 +65,15 @@ export const search_issues = tool({
     per_page: z.number().max(100).optional(),
     cursor: z.string().optional().describe("Pagination cursor from previous response"),
   }),
-  execute: async ({ query, sort, cursor }) => {
+  execute: async ({ query, project_slug, sort, per_page, cursor }) => {
     const result = await listAnOrganization_sIssues({
       ...sentryOpts(),
       path: { organization_id_or_slug: sentryOrg() },
       query: {
         query,
+        project: project_slug ? ([project_slug] as unknown as number[]) : undefined,
         sort: sort as "date" | "freq" | "new" | undefined,
+        limit: per_page,
         cursor,
       },
     });

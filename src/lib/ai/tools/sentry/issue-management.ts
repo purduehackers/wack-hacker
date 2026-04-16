@@ -42,7 +42,9 @@ export const update_issue = tool({
     if (input.assigned_to !== undefined) body.assignedTo = input.assigned_to;
     if (input.has_seen !== undefined) body.hasSeen = input.has_seen;
     if (input.is_bookmarked !== undefined) body.isBookmarked = input.is_bookmarked;
+    if (input.priority !== undefined) body.priority = input.priority;
     if (input.status_details !== undefined) body.statusDetails = input.status_details;
+    if (input.substatus !== undefined) body.substatus = input.substatus;
     const result = await updateAnIssue({
       ...sentryOpts(),
       path: {
@@ -96,13 +98,14 @@ export const bulk_update_issues = tool({
     if (input.assigned_to !== undefined) body.assignedTo = input.assigned_to;
     if (input.has_seen !== undefined) body.hasSeen = input.has_seen;
     if (input.is_bookmarked !== undefined) body.isBookmarked = input.is_bookmarked;
+    if (input.priority !== undefined) body.priority = input.priority;
     const result = await bulkMutateAListOfIssues({
       ...sentryOpts(),
       path: {
         organization_id_or_slug: sentryOrg(),
         project_id_or_slug: project_slug,
       },
-      query: { id: Number(issue_ids[0]) },
+      query: { id: issue_ids.map(Number) as unknown as number },
       body: body as Parameters<typeof bulkMutateAListOfIssues>[0]["body"],
     });
     const { data } = unwrapResult(result, "bulkUpdateIssues");

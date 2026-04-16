@@ -20,12 +20,14 @@ export const list_replays = tool({
     per_page: z.number().max(100).optional(),
     stat_period: z.string().optional().describe("Time range (e.g. '24h', '7d'). Defaults to '7d'."),
   }),
-  execute: async ({ query, sort, stat_period }) => {
+  execute: async ({ project_slug, query, sort, per_page, stat_period }) => {
     const result = await listAnOrganization_sReplays({
       ...sentryOpts(),
       path: { organization_id_or_slug: sentryOrg() },
       query: {
+        project: project_slug ? ([project_slug] as unknown as number[]) : undefined,
         statsPeriod: stat_period ?? "7d",
+        per_page,
         query,
         sort,
       },
@@ -54,7 +56,6 @@ export const get_replay = tool({
   description:
     "Get full details for a session replay — duration, error count, URLs, user info, browser/OS, and segment count.",
   inputSchema: z.object({
-    project_slug: z.string().describe("Project slug"),
     replay_id: z.string().describe("Replay ID"),
   }),
   execute: async ({ replay_id }) => {
