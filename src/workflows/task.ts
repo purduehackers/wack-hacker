@@ -6,7 +6,8 @@ import { sleep, getWorkflowMetadata } from "workflow";
 import type { TaskMeta } from "@/lib/tasks/types";
 
 import { AgentContext } from "@/lib/ai/context";
-import { streamTurn, truncateWithFooter } from "@/lib/ai/streaming";
+import { MessageRenderer } from "@/lib/ai/message-renderer";
+import { streamTurn } from "@/lib/ai/streaming";
 import { nextOccurrence } from "@/lib/tasks/cron";
 import { saveTask, removeTask, getTask } from "@/lib/tasks/registry";
 
@@ -38,9 +39,9 @@ async function executeAction(meta: TaskMeta) {
   const taskFooter = `-# Task: ${meta.id}`;
 
   if (meta.action.type === "message") {
-    await discord.channels.createMessage(meta.action.channelId, {
-      content: truncateWithFooter(meta.action.content, taskFooter),
-    });
+    for (const msg of MessageRenderer.splitWithFooter(meta.action.content, taskFooter)) {
+      await discord.channels.createMessage(meta.action.channelId, { content: msg });
+    }
     log.info("task-workflow", `Sent message for task ${meta.id}`);
   } else if (meta.action.type === "agent") {
     const now = new Date();
