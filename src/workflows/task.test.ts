@@ -93,7 +93,7 @@ describe("taskWorkflow: agent action footer", () => {
     expect(streaming.streamTurn).toHaveBeenCalledWith(
       expect.anything(), // discord API
       "ch-1",
-      "Summarize today",
+      [{ role: "user", content: "Summarize today" }],
       expect.any(Object), // serialized context
       "task-run-42", // task ID
     );

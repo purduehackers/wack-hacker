@@ -1,8 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 
+import type { ChatMessage } from "./types.ts";
+
 import { createMockAPI, asAPI, messagePacket } from "../test/fixtures/index.ts";
 import { AgentContext } from "./context.ts";
-import { buildPrompt, streamTurn } from "./streaming.ts";
+import { buildUserMessage, streamTurn } from "./streaming.ts";
 
 type StreamEvent = Record<string, unknown>;
 
@@ -14,13 +16,15 @@ function mockOrchestrator(
     extraEvents?: StreamEvent[];
     totalUsage?: Promise<unknown>;
     steps?: Promise<unknown>;
+    captureInput?: (input: unknown) => void;
   },
 ) {
   const stepCount = options?.stepCount ?? 1;
   const toolCallsPerStep = options?.toolCallsPerStep ?? 0;
   return {
-    stream: () =>
-      Promise.resolve({
+    stream: (input: unknown) => {
+      options?.captureInput?.(input);
+      return Promise.resolve({
         fullStream: (async function* () {
           for (const evt of options?.extraEvents ?? []) yield evt;
           for (const text of textChunks) {
@@ -43,7 +47,8 @@ function mockOrchestrator(
               })),
             })),
           ),
-      }),
+      });
+    },
   } as any;
 }
 
@@ -51,71 +56,61 @@ vi.mock("./orchestrator", () => ({
   createOrchestrator: vi.fn(() => mockOrchestrator(["Hello ", "world!"])),
 }));
 
-function getMessageContent(result: ReturnType<typeof buildPrompt>) {
-  if (!("messages" in result) || !result.messages) throw new Error("expected messages");
-  return result.messages[0].content;
-}
+const userMsg = (content: string): ChatMessage[] => [{ role: "user", content }];
 
-describe("buildPrompt", () => {
-  it("returns prompt for text only", () => {
-    expect(buildPrompt("hello")).toEqual({ prompt: "hello" });
+describe("buildUserMessage", () => {
+  it("returns a plain user message for text only", () => {
+    expect(buildUserMessage("hello")).toEqual({ role: "user", content: "hello" });
   });
 
-  it("returns prompt for empty attachments", () => {
-    expect(buildPrompt("hello", [])).toEqual({ prompt: "hello" });
+  it("returns a plain user message for empty attachments", () => {
+    expect(buildUserMessage("hello", [])).toEqual({ role: "user", content: "hello" });
   });
 
   it("builds image parts for image attachment", () => {
-    const content = getMessageContent(
-      buildPrompt("describe", [
-        { url: "https://example.com/img.png", filename: "img.png", contentType: "image/png" },
-      ]),
-    );
-    expect(content).toHaveLength(2);
-    expect(content[0]).toEqual({ type: "text", text: "describe" });
-    expect(content[1].type).toBe("image");
+    const msg = buildUserMessage("describe", [
+      { url: "https://example.com/img.png", filename: "img.png", contentType: "image/png" },
+    ]);
+    expect(Array.isArray(msg.content)).toBe(true);
+    const parts = msg.content as Array<{ type: string }>;
+    expect(parts).toHaveLength(2);
+    expect(parts[0]).toEqual({ type: "text", text: "describe" });
+    expect(parts[1].type).toBe("image");
   });
 
   it("builds file parts for non-image attachment", () => {
-    const content = getMessageContent(
-      buildPrompt("read", [
-        { url: "https://example.com/doc.pdf", filename: "doc.pdf", contentType: "application/pdf" },
-      ]),
-    );
-    if (content[1].type === "file") {
-      expect(content[1].filename).toBe("doc.pdf");
-      expect(content[1].mediaType).toBe("application/pdf");
-    }
+    const msg = buildUserMessage("read", [
+      { url: "https://example.com/doc.pdf", filename: "doc.pdf", contentType: "application/pdf" },
+    ]);
+    const parts = msg.content as Array<{ type: string; filename?: string; mediaType?: string }>;
+    expect(parts[1].type).toBe("file");
+    expect(parts[1].filename).toBe("doc.pdf");
+    expect(parts[1].mediaType).toBe("application/pdf");
   });
 
   it("defaults mediaType to application/octet-stream", () => {
-    const content = getMessageContent(
-      buildPrompt("check", [{ url: "https://example.com/blob", filename: "blob" }]),
-    );
-    if (content[1].type === "file") {
-      expect(content[1].mediaType).toBe("application/octet-stream");
-    }
+    const msg = buildUserMessage("check", [{ url: "https://example.com/blob", filename: "blob" }]);
+    const parts = msg.content as Array<{ type: string; mediaType?: string }>;
+    expect(parts[1].mediaType).toBe("application/octet-stream");
   });
 
   it("handles mixed attachments", () => {
-    const content = getMessageContent(
-      buildPrompt("mixed", [
-        { url: "https://example.com/a.png", filename: "a.png", contentType: "image/png" },
-        { url: "https://example.com/b.pdf", filename: "b.pdf", contentType: "application/pdf" },
-      ]),
-    );
-    expect(content).toHaveLength(3);
-    expect(content[1].type).toBe("image");
-    expect(content[2].type).toBe("file");
+    const msg = buildUserMessage("mixed", [
+      { url: "https://example.com/a.png", filename: "a.png", contentType: "image/png" },
+      { url: "https://example.com/b.pdf", filename: "b.pdf", contentType: "application/pdf" },
+    ]);
+    const parts = msg.content as Array<{ type: string }>;
+    expect(parts).toHaveLength(3);
+    expect(parts[1].type).toBe("image");
+    expect(parts[2].type).toBe("file");
   });
 
   it("treats image/jpeg as image", () => {
-    const content = getMessageContent(
-      buildPrompt("photo", [
-        { url: "https://example.com/p.jpg", filename: "p.jpg", contentType: "image/jpeg" },
-      ]),
-    );
-    expect(content[1].type).toBe("image");
+    const msg = buildUserMessage("photo", [
+      { url: "https://example.com/p.jpg", filename: "p.jpg", contentType: "image/jpeg" },
+    ]);
+    const parts = msg.content as Array<{ type: string }>;
+    expect(parts[1].type).toBe("image");
   });
 });
 
@@ -124,7 +119,7 @@ describe("streamTurn: basic streaming", () => {
     const discord = createMockAPI();
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
 
-    const result = await streamTurn(asAPI(discord), "ch-1", "hello", ctx.toJSON());
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON());
 
     expect(result.text).toBe("Hello world!");
     expect(discord.callsTo("channels.createMessage")[0]).toEqual([
@@ -144,13 +139,12 @@ describe("streamTurn: basic streaming", () => {
     const discord = createMockAPI();
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
 
-    await streamTurn(asAPI(discord), "ch-1", "hello", ctx.toJSON(), "task-abc-123");
+    await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), "task-abc-123");
 
     const edits = discord.callsTo("channels.editMessage");
     const lastEdit = edits[edits.length - 1];
     const body = lastEdit[2] as { content: string };
     expect(body.content).toContain("-# Task: task-abc-123");
-    // Task footer should be on a separate line from the metadata footer
     expect(body.content).toMatch(/-# .+s · .+\n-# Task: task-abc-123/);
   });
 
@@ -161,7 +155,7 @@ describe("streamTurn: basic streaming", () => {
     };
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
 
-    const result = await streamTurn(asAPI(discord), "ch-1", "hello", ctx.toJSON());
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON());
 
     expect(result.text).toBe("Hello world!");
     const sends = discord.callsTo("channels.createMessage");
@@ -185,7 +179,7 @@ describe("streamTurn: basic streaming", () => {
     });
 
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
-    const result = await streamTurn(asAPI(discord), "ch-1", "hello", ctx.toJSON());
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON());
 
     expect(result.text).toBe("Hello world!");
     expect(editCount).toBeGreaterThanOrEqual(2);
@@ -199,7 +193,7 @@ describe("streamTurn: basic streaming", () => {
 
     const discord = createMockAPI();
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
-    const result = await streamTurn(asAPI(discord), "ch-1", "hello", ctx.toJSON());
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON());
 
     expect(result.text).toBe("");
     const edits = discord.callsTo("channels.editMessage");
@@ -222,9 +216,8 @@ describe("streamTurn: multi-message splitting", () => {
 
     const discord = createMockAPI();
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
-    await streamTurn(asAPI(discord), "ch-1", "hello", ctx.toJSON());
+    await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON());
 
-    // Initial "Thinking..." + at least one overflow chunk
     const sends = discord.callsTo("channels.createMessage");
     expect(sends.length).toBeGreaterThanOrEqual(2);
 
@@ -250,7 +243,7 @@ describe("streamTurn: tool events and metadata", () => {
 
     const discord = createMockAPI();
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
-    await streamTurn(asAPI(discord), "ch-1", "hello", ctx.toJSON());
+    await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON());
 
     const edits = discord.callsTo("channels.editMessage");
     const editBodies = edits.map((e) => (e[2] as { content: string }).content);
@@ -286,7 +279,7 @@ describe("streamTurn: tool events and metadata", () => {
 
     const discord = createMockAPI();
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
-    await streamTurn(asAPI(discord), "ch-1", "hello", ctx.toJSON());
+    await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON());
 
     const edits = discord.callsTo("channels.editMessage");
     const editBodies = edits.map((e) => (e[2] as { content: string }).content);
@@ -313,7 +306,7 @@ describe("streamTurn: tool event edge cases", () => {
 
     const discord = createMockAPI();
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
-    const result = await streamTurn(asAPI(discord), "ch-1", "hello", ctx.toJSON());
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON());
 
     expect(result.text).toBe("Done.");
     vi.restoreAllMocks();
@@ -333,7 +326,7 @@ describe("streamTurn: tool event edge cases", () => {
 
     const discord = createMockAPI();
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
-    const result = await streamTurn(asAPI(discord), "ch-1", "hello", ctx.toJSON());
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON());
 
     expect(result.text).toBe("Ok.");
     const edits = discord.callsTo("channels.editMessage");
@@ -355,14 +348,78 @@ describe("streamTurn: tool event edge cases", () => {
 
     const discord = createMockAPI();
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
-    const result = await streamTurn(asAPI(discord), "ch-1", "hello", ctx.toJSON());
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON());
 
     expect(result.text).toBe("Response.");
     const edits = discord.callsTo("channels.editMessage");
     const lastEdit = edits[edits.length - 1];
     const body = lastEdit[2] as { content: string };
-    // Should still have a footer with just time, no tokens/tools
     expect(body.content).toMatch(/-# \d+\.\ds$/);
+
+    vi.restoreAllMocks();
+  });
+});
+
+describe("streamTurn: messages array", () => {
+  it("passes full conversation history to the agent", async () => {
+    const orchestrator = await import("./orchestrator");
+    let capturedInput: unknown;
+    vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue(
+      mockOrchestrator(["ok"], { captureInput: (i) => (capturedInput = i) }) as any,
+    );
+
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    const history: ChatMessage[] = [
+      { role: "user", content: "remind me friday" },
+      { role: "assistant", content: "what time?" },
+      { role: "user", content: "any time works" },
+    ];
+
+    await streamTurn(asAPI(discord), "ch-1", history, ctx.toJSON());
+
+    const { messages } = capturedInput as { messages: Array<{ role: string; content: unknown }> };
+    expect(messages).toHaveLength(3);
+    expect(messages[0]).toEqual({ role: "user", content: "remind me friday" });
+    expect(messages[1]).toEqual({ role: "assistant", content: "what time?" });
+    expect(messages[2]).toEqual({ role: "user", content: "any time works" });
+
+    vi.restoreAllMocks();
+  });
+
+  it("applies attachments to the last user message only", async () => {
+    const orchestrator = await import("./orchestrator");
+    let capturedInput: unknown;
+    vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue(
+      mockOrchestrator(["ok"], { captureInput: (i) => (capturedInput = i) }) as any,
+    );
+
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(
+      messagePacket("hello", {
+        attachments: [
+          {
+            id: "a",
+            url: "https://x/a.png",
+            filename: "a.png",
+            contentType: "image/png",
+            size: 1,
+          },
+        ],
+      }),
+    );
+    const history: ChatMessage[] = [
+      { role: "user", content: "earlier" },
+      { role: "assistant", content: "reply" },
+      { role: "user", content: "latest" },
+    ];
+
+    await streamTurn(asAPI(discord), "ch-1", history, ctx.toJSON());
+
+    const { messages } = capturedInput as { messages: Array<{ role: string; content: unknown }> };
+    expect(typeof messages[0].content).toBe("string");
+    expect(typeof messages[1].content).toBe("string");
+    expect(Array.isArray(messages[2].content)).toBe(true);
 
     vi.restoreAllMocks();
   });

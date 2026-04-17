@@ -57,7 +57,13 @@ async function executeAction(meta: TaskMeta) {
         day: "numeric",
       }),
     });
-    await streamTurn(discord, meta.action.channelId, meta.action.prompt, context.toJSON(), meta.id);
+    await streamTurn(
+      discord,
+      meta.action.channelId,
+      [{ role: "user", content: meta.action.prompt }],
+      context.toJSON(),
+      meta.id,
+    );
     log.info("task-workflow", `Ran agent for task ${meta.id}`);
   }
 }

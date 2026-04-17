@@ -2,11 +2,13 @@ import { log } from "evlog";
 import { resumeHook } from "workflow/api";
 
 import type { EventHandler } from "@/bot/events/types";
+import type { ChatHookEvent } from "@/workflows/chat";
 
 import * as userEvents from "@/bot/handlers/events";
 import { handleMention } from "@/bot/handlers/events";
 import { isBotMention } from "@/bot/mention";
 import { EventRouter } from "@/bot/router";
+import { AgentContext } from "@/lib/ai/context";
 
 export const router = new EventRouter();
 
@@ -20,23 +22,23 @@ router.onMessage(async (packet, ctx) => {
   if (packet.data.thread) return;
 
   const channelId = packet.data.channel.id;
-  const threadId = packet.data.thread ? packet.data.channel.id : undefined;
-  const existing = await ctx.store.get(channelId, threadId);
+  const existing = await ctx.store.get(channelId);
   if (!existing) return;
 
   log.info("handlers", `Forwarding message to workflow ${existing.workflowRunId}`);
 
   try {
-    await resumeHook(existing.workflowRunId, {
-      type: "message" as const,
+    const turnContext = AgentContext.fromPacket(packet).toJSON();
+    const event: ChatHookEvent = {
+      type: "message",
       content: packet.data.content,
-      authorId: packet.data.author.id,
-      authorUsername: packet.data.author.username,
-    });
-    await ctx.store.touch(channelId, threadId);
+      context: turnContext,
+    };
+    await resumeHook(existing.workflowRunId, event);
+    await ctx.store.touch(channelId);
   } catch (err) {
     log.info("handlers", `Conversation ended for ${channelId}: ${String(err)}`);
-    await ctx.store.delete(channelId, threadId);
+    await ctx.store.delete(channelId);
   }
 });
 

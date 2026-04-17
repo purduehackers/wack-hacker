@@ -1,6 +1,8 @@
 # Streaming
 
-`src/lib/ai/streaming.ts` exports `streamTurn(discord, channelId, content, serializedContext)`. This is the function `chatWorkflow` and `taskWorkflow` actually call — it owns the entire loop from "bot was mentioned" to "Discord message is updated".
+`src/lib/ai/streaming.ts` exports `streamTurn(discord, channelId, messages, serializedContext, taskId?)`. This is the function `chatWorkflow` and `taskWorkflow` actually call — it owns the entire loop from "bot was mentioned" to "Discord message is updated".
+
+`messages` is the full `ChatMessage[]` conversation history so far; the **last entry is the current user input** and prior entries are passed to the model as assistant/user turns. For single-turn callers (scheduled tasks), wrap the prompt as `[{ role: "user", content: prompt }]`.
 
 ## Constants
 
@@ -16,7 +18,7 @@ The 1.5-second debounce keeps Discord rate-limits happy while still feeling live
 1. Rehydrates `AgentContext` from JSON via `AgentContext.fromJSON(serializedContext)`.
 2. Calls `createOrchestrator(agentCtx)`.
 3. Sends an initial Discord message: `> Thinking...`. Holds onto its message ID.
-4. Calls `agent.stream(buildPrompt(content, agentCtx.attachments))` and consumes the `fullStream`. `buildPrompt` wraps any image attachments as `image` parts and other files as `file` parts so the model can see them directly.
+4. Splits `messages` into prior turns and the current user input, then calls `agent.stream({ messages: [...priorTurns, currentUserMessage] })`. The current user message goes through `buildUserMessage(content, agentCtx.attachments)`, which inlines image/file attachments as multimodal content parts so the model can see them directly. Consumes the `fullStream`.
 5. Maintains a small render state: `{ text, activity, subagentPreview }`.
 6. Handles each stream event:
    - **`text-delta`** — append `event.text` to `state.text`, clear `activity` and `subagentPreview`.
@@ -43,13 +45,15 @@ The activity line uses Discord's `-# ` subtle text syntax. The subagent preview 
 
 Activity lines and subagent previews are deliberately ephemeral — they appear only while a tool is running and disappear when the next text delta arrives.
 
-## buildPrompt
+## buildUserMessage
 
 ```ts
-buildPrompt(content: string, attachments?: Attachment[])
+buildUserMessage(content: string, attachments?: Attachment[])
 ```
 
-If there are no attachments, returns `{ prompt: content }`. Otherwise builds a `messages` array with a single user message whose `content` is an array of parts: one `text` part for `content`, then one part per attachment (`image` for `image/*` content types, `file` otherwise).
+Returns a single `{ role: "user", content }` `CoreMessage` suitable for use as the last slot of an AI SDK `messages` array. If there are no attachments, `content` is a plain string. Otherwise `content` is an array of parts: one `text` part for the message text, then one part per attachment (`image` for `image/*` content types, `file` otherwise).
+
+Attachments are only applied to the current turn's user message — not to prior-turn history — since attachments were already processed when that prior turn ran.
 
 ## Where streamTurn gets called
 
