@@ -124,6 +124,14 @@ describe("fetchCatalog", () => {
     expect(out).toEqual(catalog);
   });
 
+  it("passes timeout + no-store cache options", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, json: async () => catalog });
+    await fetchCatalog(fetchImpl as unknown as typeof fetch);
+    const [, opts] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    expect(opts.cache).toBe("no-store");
+    expect(opts.signal).toBeInstanceOf(AbortSignal);
+  });
+
   it("returns null on non-2xx", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({}) });
     expect(await fetchCatalog(fetchImpl as unknown as typeof fetch)).toBeNull();
@@ -132,6 +140,16 @@ describe("fetchCatalog", () => {
   it("returns null on fetch throw", async () => {
     const fetchImpl = vi.fn().mockRejectedValue(new Error("network down"));
     expect(await fetchCatalog(fetchImpl as unknown as typeof fetch)).toBeNull();
+  });
+
+  it("uses the global fetch when no implementation is provided", async () => {
+    const globalFetch = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("no network"));
+    expect(await fetchCatalog()).toBeNull();
+    expect(globalFetch).toHaveBeenCalledWith(
+      "https://models.dev/api.json",
+      expect.objectContaining({ cache: "no-store" }),
+    );
+    globalFetch.mockRestore();
   });
 });
 
@@ -150,5 +168,58 @@ describe("fetchModelInfo", () => {
       fetchImpl as unknown as typeof fetch,
     );
     expect(info?.id).toBe("claude-sonnet-4-6-20260301");
+  });
+
+  it("uses the global fetch when no implementation is provided", async () => {
+    const globalFetch = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("no network"));
+    expect(await fetchModelInfo("anthropic/claude-sonnet-4.6")).toBeNull();
+    globalFetch.mockRestore();
+  });
+});
+
+describe("matchModel: pickLatest date fallbacks", () => {
+  it("falls back to release_date when last_updated is missing", () => {
+    const mixedCatalog = {
+      anthropic: {
+        models: {
+          "claude-x-20250101": {
+            id: "claude-x-20250101",
+            release_date: "2025-01-01",
+            cost: { input: 1, output: 2 },
+            limit: { context: 10, output: 20 },
+          },
+          "claude-x-20260301": {
+            id: "claude-x-20260301",
+            release_date: "2026-03-01",
+            cost: { input: 1, output: 2 },
+            limit: { context: 10, output: 20 },
+          },
+        },
+      },
+    };
+    const info = matchModel(mixedCatalog, "anthropic/claude-x");
+    expect(info?.id).toBe("claude-x-20260301");
+  });
+
+  it("handles entries with neither last_updated nor release_date", () => {
+    const dateless = {
+      anthropic: {
+        models: {
+          "claude-y-a": {
+            id: "claude-y-a",
+            cost: { input: 1, output: 2 },
+            limit: { context: 10, output: 20 },
+          },
+          "claude-y-b": {
+            id: "claude-y-b",
+            cost: { input: 1, output: 2 },
+            limit: { context: 10, output: 20 },
+          },
+        },
+      },
+    };
+    const info = matchModel(dateless, "anthropic/claude-y");
+    // With empty strings both compare equal — sort is stable, first one wins.
+    expect(info?.id).toBe("claude-y-a");
   });
 });

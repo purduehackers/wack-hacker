@@ -47,15 +47,34 @@ async function persistSnapshot(
   snapshot: ContextSnapshot,
 ) {
   "use step";
-  await new ContextSnapshotStore().set(channelId, threadId, snapshot);
+  // Best-effort: snapshot persistence is diagnostic. A Redis blip should not
+  // abort the chat workflow or hide a successful user-facing turn.
+  try {
+    await new ContextSnapshotStore().set(channelId, threadId, snapshot);
+  } catch (err) {
+    log.warn("workflow", `Snapshot persist failed for ${channelId}: ${String(err)}`);
+    countMetric("workflow.chat.snapshot_error");
+  }
 }
 
 async function cleanupConversation(channelId: string, threadId: string | undefined) {
   "use step";
-  await Promise.all([
+  // Snapshot deletion is best-effort; only the ConversationStore delete is
+  // load-bearing for starting a fresh workflow later.
+  const [conversationResult, snapshotResult] = await Promise.allSettled([
     new ConversationStore().delete(channelId),
     new ContextSnapshotStore().delete(channelId, threadId),
   ]);
+  if (snapshotResult.status === "rejected") {
+    log.warn(
+      "workflow",
+      `Snapshot delete failed for ${channelId}: ${String(snapshotResult.reason)}`,
+    );
+    countMetric("workflow.chat.snapshot_cleanup_error");
+  }
+  if (conversationResult.status === "rejected") {
+    throw conversationResult.reason;
+  }
 }
 
 function captureSnapshot(

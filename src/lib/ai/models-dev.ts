@@ -82,9 +82,14 @@ export function matchModel(catalog: RawCatalog, gatewayModelId: string): ModelIn
   };
 }
 
+const CATALOG_FETCH_TIMEOUT_MS = 15_000;
+
 export async function fetchCatalog(fetchImpl: typeof fetch = fetch): Promise<RawCatalog | null> {
   try {
-    const res = await fetchImpl(CATALOG_URL);
+    const res = await fetchImpl(CATALOG_URL, {
+      signal: AbortSignal.timeout(CATALOG_FETCH_TIMEOUT_MS),
+      cache: "no-store",
+    });
     if (!res.ok) {
       log.warn("models-dev", `fetch ${CATALOG_URL} returned ${res.status}`);
       return null;

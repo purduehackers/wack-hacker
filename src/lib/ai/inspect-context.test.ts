@@ -4,7 +4,15 @@ import type { ContextSnapshot } from "@/bot/context-snapshot";
 
 import type { ModelInfo } from "./models-dev.ts";
 
-import { breakdownFromSnapshot, estimateTokens } from "./inspect-context.ts";
+vi.mock("./models-dev.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./models-dev.ts")>();
+  return {
+    ...actual,
+    fetchModelInfo: vi.fn().mockResolvedValue(null),
+  };
+});
+
+const { breakdownFromSnapshot, estimateTokens } = await import("./inspect-context.ts");
 
 const baseSnap: ContextSnapshot = {
   model: "anthropic/claude-sonnet-4.6",
@@ -110,6 +118,24 @@ describe("breakdownFromSnapshot", () => {
     const out = await breakdownFromSnapshot(snap, fetchInfo);
     expect(out.lastTurnCostUsd?.output).toBe(0);
     expect(out.lastTurnCostUsd?.input).toBeCloseTo(0.003, 6);
+  });
+
+  it("computes cost with only output tokens present", async () => {
+    const fetchInfo = vi.fn().mockResolvedValue(modelInfo);
+    const snap = {
+      ...baseSnap,
+      lastTurnUsage: { ...baseSnap.lastTurnUsage, inputTokens: undefined },
+    };
+    const out = await breakdownFromSnapshot(snap, fetchInfo);
+    expect(out.lastTurnCostUsd?.input).toBe(0);
+    expect(out.lastTurnCostUsd?.output).toBeCloseTo(0.003, 6);
+  });
+
+  it("uses the default fetchModelInfo when no fetchInfo is passed", async () => {
+    const out = await breakdownFromSnapshot(baseSnap);
+    // Mocked default returns null → no model metadata in the breakdown.
+    expect(out.modelInfo).toBeNull();
+    expect(out.lastTurnCostUsd).toBeUndefined();
   });
 
   it("forwards turnCount and messageCount", async () => {
