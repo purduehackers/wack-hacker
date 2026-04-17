@@ -5,7 +5,7 @@ import { log } from "evlog";
 
 import { countMetric, recordDistribution, recordDuration } from "@/lib/metrics";
 
-import type { SerializedAgentContext, Attachment, SubagentMetrics } from "./types.ts";
+import type { Attachment, ChatMessage, SerializedAgentContext, SubagentMetrics } from "./types.ts";
 
 import { AgentContext } from "./context.ts";
 import { MessageRenderer } from "./message-renderer.ts";
@@ -13,20 +13,28 @@ import { createOrchestrator } from "./orchestrator.ts";
 
 export { MessageRenderer } from "./message-renderer.ts";
 
-export function buildPrompt(content: string, attachments?: Attachment[]) {
-  if (!attachments?.length) return { prompt: content };
+type UserContentPart =
+  | { type: "text"; text: string }
+  | { type: "image"; image: URL }
+  | { type: "file"; data: URL; filename: string; mediaType: string };
 
-  const userContent: Array<
-    | { type: "text"; text: string }
-    | { type: "image"; image: URL }
-    | { type: "file"; data: URL; filename: string; mediaType: string }
-  > = [{ type: "text", text: content }];
+/**
+ * Build a user-role message, inlining attachments as multimodal content parts
+ * when present. The returned message is suitable for use in the last slot of
+ * an AI SDK `messages` array.
+ */
+export function buildUserMessage(content: string, attachments?: Attachment[]) {
+  if (!attachments?.length) {
+    return { role: "user" as const, content };
+  }
+
+  const parts: UserContentPart[] = [{ type: "text", text: content }];
 
   for (const a of attachments) {
     if (a.contentType?.startsWith("image/")) {
-      userContent.push({ type: "image", image: new URL(a.url) });
+      parts.push({ type: "image", image: new URL(a.url) });
     } else {
-      userContent.push({
+      parts.push({
         type: "file",
         data: new URL(a.url),
         filename: a.filename,
@@ -35,7 +43,7 @@ export function buildPrompt(content: string, attachments?: Attachment[]) {
     }
   }
 
-  return { messages: [{ role: "user" as const, content: userContent }] };
+  return { role: "user" as const, content: parts };
 }
 
 /** Extract the latest text from a subagent's UIMessage for inline preview. */
@@ -44,10 +52,19 @@ function previewSubagentText(message: UIMessage): string {
   return last?.text ?? "";
 }
 
+/**
+ * Run a single agent turn. `messages` is the full conversation history so far,
+ * where the LAST entry is the current user input. Prior entries are passed to
+ * the model as assistant/user turns so it has real conversation memory rather
+ * than relying on scraped channel history.
+ *
+ * Attachments from the serialized context are applied to the current user
+ * message only (the last entry in `messages`).
+ */
 export async function streamTurn(
   discord: API,
   channelId: string,
-  content: string,
+  messages: ChatMessage[],
   serializedContext: SerializedAgentContext,
   taskId?: string,
 ): Promise<{ text: string }> {
@@ -60,8 +77,12 @@ export async function streamTurn(
 
   log.info("streaming", `Turn started in ${channelId}`);
 
+  const priorMessages = messages.slice(0, -1).map((m) => ({ role: m.role, content: m.content }));
+  const current = messages[messages.length - 1];
+  const currentMessage = buildUserMessage(current.content, agentCtx.attachments);
+
   const startTime = Date.now();
-  const result = await agent.stream(buildPrompt(content, agentCtx.attachments));
+  const result = await agent.stream({ messages: [...priorMessages, currentMessage] });
 
   for await (const event of result.fullStream) {
     switch (event.type) {

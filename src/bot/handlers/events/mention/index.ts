@@ -33,8 +33,10 @@ export async function handleMention(
   if (existing) {
     log.info("mention", `Resuming workflow ${existing.workflowRunId} for ${data.author.username}`);
     try {
-      const recentMessages = await fetchRecentMessages(ctx.discord, sourceChannelId, data.id);
-      const turnContext = AgentContext.fromPacket(packet, { recentMessages }).toJSON();
+      // No recentMessages fetch on resume: the lead-in context was pinned at
+      // workflow start; turn-to-turn conversation memory comes from the
+      // workflow's accumulated messages array instead.
+      const turnContext = AgentContext.fromPacket(packet).toJSON();
       const event: ChatHookEvent = { type: "message", content, context: turnContext };
       await resumeHook(existing.workflowRunId, event);
       await ctx.store.touch(sourceChannelId, lookupThreadId);

@@ -25,6 +25,11 @@ export interface RecentMessage {
   timestamp: string;
 }
 
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
 export interface SerializedAgentContext {
   userId: string;
   username: string;

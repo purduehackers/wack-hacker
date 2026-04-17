@@ -7,7 +7,6 @@ import type { ChatHookEvent } from "@/workflows/chat";
 import * as userEvents from "@/bot/handlers/events";
 import { handleMention } from "@/bot/handlers/events";
 import { isBotMention } from "@/bot/mention";
-import { fetchRecentMessages } from "@/bot/recent-messages";
 import { EventRouter } from "@/bot/router";
 import { AgentContext } from "@/lib/ai/context";
 
@@ -29,8 +28,7 @@ router.onMessage(async (packet, ctx) => {
   log.info("handlers", `Forwarding message to workflow ${existing.workflowRunId}`);
 
   try {
-    const recentMessages = await fetchRecentMessages(ctx.discord, channelId, packet.data.id);
-    const turnContext = AgentContext.fromPacket(packet, { recentMessages }).toJSON();
+    const turnContext = AgentContext.fromPacket(packet).toJSON();
     const event: ChatHookEvent = {
       type: "message",
       content: packet.data.content,
