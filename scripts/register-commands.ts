@@ -1,8 +1,13 @@
-import { REST, Routes } from "discord.js";
-
 import type { SlashCommand } from "../src/bot/commands/types";
 
-import * as commands from "../src/bot/handlers/commands";
+const vercelEnv = process.env.VERCEL_ENV;
+if (vercelEnv && vercelEnv !== "production") {
+  console.log(`Skipping command registration on VERCEL_ENV=${vercelEnv}`);
+  process.exit(0);
+}
+
+const { REST, Routes } = await import("discord.js");
+const commands = await import("../src/bot/handlers/commands");
 
 const token = process.env.DISCORD_BOT_TOKEN;
 const clientId = process.env.DISCORD_CLIENT_ID;
