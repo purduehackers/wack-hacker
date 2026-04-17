@@ -13,6 +13,9 @@ export default defineConfig({
   test: {
     include: ["src/**/*.test.ts"],
     exclude: ["src/**/*.integration.test.ts"],
+    env: {
+      SKIP_ENV_VALIDATION: "1",
+    },
     coverage: {
       provider: "istanbul",
       include: ["src/**/*.ts"],

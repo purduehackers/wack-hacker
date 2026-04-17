@@ -41,4 +41,5 @@ export const env = createEnv({
   },
   extends: [vercel()],
   runtimeEnv: process.env,
+  skipValidation: process.env.SKIP_ENV_VALIDATION === "1",
 });
