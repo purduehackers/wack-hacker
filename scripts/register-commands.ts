@@ -4,6 +4,12 @@ import type { SlashCommand } from "../src/bot/commands/types";
 
 import * as commands from "../src/bot/handlers/commands";
 
+const vercelEnv = process.env.VERCEL_ENV;
+if (vercelEnv && vercelEnv !== "production") {
+  console.log(`Skipping command registration on VERCEL_ENV=${vercelEnv}`);
+  process.exit(0);
+}
+
 const token = process.env.DISCORD_BOT_TOKEN;
 const clientId = process.env.DISCORD_CLIENT_ID;
 const guildId = process.env.DISCORD_GUILD_ID;
