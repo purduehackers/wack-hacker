@@ -1,5 +1,7 @@
 import { type VercelConfig } from "@vercel/config/v1";
 
+import { buildCronRoutes } from "@/bot/crons/config";
+
 export const config: VercelConfig = {
   framework: "nextjs",
   crons: [
@@ -7,6 +9,7 @@ export const config: VercelConfig = {
       path: "/api/discord/gateway",
       schedule: "*/9 * * * *",
     },
+    ...buildCronRoutes(),
   ],
   functions: {
     "src/app/api/tasks/route.ts": {
