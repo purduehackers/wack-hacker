@@ -1,48 +1,13 @@
-import type { API } from "@discordjs/core/http-only";
-
 import { log } from "evlog";
 import { start, resumeHook } from "workflow/api";
 
 import type { HandlerContext } from "@/bot/types";
-import type { RecentMessage } from "@/lib/ai/types";
 import type { MessageCreatePacketType } from "@/lib/protocol/types";
+import type { ChatHookEvent } from "@/workflows/chat";
 
+import { buildTurnContext } from "@/bot/chat-context";
 import { stripBotMention } from "@/bot/mention";
-import { AgentContext } from "@/lib/ai/context";
 import { chatWorkflow } from "@/workflows/chat";
-
-const MAX_RECENT_MESSAGES = 15;
-
-async function fetchRecentMessages(
-  discord: API,
-  channelId: string,
-  beforeMessageId: string,
-): Promise<RecentMessage[] | undefined> {
-  try {
-    const raw = await discord.channels.getMessages(channelId, {
-      before: beforeMessageId,
-      limit: MAX_RECENT_MESSAGES,
-    });
-
-    // Discord returns newest-first; keep chronological order
-    const messages: RecentMessage[] = raw
-      .filter((m) => m.content?.trim())
-      .reverse()
-      .map((m) => ({
-        author: (m.author as any).global_name ?? m.author.username,
-        content: m.content,
-        timestamp: new Date(m.timestamp).toLocaleTimeString("en-US", {
-          hour: "numeric",
-          minute: "2-digit",
-        }),
-      }));
-
-    return messages.length > 0 ? messages : undefined;
-  } catch (err) {
-    log.warn("mention", `Failed to fetch recent messages: ${String(err)}`);
-    return undefined;
-  }
-}
 
 export async function handleMention(
   packet: MessageCreatePacketType,
@@ -67,14 +32,9 @@ export async function handleMention(
   if (existing) {
     log.info("mention", `Resuming workflow ${existing.workflowRunId} for ${data.author.username}`);
     try {
-      const recentMessages = await fetchRecentMessages(ctx.discord, sourceChannelId, data.id);
-      await resumeHook(existing.workflowRunId, {
-        type: "message" as const,
-        content,
-        authorId: data.author.id,
-        authorUsername: data.author.username,
-        recentMessages,
-      });
+      const turnContext = await buildTurnContext(ctx.discord, packet);
+      const event: ChatHookEvent = { type: "message", content, context: turnContext };
+      await resumeHook(existing.workflowRunId, event);
       await ctx.store.touch(sourceChannelId, lookupThreadId);
       return;
     } catch (err) {
@@ -88,6 +48,7 @@ export async function handleMention(
 
   let conversationChannelId = sourceChannelId;
   let conversationThreadId = lookupThreadId;
+  let createdThread: { id: string; name: string } | undefined;
 
   if (!alreadyInThread) {
     try {
@@ -100,15 +61,14 @@ export async function handleMention(
       );
       conversationChannelId = thread.id;
       conversationThreadId = thread.id;
+      createdThread = { id: thread.id, name: thread.name };
       log.info("mention", `Created thread ${thread.id} for ${data.author.username}`);
     } catch (err) {
       log.warn("mention", `Failed to create thread, replying in channel: ${String(err)}`);
     }
   }
 
-  const agentContext = AgentContext.fromPacket(packet);
-
-  const recentMessages = await fetchRecentMessages(ctx.discord, sourceChannelId, data.id);
+  const turnContext = await buildTurnContext(ctx.discord, packet, createdThread);
 
   log.info("mention", `Starting workflow for ${data.author.username} in ${data.channel.name}`);
 
@@ -116,7 +76,7 @@ export async function handleMention(
     {
       channelId: conversationChannelId,
       content,
-      context: { ...agentContext.toJSON(), recentMessages },
+      context: turnContext,
     },
   ]);
 
