@@ -22,8 +22,23 @@ Sentry.init({
 // @sentry/core/utils/vercelWaitUntil.js: `if (typeof EdgeRuntime !== 'string') return;`),
 // so the SDK's per-request metric flush never runs on Fluid Compute and buffered
 // trace_metric envelopes are lost when the function is suspended. Bridge the gap by
-// scheduling a real `@vercel/functions` waitUntil on every metric capture; outside a
+// scheduling a real `@vercel/functions` waitUntil on each metric capture; outside a
 // request context waitUntil is a safe no-op.
+//
+// `afterCaptureMetric` fires for every metric (ai.turn.*, event.*, etc.), so naively
+// flushing per-capture spawns many concurrent flushes and inflates invocation tail
+// time. Coalesce bursts into one flush: the first capture arms a microtask that
+// clears the flag and runs the flush, so captures queued in the same tick share a
+// single waitUntil task. Captures that arrive while a flush is in flight piggyback
+// on the next scheduled cycle.
+let flushScheduled = false;
 Sentry.getClient()?.on("afterCaptureMetric", () => {
-  waitUntil(Sentry.flush(2000).catch(() => false));
+  if (flushScheduled) return;
+  flushScheduled = true;
+  waitUntil(
+    Promise.resolve().then(() => {
+      flushScheduled = false;
+      return Sentry.flush(2000).catch(() => false);
+    }),
+  );
 });
