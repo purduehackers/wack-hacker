@@ -40,6 +40,15 @@ export interface SerializedAgentContext {
   attachments?: Attachment[];
   memberRoles?: string[];
   recentMessages?: RecentMessage[];
+  /**
+   * True when `recentMessages` were fetched from the thread itself (i.e. the
+   * mention that started this workflow was already in a thread). False when
+   * they came from a parent channel (a fresh mention that created a new
+   * thread). Controls the `<recent_thread_messages>` vs `<recent_channel_messages>`
+   * tag in the system prompt so the model isn't told thread context when the
+   * lead-in is actually channel chatter.
+   */
+  recentMessagesFromThread?: boolean;
 }
 
 export interface FooterMeta {

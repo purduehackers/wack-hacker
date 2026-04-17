@@ -33,6 +33,7 @@ export class AgentContext {
   readonly attachments?: Attachment[];
   readonly memberRoles?: string[];
   readonly recentMessages?: RecentMessage[];
+  readonly recentMessagesFromThread?: boolean;
 
   private constructor(data: SerializedAgentContext) {
     this.userId = data.userId;
@@ -44,6 +45,7 @@ export class AgentContext {
     this.attachments = data.attachments;
     this.memberRoles = data.memberRoles;
     this.recentMessages = data.recentMessages;
+    this.recentMessagesFromThread = data.recentMessagesFromThread;
   }
 
   /** Resolve Discord role IDs to an application-level access tier. */
@@ -94,6 +96,13 @@ export class AgentContext {
       thread = undefined;
     }
 
+    // recentMessages came from the thread iff the triggering packet was
+    // already in a thread AND we aren't synthesizing a newly-created one.
+    // When threadOverride is set, the thread was JUST created so any messages
+    // we fetched were pulled from the parent channel.
+    const recentMessagesFromThread =
+      recentMessages !== undefined && Boolean(data.thread) && !threadOverride;
+
     return new AgentContext({
       userId: data.author.id,
       username: data.author.username,
@@ -116,6 +125,7 @@ export class AgentContext {
           : undefined,
       memberRoles: data.memberRoles ?? undefined,
       recentMessages,
+      recentMessagesFromThread,
     });
   }
 
@@ -134,6 +144,7 @@ export class AgentContext {
       attachments: this.attachments,
       memberRoles: this.memberRoles,
       recentMessages: this.recentMessages,
+      recentMessagesFromThread: this.recentMessagesFromThread,
     };
   }
 
@@ -146,7 +157,12 @@ export class AgentContext {
       ? `\nthread:\n  name: ${JSON.stringify(this.thread.name)}\n  id: "${this.thread.id}"\n  parent_channel: "#${this.thread.parentChannel.name}"`
       : "";
 
-    const msgTag = this.thread ? "recent_thread_messages" : "recent_channel_messages";
+    // Tag the lead-in block based on where its messages actually came from,
+    // not on whether the conversation is happening in a thread. A fresh
+    // mention creates a thread but the lead-in is from the parent channel.
+    // Legacy serialized contexts without the flag fall back to `thread`.
+    const fromThread = this.recentMessagesFromThread ?? Boolean(this.thread);
+    const msgTag = fromThread ? "recent_thread_messages" : "recent_channel_messages";
     const recentMsgs = this.recentMessages?.length
       ? `\n\n<${msgTag}>\n${this.recentMessages
           .map((m) => `[${m.timestamp}] ${m.author}: ${m.content}`)

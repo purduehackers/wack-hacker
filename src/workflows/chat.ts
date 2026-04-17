@@ -13,6 +13,16 @@ import type { ChatHookEvent, ChatPayload } from "./types";
 
 export type { ChatHookEvent, ChatPayload } from "./types";
 
+/** Cap on accumulated user+assistant turns — 25 exchanges. Drops oldest pairs. */
+const MAX_HISTORY_MESSAGES = 50;
+
+function capHistory(messages: ChatMessage[]): void {
+  if (messages.length <= MAX_HISTORY_MESSAGES) return;
+  // Drop pairs (even count) so history always starts with a user message.
+  const excess = messages.length - MAX_HISTORY_MESSAGES;
+  messages.splice(0, excess + (excess % 2));
+}
+
 async function runTurn(
   channelId: string,
   messages: ChatMessage[],
@@ -48,6 +58,7 @@ export async function chatWorkflow(payload: ChatPayload) {
   const messages: ChatMessage[] = [{ role: "user", content }];
   const first = await runTurn(channelId, messages, context);
   messages.push({ role: "assistant", content: first.text });
+  capHistory(messages);
 
   using hook = createHook<ChatHookEvent>({ token: workflowRunId });
 
@@ -74,6 +85,7 @@ export async function chatWorkflow(payload: ChatPayload) {
     messages.push({ role: "user", content: event.content });
     const turn = await runTurn(channelId, messages, turnContext);
     messages.push({ role: "assistant", content: turn.text });
+    capHistory(messages);
   }
 
   await cleanupConversation(channelId);

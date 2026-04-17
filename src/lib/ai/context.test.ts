@@ -189,25 +189,49 @@ describe("AgentContext.buildInstructions", () => {
     expect(result).toContain("parent_channel");
   });
 
-  it("uses recent_thread_messages tag when in a thread", () => {
-    const ctx = AgentContext.fromJSON({
-      ...AgentContext.fromPacket(
-        messagePacket("hello", { thread: { parentId: "p1", parentName: "parent" } }),
-      ).toJSON(),
-      recentMessages: [{ author: "bob", content: "hey", timestamp: "1:00 PM" }],
-    });
+  it("uses recent_thread_messages tag when lead-in came from the thread", () => {
+    const ctx = AgentContext.fromPacket(
+      messagePacket("hello", { thread: { parentId: "p1", parentName: "parent" } }),
+      { recentMessages: [{ author: "bob", content: "hey", timestamp: "1:00 PM" }] },
+    );
     const result = ctx.buildInstructions("Base.");
     expect(result).toContain("<recent_thread_messages>");
     expect(result).not.toContain("<recent_channel_messages>");
   });
 
   it("uses recent_channel_messages tag when not in a thread", () => {
-    const ctx = AgentContext.fromJSON({
-      ...AgentContext.fromPacket(messagePacket("hello")).toJSON(),
+    const ctx = AgentContext.fromPacket(messagePacket("hello"), {
       recentMessages: [{ author: "bob", content: "hey", timestamp: "1:00 PM" }],
     });
     const result = ctx.buildInstructions("Base.");
     expect(result).toContain("<recent_channel_messages>");
     expect(result).not.toContain("<recent_thread_messages>");
+  });
+
+  it("uses recent_channel_messages tag when a new thread was just created", () => {
+    // threadOverride is set (so context has thread info) but recentMessages
+    // came from the parent channel, not the newly-created thread.
+    const ctx = AgentContext.fromPacket(messagePacket("hello"), {
+      threadOverride: { id: "thread-99", name: "new" },
+      recentMessages: [{ author: "bob", content: "hey", timestamp: "1:00 PM" }],
+    });
+    const result = ctx.buildInstructions("Base.");
+    expect(result).toContain("<recent_channel_messages>");
+    expect(result).not.toContain("<recent_thread_messages>");
+  });
+
+  it("falls back to thread presence when recentMessagesFromThread is absent", () => {
+    // Legacy serialized context — no recentMessagesFromThread field.
+    const ctx = AgentContext.fromJSON({
+      userId: "u",
+      username: "u",
+      nickname: "u",
+      channel: { id: "t", name: "t" },
+      thread: { id: "t", name: "t", parentChannel: { id: "p", name: "p" } },
+      date: "today",
+      recentMessages: [{ author: "bob", content: "hey", timestamp: "1:00 PM" }],
+    });
+    const result = ctx.buildInstructions("Base.");
+    expect(result).toContain("<recent_thread_messages>");
   });
 });
