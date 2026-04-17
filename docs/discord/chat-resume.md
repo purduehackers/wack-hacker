@@ -8,20 +8,20 @@ Both the mention handler and the message handler can resume an existing `chatWor
 
 1. Strips the bot mention from the content. If nothing's left, replies with a canned "Hey! What can I help you with?" and exits.
 2. Looks up the active `ConversationState` via `ctx.store.get(channelId, threadId?)`.
-3. **If found**: calls `resumeHook(existing.workflowRunId, { type: "message", content, authorId, authorUsername })`, touches the Redis key to refresh the TTL, and returns.
+3. **If found**: rebuilds per-turn context with `AgentContext.fromPacket(packet).toJSON()` (no `recentMessages` — that's stable from workflow start) and calls `resumeHook(existing.workflowRunId, { type: "message", content, context })`. Touches the Redis key to refresh the TTL and returns.
 4. **If `resumeHook` throws** (workflow expired / gone): deletes the stale state and continues to step 5.
 5. **If not in a thread already**: creates a thread on the source message (`auto_archive_duration: 60`), naming it `${nickname ?? username} — ${content.slice(0, 54)}`. The new thread ID becomes both `conversationChannelId` and `conversationThreadId`.
-6. Builds an `AgentContext` from the packet via `AgentContext.fromPacket(packet)`.
-7. Calls `start(chatWorkflow, [{ channelId, content, context: agentContext.toJSON() }])` to begin a new workflow.
+6. Fetches `recentMessages` (pre-conversation lead-in) and builds context with `AgentContext.fromPacket(packet, { threadOverride: createdThread, recentMessages }).toJSON()`. The `threadOverride` ensures the context's `channel`/`thread` fields reflect the newly-created thread rather than the packet's parent channel.
+7. Calls `start(chatWorkflow, [{ channelId, content, context }])` to begin a new workflow.
 8. Stores the new conversation state (`{ workflowRunId, channelId, threadId, startedAt }`) so follow-up messages can find it.
 
 ## Non-mention message path
 
 `src/server/routes/handlers.ts` (the anonymous `onMessage` handler registered from this file):
 
-1. **Short-circuits early on `isBotMention`** so the mention handler doesn't get double-routed.
+1. **Short-circuits early on `isBotMention`** so the mention handler doesn't get double-routed. Also short-circuits on `packet.data.thread` — non-mention thread messages are ignored so the workflow isn't flooded by other people chatting in the thread.
 2. Looks up the active `ConversationState`. If none, returns.
-3. Calls `resumeHook(existing.workflowRunId, event)`. Touches the key on success.
+3. Rebuilds per-turn context with `AgentContext.fromPacket(packet).toJSON()` and calls `resumeHook(existing.workflowRunId, { type: "message", content: packet.data.content, context })`. Touches the key on success.
 4. If `resumeHook` throws (workflow expired, etc.), deletes the stale state.
 
 This path **only resumes** — it never starts a new workflow. Starts are always triggered by a mention.
