@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/nextjs";
+import { waitUntil } from "@vercel/functions";
 
 Sentry.init({
   dsn:
@@ -15,4 +16,14 @@ Sentry.init({
     Sentry.vercelAIIntegration({ recordInputs: true, recordOutputs: true }),
     Sentry.anrIntegration({ captureStackTrace: true, anrThreshold: 5000 }),
   ],
+});
+
+// Sentry v10's `vercelWaitUntil` is a no-op in Node runtime (see
+// @sentry/core/utils/vercelWaitUntil.js: `if (typeof EdgeRuntime !== 'string') return;`),
+// so the SDK's per-request metric flush never runs on Fluid Compute and buffered
+// trace_metric envelopes are lost when the function is suspended. Bridge the gap by
+// scheduling a real `@vercel/functions` waitUntil on every metric capture; outside a
+// request context waitUntil is a safe no-op.
+Sentry.getClient()?.on("afterCaptureMetric", () => {
+  waitUntil(Sentry.flush(2000).catch(() => false));
 });
