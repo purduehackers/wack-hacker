@@ -1,0 +1,130 @@
+import { describe, it, expect, vi } from "vitest";
+
+import type { ContextSnapshot } from "@/bot/context-snapshot";
+
+import type { ModelInfo } from "./models-dev.ts";
+
+import { breakdownFromSnapshot, estimateTokens } from "./inspect-context.ts";
+
+const baseSnap: ContextSnapshot = {
+  model: "anthropic/claude-sonnet-4.6",
+  context: {
+    userId: "u-1",
+    username: "rayhan",
+    nickname: "Rayhan",
+    channel: { id: "ch-1", name: "bot-testing" },
+    date: "Wednesday, April 15, 2026",
+  },
+  // 120 chars → 30 estimated tokens
+  systemPrompt: "a".repeat(120),
+  // JSON.stringify returns 2 chars → 1 token
+  tools: [],
+  // "user: hi" = 8 chars → 2 tokens
+  messages: [{ role: "user", content: "hi" }],
+  lastTurnUsage: {
+    inputTokens: 1000,
+    outputTokens: 200,
+    totalTokens: 1200,
+    subagentTokens: 0,
+    toolCallCount: 1,
+    stepCount: 2,
+  },
+  turnCount: 1,
+  updatedAt: "2026-04-15T12:00:00.000Z",
+};
+
+const modelInfo: ModelInfo = {
+  id: "claude-sonnet-4-6-20260301",
+  provider: "anthropic",
+  limit: { context: 200_000, output: 64_000 },
+  cost: { input: 3, output: 15 },
+};
+
+describe("estimateTokens", () => {
+  it("returns 0 for empty string", () => {
+    expect(estimateTokens("")).toBe(0);
+  });
+
+  it("rounds up", () => {
+    expect(estimateTokens("a")).toBe(1);
+    expect(estimateTokens("aaaa")).toBe(1);
+    expect(estimateTokens("aaaaa")).toBe(2);
+  });
+});
+
+describe("breakdownFromSnapshot", () => {
+  it("builds categories and sums estimated input tokens", async () => {
+    const fetchInfo = vi.fn().mockResolvedValue(modelInfo);
+    const out = await breakdownFromSnapshot(baseSnap, fetchInfo);
+    expect(fetchInfo).toHaveBeenCalledWith("anthropic/claude-sonnet-4.6");
+    expect(out.categories.map((c) => c.label)).toEqual([
+      "System prompt",
+      "Tools",
+      "Conversation history",
+    ]);
+    const system = out.categories.find((c) => c.label === "System prompt");
+    const history = out.categories.find((c) => c.label === "Conversation history");
+    expect(system?.estimatedTokens).toBe(30);
+    expect(history?.estimatedTokens).toBe(2);
+    expect(out.estimatedInputTokens).toBe(
+      out.categories.reduce((sum, c) => sum + c.estimatedTokens, 0),
+    );
+  });
+
+  it("computes last-turn cost from real usage × pricing", async () => {
+    const fetchInfo = vi.fn().mockResolvedValue(modelInfo);
+    const out = await breakdownFromSnapshot(baseSnap, fetchInfo);
+    // 1000 input * $3/M = $0.003, 200 output * $15/M = $0.003, total = $0.006
+    expect(out.lastTurnCostUsd?.input).toBeCloseTo(0.003, 6);
+    expect(out.lastTurnCostUsd?.output).toBeCloseTo(0.003, 6);
+    expect(out.lastTurnCostUsd?.total).toBeCloseTo(0.006, 6);
+  });
+
+  it("omits cost when modelInfo is null", async () => {
+    const fetchInfo = vi.fn().mockResolvedValue(null);
+    const out = await breakdownFromSnapshot(baseSnap, fetchInfo);
+    expect(out.modelInfo).toBeNull();
+    expect(out.lastTurnCostUsd).toBeUndefined();
+  });
+
+  it("omits cost when both token counts are missing", async () => {
+    const fetchInfo = vi.fn().mockResolvedValue(modelInfo);
+    const snap = {
+      ...baseSnap,
+      lastTurnUsage: {
+        ...baseSnap.lastTurnUsage,
+        inputTokens: undefined,
+        outputTokens: undefined,
+      },
+    };
+    const out = await breakdownFromSnapshot(snap, fetchInfo);
+    expect(out.lastTurnCostUsd).toBeUndefined();
+  });
+
+  it("computes cost with only input tokens present", async () => {
+    const fetchInfo = vi.fn().mockResolvedValue(modelInfo);
+    const snap = {
+      ...baseSnap,
+      lastTurnUsage: { ...baseSnap.lastTurnUsage, outputTokens: undefined },
+    };
+    const out = await breakdownFromSnapshot(snap, fetchInfo);
+    expect(out.lastTurnCostUsd?.output).toBe(0);
+    expect(out.lastTurnCostUsd?.input).toBeCloseTo(0.003, 6);
+  });
+
+  it("forwards turnCount and messageCount", async () => {
+    const fetchInfo = vi.fn().mockResolvedValue(modelInfo);
+    const snap = {
+      ...baseSnap,
+      turnCount: 5,
+      messages: [
+        { role: "user" as const, content: "a" },
+        { role: "assistant" as const, content: "b" },
+        { role: "user" as const, content: "c" },
+      ],
+    };
+    const out = await breakdownFromSnapshot(snap, fetchInfo);
+    expect(out.turnCount).toBe(5);
+    expect(out.messageCount).toBe(3);
+  });
+});

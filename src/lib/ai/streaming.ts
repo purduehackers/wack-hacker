@@ -5,7 +5,13 @@ import { log } from "evlog";
 
 import { countMetric, recordDistribution, recordDuration } from "@/lib/metrics";
 
-import type { Attachment, ChatMessage, SerializedAgentContext, SubagentMetrics } from "./types.ts";
+import type {
+  Attachment,
+  ChatMessage,
+  SerializedAgentContext,
+  SubagentMetrics,
+  TurnUsage,
+} from "./types.ts";
 
 import { AgentContext } from "./context.ts";
 import { MessageRenderer } from "./message-renderer.ts";
@@ -67,7 +73,7 @@ export async function streamTurn(
   messages: ChatMessage[],
   serializedContext: SerializedAgentContext,
   taskId?: string,
-): Promise<{ text: string }> {
+): Promise<{ text: string; usage: TurnUsage }> {
   const agentCtx = AgentContext.fromJSON(serializedContext);
   const subagentMetrics: SubagentMetrics = { totalTokens: 0, toolCallCount: 0 };
   const agent = createOrchestrator(agentCtx, subagentMetrics);
@@ -106,11 +112,24 @@ export async function streamTurn(
   }
 
   const elapsedMs = Date.now() - startTime;
+  let usage: TurnUsage = {
+    subagentTokens: subagentMetrics.totalTokens,
+    toolCallCount: subagentMetrics.toolCallCount,
+    stepCount: 0,
+  };
   try {
     const [totalUsage, steps] = await Promise.all([result.totalUsage, result.steps]);
     const orchestratorToolCalls = steps.reduce((sum, step) => sum + step.toolCalls.length, 0);
     const totalTokens = (totalUsage.totalTokens ?? 0) + subagentMetrics.totalTokens;
     const toolCallCount = orchestratorToolCalls + subagentMetrics.toolCallCount;
+    usage = {
+      inputTokens: totalUsage.inputTokens,
+      outputTokens: totalUsage.outputTokens,
+      totalTokens,
+      subagentTokens: subagentMetrics.totalTokens,
+      toolCallCount,
+      stepCount: steps.length,
+    };
     await renderer.finalize({
       elapsedMs,
       totalTokens,
@@ -137,5 +156,5 @@ export async function streamTurn(
 
   log.info("streaming", `Turn complete, ${renderer.content.length} chars, ${elapsedMs}ms`);
 
-  return { text: renderer.content };
+  return { text: renderer.content, usage };
 }

@@ -3,9 +3,13 @@ import { REST } from "@discordjs/rest";
 import { log } from "evlog";
 import { createHook, getWorkflowMetadata } from "workflow";
 
-import type { ChatMessage, SerializedAgentContext } from "@/lib/ai/types";
+import type { ContextSnapshot } from "@/bot/context-snapshot";
+import type { ChatMessage, SerializedAgentContext, TurnUsage } from "@/lib/ai/types";
 
+import { ContextSnapshotStore } from "@/bot/context-snapshot";
 import { ConversationStore } from "@/bot/store";
+import { AgentContext } from "@/lib/ai/context";
+import { buildContextSnapshot } from "@/lib/ai/snapshot";
 import { streamTurn } from "@/lib/ai/streaming";
 import { countMetric } from "@/lib/metrics";
 
@@ -37,16 +41,41 @@ async function runTurn(
   return streamTurn(discord, channelId, messages, serializedContext);
 }
 
-async function cleanupConversation(channelId: string) {
+async function persistSnapshot(
+  channelId: string,
+  threadId: string | undefined,
+  snapshot: ContextSnapshot,
+) {
   "use step";
-  const store = new ConversationStore();
-  await store.delete(channelId);
+  await new ContextSnapshotStore().set(channelId, threadId, snapshot);
+}
+
+async function cleanupConversation(channelId: string, threadId: string | undefined) {
+  "use step";
+  await Promise.all([
+    new ConversationStore().delete(channelId),
+    new ContextSnapshotStore().delete(channelId, threadId),
+  ]);
+}
+
+function captureSnapshot(
+  serializedContext: SerializedAgentContext,
+  messages: ChatMessage[],
+  usage: TurnUsage,
+  turnCount: number,
+): ContextSnapshot {
+  return buildContextSnapshot({
+    agentCtx: AgentContext.fromJSON(serializedContext),
+    messages,
+    lastTurnUsage: usage,
+    turnCount,
+  });
 }
 
 export async function chatWorkflow(payload: ChatPayload) {
   "use workflow";
 
-  const { channelId, content, context } = payload;
+  const { channelId, threadId, content, context } = payload;
   const { workflowRunId } = getWorkflowMetadata();
 
   log.info("workflow", `Chat started: ${workflowRunId}`);
@@ -63,6 +92,9 @@ export async function chatWorkflow(payload: ChatPayload) {
   const first = await runTurn(channelId, messages, context);
   messages.push({ role: "assistant", content: first.text });
   capHistory(messages);
+  await persistSnapshot(channelId, threadId, captureSnapshot(context, messages, first.usage, 1));
+
+  let turnCount = 1;
 
   using hook = createHook<ChatHookEvent>({ token: workflowRunId });
 
@@ -90,8 +122,14 @@ export async function chatWorkflow(payload: ChatPayload) {
     const turn = await runTurn(channelId, messages, turnContext);
     messages.push({ role: "assistant", content: turn.text });
     capHistory(messages);
+    turnCount += 1;
+    await persistSnapshot(
+      channelId,
+      threadId,
+      captureSnapshot(turnContext, messages, turn.usage, turnCount),
+    );
   }
 
-  await cleanupConversation(channelId);
+  await cleanupConversation(channelId, threadId);
   log.info("workflow", `Chat cleaned up: ${workflowRunId}`);
 }
