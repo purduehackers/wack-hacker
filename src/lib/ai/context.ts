@@ -54,20 +54,52 @@ export class AgentContext {
     return UserRole.Public;
   }
 
-  static fromPacket(packet: MessageCreatePacketType): AgentContext {
+  /**
+   * Build context from a Discord message packet.
+   *
+   * - `threadOverride`: supply when a thread was just created for this mention.
+   *   The packet still describes the parent channel; pass the new thread and
+   *   the context's `channel`/`thread` fields will reflect the thread instead.
+   * - `recentMessages`: attach the recent-messages block fetched separately.
+   */
+  static fromPacket(
+    packet: MessageCreatePacketType,
+    options?: {
+      threadOverride?: { id: string; name: string };
+      recentMessages?: RecentMessage[];
+    },
+  ): AgentContext {
     const { data } = packet;
+    const { threadOverride, recentMessages } = options ?? {};
+
+    let channel: ChannelInfo;
+    let thread: ThreadInfo | undefined;
+
+    if (threadOverride) {
+      channel = { id: threadOverride.id, name: threadOverride.name };
+      thread = {
+        id: threadOverride.id,
+        name: threadOverride.name,
+        parentChannel: data.channel,
+      };
+    } else if (data.thread) {
+      channel = data.channel;
+      thread = {
+        id: data.channel.id,
+        name: data.channel.name,
+        parentChannel: { id: data.thread.parentId, name: data.thread.parentName },
+      };
+    } else {
+      channel = data.channel;
+      thread = undefined;
+    }
+
     return new AgentContext({
       userId: data.author.id,
       username: data.author.username,
       nickname: data.author.nickname ?? data.author.username,
-      channel: data.channel,
-      thread: data.thread
-        ? {
-            id: data.channel.id,
-            name: data.channel.name,
-            parentChannel: { id: data.thread.parentId, name: data.thread.parentName },
-          }
-        : undefined,
+      channel,
+      thread,
       date: new Date().toLocaleDateString("en-US", {
         weekday: "long",
         year: "numeric",
@@ -83,6 +115,7 @@ export class AgentContext {
             }))
           : undefined,
       memberRoles: data.memberRoles ?? undefined,
+      recentMessages,
     });
   }
 

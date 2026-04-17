@@ -5,8 +5,9 @@ import type { HandlerContext } from "@/bot/types";
 import type { MessageCreatePacketType } from "@/lib/protocol/types";
 import type { ChatHookEvent } from "@/workflows/chat";
 
-import { buildTurnContext } from "@/bot/chat-context";
 import { stripBotMention } from "@/bot/mention";
+import { fetchRecentMessages } from "@/bot/recent-messages";
+import { AgentContext } from "@/lib/ai/context";
 import { chatWorkflow } from "@/workflows/chat";
 
 export async function handleMention(
@@ -32,7 +33,8 @@ export async function handleMention(
   if (existing) {
     log.info("mention", `Resuming workflow ${existing.workflowRunId} for ${data.author.username}`);
     try {
-      const turnContext = await buildTurnContext(ctx.discord, packet);
+      const recentMessages = await fetchRecentMessages(ctx.discord, sourceChannelId, data.id);
+      const turnContext = AgentContext.fromPacket(packet, { recentMessages }).toJSON();
       const event: ChatHookEvent = { type: "message", content, context: turnContext };
       await resumeHook(existing.workflowRunId, event);
       await ctx.store.touch(sourceChannelId, lookupThreadId);
@@ -68,7 +70,11 @@ export async function handleMention(
     }
   }
 
-  const turnContext = await buildTurnContext(ctx.discord, packet, createdThread);
+  const recentMessages = await fetchRecentMessages(ctx.discord, sourceChannelId, data.id);
+  const turnContext = AgentContext.fromPacket(packet, {
+    threadOverride: createdThread,
+    recentMessages,
+  }).toJSON();
 
   log.info("mention", `Starting workflow for ${data.author.username} in ${data.channel.name}`);
 
