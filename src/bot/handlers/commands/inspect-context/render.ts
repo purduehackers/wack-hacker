@@ -1,6 +1,6 @@
 import type { ContextBreakdown } from "@/lib/ai/inspect-context";
 
-const HEADER_PREFIX = "**Context Usage** — live snapshot";
+const HEADER_PREFIX = "**Context Usage**";
 
 function formatTokens(n: number): string {
   return n.toLocaleString("en-US");
@@ -71,11 +71,6 @@ export function renderContextReport(breakdown: ContextBreakdown): string {
     const free = Math.max(window - estimatedInputTokens, 0);
     lines.push(`• **Free space**: ~${formatTokens(free)} tokens (${formatPercent(free, window)})`);
   }
-
-  lines.push("");
-  lines.push(
-    "-# Per-category counts estimated with chars/4. Last-turn totals and dollar cost are exact (from API usage × models.dev pricing).",
-  );
 
   return lines.join("\n");
 }

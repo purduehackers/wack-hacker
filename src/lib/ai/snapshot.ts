@@ -3,10 +3,11 @@ import { toJSONSchema } from "zod";
 import type { ContextSnapshot, ToolDefSnapshot } from "@/bot/context-snapshot";
 
 import type { AgentContext } from "./context.ts";
-import type { ChatMessage, SubagentMetrics, TurnUsage } from "./types.ts";
+import type { ChatMessage, TurnUsage } from "./types.ts";
 
 import { ORCHESTRATOR_MODEL, SYSTEM_PROMPT } from "./constants.ts";
 import { getOrchestratorTools } from "./orchestrator.ts";
+import { TurnUsageTracker } from "./turn-usage.ts";
 
 interface MinimalTool {
   description?: string;
@@ -41,10 +42,9 @@ export function buildContextSnapshot(args: {
 }): ContextSnapshot {
   const { agentCtx, messages, lastTurnUsage, turnCount } = args;
 
-  // Metrics accumulator is write-only for the orchestrator — a dummy is fine
-  // here since we only need the tool set's shape.
-  const metrics: SubagentMetrics = { totalTokens: 0, toolCallCount: 0 };
-  const toolSet = getOrchestratorTools(agentCtx.role, metrics);
+  // The tracker is write-only here — the snapshot only needs the tool set's
+  // shape, not its accumulated counts.
+  const toolSet = getOrchestratorTools(agentCtx.role, new TurnUsageTracker());
 
   const tools: ToolDefSnapshot[] = Object.entries(toolSet).map(([name, tool]) => {
     const t = tool as MinimalTool;

@@ -74,12 +74,6 @@ export interface TurnUsage {
   stepCount: number;
 }
 
-/** Mutable accumulator for subagent token/tool-call metrics. */
-export interface SubagentMetrics {
-  totalTokens: number;
-  toolCallCount: number;
-}
-
 export interface ModelInfo {
   id: string;
   provider: string;
