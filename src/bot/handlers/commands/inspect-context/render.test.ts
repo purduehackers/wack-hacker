@@ -34,11 +34,17 @@ const baseBreakdown: ContextBreakdown = {
 };
 
 describe("renderContextReport", () => {
-  it("includes the model id and turn number header", () => {
+  it("includes the model id and exchange count header", () => {
     const out = renderContextReport(baseBreakdown);
-    expect(out).toContain("turn #14");
+    expect(out).toContain("after 14 exchanges");
     expect(out).toContain("anthropic/claude-sonnet-4.6");
     expect(out).toContain("claude-sonnet-4-6-20260301");
+  });
+
+  it("singularizes the exchange count when there is only one", () => {
+    const out = renderContextReport({ ...baseBreakdown, turnCount: 1 });
+    expect(out).toContain("after 1 exchange");
+    expect(out).not.toContain("1 exchanges");
   });
 
   it("shows context window and per-category lines", () => {

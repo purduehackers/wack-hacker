@@ -20,7 +20,8 @@ export function renderContextReport(breakdown: ContextBreakdown): string {
     breakdown;
 
   const lines: string[] = [];
-  lines.push(`${HEADER_PREFIX} (turn #${breakdown.turnCount})`);
+  const exchanges = breakdown.turnCount === 1 ? "1 exchange" : `${breakdown.turnCount} exchanges`;
+  lines.push(`${HEADER_PREFIX} (after ${exchanges})`);
 
   const modelIdSuffix = modelInfo ? ` (${modelInfo.id})` : "";
   lines.push(`\`Model\`: ${model}${modelIdSuffix}`);
