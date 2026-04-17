@@ -6,6 +6,7 @@ import { isOrganizer, respond } from "@/bot/commands/helpers";
 import { env } from "@/env";
 
 const FAILURE_MSG = "Failed to restart the bot. Try again later.";
+const GATEWAY_TIMEOUT_MS = 10_000;
 
 function gatewayUrl(): string {
   const host = env.VERCEL_PROJECT_PRODUCTION_URL ?? env.VERCEL_URL;
@@ -24,7 +25,15 @@ export const restartBot = defineCommand({
     }
 
     try {
-      const res = await fetch(gatewayUrl(), { method: "GET" });
+      const res = await fetch(gatewayUrl(), {
+        method: "GET",
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-store, no-cache, max-age=0",
+          Pragma: "no-cache",
+        },
+        signal: AbortSignal.timeout(GATEWAY_TIMEOUT_MS),
+      });
 
       if (!res.ok) {
         log.warn("restart-bot", `Gateway returned ${res.status}`);
