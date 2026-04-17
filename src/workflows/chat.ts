@@ -16,6 +16,10 @@ export type { ChatHookEvent, ChatPayload } from "./types";
 /** Cap on accumulated user+assistant turns — 25 exchanges. Drops oldest pairs. */
 const MAX_HISTORY_MESSAGES = 50;
 
+// TODO: run the dropped messages through a small fast model (e.g. Haiku) and
+// replace them with a compact summary assistant message, instead of throwing
+// the context away entirely. Preserves continuity on long conversations at
+// the cost of one extra round-trip per cap event.
 function capHistory(messages: ChatMessage[]): void {
   if (messages.length <= MAX_HISTORY_MESSAGES) return;
   // Drop pairs (even count) so history always starts with a user message.
