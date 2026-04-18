@@ -3,14 +3,10 @@ import { REST } from "@discordjs/rest";
 import { log } from "evlog";
 import { createHook, getWorkflowMetadata } from "workflow";
 
-import type { ContextSnapshot } from "@/bot/context-snapshot";
 import type { ChatMessage, SerializedAgentContext } from "@/lib/ai/types";
 
-import { ContextSnapshotStore } from "@/bot/context-snapshot";
 import { ConversationStore } from "@/bot/store";
-import { buildContextSnapshot } from "@/lib/ai/snapshot";
 import { streamTurn } from "@/lib/ai/streaming";
-import { addTurnUsage, emptyTurnUsage } from "@/lib/ai/turn-usage";
 import { countMetric } from "@/lib/metrics";
 
 import type { ChatHookEvent, ChatPayload } from "./types";
@@ -41,59 +37,20 @@ async function runTurn(
   return streamTurn(discord, channelId, messages, serializedContext);
 }
 
-async function persistSnapshot(
-  channelId: string,
-  threadId: string | undefined,
-  snapshot: ContextSnapshot,
-) {
+async function cleanupConversation(channelId: string) {
   "use step";
-  // Best-effort: snapshot persistence is diagnostic. A Redis blip should not
-  // abort the chat workflow or hide a successful user-facing turn.
-  try {
-    await new ContextSnapshotStore().set(channelId, threadId, snapshot);
-  } catch (err) {
-    log.warn("workflow", `Snapshot persist failed for ${channelId}: ${String(err)}`);
-    countMetric("workflow.chat.snapshot_error");
-  }
-}
-
-async function logEvent(message: string, metric?: string) {
-  "use step";
-  // Both evlog's console output (via Sentry's patched console) and Sentry's
-  // metrics buffer can schedule setTimeout during capture, which isn't allowed
-  // in the workflow runtime. Route every workflow-body log + metric through a
-  // step so any downstream flush schedules in regular Node.
-  log.info("workflow", message);
-  if (metric) countMetric(metric);
-}
-
-async function cleanupConversation(channelId: string, threadId: string | undefined) {
-  "use step";
-  // Snapshot deletion is best-effort; only the ConversationStore delete is
-  // load-bearing for starting a fresh workflow later.
-  const [conversationResult, snapshotResult] = await Promise.allSettled([
-    new ConversationStore().delete(channelId),
-    new ContextSnapshotStore().delete(channelId, threadId),
-  ]);
-  if (snapshotResult.status === "rejected") {
-    log.warn(
-      "workflow",
-      `Snapshot delete failed for ${channelId}: ${String(snapshotResult.reason)}`,
-    );
-    countMetric("workflow.chat.snapshot_cleanup_error");
-  }
-  if (conversationResult.status === "rejected") {
-    throw conversationResult.reason;
-  }
+  const store = new ConversationStore();
+  await store.delete(channelId);
 }
 
 export async function chatWorkflow(payload: ChatPayload) {
   "use workflow";
 
-  const { channelId, threadId, content, context } = payload;
+  const { channelId, content, context } = payload;
   const { workflowRunId } = getWorkflowMetadata();
 
-  await logEvent(`Chat started: ${workflowRunId}`, "workflow.chat.started");
+  log.info("workflow", `Chat started: ${workflowRunId}`);
+  countMetric("workflow.chat.started");
 
   // Stable for the lifetime of this workflow — the conversation is pinned to
   // one Discord channel/thread and the pre-conversation message lead-in does
@@ -107,27 +64,18 @@ export async function chatWorkflow(payload: ChatPayload) {
   messages.push({ role: "assistant", content: first.text });
   capHistory(messages);
 
-  let turnCount = 1;
-  let totalUsage = addTurnUsage(emptyTurnUsage(), first.usage);
-  await persistSnapshot(
-    channelId,
-    threadId,
-    buildContextSnapshot({ context, messages, totalUsage, turnCount }),
-  );
-
   using hook = createHook<ChatHookEvent>({ token: workflowRunId });
 
   for await (const event of hook) {
     if (event.type === "done") {
-      await logEvent(`Chat ended by user: ${workflowRunId}`, "workflow.chat.ended");
+      log.info("workflow", `Chat ended by user: ${workflowRunId}`);
+      countMetric("workflow.chat.ended");
       break;
     }
     if (!event.content) continue;
 
-    await logEvent(
-      `Follow-up from ${event.context.username}: ${workflowRunId}`,
-      "workflow.chat.followup",
-    );
+    log.info("workflow", `Follow-up from ${event.context.username}: ${workflowRunId}`);
+    countMetric("workflow.chat.followup");
 
     // Merge the fresh per-turn identity from the event with the stable
     // location + lead-in pinned at workflow start.
@@ -142,15 +90,8 @@ export async function chatWorkflow(payload: ChatPayload) {
     const turn = await runTurn(channelId, messages, turnContext);
     messages.push({ role: "assistant", content: turn.text });
     capHistory(messages);
-    turnCount += 1;
-    totalUsage = addTurnUsage(totalUsage, turn.usage);
-    await persistSnapshot(
-      channelId,
-      threadId,
-      buildContextSnapshot({ context: turnContext, messages, totalUsage, turnCount }),
-    );
   }
 
-  await cleanupConversation(channelId, threadId);
-  await logEvent(`Chat cleaned up: ${workflowRunId}`);
+  await cleanupConversation(channelId);
+  log.info("workflow", `Chat cleaned up: ${workflowRunId}`);
 }

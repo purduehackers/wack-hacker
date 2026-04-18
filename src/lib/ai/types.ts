@@ -58,60 +58,10 @@ export interface FooterMeta {
   stepCount: number;
 }
 
-/**
- * Usage accounting for a single orchestrator turn. Captured from the AI SDK's
- * `result.totalUsage` plus the subagent metrics accumulator. Stored in the
- * context snapshot so the /inspect-context command can report real, non-estimated
- * token numbers for the last completed turn.
- */
-export interface TurnUsage {
-  inputTokens?: number;
-  outputTokens?: number;
-  /** Total including subagent tokens; matches the footer value. */
-  totalTokens?: number;
-  subagentTokens: number;
+/** Mutable accumulator for subagent token/tool-call metrics. */
+export interface SubagentMetrics {
+  totalTokens: number;
   toolCallCount: number;
-  stepCount: number;
-}
-
-export interface ModelInfo {
-  id: string;
-  provider: string;
-  limit: { context: number; output: number };
-  cost: { input: number; output: number };
-}
-
-export interface CategoryBreakdown {
-  label: string;
-  chars: number;
-  estimatedTokens: number;
-  /** Optional per-item breakdown (e.g. per-tool token counts within the Tools category). */
-  items?: CategoryItem[];
-}
-
-export interface CategoryItem {
-  name: string;
-  estimatedTokens: number;
-  /**
-   * Loadable subskills nested under this item — populated only for delegate
-   * agents (subskills load on demand inside the subagent via `load_skill`).
-   * Not counted toward the orchestrator's input total.
-   */
-  skills?: CategoryItem[];
-}
-
-export interface ContextBreakdown {
-  model: string;
-  modelInfo: ModelInfo | null;
-  categories: CategoryBreakdown[];
-  /** Sum of per-category estimatedTokens (chars/4). */
-  estimatedInputTokens: number;
-  /** Cumulative API usage across every turn this conversation has run. */
-  totalUsage: TurnUsage;
-  turnCount: number;
-  messageCount: number;
-  /** Cumulative dollar cost across every turn — modelInfo + usage required. */
-  totalCostUsd?: { input: number; output: number; total: number };
 }
 
 export interface SubagentSpec {

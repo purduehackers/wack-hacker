@@ -152,12 +152,7 @@ export class AgentContext {
     return `${baseInstructions.replace("{{DATE}}", this.date)}\n\n${this.contextBlock()}`;
   }
 
-  /**
-   * Render the YAML execution-context block appended to the system prompt.
-   * Public so the context inspector can snapshot the exact block the orchestrator
-   * saw without duplicating the YAML layout.
-   */
-  contextBlock(): string {
+  private contextBlock(): string {
     const thread = this.thread
       ? `\nthread:\n  name: ${JSON.stringify(this.thread.name)}\n  id: "${this.thread.id}"\n  parent_channel: "#${this.thread.parentChannel.name}"`
       : "";

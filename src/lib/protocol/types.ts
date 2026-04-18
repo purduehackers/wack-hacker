@@ -39,16 +39,6 @@ export interface InteractionData {
   options?: InteractionOption[];
   custom_id?: string;
   component_type?: number;
-  target_id?: string;
-  resolved?: InteractionResolved;
-}
-
-export interface InteractionResolved {
-  messages?: Record<string, APIMessage>;
-  users?: Record<
-    string,
-    { id: string; username: string; global_name?: string | null; bot?: boolean }
-  >;
 }
 
 export interface InteractionOption {
