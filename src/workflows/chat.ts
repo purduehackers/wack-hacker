@@ -57,6 +57,14 @@ async function persistSnapshot(
   }
 }
 
+async function emitMetric(name: string) {
+  "use step";
+  // Sentry's metrics buffer flushes via setTimeout, which isn't allowed in the
+  // workflow runtime. Wrap every workflow-body metric call in a step so the
+  // flush schedules in regular Node.
+  countMetric(name);
+}
+
 async function cleanupConversation(channelId: string, threadId: string | undefined) {
   "use step";
   // Snapshot deletion is best-effort; only the ConversationStore delete is
@@ -84,7 +92,7 @@ export async function chatWorkflow(payload: ChatPayload) {
   const { workflowRunId } = getWorkflowMetadata();
 
   log.info("workflow", `Chat started: ${workflowRunId}`);
-  countMetric("workflow.chat.started");
+  await emitMetric("workflow.chat.started");
 
   // Stable for the lifetime of this workflow — the conversation is pinned to
   // one Discord channel/thread and the pre-conversation message lead-in does
@@ -111,13 +119,13 @@ export async function chatWorkflow(payload: ChatPayload) {
   for await (const event of hook) {
     if (event.type === "done") {
       log.info("workflow", `Chat ended by user: ${workflowRunId}`);
-      countMetric("workflow.chat.ended");
+      await emitMetric("workflow.chat.ended");
       break;
     }
     if (!event.content) continue;
 
     log.info("workflow", `Follow-up from ${event.context.username}: ${workflowRunId}`);
-    countMetric("workflow.chat.followup");
+    await emitMetric("workflow.chat.followup");
 
     // Merge the fresh per-turn identity from the event with the stable
     // location + lead-in pinned at workflow start.
