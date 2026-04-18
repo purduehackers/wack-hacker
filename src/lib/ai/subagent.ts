@@ -71,6 +71,11 @@ export function createDelegationTool(
           const active = computeActiveTools({ steps, registry, role, baseToolNames });
           return active ? { activeTools: active as ToolKey[] } : undefined;
         },
+        providerOptions: {
+          openai: {
+            parallelToolCalls: true,
+          },
+        },
         experimental_telemetry: {
           isEnabled: true,
           functionId: `subagent.${spec.name}`,
