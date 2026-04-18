@@ -70,6 +70,8 @@ route.post("/interactions", async (c) => {
 
     return c.json({
       type: InteractionResponseType.DeferredChannelMessageWithSource,
+      // Discord MessageFlags.Ephemeral — only the invoker sees the reply.
+      data: command.ephemeral ? { flags: 64 } : undefined,
     });
   }
 

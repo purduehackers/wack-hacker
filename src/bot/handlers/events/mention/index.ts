@@ -83,6 +83,7 @@ export async function handleMention(
   const run = await start(chatWorkflow, [
     {
       channelId: conversationChannelId,
+      threadId: conversationThreadId,
       content,
       context: turnContext,
     },
