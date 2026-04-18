@@ -30,6 +30,20 @@ function ephemeralMessage(content: string): InteractionResponsePayload {
   };
 }
 
+function buildPlatformRow(
+  id: string,
+  label: string,
+  prior: string | undefined,
+): ActionRowBuilder<TextInputBuilder> {
+  const input = new TextInputBuilder()
+    .setCustomId(id)
+    .setLabel(label)
+    .setStyle(TextInputStyle.Short)
+    .setRequired(false);
+  if (prior) input.setValue(prior);
+  return new ActionRowBuilder<TextInputBuilder>().addComponents(input);
+}
+
 export const identityCommand = defineCommand({
   builder: new SlashCommandBuilder()
     .setName("identity")
@@ -67,30 +81,13 @@ export const identityCommand = defineCommand({
 
     const organizers = await getOrganizers();
     const existing = organizers[targetId];
-
-    let title: string;
-    if (mode === "self") {
-      title = "Link your platform IDs";
-    } else {
-      const resolved = ctx.interaction.data?.resolved?.users?.[targetId];
-      const displayName = resolved?.global_name ?? resolved?.username ?? targetId;
-      title = `Edit ${displayName}'s platform IDs`.slice(0, 45);
-    }
+    const title = buildTitle(mode, targetId, ctx.interaction.data?.resolved?.users);
 
     const modal = new ModalBuilder()
       .setCustomId(`identity:${mode}:${targetId}`)
       .setTitle(title)
       .addComponents(
-        ...PLATFORM_FIELDS.map(({ id, label }) => {
-          const input = new TextInputBuilder()
-            .setCustomId(id)
-            .setLabel(label)
-            .setStyle(TextInputStyle.Short)
-            .setRequired(false);
-          const prior = existing?.[id];
-          if (prior) input.setValue(prior);
-          return new ActionRowBuilder<TextInputBuilder>().addComponents(input);
-        }),
+        ...PLATFORM_FIELDS.map(({ id, label }) => buildPlatformRow(id, label, existing?.[id])),
       );
 
     return {
@@ -99,3 +96,14 @@ export const identityCommand = defineCommand({
     };
   },
 });
+
+function buildTitle(
+  mode: "self" | "admin",
+  targetId: string,
+  resolvedUsers: Record<string, { username: string; global_name?: string | null }> | undefined,
+): string {
+  if (mode === "self") return "Link your platform IDs";
+  const resolved = resolvedUsers?.[targetId];
+  const displayName = resolved?.global_name ?? resolved?.username ?? targetId;
+  return `Edit ${displayName}'s platform IDs`.slice(0, 45);
+}

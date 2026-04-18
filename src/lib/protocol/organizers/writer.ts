@@ -26,16 +26,17 @@ export async function upsertOrganizer(
   for (const platform of EDITABLE_PLATFORMS) {
     const patchVal = patch[platform];
     const existingVal = existing?.[platform];
+
     if (patchVal === undefined) {
+      // Omitted — preserve whatever was there.
       if (existingVal !== undefined) next[platform] = existingVal;
-      continue;
-    }
-    if (patchVal === "") {
+    } else if (patchVal === "") {
+      // Explicit clear — drop the field, record it only if it used to exist.
       if (existingVal !== undefined) cleared.push(platform);
-      continue;
+    } else {
+      next[platform] = patchVal;
+      if (existingVal !== patchVal) set.push(platform);
     }
-    next[platform] = patchVal;
-    if (existingVal !== patchVal) set.push(platform);
   }
 
   const merged: OrganizersMap = { ...current, [discordId]: next };

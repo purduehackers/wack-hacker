@@ -4,10 +4,12 @@ import { waitUntil } from "@vercel/functions";
 import { log } from "evlog";
 import { Hono } from "hono";
 
-import type { SlashCommand } from "@/bot/commands/types";
+import type { InteractionResponsePayload, SlashCommand } from "@/bot/commands/types";
 import type { ComponentHandler } from "@/bot/components/types";
 import type { ModalHandler } from "@/bot/modals/types";
 import type { DiscordInteraction } from "@/lib/protocol/types";
+
+type DispatcherResult = InteractionResponsePayload | { error: string; status: 400 };
 
 import { parseOptions } from "@/bot/commands/registry";
 import * as components from "@/bot/components";
@@ -38,7 +40,17 @@ function buildDiscord(): API {
   return new API(new REST({ version: "10" }).setToken(env.DISCORD_BOT_TOKEN));
 }
 
-async function runModalCommand(command: SlashCommand, interaction: DiscordInteraction) {
+function ephemeralError(content: string): InteractionResponsePayload {
+  return {
+    type: InteractionResponseType.ChannelMessageWithSource,
+    data: { content, flags: EPHEMERAL_FLAG },
+  };
+}
+
+async function runModalCommand(
+  command: SlashCommand,
+  interaction: DiscordInteraction,
+): Promise<InteractionResponsePayload> {
   const discord = buildDiscord();
   try {
     const response = await command.execute({
@@ -46,26 +58,21 @@ async function runModalCommand(command: SlashCommand, interaction: DiscordIntera
       discord,
       options: parseOptions(interaction.data?.options),
     });
-    if (!response) {
-      log.error("interactions", `/${command.name} (modal) returned no response`);
-      countMetric("interaction.command_error", { command: command.name });
-      return {
-        type: InteractionResponseType.ChannelMessageWithSource,
-        data: { content: `/${command.name} did not produce a response.`, flags: EPHEMERAL_FLAG },
-      };
-    }
-    return response;
+    if (response) return response;
+    log.error("interactions", `/${command.name} (modal) returned no response`);
+    countMetric("interaction.command_error", { command: command.name });
+    return ephemeralError(`/${command.name} did not produce a response.`);
   } catch (err) {
     log.error("interactions", `/${command.name} failed: ${describeError(err)}`);
     countMetric("interaction.command_error", { command: command.name });
-    return {
-      type: InteractionResponseType.ChannelMessageWithSource,
-      data: { content: `Error executing /${command.name}.`, flags: EPHEMERAL_FLAG },
-    };
+    return ephemeralError(`Error executing /${command.name}.`);
   }
 }
 
-function runDeferredCommand(command: SlashCommand, interaction: DiscordInteraction) {
+function runDeferredCommand(
+  command: SlashCommand,
+  interaction: DiscordInteraction,
+): InteractionResponsePayload {
   const discord = buildDiscord();
   waitUntil(
     command
@@ -92,9 +99,11 @@ function runDeferredCommand(command: SlashCommand, interaction: DiscordInteracti
   };
 }
 
-async function handleApplicationCommand(interaction: DiscordInteraction) {
+async function handleApplicationCommand(
+  interaction: DiscordInteraction,
+): Promise<DispatcherResult> {
   const name = interaction.data?.name;
-  if (!name) return { error: "Missing command name" as const, status: 400 as const };
+  if (!name) return { error: "Missing command name", status: 400 };
 
   const command = commandMap.get(name);
   if (!command) {
@@ -111,9 +120,9 @@ async function handleApplicationCommand(interaction: DiscordInteraction) {
   return runDeferredCommand(command, interaction);
 }
 
-function handleMessageComponent(interaction: DiscordInteraction) {
+function handleMessageComponent(interaction: DiscordInteraction): DispatcherResult {
   const customId = interaction.data?.custom_id;
-  if (!customId) return { error: "Missing custom_id" as const, status: 400 as const };
+  if (!customId) return { error: "Missing custom_id", status: 400 };
 
   const prefix = customId.split(":")[0];
   const handler = componentHandlers.find((h) => h.prefix === prefix);
@@ -142,19 +151,16 @@ function extractModalFields(interaction: DiscordInteraction): Map<string, string
   return fields;
 }
 
-async function handleModalSubmit(interaction: DiscordInteraction) {
+async function handleModalSubmit(interaction: DiscordInteraction): Promise<DispatcherResult> {
   const customId = interaction.data?.custom_id;
-  if (!customId) return { error: "Missing custom_id" as const, status: 400 as const };
+  if (!customId) return { error: "Missing custom_id", status: 400 };
 
   const prefix = customId.split(":")[0];
   const handler = modalHandlerList.find((h) => h.prefix === prefix);
 
   if (!handler) {
     log.warn("interactions", `Unexpected modal submit: ${customId}`);
-    return {
-      type: InteractionResponseType.ChannelMessageWithSource,
-      data: { content: "This form is no longer supported.", flags: EPHEMERAL_FLAG },
-    };
+    return ephemeralError("This form is no longer supported.");
   }
 
   log.info("interactions", `Handling modal ${prefix}`);
@@ -171,10 +177,7 @@ async function handleModalSubmit(interaction: DiscordInteraction) {
   } catch (err: unknown) {
     log.error("interactions", `Modal ${customId} failed: ${describeError(err)}`);
     countMetric("interaction.modal_error", { prefix });
-    return {
-      type: InteractionResponseType.ChannelMessageWithSource,
-      data: { content: "Something went wrong processing the form.", flags: EPHEMERAL_FLAG },
-    };
+    return ephemeralError("Something went wrong processing the form.");
   }
 }
 
