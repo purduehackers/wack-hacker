@@ -32,80 +32,110 @@ async function relay(packet: Packet, oidcToken: string): Promise<void> {
 
 type Publish = (packet: Packet) => Promise<void>;
 
-async function runGatewayListener(client: Client): Promise<void> {
+type GatewayListener = {
+  ready: Promise<void>;
+  done: Promise<void>;
+};
+
+function runGatewayListener(client: Client): GatewayListener {
   const redis = Redis.fromEnv();
   const listenerId = `gw_${ulid()}`;
   const abort = new AbortController();
 
-  log.info("gateway", `listener ${listenerId} starting`);
+  let resolveReady!: () => void;
+  let rejectReady!: (err: unknown) => void;
+  const ready = new Promise<void>((resolve, reject) => {
+    resolveReady = resolve;
+    rejectReady = reject;
+  });
+  let readySettled = false;
+  const markReady = () => {
+    if (readySettled) return;
+    readySettled = true;
+    resolveReady();
+  };
+  const failReady = (err: unknown) => {
+    if (readySettled) return;
+    readySettled = true;
+    rejectReady(err);
+  };
+  client.once(Events.ClientReady, markReady);
 
-  const existing = await redis.get<string>(LEADER_KEY).catch(() => null);
-  await redis.set(LEADER_KEY, listenerId, { px: LEASE_TTL_MS });
+  const done = (async () => {
+    log.info("gateway", `listener ${listenerId} starting`);
 
-  if (existing && existing !== listenerId) {
-    log.info(
-      "gateway",
-      `prior leader ${existing} detected, waiting ${HANDOFF_WAIT_MS}ms for handoff`,
-    );
-    await new Promise((r) => setTimeout(r, HANDOFF_WAIT_MS));
-  }
+    const existing = await redis.get<string>(LEADER_KEY).catch(() => null);
+    await redis.set(LEADER_KEY, listenerId, { px: LEASE_TTL_MS });
 
-  const poll = setInterval(async () => {
-    if (abort.signal.aborted) return;
-    try {
-      const current = await redis.get<string>(LEADER_KEY);
-      if (current !== listenerId) {
-        log.info(
-          "gateway",
-          `leadership lost (current=${current ?? "null"}), aborting ${listenerId}`,
-        );
-        abort.abort();
-        return;
-      }
-      await redis.set(LEADER_KEY, listenerId, { px: LEASE_TTL_MS });
-    } catch (err) {
-      log.error("gateway", `lease poll failed: ${String(err)}`);
-    }
-  }, POLL_INTERVAL_MS);
-
-  try {
-    await client.login(env.DISCORD_BOT_TOKEN);
-    log.info("gateway", `login() resolved for ${listenerId}`);
-
-    await new Promise<void>((resolve) => {
-      const timer = setTimeout(() => {
-        log.info("gateway", `hold elapsed for ${listenerId}`);
-        resolve();
-      }, HOLD_MS);
-      abort.signal.addEventListener(
-        "abort",
-        () => {
-          clearTimeout(timer);
-          resolve();
-        },
-        { once: true },
+    if (existing && existing !== listenerId) {
+      log.info(
+        "gateway",
+        `prior leader ${existing} detected, waiting ${HANDOFF_WAIT_MS}ms for handoff`,
       );
-    });
-  } catch (err) {
-    log.error("gateway", `login/hold failed: ${String(err)}`);
-  } finally {
-    clearInterval(poll);
-    log.info("gateway", `destroying client ${listenerId}`);
-    try {
-      await client.destroy();
-    } catch (err) {
-      log.error("gateway", `destroy failed: ${String(err)}`);
+      await new Promise((r) => setTimeout(r, HANDOFF_WAIT_MS));
     }
-    try {
-      const current = await redis.get<string>(LEADER_KEY);
-      if (current === listenerId) {
-        await redis.del(LEADER_KEY);
-        log.info("gateway", `released lease for ${listenerId}`);
+
+    const poll = setInterval(async () => {
+      if (abort.signal.aborted) return;
+      try {
+        const current = await redis.get<string>(LEADER_KEY);
+        if (current !== listenerId) {
+          log.info(
+            "gateway",
+            `leadership lost (current=${current ?? "null"}), aborting ${listenerId}`,
+          );
+          abort.abort();
+          return;
+        }
+        await redis.set(LEADER_KEY, listenerId, { px: LEASE_TTL_MS });
+      } catch (err) {
+        log.error("gateway", `lease poll failed: ${String(err)}`);
       }
+    }, POLL_INTERVAL_MS);
+
+    try {
+      await client.login(env.DISCORD_BOT_TOKEN);
+      log.info("gateway", `login() resolved for ${listenerId}`);
+
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(() => {
+          log.info("gateway", `hold elapsed for ${listenerId}`);
+          resolve();
+        }, HOLD_MS);
+        abort.signal.addEventListener(
+          "abort",
+          () => {
+            clearTimeout(timer);
+            resolve();
+          },
+          { once: true },
+        );
+      });
     } catch (err) {
-      log.error("gateway", `lease release failed: ${String(err)}`);
+      log.error("gateway", `login/hold failed: ${String(err)}`);
+      failReady(err);
+    } finally {
+      failReady(new Error(`gateway ${listenerId} ended before ready`));
+      clearInterval(poll);
+      log.info("gateway", `destroying client ${listenerId}`);
+      try {
+        await client.destroy();
+      } catch (err) {
+        log.error("gateway", `destroy failed: ${String(err)}`);
+      }
+      try {
+        const current = await redis.get<string>(LEADER_KEY);
+        if (current === listenerId) {
+          await redis.del(LEADER_KEY);
+          log.info("gateway", `released lease for ${listenerId}`);
+        }
+      } catch (err) {
+        log.error("gateway", `lease release failed: ${String(err)}`);
+      }
     }
-  }
+  })();
+
+  return { ready, done };
 }
 
 const route = new Hono();
@@ -264,7 +294,7 @@ function bindGuildHandlers(client: Client, publish: Publish): void {
   });
 }
 
-route.get("/gateway", (c) => {
+route.get("/gateway", async (c) => {
   let oidcToken: string;
   try {
     oidcToken = getVercelOidcTokenSync();
@@ -320,9 +350,15 @@ route.get("/gateway", (c) => {
   bindMessageHandlers(client, publish);
   bindGuildHandlers(client, publish);
 
-  const loginAndHold = runGatewayListener(client);
+  const listener = runGatewayListener(client);
+  waitUntil(listener.done);
 
-  waitUntil(loginAndHold);
+  try {
+    await listener.ready;
+  } catch (err) {
+    log.error("gateway", `ready wait failed: ${String(err)}`);
+    return c.json({ error: "gateway failed to become ready" }, 500);
+  }
 
   return c.json({ message: "ok" });
 });
