@@ -65,11 +65,10 @@ export async function fetchReferencedMessageContext(
       }),
     ]);
 
-    // priors is newest-first; chronological = reverse(priors) then anchor
-    const chronological: RawMessage[] = [...priors].reverse();
-    chronological.push(anchor);
-
-    const messages = chronological.filter((m) => m.content?.trim()).map(toRecentMessage);
+    // Discord returns priors newest-first; chronological = reverse(priors) then anchor.
+    const messages = [...priors.toReversed(), anchor]
+      .filter((m) => m.content?.trim())
+      .map(toRecentMessage);
 
     return messages.length > 0 ? messages : undefined;
   } catch (err) {

@@ -8,12 +8,12 @@ import type { RecentMessage } from "@/lib/ai/types";
 import type { MessageCreatePacketType } from "@/lib/protocol/types";
 import type { ChatHookEvent } from "@/workflows/chat";
 
-type MessageData = MessageCreatePacketType["data"];
-
 import { stripBotMention } from "@/bot/mention";
 import { fetchRecentMessages, fetchReferencedMessageContext } from "@/bot/recent-messages";
 import { AgentContext } from "@/lib/ai/context";
 import { chatWorkflow } from "@/workflows/chat";
+
+type MessageData = MessageCreatePacketType["data"];
 
 async function fetchLeadInMessages(
   discord: API,
