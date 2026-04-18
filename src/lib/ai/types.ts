@@ -20,6 +20,8 @@ export interface Attachment {
 }
 
 export interface RecentMessage {
+  /** Discord message ID — used to dedupe against other context batches. Not rendered. */
+  id: string;
   author: string;
   content: string;
   timestamp: string;
@@ -49,6 +51,13 @@ export interface SerializedAgentContext {
    * lead-in is actually channel chatter.
    */
   recentMessagesFromThread?: boolean;
+  /**
+   * Extra lead-in fetched when the triggering mention was a reply to another
+   * message: the referenced message plus up to 14 messages immediately
+   * preceding it, in chronological order. Only set when the reply target is
+   * not already included in `recentMessages`.
+   */
+  referencedContext?: RecentMessage[];
 }
 
 export interface FooterMeta {

@@ -49,6 +49,12 @@ const MessageData = z.object({
   flags: z.number().optional(),
   categoryId: z.string().optional(),
   forwardedSnapshots: z.array(MessageSnapshot).optional(),
+  reference: z
+    .object({
+      messageId: z.string(),
+      channelId: z.string().optional(),
+    })
+    .optional(),
 });
 
 const ReactionDataEmoji = z.object({
