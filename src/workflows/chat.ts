@@ -3,8 +3,7 @@ import { REST } from "@discordjs/rest";
 import { log } from "evlog";
 import { createHook, getWorkflowMetadata } from "workflow";
 
-import type { ContextSnapshot } from "@/bot/context-snapshot";
-import type { ChatMessage, SerializedAgentContext } from "@/lib/ai/types";
+import type { ChatMessage, SerializedAgentContext, TurnUsage } from "@/lib/ai/types";
 
 import { ContextSnapshotStore } from "@/bot/context-snapshot";
 import { ConversationStore } from "@/bot/store";
@@ -44,12 +43,20 @@ async function runTurn(
 async function persistSnapshot(
   channelId: string,
   threadId: string | undefined,
-  snapshot: ContextSnapshot,
+  args: {
+    context: SerializedAgentContext;
+    messages: ChatMessage[];
+    totalUsage: TurnUsage;
+    turnCount: number;
+  },
 ) {
   "use step";
-  // Best-effort: snapshot persistence is diagnostic. A Redis blip should not
-  // abort the chat workflow or hide a successful user-facing turn.
+  // Build the snapshot inside the step. buildContextSnapshot materializes the
+  // full orchestrator tool set (AI SDK `tool()` wrappers, Zod → JSON Schema
+  // conversion), which must not run in the workflow sandbox. Best-effort: a
+  // Redis blip should not abort the chat workflow.
   try {
+    const snapshot = buildContextSnapshot(args);
     await new ContextSnapshotStore().set(channelId, threadId, snapshot);
   } catch (err) {
     log.warn("workflow", `Snapshot persist failed for ${channelId}: ${String(err)}`);
@@ -100,11 +107,7 @@ export async function chatWorkflow(payload: ChatPayload) {
 
   let turnCount = 1;
   let totalUsage = addTurnUsage(emptyTurnUsage(), first.usage);
-  await persistSnapshot(
-    channelId,
-    threadId,
-    buildContextSnapshot({ context, messages, totalUsage, turnCount }),
-  );
+  await persistSnapshot(channelId, threadId, { context, messages, totalUsage, turnCount });
 
   using hook = createHook<ChatHookEvent>({ token: workflowRunId });
 
@@ -134,11 +137,12 @@ export async function chatWorkflow(payload: ChatPayload) {
     capHistory(messages);
     turnCount += 1;
     totalUsage = addTurnUsage(totalUsage, turn.usage);
-    await persistSnapshot(
-      channelId,
-      threadId,
-      buildContextSnapshot({ context: turnContext, messages, totalUsage, turnCount }),
-    );
+    await persistSnapshot(channelId, threadId, {
+      context: turnContext,
+      messages,
+      totalUsage,
+      turnCount,
+    });
   }
 
   await cleanupConversation(channelId, threadId);
