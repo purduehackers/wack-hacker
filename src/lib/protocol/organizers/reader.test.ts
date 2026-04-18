@@ -29,6 +29,17 @@ beforeEach(() => {
 });
 
 describe("getOrganizers", () => {
+  it("returns {} when EDGE_CONFIG env is unset (before Edge Config is linked)", async () => {
+    const saved = process.env.EDGE_CONFIG;
+    delete process.env.EDGE_CONFIG;
+    try {
+      expect(await getOrganizers()).toEqual({});
+      expect(mockGet).not.toHaveBeenCalled();
+    } finally {
+      if (saved !== undefined) process.env.EDGE_CONFIG = saved;
+    }
+  });
+
   it("returns {} when the key is missing", async () => {
     mockGet.mockResolvedValue(undefined);
     expect(await getOrganizers()).toEqual({});
