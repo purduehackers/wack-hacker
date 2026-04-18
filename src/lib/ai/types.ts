@@ -65,10 +65,10 @@ export interface FooterMeta {
  * token numbers for the last completed turn.
  */
 export interface TurnUsage {
-  inputTokens?: number;
-  outputTokens?: number;
+  inputTokens: number;
+  outputTokens: number;
   /** Total including subagent tokens; matches the footer value. */
-  totalTokens?: number;
+  totalTokens: number;
   subagentTokens: number;
   toolCallCount: number;
   stepCount: number;

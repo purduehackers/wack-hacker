@@ -96,25 +96,27 @@ describe("breakdownFromSnapshot", () => {
     expect(out.totalCostUsd).toBeUndefined();
   });
 
-  it("omits cost when both token counts are missing", async () => {
+  it("returns zero cost when both token counts are zero", async () => {
     const fetchInfo = vi.fn().mockResolvedValue(modelInfo);
     const snap = {
       ...baseSnap,
       totalUsage: {
         ...baseSnap.totalUsage,
-        inputTokens: undefined,
-        outputTokens: undefined,
+        inputTokens: 0,
+        outputTokens: 0,
       },
     };
     const out = await breakdownFromSnapshot(snap, fetchInfo);
-    expect(out.totalCostUsd).toBeUndefined();
+    expect(out.totalCostUsd?.input).toBe(0);
+    expect(out.totalCostUsd?.output).toBe(0);
+    expect(out.totalCostUsd?.total).toBe(0);
   });
 
   it("computes cost with only input tokens present", async () => {
     const fetchInfo = vi.fn().mockResolvedValue(modelInfo);
     const snap = {
       ...baseSnap,
-      totalUsage: { ...baseSnap.totalUsage, outputTokens: undefined },
+      totalUsage: { ...baseSnap.totalUsage, outputTokens: 0 },
     };
     const out = await breakdownFromSnapshot(snap, fetchInfo);
     expect(out.totalCostUsd?.output).toBe(0);
@@ -125,7 +127,7 @@ describe("breakdownFromSnapshot", () => {
     const fetchInfo = vi.fn().mockResolvedValue(modelInfo);
     const snap = {
       ...baseSnap,
-      totalUsage: { ...baseSnap.totalUsage, inputTokens: undefined },
+      totalUsage: { ...baseSnap.totalUsage, inputTokens: 0 },
     };
     const out = await breakdownFromSnapshot(snap, fetchInfo);
     expect(out.totalCostUsd?.input).toBe(0);

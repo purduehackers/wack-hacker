@@ -11,9 +11,9 @@ import type { TurnUsage } from "./types.ts";
 export class TurnUsageTracker {
   private subagentTokens = 0;
   private subagentToolCalls = 0;
-  private orchestratorInputTokens: number | undefined;
-  private orchestratorOutputTokens: number | undefined;
-  private orchestratorTotalTokens: number | undefined;
+  private orchestratorInputTokens = 0;
+  private orchestratorOutputTokens = 0;
+  private orchestratorTotalTokens = 0;
   private orchestratorToolCalls = 0;
   private stepCount = 0;
 
@@ -23,14 +23,18 @@ export class TurnUsageTracker {
     this.subagentToolCalls += delta.toolCalls;
   }
 
-  /** Record the orchestrator's terminal usage + step trace for this turn. */
+  /**
+   * Record the orchestrator's terminal usage + step trace for this turn.
+   * Coerces undefined tokens from the AI SDK to 0 at the boundary so the
+   * internal TurnUsage contract stays numeric.
+   */
   recordOrchestrator(args: {
     usage: { inputTokens?: number; outputTokens?: number; totalTokens?: number };
     steps: ReadonlyArray<{ toolCalls: ReadonlyArray<unknown> }>;
   }): void {
-    this.orchestratorInputTokens = args.usage.inputTokens;
-    this.orchestratorOutputTokens = args.usage.outputTokens;
-    this.orchestratorTotalTokens = args.usage.totalTokens;
+    this.orchestratorInputTokens = args.usage.inputTokens ?? 0;
+    this.orchestratorOutputTokens = args.usage.outputTokens ?? 0;
+    this.orchestratorTotalTokens = args.usage.totalTokens ?? 0;
     this.orchestratorToolCalls = args.steps.reduce((sum, step) => sum + step.toolCalls.length, 0);
     this.stepCount = args.steps.length;
   }
@@ -47,7 +51,7 @@ export class TurnUsageTracker {
 
   /** Convenience accessor for the post-stream merged token total. */
   get totalTokens(): number {
-    return (this.orchestratorTotalTokens ?? 0) + this.subagentTokens;
+    return this.orchestratorTotalTokens + this.subagentTokens;
   }
 
   /** Snapshot in the shape persisted to the context-snapshot store. */
@@ -79,9 +83,9 @@ export function emptyTurnUsage(): TurnUsage {
  * accumulate per-turn usage into a conversation-wide running total. */
 export function addTurnUsage(total: TurnUsage, turn: TurnUsage): TurnUsage {
   return {
-    inputTokens: (total.inputTokens ?? 0) + (turn.inputTokens ?? 0),
-    outputTokens: (total.outputTokens ?? 0) + (turn.outputTokens ?? 0),
-    totalTokens: (total.totalTokens ?? 0) + (turn.totalTokens ?? 0),
+    inputTokens: total.inputTokens + turn.inputTokens,
+    outputTokens: total.outputTokens + turn.outputTokens,
+    totalTokens: total.totalTokens + turn.totalTokens,
     subagentTokens: total.subagentTokens + turn.subagentTokens,
     toolCallCount: total.toolCallCount + turn.toolCallCount,
     stepCount: total.stepCount + turn.stepCount,

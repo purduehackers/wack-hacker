@@ -6,8 +6,8 @@ describe("TurnUsageTracker", () => {
   it("starts empty", () => {
     const t = new TurnUsageTracker();
     expect(t.toTurnUsage()).toEqual({
-      inputTokens: undefined,
-      outputTokens: undefined,
+      inputTokens: 0,
+      outputTokens: 0,
       totalTokens: 0,
       subagentTokens: 0,
       toolCallCount: 0,
@@ -55,7 +55,7 @@ describe("TurnUsageTracker", () => {
     expect(t.totalSteps).toBe(1);
   });
 
-  it("handles missing orchestrator totalTokens", () => {
+  it("coerces undefined orchestrator tokens to zero", () => {
     const t = new TurnUsageTracker();
     t.addSubagent({ tokens: 50, toolCalls: 1 });
     t.recordOrchestrator({
@@ -64,8 +64,8 @@ describe("TurnUsageTracker", () => {
     });
     const usage = t.toTurnUsage();
     expect(usage.totalTokens).toBe(50);
-    expect(usage.inputTokens).toBeUndefined();
-    expect(usage.outputTokens).toBeUndefined();
+    expect(usage.inputTokens).toBe(0);
+    expect(usage.outputTokens).toBe(0);
     expect(usage.toolCallCount).toBe(1);
     expect(usage.stepCount).toBe(0);
   });
@@ -112,32 +112,7 @@ describe("addTurnUsage", () => {
     });
   });
 
-  it("treats missing input/output/total tokens as zero", () => {
-    const a = emptyTurnUsage();
-    const b = {
-      inputTokens: undefined,
-      outputTokens: undefined,
-      totalTokens: undefined,
-      subagentTokens: 5,
-      toolCallCount: 1,
-      stepCount: 1,
-    };
-    const out = addTurnUsage(a, b);
-    expect(out.inputTokens).toBe(0);
-    expect(out.outputTokens).toBe(0);
-    expect(out.totalTokens).toBe(0);
-    expect(out.subagentTokens).toBe(5);
-  });
-
-  it("treats undefined values on the LHS as zero", () => {
-    const a = {
-      inputTokens: undefined,
-      outputTokens: undefined,
-      totalTokens: undefined,
-      subagentTokens: 0,
-      toolCallCount: 0,
-      stepCount: 0,
-    };
+  it("adds onto emptyTurnUsage cleanly", () => {
     const b = {
       inputTokens: 10,
       outputTokens: 5,
@@ -146,13 +121,6 @@ describe("addTurnUsage", () => {
       toolCallCount: 1,
       stepCount: 1,
     };
-    expect(addTurnUsage(a, b)).toEqual({
-      inputTokens: 10,
-      outputTokens: 5,
-      totalTokens: 15,
-      subagentTokens: 2,
-      toolCallCount: 1,
-      stepCount: 1,
-    });
+    expect(addTurnUsage(emptyTurnUsage(), b)).toEqual(b);
   });
 });

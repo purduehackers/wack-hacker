@@ -115,9 +115,8 @@ function computeCost(
   usage: ContextSnapshot["totalUsage"],
 ): ContextBreakdown["totalCostUsd"] | undefined {
   if (!modelInfo) return undefined;
-  if (usage.inputTokens == null && usage.outputTokens == null) return undefined;
-  const inputCost = ((usage.inputTokens ?? 0) * modelInfo.cost.input) / 1_000_000;
-  const outputCost = ((usage.outputTokens ?? 0) * modelInfo.cost.output) / 1_000_000;
+  const inputCost = (usage.inputTokens * modelInfo.cost.input) / 1_000_000;
+  const outputCost = (usage.outputTokens * modelInfo.cost.output) / 1_000_000;
   return {
     input: inputCost,
     output: outputCost,

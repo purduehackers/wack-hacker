@@ -74,13 +74,10 @@ function renderSummary(breakdown: ContextBreakdown): string {
     lines.push(`\`Window\`: unknown (model not in models.dev catalog)`);
   }
 
-  const usageParts: string[] = [];
-  if (totalUsage.inputTokens != null) {
-    usageParts.push(`${formatTokens(totalUsage.inputTokens)} input`);
-  }
-  if (totalUsage.outputTokens != null) {
-    usageParts.push(`${formatTokens(totalUsage.outputTokens)} output`);
-  }
+  const usageParts: string[] = [
+    `${formatTokens(totalUsage.inputTokens)} input`,
+    `${formatTokens(totalUsage.outputTokens)} output`,
+  ];
   if (totalUsage.subagentTokens > 0) {
     usageParts.push(`${formatTokens(totalUsage.subagentTokens)} subagent`);
   }
