@@ -33,14 +33,26 @@ export interface DiscordInteraction {
 }
 
 export interface InteractionData {
-  id: string;
-  name: string;
+  id?: string;
+  name?: string;
   type?: number;
   options?: InteractionOption[];
   custom_id?: string;
   component_type?: number;
   target_id?: string;
   resolved?: InteractionResolved;
+  components?: ModalActionRow[];
+}
+
+export interface ModalActionRow {
+  type: number;
+  components: ModalSubmitComponent[];
+}
+
+export interface ModalSubmitComponent {
+  type: number;
+  custom_id: string;
+  value: string;
 }
 
 export interface InteractionResolved {
