@@ -14,6 +14,7 @@ import {
 
 import { admin, SkillRegistry } from "./skills/index.ts";
 import { createDelegationTool } from "./subagent.ts";
+import { TurnUsageTracker } from "./turn-usage.ts";
 
 const baseSpec = {
   name: "test",
@@ -29,12 +30,12 @@ const baseSpec = {
 
 describe("createDelegationTool — tool shape", () => {
   it("returns a tool with the spec description", () => {
-    const t = createDelegationTool(baseSpec, UserRole.Admin, { totalTokens: 0, toolCallCount: 0 });
+    const t = createDelegationTool(baseSpec, UserRole.Admin, new TurnUsageTracker());
     expect(t.description).toBe("Test delegation");
   });
 
   it("validates the task input schema", () => {
-    const t = createDelegationTool(baseSpec, UserRole.Admin, { totalTokens: 0, toolCallCount: 0 });
+    const t = createDelegationTool(baseSpec, UserRole.Admin, new TurnUsageTracker());
     const schema = t.inputSchema as unknown as {
       safeParse: (input: unknown) => { success: boolean };
     };
@@ -57,7 +58,7 @@ describe("createDelegationTool — execute() against MockLanguageModelV3", () =>
   });
 
   async function drain(spec: typeof baseSpec, role: UserRole) {
-    const t = createDelegationTool(spec, role, { totalTokens: 0, toolCallCount: 0 });
+    const t = createDelegationTool(spec, role, new TurnUsageTracker());
     const received: UIMessage[] = [];
     const gen = t.execute!(
       { task: "do the thing" },
@@ -125,7 +126,7 @@ describe("createDelegationTool — toModelOutput()", () => {
   }
 
   it("extracts the last text part from the final UIMessage", () => {
-    const t = createDelegationTool(baseSpec, UserRole.Admin, { totalTokens: 0, toolCallCount: 0 });
+    const t = createDelegationTool(baseSpec, UserRole.Admin, new TurnUsageTracker());
     const output = uiMessage([
       { type: "text", text: "first" },
       { type: "tool-call" },
@@ -137,7 +138,7 @@ describe("createDelegationTool — toModelOutput()", () => {
   });
 
   it("falls back to a completion message when no text parts exist", () => {
-    const t = createDelegationTool(baseSpec, UserRole.Admin, { totalTokens: 0, toolCallCount: 0 });
+    const t = createDelegationTool(baseSpec, UserRole.Admin, new TurnUsageTracker());
     const output = uiMessage([{ type: "tool-call" }]);
     expect(
       t.toModelOutput!({ output } as Parameters<NonNullable<typeof t.toModelOutput>>[0]),
@@ -145,7 +146,7 @@ describe("createDelegationTool — toModelOutput()", () => {
   });
 
   it("falls back when output is undefined", () => {
-    const t = createDelegationTool(baseSpec, UserRole.Admin, { totalTokens: 0, toolCallCount: 0 });
+    const t = createDelegationTool(baseSpec, UserRole.Admin, new TurnUsageTracker());
     expect(
       t.toModelOutput!({ output: undefined } as unknown as Parameters<
         NonNullable<typeof t.toModelOutput>

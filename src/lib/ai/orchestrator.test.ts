@@ -11,6 +11,7 @@ import {
 } from "@/lib/test/fixtures";
 
 import { AgentContext } from "./context.ts";
+import { TurnUsageTracker } from "./turn-usage.ts";
 
 // --- Boundary mocks: tools that hit external APIs or initialize SDK clients ---
 
@@ -83,7 +84,7 @@ describe("createOrchestrator", () => {
   });
 
   async function drain(ctx: AgentContext) {
-    const agent = createOrchestrator(ctx, { totalTokens: 0, toolCallCount: 0 });
+    const agent = createOrchestrator(ctx, new TurnUsageTracker());
     const result = await agent.stream({ prompt: "say hi" });
     const reader = result.toUIMessageStream().getReader();
     while (!(await reader.read()).done);
