@@ -5,11 +5,12 @@ import { log } from "evlog";
 
 import { countMetric, recordDistribution, recordDuration } from "@/lib/metrics";
 
-import type { Attachment, ChatMessage, SerializedAgentContext, SubagentMetrics } from "./types.ts";
+import type { Attachment, ChatMessage, SerializedAgentContext, TurnUsage } from "./types.ts";
 
 import { AgentContext } from "./context.ts";
 import { MessageRenderer } from "./message-renderer.ts";
 import { createOrchestrator } from "./orchestrator.ts";
+import { TurnUsageTracker } from "./turn-usage.ts";
 
 export { MessageRenderer } from "./message-renderer.ts";
 
@@ -67,10 +68,10 @@ export async function streamTurn(
   messages: ChatMessage[],
   serializedContext: SerializedAgentContext,
   taskId?: string,
-): Promise<{ text: string }> {
+): Promise<{ text: string; usage: TurnUsage }> {
   const agentCtx = AgentContext.fromJSON(serializedContext);
-  const subagentMetrics: SubagentMetrics = { totalTokens: 0, toolCallCount: 0 };
-  const agent = createOrchestrator(agentCtx, subagentMetrics);
+  const tracker = new TurnUsageTracker();
+  const agent = createOrchestrator(agentCtx, tracker);
   const renderer = new MessageRenderer(discord, channelId, { taskId });
 
   await renderer.init();
@@ -108,19 +109,18 @@ export async function streamTurn(
   const elapsedMs = Date.now() - startTime;
   try {
     const [totalUsage, steps] = await Promise.all([result.totalUsage, result.steps]);
-    const orchestratorToolCalls = steps.reduce((sum, step) => sum + step.toolCalls.length, 0);
-    const totalTokens = (totalUsage.totalTokens ?? 0) + subagentMetrics.totalTokens;
-    const toolCallCount = orchestratorToolCalls + subagentMetrics.toolCallCount;
+    tracker.recordOrchestrator({ usage: totalUsage, steps });
+
     await renderer.finalize({
       elapsedMs,
-      totalTokens,
-      toolCallCount,
-      stepCount: steps.length,
+      totalTokens: tracker.totalTokens,
+      toolCallCount: tracker.totalToolCalls,
+      stepCount: tracker.totalSteps,
     });
 
-    recordDistribution("ai.turn.tokens", totalTokens);
-    recordDistribution("ai.turn.tool_calls", toolCallCount);
-    recordDistribution("ai.turn.steps", steps.length);
+    recordDistribution("ai.turn.tokens", tracker.totalTokens);
+    recordDistribution("ai.turn.tool_calls", tracker.totalToolCalls);
+    recordDistribution("ai.turn.steps", tracker.totalSteps);
   } catch (err) {
     log.warn("streaming", `Failed to collect metadata: ${String(err)}`);
     countMetric("ai.turn.metadata_error");
@@ -137,5 +137,5 @@ export async function streamTurn(
 
   log.info("streaming", `Turn complete, ${renderer.content.length} chars, ${elapsedMs}ms`);
 
-  return { text: renderer.content };
+  return { text: renderer.content, usage: tracker.toTurnUsage() };
 }
