@@ -20,6 +20,17 @@ const LEADER_KEY = "gateway:leader";
 const LEASE_TTL_MS = 15_000;
 const POLL_INTERVAL_MS = 5_000;
 const HANDOFF_WAIT_MS = 8_000;
+const READY_TIMEOUT_MS = 30_000;
+
+// Atomic compare-and-delete: only removes the lease if we still own it.
+// Without this, a get-then-del race could delete a new leader's key after
+// we read our own ID but before the del reached Redis.
+const RELEASE_LEASE_SCRIPT = `
+if redis.call("get", KEYS[1]) == ARGV[1] then
+  return redis.call("del", KEYS[1])
+else
+  return 0
+end`;
 
 const ulid = monotonicFactory();
 
@@ -35,9 +46,12 @@ type Publish = (packet: Packet) => Promise<void>;
 
 async function releaseLease(redis: Redis, listenerId: string): Promise<void> {
   try {
-    const current = await redis.get<string>(LEADER_KEY);
-    if (current === listenerId) {
-      await redis.del(LEADER_KEY);
+    const released = await redis.eval<[string], number>(
+      RELEASE_LEASE_SCRIPT,
+      [LEADER_KEY],
+      [listenerId],
+    );
+    if (released === 1) {
       log.info("gateway", `released lease for ${listenerId}`);
     }
   } catch (err) {
@@ -95,9 +109,11 @@ async function startGatewayListener(client: Client): Promise<{ hold: Promise<voi
   }, POLL_INTERVAL_MS);
 
   try {
-    // Pass abort.signal so the ready wait rejects if the lease poll detects
-    // we lost leadership during login/handshake.
-    const ready = once(client, Events.ClientReady, { signal: abort.signal });
+    // Combine the lease-loss abort with a hard timeout so the route can't
+    // hang indefinitely if login resolves but ClientReady never fires.
+    // Either signal rejects the once() wait and triggers cleanup below.
+    const readySignal = AbortSignal.any([abort.signal, AbortSignal.timeout(READY_TIMEOUT_MS)]);
+    const ready = once(client, Events.ClientReady, { signal: readySignal });
     await client.login(env.DISCORD_BOT_TOKEN);
     await ready;
     log.info("gateway", `ready for ${listenerId}`);
