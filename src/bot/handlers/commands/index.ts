@@ -4,4 +4,3 @@ export * from "./privacy";
 export * from "./delete-ship";
 export * from "./hack-night";
 export * from "./restart-bot";
-export * from "./inspect-context";

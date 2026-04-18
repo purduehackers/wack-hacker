@@ -1,7 +1,7 @@
 import type { ToolSet } from "ai";
 
 import type { UserRole } from "./constants.ts";
-import type { TurnUsageTracker } from "./turn-usage.ts";
+import type { SubagentMetrics } from "./types.ts";
 
 import { SKILL_MANIFEST as DISCORD_SUBSKILLS } from "./skills/generated/domains/discord.ts";
 import { SKILL_MANIFEST as FIGMA_SUBSKILLS } from "./skills/generated/domains/figma.ts";
@@ -72,7 +72,7 @@ const DOMAINS = {
 const registry = new SkillRegistry(SKILL_MANIFEST);
 
 /** Build delegation tools for every delegate-mode skill the role can access. */
-export function buildDelegationTools(role: UserRole, tracker: TurnUsageTracker): ToolSet {
+export function buildDelegationTools(role: UserRole, metrics: SubagentMetrics): ToolSet {
   const tools: ToolSet = {};
   for (const [name, config] of Object.entries(DOMAINS)) {
     const skill = registry.loadSkill(name, role);
@@ -85,7 +85,7 @@ export function buildDelegationTools(role: UserRole, tracker: TurnUsageTracker):
         ...config,
       },
       role,
-      tracker,
+      metrics,
     );
   }
   return tools;
