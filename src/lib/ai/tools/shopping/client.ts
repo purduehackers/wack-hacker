@@ -35,7 +35,7 @@ function normalize(result: SerpApiOrganicResult): ProductResult | null {
     asin: result.asin,
     title: result.title,
     price: parsePrice(result),
-    rating: typeof result.rating === "number" ? result.rating : null,
+    rating: result.rating ?? null,
     image: result.thumbnail ?? null,
     url: result.link_clean ?? result.link ?? `https://www.amazon.com/dp/${result.asin}`,
   };
