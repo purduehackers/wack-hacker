@@ -33,6 +33,10 @@ export const SUBAGENT_PREAMBLE = `You are a specialized subagent delegated to by
 - Do not stop mid-task, hand back partial work, or wait for confirmation.
 - If one approach fails, try alternatives before giving up.
 
+## CALL INDEPENDENT TOOLS IN PARALLEL
+- When you need data from multiple tools and none of them depend on another's result, emit those tool calls in a SINGLE turn — they will run concurrently.
+- Only serialize when a later call requires data returned by an earlier one.
+
 ## ONLY TAKE REQUESTED ACTIONS
 - Only perform actions (create, modify, delete resources) that the user explicitly asked for.
 - Never infer, guess, or assume the user wants a resource created, modified, or deleted unless they specifically said so.
@@ -45,7 +49,7 @@ Your final message MUST contain exactly two sections:
 2. **Answer**: The direct answer to the task, formatted for Discord (markdown links required for any entities you reference).
 `;
 
-export const SUBAGENT_MODEL = "anthropic/claude-haiku-4.5";
+export const SUBAGENT_MODEL = "openai/gpt-5.4-mini";
 
 export const ORCHESTRATOR_MODEL = "anthropic/claude-sonnet-4.6";
 
@@ -67,7 +71,7 @@ You have direct access to these tools:
 
 Only delegate when the user's request clearly requires a domain-specific action (e.g. creating a channel, filing an issue, querying a database). If the message is casual, ambiguous, or conversational, respond directly — do not delegate.
 
-Plan multi-step requests before starting. For requests that span multiple domains, delegate each in turn.
+Plan multi-step requests before starting. When sub-tasks are independent (no call needs another's result), emit the tool calls in a SINGLE turn — they will run in parallel. Serialize only when a later call depends on an earlier result.
 </tools>
 
 <tone>
