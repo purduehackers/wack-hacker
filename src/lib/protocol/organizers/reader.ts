@@ -22,13 +22,16 @@ export const organizersSchema = z.record(z.string(), organizerSchema);
 
 let client: ReturnType<typeof createClient> | null = null;
 
-function getClient(): ReturnType<typeof createClient> {
+function getClient(): ReturnType<typeof createClient> | null {
+  if (!env.EDGE_CONFIG) return null;
   client ??= createClient(env.EDGE_CONFIG);
   return client;
 }
 
 export async function getOrganizers(): Promise<OrganizersMap> {
-  const raw = await getClient().get(ORGANIZERS_KEY);
+  const c = getClient();
+  if (!c) return {};
+  const raw = await c.get(ORGANIZERS_KEY);
   if (raw === undefined || raw === null) return {};
   const parsed = organizersSchema.safeParse(raw);
   return parsed.success ? parsed.data : {};
