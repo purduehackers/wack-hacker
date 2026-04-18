@@ -22,7 +22,7 @@ const HANDOFF_WAIT_MS = 8_000;
 
 `vercel.ts` schedules `*/9 * * * *` → `GET /api/discord/gateway`. The 9-minute cadence deliberately overlaps with the 10-minute hold so there's always a listener trying to claim the lease. If an instance dies mid-hold, the next cron invocation picks up within a minute.
 
-The route uses `waitUntil(runGatewayListener(client))` to keep the async lifecycle alive past the HTTP response, so the cron's `GET` returns `{ message: "ok" }` immediately while the listener runs to completion in the background.
+The route awaits the discord.js `ClientReady` event before responding, then uses `waitUntil` to keep the remaining lifecycle alive past the HTTP response. The cron's `GET` returns `{ message: "ok" }` only after the bot successfully logs in; if login or readiness fails, the route responds `500`. The hold continues running in the background for the rest of the 10 minutes.
 
 ## What the client publishes
 
