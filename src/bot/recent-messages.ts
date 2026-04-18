@@ -13,7 +13,11 @@ function toRecentMessage(m: RawMessage): RecentMessage {
   return {
     id: m.id,
     author: (m.author as { global_name?: string }).global_name ?? m.author.username,
-    content: m.content,
+    // Attachment-only / sticker messages arrive with empty content. Render a
+    // placeholder so callers that include such messages (e.g. the anchor of a
+    // reply-context fetch) produce a line the model can see, rather than a
+    // dangling `author:` with nothing after it.
+    content: m.content?.trim() ? m.content : "(no text content)",
     timestamp: new Date(m.timestamp).toLocaleTimeString("en-US", {
       hour: "numeric",
       minute: "2-digit",
@@ -65,12 +69,12 @@ export async function fetchReferencedMessageContext(
       }),
     ]);
 
-    // Discord returns priors newest-first; chronological = reverse(priors) then anchor.
-    const messages = [...priors.toReversed(), anchor]
-      .filter((m) => m.content?.trim())
-      .map(toRecentMessage);
-
-    return messages.length > 0 ? messages : undefined;
+    // Priors come newest-first; reverse for chronological order and drop
+    // empty-content entries. The anchor is always kept as the last element —
+    // even if it's attachment-only — so "last item = reply target" holds
+    // and the model can see what was being replied to.
+    const chronologicalPriors = priors.toReversed().filter((m) => m.content?.trim());
+    return [...chronologicalPriors, anchor].map(toRecentMessage);
   } catch (err) {
     log.warn("recent-messages", `Failed to fetch referenced context: ${String(err)}`);
     return undefined;

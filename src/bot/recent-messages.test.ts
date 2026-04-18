@@ -52,6 +52,17 @@ describe("fetchRecentMessages", () => {
   });
 });
 
+function rawMsg(id: string, username: string, content: string, time: string): unknown {
+  return { id, author: { username }, content, timestamp: time };
+}
+
+function mockWithAnchor(anchor: unknown, priors: unknown[]) {
+  const mock = createMockAPI();
+  mock.channels.getMessage = async () => anchor as never;
+  mock.channels.getMessages = async () => priors as never;
+  return mock;
+}
+
 describe("fetchReferencedMessageContext", () => {
   it("returns undefined when anchor fetch fails", async () => {
     const mock = createMockAPI();
@@ -65,12 +76,7 @@ describe("fetchReferencedMessageContext", () => {
   it("returns undefined when priors fetch fails", async () => {
     const mock = createMockAPI();
     mock.channels.getMessage = async () =>
-      ({
-        id: "anchor",
-        author: { username: "a" },
-        content: "hi",
-        timestamp: "2024-01-01T13:05:00Z",
-      }) as never;
+      rawMsg("anchor", "a", "hi", "2024-01-01T13:05:00Z") as never;
     mock.channels.getMessages = async () => {
       throw new Error("rate limited");
     };
@@ -79,30 +85,10 @@ describe("fetchReferencedMessageContext", () => {
   });
 
   it("puts the anchor last and reverses priors into chronological order", async () => {
-    const mock = createMockAPI();
-    mock.channels.getMessage = async () =>
-      ({
-        id: "anchor",
-        author: { username: "c" },
-        content: "anchor msg",
-        timestamp: "2024-01-01T13:05:00Z",
-      }) as never;
-    mock.channels.getMessages = async () =>
-      [
-        {
-          id: "p-newer",
-          author: { username: "b" },
-          content: "second",
-          timestamp: "2024-01-01T13:02:00Z",
-        },
-        {
-          id: "p-older",
-          author: { username: "a" },
-          content: "first",
-          timestamp: "2024-01-01T13:01:00Z",
-        },
-      ] as never;
-
+    const mock = mockWithAnchor(rawMsg("anchor", "c", "anchor msg", "2024-01-01T13:05:00Z"), [
+      rawMsg("p-newer", "b", "second", "2024-01-01T13:02:00Z"),
+      rawMsg("p-older", "a", "first", "2024-01-01T13:01:00Z"),
+    ]);
     const result = await fetchReferencedMessageContext(asAPI(mock), "ch-1", "anchor");
     expect(result).toEqual([
       { id: "p-older", author: "a", content: "first", timestamp: expect.any(String) },
@@ -111,28 +97,24 @@ describe("fetchReferencedMessageContext", () => {
     ]);
   });
 
-  it("filters empty-content messages but keeps the anchor when it has content", async () => {
-    const mock = createMockAPI();
-    mock.channels.getMessage = async () =>
-      ({
-        id: "anchor",
-        author: { username: "c" },
-        content: "anchor msg",
-        timestamp: "2024-01-01T13:05:00Z",
-      }) as never;
-    mock.channels.getMessages = async () =>
-      [
-        {
-          id: "p-empty",
-          author: { username: "b" },
-          content: "   ",
-          timestamp: "2024-01-01T13:02:00Z",
-        },
-      ] as never;
-
+  it("filters empty-content priors but keeps the anchor when it has content", async () => {
+    const mock = mockWithAnchor(rawMsg("anchor", "c", "anchor msg", "2024-01-01T13:05:00Z"), [
+      rawMsg("p-empty", "b", "   ", "2024-01-01T13:02:00Z"),
+    ]);
     const result = await fetchReferencedMessageContext(asAPI(mock), "ch-1", "anchor");
     expect(result).toEqual([
       { id: "anchor", author: "c", content: "anchor msg", timestamp: expect.any(String) },
+    ]);
+  });
+
+  it("keeps an attachment-only anchor with a placeholder so it stays last", async () => {
+    const mock = mockWithAnchor(rawMsg("anchor", "c", "", "2024-01-01T13:05:00Z"), [
+      rawMsg("p-older", "a", "first", "2024-01-01T13:01:00Z"),
+    ]);
+    const result = await fetchReferencedMessageContext(asAPI(mock), "ch-1", "anchor");
+    expect(result).toEqual([
+      { id: "p-older", author: "a", content: "first", timestamp: expect.any(String) },
+      { id: "anchor", author: "c", content: "(no text content)", timestamp: expect.any(String) },
     ]);
   });
 });
