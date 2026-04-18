@@ -62,6 +62,7 @@ vi.mock("@/lib/ai/skills/generated/domains/discord", () => ({ SKILL_MANIFEST: {}
 vi.mock("@/lib/ai/skills/generated/domains/figma", () => ({ SKILL_MANIFEST: {} }));
 vi.mock("@/lib/ai/skills/generated/domains/notion", () => ({ SKILL_MANIFEST: {} }));
 vi.mock("@/lib/ai/skills/generated/domains/sentry", () => ({ SKILL_MANIFEST: {} }));
+vi.mock("@/lib/ai/skills/generated/domains/shopping", () => ({ SKILL_MANIFEST: {} }));
 
 // Stub the heavy tool index modules so env-backed SDK clients don't initialize.
 vi.mock("@/lib/ai/tools/linear", () => ({}));
@@ -70,6 +71,7 @@ vi.mock("@/lib/ai/tools/discord", () => ({}));
 vi.mock("@/lib/ai/tools/figma", () => ({}));
 vi.mock("@/lib/ai/tools/notion", () => ({}));
 vi.mock("@/lib/ai/tools/sentry", () => ({}));
+vi.mock("@/lib/ai/tools/shopping", () => ({}));
 
 // Stub createDelegationTool so we can see what spec each domain was passed.
 vi.mock("@/lib/ai/subagent", () => ({
