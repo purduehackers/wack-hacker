@@ -58,14 +58,9 @@ export function renderContextReport(breakdown: ContextBreakdown): string[] {
 }
 
 function renderSummary(breakdown: ContextBreakdown): string {
-  const lines: string[] = [];
-  appendSummaryLines(lines, breakdown);
-  return lines.join("\n");
-}
-
-function appendSummaryLines(lines: string[], breakdown: ContextBreakdown): void {
   const { model, modelInfo, categories, estimatedInputTokens, totalUsage, totalCostUsd } =
     breakdown;
+  const lines: string[] = [];
 
   const exchanges = breakdown.turnCount === 1 ? "1 exchange" : `${breakdown.turnCount} exchanges`;
   lines.push(`${HEADER_PREFIX} (after ${exchanges})`);
@@ -120,6 +115,8 @@ function appendSummaryLines(lines: string[], breakdown: ContextBreakdown): void 
     const free = Math.max(window - estimatedInputTokens, 0);
     lines.push(`• **Free space**: ~${formatTokens(free)} tokens (${formatPercent(free, window)})`);
   }
+
+  return lines.join("\n");
 }
 
 /**

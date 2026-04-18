@@ -60,11 +60,7 @@ function toolItem(tool: ToolDefSnapshot): CategoryItem {
 
 function delegateItem(tool: ToolDefSnapshot, role: UserRole): CategoryItem {
   const domain = tool.name.slice(DELEGATE_PREFIX.length);
-  return {
-    name: tool.name,
-    estimatedTokens: estimateTokens(JSON.stringify(tool)),
-    skills: loadableSkillsFor(domain, role),
-  };
+  return { ...toolItem(tool), skills: loadableSkillsFor(domain, role) };
 }
 
 function partitionTools(tools: ToolDefSnapshot[]): {
@@ -94,20 +90,15 @@ function categoryFromTools(
   };
 }
 
-function renderMessagesText(snap: ContextSnapshot): string {
-  return snap.messages.map((m) => `${m.role}: ${m.content}`).join("\n");
-}
-
 function buildCategories(snap: ContextSnapshot, role: UserRole): CategoryBreakdown[] {
-  const systemPromptText = snap.systemPrompt;
-  const messagesText = renderMessagesText(snap);
+  const messagesText = snap.messages.map((m) => `${m.role}: ${m.content}`).join("\n");
   const { baseTools, delegates } = partitionTools(snap.tools);
 
   return [
     {
       label: "System prompt",
-      chars: systemPromptText.length,
-      estimatedTokens: estimateTokens(systemPromptText),
+      chars: snap.systemPrompt.length,
+      estimatedTokens: estimateTokens(snap.systemPrompt),
     },
     categoryFromTools("Tools", baseTools, toolItem),
     categoryFromTools("Delegate agents", delegates, (t) => delegateItem(t, role)),

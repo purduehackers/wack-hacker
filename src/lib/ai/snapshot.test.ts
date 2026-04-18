@@ -64,7 +64,7 @@ describe("buildContextSnapshot", () => {
   it("captures the orchestrator model identifier", () => {
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
     const snap = buildContextSnapshot({
-      agentCtx: ctx,
+      context: ctx.toJSON(),
       messages: [{ role: "user", content: "hi" }],
       totalUsage: usage,
       turnCount: 1,
@@ -75,7 +75,7 @@ describe("buildContextSnapshot", () => {
   it("includes the fully assembled system prompt (with context block)", () => {
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
     const snap = buildContextSnapshot({
-      agentCtx: ctx,
+      context: ctx.toJSON(),
       messages: [{ role: "user", content: "hi" }],
       totalUsage: usage,
       turnCount: 1,
@@ -89,7 +89,7 @@ describe("buildContextSnapshot", () => {
   it("serializes the orchestrator tool surface", () => {
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
     const snap = buildContextSnapshot({
-      agentCtx: ctx,
+      context: ctx.toJSON(),
       messages: [],
       totalUsage: usage,
       turnCount: 1,
@@ -107,7 +107,7 @@ describe("buildContextSnapshot", () => {
   it("converts zod input schemas to JSON Schema", () => {
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
     const snap = buildContextSnapshot({
-      agentCtx: ctx,
+      context: ctx.toJSON(),
       messages: [],
       totalUsage: usage,
       turnCount: 1,
@@ -128,7 +128,7 @@ describe("buildContextSnapshot", () => {
       { role: "assistant" as const, content: "hello" },
     ];
     const snap = buildContextSnapshot({
-      agentCtx: ctx,
+      context: ctx.toJSON(),
       messages: msgs,
       totalUsage: usage,
       turnCount: 7,
@@ -141,7 +141,7 @@ describe("buildContextSnapshot", () => {
   it("stamps updatedAt with an ISO timestamp", () => {
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
     const snap = buildContextSnapshot({
-      agentCtx: ctx,
+      context: ctx.toJSON(),
       messages: [],
       totalUsage: usage,
       turnCount: 1,
@@ -154,7 +154,7 @@ describe("buildContextSnapshot: tool schema serialization", () => {
   it("passes through raw JSON-schema tools verbatim (non-Zod)", () => {
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
     const snap = buildContextSnapshot({
-      agentCtx: ctx,
+      context: ctx.toJSON(),
       messages: [],
       totalUsage: usage,
       turnCount: 1,
@@ -169,7 +169,7 @@ describe("buildContextSnapshot: tool schema serialization", () => {
   it("uses an empty object when the tool has no inputSchema", () => {
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
     const snap = buildContextSnapshot({
-      agentCtx: ctx,
+      context: ctx.toJSON(),
       messages: [],
       totalUsage: usage,
       turnCount: 1,
@@ -181,7 +181,7 @@ describe("buildContextSnapshot: tool schema serialization", () => {
   it("returns an empty object when toJSONSchema rejects a zod-like shape", () => {
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
     const snap = buildContextSnapshot({
-      agentCtx: ctx,
+      context: ctx.toJSON(),
       messages: [],
       totalUsage: usage,
       turnCount: 1,

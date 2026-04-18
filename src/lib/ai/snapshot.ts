@@ -2,10 +2,10 @@ import { toJSONSchema } from "zod";
 
 import type { ContextSnapshot, ToolDefSnapshot } from "@/bot/context-snapshot";
 
-import type { AgentContext } from "./context.ts";
-import type { ChatMessage, TurnUsage } from "./types.ts";
+import type { ChatMessage, SerializedAgentContext, TurnUsage } from "./types.ts";
 
 import { ORCHESTRATOR_MODEL, SYSTEM_PROMPT } from "./constants.ts";
+import { AgentContext } from "./context.ts";
 import { getOrchestratorTools } from "./orchestrator.ts";
 import { TurnUsageTracker } from "./turn-usage.ts";
 
@@ -38,12 +38,13 @@ function describeSchema(schema: unknown): unknown {
  * each turn's usage into a running total before calling this.
  */
 export function buildContextSnapshot(args: {
-  agentCtx: AgentContext;
+  context: SerializedAgentContext;
   messages: ChatMessage[];
   totalUsage: TurnUsage;
   turnCount: number;
 }): ContextSnapshot {
-  const { agentCtx, messages, totalUsage, turnCount } = args;
+  const { context, messages, totalUsage, turnCount } = args;
+  const agentCtx = AgentContext.fromJSON(context);
 
   // The tracker is write-only here — the snapshot only needs the tool set's
   // shape, not its accumulated counts.
@@ -60,7 +61,7 @@ export function buildContextSnapshot(args: {
 
   return {
     model: ORCHESTRATOR_MODEL,
-    context: agentCtx.toJSON(),
+    context,
     systemPrompt: agentCtx.buildInstructions(SYSTEM_PROMPT),
     tools,
     messages,
