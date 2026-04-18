@@ -3,10 +3,13 @@ import { REST } from "@discordjs/rest";
 import { log } from "evlog";
 import { createHook, getWorkflowMetadata } from "workflow";
 
-import type { ChatMessage, SerializedAgentContext } from "@/lib/ai/types";
+import type { ChatMessage, SerializedAgentContext, TurnUsage } from "@/lib/ai/types";
 
+import { ContextSnapshotStore } from "@/bot/context-snapshot";
 import { ConversationStore } from "@/bot/store";
+import { buildContextSnapshot } from "@/lib/ai/snapshot";
 import { streamTurn } from "@/lib/ai/streaming";
+import { addTurnUsage, emptyTurnUsage } from "@/lib/ai/turn-usage";
 import { countMetric } from "@/lib/metrics";
 
 import type { ChatHookEvent, ChatPayload } from "./types";
@@ -37,16 +40,54 @@ async function runTurn(
   return streamTurn(discord, channelId, messages, serializedContext);
 }
 
-async function cleanupConversation(channelId: string) {
+async function persistSnapshot(
+  channelId: string,
+  threadId: string | undefined,
+  args: {
+    context: SerializedAgentContext;
+    messages: ChatMessage[];
+    totalUsage: TurnUsage;
+    turnCount: number;
+  },
+) {
   "use step";
-  const store = new ConversationStore();
-  await store.delete(channelId);
+  // Build the snapshot inside the step. buildContextSnapshot materializes the
+  // full orchestrator tool set (AI SDK `tool()` wrappers, Zod → JSON Schema
+  // conversion), which must not run in the workflow sandbox. Best-effort: a
+  // Redis blip should not abort the chat workflow.
+  try {
+    const snapshot = buildContextSnapshot(args);
+    await new ContextSnapshotStore().set(channelId, threadId, snapshot);
+  } catch (err) {
+    log.warn("workflow", `Snapshot persist failed for ${channelId}: ${String(err)}`);
+    countMetric("workflow.chat.snapshot_error");
+  }
+}
+
+async function cleanupConversation(channelId: string, threadId: string | undefined) {
+  "use step";
+  // Snapshot deletion is best-effort; only the ConversationStore delete is
+  // load-bearing for starting a fresh workflow later.
+  const [conversationResult, snapshotResult] = await Promise.allSettled([
+    new ConversationStore().delete(channelId),
+    new ContextSnapshotStore().delete(channelId, threadId),
+  ]);
+  if (snapshotResult.status === "rejected") {
+    log.warn(
+      "workflow",
+      `Snapshot delete failed for ${channelId}: ${String(snapshotResult.reason)}`,
+    );
+    countMetric("workflow.chat.snapshot_cleanup_error");
+  }
+  if (conversationResult.status === "rejected") {
+    throw conversationResult.reason;
+  }
 }
 
 export async function chatWorkflow(payload: ChatPayload) {
   "use workflow";
 
-  const { channelId, content, context } = payload;
+  const { channelId, threadId, content, context } = payload;
   const { workflowRunId } = getWorkflowMetadata();
 
   log.info("workflow", `Chat started: ${workflowRunId}`);
@@ -63,6 +104,10 @@ export async function chatWorkflow(payload: ChatPayload) {
   const first = await runTurn(channelId, messages, context);
   messages.push({ role: "assistant", content: first.text });
   capHistory(messages);
+
+  let turnCount = 1;
+  let totalUsage = addTurnUsage(emptyTurnUsage(), first.usage);
+  await persistSnapshot(channelId, threadId, { context, messages, totalUsage, turnCount });
 
   using hook = createHook<ChatHookEvent>({ token: workflowRunId });
 
@@ -90,8 +135,16 @@ export async function chatWorkflow(payload: ChatPayload) {
     const turn = await runTurn(channelId, messages, turnContext);
     messages.push({ role: "assistant", content: turn.text });
     capHistory(messages);
+    turnCount += 1;
+    totalUsage = addTurnUsage(totalUsage, turn.usage);
+    await persistSnapshot(channelId, threadId, {
+      context: turnContext,
+      messages,
+      totalUsage,
+      turnCount,
+    });
   }
 
-  await cleanupConversation(channelId);
+  await cleanupConversation(channelId, threadId);
   log.info("workflow", `Chat cleaned up: ${workflowRunId}`);
 }
