@@ -42,6 +42,10 @@ export interface ToolDefSnapshot {
  * chat workflow after each turn completes; read by the /Inspect Context message
  * command. Stored under a separate Redis key from `ConversationState` to keep
  * the hot-path state lean.
+ *
+ * `totalUsage` is cumulative across every turn the workflow has run so far —
+ * it answers "what has this conversation cost in total?" — not just the most
+ * recent turn.
  */
 export interface ContextSnapshot {
   model: string;
@@ -49,7 +53,7 @@ export interface ContextSnapshot {
   systemPrompt: string;
   tools: ToolDefSnapshot[];
   messages: ChatMessage[];
-  lastTurnUsage: TurnUsage;
+  totalUsage: TurnUsage;
   turnCount: number;
   updatedAt: string;
 }

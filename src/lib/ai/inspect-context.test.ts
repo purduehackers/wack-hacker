@@ -29,7 +29,7 @@ const baseSnap: ContextSnapshot = {
   tools: [],
   // "user: hi" = 8 chars → 2 tokens
   messages: [{ role: "user", content: "hi" }],
-  lastTurnUsage: {
+  totalUsage: {
     inputTokens: 1000,
     outputTokens: 200,
     totalTokens: 1200,
@@ -68,6 +68,7 @@ describe("breakdownFromSnapshot", () => {
     expect(out.categories.map((c) => c.label)).toEqual([
       "System prompt",
       "Tools",
+      "Delegate agents",
       "Conversation history",
     ]);
     const system = out.categories.find((c) => c.label === "System prompt");
@@ -83,59 +84,59 @@ describe("breakdownFromSnapshot", () => {
     const fetchInfo = vi.fn().mockResolvedValue(modelInfo);
     const out = await breakdownFromSnapshot(baseSnap, fetchInfo);
     // 1000 input * $3/M = $0.003, 200 output * $15/M = $0.003, total = $0.006
-    expect(out.lastTurnCostUsd?.input).toBeCloseTo(0.003, 6);
-    expect(out.lastTurnCostUsd?.output).toBeCloseTo(0.003, 6);
-    expect(out.lastTurnCostUsd?.total).toBeCloseTo(0.006, 6);
+    expect(out.totalCostUsd?.input).toBeCloseTo(0.003, 6);
+    expect(out.totalCostUsd?.output).toBeCloseTo(0.003, 6);
+    expect(out.totalCostUsd?.total).toBeCloseTo(0.006, 6);
   });
 
   it("omits cost when modelInfo is null", async () => {
     const fetchInfo = vi.fn().mockResolvedValue(null);
     const out = await breakdownFromSnapshot(baseSnap, fetchInfo);
     expect(out.modelInfo).toBeNull();
-    expect(out.lastTurnCostUsd).toBeUndefined();
+    expect(out.totalCostUsd).toBeUndefined();
   });
 
   it("omits cost when both token counts are missing", async () => {
     const fetchInfo = vi.fn().mockResolvedValue(modelInfo);
     const snap = {
       ...baseSnap,
-      lastTurnUsage: {
-        ...baseSnap.lastTurnUsage,
+      totalUsage: {
+        ...baseSnap.totalUsage,
         inputTokens: undefined,
         outputTokens: undefined,
       },
     };
     const out = await breakdownFromSnapshot(snap, fetchInfo);
-    expect(out.lastTurnCostUsd).toBeUndefined();
+    expect(out.totalCostUsd).toBeUndefined();
   });
 
   it("computes cost with only input tokens present", async () => {
     const fetchInfo = vi.fn().mockResolvedValue(modelInfo);
     const snap = {
       ...baseSnap,
-      lastTurnUsage: { ...baseSnap.lastTurnUsage, outputTokens: undefined },
+      totalUsage: { ...baseSnap.totalUsage, outputTokens: undefined },
     };
     const out = await breakdownFromSnapshot(snap, fetchInfo);
-    expect(out.lastTurnCostUsd?.output).toBe(0);
-    expect(out.lastTurnCostUsd?.input).toBeCloseTo(0.003, 6);
+    expect(out.totalCostUsd?.output).toBe(0);
+    expect(out.totalCostUsd?.input).toBeCloseTo(0.003, 6);
   });
 
   it("computes cost with only output tokens present", async () => {
     const fetchInfo = vi.fn().mockResolvedValue(modelInfo);
     const snap = {
       ...baseSnap,
-      lastTurnUsage: { ...baseSnap.lastTurnUsage, inputTokens: undefined },
+      totalUsage: { ...baseSnap.totalUsage, inputTokens: undefined },
     };
     const out = await breakdownFromSnapshot(snap, fetchInfo);
-    expect(out.lastTurnCostUsd?.input).toBe(0);
-    expect(out.lastTurnCostUsd?.output).toBeCloseTo(0.003, 6);
+    expect(out.totalCostUsd?.input).toBe(0);
+    expect(out.totalCostUsd?.output).toBeCloseTo(0.003, 6);
   });
 
   it("uses the default fetchModelInfo when no fetchInfo is passed", async () => {
     const out = await breakdownFromSnapshot(baseSnap);
     // Mocked default returns null → no model metadata in the breakdown.
     expect(out.modelInfo).toBeNull();
-    expect(out.lastTurnCostUsd).toBeUndefined();
+    expect(out.totalCostUsd).toBeUndefined();
   });
 
   it("forwards turnCount and messageCount", async () => {
@@ -152,5 +153,74 @@ describe("breakdownFromSnapshot", () => {
     const out = await breakdownFromSnapshot(snap, fetchInfo);
     expect(out.turnCount).toBe(5);
     expect(out.messageCount).toBe(3);
+  });
+});
+
+describe("breakdownFromSnapshot — tool partitioning", () => {
+  it("partitions tools into base tools and delegate agents by name prefix", async () => {
+    const fetchInfo = vi.fn().mockResolvedValue(modelInfo);
+    const snap = {
+      ...baseSnap,
+      tools: [
+        { name: "currentTime", description: "time", inputSchema: {} },
+        { name: "documentation", description: "docs", inputSchema: {} },
+        { name: "delegate_linear", description: "linear", inputSchema: {} },
+        { name: "delegate_github", description: "github", inputSchema: {} },
+      ],
+    };
+    const out = await breakdownFromSnapshot(snap, fetchInfo);
+    const tools = out.categories.find((c) => c.label === "Tools");
+    const delegates = out.categories.find((c) => c.label === "Delegate agents");
+    expect(tools?.items?.map((i) => i.name)).toEqual(["currentTime", "documentation"]);
+    expect(delegates?.items?.map((i) => i.name)).toEqual(["delegate_linear", "delegate_github"]);
+    for (const item of [...(tools?.items ?? []), ...(delegates?.items ?? [])]) {
+      expect(item.estimatedTokens).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe("breakdownFromSnapshot — delegate subskills", () => {
+  it("attaches no skills to delegates for a Public-tier user", async () => {
+    const fetchInfo = vi.fn().mockResolvedValue(modelInfo);
+    const snap = {
+      ...baseSnap,
+      tools: [{ name: "delegate_linear", description: "linear", inputSchema: {} }],
+    };
+    const out = await breakdownFromSnapshot(snap, fetchInfo);
+    const delegates = out.categories.find((c) => c.label === "Delegate agents");
+    expect(delegates?.items?.[0].skills).toBeUndefined();
+  });
+
+  it("attaches Organizer-tier subskills to each delegate with a known domain", async () => {
+    const fetchInfo = vi.fn().mockResolvedValue(modelInfo);
+    const snap = {
+      ...baseSnap,
+      context: { ...baseSnap.context, memberRoles: ["1012751663322382438"] },
+      tools: [
+        { name: "delegate_linear", description: "linear", inputSchema: {} },
+        { name: "delegate_github", description: "github", inputSchema: {} },
+      ],
+    };
+    const out = await breakdownFromSnapshot(snap, fetchInfo);
+    const delegates = out.categories.find((c) => c.label === "Delegate agents");
+    const linear = delegates?.items?.find((i) => i.name === "delegate_linear");
+    const github = delegates?.items?.find((i) => i.name === "delegate_github");
+    expect(linear?.skills?.length).toBeGreaterThan(0);
+    expect(github?.skills?.length).toBeGreaterThan(0);
+    for (const s of linear?.skills ?? []) {
+      expect(s.estimatedTokens).toBeGreaterThan(0);
+    }
+  });
+
+  it("returns undefined skills for a delegate whose domain is not registered", async () => {
+    const fetchInfo = vi.fn().mockResolvedValue(modelInfo);
+    const snap = {
+      ...baseSnap,
+      context: { ...baseSnap.context, memberRoles: ["1012751663322382438"] },
+      tools: [{ name: "delegate_unknown", description: "?", inputSchema: {} }],
+    };
+    const out = await breakdownFromSnapshot(snap, fetchInfo);
+    const delegates = out.categories.find((c) => c.label === "Delegate agents");
+    expect(delegates?.items?.[0].skills).toBeUndefined();
   });
 });

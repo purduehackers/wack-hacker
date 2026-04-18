@@ -33,14 +33,17 @@ function describeSchema(schema: unknown): unknown {
  * Build a snapshot of the exact context the orchestrator assembled for this
  * turn. Uses the same code paths the orchestrator runs with (getOrchestratorTools,
  * AgentContext.buildInstructions) so the snapshot is the orchestrator's view.
+ *
+ * `totalUsage` is the conversation-wide cumulative spend; the workflow accumulates
+ * each turn's usage into a running total before calling this.
  */
 export function buildContextSnapshot(args: {
   agentCtx: AgentContext;
   messages: ChatMessage[];
-  lastTurnUsage: TurnUsage;
+  totalUsage: TurnUsage;
   turnCount: number;
 }): ContextSnapshot {
-  const { agentCtx, messages, lastTurnUsage, turnCount } = args;
+  const { agentCtx, messages, totalUsage, turnCount } = args;
 
   // The tracker is write-only here — the snapshot only needs the tool set's
   // shape, not its accumulated counts.
@@ -61,7 +64,7 @@ export function buildContextSnapshot(args: {
     systemPrompt: agentCtx.buildInstructions(SYSTEM_PROMPT),
     tools,
     messages,
-    lastTurnUsage,
+    totalUsage,
     turnCount,
     updatedAt: new Date().toISOString(),
   };

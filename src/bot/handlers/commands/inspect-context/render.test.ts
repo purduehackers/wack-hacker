@@ -16,84 +16,226 @@ const baseBreakdown: ContextBreakdown = {
   modelInfo,
   categories: [
     { label: "System prompt", chars: 4000, estimatedTokens: 1000 },
-    { label: "Tools", chars: 12_000, estimatedTokens: 3000 },
+    {
+      label: "Tools",
+      chars: 2000,
+      estimatedTokens: 500,
+      items: [
+        { name: "currentTime", estimatedTokens: 80 },
+        { name: "documentation", estimatedTokens: 150 },
+        { name: "scheduleTask", estimatedTokens: 120 },
+        { name: "listScheduledTasks", estimatedTokens: 70 },
+        { name: "cancelTask", estimatedTokens: 80 },
+      ],
+    },
+    {
+      label: "Delegate agents",
+      chars: 3500,
+      estimatedTokens: 875,
+      items: [
+        {
+          name: "delegate_linear",
+          estimatedTokens: 180,
+          skills: [
+            { name: "issues", estimatedTokens: 430 },
+            { name: "projects", estimatedTokens: 280 },
+            { name: "comments", estimatedTokens: 150 },
+          ],
+        },
+        {
+          name: "delegate_github",
+          estimatedTokens: 150,
+          skills: [
+            { name: "pulls", estimatedTokens: 380 },
+            { name: "issues", estimatedTokens: 320 },
+          ],
+        },
+        { name: "delegate_discord", estimatedTokens: 140, skills: [] },
+        { name: "delegate_notion", estimatedTokens: 150 },
+      ],
+    },
     { label: "Conversation history", chars: 24_000, estimatedTokens: 6000 },
   ],
-  estimatedInputTokens: 10_000,
-  lastTurnUsage: {
-    inputTokens: 12_482,
-    outputTokens: 543,
-    totalTokens: 13_025,
+  estimatedInputTokens: 8375,
+  totalUsage: {
+    inputTokens: 142_830,
+    outputTokens: 8340,
+    totalTokens: 151_170,
     subagentTokens: 0,
-    toolCallCount: 2,
-    stepCount: 3,
+    toolCallCount: 32,
+    stepCount: 41,
   },
   turnCount: 14,
   messageCount: 38,
-  lastTurnCostUsd: { input: 0.037446, output: 0.008145, total: 0.045591 },
+  totalCostUsd: { input: 0.42849, output: 0.1251, total: 0.55359 },
 };
 
-describe("renderContextReport", () => {
+function joinPages(breakdown: ContextBreakdown): string {
+  return renderContextReport(breakdown).join("\n");
+}
+
+describe("renderContextReport — summary section", () => {
   it("includes the model id and exchange count header", () => {
-    const out = renderContextReport(baseBreakdown);
+    const out = joinPages(baseBreakdown);
     expect(out).toContain("after 14 exchanges");
     expect(out).toContain("anthropic/claude-sonnet-4.6");
     expect(out).toContain("claude-sonnet-4-6-20260301");
   });
 
   it("singularizes the exchange count when there is only one", () => {
-    const out = renderContextReport({ ...baseBreakdown, turnCount: 1 });
+    const out = joinPages({ ...baseBreakdown, turnCount: 1 });
     expect(out).toContain("after 1 exchange");
     expect(out).not.toContain("1 exchanges");
   });
 
-  it("shows context window and per-category lines", () => {
-    const out = renderContextReport(baseBreakdown);
+  it("shows context window and per-category lines with item counts", () => {
+    const out = joinPages(baseBreakdown);
     expect(out).toContain("200,000 tokens");
     expect(out).toContain("**System prompt**");
     expect(out).toContain("**Tools**");
+    expect(out).toContain("5 entries");
+    expect(out).toContain("**Delegate agents**");
+    expect(out).toContain("4 entries");
     expect(out).toContain("**Conversation history**");
     expect(out).toContain("38 messages");
   });
 
-  it("includes last-turn usage and cost when available", () => {
-    const out = renderContextReport(baseBreakdown);
-    expect(out).toContain("input 12,482");
-    expect(out).toContain("output 543");
-    expect(out).toContain("tools 2");
-    expect(out).toContain("steps 3");
-    expect(out).toContain("$0.0456");
+  it("includes conversation totals and cumulative cost", () => {
+    const out = joinPages(baseBreakdown);
+    expect(out).toContain("`Conversation totals` (sum of every turn, from API):");
+    expect(out).toContain("142,830 input");
+    expect(out).toContain("8,340 output");
+    expect(out).toContain("32 tool calls");
+    expect(out).toContain("41 steps");
+    expect(out).toContain("`Conversation cost`:");
+    expect(out).toContain("$0.5536");
+  });
+
+  it("calls out the breakdown as a next-turn projection", () => {
+    const out = joinPages(baseBreakdown);
+    expect(out).toContain(
+      "Estimated next-request breakdown — what the model would see on the next turn (chars/4):",
+    );
   });
 
   it("omits cost line when modelInfo is null", () => {
-    const out = renderContextReport({
+    const out = joinPages({
       ...baseBreakdown,
       modelInfo: null,
-      lastTurnCostUsd: undefined,
+      totalCostUsd: undefined,
     });
     expect(out).toContain("unknown (model not in models.dev catalog)");
-    expect(out).not.toContain("Last turn cost");
+    expect(out).not.toContain("Conversation cost");
   });
 
   it("omits free-space line when modelInfo is null", () => {
-    const out = renderContextReport({
+    const out = joinPages({
       ...baseBreakdown,
       modelInfo: null,
-      lastTurnCostUsd: undefined,
+      totalCostUsd: undefined,
     });
     expect(out).not.toContain("Free space");
   });
 
   it("includes subagent tokens when present", () => {
-    const out = renderContextReport({
+    const out = joinPages({
       ...baseBreakdown,
-      lastTurnUsage: { ...baseBreakdown.lastTurnUsage, subagentTokens: 800 },
+      totalUsage: { ...baseBreakdown.totalUsage, subagentTokens: 4830 },
     });
-    expect(out).toContain("subagents 800");
+    expect(out).toContain("4,830 subagent");
   });
 
-  it("stays under Discord's 2000 char limit", () => {
-    const out = renderContextReport(baseBreakdown);
-    expect(out.length).toBeLessThan(2000);
+  it("keeps every message under Discord's 2000 char limit", () => {
+    const messages = renderContextReport(baseBreakdown);
+    for (const messageBody of messages) {
+      expect(messageBody.length).toBeLessThan(2000);
+    }
+  });
+});
+
+describe("renderContextReport — details section", () => {
+  it("emits a flat tools section with per-tool tokens", () => {
+    const out = joinPages(baseBreakdown);
+    expect(out).toContain("**Tools** (5)");
+    expect(out).toContain("`currentTime`: ~80 tokens");
+  });
+
+  it("nests loadable skills under each delegate with per-skill tokens", () => {
+    const out = joinPages(baseBreakdown);
+    expect(out).toContain("**Delegate agents** (4, with loadable subskills)");
+    expect(out).toContain("`delegate_linear`: ~180 tokens");
+    expect(out).toContain("Loadable skills (3):");
+    expect(out).toContain("• `issues`: ~430 tokens");
+    expect(out).toContain("• `projects`: ~280 tokens");
+  });
+
+  it("singularizes the loadable-skill heading when a delegate has one skill", () => {
+    const out = joinPages({
+      ...baseBreakdown,
+      categories: baseBreakdown.categories.map((c) =>
+        c.label === "Delegate agents"
+          ? {
+              ...c,
+              items: [
+                {
+                  name: "delegate_x",
+                  estimatedTokens: 100,
+                  skills: [{ name: "only-one", estimatedTokens: 50 }],
+                },
+              ],
+            }
+          : c,
+      ),
+    });
+    expect(out).toContain("Loadable skill (1):");
+    expect(out).not.toContain("Loadable skills (1):");
+  });
+
+  it("shows 'none' when a delegate has no loadable skills for the role", () => {
+    const out = joinPages(baseBreakdown);
+    // delegate_discord has skills: [] in the fixture
+    expect(out).toContain("`delegate_discord`: ~140 tokens");
+    expect(out).toContain("Loadable skills: none");
+  });
+
+  it("shows 'none' when a delegate has no skills field at all", () => {
+    const out = joinPages(baseBreakdown);
+    // delegate_notion has no `skills` field in the fixture
+    expect(out).toContain("`delegate_notion`: ~150 tokens");
+  });
+
+  it("omits delegate detail when no delegate items exist", () => {
+    const out = joinPages({
+      ...baseBreakdown,
+      categories: baseBreakdown.categories.map((c) =>
+        c.label === "Delegate agents" ? { ...c, items: [] } : c,
+      ),
+    });
+    expect(out).not.toContain("with loadable subskills");
+  });
+});
+
+describe("renderContextReport — pagination", () => {
+  it("returns multiple pages when content exceeds a single message", () => {
+    // Build a delegate with a huge skill list to force paging.
+    const fatSkills = Array.from({ length: 200 }, (_, i) => ({
+      name: `skill_${i}`,
+      estimatedTokens: 50,
+    }));
+    const messages = renderContextReport({
+      ...baseBreakdown,
+      categories: baseBreakdown.categories.map((c) =>
+        c.label === "Delegate agents"
+          ? {
+              ...c,
+              items: [{ name: "delegate_huge", estimatedTokens: 100, skills: fatSkills }],
+            }
+          : c,
+      ),
+    });
+    expect(messages.length).toBeGreaterThan(1);
+    for (const messageBody of messages) {
+      expect(messageBody.length).toBeLessThan(2000);
+    }
   });
 });

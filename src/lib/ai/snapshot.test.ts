@@ -66,7 +66,7 @@ describe("buildContextSnapshot", () => {
     const snap = buildContextSnapshot({
       agentCtx: ctx,
       messages: [{ role: "user", content: "hi" }],
-      lastTurnUsage: usage,
+      totalUsage: usage,
       turnCount: 1,
     });
     expect(snap.model).toMatch(/^anthropic\//);
@@ -77,7 +77,7 @@ describe("buildContextSnapshot", () => {
     const snap = buildContextSnapshot({
       agentCtx: ctx,
       messages: [{ role: "user", content: "hi" }],
-      lastTurnUsage: usage,
+      totalUsage: usage,
       turnCount: 1,
     });
     expect(snap.systemPrompt).toContain("<execution_context>");
@@ -91,7 +91,7 @@ describe("buildContextSnapshot", () => {
     const snap = buildContextSnapshot({
       agentCtx: ctx,
       messages: [],
-      lastTurnUsage: usage,
+      totalUsage: usage,
       turnCount: 1,
     });
     const names = snap.tools.map((t) => t.name);
@@ -109,7 +109,7 @@ describe("buildContextSnapshot", () => {
     const snap = buildContextSnapshot({
       agentCtx: ctx,
       messages: [],
-      lastTurnUsage: usage,
+      totalUsage: usage,
       turnCount: 1,
     });
     const currentTime = snap.tools.find((t) => t.name === "currentTime");
@@ -130,11 +130,11 @@ describe("buildContextSnapshot", () => {
     const snap = buildContextSnapshot({
       agentCtx: ctx,
       messages: msgs,
-      lastTurnUsage: usage,
+      totalUsage: usage,
       turnCount: 7,
     });
     expect(snap.messages).toEqual(msgs);
-    expect(snap.lastTurnUsage).toEqual(usage);
+    expect(snap.totalUsage).toEqual(usage);
     expect(snap.turnCount).toBe(7);
   });
 
@@ -143,7 +143,7 @@ describe("buildContextSnapshot", () => {
     const snap = buildContextSnapshot({
       agentCtx: ctx,
       messages: [],
-      lastTurnUsage: usage,
+      totalUsage: usage,
       turnCount: 1,
     });
     expect(snap.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
@@ -156,7 +156,7 @@ describe("buildContextSnapshot: tool schema serialization", () => {
     const snap = buildContextSnapshot({
       agentCtx: ctx,
       messages: [],
-      lastTurnUsage: usage,
+      totalUsage: usage,
       turnCount: 1,
     });
     const raw = snap.tools.find((t) => t.name === "rawJsonSchemaTool");
@@ -171,7 +171,7 @@ describe("buildContextSnapshot: tool schema serialization", () => {
     const snap = buildContextSnapshot({
       agentCtx: ctx,
       messages: [],
-      lastTurnUsage: usage,
+      totalUsage: usage,
       turnCount: 1,
     });
     const opaque = snap.tools.find((t) => t.name === "toolWithoutSchema");
@@ -183,7 +183,7 @@ describe("buildContextSnapshot: tool schema serialization", () => {
     const snap = buildContextSnapshot({
       agentCtx: ctx,
       messages: [],
-      lastTurnUsage: usage,
+      totalUsage: usage,
       turnCount: 1,
     });
     const malformed = snap.tools.find((t) => t.name === "malformedZodLike");

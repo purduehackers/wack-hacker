@@ -25,7 +25,7 @@ const sampleSnapshot: ContextSnapshot = {
     { role: "user", content: "hi" },
     { role: "assistant", content: "hello" },
   ],
-  lastTurnUsage: {
+  totalUsage: {
     inputTokens: 100,
     outputTokens: 50,
     totalTokens: 150,

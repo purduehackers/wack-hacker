@@ -85,6 +85,19 @@ export interface CategoryBreakdown {
   label: string;
   chars: number;
   estimatedTokens: number;
+  /** Optional per-item breakdown (e.g. per-tool token counts within the Tools category). */
+  items?: CategoryItem[];
+}
+
+export interface CategoryItem {
+  name: string;
+  estimatedTokens: number;
+  /**
+   * Loadable subskills nested under this item — populated only for delegate
+   * agents (subskills load on demand inside the subagent via `load_skill`).
+   * Not counted toward the orchestrator's input total.
+   */
+  skills?: CategoryItem[];
 }
 
 export interface ContextBreakdown {
@@ -93,11 +106,12 @@ export interface ContextBreakdown {
   categories: CategoryBreakdown[];
   /** Sum of per-category estimatedTokens (chars/4). */
   estimatedInputTokens: number;
-  lastTurnUsage: TurnUsage;
+  /** Cumulative API usage across every turn this conversation has run. */
+  totalUsage: TurnUsage;
   turnCount: number;
   messageCount: number;
-  /** Dollar cost of the last turn, computed when modelInfo + usage are both present. */
-  lastTurnCostUsd?: { input: number; output: number; total: number };
+  /** Cumulative dollar cost across every turn — modelInfo + usage required. */
+  totalCostUsd?: { input: number; output: number; total: number };
 }
 
 export interface SubagentSpec {

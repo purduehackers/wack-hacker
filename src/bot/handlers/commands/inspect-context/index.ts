@@ -44,6 +44,17 @@ export const inspectContext = defineCommand({
     }
 
     const breakdown = await breakdownFromSnapshot(snap);
-    await respond(ctx, renderContextReport(breakdown));
+    const messages = renderContextReport(breakdown);
+    const [firstMessage, ...followUpMessages] = messages;
+    await respond(ctx, firstMessage);
+    for (const followUp of followUpMessages) {
+      // Followups must set the EPHEMERAL flag explicitly (64); it doesn't
+      // inherit from the deferred reply.
+      await ctx.discord.interactions.followUp(
+        ctx.interaction.application_id,
+        ctx.interaction.token,
+        { content: followUp, flags: 64 },
+      );
+    }
   },
 });

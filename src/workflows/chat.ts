@@ -11,6 +11,7 @@ import { ConversationStore } from "@/bot/store";
 import { AgentContext } from "@/lib/ai/context";
 import { buildContextSnapshot } from "@/lib/ai/snapshot";
 import { streamTurn } from "@/lib/ai/streaming";
+import { addTurnUsage, emptyTurnUsage } from "@/lib/ai/turn-usage";
 import { countMetric } from "@/lib/metrics";
 
 import type { ChatHookEvent, ChatPayload } from "./types";
@@ -80,13 +81,13 @@ async function cleanupConversation(channelId: string, threadId: string | undefin
 function captureSnapshot(
   serializedContext: SerializedAgentContext,
   messages: ChatMessage[],
-  usage: TurnUsage,
+  totalUsage: TurnUsage,
   turnCount: number,
 ): ContextSnapshot {
   return buildContextSnapshot({
     agentCtx: AgentContext.fromJSON(serializedContext),
     messages,
-    lastTurnUsage: usage,
+    totalUsage,
     turnCount,
   });
 }
@@ -111,9 +112,10 @@ export async function chatWorkflow(payload: ChatPayload) {
   const first = await runTurn(channelId, messages, context);
   messages.push({ role: "assistant", content: first.text });
   capHistory(messages);
-  await persistSnapshot(channelId, threadId, captureSnapshot(context, messages, first.usage, 1));
 
   let turnCount = 1;
+  let totalUsage = addTurnUsage(emptyTurnUsage(), first.usage);
+  await persistSnapshot(channelId, threadId, captureSnapshot(context, messages, totalUsage, 1));
 
   using hook = createHook<ChatHookEvent>({ token: workflowRunId });
 
@@ -142,10 +144,11 @@ export async function chatWorkflow(payload: ChatPayload) {
     messages.push({ role: "assistant", content: turn.text });
     capHistory(messages);
     turnCount += 1;
+    totalUsage = addTurnUsage(totalUsage, turn.usage);
     await persistSnapshot(
       channelId,
       threadId,
-      captureSnapshot(turnContext, messages, turn.usage, turnCount),
+      captureSnapshot(turnContext, messages, totalUsage, turnCount),
     );
   }
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { TurnUsageTracker } from "./turn-usage.ts";
+import { TurnUsageTracker, addTurnUsage, emptyTurnUsage } from "./turn-usage.ts";
 
 describe("TurnUsageTracker", () => {
   it("starts empty", () => {
@@ -68,5 +68,91 @@ describe("TurnUsageTracker", () => {
     expect(usage.outputTokens).toBeUndefined();
     expect(usage.toolCallCount).toBe(1);
     expect(usage.stepCount).toBe(0);
+  });
+});
+
+describe("emptyTurnUsage", () => {
+  it("returns a zeroed accumulator", () => {
+    expect(emptyTurnUsage()).toEqual({
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      subagentTokens: 0,
+      toolCallCount: 0,
+      stepCount: 0,
+    });
+  });
+});
+
+describe("addTurnUsage", () => {
+  it("sums every field across two turns", () => {
+    const a = {
+      inputTokens: 100,
+      outputTokens: 50,
+      totalTokens: 150,
+      subagentTokens: 20,
+      toolCallCount: 2,
+      stepCount: 3,
+    };
+    const b = {
+      inputTokens: 200,
+      outputTokens: 80,
+      totalTokens: 280,
+      subagentTokens: 10,
+      toolCallCount: 1,
+      stepCount: 2,
+    };
+    expect(addTurnUsage(a, b)).toEqual({
+      inputTokens: 300,
+      outputTokens: 130,
+      totalTokens: 430,
+      subagentTokens: 30,
+      toolCallCount: 3,
+      stepCount: 5,
+    });
+  });
+
+  it("treats missing input/output/total tokens as zero", () => {
+    const a = emptyTurnUsage();
+    const b = {
+      inputTokens: undefined,
+      outputTokens: undefined,
+      totalTokens: undefined,
+      subagentTokens: 5,
+      toolCallCount: 1,
+      stepCount: 1,
+    };
+    const out = addTurnUsage(a, b);
+    expect(out.inputTokens).toBe(0);
+    expect(out.outputTokens).toBe(0);
+    expect(out.totalTokens).toBe(0);
+    expect(out.subagentTokens).toBe(5);
+  });
+
+  it("treats undefined values on the LHS as zero", () => {
+    const a = {
+      inputTokens: undefined,
+      outputTokens: undefined,
+      totalTokens: undefined,
+      subagentTokens: 0,
+      toolCallCount: 0,
+      stepCount: 0,
+    };
+    const b = {
+      inputTokens: 10,
+      outputTokens: 5,
+      totalTokens: 15,
+      subagentTokens: 2,
+      toolCallCount: 1,
+      stepCount: 1,
+    };
+    expect(addTurnUsage(a, b)).toEqual({
+      inputTokens: 10,
+      outputTokens: 5,
+      totalTokens: 15,
+      subagentTokens: 2,
+      toolCallCount: 1,
+      stepCount: 1,
+    });
   });
 });

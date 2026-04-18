@@ -62,3 +62,28 @@ export class TurnUsageTracker {
     };
   }
 }
+
+/** Initial zero-state for a cumulative TurnUsage accumulator. */
+export function emptyTurnUsage(): TurnUsage {
+  return {
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+    subagentTokens: 0,
+    toolCallCount: 0,
+    stepCount: 0,
+  };
+}
+
+/** Sum two TurnUsage values into a fresh object — used by the workflow to
+ * accumulate per-turn usage into a conversation-wide running total. */
+export function addTurnUsage(total: TurnUsage, turn: TurnUsage): TurnUsage {
+  return {
+    inputTokens: (total.inputTokens ?? 0) + (turn.inputTokens ?? 0),
+    outputTokens: (total.outputTokens ?? 0) + (turn.outputTokens ?? 0),
+    totalTokens: (total.totalTokens ?? 0) + (turn.totalTokens ?? 0),
+    subagentTokens: total.subagentTokens + turn.subagentTokens,
+    toolCallCount: total.toolCallCount + turn.toolCallCount,
+    stepCount: total.stepCount + turn.stepCount,
+  };
+}
