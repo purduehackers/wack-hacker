@@ -40,6 +40,7 @@ export const env = createEnv({
     SENTRY_ORG: z.string(),
     SENTRY_DSN: z.string().optional(),
     HCB_ORG_SLUG: z.string(),
+    SERPAPI_API_KEY: z.string(),
   },
   extends: [vercel()],
   runtimeEnv: process.env,
