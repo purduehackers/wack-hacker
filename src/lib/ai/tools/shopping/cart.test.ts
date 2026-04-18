@@ -10,8 +10,10 @@ const state: { cart: Cart } = {
 
 vi.mock("@/lib/shopping/cart", () => ({
   getCart: vi.fn(async () => state.cart),
-  saveCart: vi.fn(async (cart: Cart) => {
-    state.cart = { ...cart, updatedAt: "mocked" };
+  updateCart: vi.fn(async <T>(mutate: (cart: Cart) => T | Promise<T>): Promise<T> => {
+    const result = await mutate(state.cart);
+    state.cart = { ...state.cart, updatedAt: "mocked" };
+    return result;
   }),
   clearCart: vi.fn(async () => {
     state.cart = { items: [], updatedAt: "" };
@@ -20,12 +22,11 @@ vi.mock("@/lib/shopping/cart", () => ({
 
 const { add_to_cart, remove_from_cart, update_quantity, view_cart, clear_cart } =
   await import("./cart.ts");
-const { getCart, saveCart, clearCart: clearCartMock } = await import("@/lib/shopping/cart");
+const { updateCart, clearCart: clearCartMock } = await import("@/lib/shopping/cart");
 
 function resetState() {
   state.cart = { items: [], updatedAt: "" };
-  vi.mocked(getCart).mockClear();
-  vi.mocked(saveCart).mockClear();
+  vi.mocked(updateCart).mockClear();
   vi.mocked(clearCartMock).mockClear();
 }
 
@@ -65,6 +66,11 @@ describe("add_to_cart", () => {
     const parsed = JSON.parse(raw as string);
     expect(parsed.subtotal).toBe(17);
   });
+
+  it("routes mutations through updateCart for locking", async () => {
+    await add_to_cart.execute!({ asin: "B01", title: "W", price: 1, quantity: 1 }, toolOpts);
+    expect(vi.mocked(updateCart)).toHaveBeenCalledOnce();
+  });
 });
 
 describe("remove_from_cart", () => {
@@ -86,7 +92,6 @@ describe("remove_from_cart", () => {
     const raw = await remove_from_cart.execute!({ asin: "missing" }, toolOpts);
     const parsed = JSON.parse(raw as string);
     expect(parsed.error).toContain("missing");
-    expect(vi.mocked(saveCart)).not.toHaveBeenCalled();
   });
 });
 
