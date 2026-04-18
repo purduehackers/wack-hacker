@@ -4,6 +4,7 @@ import { getVercelOidcTokenSync } from "@vercel/functions/oidc";
 import { ActivityType, Client, Events, GatewayIntentBits, Partials } from "discord.js";
 import { log } from "evlog";
 import { Hono } from "hono";
+import { once } from "node:events";
 import { monotonicFactory } from "ulid";
 
 import type { Packet } from "@/lib/protocol/types";
@@ -19,6 +20,17 @@ const LEADER_KEY = "gateway:leader";
 const LEASE_TTL_MS = 15_000;
 const POLL_INTERVAL_MS = 5_000;
 const HANDOFF_WAIT_MS = 8_000;
+const READY_TIMEOUT_MS = 30_000;
+
+// Atomic compare-and-delete: only removes the lease if we still own it.
+// Without this, a get-then-del race could delete a new leader's key after
+// we read our own ID but before the del reached Redis.
+const RELEASE_LEASE_SCRIPT = `
+if redis.call("get", KEYS[1]) == ARGV[1] then
+  return redis.call("del", KEYS[1])
+else
+  return 0
+end`;
 
 const ulid = monotonicFactory();
 
@@ -32,7 +44,35 @@ async function relay(packet: Packet, oidcToken: string): Promise<void> {
 
 type Publish = (packet: Packet) => Promise<void>;
 
-async function runGatewayListener(client: Client): Promise<void> {
+async function releaseLease(redis: Redis, listenerId: string): Promise<void> {
+  try {
+    const released = await redis.eval<[string], number>(
+      RELEASE_LEASE_SCRIPT,
+      [LEADER_KEY],
+      [listenerId],
+    );
+    if (released === 1) {
+      log.info("gateway", `released lease for ${listenerId}`);
+    }
+  } catch (err) {
+    log.error("gateway", `lease release failed: ${String(err)}`);
+  }
+}
+
+async function destroyClient(client: Client, listenerId: string): Promise<void> {
+  log.info("gateway", `destroying client ${listenerId}`);
+  try {
+    await client.destroy();
+  } catch (err) {
+    log.error("gateway", `destroy failed: ${String(err)}`);
+  }
+}
+
+// Acquires the leader lease and logs the client in. Resolves once Discord
+// emits ClientReady; returns a `hold` promise that runs the 10-minute lease
+// renewal loop and tears everything down when it completes or loses leadership.
+// Throws (and cleans up) if login or the ready handshake fails.
+async function startGatewayListener(client: Client): Promise<{ hold: Promise<void> }> {
   const redis = Redis.fromEnv();
   const listenerId = `gw_${ulid()}`;
   const abort = new AbortController();
@@ -69,43 +109,53 @@ async function runGatewayListener(client: Client): Promise<void> {
   }, POLL_INTERVAL_MS);
 
   try {
+    // Combine the lease-loss abort with a hard timeout so the route can't
+    // hang indefinitely if login resolves but ClientReady never fires.
+    // Either signal rejects the once() wait and triggers cleanup below.
+    const readySignal = AbortSignal.any([abort.signal, AbortSignal.timeout(READY_TIMEOUT_MS)]);
+    const ready = once(client, Events.ClientReady, { signal: readySignal });
     await client.login(env.DISCORD_BOT_TOKEN);
-    log.info("gateway", `login() resolved for ${listenerId}`);
-
-    await new Promise<void>((resolve) => {
-      const timer = setTimeout(() => {
-        log.info("gateway", `hold elapsed for ${listenerId}`);
-        resolve();
-      }, HOLD_MS);
-      abort.signal.addEventListener(
-        "abort",
-        () => {
-          clearTimeout(timer);
-          resolve();
-        },
-        { once: true },
-      );
-    });
+    await ready;
+    log.info("gateway", `ready for ${listenerId}`);
   } catch (err) {
-    log.error("gateway", `login/hold failed: ${String(err)}`);
-  } finally {
+    log.error("gateway", `login/ready failed: ${String(err)}`);
     clearInterval(poll);
-    log.info("gateway", `destroying client ${listenerId}`);
-    try {
-      await client.destroy();
-    } catch (err) {
-      log.error("gateway", `destroy failed: ${String(err)}`);
-    }
-    try {
-      const current = await redis.get<string>(LEADER_KEY);
-      if (current === listenerId) {
-        await redis.del(LEADER_KEY);
-        log.info("gateway", `released lease for ${listenerId}`);
-      }
-    } catch (err) {
-      log.error("gateway", `lease release failed: ${String(err)}`);
-    }
+    await destroyClient(client, listenerId);
+    await releaseLease(redis, listenerId);
+    throw err;
   }
+
+  const hold = (async () => {
+    try {
+      // Fast-path: abort fired between ready and hold-executor running.
+      // AbortSignal listeners added post-abort never fire, so teardown
+      // would otherwise wait out the full HOLD_MS.
+      if (abort.signal.aborted) {
+        log.info("gateway", `hold skipped, already aborted for ${listenerId}`);
+        return;
+      }
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(() => {
+          log.info("gateway", `hold elapsed for ${listenerId}`);
+          resolve();
+        }, HOLD_MS);
+        abort.signal.addEventListener(
+          "abort",
+          () => {
+            clearTimeout(timer);
+            resolve();
+          },
+          { once: true },
+        );
+      });
+    } finally {
+      clearInterval(poll);
+      await destroyClient(client, listenerId);
+      await releaseLease(redis, listenerId);
+    }
+  })();
+
+  return { hold };
 }
 
 const route = new Hono();
@@ -264,7 +314,7 @@ function bindGuildHandlers(client: Client, publish: Publish): void {
   });
 }
 
-route.get("/gateway", (c) => {
+route.get("/gateway", async (c) => {
   let oidcToken: string;
   try {
     oidcToken = getVercelOidcTokenSync();
@@ -320,10 +370,14 @@ route.get("/gateway", (c) => {
   bindMessageHandlers(client, publish);
   bindGuildHandlers(client, publish);
 
-  const loginAndHold = runGatewayListener(client);
+  let hold: Promise<void>;
+  try {
+    ({ hold } = await startGatewayListener(client));
+  } catch {
+    return c.json({ error: "gateway failed to become ready" }, 500);
+  }
 
-  waitUntil(loginAndHold);
-
+  waitUntil(hold);
   return c.json({ message: "ok" });
 });
 
