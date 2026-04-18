@@ -57,12 +57,14 @@ async function persistSnapshot(
   }
 }
 
-async function emitMetric(name: string) {
+async function logEvent(message: string, metric?: string) {
   "use step";
-  // Sentry's metrics buffer flushes via setTimeout, which isn't allowed in the
-  // workflow runtime. Wrap every workflow-body metric call in a step so the
-  // flush schedules in regular Node.
-  countMetric(name);
+  // Both evlog's console output (via Sentry's patched console) and Sentry's
+  // metrics buffer can schedule setTimeout during capture, which isn't allowed
+  // in the workflow runtime. Route every workflow-body log + metric through a
+  // step so any downstream flush schedules in regular Node.
+  log.info("workflow", message);
+  if (metric) countMetric(metric);
 }
 
 async function cleanupConversation(channelId: string, threadId: string | undefined) {
@@ -91,8 +93,7 @@ export async function chatWorkflow(payload: ChatPayload) {
   const { channelId, threadId, content, context } = payload;
   const { workflowRunId } = getWorkflowMetadata();
 
-  log.info("workflow", `Chat started: ${workflowRunId}`);
-  await emitMetric("workflow.chat.started");
+  await logEvent(`Chat started: ${workflowRunId}`, "workflow.chat.started");
 
   // Stable for the lifetime of this workflow — the conversation is pinned to
   // one Discord channel/thread and the pre-conversation message lead-in does
@@ -118,14 +119,15 @@ export async function chatWorkflow(payload: ChatPayload) {
 
   for await (const event of hook) {
     if (event.type === "done") {
-      log.info("workflow", `Chat ended by user: ${workflowRunId}`);
-      await emitMetric("workflow.chat.ended");
+      await logEvent(`Chat ended by user: ${workflowRunId}`, "workflow.chat.ended");
       break;
     }
     if (!event.content) continue;
 
-    log.info("workflow", `Follow-up from ${event.context.username}: ${workflowRunId}`);
-    await emitMetric("workflow.chat.followup");
+    await logEvent(
+      `Follow-up from ${event.context.username}: ${workflowRunId}`,
+      "workflow.chat.followup",
+    );
 
     // Merge the fresh per-turn identity from the event with the stable
     // location + lead-in pinned at workflow start.
@@ -150,5 +152,5 @@ export async function chatWorkflow(payload: ChatPayload) {
   }
 
   await cleanupConversation(channelId, threadId);
-  log.info("workflow", `Chat cleaned up: ${workflowRunId}`);
+  await logEvent(`Chat cleaned up: ${workflowRunId}`);
 }
