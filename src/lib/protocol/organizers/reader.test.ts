@@ -1,63 +1,99 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { mockGet } = vi.hoisted(() => ({ mockGet: vi.fn() }));
-
-vi.mock("@vercel/edge-config", () => ({
-  createClient: () => ({ get: mockGet }),
+const { mockGet, mockGetAll } = vi.hoisted(() => ({
+  mockGet: vi.fn(),
+  mockGetAll: vi.fn(),
 }));
 
-import { getOrganizers, findOrganizer, resolveOrganizerId } from "./reader.ts";
+vi.mock("@vercel/edge-config", () => ({
+  createClient: () => ({ get: mockGet, getAll: mockGetAll }),
+}));
 
-const SAMPLE = {
-  "100000000000000001": {
-    name: "Ray",
-    slug: "ray",
-    aliases: ["rayhan"],
-    linear: "lin-uuid-ray",
-    notion: "notion-uuid-ray",
-    github: "rayhanadev",
-  },
-  "100000000000000002": {
-    name: "Alice",
-    slug: "alice",
-    sentry: "sentry-id-alice",
-  },
+import { findOrganizer, getOrganizer, getOrganizers, resolveOrganizerId } from "./reader.ts";
+
+const RAY = {
+  name: "Ray",
+  slug: "ray",
+  aliases: ["rayhan"],
+  linear: "lin-uuid-ray",
+  notion: "notion-uuid-ray",
+  github: "rayhanadev",
+};
+
+const ALICE = {
+  name: "Alice",
+  slug: "alice",
+  sentry: "sentry-id-alice",
+};
+
+const ALL_STORED = {
+  "organizer:100000000000000001": RAY,
+  "organizer:100000000000000002": ALICE,
+  // Unrelated keys (e.g. hack-night's `version`) must be ignored.
+  version: "6.17",
+};
+
+const SAMPLE_MAP = {
+  "100000000000000001": RAY,
+  "100000000000000002": ALICE,
 };
 
 beforeEach(() => {
   mockGet.mockReset();
+  mockGetAll.mockReset();
 });
 
 describe("getOrganizers", () => {
-  it("returns {} when the key is missing", async () => {
+  it("returns {} when Edge Config has no items", async () => {
+    mockGetAll.mockResolvedValue(undefined);
+    expect(await getOrganizers()).toEqual({});
+  });
+
+  it("ignores keys that don't match the organizer prefix", async () => {
+    mockGetAll.mockResolvedValue({ version: "6.17", random: { foo: 1 } });
+    expect(await getOrganizers()).toEqual({});
+  });
+
+  it("drops entries that fail schema validation but keeps valid ones", async () => {
+    mockGetAll.mockResolvedValue({
+      "organizer:100000000000000001": RAY,
+      "organizer:broken": { name: 42 },
+    });
+    expect(await getOrganizers()).toEqual({ "100000000000000001": RAY });
+  });
+
+  it("returns the parsed map stripped of the prefix", async () => {
+    mockGetAll.mockResolvedValue(ALL_STORED);
+    expect(await getOrganizers()).toEqual(SAMPLE_MAP);
+  });
+});
+
+describe("getOrganizer", () => {
+  it("returns null when the key is missing", async () => {
     mockGet.mockResolvedValue(undefined);
-    expect(await getOrganizers()).toEqual({});
+    expect(await getOrganizer("100000000000000001")).toBeNull();
   });
 
-  it("returns {} when the key is null", async () => {
-    mockGet.mockResolvedValue(null);
-    expect(await getOrganizers()).toEqual({});
+  it("returns null when the stored value fails schema validation", async () => {
+    mockGet.mockResolvedValue({ name: 42 });
+    expect(await getOrganizer("100000000000000001")).toBeNull();
   });
 
-  it("returns {} when the stored value fails schema validation", async () => {
-    mockGet.mockResolvedValue({ "123": { name: 42 } });
-    expect(await getOrganizers()).toEqual({});
-  });
-
-  it("returns the parsed map when valid", async () => {
-    mockGet.mockResolvedValue(SAMPLE);
-    expect(await getOrganizers()).toEqual(SAMPLE);
+  it("returns the parsed organizer when valid", async () => {
+    mockGet.mockResolvedValue(RAY);
+    expect(await getOrganizer("100000000000000001")).toEqual(RAY);
+    expect(mockGet).toHaveBeenCalledWith("organizer:100000000000000001");
   });
 });
 
 describe("findOrganizer", () => {
   beforeEach(() => {
-    mockGet.mockResolvedValue(SAMPLE);
+    mockGetAll.mockResolvedValue(ALL_STORED);
   });
 
-  it("matches by Discord ID (map key)", async () => {
+  it("matches by Discord ID", async () => {
     expect(await findOrganizer("100000000000000001")).toEqual({
-      ...SAMPLE["100000000000000001"],
+      ...RAY,
       discord: "100000000000000001",
     });
   });
@@ -94,7 +130,7 @@ describe("findOrganizer", () => {
 
 describe("resolveOrganizerId", () => {
   beforeEach(() => {
-    mockGet.mockResolvedValue(SAMPLE);
+    mockGetAll.mockResolvedValue(ALL_STORED);
   });
 
   it("returns the Discord ID when platform is 'discord'", async () => {

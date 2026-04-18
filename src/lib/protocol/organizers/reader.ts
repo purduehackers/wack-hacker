@@ -3,9 +3,9 @@ import { z } from "zod";
 
 import { env } from "@/env";
 
-import type { OrganizerEntry, OrganizerPlatform, OrganizersMap } from "./types.ts";
+import type { Organizer, OrganizerEntry, OrganizerPlatform, OrganizersMap } from "./types.ts";
 
-import { ORGANIZERS_KEY } from "./constants.ts";
+import { ORGANIZER_KEY_PREFIX } from "./constants.ts";
 
 export const organizerSchema = z.object({
   name: z.string(),
@@ -27,11 +27,24 @@ function getClient(): ReturnType<typeof createClient> {
   return client;
 }
 
+/** Read every `organizer:*` key and build a Discord-ID → Organizer map. */
 export async function getOrganizers(): Promise<OrganizersMap> {
-  const raw = await getClient().get(ORGANIZERS_KEY);
-  if (raw === undefined || raw === null) return {};
-  const parsed = organizersSchema.safeParse(raw);
-  return parsed.success ? parsed.data : {};
+  const all = (await getClient().getAll()) ?? {};
+  const result: OrganizersMap = {};
+  for (const [key, value] of Object.entries(all)) {
+    if (!key.startsWith(ORGANIZER_KEY_PREFIX)) continue;
+    const parsed = organizerSchema.safeParse(value);
+    if (parsed.success) result[key.slice(ORGANIZER_KEY_PREFIX.length)] = parsed.data;
+  }
+  return result;
+}
+
+/** Read a single organizer by Discord ID — used by the writer for read-modify-write. */
+export async function getOrganizer(discordId: string): Promise<Organizer | null> {
+  const raw = await getClient().get(`${ORGANIZER_KEY_PREFIX}${discordId}`);
+  if (raw === undefined || raw === null) return null;
+  const parsed = organizerSchema.safeParse(raw);
+  return parsed.success ? parsed.data : null;
 }
 
 export async function findOrganizer(query: string): Promise<OrganizerEntry | null> {

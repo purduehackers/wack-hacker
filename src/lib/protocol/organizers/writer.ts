@@ -2,17 +2,22 @@ import { Vercel } from "@vercel/sdk";
 
 import { env } from "@/env";
 
-import type { Organizer, OrganizerPatch, OrganizersMap, UpsertResult } from "./types.ts";
+import type { Organizer, OrganizerPatch, UpsertResult } from "./types.ts";
 
-import { EDITABLE_PLATFORMS, ORGANIZERS_KEY } from "./constants.ts";
-import { getOrganizers } from "./reader.ts";
+import { EDITABLE_PLATFORMS, ORGANIZER_KEY_PREFIX } from "./constants.ts";
+import { getOrganizer } from "./reader.ts";
 
+/**
+ * Atomic per-user upsert. Reads the single `organizer:<discordId>` key, merges
+ * the patch, writes just that key back. Concurrent writes for *different* users
+ * never collide; same-user concurrent writes remain a theoretical last-writer-wins
+ * race but are negligible in practice (one person submitting the modal twice).
+ */
 export async function upsertOrganizer(
   discordId: string,
   patch: OrganizerPatch,
 ): Promise<UpsertResult> {
-  const current = await getOrganizers();
-  const existing = current[discordId];
+  const existing = await getOrganizer(discordId);
 
   const next: Organizer = {
     name: patch.name ?? existing?.name ?? discordId,
@@ -28,10 +33,8 @@ export async function upsertOrganizer(
     const existingVal = existing?.[platform];
 
     if (patchVal === undefined) {
-      // Omitted — preserve whatever was there.
       if (existingVal !== undefined) next[platform] = existingVal;
     } else if (patchVal === "") {
-      // Explicit clear — drop the field, record it only if it used to exist.
       if (existingVal !== undefined) cleared.push(platform);
     } else {
       next[platform] = patchVal;
@@ -39,13 +42,11 @@ export async function upsertOrganizer(
     }
   }
 
-  const merged: OrganizersMap = { ...current, [discordId]: next };
-
   const vercel = new Vercel({ bearerToken: env.VERCEL_API_TOKEN });
   await vercel.edgeConfig.patchEdgeConfigItems({
     edgeConfigId: env.VERCEL_EDGE_CONFIG_ID,
     requestBody: {
-      items: [{ operation: "upsert", key: ORGANIZERS_KEY, value: merged }],
+      items: [{ operation: "upsert", key: `${ORGANIZER_KEY_PREFIX}${discordId}`, value: next }],
     },
   });
 

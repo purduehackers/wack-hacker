@@ -15,9 +15,6 @@ export default defineConfig({
     exclude: ["src/**/*.integration.test.ts"],
     env: {
       SKIP_ENV_VALIDATION: "1",
-      // Non-empty so the organizers reader exercises its Edge Config path
-      // under test; actual reads are mocked at the `@vercel/edge-config` boundary.
-      EDGE_CONFIG: "https://edge-config.vercel.com/test?token=test",
     },
     coverage: {
       provider: "istanbul",
