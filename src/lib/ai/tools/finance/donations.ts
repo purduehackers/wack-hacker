@@ -1,7 +1,10 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { hcbGet, hcbOrgSlug, hcbPaginate } from "./client.ts";
+import { hcbGet, hcbOrgSlug, hcbPaginate, paginationQuery } from "./client.ts";
+import { paginationInputShape } from "./constants.ts";
+
+const SETTLED_DONATION_STATUSES = new Set(["deposited", "succeeded", "in_transit"]);
 
 interface HcbDonation {
   id?: string;
@@ -32,15 +35,12 @@ function projectDonation(d: HcbDonation) {
 export const list_donations = tool({
   description:
     "List donations to the Hack Club Bank org — donor name (or '(anonymous)'), amount_cents, status, recurring flag, and message.",
-  inputSchema: z.object({
-    per_page: z.number().int().min(1).max(100).optional().describe("Page size (default 50)"),
-    page: z.number().int().min(1).optional().describe("Page number (default 1)"),
-  }),
-  execute: async ({ per_page, page }) => {
-    const data = await hcbGet<HcbDonation[]>(`/organizations/${hcbOrgSlug()}/donations`, {
-      per_page: per_page ?? 50,
-      page: page ?? 1,
-    });
+  inputSchema: z.object(paginationInputShape),
+  execute: async (input) => {
+    const data = await hcbGet<HcbDonation[]>(
+      `/organizations/${hcbOrgSlug()}/donations`,
+      paginationQuery(input),
+    );
     return JSON.stringify(data.map(projectDonation));
   },
 });
@@ -66,13 +66,7 @@ export const donation_totals = tool({
     let oneTime = 0;
     let count = 0;
     for (const d of all) {
-      if (
-        d.status &&
-        d.status !== "deposited" &&
-        d.status !== "succeeded" &&
-        d.status !== "in_transit"
-      )
-        continue;
+      if (d.status && !SETTLED_DONATION_STATUSES.has(d.status)) continue;
       if (sinceTs !== undefined && d.created_at && Date.parse(d.created_at) < sinceTs) continue;
       if (untilTs !== undefined && d.created_at && Date.parse(d.created_at) > untilTs) continue;
       total += d.amount_cents ?? 0;

@@ -1,7 +1,8 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { hcbGet, hcbOrgSlug, hcbPaginate, hcbTxnUrl } from "./client.ts";
+import { hcbGet, hcbOrgSlug, hcbPaginate, hcbTxnUrl, paginationQuery } from "./client.ts";
+import { paginationInputShape } from "./constants.ts";
 
 interface HcbReceiptsSummary {
   count?: number;
@@ -35,15 +36,12 @@ function projectTransaction(t: HcbTransaction) {
 export const list_transactions = tool({
   description:
     "List recent HCB transactions for Purdue Hackers — newest first. Each transaction includes id, date, amount_cents (negative = outflow), memo, type, pending flag, and a receipts summary {count, missing}. Receipt files themselves are NOT available via HCB's API; only whether a receipt is attached.",
-  inputSchema: z.object({
-    per_page: z.number().int().min(1).max(100).optional().describe("Page size (default 50)"),
-    page: z.number().int().min(1).optional().describe("Page number (default 1)"),
-  }),
-  execute: async ({ per_page, page }) => {
-    const data = await hcbGet<HcbTransaction[]>(`/organizations/${hcbOrgSlug()}/transactions`, {
-      per_page: per_page ?? 50,
-      page: page ?? 1,
-    });
+  inputSchema: z.object(paginationInputShape),
+  execute: async (input) => {
+    const data = await hcbGet<HcbTransaction[]>(
+      `/organizations/${hcbOrgSlug()}/transactions`,
+      paginationQuery(input),
+    );
     return JSON.stringify(data.map(projectTransaction));
   },
 });

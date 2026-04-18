@@ -3,6 +3,14 @@ import { env } from "../../../../env.ts";
 const BASE_URL = "https://hcb.hackclub.com/api/v3";
 const REQUEST_TIMEOUT_MS = 15_000;
 
+/** Resolve pagination input to a query-string object with defaults. */
+export function paginationQuery(input: { per_page?: number; page?: number }): {
+  per_page: number;
+  page: number;
+} {
+  return { per_page: input.per_page ?? 50, page: input.page ?? 1 };
+}
+
 export function hcbOrgSlug(): string {
   return env.HCB_ORG_SLUG;
 }

@@ -1,7 +1,8 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { hcbGet, hcbOrgSlug, hcbPaginate, hcbTxnUrl } from "./client.ts";
+import { hcbGet, hcbOrgSlug, hcbPaginate, hcbTxnUrl, paginationQuery } from "./client.ts";
+import { paginationInputShape } from "./constants.ts";
 
 interface HcbCardCharge {
   id?: string;
@@ -41,28 +42,29 @@ export const list_card_charges = tool({
       .string()
       .optional()
       .describe("Substring match (case-insensitive) against cardholder name or email"),
-    per_page: z.number().int().min(1).max(100).optional().describe("Page size (default 50)"),
-    page: z.number().int().min(1).optional().describe("Page number (default 1)"),
+    ...paginationInputShape,
   }),
-  execute: async ({ user, per_page, page }) => {
+  execute: async ({ user, ...pagination }) => {
+    const path = `/organizations/${hcbOrgSlug()}/card_charges`;
     if (user) {
       const all = await hcbPaginate<HcbCardCharge>(
-        `/organizations/${hcbOrgSlug()}/card_charges`,
+        path,
         {},
-        { maxItems: 500, maxPages: 10, perPage: 100 },
+        {
+          maxItems: 500,
+          maxPages: 10,
+          perPage: 100,
+        },
       );
       const needle = user.toLowerCase();
-      const filtered = all.filter(
+      const matches = all.filter(
         (c) =>
           (c.user?.name ?? "").toLowerCase().includes(needle) ||
           (c.user?.email ?? "").toLowerCase().includes(needle),
       );
-      return JSON.stringify(filtered.map(projectCharge));
+      return JSON.stringify(matches.map(projectCharge));
     }
-    const data = await hcbGet<HcbCardCharge[]>(`/organizations/${hcbOrgSlug()}/card_charges`, {
-      per_page: per_page ?? 50,
-      page: page ?? 1,
-    });
+    const data = await hcbGet<HcbCardCharge[]>(path, paginationQuery(pagination));
     return JSON.stringify(data.map(projectCharge));
   },
 });
