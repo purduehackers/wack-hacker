@@ -11,7 +11,7 @@ import { z } from "zod";
 
 import { countMetric, recordDistribution } from "@/lib/metrics";
 
-import type { SubagentSpec } from "./types.ts";
+import type { SubagentSpec, SubagentMetrics } from "./types.ts";
 
 import { SUBAGENT_MODEL, SUBAGENT_PREAMBLE, UserRole } from "./constants.ts";
 import {
@@ -20,7 +20,6 @@ import {
   computeActiveTools,
   filterAdmin,
 } from "./skills/index.ts";
-import { TurnUsageTracker } from "./turn-usage.ts";
 
 export type { SubagentSpec } from "./types.ts";
 
@@ -37,11 +36,7 @@ export type { SubagentSpec } from "./types.ts";
  * message history stays lean (full execution details live in the UI stream,
  * not in the model context).
  */
-export function createDelegationTool(
-  spec: SubagentSpec,
-  role: UserRole,
-  tracker: TurnUsageTracker,
-) {
+export function createDelegationTool(spec: SubagentSpec, role: UserRole, metrics: SubagentMetrics) {
   return tool({
     description: spec.description,
     inputSchema: z.object({
@@ -90,13 +85,18 @@ export function createDelegationTool(
       }
 
       const [usage, steps] = await Promise.all([result.totalUsage, result.steps]);
-      const tokens = usage.totalTokens ?? 0;
-      const toolCalls = steps.reduce((sum, s) => sum + s.toolCalls.length, 0);
-      tracker.addSubagent({ tokens, toolCalls });
+      const tokensBefore = metrics.totalTokens;
+      const toolCallsBefore = metrics.toolCallCount;
+      metrics.totalTokens += usage.totalTokens ?? 0;
+      metrics.toolCallCount += steps.reduce((sum, s) => sum + s.toolCalls.length, 0);
 
       countMetric("ai.subagent.completed", { domain: spec.name });
-      recordDistribution("ai.subagent.tokens", tokens, { domain: spec.name });
-      recordDistribution("ai.subagent.tool_calls", toolCalls, { domain: spec.name });
+      recordDistribution("ai.subagent.tokens", metrics.totalTokens - tokensBefore, {
+        domain: spec.name,
+      });
+      recordDistribution("ai.subagent.tool_calls", metrics.toolCallCount - toolCallsBefore, {
+        domain: spec.name,
+      });
     },
     toModelOutput: ({ output }) => {
       const message = output as UIMessage | undefined;

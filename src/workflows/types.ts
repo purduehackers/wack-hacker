@@ -3,8 +3,6 @@ import type { TaskMeta } from "@/lib/tasks/types";
 
 export interface ChatPayload {
   channelId: string;
-  /** Thread ID when the conversation lives in a thread; used for context-snapshot keying. */
-  threadId?: string;
   content: string;
   context: SerializedAgentContext;
 }
