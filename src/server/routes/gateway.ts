@@ -95,7 +95,9 @@ async function startGatewayListener(client: Client): Promise<{ hold: Promise<voi
   }, POLL_INTERVAL_MS);
 
   try {
-    const ready = once(client, Events.ClientReady);
+    // Pass abort.signal so the ready wait rejects if the lease poll detects
+    // we lost leadership during login/handshake.
+    const ready = once(client, Events.ClientReady, { signal: abort.signal });
     await client.login(env.DISCORD_BOT_TOKEN);
     await ready;
     log.info("gateway", `ready for ${listenerId}`);
@@ -109,6 +111,13 @@ async function startGatewayListener(client: Client): Promise<{ hold: Promise<voi
 
   const hold = (async () => {
     try {
+      // Fast-path: abort fired between ready and hold-executor running.
+      // AbortSignal listeners added post-abort never fire, so teardown
+      // would otherwise wait out the full HOLD_MS.
+      if (abort.signal.aborted) {
+        log.info("gateway", `hold skipped, already aborted for ${listenerId}`);
+        return;
+      }
       await new Promise<void>((resolve) => {
         const timer = setTimeout(() => {
           log.info("gateway", `hold elapsed for ${listenerId}`);
