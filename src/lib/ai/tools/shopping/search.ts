@@ -3,9 +3,8 @@ import { z } from "zod";
 
 import { searchAmazon } from "./client.ts";
 
-const MAX_RESULTS_DEFAULT = 5;
-const MAX_RESULTS_UPPER = 10;
-const MAX_RESULTS_LOWER = 1;
+const DEFAULT_MAX_RESULTS = 5;
+const HARD_MAX_RESULTS = 10;
 
 export const search_products = tool({
   description:
@@ -18,14 +17,13 @@ export const search_products = tool({
     max_results: z
       .number()
       .int()
-      .min(MAX_RESULTS_LOWER)
-      .max(MAX_RESULTS_UPPER)
-      .optional()
-      .describe(`Max products to return (1-${MAX_RESULTS_UPPER}, default ${MAX_RESULTS_DEFAULT})`),
+      .min(1)
+      .max(HARD_MAX_RESULTS)
+      .default(DEFAULT_MAX_RESULTS)
+      .describe(`Max products to return (1-${HARD_MAX_RESULTS})`),
   }),
   execute: async ({ query, max_results }) => {
-    const limit = max_results ?? MAX_RESULTS_DEFAULT;
-    const products = await searchAmazon(query, limit);
+    const products = await searchAmazon(query, max_results);
     return JSON.stringify({ query, count: products.length, products });
   },
 });

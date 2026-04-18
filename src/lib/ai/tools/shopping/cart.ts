@@ -28,23 +28,22 @@ export const add_to_cart = tool({
       .number()
       .int()
       .min(1)
-      .optional()
-      .describe("Quantity to add (default 1). Merges with existing quantity for this ASIN."),
+      .default(1)
+      .describe("Quantity to add. Merges with existing quantity for this ASIN."),
   }),
   execute: async ({ asin, title, price, quantity }) => {
-    const qty = quantity ?? 1;
     const cart = await getCart();
-    const existing = cart.items.find((item) => item.asin === asin);
+    const existing = cart.items.find((entry) => entry.asin === asin);
     if (existing) {
-      existing.quantity += qty;
+      existing.quantity += quantity;
       existing.title = title;
       existing.price = price;
     } else {
-      cart.items.push({ asin, title, price, quantity: qty });
+      cart.items.push({ asin, title, price, quantity });
     }
     await saveCart(cart);
     return JSON.stringify({
-      added: { asin, title, price, quantity: qty },
+      added: { asin, title, price, quantity },
       ...summarize(cart.items),
     });
   },
@@ -57,7 +56,7 @@ export const remove_from_cart = tool({
   }),
   execute: async ({ asin }) => {
     const cart = await getCart();
-    const index = cart.items.findIndex((item) => item.asin === asin);
+    const index = cart.items.findIndex((entry) => entry.asin === asin);
     if (index === -1) return JSON.stringify({ error: `ASIN ${asin} not in cart` });
     const [removed] = cart.items.splice(index, 1);
     await saveCart(cart);
@@ -74,13 +73,10 @@ export const update_quantity = tool({
   }),
   execute: async ({ asin, quantity }) => {
     const cart = await getCart();
-    const item = cart.items.find((entry) => entry.asin === asin);
-    if (!item) return JSON.stringify({ error: `ASIN ${asin} not in cart` });
-    if (quantity === 0) {
-      cart.items = cart.items.filter((entry) => entry.asin !== asin);
-    } else {
-      item.quantity = quantity;
-    }
+    const index = cart.items.findIndex((entry) => entry.asin === asin);
+    if (index === -1) return JSON.stringify({ error: `ASIN ${asin} not in cart` });
+    if (quantity === 0) cart.items.splice(index, 1);
+    else cart.items[index].quantity = quantity;
     await saveCart(cart);
     return JSON.stringify({ asin, quantity, ...summarize(cart.items) });
   },
@@ -94,20 +90,19 @@ export const view_cart = tool({
       .number()
       .int()
       .min(1)
-      .optional()
+      .default(1)
       .describe(`Page number (1-indexed). Page size is ${PAGE_SIZE} items.`),
   }),
   execute: async ({ page }) => {
     const cart = await getCart();
     const totalPages = Math.max(1, Math.ceil(cart.items.length / PAGE_SIZE));
-    const current = Math.min(page ?? 1, totalPages);
+    const current = Math.min(page, totalPages);
     const start = (current - 1) * PAGE_SIZE;
-    const items = cart.items.slice(start, start + PAGE_SIZE);
     return JSON.stringify({
       page: current,
       total_pages: totalPages,
       page_size: PAGE_SIZE,
-      items,
+      items: cart.items.slice(start, start + PAGE_SIZE),
       ...summarize(cart.items),
       updated_at: cart.updatedAt,
     });

@@ -33,7 +33,10 @@ describe("add_to_cart", () => {
   beforeEach(resetState);
 
   it("adds a new item with default quantity 1", async () => {
-    const raw = await add_to_cart.execute!({ asin: "B01", title: "Widget", price: 10 }, toolOpts);
+    const raw = await add_to_cart.execute!(
+      { asin: "B01", title: "Widget", price: 10, quantity: 1 },
+      toolOpts,
+    );
     const parsed = JSON.parse(raw as string);
     expect(parsed.added.quantity).toBe(1);
     expect(parsed.subtotal).toBe(10);
@@ -117,7 +120,7 @@ describe("view_cart", () => {
   it("returns items and totals with a default page", async () => {
     state.cart.items.push({ asin: "B01", title: "A", price: 2, quantity: 3 });
     state.cart.updatedAt = "2026-01-01T00:00:00Z";
-    const raw = await view_cart.execute!({}, toolOpts);
+    const raw = await view_cart.execute!({ page: 1 }, toolOpts);
     const parsed = JSON.parse(raw as string);
     expect(parsed.page).toBe(1);
     expect(parsed.total_pages).toBe(1);
