@@ -26,13 +26,13 @@ vi.mock("@/lib/db", async () => {
 const { getDb } = await import("@/lib/db");
 const { getCart, addCartItem, removeCartItem, setCartItemQuantity, clearCart } =
   await import("./cart.ts");
-const { cartItems } = await import("./schemas/cart-items.ts");
-const { carts } = await import("./schemas/carts.ts");
+const { shoppingCartItems } = await import("@/lib/db/schemas/shopping-cart-items");
+const { shoppingCarts } = await import("@/lib/db/schemas/shopping-carts");
 
 beforeEach(async () => {
   const db = getDb();
-  await db.delete(cartItems);
-  await db.delete(carts);
+  await db.delete(shoppingCartItems);
+  await db.delete(shoppingCarts);
 });
 
 describe("getCart", () => {

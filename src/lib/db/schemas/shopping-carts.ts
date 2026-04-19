@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { sqliteTable, text } from "drizzle-orm/sqlite-core";
 
-export const carts = sqliteTable("shopping_carts", {
+export const shoppingCarts = sqliteTable("shopping_carts", {
   id: text("id").primaryKey(),
   createdAt: text("created_at")
     .notNull()

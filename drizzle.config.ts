@@ -7,7 +7,7 @@ if (!databaseUrl) {
 
 export default defineConfig({
   dialect: "turso",
-  schema: ["./src/lib/shopping/schemas/*.ts", "./src/lib/shopping/relations.ts"],
+  schema: "./src/lib/db/schemas/*.ts",
   out: "./drizzle",
   dbCredentials: {
     url: databaseUrl,
