@@ -93,7 +93,7 @@ describe("POST /api/webhooks/resend", () => {
     expect(applyMock).toHaveBeenCalledTimes(1);
   });
 
-  it("returns 200 and logs when applyResendEvent throws", async () => {
+  it("returns 500 when applyResendEvent throws so Resend retries", async () => {
     verifyMock.mockReturnValueOnce({
       type: "email.opened",
       created_at: "t",
@@ -101,7 +101,23 @@ describe("POST /api/webhooks/resend", () => {
     });
     applyMock.mockRejectedValueOnce(new Error("notion down"));
     const res = await POST(req("{}", { ...GOOD_HEADERS, "svix-id": "err-1" }));
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(500);
     expect(applyMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("releases the dedup claim on failure so the next delivery retries", async () => {
+    verifyMock.mockReturnValue({
+      type: "email.opened",
+      created_at: "t",
+      data: { email_id: "re_4" },
+    });
+    applyMock.mockRejectedValueOnce(new Error("notion down"));
+    const r1 = await POST(req("{}", { ...GOOD_HEADERS, "svix-id": "retry-1" }));
+    expect(r1.status).toBe(500);
+
+    applyMock.mockResolvedValueOnce(undefined);
+    const r2 = await POST(req("{}", { ...GOOD_HEADERS, "svix-id": "retry-1" }));
+    expect(r2.status).toBe(200);
+    expect(applyMock).toHaveBeenCalledTimes(2);
   });
 });

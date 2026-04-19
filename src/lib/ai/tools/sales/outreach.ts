@@ -2,7 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { env } from "../../../../env.ts";
-import { notion, resend } from "./client.ts";
+import { companiesDataSourceId, contactsDataSourceId, notion, resend } from "./client.ts";
 
 async function writeLastOutreach(pageId: string, emailId: string, sentAt: string): Promise<void> {
   await notion.pages.update({
@@ -15,11 +15,23 @@ async function writeLastOutreach(pageId: string, emailId: string, sentAt: string
   });
 }
 
-async function ensureMayContact(pageId: string): Promise<string | null> {
+/**
+ * Verify the Notion page belongs to the expected CRM data source and honors
+ * the Do Not Contact flag. Returns null when the send can proceed, or an
+ * error string describing why it was blocked.
+ */
+async function preflight(pageId: string, target: "company" | "contact"): Promise<string | null> {
   const page = await notion.pages.retrieve({ page_id: pageId });
   if (!("properties" in page)) return "Could not read target page properties";
-  const props = page.properties as Record<string, { type?: string; [key: string]: unknown }>;
 
+  const expectedId = target === "company" ? companiesDataSourceId() : contactsDataSourceId();
+  const parent = (page as { parent?: { data_source_id?: string; database_id?: string } }).parent;
+  const actualId = parent?.data_source_id ?? parent?.database_id;
+  if (actualId && actualId !== expectedId) {
+    return `Page ${pageId} parent data source does not match target="${target}"`;
+  }
+
+  const props = page.properties as Record<string, { type?: string; [key: string]: unknown }>;
   const doNotContact = props["Do Not Contact"];
   if (doNotContact?.type === "checkbox" && doNotContact.checkbox) {
     return "Do Not Contact is set on this page";
@@ -38,7 +50,7 @@ export const send_outreach_email = tool({
     html: z.string().optional().describe("Optional HTML body"),
   }),
   execute: async ({ target, page_id, to, subject, text, html }) => {
-    const block = await ensureMayContact(page_id);
+    const block = await preflight(page_id, target);
     if (block) return JSON.stringify({ error: block });
 
     const result = await resend().emails.send({

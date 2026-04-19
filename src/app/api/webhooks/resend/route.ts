@@ -25,12 +25,16 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   const svixId = headers["svix-id"];
-  if (svixId) {
-    const store = new ConversationStore();
-    if (!(await store.dedup(`resend:${svixId}`))) {
-      log.info("resend", `Dedup hit for ${svixId}, skipping`);
-      return new Response("ok", { status: 200 });
-    }
+  const store = svixId ? new ConversationStore() : null;
+  const dedupKey = svixId ? `resend:${svixId}` : null;
+
+  // Claim the dedup slot. If the claim is already held, a prior delivery of
+  // this event was successfully applied and we short-circuit. The claim is
+  // only retained when processing succeeds — failures release it so Resend's
+  // retry can attempt processing again.
+  if (store && dedupKey && !(await store.dedup(dedupKey))) {
+    log.info("resend", `Dedup hit for ${svixId}, skipping`);
+    return new Response("ok", { status: 200 });
   }
 
   try {
@@ -40,6 +44,8 @@ export async function POST(req: Request): Promise<Response> {
       "resend",
       `Failed to apply event: ${err instanceof Error ? err.message : String(err)}`,
     );
+    if (store && dedupKey) await store.releaseDedup(dedupKey);
+    return new Response("failed to apply event", { status: 500 });
   }
 
   return new Response("ok", { status: 200 });

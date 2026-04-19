@@ -16,6 +16,8 @@ const updateMock = vi.fn();
 vi.mock("./client.ts", () => ({
   notion: { pages: { retrieve: retrieveMock, update: updateMock } },
   resend: () => ({ emails: { send: sendMock } }),
+  companiesDataSourceId: () => "companies-ds",
+  contactsDataSourceId: () => "contacts-ds",
 }));
 
 const { send_outreach_email, get_email_status } = await import("./outreach.ts");
@@ -24,10 +26,11 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe("send_outreach_email", () => {
+describe("send_outreach_email: preflight", () => {
   it("blocks when Do Not Contact is checked", async () => {
     retrieveMock.mockResolvedValueOnce({
       id: "p-1",
+      parent: { data_source_id: "companies-ds" },
       properties: { "Do Not Contact": { type: "checkbox", checkbox: true } },
     });
     const raw = await send_outreach_email.execute!(
@@ -45,9 +48,33 @@ describe("send_outreach_email", () => {
     expect(sendMock).not.toHaveBeenCalled();
   });
 
+  it("blocks when the page belongs to a different data source than target", async () => {
+    retrieveMock.mockResolvedValueOnce({
+      id: "p-wrong",
+      parent: { data_source_id: "contacts-ds" },
+      properties: { "Do Not Contact": { type: "checkbox", checkbox: false } },
+    });
+    const raw = await send_outreach_email.execute!(
+      {
+        target: "company",
+        page_id: "p-wrong",
+        to: "alice@acme.com",
+        subject: "hi",
+        text: "hey",
+      },
+      toolOpts,
+    );
+    const parsed = JSON.parse(raw as string);
+    expect(parsed.error).toMatch(/parent data source does not match/i);
+    expect(sendMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("send_outreach_email: send path", () => {
   it("sends via Resend and writes Last Outreach ID", async () => {
     retrieveMock.mockResolvedValueOnce({
       id: "p-2",
+      parent: { data_source_id: "contacts-ds" },
       properties: { "Do Not Contact": { type: "checkbox", checkbox: false } },
     });
     sendMock.mockResolvedValueOnce({ data: { id: "re_abc" }, error: null });
@@ -88,6 +115,7 @@ describe("send_outreach_email", () => {
   it("surfaces Resend errors without writing Notion", async () => {
     retrieveMock.mockResolvedValueOnce({
       id: "p-3",
+      parent: { data_source_id: "companies-ds" },
       properties: { "Do Not Contact": { type: "checkbox", checkbox: false } },
     });
     sendMock.mockResolvedValueOnce({
