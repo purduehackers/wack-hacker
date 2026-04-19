@@ -1,14 +1,6 @@
-export interface CartItem {
-  asin: string;
-  title: string;
-  price: number;
-  quantity: number;
-}
+import type { cartItems } from "./schemas/cart-items.ts";
 
-export interface Cart {
-  items: CartItem[];
-  updatedAt: string;
-}
+export type CartItem = typeof cartItems.$inferSelect;
 
 export interface ProductResult {
   asin: string;
@@ -17,4 +9,21 @@ export interface ProductResult {
   rating: number | null;
   image: string | null;
   url: string;
+}
+
+export interface CartSnapshot {
+  items: CartItem[];
+  updatedAt: string | null;
+}
+
+export interface CartMutation {
+  item: CartItem;
+  snapshot: CartSnapshot;
+}
+
+export interface NewCartItemInput {
+  asin: string;
+  title: string;
+  price: number;
+  quantity: number;
 }
