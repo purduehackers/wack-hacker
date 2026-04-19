@@ -1,6 +1,6 @@
-import type { cartItems } from "./schemas/cart-items.ts";
+import type { shoppingCartItems } from "../db/schemas/shopping-cart-items.ts";
 
-export type CartItem = typeof cartItems.$inferSelect;
+export type CartItem = typeof shoppingCartItems.$inferSelect;
 
 export interface PublicCartItem {
   asin: string;

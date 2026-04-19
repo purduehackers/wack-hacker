@@ -1,9 +1,9 @@
 import { sql } from "drizzle-orm";
 import { integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
-import { carts } from "./carts.ts";
+import { shoppingCarts } from "./shopping-carts.ts";
 
-export const cartItems = sqliteTable(
+export const shoppingCartItems = sqliteTable(
   "shopping_cart_items",
   {
     id: text("id")
@@ -11,7 +11,7 @@ export const cartItems = sqliteTable(
       .$defaultFn(() => crypto.randomUUID()),
     cartId: text("cart_id")
       .notNull()
-      .references(() => carts.id, { onDelete: "cascade" }),
+      .references(() => shoppingCarts.id, { onDelete: "cascade" }),
     asin: text("asin").notNull(),
     title: text("title").notNull(),
     price: real("price").notNull(),
