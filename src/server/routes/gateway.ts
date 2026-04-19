@@ -213,6 +213,12 @@ function bindMessageHandlers(client: Client, publish: Publish): void {
             height: a.height ?? undefined,
           })),
         })),
+        reference: message.reference?.messageId
+          ? {
+              messageId: message.reference.messageId,
+              channelId: message.reference.channelId ?? undefined,
+            }
+          : undefined,
       },
     });
   });

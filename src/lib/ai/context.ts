@@ -34,6 +34,7 @@ export class AgentContext {
   readonly memberRoles?: string[];
   readonly recentMessages?: RecentMessage[];
   readonly recentMessagesFromThread?: boolean;
+  readonly referencedContext?: RecentMessage[];
 
   private constructor(data: SerializedAgentContext) {
     this.userId = data.userId;
@@ -46,6 +47,7 @@ export class AgentContext {
     this.memberRoles = data.memberRoles;
     this.recentMessages = data.recentMessages;
     this.recentMessagesFromThread = data.recentMessagesFromThread;
+    this.referencedContext = data.referencedContext;
   }
 
   /** Resolve Discord role IDs to an application-level access tier. */
@@ -63,16 +65,20 @@ export class AgentContext {
    *   The packet still describes the parent channel; pass the new thread and
    *   the context's `channel`/`thread` fields will reflect the thread instead.
    * - `recentMessages`: attach the recent-messages block fetched separately.
+   * - `referencedContext`: attach a second lead-in block built from the
+   *   referenced message (when the mention was a reply) plus messages
+   *   preceding it.
    */
   static fromPacket(
     packet: MessageCreatePacketType,
     options?: {
       threadOverride?: { id: string; name: string };
       recentMessages?: RecentMessage[];
+      referencedContext?: RecentMessage[];
     },
   ): AgentContext {
     const { data } = packet;
-    const { threadOverride, recentMessages } = options ?? {};
+    const { threadOverride, recentMessages, referencedContext } = options ?? {};
 
     let channel: ChannelInfo;
     let thread: ThreadInfo | undefined;
@@ -126,6 +132,7 @@ export class AgentContext {
       memberRoles: data.memberRoles ?? undefined,
       recentMessages,
       recentMessagesFromThread,
+      referencedContext,
     });
   }
 
@@ -145,6 +152,7 @@ export class AgentContext {
       memberRoles: this.memberRoles,
       recentMessages: this.recentMessages,
       recentMessagesFromThread: this.recentMessagesFromThread,
+      referencedContext: this.referencedContext,
     };
   }
 
@@ -174,6 +182,12 @@ export class AgentContext {
           .join("\n")}\n</${msgTag}>`
       : "";
 
+    const refMsgs = this.referencedContext?.length
+      ? `\n\n<referenced_message_context>\nThe user's mention was a reply to a message in this channel. Below is that message (last) plus the messages that immediately preceded it, in chronological order.\n${this.referencedContext
+          .map((m) => `[${m.timestamp}] ${m.author}: ${m.content}`)
+          .join("\n")}\n</referenced_message_context>`
+      : "";
+
     return `<execution_context>
 \`\`\`yaml
 user:
@@ -185,6 +199,6 @@ channel:
   id: "${this.channel.id}"${thread}
 date: "${this.date}"
 \`\`\`
-</execution_context>${recentMsgs}`;
+</execution_context>${recentMsgs}${refMsgs}`;
   }
 }
