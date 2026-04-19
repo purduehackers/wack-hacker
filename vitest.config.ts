@@ -37,6 +37,7 @@ export default defineConfig({
         "src/lib/ai/skills/generated/**",
         "src/lib/ai/tools/**",
         "src/lib/evlog.ts",
+        "src/lib/db/**",
       ],
       reporter: ["text", "lcov"],
       thresholds: {

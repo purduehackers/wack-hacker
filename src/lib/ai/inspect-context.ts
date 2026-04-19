@@ -12,6 +12,7 @@ import { SKILL_MANIFEST as GITHUB_SUBSKILLS } from "./skills/generated/domains/g
 import { SKILL_MANIFEST as LINEAR_SUBSKILLS } from "./skills/generated/domains/linear.ts";
 import { SKILL_MANIFEST as NOTION_SUBSKILLS } from "./skills/generated/domains/notion.ts";
 import { SKILL_MANIFEST as SENTRY_SUBSKILLS } from "./skills/generated/domains/sentry.ts";
+import { SKILL_MANIFEST as SHOPPING_SUBSKILLS } from "./skills/generated/domains/shopping.ts";
 import { SkillRegistry } from "./skills/registry.ts";
 
 export type { CategoryBreakdown, CategoryItem, ContextBreakdown, ModelInfo } from "./types.ts";
@@ -31,6 +32,7 @@ const DOMAIN_SUBSKILLS: Record<string, Record<string, SkillBundle>> = {
   notion: NOTION_SUBSKILLS,
   figma: FIGMA_SUBSKILLS,
   sentry: SENTRY_SUBSKILLS,
+  shopping: SHOPPING_SUBSKILLS,
 };
 
 function loadableSkillsFor(domain: string, role: UserRole): CategoryItem[] | undefined {
