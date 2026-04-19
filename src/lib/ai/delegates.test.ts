@@ -51,6 +51,15 @@ vi.mock("@/lib/ai/skills/generated/manifest", () => ({
       mode: "delegate",
       instructions: "Sentry instructions.",
     },
+    finance: {
+      name: "finance",
+      description: "Finance delegate",
+      criteria: "when asked about finances",
+      toolNames: [],
+      minRole: UserRole.Organizer,
+      mode: "delegate",
+      instructions: "Finance instructions.",
+    },
     // notion is intentionally omitted — buildDelegationTools should tolerate missing domains.
   },
 }));
@@ -62,6 +71,7 @@ vi.mock("@/lib/ai/skills/generated/domains/discord", () => ({ SKILL_MANIFEST: {}
 vi.mock("@/lib/ai/skills/generated/domains/figma", () => ({ SKILL_MANIFEST: {} }));
 vi.mock("@/lib/ai/skills/generated/domains/notion", () => ({ SKILL_MANIFEST: {} }));
 vi.mock("@/lib/ai/skills/generated/domains/sentry", () => ({ SKILL_MANIFEST: {} }));
+vi.mock("@/lib/ai/skills/generated/domains/finance", () => ({ SKILL_MANIFEST: {} }));
 
 // Stub the heavy tool index modules so env-backed SDK clients don't initialize.
 vi.mock("@/lib/ai/tools/linear", () => ({}));
@@ -70,6 +80,7 @@ vi.mock("@/lib/ai/tools/discord", () => ({}));
 vi.mock("@/lib/ai/tools/figma", () => ({}));
 vi.mock("@/lib/ai/tools/notion", () => ({}));
 vi.mock("@/lib/ai/tools/sentry", () => ({}));
+vi.mock("@/lib/ai/tools/finance", () => ({}));
 
 // Stub createDelegationTool so we can see what spec each domain was passed.
 vi.mock("@/lib/ai/subagent", () => ({
@@ -97,6 +108,7 @@ describe("buildDelegationTools", () => {
     const tools = buildDelegationTools(UserRole.Organizer, new TurnUsageTracker());
     expect(Object.keys(tools).sort()).toEqual([
       "delegate_figma",
+      "delegate_finance",
       "delegate_linear",
       "delegate_sentry",
     ]);
@@ -107,6 +119,7 @@ describe("buildDelegationTools", () => {
     const tools = buildDelegationTools(UserRole.Admin, new TurnUsageTracker());
     expect(Object.keys(tools).sort()).toEqual([
       "delegate_figma",
+      "delegate_finance",
       "delegate_github",
       "delegate_linear",
       "delegate_sentry",

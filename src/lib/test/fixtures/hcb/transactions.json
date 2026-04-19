@@ -1,0 +1,38 @@
+[
+  {
+    "id": "txn_food_1",
+    "date": "2026-03-15",
+    "amount_cents": -4200,
+    "memo": "Pizza for Hack Night",
+    "type": "card_charge",
+    "pending": false,
+    "receipts": { "count": 1, "missing": false }
+  },
+  {
+    "id": "txn_food_2",
+    "date": "2026-03-20",
+    "amount_cents": -7800,
+    "memo": "Snacks and drinks for Hack Night",
+    "type": "card_charge",
+    "pending": false,
+    "receipts": { "count": 0, "missing": true }
+  },
+  {
+    "id": "txn_donation_1",
+    "date": "2026-04-01",
+    "amount_cents": 100000,
+    "memo": "Vercel sponsorship",
+    "type": "donation",
+    "pending": false,
+    "receipts": { "count": 0, "missing": false }
+  },
+  {
+    "id": "txn_badge_1",
+    "date": "2026-04-10",
+    "amount_cents": -4200,
+    "memo": "Badge printing supplies",
+    "type": "card_charge",
+    "pending": true,
+    "receipts": { "count": 0, "missing": true }
+  }
+]
