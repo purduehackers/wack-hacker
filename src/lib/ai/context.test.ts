@@ -89,9 +89,15 @@ describe("AgentContext.fromPacket", () => {
   });
 
   it("attaches recentMessages when provided", () => {
-    const messages = [{ author: "bob", content: "hi", timestamp: "1:00 PM" }];
+    const messages = [{ id: "m-bob", author: "bob", content: "hi", timestamp: "1:00 PM" }];
     const ctx = AgentContext.fromPacket(messagePacket("hello"), { recentMessages: messages });
     expect(ctx.recentMessages).toEqual(messages);
+  });
+
+  it("attaches referencedContext when provided", () => {
+    const ref = [{ id: "anchor", author: "carol", content: "original", timestamp: "12:55 PM" }];
+    const ctx = AgentContext.fromPacket(messagePacket("hello"), { referencedContext: ref });
+    expect(ctx.referencedContext).toEqual(ref);
   });
 });
 
@@ -192,7 +198,7 @@ describe("AgentContext.buildInstructions", () => {
   it("uses recent_thread_messages tag when lead-in came from the thread", () => {
     const ctx = AgentContext.fromPacket(
       messagePacket("hello", { thread: { parentId: "p1", parentName: "parent" } }),
-      { recentMessages: [{ author: "bob", content: "hey", timestamp: "1:00 PM" }] },
+      { recentMessages: [{ id: "m-bob", author: "bob", content: "hey", timestamp: "1:00 PM" }] },
     );
     const result = ctx.buildInstructions("Base.");
     expect(result).toContain("<recent_thread_messages>");
@@ -201,7 +207,7 @@ describe("AgentContext.buildInstructions", () => {
 
   it("uses recent_channel_messages tag when not in a thread", () => {
     const ctx = AgentContext.fromPacket(messagePacket("hello"), {
-      recentMessages: [{ author: "bob", content: "hey", timestamp: "1:00 PM" }],
+      recentMessages: [{ id: "m-bob", author: "bob", content: "hey", timestamp: "1:00 PM" }],
     });
     const result = ctx.buildInstructions("Base.");
     expect(result).toContain("<recent_channel_messages>");
@@ -213,11 +219,30 @@ describe("AgentContext.buildInstructions", () => {
     // came from the parent channel, not the newly-created thread.
     const ctx = AgentContext.fromPacket(messagePacket("hello"), {
       threadOverride: { id: "thread-99", name: "new" },
-      recentMessages: [{ author: "bob", content: "hey", timestamp: "1:00 PM" }],
+      recentMessages: [{ id: "m-bob", author: "bob", content: "hey", timestamp: "1:00 PM" }],
     });
     const result = ctx.buildInstructions("Base.");
     expect(result).toContain("<recent_channel_messages>");
     expect(result).not.toContain("<recent_thread_messages>");
+  });
+
+  it("renders <referenced_message_context> when referencedContext is set", () => {
+    const ctx = AgentContext.fromPacket(messagePacket("hello"), {
+      recentMessages: [{ id: "m-bob", author: "bob", content: "hey", timestamp: "1:00 PM" }],
+      referencedContext: [
+        { id: "anchor", author: "carol", content: "original", timestamp: "12:55 PM" },
+      ],
+    });
+    const result = ctx.buildInstructions("Base.");
+    expect(result).toContain("<referenced_message_context>");
+    expect(result).toContain("carol: original");
+  });
+
+  it("omits <referenced_message_context> when referencedContext is empty", () => {
+    const ctx = AgentContext.fromPacket(messagePacket("hello"), {
+      recentMessages: [{ id: "m-bob", author: "bob", content: "hey", timestamp: "1:00 PM" }],
+    });
+    expect(ctx.buildInstructions("Base.")).not.toContain("<referenced_message_context>");
   });
 
   it("falls back to thread presence when recentMessagesFromThread is absent", () => {
@@ -229,7 +254,7 @@ describe("AgentContext.buildInstructions", () => {
       channel: { id: "t", name: "t" },
       thread: { id: "t", name: "t", parentChannel: { id: "p", name: "p" } },
       date: "today",
-      recentMessages: [{ author: "bob", content: "hey", timestamp: "1:00 PM" }],
+      recentMessages: [{ id: "m-bob", author: "bob", content: "hey", timestamp: "1:00 PM" }],
     });
     const result = ctx.buildInstructions("Base.");
     expect(result).toContain("<recent_thread_messages>");

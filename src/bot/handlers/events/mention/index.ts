@@ -1,14 +1,41 @@
+import type { API } from "@discordjs/core/http-only";
+
 import { log } from "evlog";
 import { start, resumeHook } from "workflow/api";
 
 import type { HandlerContext } from "@/bot/types";
+import type { RecentMessage } from "@/lib/ai/types";
 import type { MessageCreatePacketType } from "@/lib/protocol/types";
 import type { ChatHookEvent } from "@/workflows/chat";
 
 import { stripBotMention } from "@/bot/mention";
-import { fetchRecentMessages } from "@/bot/recent-messages";
+import { fetchRecentMessages, fetchReferencedMessageContext } from "@/bot/recent-messages";
 import { AgentContext } from "@/lib/ai/context";
 import { chatWorkflow } from "@/workflows/chat";
+
+type MessageData = MessageCreatePacketType["data"];
+
+async function fetchLeadInMessages(
+  discord: API,
+  sourceChannelId: string,
+  data: MessageData,
+): Promise<{ recentMessages?: RecentMessage[]; referencedContext?: RecentMessage[] }> {
+  const recentMessages = await fetchRecentMessages(discord, sourceChannelId, data.id);
+
+  const ref = data.reference;
+  if (!ref?.messageId) return { recentMessages };
+
+  const sameChannel = !ref.channelId || ref.channelId === sourceChannelId;
+  const alreadyInRecent = recentMessages?.some((m) => m.id === ref.messageId) ?? false;
+  if (!sameChannel || alreadyInRecent) return { recentMessages };
+
+  const referencedContext = await fetchReferencedMessageContext(
+    discord,
+    sourceChannelId,
+    ref.messageId,
+  );
+  return { recentMessages, referencedContext };
+}
 
 export async function handleMention(
   packet: MessageCreatePacketType,
@@ -72,10 +99,16 @@ export async function handleMention(
     }
   }
 
-  const recentMessages = await fetchRecentMessages(ctx.discord, sourceChannelId, data.id);
+  const { recentMessages, referencedContext } = await fetchLeadInMessages(
+    ctx.discord,
+    sourceChannelId,
+    data,
+  );
+
   const turnContext = AgentContext.fromPacket(packet, {
     threadOverride: createdThread,
     recentMessages,
+    referencedContext,
   }).toJSON();
 
   log.info("mention", `Starting workflow for ${data.author.username} in ${data.channel.name}`);

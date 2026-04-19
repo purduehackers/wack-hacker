@@ -99,6 +99,7 @@ export async function chatWorkflow(payload: ChatPayload) {
   const stableChannel = context.channel;
   const stableThread = context.thread;
   const stableRecentMessages = context.recentMessages;
+  const stableReferencedContext = context.referencedContext;
 
   const messages: ChatMessage[] = [{ role: "user", content }];
   const first = await runTurn(channelId, messages, context);
@@ -129,6 +130,7 @@ export async function chatWorkflow(payload: ChatPayload) {
       channel: stableChannel,
       thread: stableThread,
       recentMessages: stableRecentMessages,
+      referencedContext: stableReferencedContext,
     };
 
     messages.push({ role: "user", content: event.content });
