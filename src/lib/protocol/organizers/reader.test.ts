@@ -27,8 +27,8 @@ const ALICE = {
 };
 
 const ALL_STORED = {
-  "organizer:100000000000000001": RAY,
-  "organizer:100000000000000002": ALICE,
+  organizer_100000000000000001: RAY,
+  organizer_100000000000000002: ALICE,
   // Unrelated keys (e.g. hack-night's `version`) must be ignored.
   version: "6.17",
 };
@@ -56,8 +56,8 @@ describe("getOrganizers", () => {
 
   it("drops entries that fail schema validation but keeps valid ones", async () => {
     mockGetAll.mockResolvedValue({
-      "organizer:100000000000000001": RAY,
-      "organizer:broken": { name: 42 },
+      organizer_100000000000000001: RAY,
+      organizer_broken: { name: 42 },
     });
     expect(await getOrganizers()).toEqual({ "100000000000000001": RAY });
   });
@@ -82,7 +82,7 @@ describe("getOrganizer", () => {
   it("returns the parsed organizer when valid", async () => {
     mockGet.mockResolvedValue(RAY);
     expect(await getOrganizer("100000000000000001")).toEqual(RAY);
-    expect(mockGet).toHaveBeenCalledWith("organizer:100000000000000001");
+    expect(mockGet).toHaveBeenCalledWith("organizer_100000000000000001");
   });
 });
 

@@ -8,7 +8,7 @@ import { EDITABLE_PLATFORMS, ORGANIZER_KEY_PREFIX } from "./constants.ts";
 import { getOrganizer } from "./reader.ts";
 
 /**
- * Atomic per-user upsert. Reads the single `organizer:<discordId>` key, merges
+ * Atomic per-user upsert. Reads the single `organizer_<discordId>` key, merges
  * the patch, writes just that key back. Concurrent writes for *different* users
  * never collide; same-user concurrent writes remain a theoretical last-writer-wins
  * race but are negligible in practice (one person submitting the modal twice).

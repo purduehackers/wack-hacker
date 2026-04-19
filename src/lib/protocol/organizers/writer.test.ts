@@ -18,7 +18,7 @@ vi.mock("@vercel/sdk", () => ({
 import { upsertOrganizer } from "./writer.ts";
 
 const RAY_ID = "100000000000000001";
-const RAY_KEY = `organizer:${RAY_ID}`;
+const RAY_KEY = `organizer_${RAY_ID}`;
 
 beforeEach(() => {
   mockGet.mockReset();

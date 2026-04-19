@@ -27,7 +27,7 @@ function getClient(): ReturnType<typeof createClient> {
   return client;
 }
 
-/** Read every `organizer:*` key and build a Discord-ID → Organizer map. */
+/** Read every `organizer_*` key and build a Discord-ID → Organizer map. */
 export async function getOrganizers(): Promise<OrganizersMap> {
   const all = (await getClient().getAll()) ?? {};
   const result: OrganizersMap = {};
