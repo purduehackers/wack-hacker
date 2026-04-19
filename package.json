@@ -59,6 +59,7 @@
     "@sentry/nextjs": "^10.48.0",
     "@t3-oss/env-core": "^0.13.11",
     "@upstash/redis": "^1.37.0",
+    "@vercel/edge-config": "^1.4.3",
     "@vercel/functions": "^3.4.3",
     "@vercel/queue": "^0.1.6",
     "@vercel/sdk": "^1.19.35",
