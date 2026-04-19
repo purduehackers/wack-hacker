@@ -37,6 +37,9 @@ export default defineConfig({
         "src/lib/ai/skills/generated/**",
         "src/lib/ai/tools/**",
         "src/lib/evlog.ts",
+        "src/lib/shopping/db.ts",
+        "src/lib/shopping/schemas/**",
+        "src/lib/shopping/relations.ts",
       ],
       reporter: ["text", "lcov"],
       thresholds: {
