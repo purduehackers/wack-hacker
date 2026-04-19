@@ -96,7 +96,7 @@ describe("PacketCodec", () => {
 });
 
 describe("PacketCodec - mentions defaulting", () => {
-  it("defaults mentions to an empty array when omitted on the wire", () => {
+  it("defaults mentions to an empty array on MESSAGE_CREATE when omitted on the wire", () => {
     const raw = JSON.stringify({
       type: "GATEWAY_MESSAGE_CREATE",
       timestamp: new Date("2024-01-01"),
@@ -113,6 +113,17 @@ describe("PacketCodec - mentions defaulting", () => {
     const decoded = PacketCodec.decode(raw);
     if (decoded.type !== "GATEWAY_MESSAGE_CREATE") throw new Error("wrong type");
     expect(decoded.data.mentions).toEqual([]);
+  });
+
+  it("leaves mentions undefined on MESSAGE_UPDATE when omitted (no default leak)", () => {
+    const raw = JSON.stringify({
+      type: "GATEWAY_MESSAGE_UPDATE",
+      timestamp: new Date("2024-01-01"),
+      data: { id: "msg-1", channelId: "ch-1", guildId: "guild-1" },
+    });
+    const decoded = PacketCodec.decode(raw);
+    if (decoded.type !== "GATEWAY_MESSAGE_UPDATE") throw new Error("wrong type");
+    expect(decoded.data.mentions).toBeUndefined();
   });
 });
 
