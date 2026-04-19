@@ -1,105 +1,123 @@
+import { createClient } from "@libsql/client";
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Cart } from "./types.ts";
+vi.mock("./db.ts", async () => {
+  const actual = await vi.importActual<typeof import("./db.ts")>("./db.ts");
+  const client = createClient({ url: "file::memory:?cache=shared" });
+  const db = actual.buildDb(client);
 
-const mockRedis = {
-  data: new Map<string, unknown>(),
-  opts: new Map<string, Record<string, unknown> | undefined>(),
-  evalCalls: [] as Array<{ script: string; keys: string[]; args: string[] }>,
-
-  async get<T>(key: string): Promise<T | null> {
-    return (this.data.get(key) as T) ?? null;
-  },
-  async set(key: string, value: unknown, opts?: Record<string, unknown>) {
-    if (opts?.nx && this.data.has(key)) return null;
-    this.data.set(key, value);
-    this.opts.set(key, opts);
-    return "OK";
-  },
-  async del(key: string) {
-    this.data.delete(key);
-    this.opts.delete(key);
-    return 1;
-  },
-  async eval(script: string, keys: string[], args: string[]) {
-    this.evalCalls.push({ script, keys, args });
-    const stored = this.data.get(keys[0]);
-    if (stored === args[0]) {
-      this.data.delete(keys[0]);
-      return 1;
+  const migrationsDir = "./drizzle/shopping";
+  const migrationFiles = readdirSync(migrationsDir)
+    .filter((name) => name.endsWith(".sql"))
+    .sort();
+  for (const migration of migrationFiles) {
+    const raw = readFileSync(join(migrationsDir, migration), "utf-8");
+    for (const statement of raw.split("--> statement-breakpoint")) {
+      const trimmed = statement.trim();
+      if (trimmed) await client.execute(trimmed);
     }
-    return 0;
-  },
+  }
 
-  reset() {
-    this.data.clear();
-    this.opts.clear();
-    this.evalCalls = [];
-  },
-};
+  return { ...actual, getDb: () => db };
+});
 
-vi.mock("@upstash/redis", () => ({
-  Redis: { fromEnv: () => mockRedis },
-}));
+const { getDb } = await import("./db.ts");
+const { getCart, addCartItem, removeCartItem, setCartItemQuantity, clearCart } =
+  await import("./cart.ts");
+const { cartItems } = await import("./schemas/cart-items.ts");
+const { carts } = await import("./schemas/carts.ts");
 
-const { getCart, updateCart, clearCart } = await import("./cart.ts");
+beforeEach(async () => {
+  const db = getDb();
+  await db.delete(cartItems);
+  await db.delete(carts);
+});
 
-const CART_KEY = "shopping:cart:global";
-const LOCK_KEY = "shopping:cart:lock";
-
-describe("shopping cart persistence", () => {
-  beforeEach(() => mockRedis.reset());
-
-  it("returns an empty cart when none has been saved", async () => {
-    const cart = await getCart();
-    expect(cart.items).toEqual([]);
-    expect(cart.updatedAt).toBeTypeOf("string");
+describe("getCart", () => {
+  it("returns an empty snapshot before anything exists", async () => {
+    const snapshot = await getCart();
+    expect(snapshot.items).toEqual([]);
+    expect(snapshot.updatedAt).toBeNull();
   });
+});
 
-  it("updateCart persists mutations and refreshes updatedAt", async () => {
-    mockRedis.data.set(CART_KEY, {
-      items: [{ asin: "B01", title: "T", price: 1, quantity: 1 }],
-      updatedAt: "2020-01-01T00:00:00Z",
-    } satisfies Cart);
-    await updateCart((cart) => {
-      cart.items.push({ asin: "B02", title: "U", price: 2, quantity: 1 });
+describe("addCartItem", () => {
+  it("inserts a new item and returns it with the snapshot", async () => {
+    const { item, snapshot } = await addCartItem({
+      asin: "B01",
+      title: "Widget",
+      price: 10,
+      quantity: 2,
     });
-    const stored = mockRedis.data.get(CART_KEY) as Cart;
-    expect(stored.items).toHaveLength(2);
-    expect(stored.updatedAt).not.toBe("2020-01-01T00:00:00Z");
+    expect(item).toMatchObject({ asin: "B01", title: "Widget", price: 10, quantity: 2 });
+    expect(snapshot.items).toHaveLength(1);
+    expect(snapshot.updatedAt).toBeTypeOf("string");
   });
 
-  it("updateCart returns the mutator's result", async () => {
-    const result = await updateCart(() => ({ ok: true }));
-    expect(result).toEqual({ ok: true });
-  });
-
-  it("updateCart sets the TTL on write", async () => {
-    await updateCart((cart) => {
-      cart.items.push({ asin: "B01", title: "T", price: 1, quantity: 1 });
+  it("merges quantity for existing ASIN and refreshes title/price", async () => {
+    await addCartItem({ asin: "B01", title: "Old", price: 5, quantity: 1 });
+    const { item, snapshot } = await addCartItem({
+      asin: "B01",
+      title: "New",
+      price: 9.99,
+      quantity: 3,
     });
-    expect(mockRedis.opts.get(CART_KEY)?.ex).toBe(60 * 60 * 24 * 30);
+    expect(item.quantity).toBe(4);
+    expect(item.title).toBe("New");
+    expect(item.price).toBe(9.99);
+    expect(snapshot.items).toHaveLength(1);
+  });
+});
+
+describe("removeCartItem", () => {
+  it("removes an existing item and returns it", async () => {
+    await addCartItem({ asin: "B01", title: "A", price: 1, quantity: 1 });
+    await addCartItem({ asin: "B02", title: "B", price: 2, quantity: 1 });
+    const result = await removeCartItem("B01");
+    expect(result?.item.asin).toBe("B01");
+    expect(result?.snapshot.items).toHaveLength(1);
+    expect(result?.snapshot.items[0].asin).toBe("B02");
   });
 
-  it("updateCart releases the lock after a successful write", async () => {
-    await updateCart(() => undefined);
-    expect(mockRedis.data.has(LOCK_KEY)).toBe(false);
-    expect(mockRedis.evalCalls).toHaveLength(1);
+  it("returns null when the ASIN is not in the cart", async () => {
+    expect(await removeCartItem("missing")).toBeNull();
+  });
+});
+
+describe("setCartItemQuantity", () => {
+  it("updates the quantity for an existing item", async () => {
+    await addCartItem({ asin: "B01", title: "A", price: 2, quantity: 1 });
+    const result = await setCartItemQuantity("B01", 5);
+    expect(result?.item.quantity).toBe(5);
+    expect(result?.snapshot.items[0].quantity).toBe(5);
   });
 
-  it("updateCart releases the lock even when the mutator throws", async () => {
-    await expect(
-      updateCart(() => {
-        throw new Error("boom");
-      }),
-    ).rejects.toThrow("boom");
-    expect(mockRedis.data.has(LOCK_KEY)).toBe(false);
+  it("deletes the item when the new quantity is 0", async () => {
+    await addCartItem({ asin: "B01", title: "A", price: 2, quantity: 3 });
+    const result = await setCartItemQuantity("B01", 0);
+    expect(result?.item.asin).toBe("B01");
+    expect(result?.snapshot.items).toEqual([]);
   });
 
-  it("clearCart wipes the cart and releases the lock", async () => {
-    mockRedis.data.set(CART_KEY, { items: [{} as never], updatedAt: "" });
+  it("returns null when the ASIN is not in the cart", async () => {
+    expect(await setCartItemQuantity("missing", 2)).toBeNull();
+  });
+});
+
+describe("clearCart", () => {
+  it("removes every item", async () => {
+    await addCartItem({ asin: "B01", title: "A", price: 1, quantity: 1 });
+    await addCartItem({ asin: "B02", title: "B", price: 1, quantity: 1 });
     await clearCart();
-    expect(mockRedis.data.has(CART_KEY)).toBe(false);
-    expect(mockRedis.data.has(LOCK_KEY)).toBe(false);
+    const snapshot = await getCart();
+    expect(snapshot.items).toEqual([]);
+  });
+
+  it("is a no-op when the cart is already empty", async () => {
+    await clearCart();
+    const snapshot = await getCart();
+    expect(snapshot.items).toEqual([]);
   });
 });

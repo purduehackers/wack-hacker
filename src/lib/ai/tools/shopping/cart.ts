@@ -3,7 +3,13 @@ import { z } from "zod";
 
 import type { CartItem } from "../../../shopping/types.ts";
 
-import { clearCart, getCart, updateCart } from "../../../shopping/cart.ts";
+import {
+  addCartItem,
+  clearCart,
+  getCart,
+  removeCartItem,
+  setCartItemQuantity,
+} from "../../../shopping/cart.ts";
 
 const PAGE_SIZE = 10;
 
@@ -31,20 +37,10 @@ export const add_to_cart = tool({
       .default(1)
       .describe("Quantity to add. Merges with existing quantity for this ASIN."),
   }),
-  execute: async ({ asin, title, price, quantity }) =>
-    JSON.stringify(
-      await updateCart((cart) => {
-        const existing = cart.items.find((entry) => entry.asin === asin);
-        if (existing) {
-          existing.quantity += quantity;
-          existing.title = title;
-          existing.price = price;
-        } else {
-          cart.items.push({ asin, title, price, quantity });
-        }
-        return { added: { asin, title, price, quantity }, ...summarize(cart.items) };
-      }),
-    ),
+  execute: async ({ asin, title, price, quantity }) => {
+    const { item, snapshot } = await addCartItem({ asin, title, price, quantity });
+    return JSON.stringify({ added: item, ...summarize(snapshot.items) });
+  },
 });
 
 export const remove_from_cart = tool({
@@ -52,15 +48,11 @@ export const remove_from_cart = tool({
   inputSchema: z.object({
     asin: z.string().min(1).describe("ASIN of the item to remove"),
   }),
-  execute: async ({ asin }) =>
-    JSON.stringify(
-      await updateCart((cart) => {
-        const index = cart.items.findIndex((entry) => entry.asin === asin);
-        if (index === -1) return { error: `ASIN ${asin} not in cart` };
-        const [removed] = cart.items.splice(index, 1);
-        return { removed, ...summarize(cart.items) };
-      }),
-    ),
+  execute: async ({ asin }) => {
+    const result = await removeCartItem(asin);
+    if (!result) return JSON.stringify({ error: `ASIN ${asin} not in cart` });
+    return JSON.stringify({ removed: result.item, ...summarize(result.snapshot.items) });
+  },
 });
 
 export const update_quantity = tool({
@@ -70,16 +62,11 @@ export const update_quantity = tool({
     asin: z.string().min(1).describe("ASIN of the item to update"),
     quantity: z.number().int().min(0).describe("New quantity (0 removes the item)"),
   }),
-  execute: async ({ asin, quantity }) =>
-    JSON.stringify(
-      await updateCart((cart) => {
-        const index = cart.items.findIndex((entry) => entry.asin === asin);
-        if (index === -1) return { error: `ASIN ${asin} not in cart` };
-        if (quantity === 0) cart.items.splice(index, 1);
-        else cart.items[index].quantity = quantity;
-        return { asin, quantity, ...summarize(cart.items) };
-      }),
-    ),
+  execute: async ({ asin, quantity }) => {
+    const result = await setCartItemQuantity(asin, quantity);
+    if (!result) return JSON.stringify({ error: `ASIN ${asin} not in cart` });
+    return JSON.stringify({ asin, quantity, ...summarize(result.snapshot.items) });
+  },
 });
 
 export const view_cart = tool({
@@ -94,17 +81,17 @@ export const view_cart = tool({
       .describe(`Page number (1-indexed). Page size is ${PAGE_SIZE} items.`),
   }),
   execute: async ({ page }) => {
-    const cart = await getCart();
-    const totalPages = Math.max(1, Math.ceil(cart.items.length / PAGE_SIZE));
+    const snapshot = await getCart();
+    const totalPages = Math.max(1, Math.ceil(snapshot.items.length / PAGE_SIZE));
     const current = Math.min(page, totalPages);
     const start = (current - 1) * PAGE_SIZE;
     return JSON.stringify({
       page: current,
       total_pages: totalPages,
       page_size: PAGE_SIZE,
-      items: cart.items.slice(start, start + PAGE_SIZE),
-      ...summarize(cart.items),
-      updated_at: cart.updatedAt,
+      items: snapshot.items.slice(start, start + PAGE_SIZE),
+      ...summarize(snapshot.items),
+      updated_at: snapshot.updatedAt,
     });
   },
 });

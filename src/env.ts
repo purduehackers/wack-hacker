@@ -31,6 +31,8 @@ export const env = createEnv({
     SHIP_R2_BUCKET_NAME: z.string(),
     SHIP_DATABASE_TURSO_DATABASE_URL: z.string(),
     SHIP_DATABASE_TURSO_AUTH_TOKEN: z.string(),
+    SHOPPING_DATABASE_TURSO_DATABASE_URL: z.string(),
+    SHOPPING_DATABASE_TURSO_AUTH_TOKEN: z.string(),
     KV_REST_API_URL: z.string(),
     KV_REST_API_TOKEN: z.string(),
     VERCEL_API_TOKEN: z.string(),

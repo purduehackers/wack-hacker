@@ -1,70 +1,129 @@
-import { Redis } from "@upstash/redis";
+import { and, eq, sql } from "drizzle-orm";
 
-import type { Cart } from "./types.ts";
+import type { CartMutation, CartSnapshot, NewCartItemInput } from "./types.ts";
 
-const CART_KEY = "shopping:cart:global";
-const CART_TTL_SECONDS = 60 * 60 * 24 * 30;
-const LOCK_KEY = "shopping:cart:lock";
-const LOCK_TTL_MS = 5000;
-const LOCK_RETRY_MS = 50;
-const LOCK_MAX_ATTEMPTS = 40;
+import { getDb } from "./db.ts";
+import { cartItems } from "./schemas/cart-items.ts";
+import { carts } from "./schemas/carts.ts";
 
-const RELEASE_LOCK_SCRIPT = `
-if redis.call("get", KEYS[1]) == ARGV[1] then
-  return redis.call("del", KEYS[1])
-else
-  return 0
-end`;
+const GLOBAL_CART_ID = "global";
 
-let redis: Redis;
-function getRedis() {
-  return (redis ??= Redis.fromEnv());
+function now(): string {
+  return new Date().toISOString();
 }
 
-export async function getCart(): Promise<Cart> {
-  const cart = await getRedis().get<Cart>(CART_KEY);
-  return cart ?? { items: [], updatedAt: new Date().toISOString() };
+export async function getCart(): Promise<CartSnapshot> {
+  const db = getDb();
+  const [cart] = await db
+    .select({ updatedAt: carts.updatedAt })
+    .from(carts)
+    .where(eq(carts.id, GLOBAL_CART_ID));
+  const items = await db
+    .select()
+    .from(cartItems)
+    .where(eq(cartItems.cartId, GLOBAL_CART_ID))
+    .orderBy(cartItems.addedAt);
+  return { items, updatedAt: cart?.updatedAt ?? null };
 }
 
-async function acquireLock(): Promise<string> {
-  const token = crypto.randomUUID();
-  for (let attempt = 0; attempt < LOCK_MAX_ATTEMPTS; attempt++) {
-    const result = await getRedis().set(LOCK_KEY, token, { nx: true, px: LOCK_TTL_MS });
-    if (result !== null) return token;
-    await new Promise((resolve) => setTimeout(resolve, LOCK_RETRY_MS));
-  }
-  throw new Error("Timed out waiting for shopping cart lock");
+export async function addCartItem(input: NewCartItemInput): Promise<CartMutation> {
+  return getDb().transaction(async (tx) => {
+    await tx.insert(carts).values({ id: GLOBAL_CART_ID }).onConflictDoNothing();
+    const [item] = await tx
+      .insert(cartItems)
+      .values({
+        cartId: GLOBAL_CART_ID,
+        asin: input.asin,
+        title: input.title,
+        price: input.price,
+        quantity: input.quantity,
+      })
+      .onConflictDoUpdate({
+        target: [cartItems.cartId, cartItems.asin],
+        set: {
+          quantity: sql`${cartItems.quantity} + ${input.quantity}`,
+          title: input.title,
+          price: input.price,
+        },
+      })
+      .returning();
+    await tx.update(carts).set({ updatedAt: now() }).where(eq(carts.id, GLOBAL_CART_ID));
+    const [{ updatedAt }] = await tx
+      .select({ updatedAt: carts.updatedAt })
+      .from(carts)
+      .where(eq(carts.id, GLOBAL_CART_ID));
+    const items = await tx
+      .select()
+      .from(cartItems)
+      .where(eq(cartItems.cartId, GLOBAL_CART_ID))
+      .orderBy(cartItems.addedAt);
+    return { item, snapshot: { items, updatedAt } };
+  });
 }
 
-async function releaseLock(token: string): Promise<void> {
-  await getRedis().eval(RELEASE_LOCK_SCRIPT, [LOCK_KEY], [token]);
+export async function removeCartItem(asin: string): Promise<CartMutation | null> {
+  return getDb().transaction(async (tx) => {
+    const [removed] = await tx
+      .delete(cartItems)
+      .where(and(eq(cartItems.cartId, GLOBAL_CART_ID), eq(cartItems.asin, asin)))
+      .returning();
+    if (!removed) return null;
+    await tx.update(carts).set({ updatedAt: now() }).where(eq(carts.id, GLOBAL_CART_ID));
+    const [{ updatedAt }] = await tx
+      .select({ updatedAt: carts.updatedAt })
+      .from(carts)
+      .where(eq(carts.id, GLOBAL_CART_ID));
+    const items = await tx
+      .select()
+      .from(cartItems)
+      .where(eq(cartItems.cartId, GLOBAL_CART_ID))
+      .orderBy(cartItems.addedAt);
+    return { item: removed, snapshot: { items, updatedAt } };
+  });
 }
 
-/**
- * Read-modify-write the cart under a Redis lock. Serializes mutations so
- * concurrent tool calls from different organizers can't overwrite each other.
- */
-export async function updateCart<T>(mutate: (cart: Cart) => T | Promise<T>): Promise<T> {
-  const token = await acquireLock();
-  try {
-    const cart = await getCart();
-    const result = await mutate(cart);
-    await getRedis().set(
-      CART_KEY,
-      { ...cart, updatedAt: new Date().toISOString() },
-      { ex: CART_TTL_SECONDS },
-    );
-    return result;
-  } finally {
-    await releaseLock(token);
-  }
+export async function setCartItemQuantity(
+  asin: string,
+  quantity: number,
+): Promise<CartMutation | null> {
+  return getDb().transaction(async (tx) => {
+    const [existing] = await tx
+      .select()
+      .from(cartItems)
+      .where(and(eq(cartItems.cartId, GLOBAL_CART_ID), eq(cartItems.asin, asin)));
+    if (!existing) return null;
+
+    let affected = existing;
+    if (quantity === 0) {
+      await tx
+        .delete(cartItems)
+        .where(and(eq(cartItems.cartId, GLOBAL_CART_ID), eq(cartItems.asin, asin)));
+    } else {
+      const [updated] = await tx
+        .update(cartItems)
+        .set({ quantity })
+        .where(and(eq(cartItems.cartId, GLOBAL_CART_ID), eq(cartItems.asin, asin)))
+        .returning();
+      affected = updated;
+    }
+    await tx.update(carts).set({ updatedAt: now() }).where(eq(carts.id, GLOBAL_CART_ID));
+    const [{ updatedAt }] = await tx
+      .select({ updatedAt: carts.updatedAt })
+      .from(carts)
+      .where(eq(carts.id, GLOBAL_CART_ID));
+    const items = await tx
+      .select()
+      .from(cartItems)
+      .where(eq(cartItems.cartId, GLOBAL_CART_ID))
+      .orderBy(cartItems.addedAt);
+    return { item: affected, snapshot: { items, updatedAt } };
+  });
 }
 
 export async function clearCart(): Promise<void> {
-  const token = await acquireLock();
-  try {
-    await getRedis().del(CART_KEY);
-  } finally {
-    await releaseLock(token);
-  }
+  await getDb().transaction(async (tx) => {
+    await tx.insert(carts).values({ id: GLOBAL_CART_ID }).onConflictDoNothing();
+    await tx.delete(cartItems).where(eq(cartItems.cartId, GLOBAL_CART_ID));
+    await tx.update(carts).set({ updatedAt: now() }).where(eq(carts.id, GLOBAL_CART_ID));
+  });
 }
