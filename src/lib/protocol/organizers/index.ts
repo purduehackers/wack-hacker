@@ -1,4 +1,5 @@
 export type {
+  EditablePlatform,
   Organizer,
   OrganizerEntry,
   OrganizerPatch,
@@ -6,6 +7,6 @@ export type {
   OrganizersMap,
   UpsertResult,
 } from "./types.ts";
-export { ORGANIZER_PLATFORMS } from "./constants.ts";
+export { EDITABLE_PLATFORMS, ORGANIZER_PLATFORMS } from "./constants.ts";
 export { getOrganizers, findOrganizer, resolveOrganizerId } from "./reader.ts";
 export { upsertOrganizer } from "./writer.ts";

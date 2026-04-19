@@ -2,15 +2,15 @@ import { log } from "evlog";
 
 import type { InteractionResponsePayload } from "@/bot/commands/types";
 import type { ModalSubmitContext } from "@/bot/modals/types";
-import type { OrganizerPatch, UpsertResult } from "@/lib/protocol/organizers";
+import type { EditablePlatform, OrganizerPatch, UpsertResult } from "@/lib/protocol/organizers";
 
 import { defineModal } from "@/bot/modals/define";
 import { DISCORD_IDS, InteractionResponseType } from "@/lib/protocol/constants";
-import { upsertOrganizer } from "@/lib/protocol/organizers";
+import { EDITABLE_PLATFORMS, upsertOrganizer } from "@/lib/protocol/organizers";
 
 const EPHEMERAL_FLAG = 64;
 
-const PLATFORM_LABELS: Record<string, string> = {
+const PLATFORM_LABELS: Record<EditablePlatform, string> = {
   linear: "Linear",
   notion: "Notion",
   sentry: "Sentry",
@@ -49,13 +49,11 @@ function authorize(
 }
 
 function buildPatch(fields: Map<string, string>): OrganizerPatch {
-  return {
-    linear: fields.get("linear") ?? "",
-    notion: fields.get("notion") ?? "",
-    sentry: fields.get("sentry") ?? "",
-    github: fields.get("github") ?? "",
-    figma: fields.get("figma") ?? "",
-  };
+  const patch: OrganizerPatch = {};
+  for (const platform of EDITABLE_PLATFORMS) {
+    patch[platform] = fields.get(platform) ?? "";
+  }
+  return patch;
 }
 
 async function fetchDisplay(
@@ -78,10 +76,10 @@ async function fetchDisplay(
 function summarise(result: UpsertResult, mode: string, targetId: string): string {
   const parts: string[] = [];
   if (result.set.length > 0) {
-    parts.push(`Set: ${result.set.map((p) => PLATFORM_LABELS[p] ?? p).join(", ")}`);
+    parts.push(`Set: ${result.set.map((p) => PLATFORM_LABELS[p]).join(", ")}`);
   }
   if (result.cleared.length > 0) {
-    parts.push(`Cleared: ${result.cleared.map((p) => PLATFORM_LABELS[p] ?? p).join(", ")}`);
+    parts.push(`Cleared: ${result.cleared.map((p) => PLATFORM_LABELS[p]).join(", ")}`);
   }
   const detail = parts.length > 0 ? parts.join(" \u00B7 ") : "No changes.";
   const prefix = mode === "self" ? "Identity updated." : `Identity updated for <@${targetId}>.`;

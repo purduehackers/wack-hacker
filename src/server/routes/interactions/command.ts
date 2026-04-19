@@ -1,7 +1,12 @@
+import { API } from "@discordjs/core/http-only";
 import { waitUntil } from "@vercel/functions";
 import { log } from "evlog";
 
-import type { InteractionResponsePayload, SlashCommand } from "@/bot/commands/types";
+import type {
+  InteractionResponsePayload,
+  SlashCommand,
+  SlashCommandContext,
+} from "@/bot/commands/types";
 import type { DiscordInteraction } from "@/lib/protocol/types";
 
 import { parseOptions } from "@/bot/commands/registry";
@@ -37,17 +42,17 @@ export async function handleApplicationCommand(
   return runDeferredCommand(command, interaction);
 }
 
+function buildCtx(interaction: DiscordInteraction, discord: API): SlashCommandContext {
+  return { interaction, discord, options: parseOptions(interaction.data?.options) };
+}
+
 async function runModalCommand(
   command: SlashCommand,
   interaction: DiscordInteraction,
 ): Promise<InteractionResponsePayload> {
   const discord = buildDiscord();
   try {
-    const response = await command.execute({
-      interaction,
-      discord,
-      options: parseOptions(interaction.data?.options),
-    });
+    const response = await command.execute(buildCtx(interaction, discord));
     if (response) return response;
     log.error("interactions", `/${command.name} (modal) returned no response`);
     countMetric("interaction.command_error", { command: command.name });
@@ -65,23 +70,17 @@ function runDeferredCommand(
 ): InteractionResponsePayload {
   const discord = buildDiscord();
   waitUntil(
-    command
-      .execute({
-        interaction,
-        discord,
-        options: parseOptions(interaction.data?.options),
-      })
-      .catch((err: unknown) => {
-        log.error("interactions", `/${command.name} failed: ${describeError(err)}`);
-        countMetric("interaction.command_error", { command: command.name });
-        discord.interactions
-          .editReply(interaction.application_id, interaction.token, {
-            content: `Error executing /${command.name}.`,
-          })
-          .catch((e: unknown) =>
-            log.error("interactions", `Failed to send error response: ${describeError(e)}`),
-          );
-      }),
+    command.execute(buildCtx(interaction, discord)).catch((err: unknown) => {
+      log.error("interactions", `/${command.name} failed: ${describeError(err)}`);
+      countMetric("interaction.command_error", { command: command.name });
+      discord.interactions
+        .editReply(interaction.application_id, interaction.token, {
+          content: `Error executing /${command.name}.`,
+        })
+        .catch((e: unknown) =>
+          log.error("interactions", `Failed to send error response: ${describeError(e)}`),
+        );
+    }),
   );
   return {
     type: InteractionResponseType.DeferredChannelMessageWithSource,

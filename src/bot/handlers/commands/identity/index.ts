@@ -7,6 +7,7 @@ import {
 } from "discord.js";
 
 import type { InteractionResponsePayload } from "@/bot/commands/types";
+import type { InteractionResolved } from "@/lib/protocol/types";
 
 import { defineCommand } from "@/bot/commands/define";
 import { isAdmin, isOrganizer } from "@/bot/commands/helpers";
@@ -100,7 +101,7 @@ export const identityCommand = defineCommand({
 function buildTitle(
   mode: "self" | "admin",
   targetId: string,
-  resolvedUsers: Record<string, { username: string; global_name?: string | null }> | undefined,
+  resolvedUsers: InteractionResolved["users"],
 ): string {
   if (mode === "self") return "Link your platform IDs";
   const resolved = resolvedUsers?.[targetId];
