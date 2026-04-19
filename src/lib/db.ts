@@ -1,11 +1,11 @@
 import { createClient, type Client } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 
-import { env } from "../../env.ts";
-import * as relations from "./relations.ts";
-import * as schemas from "./schemas/index.ts";
+import { env } from "../env.ts";
+import * as shoppingRelations from "./shopping/relations.ts";
+import * as shoppingSchemas from "./shopping/schemas/index.ts";
 
-const schema = { ...schemas, ...relations };
+const schema = { ...shoppingSchemas, ...shoppingRelations };
 
 type Db = ReturnType<typeof drizzle<typeof schema>>;
 
@@ -18,8 +18,8 @@ export function buildDb(client: Client): Db {
 export function getDb(): Db {
   if (!cachedDb) {
     const client = createClient({
-      url: env.SHOPPING_DATABASE_TURSO_DATABASE_URL,
-      authToken: env.SHOPPING_DATABASE_TURSO_AUTH_TOKEN,
+      url: env.TURSO_DATABASE_URL,
+      authToken: env.TURSO_AUTH_TOKEN,
     });
     cachedDb = buildDb(client);
   }

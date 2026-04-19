@@ -3,12 +3,12 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("./db.ts", async () => {
-  const actual = await vi.importActual<typeof import("./db.ts")>("./db.ts");
+vi.mock("@/lib/db", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/db")>("@/lib/db");
   const client = createClient({ url: "file::memory:?cache=shared" });
   const db = actual.buildDb(client);
 
-  const migrationsDir = "./drizzle/shopping";
+  const migrationsDir = "./drizzle";
   const migrationFiles = readdirSync(migrationsDir)
     .filter((name) => name.endsWith(".sql"))
     .sort();
@@ -23,7 +23,7 @@ vi.mock("./db.ts", async () => {
   return { ...actual, getDb: () => db };
 });
 
-const { getDb } = await import("./db.ts");
+const { getDb } = await import("@/lib/db");
 const { getCart, addCartItem, removeCartItem, setCartItemQuantity, clearCart } =
   await import("./cart.ts");
 const { cartItems } = await import("./schemas/cart-items.ts");
