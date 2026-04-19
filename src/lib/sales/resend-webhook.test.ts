@@ -22,13 +22,14 @@ function event(type: string, extra?: Record<string, unknown>) {
   };
 }
 
-function pageWithStatus(status: string | null) {
-  return {
-    id: "page-1",
-    properties: {
-      "Outreach Status": status ? { type: "select", select: { name: status } } : undefined,
-    },
+function pageWithStatus(status: string | null, lastEventAt?: string) {
+  const properties: Record<string, unknown> = {
+    "Outreach Status": status ? { type: "select", select: { name: status } } : undefined,
   };
+  if (lastEventAt) {
+    properties["Outreach Last Event At"] = { type: "date", date: { start: lastEventAt } };
+  }
+  return { id: "page-1", properties };
 }
 
 beforeEach(() => {
@@ -114,6 +115,39 @@ describe("applyResendEvent: monotonic status", () => {
     await applyResendEvent(event("email.clicked"));
     const props = updateMock.mock.calls[0]![0].properties;
     expect(props["Outreach Status"]).toEqual({ select: { name: "Clicked" } });
+  });
+});
+
+describe("applyResendEvent: monotonic timestamp", () => {
+  it("does not overwrite a newer Outreach Last Event At", async () => {
+    queryMock.mockResolvedValueOnce({
+      results: [pageWithStatus("Opened", "2026-04-19T05:00:00Z")],
+    });
+    await applyResendEvent(event("email.clicked"));
+
+    const props = updateMock.mock.calls[0]![0].properties;
+    expect(props["Outreach Last Event At"]).toBeUndefined();
+    expect(props["Outreach Status"]).toEqual({ select: { name: "Clicked" } });
+  });
+
+  it("writes the timestamp when incoming is strictly newer", async () => {
+    queryMock.mockResolvedValueOnce({
+      results: [pageWithStatus("Sent", "2026-04-18T00:00:00Z")],
+    });
+    await applyResendEvent(event("email.delivered"));
+
+    const props = updateMock.mock.calls[0]![0].properties;
+    expect(props["Outreach Last Event At"]).toEqual({
+      date: { start: "2026-04-19T01:00:00Z" },
+    });
+  });
+
+  it("skips the update entirely when nothing changes", async () => {
+    queryMock.mockResolvedValueOnce({
+      results: [pageWithStatus("Clicked", "2026-04-19T05:00:00Z")],
+    });
+    await applyResendEvent(event("email.delivered"));
+    expect(updateMock).not.toHaveBeenCalled();
   });
 });
 

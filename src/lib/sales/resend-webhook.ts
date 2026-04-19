@@ -79,6 +79,13 @@ function currentStatus(properties: Record<string, unknown>): OutreachStatus | nu
   return name in STATUS_RANK ? (name as OutreachStatus) : null;
 }
 
+function currentEventAt(properties: Record<string, unknown>): string | null {
+  const dateProp = properties["Outreach Last Event At"] as
+    | { type?: string; date?: { start?: string } | null }
+    | undefined;
+  return dateProp?.date?.start ?? null;
+}
+
 export async function applyResendEvent(raw: unknown): Promise<void> {
   if (!isResendEvent(raw)) {
     log.warn("resend", `Discarded event — shape does not match ResendEvent`);
@@ -105,14 +112,23 @@ export async function applyResendEvent(raw: unknown): Promise<void> {
   const applyStatus = STATUS_RANK[nextStatus] >= currentRank;
   const shouldBlock = eventType === "email.bounced" || eventType === "email.complained";
 
-  const properties: Record<string, unknown> = {
-    "Outreach Last Event At": { date: { start: raw.created_at } },
-  };
+  const existingEventAt = currentEventAt(page.properties);
+  const applyEventAt = !existingEventAt || raw.created_at > existingEventAt;
+
+  const properties: Record<string, unknown> = {};
+  if (applyEventAt) {
+    properties["Outreach Last Event At"] = { date: { start: raw.created_at } };
+  }
   if (applyStatus) {
     properties["Outreach Status"] = { select: { name: nextStatus } };
   }
   if (shouldBlock) {
     properties["Do Not Contact"] = { checkbox: true };
+  }
+
+  if (Object.keys(properties).length === 0) {
+    log.info("resend", `No-op for ${emailId} (${eventType}) — already newer state`);
+    return;
   }
 
   await notion.pages.update({ page_id: page.id, properties } as UpdatePageParameters);

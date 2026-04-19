@@ -48,6 +48,11 @@ export class ConversationStore {
     return result !== null;
   }
 
+  /** Release a dedup claim so a retry can re-run the guarded work. */
+  async releaseDedup(key: string): Promise<void> {
+    await this.redis.del(`dedup:${key}`);
+  }
+
   /** Atomic lock — returns a token if acquired, null if already held. */
   async acquireLock(key: string, ttlMs = LOCK_TTL_MS): Promise<string | null> {
     const token = crypto.randomUUID();
