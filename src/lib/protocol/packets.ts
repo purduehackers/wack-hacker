@@ -36,6 +36,11 @@ const MessageSnapshot = z.object({
   attachments: z.array(MessageDataAttachment).optional(),
 });
 
+// Base shape shared by MESSAGE_CREATE and MESSAGE_UPDATE. `mentions` stays
+// optional here so `MessageData.partial()` on the update packet doesn't
+// silently default an omitted field to `[]` (which would be
+// indistinguishable from "the update explicitly had zero mentions").
+// MessageCreate re-tightens `mentions` to a defaulted array below.
 const MessageData = z.object({
   id: z.string(),
   attachments: z.array(MessageDataAttachment),
@@ -49,12 +54,18 @@ const MessageData = z.object({
   flags: z.number().optional(),
   categoryId: z.string().optional(),
   forwardedSnapshots: z.array(MessageSnapshot).optional(),
+  mentions: z.array(z.string()).optional(),
   reference: z
     .object({
       messageId: z.string(),
       channelId: z.string().optional(),
+      authorId: z.string().optional(),
     })
     .optional(),
+});
+
+const MessageCreateData = MessageData.extend({
+  mentions: z.array(z.string()).default([]),
 });
 
 const ReactionDataEmoji = z.object({
@@ -88,7 +99,7 @@ const MessageDeleteData = z.object({
 export const MessageCreatePacket = z.object({
   type: z.literal("GATEWAY_MESSAGE_CREATE"),
   timestamp: PacketTimestamp,
-  data: MessageData,
+  data: MessageCreateData,
 });
 
 export const MessageReactionAddPacket = z.object({

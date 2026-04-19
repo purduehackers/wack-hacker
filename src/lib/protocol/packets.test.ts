@@ -62,6 +62,12 @@ describe("PacketCodec", () => {
               size: 1024,
             },
           ],
+          mentions: ["bot-123", "user-2"],
+          reference: {
+            messageId: "msg-0",
+            channelId: "ch-1",
+            authorId: "bot-123",
+          },
         }),
       ),
     );
@@ -71,6 +77,12 @@ describe("PacketCodec", () => {
     expect(decoded.data.memberRoles).toEqual(["role-1", "role-2"]);
     expect(decoded.data.author.nickname).toBe("Ali");
     expect(decoded.data.attachments).toHaveLength(1);
+    expect(decoded.data.mentions).toEqual(["bot-123", "user-2"]);
+    expect(decoded.data.reference).toEqual({
+      messageId: "msg-0",
+      channelId: "ch-1",
+      authorId: "bot-123",
+    });
   });
 
   it("handles voice state with null channelId", () => {
@@ -80,6 +92,38 @@ describe("PacketCodec", () => {
 
   it("rejects invalid JSON", () => {
     expect(() => PacketCodec.decode("not json")).toThrow();
+  });
+});
+
+describe("PacketCodec - mentions defaulting", () => {
+  it("defaults mentions to an empty array on MESSAGE_CREATE when omitted on the wire", () => {
+    const raw = JSON.stringify({
+      type: "GATEWAY_MESSAGE_CREATE",
+      timestamp: new Date("2024-01-01"),
+      data: {
+        id: "msg-1",
+        attachments: [],
+        author: { id: "user-1", username: "alice" },
+        channel: { id: "ch-1", name: "general" },
+        guildId: "guild-1",
+        content: "hi",
+        timestamp: "2024-01-01T00:00:00.000+00:00",
+      },
+    });
+    const decoded = PacketCodec.decode(raw);
+    if (decoded.type !== "GATEWAY_MESSAGE_CREATE") throw new Error("wrong type");
+    expect(decoded.data.mentions).toEqual([]);
+  });
+
+  it("leaves mentions undefined on MESSAGE_UPDATE when omitted (no default leak)", () => {
+    const raw = JSON.stringify({
+      type: "GATEWAY_MESSAGE_UPDATE",
+      timestamp: new Date("2024-01-01"),
+      data: { id: "msg-1", channelId: "ch-1", guildId: "guild-1" },
+    });
+    const decoded = PacketCodec.decode(raw);
+    if (decoded.type !== "GATEWAY_MESSAGE_UPDATE") throw new Error("wrong type");
+    expect(decoded.data.mentions).toBeUndefined();
   });
 });
 

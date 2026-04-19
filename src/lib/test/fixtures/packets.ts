@@ -20,6 +20,7 @@ export function messagePacket(
       guildId: "guild-1",
       content,
       timestamp: "2024-01-01T00:00:00.000+00:00",
+      mentions: [],
       ...overrides,
     },
   };

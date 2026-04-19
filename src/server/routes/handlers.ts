@@ -18,7 +18,7 @@ router.onMessage(async (packet, ctx) => {
   // Mentions are already handled by `handleMention`, which calls `resumeHook`
   // with the mention prefix stripped. Forwarding again here would duplicate
   // the turn and push the un-stripped content into the conversation.
-  if (isBotMention(packet.data.content, ctx.botUserId)) return;
+  if (isBotMention(packet.data, ctx.botUserId)) return;
   if (packet.data.thread) return;
 
   const channelId = packet.data.channel.id;
