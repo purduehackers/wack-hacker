@@ -1,11 +1,11 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "0ec43c6a-d10b-41a0-a79d-0cdb53e815e4",
+  "id": "61a0f74e-1125-444b-b98f-54e76247df68",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
-    "cart_items": {
-      "name": "cart_items",
+    "shopping_cart_items": {
+      "name": "shopping_cart_items",
       "columns": {
         "id": {
           "name": "id",
@@ -59,17 +59,17 @@
         }
       },
       "indexes": {
-        "cart_items_cart_asin_uq": {
-          "name": "cart_items_cart_asin_uq",
+        "shopping_cart_items_cart_asin_uq": {
+          "name": "shopping_cart_items_cart_asin_uq",
           "columns": ["cart_id", "asin"],
           "isUnique": true
         }
       },
       "foreignKeys": {
-        "cart_items_cart_id_carts_id_fk": {
-          "name": "cart_items_cart_id_carts_id_fk",
-          "tableFrom": "cart_items",
-          "tableTo": "carts",
+        "shopping_cart_items_cart_id_shopping_carts_id_fk": {
+          "name": "shopping_cart_items_cart_id_shopping_carts_id_fk",
+          "tableFrom": "shopping_cart_items",
+          "tableTo": "shopping_carts",
           "columnsFrom": ["cart_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
@@ -80,8 +80,8 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "carts": {
-      "name": "carts",
+    "shopping_carts": {
+      "name": "shopping_carts",
       "columns": {
         "id": {
           "name": "id",

@@ -2,7 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 
 import type { CartMutation, CartSnapshot, NewCartItemInput } from "./types.ts";
 
-import { getDb } from "./db.ts";
+import { getDb } from "../db.ts";
 import { cartItems } from "./schemas/cart-items.ts";
 import { carts } from "./schemas/carts.ts";
 

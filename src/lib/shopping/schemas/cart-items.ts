@@ -4,7 +4,7 @@ import { integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlit
 import { carts } from "./carts.ts";
 
 export const cartItems = sqliteTable(
-  "cart_items",
+  "shopping_cart_items",
   {
     id: text("id")
       .primaryKey()
@@ -20,5 +20,5 @@ export const cartItems = sqliteTable(
       .notNull()
       .default(sql`(CURRENT_TIMESTAMP)`),
   },
-  (table) => [uniqueIndex("cart_items_cart_asin_uq").on(table.cartId, table.asin)],
+  (table) => [uniqueIndex("shopping_cart_items_cart_asin_uq").on(table.cartId, table.asin)],
 );
