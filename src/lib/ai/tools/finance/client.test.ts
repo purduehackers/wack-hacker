@@ -26,6 +26,16 @@ describe("hcbOrgSlug", () => {
   it("returns the configured slug", () => {
     expect(hcbOrgSlug()).toBe("purdue-hackers");
   });
+
+  it("throws a helpful error when the slug is not configured", () => {
+    const original = process.env.HCB_ORG_SLUG;
+    delete process.env.HCB_ORG_SLUG;
+    try {
+      expect(() => hcbOrgSlug()).toThrow(/HCB_ORG_SLUG/);
+    } finally {
+      if (original !== undefined) process.env.HCB_ORG_SLUG = original;
+    }
+  });
 });
 
 describe("hcbTxnUrl", () => {

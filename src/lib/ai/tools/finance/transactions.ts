@@ -2,7 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { hcbGet, hcbOrgSlug, hcbPaginate, hcbTxnUrl, paginationQuery } from "./client.ts";
-import { paginationInputShape } from "./constants.ts";
+import { isoDate, paginationInputShape } from "./constants.ts";
 
 interface HcbReceiptsSummary {
   count?: number;
@@ -49,7 +49,7 @@ export const list_transactions = tool({
 /** Get a single transaction by id. */
 export const get_transaction = tool({
   description:
-    "Get full details for a single HCB transaction by id. Includes receipts summary {count, missing} — note: the actual receipt files are only available in the HCB web UI at hcb.hackclub.com/hcb/{id}, not via this API.",
+    "Get a single HCB transaction by id. Returns a compact summary with id, date, amount_cents (negative = outflow), memo, type, pending flag, receipts summary {count, missing}, and href. Receipt files themselves are NOT available via HCB's API; only whether a receipt is attached — visit hcb.hackclub.com/hcb/{id} for the actual file.",
   inputSchema: z.object({
     id: z.string().describe("HCB transaction id (e.g. 'txn_abc123')"),
   }),
@@ -74,14 +74,8 @@ export const find_transactions = tool({
       .optional()
       .describe("Inclusive lower bound on amount_cents (signed — negatives are outflows)"),
     max_amount_cents: z.number().int().optional().describe("Inclusive upper bound on amount_cents"),
-    since: z
-      .string()
-      .optional()
-      .describe("ISO date — only include transactions on/after this date"),
-    until: z
-      .string()
-      .optional()
-      .describe("ISO date — only include transactions on/before this date"),
+    since: isoDate.optional().describe("ISO date (YYYY-MM-DD) — on/after this date"),
+    until: isoDate.optional().describe("ISO date (YYYY-MM-DD) — on/before this date"),
     pending: z
       .enum(["any", "only", "exclude"])
       .optional()

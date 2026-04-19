@@ -7,7 +7,7 @@ import transactionsFixture from "@/lib/test/fixtures/hcb/transactions.json";
 import { get_balance, get_organization } from "./base.ts";
 import { list_card_charges } from "./card-charges.ts";
 import { donation_totals } from "./donations.ts";
-import { list_missing_receipts } from "./receipts.ts";
+import { get_receipt_status, list_missing_receipts } from "./receipts.ts";
 import { find_transactions, list_transactions } from "./transactions.ts";
 
 const originalFetch = globalThis.fetch;
@@ -162,6 +162,23 @@ describe("list_missing_receipts", () => {
     const parsed = JSON.parse(raw as string);
     expect(parsed.map((t: { id: string }) => t.id).sort()).toEqual(["txn_badge_1", "txn_food_2"]);
     expect(parsed[0].href).toContain("hcb.hackclub.com/hcb/");
+  });
+});
+
+describe("get_receipt_status", () => {
+  it("returns a receipts object consistent with other finance tools", async () => {
+    mockFetch(
+      () =>
+        new Response(JSON.stringify({ id: "txn_food_2", receipts: { count: 0, missing: true } }), {
+          status: 200,
+        }),
+    );
+    const raw = await get_receipt_status.execute!({ id: "txn_food_2" }, toolOpts);
+    expect(JSON.parse(raw as string)).toEqual({
+      id: "txn_food_2",
+      receipts: { count: 0, missing: true },
+      href: "https://hcb.hackclub.com/hcb/txn_food_2",
+    });
   });
 });
 

@@ -12,7 +12,13 @@ export function paginationQuery(input: { per_page?: number; page?: number }): {
 }
 
 export function hcbOrgSlug(): string {
-  return env.HCB_ORG_SLUG;
+  const slug = env.HCB_ORG_SLUG;
+  if (!slug) {
+    throw new Error(
+      "Finance tools require HCB_ORG_SLUG to be set (Purdue Hackers' Hack Club Bank slug).",
+    );
+  }
+  return slug;
 }
 
 /** Build a link to the HCB web UI for a transaction id. */

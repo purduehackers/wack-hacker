@@ -2,7 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { hcbGet, hcbOrgSlug, hcbPaginate, paginationQuery } from "./client.ts";
-import { paginationInputShape } from "./constants.ts";
+import { isoDate, paginationInputShape } from "./constants.ts";
 
 const SETTLED_DONATION_STATUSES = new Set(["deposited", "succeeded", "in_transit"]);
 
@@ -50,8 +50,8 @@ export const donation_totals = tool({
   description:
     "Sum successful donations within an ISO date range. Returns total_cents, count, and a breakdown of recurring vs one-time. Useful for fundraising team asks ('what did we raise this month?').",
   inputSchema: z.object({
-    since: z.string().optional().describe("ISO date — include donations on/after this date"),
-    until: z.string().optional().describe("ISO date — include donations on/before this date"),
+    since: isoDate.optional().describe("ISO date (YYYY-MM-DD) — on/after this date"),
+    until: isoDate.optional().describe("ISO date (YYYY-MM-DD) — on/before this date"),
   }),
   execute: async ({ since, until }) => {
     const all = await hcbPaginate<HcbDonation>(
@@ -66,7 +66,8 @@ export const donation_totals = tool({
     let oneTime = 0;
     let count = 0;
     for (const d of all) {
-      if (d.status && !SETTLED_DONATION_STATUSES.has(d.status)) continue;
+      const normalizedStatus = d.status?.toLowerCase();
+      if (!normalizedStatus || !SETTLED_DONATION_STATUSES.has(normalizedStatus)) continue;
       if (sinceTs !== undefined && d.created_at && Date.parse(d.created_at) < sinceTs) continue;
       if (untilTs !== undefined && d.created_at && Date.parse(d.created_at) > untilTs) continue;
       total += d.amount_cents ?? 0;

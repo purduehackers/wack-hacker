@@ -52,7 +52,7 @@ export const list_missing_receipts = tool({
 /** Report whether a given transaction has a receipt attached. */
 export const get_receipt_status = tool({
   description:
-    "Report whether a given HCB transaction has a receipt attached — returns {count, missing}. The HCB API does not expose the receipt file itself; to upload or view the actual image/PDF, visit hcb.hackclub.com/hcb/{id}.",
+    "Report whether a given HCB transaction has a receipt attached — returns { id, receipts: { count, missing }, href }. The HCB API does not expose the receipt file itself; to upload or view the actual image/PDF, visit hcb.hackclub.com/hcb/{id}.",
   inputSchema: z.object({
     id: z.string().describe("HCB transaction id"),
   }),
@@ -60,8 +60,10 @@ export const get_receipt_status = tool({
     const data = await hcbGet<HcbTransaction>(`/transactions/${id}`);
     return JSON.stringify({
       id,
-      count: data.receipts?.count ?? 0,
-      missing: data.receipts?.missing ?? false,
+      receipts: {
+        count: data.receipts?.count ?? 0,
+        missing: data.receipts?.missing ?? false,
+      },
       href: hcbTxnUrl(id),
     });
   },
