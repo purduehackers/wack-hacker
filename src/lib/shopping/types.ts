@@ -2,6 +2,14 @@ import type { cartItems } from "./schemas/cart-items.ts";
 
 export type CartItem = typeof cartItems.$inferSelect;
 
+export interface PublicCartItem {
+  asin: string;
+  title: string;
+  price: number;
+  quantity: number;
+  added_at: string;
+}
+
 export interface ProductResult {
   asin: string;
   title: string;
