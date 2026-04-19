@@ -49,10 +49,12 @@ const MessageData = z.object({
   flags: z.number().optional(),
   categoryId: z.string().optional(),
   forwardedSnapshots: z.array(MessageSnapshot).optional(),
+  mentions: z.array(z.string()).default([]),
   reference: z
     .object({
       messageId: z.string(),
       channelId: z.string().optional(),
+      authorId: z.string().optional(),
     })
     .optional(),
 });

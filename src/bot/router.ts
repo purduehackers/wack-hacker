@@ -13,7 +13,7 @@ import { PacketCodec } from "@/lib/protocol/packets";
 
 import type { HandlerContext } from "./types";
 
-import { isBotMention } from "./mention";
+import { isBotMention, isReplyToBot } from "./mention";
 
 export type { HandlerContext } from "./types";
 
@@ -73,7 +73,7 @@ export class EventRouter {
 
     switch (packet.type) {
       case "GATEWAY_MESSAGE_CREATE": {
-        if (isBotMention(packet.data.content, ctx.botUserId)) {
+        if (isBotMention(packet.data, ctx.botUserId) || isReplyToBot(packet.data, ctx.botUserId)) {
           await run(this.handlers.mention, packet);
         }
         await run(this.handlers.message, packet);

@@ -213,10 +213,12 @@ function bindMessageHandlers(client: Client, publish: Publish): void {
             height: a.height ?? undefined,
           })),
         })),
+        mentions: [...message.mentions.users.keys()],
         reference: message.reference?.messageId
           ? {
               messageId: message.reference.messageId,
               channelId: message.reference.channelId ?? undefined,
+              authorId: message.mentions.repliedUser?.id,
             }
           : undefined,
       },
