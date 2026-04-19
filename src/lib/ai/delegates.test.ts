@@ -51,6 +51,15 @@ vi.mock("@/lib/ai/skills/generated/manifest", () => ({
       mode: "delegate",
       instructions: "Sentry instructions.",
     },
+    sales: {
+      name: "sales",
+      description: "Sales delegate",
+      criteria: "when asked about the CRM",
+      toolNames: [],
+      minRole: UserRole.Organizer,
+      mode: "delegate",
+      instructions: "Sales instructions.",
+    },
     // notion is intentionally omitted — buildDelegationTools should tolerate missing domains.
   },
 }));
@@ -61,6 +70,7 @@ vi.mock("@/lib/ai/skills/generated/domains/github", () => ({ SKILL_MANIFEST: {} 
 vi.mock("@/lib/ai/skills/generated/domains/discord", () => ({ SKILL_MANIFEST: {} }));
 vi.mock("@/lib/ai/skills/generated/domains/figma", () => ({ SKILL_MANIFEST: {} }));
 vi.mock("@/lib/ai/skills/generated/domains/notion", () => ({ SKILL_MANIFEST: {} }));
+vi.mock("@/lib/ai/skills/generated/domains/sales", () => ({ SKILL_MANIFEST: {} }));
 vi.mock("@/lib/ai/skills/generated/domains/sentry", () => ({ SKILL_MANIFEST: {} }));
 
 // Stub the heavy tool index modules so env-backed SDK clients don't initialize.
@@ -69,6 +79,7 @@ vi.mock("@/lib/ai/tools/github", () => ({}));
 vi.mock("@/lib/ai/tools/discord", () => ({}));
 vi.mock("@/lib/ai/tools/figma", () => ({}));
 vi.mock("@/lib/ai/tools/notion", () => ({}));
+vi.mock("@/lib/ai/tools/sales", () => ({}));
 vi.mock("@/lib/ai/tools/sentry", () => ({}));
 
 // Stub createDelegationTool so we can see what spec each domain was passed.
@@ -98,6 +109,7 @@ describe("buildDelegationTools", () => {
     expect(Object.keys(tools).sort()).toEqual([
       "delegate_figma",
       "delegate_linear",
+      "delegate_sales",
       "delegate_sentry",
     ]);
   });
@@ -109,6 +121,7 @@ describe("buildDelegationTools", () => {
       "delegate_figma",
       "delegate_github",
       "delegate_linear",
+      "delegate_sales",
       "delegate_sentry",
     ]);
   });
