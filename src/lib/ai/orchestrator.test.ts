@@ -16,6 +16,7 @@ import { TurnUsageTracker } from "./turn-usage.ts";
 // --- Boundary mocks: tools that hit external APIs or initialize SDK clients ---
 
 vi.mock("@/lib/ai/tools/docs", () => ({ documentation: stubTool("documentation") }));
+vi.mock("@/lib/ai/tools/roster", () => ({ resolve_organizer: stubTool("resolve_organizer") }));
 vi.mock("@/lib/ai/tools/schedule", () => ({
   scheduleTask: stubTool("scheduleTask"),
   listScheduledTasks: stubTool("listScheduledTasks"),
@@ -68,6 +69,7 @@ const BASE_TOOLS = [
   "currentTime",
   "documentation",
   "listScheduledTasks",
+  "resolve_organizer",
   "scheduleTask",
 ];
 

@@ -7,6 +7,7 @@ import type {
   SerializedAgentContext,
 } from "./types.ts";
 
+import { DISCORD_IDS } from "../protocol/constants.ts";
 import { UserRole } from "./constants.ts";
 
 export type {
@@ -16,12 +17,6 @@ export type {
   RecentMessage,
   SerializedAgentContext,
 } from "./types.ts";
-
-/** Discord role IDs for Purdue Hackers server. */
-const ROLE_IDS = {
-  ORGANIZER: "1012751663322382438",
-  ADMIN: "1344066433172373656",
-} as const;
 
 export class AgentContext {
   readonly userId: string;
@@ -53,8 +48,8 @@ export class AgentContext {
   /** Resolve Discord role IDs to an application-level access tier. */
   get role(): UserRole {
     if (!this.memberRoles) return UserRole.Public;
-    if (this.memberRoles.includes(ROLE_IDS.ADMIN)) return UserRole.Admin;
-    if (this.memberRoles.includes(ROLE_IDS.ORGANIZER)) return UserRole.Organizer;
+    if (this.memberRoles.includes(DISCORD_IDS.roles.ADMIN)) return UserRole.Admin;
+    if (this.memberRoles.includes(DISCORD_IDS.roles.ORGANIZER)) return UserRole.Organizer;
     return UserRole.Public;
   }
 

@@ -7,6 +7,7 @@ import { ORCHESTRATOR_MODEL, SYSTEM_PROMPT } from "./constants.ts";
 import { AgentContext } from "./context.ts";
 import { buildDelegationTools } from "./delegates.ts";
 import { documentation } from "./tools/docs/index.ts";
+import { resolve_organizer } from "./tools/roster/index.ts";
 import { scheduleTask, listScheduledTasks, cancelTask } from "./tools/schedule/index.ts";
 import { currentTime } from "./tools/schedule/time.ts";
 
@@ -20,6 +21,7 @@ export function getOrchestratorTools(role: UserRole, tracker: TurnUsageTracker):
   return {
     currentTime,
     documentation,
+    resolve_organizer,
     scheduleTask,
     listScheduledTasks,
     cancelTask,

@@ -11,3 +11,7 @@ export function respond(ctx: SlashCommandContext, msg: string): Promise<unknown>
 export function isOrganizer(ctx: SlashCommandContext): boolean {
   return (ctx.interaction.member?.roles ?? []).includes(DISCORD_IDS.roles.ORGANIZER);
 }
+
+export function isAdmin(ctx: SlashCommandContext): boolean {
+  return (ctx.interaction.member?.roles ?? []).includes(DISCORD_IDS.roles.ADMIN);
+}

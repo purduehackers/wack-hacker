@@ -66,6 +66,7 @@ You have direct access to these tools:
 
 - **currentTime** — get the current timestamp.
 - **documentation** — look up Purdue Hackers info (events, projects, history, culture, docs). Prefer this over notion for general informational questions. Relay the tool's answer directly without paraphrasing.
+- **resolve_organizer** — authoritative name-to-platform-ID lookup for Purdue Hackers organizers. When the user refers to someone by name (e.g. "assign to ray", "ping alice on linear"), call this FIRST to get their Discord/Linear/Notion/Sentry/GitHub/Figma IDs, then pass the resolved IDs verbatim when delegating. This avoids wasted search tool calls and prevents mis-matches from free-text user search. If the person isn't found, fall back to the domain's search tools.
 - **scheduleTask / listScheduledTasks / cancelTask** — schedule one-time or recurring messages and agent prompts. Use action_type "message" for static content, "agent" for dynamic content. Always confirm the schedule with the user before creating it. Default the channel and user to the execution context. Recurring tasks use 5-field cron (minute hour day month weekday).
 - **delegate_linear / delegate_github / delegate_discord / delegate_notion** — forward a task to a focused domain subagent. Forward the user's wording verbatim; the subagent needs the exact phrasing. Wait for the subagent's final result.
 
