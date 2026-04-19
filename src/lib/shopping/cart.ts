@@ -8,9 +8,7 @@ import { carts } from "./schemas/carts.ts";
 
 const GLOBAL_CART_ID = "global";
 
-function now(): string {
-  return new Date().toISOString();
-}
+const NOW = sql`CURRENT_TIMESTAMP`;
 
 export async function getCart(): Promise<CartSnapshot> {
   const db = getDb();
@@ -47,7 +45,7 @@ export async function addCartItem(input: NewCartItemInput): Promise<CartMutation
         },
       })
       .returning();
-    await tx.update(carts).set({ updatedAt: now() }).where(eq(carts.id, GLOBAL_CART_ID));
+    await tx.update(carts).set({ updatedAt: NOW }).where(eq(carts.id, GLOBAL_CART_ID));
     const [{ updatedAt }] = await tx
       .select({ updatedAt: carts.updatedAt })
       .from(carts)
@@ -68,7 +66,7 @@ export async function removeCartItem(asin: string): Promise<CartMutation | null>
       .where(and(eq(cartItems.cartId, GLOBAL_CART_ID), eq(cartItems.asin, asin)))
       .returning();
     if (!removed) return null;
-    await tx.update(carts).set({ updatedAt: now() }).where(eq(carts.id, GLOBAL_CART_ID));
+    await tx.update(carts).set({ updatedAt: NOW }).where(eq(carts.id, GLOBAL_CART_ID));
     const [{ updatedAt }] = await tx
       .select({ updatedAt: carts.updatedAt })
       .from(carts)
@@ -106,7 +104,7 @@ export async function setCartItemQuantity(
         .returning();
       affected = updated;
     }
-    await tx.update(carts).set({ updatedAt: now() }).where(eq(carts.id, GLOBAL_CART_ID));
+    await tx.update(carts).set({ updatedAt: NOW }).where(eq(carts.id, GLOBAL_CART_ID));
     const [{ updatedAt }] = await tx
       .select({ updatedAt: carts.updatedAt })
       .from(carts)
@@ -124,6 +122,6 @@ export async function clearCart(): Promise<void> {
   await getDb().transaction(async (tx) => {
     await tx.insert(carts).values({ id: GLOBAL_CART_ID }).onConflictDoNothing();
     await tx.delete(cartItems).where(eq(cartItems.cartId, GLOBAL_CART_ID));
-    await tx.update(carts).set({ updatedAt: now() }).where(eq(carts.id, GLOBAL_CART_ID));
+    await tx.update(carts).set({ updatedAt: NOW }).where(eq(carts.id, GLOBAL_CART_ID));
   });
 }

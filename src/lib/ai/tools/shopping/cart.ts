@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import type { CartItem } from "../../../shopping/types.ts";
+import type { CartItem, PublicCartItem } from "../../../shopping/types.ts";
 
 import {
   addCartItem,
@@ -12,6 +12,16 @@ import {
 } from "../../../shopping/cart.ts";
 
 const PAGE_SIZE = 10;
+
+function toPublic(item: CartItem): PublicCartItem {
+  return {
+    asin: item.asin,
+    title: item.title,
+    price: item.price,
+    quantity: item.quantity,
+    added_at: item.addedAt,
+  };
+}
 
 function summarize(items: CartItem[]) {
   let subtotal = 0;
@@ -39,7 +49,7 @@ export const add_to_cart = tool({
   }),
   execute: async ({ asin, title, price, quantity }) => {
     const { item, snapshot } = await addCartItem({ asin, title, price, quantity });
-    return JSON.stringify({ added: item, ...summarize(snapshot.items) });
+    return JSON.stringify({ added: toPublic(item), ...summarize(snapshot.items) });
   },
 });
 
@@ -51,7 +61,7 @@ export const remove_from_cart = tool({
   execute: async ({ asin }) => {
     const result = await removeCartItem(asin);
     if (!result) return JSON.stringify({ error: `ASIN ${asin} not in cart` });
-    return JSON.stringify({ removed: result.item, ...summarize(result.snapshot.items) });
+    return JSON.stringify({ removed: toPublic(result.item), ...summarize(result.snapshot.items) });
   },
 });
 
@@ -89,7 +99,7 @@ export const view_cart = tool({
       page: current,
       total_pages: totalPages,
       page_size: PAGE_SIZE,
-      items: snapshot.items.slice(start, start + PAGE_SIZE),
+      items: snapshot.items.slice(start, start + PAGE_SIZE).map(toPublic),
       ...summarize(snapshot.items),
       updated_at: snapshot.updatedAt,
     });
