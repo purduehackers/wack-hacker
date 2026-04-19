@@ -61,6 +61,15 @@ vi.mock("@/lib/ai/tools/sentry", () => ({
   search_issues: stubTool("search_issues"),
   get_issue: stubTool("get_issue"),
 }));
+vi.mock("@/lib/ai/tools/sales", () => ({
+  list_companies: stubTool("list_companies"),
+  list_contacts: stubTool("list_contacts"),
+  list_deals: stubTool("list_deals"),
+  get_company: stubTool("get_company"),
+  get_contact: stubTool("get_contact"),
+  get_deal: stubTool("get_deal"),
+  retrieve_crm_schema: stubTool("retrieve_crm_schema"),
+}));
 
 const { createOrchestrator } = await import("./orchestrator.ts");
 
@@ -122,6 +131,7 @@ describe("createOrchestrator", () => {
         "delegate_github",
         "delegate_linear",
         "delegate_notion",
+        "delegate_sales",
         "delegate_sentry",
       ]),
     );

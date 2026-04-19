@@ -56,6 +56,13 @@ describe("ConversationStore", () => {
       await store.dedup("msg:1");
       expect(await store.dedup("msg:1")).toBe(false);
     });
+
+    it("releaseDedup allows a subsequent claim to succeed", async () => {
+      await store.dedup("msg:2");
+      expect(await store.dedup("msg:2")).toBe(false);
+      await store.releaseDedup("msg:2");
+      expect(await store.dedup("msg:2")).toBe(true);
+    });
   });
 
   describe("locking", () => {
