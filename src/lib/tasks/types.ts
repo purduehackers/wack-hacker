@@ -26,4 +26,12 @@ export interface TaskSchedule {
 export interface TaskContext {
   userId: string;
   channelId: string;
+  /**
+   * Discord role IDs the scheduler held at schedule time. Rehydrated into the
+   * scheduled `AgentContext` so the scheduled run resolves to the same
+   * `UserRole` (and therefore the same delegate toolset) the scheduler had.
+   * Role is re-resolved at execute time, so a revocation between scheduling
+   * and firing is respected.
+   */
+  memberRoles?: string[];
 }
