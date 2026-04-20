@@ -2,7 +2,7 @@ import { tool } from "ai";
 import { Routes } from "discord-api-types/v10";
 import { z } from "zod";
 
-import { env } from "../../../../env.ts";
+import { DISCORD_GUILD_ID } from "../../../protocol/constants.ts";
 import { discord } from "./client.ts";
 
 // ---------------------------------------------------------------------------
@@ -36,7 +36,7 @@ export const list_webhooks = tool({
   execute: async ({ channel_id }) => {
     const webhooks = channel_id
       ? ((await discord.get(Routes.channelWebhooks(channel_id))) as any[])
-      : ((await discord.get(Routes.guildWebhooks(env.DISCORD_GUILD_ID))) as any[]);
+      : ((await discord.get(Routes.guildWebhooks(DISCORD_GUILD_ID))) as any[]);
 
     return JSON.stringify(webhooks.map(summarizeWebhook));
   },

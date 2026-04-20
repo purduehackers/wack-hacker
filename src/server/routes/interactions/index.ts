@@ -15,7 +15,7 @@ import { handleModalSubmit } from "./modal.ts";
 const route = new Hono();
 
 route.post("/interactions", async (c) => {
-  const result = await verifyInteraction(c.req.raw, env.DISCORD_PUBLIC_KEY);
+  const result = await verifyInteraction(c.req.raw, env.DISCORD_BOT_PUBLIC_KEY);
   if (!result.valid) return c.json({ error: "Invalid signature" }, 401);
 
   const interaction = result.body as DiscordInteraction;

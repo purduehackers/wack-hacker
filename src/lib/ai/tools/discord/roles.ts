@@ -2,7 +2,7 @@ import { tool } from "ai";
 import { Routes } from "discord-api-types/v10";
 import { z } from "zod";
 
-import { env } from "../../../../env.ts";
+import { DISCORD_GUILD_ID } from "../../../protocol/constants.ts";
 import { discord } from "./client.ts";
 
 // ---------------------------------------------------------------------------
@@ -35,13 +35,13 @@ export const create_role = tool({
     if (icon) body.icon = icon;
     if (unicode_emoji) body.unicode_emoji = unicode_emoji;
 
-    const role = (await discord.post(Routes.guildRoles(env.DISCORD_GUILD_ID), {
+    const role = (await discord.post(Routes.guildRoles(DISCORD_GUILD_ID), {
       body,
     })) as any;
 
     // If position was requested, modify it separately
     if (position !== undefined) {
-      await discord.patch(Routes.guildRoles(env.DISCORD_GUILD_ID), {
+      await discord.patch(Routes.guildRoles(DISCORD_GUILD_ID), {
         body: [{ id: role.id, position }],
       });
     }
@@ -85,12 +85,12 @@ export const edit_role = tool({
     if (icon !== undefined) body.icon = icon;
     if (unicode_emoji !== undefined) body.unicode_emoji = unicode_emoji;
 
-    const edited = (await discord.patch(Routes.guildRole(env.DISCORD_GUILD_ID, role_id), {
+    const edited = (await discord.patch(Routes.guildRole(DISCORD_GUILD_ID, role_id), {
       body,
     })) as any;
 
     if (position !== undefined) {
-      await discord.patch(Routes.guildRoles(env.DISCORD_GUILD_ID), {
+      await discord.patch(Routes.guildRoles(DISCORD_GUILD_ID), {
         body: [{ id: role_id, position }],
       });
     }
@@ -112,10 +112,10 @@ export const delete_role = tool({
   }),
   execute: async ({ role_id }) => {
     // Fetch the role first to get its name
-    const allRoles = (await discord.get(Routes.guildRoles(env.DISCORD_GUILD_ID))) as any[];
+    const allRoles = (await discord.get(Routes.guildRoles(DISCORD_GUILD_ID))) as any[];
     const target = allRoles.find((r) => r.id === role_id);
     if (!target) return JSON.stringify({ error: "Role not found" });
-    await discord.delete(Routes.guildRole(env.DISCORD_GUILD_ID, role_id));
+    await discord.delete(Routes.guildRole(DISCORD_GUILD_ID, role_id));
     return JSON.stringify({ success: true, deleted: target.name });
   },
 });
@@ -128,7 +128,7 @@ export const assign_role = tool({
     role_id: z.string().describe("Role ID to assign"),
   }),
   execute: async ({ member_id, role_id }) => {
-    await discord.put(Routes.guildMemberRole(env.DISCORD_GUILD_ID, member_id, role_id));
+    await discord.put(Routes.guildMemberRole(DISCORD_GUILD_ID, member_id, role_id));
     return JSON.stringify({ success: true, member: member_id, role: role_id });
   },
 });
@@ -141,7 +141,7 @@ export const remove_role = tool({
     role_id: z.string().describe("Role ID to remove"),
   }),
   execute: async ({ member_id, role_id }) => {
-    await discord.delete(Routes.guildMemberRole(env.DISCORD_GUILD_ID, member_id, role_id));
+    await discord.delete(Routes.guildMemberRole(DISCORD_GUILD_ID, member_id, role_id));
     return JSON.stringify({ success: true, member: member_id, role: role_id });
   },
 });

@@ -2,7 +2,7 @@ import { tool } from "ai";
 import { Routes } from "discord-api-types/v10";
 import { z } from "zod";
 
-import { env } from "../../../../env.ts";
+import { DISCORD_GUILD_ID } from "../../../protocol/constants.ts";
 import { discord } from "./client.ts";
 
 // ---------------------------------------------------------------------------
@@ -105,7 +105,7 @@ export const create_channel = tool({
     if (default_thread_slowmode !== undefined)
       body.default_thread_rate_limit_per_user = default_thread_slowmode;
 
-    const channel = (await discord.post(Routes.guildChannels(env.DISCORD_GUILD_ID), {
+    const channel = (await discord.post(Routes.guildChannels(DISCORD_GUILD_ID), {
       body,
     })) as any;
     return JSON.stringify(summarizeChannel(channel));

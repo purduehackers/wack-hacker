@@ -2,7 +2,7 @@ import { tool } from "ai";
 import { Routes } from "discord-api-types/v10";
 import { z } from "zod";
 
-import { env } from "../../../../env.ts";
+import { DISCORD_GUILD_ID } from "../../../protocol/constants.ts";
 import { discord } from "./client.ts";
 
 // ---------------------------------------------------------------------------
@@ -45,7 +45,7 @@ export const get_server_info = tool({
     "Get Discord server overview: name, member count, channel count, role count, and basic settings. Use this to understand the server at a high level.",
   inputSchema: z.object({}),
   execute: async () => {
-    const guild = (await discord.get(Routes.guild(env.DISCORD_GUILD_ID), {
+    const guild = (await discord.get(Routes.guild(DISCORD_GUILD_ID), {
       query: new URLSearchParams({ with_counts: "true" }),
     })) as any;
     return JSON.stringify({
@@ -72,7 +72,7 @@ export const list_channels = tool({
     "List all channels in the Discord server, organized by category. Returns channel IDs, names, types, topics, and positions. Use this to find the right channel before sending messages or performing channel operations.",
   inputSchema: z.object({}),
   execute: async () => {
-    const channels = (await discord.get(Routes.guildChannels(env.DISCORD_GUILD_ID))) as any[];
+    const channels = (await discord.get(Routes.guildChannels(DISCORD_GUILD_ID))) as any[];
 
     const nonThread = channels.filter((ch) => ![10, 11, 12].includes(ch.type));
 
@@ -109,7 +109,7 @@ export const list_roles = tool({
     "List all roles in the Discord server with their colors, positions, and whether they are hoisted or mentionable. Use this to find role IDs before assigning or managing roles.",
   inputSchema: z.object({}),
   execute: async () => {
-    const roles = (await discord.get(Routes.guildRoles(env.DISCORD_GUILD_ID))) as any[];
+    const roles = (await discord.get(Routes.guildRoles(DISCORD_GUILD_ID))) as any[];
     const sorted = roles.sort((a, b) => b.position - a.position);
     return JSON.stringify(
       sorted.map((r) => ({
@@ -120,7 +120,7 @@ export const list_roles = tool({
         mentionable: r.mentionable,
         hoist: r.hoist,
         managed: r.managed,
-        isEveryone: r.id === env.DISCORD_GUILD_ID,
+        isEveryone: r.id === DISCORD_GUILD_ID,
       })),
     );
   },
@@ -139,13 +139,13 @@ export const search_members = tool({
     // If the query looks like a Discord user ID, fetch directly
     if (/^\d{17,20}$/.test(query)) {
       try {
-        const found = (await discord.get(Routes.guildMember(env.DISCORD_GUILD_ID, query))) as any;
+        const found = (await discord.get(Routes.guildMember(DISCORD_GUILD_ID, query))) as any;
         return JSON.stringify([summarizeMember(found)]);
       } catch {
         return JSON.stringify([]);
       }
     }
-    const matches = (await discord.get(Routes.guildMembersSearch(env.DISCORD_GUILD_ID), {
+    const matches = (await discord.get(Routes.guildMembersSearch(DISCORD_GUILD_ID), {
       query: new URLSearchParams({ query, limit: String(limit) }),
     })) as any[];
     return JSON.stringify(matches.map(summarizeMember));

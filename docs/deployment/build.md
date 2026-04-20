@@ -24,7 +24,7 @@ The output is committed to the repo. Type-checking and tests rely on having the 
 
 ## register-commands.ts
 
-Requires Discord credentials (`DISCORD_BOT_TOKEN`, `DISCORD_CLIENT_ID`, `DISCORD_GUILD_ID`) at build time:
+Requires Discord credentials (`DISCORD_BOT_TOKEN`, `DISCORD_BOT_CLIENT_ID`) at build time:
 
 - In CI, those come from Vercel project env.
 - Locally, they come from `.env.local`.
