@@ -108,7 +108,7 @@ async function main(): Promise<void> {
     {
       label: "ship",
       bucket: requireEnv("SHIP_R2_BUCKET_NAME"),
-      blobToken: requireEnv("SHIP_BLOB_READ_WRITE_TOKEN"),
+      blobToken: requireEnv("SHIPS_BLOB_READ_WRITE_TOKEN"),
     },
   ];
 

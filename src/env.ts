@@ -24,7 +24,7 @@ export const env = createEnv({
     PRIVACY_DB_URL: z.string(),
     PRIVACY_DB_API_KEY: z.string(),
     EVENTS_BLOB_READ_WRITE_TOKEN: z.string(),
-    SHIP_BLOB_READ_WRITE_TOKEN: z.string(),
+    SHIPS_BLOB_READ_WRITE_TOKEN: z.string(),
     SHIP_DATABASE_TURSO_DATABASE_URL: z.string(),
     SHIP_DATABASE_TURSO_AUTH_TOKEN: z.string(),
     TURSO_DATABASE_URL: z.string(),

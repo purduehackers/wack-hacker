@@ -105,7 +105,7 @@ export const shipScraper = defineEvent({
     );
 
     const uploadedAttachments = await uploadMedia(
-      env.SHIP_BLOB_READ_WRITE_TOKEN,
+      env.SHIPS_BLOB_READ_WRITE_TOKEN,
       messageId,
       attachments,
     );

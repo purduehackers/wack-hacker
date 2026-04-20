@@ -23,7 +23,7 @@ export const shipMessageDelete = defineEvent({
       log.info("ship-scraper", `Deleted ship ${deleted.id} (message ${packet.data.id})`);
 
       if (deleted.attachmentKeys.length > 0) {
-        await del(deleted.attachmentKeys, { token: env.SHIP_BLOB_READ_WRITE_TOKEN });
+        await del(deleted.attachmentKeys, { token: env.SHIPS_BLOB_READ_WRITE_TOKEN });
         log.info(
           "ship-scraper",
           `Cleaned up ${deleted.attachmentKeys.length} blobs for ship ${deleted.id}`,
