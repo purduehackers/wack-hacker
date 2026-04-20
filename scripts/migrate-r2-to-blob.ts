@@ -14,7 +14,7 @@
  * the migration has completed successfully.
  */
 
-import { GetObjectCommand, ListObjectsV2Command, S3Client, type _Object } from "@aws-sdk/client-s3";
+import { GetObjectCommand, ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
 import { put } from "@vercel/blob";
 
 type BucketPass = {
@@ -32,56 +32,50 @@ function requireEnv(name: string): string {
   return value;
 }
 
-async function listAll(s3: S3Client, bucket: string): Promise<_Object[]> {
-  const all: _Object[] = [];
-  let continuationToken: string | undefined;
-  do {
-    const res = await s3.send(
-      new ListObjectsV2Command({
-        Bucket: bucket,
-        ContinuationToken: continuationToken,
-      }),
-    );
-    if (res.Contents) all.push(...res.Contents);
-    continuationToken = res.IsTruncated ? res.NextContinuationToken : undefined;
-  } while (continuationToken);
-  return all;
-}
-
 async function migrateBucket(s3: S3Client, pass: BucketPass): Promise<void> {
   console.log(`\n=== ${pass.label} (${pass.bucket}) ===`);
-  const objects = await listAll(s3, pass.bucket);
-  console.log(`Found ${objects.length} objects`);
 
   let copied = 0;
   let failed = 0;
   let bytes = 0;
+  let continuationToken: string | undefined;
 
-  for (const obj of objects) {
-    const key = obj.Key;
-    if (!key) continue;
+  do {
+    const res = await s3.send(
+      new ListObjectsV2Command({
+        Bucket: pass.bucket,
+        ContinuationToken: continuationToken,
+      }),
+    );
 
-    try {
-      const got = await s3.send(new GetObjectCommand({ Bucket: pass.bucket, Key: key }));
-      if (!got.Body) throw new Error("empty body");
-      const arr = await got.Body.transformToByteArray();
-      const contentType = got.ContentType ?? "application/octet-stream";
+    for (const obj of res.Contents ?? []) {
+      const key = obj.Key;
+      if (!key) continue;
 
-      await put(key, Buffer.from(arr), {
-        access: "public",
-        addRandomSuffix: false,
-        allowOverwrite: true,
-        contentType,
-        token: pass.blobToken,
-      });
-      copied += 1;
-      bytes += arr.byteLength;
-      if (copied % 25 === 0) console.log(`  ...${copied} copied`);
-    } catch (err) {
-      failed += 1;
-      console.warn(`  FAIL ${key}: ${String(err)}`);
+      try {
+        const got = await s3.send(new GetObjectCommand({ Bucket: pass.bucket, Key: key }));
+        if (!got.Body) throw new Error("empty body");
+        const arr = await got.Body.transformToByteArray();
+        const contentType = got.ContentType ?? "application/octet-stream";
+
+        await put(key, Buffer.from(arr), {
+          access: "public",
+          addRandomSuffix: false,
+          allowOverwrite: true,
+          contentType,
+          token: pass.blobToken,
+        });
+        copied += 1;
+        bytes += arr.byteLength;
+        if (copied % 25 === 0) console.log(`  ...${copied} copied`);
+      } catch (err) {
+        failed += 1;
+        console.warn(`  FAIL ${key}: ${String(err)}`);
+      }
     }
-  }
+
+    continuationToken = res.IsTruncated ? res.NextContinuationToken : undefined;
+  } while (continuationToken);
 
   console.log(
     `Done: ${copied} copied, ${failed} failed, ${(bytes / (1024 * 1024)).toFixed(2)} MiB`,

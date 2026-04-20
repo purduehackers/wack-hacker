@@ -2,7 +2,12 @@ import { put } from "@vercel/blob";
 import { log } from "evlog";
 
 import { defineEvent } from "@/bot/events/define";
-import { generateEventSlug, getEventIndex, updateEventIndex } from "@/bot/integrations/hack-night";
+import {
+  generateEventSlug,
+  getEventIndex,
+  type ImageMetadata,
+  updateEventIndex,
+} from "@/bot/integrations/hack-night";
 import { env } from "@/env";
 import { DISCORD_IDS } from "@/lib/protocol/constants";
 
@@ -27,6 +32,8 @@ export const hackNightUpload = defineEvent({
     const index = await getEventIndex(slug, token);
     if (index?.images.some((img) => img.discordMessageId === messageId)) return;
 
+    const uploaded: ImageMetadata[] = [];
+
     for (const attachment of imageAttachments) {
       try {
         const res = await fetch(attachment.url);
@@ -41,21 +48,28 @@ export const hackNightUpload = defineEvent({
           token,
         });
 
-        await updateEventIndex(
-          slug,
-          {
-            filename,
-            uploadedAt: new Date().toISOString(),
-            discordMessageId: messageId,
-            discordUserId: author.id,
-          },
-          token,
-        );
+        uploaded.push({
+          filename,
+          uploadedAt: new Date().toISOString(),
+          discordMessageId: messageId,
+          discordUserId: author.id,
+        });
 
         await ctx.discord.channels.addMessageReaction(channel.id, messageId, "\u2705");
       } catch (err) {
         log.warn("hack-night", `Failed to upload ${attachment.filename}: ${String(err)}`);
         await ctx.discord.channels.addMessageReaction(channel.id, messageId, "\u274C");
+      }
+    }
+
+    if (uploaded.length > 0) {
+      try {
+        await updateEventIndex(slug, uploaded, token);
+      } catch (err) {
+        log.warn(
+          "hack-night",
+          `Failed to update index for ${slug} (${uploaded.length} images): ${String(err)}`,
+        );
       }
     }
   },
