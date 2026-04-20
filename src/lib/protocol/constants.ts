@@ -1,3 +1,5 @@
+export const DISCORD_GUILD_ID = "772576325897945119";
+
 export const DISCORD_IDS = {
   roles: {
     ADMIN: "1344066433172373656",

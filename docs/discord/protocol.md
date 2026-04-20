@@ -43,7 +43,7 @@ It extracts `X-Signature-Ed25519` and `X-Signature-Timestamp`, reads the raw bod
 The interactions route calls this **before** parsing or dispatching, so an unsigned request can never reach a handler:
 
 ```ts
-const result = await verifyInteraction(c.req.raw, env.DISCORD_PUBLIC_KEY);
+const result = await verifyInteraction(c.req.raw, env.DISCORD_BOT_PUBLIC_KEY);
 if (!result.valid) return c.json({ error: "Invalid signature" }, 401);
 ```
 

@@ -2,7 +2,7 @@ import { tool } from "ai";
 import { Routes } from "discord-api-types/v10";
 import { z } from "zod";
 
-import { env } from "../../../../env.ts";
+import { DISCORD_GUILD_ID } from "../../../protocol/constants.ts";
 import { discord } from "./client.ts";
 
 // ---------------------------------------------------------------------------
@@ -29,7 +29,7 @@ export const list_emojis = tool({
     "List all custom emojis in the server. Returns emoji IDs, names, animation status, image URLs, and role restrictions.",
   inputSchema: z.object({}),
   execute: async () => {
-    const emojis = (await discord.get(Routes.guildEmojis(env.DISCORD_GUILD_ID))) as any[];
+    const emojis = (await discord.get(Routes.guildEmojis(DISCORD_GUILD_ID))) as any[];
     return JSON.stringify(emojis.map(summarizeEmoji));
   },
 });
@@ -56,7 +56,7 @@ export const create_emoji = tool({
     const body: Record<string, any> = { name, image: dataUri };
     if (roles) body.roles = roles;
 
-    const emoji = (await discord.post(Routes.guildEmojis(env.DISCORD_GUILD_ID), {
+    const emoji = (await discord.post(Routes.guildEmojis(DISCORD_GUILD_ID), {
       body,
     })) as any;
 
@@ -85,7 +85,7 @@ export const edit_emoji = tool({
     if (name) body.name = name;
     if (roles) body.roles = roles;
 
-    const edited = (await discord.patch(Routes.guildEmoji(env.DISCORD_GUILD_ID, emoji_id), {
+    const edited = (await discord.patch(Routes.guildEmoji(DISCORD_GUILD_ID, emoji_id), {
       body,
     })) as any;
 
@@ -107,8 +107,8 @@ export const delete_emoji = tool({
   }),
   execute: async ({ emoji_id }) => {
     // Fetch emoji first to get its name
-    const emoji = (await discord.get(Routes.guildEmoji(env.DISCORD_GUILD_ID, emoji_id))) as any;
-    await discord.delete(Routes.guildEmoji(env.DISCORD_GUILD_ID, emoji_id));
+    const emoji = (await discord.get(Routes.guildEmoji(DISCORD_GUILD_ID, emoji_id))) as any;
+    await discord.delete(Routes.guildEmoji(DISCORD_GUILD_ID, emoji_id));
     return JSON.stringify({ success: true, deleted: emoji.name });
   },
 });

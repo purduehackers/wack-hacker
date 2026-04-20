@@ -2,7 +2,7 @@ import { tool } from "ai";
 import { Routes } from "discord-api-types/v10";
 import { z } from "zod";
 
-import { env } from "../../../../env.ts";
+import { DISCORD_GUILD_ID } from "../../../protocol/constants.ts";
 import { discord } from "./client.ts";
 
 // ---------------------------------------------------------------------------
@@ -50,7 +50,7 @@ export const list_events = tool({
     "List all scheduled events in the server. Returns event details including name, description, times, type, location, and attendee count.",
   inputSchema: z.object({}),
   execute: async () => {
-    const events = (await discord.get(Routes.guildScheduledEvents(env.DISCORD_GUILD_ID), {
+    const events = (await discord.get(Routes.guildScheduledEvents(DISCORD_GUILD_ID), {
       query: new URLSearchParams({ with_user_count: "true" }),
     })) as any[];
     return JSON.stringify(events.map(summarizeEvent));
@@ -100,7 +100,7 @@ export const create_event = tool({
     if (location) body.entity_metadata = { location };
     if (image) body.image = image;
 
-    const event = (await discord.post(Routes.guildScheduledEvents(env.DISCORD_GUILD_ID), {
+    const event = (await discord.post(Routes.guildScheduledEvents(DISCORD_GUILD_ID), {
       body,
     })) as any;
 
@@ -156,12 +156,9 @@ export const edit_event = tool({
     if (status) body.status = STATUS_MAP[status];
     if (channel_id !== undefined) body.channel_id = channel_id;
 
-    const edited = (await discord.patch(
-      Routes.guildScheduledEvent(env.DISCORD_GUILD_ID, event_id),
-      {
-        body,
-      },
-    )) as any;
+    const edited = (await discord.patch(Routes.guildScheduledEvent(DISCORD_GUILD_ID, event_id), {
+      body,
+    })) as any;
 
     return JSON.stringify({
       id: edited.id,
@@ -182,9 +179,9 @@ export const delete_event = tool({
   execute: async ({ event_id }) => {
     // Fetch event first to get its name
     const event = (await discord.get(
-      Routes.guildScheduledEvent(env.DISCORD_GUILD_ID, event_id),
+      Routes.guildScheduledEvent(DISCORD_GUILD_ID, event_id),
     )) as any;
-    await discord.delete(Routes.guildScheduledEvent(env.DISCORD_GUILD_ID, event_id));
+    await discord.delete(Routes.guildScheduledEvent(DISCORD_GUILD_ID, event_id));
     return JSON.stringify({ success: true, deleted: event.name });
   },
 });
