@@ -10,6 +10,7 @@ import { SKILL_MANIFEST as GITHUB_SUBSKILLS } from "./skills/generated/domains/g
 import { SKILL_MANIFEST as LINEAR_SUBSKILLS } from "./skills/generated/domains/linear.ts";
 import { SKILL_MANIFEST as NOTION_SUBSKILLS } from "./skills/generated/domains/notion.ts";
 import { SKILL_MANIFEST as SENTRY_SUBSKILLS } from "./skills/generated/domains/sentry.ts";
+import { SKILL_MANIFEST as SHOPPING_SUBSKILLS } from "./skills/generated/domains/shopping.ts";
 import { SKILL_MANIFEST } from "./skills/generated/manifest.ts";
 import { SkillRegistry } from "./skills/registry.ts";
 import { createDelegationTool } from "./subagent.ts";
@@ -20,6 +21,7 @@ import * as githubTools from "./tools/github/index.ts";
 import * as linearTools from "./tools/linear/index.ts";
 import * as notionTools from "./tools/notion/index.ts";
 import * as sentryTools from "./tools/sentry/index.ts";
+import * as shoppingTools from "./tools/shopping/index.ts";
 
 const DELEGATE_PREFIX = "delegate_";
 
@@ -70,6 +72,11 @@ const DOMAINS = {
     tools: financeTools as unknown as ToolSet,
     subSkills: FINANCE_SUBSKILLS,
     baseToolNames: ["get_organization", "get_balance", "list_transactions", "get_transaction"],
+  },
+  shopping: {
+    tools: shoppingTools as unknown as ToolSet,
+    subSkills: SHOPPING_SUBSKILLS,
+    baseToolNames: ["search_products", "view_cart"],
   },
 } as const satisfies Record<
   string,

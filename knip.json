@@ -10,5 +10,6 @@
   ],
   "project": ["src/**/*.ts", "scripts/**/*.ts"],
   "ignoreExportsUsedInFile": true,
-  "ignore": ["src/lib/ai/tools/**"]
+  "ignore": ["src/lib/ai/tools/**"],
+  "drizzle": false
 }
