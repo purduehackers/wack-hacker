@@ -44,6 +44,11 @@ describe("applyResendEvent: filtering", () => {
     expect(queryMock).not.toHaveBeenCalled();
   });
 
+  it.each([null, undefined, "not-an-object", 42])("ignores non-object input %p", async (input) => {
+    await applyResendEvent(input);
+    expect(queryMock).not.toHaveBeenCalled();
+  });
+
   it("ignores unsupported event types", async () => {
     await applyResendEvent(event("email.scheduled"));
     expect(queryMock).not.toHaveBeenCalled();
@@ -97,6 +102,24 @@ describe("applyResendEvent: routing", () => {
         "Outreach Status": { select: { name: "Opened" } },
       }),
     });
+  });
+});
+
+describe("applyResendEvent: missing / unknown prior status", () => {
+  it("treats a page with no Outreach Status as Sent (rank 1)", async () => {
+    queryMock.mockResolvedValueOnce({ results: [pageWithStatus(null)] });
+    await applyResendEvent(event("email.delivered"));
+
+    const props = updateMock.mock.calls[0]![0].properties;
+    expect(props["Outreach Status"]).toEqual({ select: { name: "Delivered" } });
+  });
+
+  it("treats an unknown select option as Sent (rank 1)", async () => {
+    queryMock.mockResolvedValueOnce({ results: [pageWithStatus("Scheduled")] });
+    await applyResendEvent(event("email.opened"));
+
+    const props = updateMock.mock.calls[0]![0].properties;
+    expect(props["Outreach Status"]).toEqual({ select: { name: "Opened" } });
   });
 });
 
