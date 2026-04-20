@@ -1,7 +1,7 @@
+import { del } from "@vercel/blob";
 import { log } from "evlog";
 
 import { defineEvent } from "@/bot/events/define";
-import { R2Storage } from "@/bot/integrations/r2";
 import { ShipDatabase } from "@/bot/integrations/ships";
 import { env } from "@/env";
 import { DISCORD_IDS } from "@/lib/protocol/constants";
@@ -23,18 +23,10 @@ export const shipMessageDelete = defineEvent({
       log.info("ship-scraper", `Deleted ship ${deleted.id} (message ${packet.data.id})`);
 
       if (deleted.attachmentKeys.length > 0) {
-        const r2 = new R2Storage(
-          env.R2_ACCOUNT_ID,
-          env.R2_ACCESS_KEY_ID,
-          env.R2_SECRET_ACCESS_KEY,
-          env.SHIP_R2_BUCKET_NAME,
-        );
-        for (const key of deleted.attachmentKeys) {
-          await r2.deleteKey(key);
-        }
+        await del(deleted.attachmentKeys, { token: env.SHIP_BLOB_READ_WRITE_TOKEN });
         log.info(
           "ship-scraper",
-          `Cleaned up ${deleted.attachmentKeys.length} R2 objects for ship ${deleted.id}`,
+          `Cleaned up ${deleted.attachmentKeys.length} blobs for ship ${deleted.id}`,
         );
       }
     } catch (err) {

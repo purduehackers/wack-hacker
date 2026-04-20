@@ -1,11 +1,11 @@
 import type { z } from "zod";
 
+import { put } from "@vercel/blob";
 import { log } from "evlog";
 
 import type { MessageCreatePacket } from "@/lib/protocol/packets";
 
 import { defineEvent } from "@/bot/events/define";
-import { R2Storage } from "@/bot/integrations/r2";
 import { ShipDatabase } from "@/bot/integrations/ships";
 import { env } from "@/env";
 import { DISCORD_IDS } from "@/lib/protocol/constants";
@@ -35,8 +35,14 @@ function isMedia(contentType: string | undefined): boolean {
   return contentType.startsWith("image/") || contentType.startsWith("video/");
 }
 
+async function downloadBuffer(url: string): Promise<Buffer> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`download failed: ${res.status}`);
+  return Buffer.from(await res.arrayBuffer());
+}
+
 async function uploadMedia(
-  r2: R2Storage,
+  token: string,
   messageId: string,
   mediaList: Attachment[],
 ): Promise<
@@ -54,14 +60,21 @@ async function uploadMedia(
     if (!isMedia(item.contentType)) continue;
 
     try {
-      const buffer = await r2.downloadBuffer(item.url);
+      const buffer = await downloadBuffer(item.url);
       const defaultName = item.contentType?.startsWith("video/") ? "video.mp4" : "image.jpg";
       const fname = `${messageId}-${item.filename ?? defaultName}`;
       const key = `images/ships/${fname}`;
-      await r2.uploadBuffer(key, buffer, item.contentType ?? "application/octet-stream");
+      const contentType = item.contentType ?? "application/octet-stream";
+      await put(key, buffer, {
+        access: "public",
+        addRandomSuffix: false,
+        allowOverwrite: true,
+        contentType,
+        token,
+      });
       uploaded.push({
         key,
-        type: item.contentType ?? "application/octet-stream",
+        type: contentType,
         filename: item.filename ?? defaultName,
         width: item.width ?? undefined,
         height: item.height ?? undefined,
@@ -86,18 +99,16 @@ export const shipScraper = defineEvent({
 
     if (!URL_PATTERN.test(content) && attachments.length === 0) return;
 
-    const r2 = new R2Storage(
-      env.R2_ACCOUNT_ID,
-      env.R2_ACCESS_KEY_ID,
-      env.R2_SECRET_ACCESS_KEY,
-      env.SHIP_R2_BUCKET_NAME,
-    );
     const shipDb = new ShipDatabase(
       env.SHIP_DATABASE_TURSO_DATABASE_URL,
       env.SHIP_DATABASE_TURSO_AUTH_TOKEN,
     );
 
-    const uploadedAttachments = await uploadMedia(r2, messageId, attachments);
+    const uploadedAttachments = await uploadMedia(
+      env.SHIP_BLOB_READ_WRITE_TOKEN,
+      messageId,
+      attachments,
+    );
 
     const firstLine = content.split("\n")[0]?.trim() ?? "";
     const title = firstLine.length > 100 ? firstLine.slice(0, 100) + "..." : firstLine || null;

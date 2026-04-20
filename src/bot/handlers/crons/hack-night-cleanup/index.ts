@@ -1,8 +1,7 @@
 import { log } from "evlog";
 
 import { defineCron } from "@/bot/crons/define";
-import { generateEventSlug } from "@/bot/integrations/hack-night";
-import { R2Storage } from "@/bot/integrations/r2";
+import { generateEventSlug, getEventIndex } from "@/bot/integrations/hack-night";
 import { env } from "@/env";
 import { DISCORD_IDS } from "@/lib/protocol/constants";
 
@@ -10,20 +9,13 @@ export const hackNightCleanup = defineCron({
   name: "hack-night-cleanup",
   schedule: "0 18 * * 0",
   async handle(discord) {
-    const r2 = new R2Storage(
-      env.R2_ACCOUNT_ID,
-      env.R2_ACCESS_KEY_ID,
-      env.R2_SECRET_ACCESS_KEY,
-      env.EVENTS_R2_BUCKET_NAME,
-    );
-
     const now = new Date();
     const daysSinceFriday = (now.getDay() + 2) % 7;
     const friday = new Date(now);
     friday.setDate(now.getDate() - daysSinceFriday);
     const slug = generateEventSlug(friday);
 
-    const index = await r2.getEventIndex(slug);
+    const index = await getEventIndex(slug, env.EVENTS_BLOB_READ_WRITE_TOKEN);
     if (!index || index.images.length === 0) {
       log.info("hack-night", `No images found for ${slug}`);
       return;

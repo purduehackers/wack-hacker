@@ -1,8 +1,8 @@
+import { put } from "@vercel/blob";
 import { log } from "evlog";
 
 import { defineEvent } from "@/bot/events/define";
-import { generateEventSlug } from "@/bot/integrations/hack-night";
-import { R2Storage } from "@/bot/integrations/r2";
+import { generateEventSlug, getEventIndex, updateEventIndex } from "@/bot/integrations/hack-night";
 import { env } from "@/env";
 import { DISCORD_IDS } from "@/lib/protocol/constants";
 
@@ -20,34 +20,37 @@ export const hackNightUpload = defineEvent({
     const imageAttachments = attachments.filter((a) => a.contentType?.startsWith("image/"));
     if (imageAttachments.length === 0) return;
 
-    const r2 = new R2Storage(
-      env.R2_ACCOUNT_ID,
-      env.R2_ACCESS_KEY_ID,
-      env.R2_SECRET_ACCESS_KEY,
-      env.EVENTS_R2_BUCKET_NAME,
-    );
+    const token = env.EVENTS_BLOB_READ_WRITE_TOKEN;
     const slug = generateEventSlug(new Date());
 
     // Skip if this message's images were already uploaded
-    const index = await r2.getEventIndex(slug);
+    const index = await getEventIndex(slug, token);
     if (index?.images.some((img) => img.discordMessageId === messageId)) return;
 
     for (const attachment of imageAttachments) {
       try {
-        const buffer = await r2.downloadBuffer(attachment.url);
+        const res = await fetch(attachment.url);
+        if (!res.ok) throw new Error(`download failed: ${res.status}`);
+        const buffer = Buffer.from(await res.arrayBuffer());
         const filename = `${messageId}-${attachment.filename}`;
-        await r2.uploadBuffer(
-          `images/${slug}/${filename}`,
-          buffer,
-          attachment.contentType ?? "image/jpeg",
-        );
-
-        await r2.updateEventIndex(slug, {
-          filename,
-          uploadedAt: new Date().toISOString(),
-          discordMessageId: messageId,
-          discordUserId: author.id,
+        await put(`images/${slug}/${filename}`, buffer, {
+          access: "public",
+          addRandomSuffix: false,
+          allowOverwrite: true,
+          contentType: attachment.contentType ?? "image/jpeg",
+          token,
         });
+
+        await updateEventIndex(
+          slug,
+          {
+            filename,
+            uploadedAt: new Date().toISOString(),
+            discordMessageId: messageId,
+            discordUserId: author.id,
+          },
+          token,
+        );
 
         await ctx.discord.channels.addMessageReaction(channel.id, messageId, "\u2705");
       } catch (err) {

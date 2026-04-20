@@ -1,8 +1,7 @@
 import { log } from "evlog";
 
 import { defineEvent } from "@/bot/events/define";
-import { generateEventSlug } from "@/bot/integrations/hack-night";
-import { R2Storage } from "@/bot/integrations/r2";
+import { generateEventSlug, removeImagesForMessage } from "@/bot/integrations/hack-night";
 import { env } from "@/env";
 import { DISCORD_IDS } from "@/lib/protocol/constants";
 
@@ -21,14 +20,8 @@ export const hackNightReaction = defineEvent({
       if (!member.roles.includes(DISCORD_IDS.roles.ORGANIZER)) return;
     }
 
-    const r2 = new R2Storage(
-      env.R2_ACCOUNT_ID,
-      env.R2_ACCESS_KEY_ID,
-      env.R2_SECRET_ACCESS_KEY,
-      env.EVENTS_R2_BUCKET_NAME,
-    );
     const slug = generateEventSlug(new Date());
-    const removed = await r2.removeImagesForMessage(slug, messageId);
+    const removed = await removeImagesForMessage(slug, messageId, env.EVENTS_BLOB_READ_WRITE_TOKEN);
     if (removed > 0) {
       await ctx.discord.channels.deleteOwnMessageReaction(channelId, messageId, "\u2705");
       log.info("hack-night", `Removed ${removed} images for message ${messageId} by ${creator.id}`);

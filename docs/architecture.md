@@ -137,7 +137,7 @@ See [Agents](./agents/README.md) for the full breakdown.
 | AI Gateway         | `anthropic/claude-sonnet-4.6` (orchestrator) and `anthropic/claude-haiku-4.5` (subagents); routing, observability, model fallbacks |
 | Upstash Redis      | `ConversationStore`, dedup keys, per-channel locks, task registry                                                                  |
 | Turso (libSQL)     | Privacy preferences, ship submissions                                                                                              |
-| Cloudflare R2      | Hack night event archives, ship uploads                                                                                            |
+| Vercel Blob        | Hack night event archives, ship uploads (two stores, one per use case)                                                             |
 | Vercel Edge Config | Hack night `version` key (used by the `/init-hn` command)                                                                          |
 | Vercel Queues      | `discord-events` (gateway → consumer), `tasks` (scheduling)                                                                        |
 

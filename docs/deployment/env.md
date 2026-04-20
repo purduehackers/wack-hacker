@@ -9,7 +9,7 @@ The full list changes often; the canonical source is always [`src/env.ts`](../..
 - **Discord** — bot token, client ID, public key, guild ID.
 - **Cron auth** — `CRON_SECRET` (bearer token for `/api/crons/*`).
 - **Integrations** — Linear, Notion, GitHub App credentials (org-installed), Groq, ask.purduehackers.com API key, dashboard URL, Phonebell open URL.
-- **Storage** — Upstash Redis (KV REST), Cloudflare R2 (account ID + access keys + bucket names for events and ships), Turso libSQL (privacy DB and ship DB).
+- **Storage** — Upstash Redis (KV REST), Vercel Blob (`EVENTS_BLOB_READ_WRITE_TOKEN` and `SHIP_BLOB_READ_WRITE_TOKEN`, one token per store), Turso libSQL (privacy DB and ship DB).
 - **Vercel** — API token, Edge Config ID. The `vercel()` preset auto-loads `VERCEL_*` deployment vars.
 - **Optional** — Sentry DSN.
 
