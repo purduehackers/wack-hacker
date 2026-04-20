@@ -45,6 +45,10 @@ async function executeAction(meta: TaskMeta) {
     log.info("task-workflow", `Sent message for task ${meta.id}`);
   } else if (meta.action.type === "agent") {
     const now = new Date();
+    // `memberRoles` is re-resolved by `AgentContext.role` at execute time, so
+    // a privilege revocation between scheduling and firing is respected. Do
+    // not blank these out — without them the scheduled run loses access to
+    // every `delegate_*` subagent.
     const context = AgentContext.fromJSON({
       userId: meta.context.userId,
       username: "system",
@@ -56,6 +60,7 @@ async function executeAction(meta: TaskMeta) {
         month: "long",
         day: "numeric",
       }),
+      memberRoles: meta.context.memberRoles,
     });
     await streamTurn(
       discord,

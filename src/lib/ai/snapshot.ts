@@ -48,7 +48,7 @@ export function buildContextSnapshot(args: {
 
   // The tracker is write-only here — the snapshot only needs the tool set's
   // shape, not its accumulated counts.
-  const toolSet = getOrchestratorTools(agentCtx.role, new TurnUsageTracker());
+  const toolSet = getOrchestratorTools(agentCtx, new TurnUsageTracker());
 
   const tools: ToolDefSnapshot[] = Object.entries(toolSet).map(([name, tool]) => {
     const t = tool as MinimalTool;
