@@ -60,6 +60,15 @@ vi.mock("@/lib/ai/skills/generated/manifest", () => ({
       mode: "delegate",
       instructions: "Finance instructions.",
     },
+    sales: {
+      name: "sales",
+      description: "Sales delegate",
+      criteria: "when asked about the CRM",
+      toolNames: [],
+      minRole: UserRole.Organizer,
+      mode: "delegate",
+      instructions: "Sales instructions.",
+    },
     // notion is intentionally omitted — buildDelegationTools should tolerate missing domains.
   },
 }));
@@ -70,6 +79,7 @@ vi.mock("@/lib/ai/skills/generated/domains/github", () => ({ SKILL_MANIFEST: {} 
 vi.mock("@/lib/ai/skills/generated/domains/discord", () => ({ SKILL_MANIFEST: {} }));
 vi.mock("@/lib/ai/skills/generated/domains/figma", () => ({ SKILL_MANIFEST: {} }));
 vi.mock("@/lib/ai/skills/generated/domains/notion", () => ({ SKILL_MANIFEST: {} }));
+vi.mock("@/lib/ai/skills/generated/domains/sales", () => ({ SKILL_MANIFEST: {} }));
 vi.mock("@/lib/ai/skills/generated/domains/sentry", () => ({ SKILL_MANIFEST: {} }));
 vi.mock("@/lib/ai/skills/generated/domains/finance", () => ({ SKILL_MANIFEST: {} }));
 vi.mock("@/lib/ai/skills/generated/domains/shopping", () => ({ SKILL_MANIFEST: {} }));
@@ -80,6 +90,7 @@ vi.mock("@/lib/ai/tools/github", () => ({}));
 vi.mock("@/lib/ai/tools/discord", () => ({}));
 vi.mock("@/lib/ai/tools/figma", () => ({}));
 vi.mock("@/lib/ai/tools/notion", () => ({}));
+vi.mock("@/lib/ai/tools/sales", () => ({}));
 vi.mock("@/lib/ai/tools/sentry", () => ({}));
 vi.mock("@/lib/ai/tools/finance", () => ({}));
 vi.mock("@/lib/ai/tools/shopping", () => ({}));
@@ -112,6 +123,7 @@ describe("buildDelegationTools", () => {
       "delegate_figma",
       "delegate_finance",
       "delegate_linear",
+      "delegate_sales",
       "delegate_sentry",
     ]);
   });
@@ -124,6 +136,7 @@ describe("buildDelegationTools", () => {
       "delegate_finance",
       "delegate_github",
       "delegate_linear",
+      "delegate_sales",
       "delegate_sentry",
     ]);
   });
