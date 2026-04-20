@@ -9,6 +9,7 @@ import { SKILL_MANIFEST as FINANCE_SUBSKILLS } from "./skills/generated/domains/
 import { SKILL_MANIFEST as GITHUB_SUBSKILLS } from "./skills/generated/domains/github.ts";
 import { SKILL_MANIFEST as LINEAR_SUBSKILLS } from "./skills/generated/domains/linear.ts";
 import { SKILL_MANIFEST as NOTION_SUBSKILLS } from "./skills/generated/domains/notion.ts";
+import { SKILL_MANIFEST as SALES_SUBSKILLS } from "./skills/generated/domains/sales.ts";
 import { SKILL_MANIFEST as SENTRY_SUBSKILLS } from "./skills/generated/domains/sentry.ts";
 import { SKILL_MANIFEST as SHOPPING_SUBSKILLS } from "./skills/generated/domains/shopping.ts";
 import { SKILL_MANIFEST } from "./skills/generated/manifest.ts";
@@ -20,6 +21,7 @@ import * as financeTools from "./tools/finance/index.ts";
 import * as githubTools from "./tools/github/index.ts";
 import * as linearTools from "./tools/linear/index.ts";
 import * as notionTools from "./tools/notion/index.ts";
+import * as salesTools from "./tools/sales/index.ts";
 import * as sentryTools from "./tools/sentry/index.ts";
 import * as shoppingTools from "./tools/shopping/index.ts";
 
@@ -77,6 +79,19 @@ const DOMAINS = {
     tools: shoppingTools as unknown as ToolSet,
     subSkills: SHOPPING_SUBSKILLS,
     baseToolNames: ["search_products", "view_cart"],
+  },
+  sales: {
+    tools: salesTools as unknown as ToolSet,
+    subSkills: SALES_SUBSKILLS,
+    baseToolNames: [
+      "list_companies",
+      "list_contacts",
+      "list_deals",
+      "get_company",
+      "get_contact",
+      "get_deal",
+      "retrieve_crm_schema",
+    ],
   },
 } as const satisfies Record<
   string,
