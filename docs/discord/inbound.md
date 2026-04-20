@@ -20,7 +20,7 @@ The actual dispatch logic. For each packet it:
 1. **Dedupes** using `ConversationStore.dedup(key)` — atomic `SET NX` against Redis, 5-minute window by default. Dedup keys are packet-type-specific (see below). If the key already exists, the packet is dropped silently (`log.debug "Dedup hit"`).
 2. **Locks per channel** for `MESSAGE_CREATE` only via `ConversationStore.acquireLock(channelId)` — 30-second TTL, token-matched release (Lua script). Other packet types skip locking.
 3. **If the lock can't be acquired**, the packet is **dropped** with a warning log — it does not wait. Vercel Queues will retry the delivery later, by which point the lock has likely expired.
-4. **Dispatches** to `router.dispatch(packet, ctx)` with a freshly-constructed `ctx` containing a Discord API client (`new API(new REST({ version: "10" }).setToken(env.DISCORD_BOT_TOKEN))`), the `ConversationStore`, and `env.DISCORD_CLIENT_ID` as the bot user ID.
+4. **Dispatches** to `router.dispatch(packet, ctx)` with a freshly-constructed `ctx` containing a Discord API client (`new API(new REST({ version: "10" }).setToken(env.DISCORD_BOT_TOKEN))`), the `ConversationStore`, and `env.DISCORD_BOT_CLIENT_ID` as the bot user ID.
 5. **Releases** the lock in a `finally`.
 
 ### Dedup keys

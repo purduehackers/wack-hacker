@@ -2,7 +2,7 @@ import { tool } from "ai";
 import { Routes } from "discord-api-types/v10";
 import { z } from "zod";
 
-import { env } from "../../../../env.ts";
+import { DISCORD_GUILD_ID } from "../../../protocol/constants.ts";
 import { discord } from "./client.ts";
 
 // ---------------------------------------------------------------------------
@@ -50,7 +50,7 @@ export const list_threads = tool({
   execute: async ({ channel_id, include_archived }) => {
     if (channel_id) {
       // Get active threads for the guild, then filter by channel
-      const active = (await discord.get(Routes.guildActiveThreads(env.DISCORD_GUILD_ID))) as any;
+      const active = (await discord.get(Routes.guildActiveThreads(DISCORD_GUILD_ID))) as any;
       const channelThreads = (active.threads ?? []).filter((t: any) => t.parent_id === channel_id);
       const threads = channelThreads.map(summarizeThread);
 
@@ -67,7 +67,7 @@ export const list_threads = tool({
     }
 
     // All active threads in the guild
-    const active = (await discord.get(Routes.guildActiveThreads(env.DISCORD_GUILD_ID))) as any;
+    const active = (await discord.get(Routes.guildActiveThreads(DISCORD_GUILD_ID))) as any;
     return JSON.stringify((active.threads ?? []).map(summarizeThread));
   },
 });

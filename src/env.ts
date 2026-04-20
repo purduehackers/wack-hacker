@@ -5,9 +5,8 @@ import { z } from "zod";
 export const env = createEnv({
   server: {
     DISCORD_BOT_TOKEN: z.string(),
-    DISCORD_CLIENT_ID: z.string(),
-    DISCORD_PUBLIC_KEY: z.string(),
-    DISCORD_GUILD_ID: z.string(),
+    DISCORD_BOT_CLIENT_ID: z.string(),
+    DISCORD_BOT_PUBLIC_KEY: z.string(),
     CRON_SECRET: z.string(),
     LINEAR_API_KEY: z.string(),
     NOTION_TOKEN: z.string(),

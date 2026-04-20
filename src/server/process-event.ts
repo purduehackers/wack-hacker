@@ -44,7 +44,7 @@ export async function processEvent(packet: Packet, store: ConversationStore): Pr
   const ctx = {
     discord: new API(new REST({ version: "10" }).setToken(env.DISCORD_BOT_TOKEN)),
     store,
-    botUserId: env.DISCORD_CLIENT_ID,
+    botUserId: env.DISCORD_BOT_CLIENT_ID,
   };
 
   const startTime = Date.now();

@@ -2,7 +2,7 @@ import { tool } from "ai";
 import { Routes } from "discord-api-types/v10";
 import { z } from "zod";
 
-import { env } from "../../../../env.ts";
+import { DISCORD_GUILD_ID } from "../../../protocol/constants.ts";
 import { admin } from "../../skills/index.ts";
 import { discord } from "./client.ts";
 
@@ -16,7 +16,7 @@ export const list_invites = admin(
       "List all active server invites with their codes, channels, creators, usage counts, and expiry dates.",
     inputSchema: z.object({}),
     execute: async () => {
-      const invites = (await discord.get(Routes.guildInvites(env.DISCORD_GUILD_ID))) as any[];
+      const invites = (await discord.get(Routes.guildInvites(DISCORD_GUILD_ID))) as any[];
       return JSON.stringify(
         invites.map((inv) => ({
           code: inv.code,
