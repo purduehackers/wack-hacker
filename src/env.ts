@@ -39,6 +39,7 @@ export const env = createEnv({
     SENTRY_AUTH_TOKEN: z.string(),
     SENTRY_ORG: z.string(),
     SENTRY_DSN: z.string().optional(),
+    HCB_ORG_SLUG: z.string(),
   },
   extends: [vercel()],
   runtimeEnv: process.env,
