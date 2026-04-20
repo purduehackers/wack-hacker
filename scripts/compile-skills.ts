@@ -101,10 +101,16 @@ async function dirExists(path: string): Promise<boolean> {
   }
 }
 
+// Directories whose name starts with `_` are skipped — a lightweight way to
+// disable a skill or sub-skill without deleting its files.
+function isActiveSkillDir(name: string): boolean {
+  return !name.startsWith("_");
+}
+
 async function main() {
   const topLevelEntries = await readdir(SKILLS_DIR, { withFileTypes: true });
   const skillDirs = topLevelEntries
-    .filter((e) => e.isDirectory() && e.name !== "generated")
+    .filter((e) => e.isDirectory() && e.name !== "generated" && isActiveSkillDir(e.name))
     .map((e) => e.name);
 
   // ── Top-level skills (orchestrator manifest) ──
@@ -132,7 +138,9 @@ async function main() {
     if (!(await dirExists(subSkillsDir))) continue;
 
     const subEntries = await readdir(subSkillsDir, { withFileTypes: true });
-    const subDirs = subEntries.filter((e) => e.isDirectory()).map((e) => e.name);
+    const subDirs = subEntries
+      .filter((e) => e.isDirectory() && isActiveSkillDir(e.name))
+      .map((e) => e.name);
     if (subDirs.length === 0) continue;
 
     const subSkills: Record<string, ParsedSkill> = {};
