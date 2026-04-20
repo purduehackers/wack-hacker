@@ -6,9 +6,11 @@ const retrieveMock = vi.fn();
 
 vi.mock("./client.ts", () => ({
   notion: { dataSources: { retrieve: retrieveMock } },
-  companiesDataSourceId: () => "companies-ds",
-  contactsDataSourceId: () => "contacts-ds",
-  dealsDataSourceId: () => "deals-ds",
+}));
+vi.mock("./constants.ts", () => ({
+  COMPANIES_DATA_SOURCE_ID: "companies-ds",
+  CONTACTS_DATA_SOURCE_ID: "contacts-ds",
+  DEALS_DATA_SOURCE_ID: "deals-ds",
 }));
 
 const { retrieve_crm_schema } = await import("./schema.ts");

@@ -11,7 +11,9 @@ vi.mock("./client.ts", () => ({
     dataSources: { query: queryMock },
     pages: { retrieve: retrieveMock, update: updateMock },
   },
-  companiesDataSourceId: () => "companies-ds",
+}));
+vi.mock("./constants.ts", () => ({
+  COMPANIES_DATA_SOURCE_ID: "companies-ds",
 }));
 
 const {

@@ -3,7 +3,8 @@ import type { QueryDataSourceParameters } from "@notionhq/client/build/src/api-e
 import { tool } from "ai";
 import { z } from "zod";
 
-import { companiesDataSourceId, notion } from "./client.ts";
+import { notion } from "./client.ts";
+import { COMPANIES_DATA_SOURCE_ID } from "./constants.ts";
 
 function summarizePage(page: { id: string; [key: string]: unknown }): Record<string, unknown> {
   return {
@@ -36,7 +37,7 @@ export const list_companies = tool({
   }),
   execute: async ({ filter, sorts, page_size, start_cursor }) => {
     const params = {
-      data_source_id: companiesDataSourceId(),
+      data_source_id: COMPANIES_DATA_SOURCE_ID,
       filter,
       sorts,
       page_size: page_size ?? 25,

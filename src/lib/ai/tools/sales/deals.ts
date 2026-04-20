@@ -7,7 +7,8 @@ import type {
 import { tool } from "ai";
 import { z } from "zod";
 
-import { dealsDataSourceId, notion } from "./client.ts";
+import { notion } from "./client.ts";
+import { DEALS_DATA_SOURCE_ID } from "./constants.ts";
 
 function summarizePage(page: { id: string; [key: string]: unknown }): Record<string, unknown> {
   return {
@@ -37,7 +38,7 @@ export const list_deals = tool({
   }),
   execute: async ({ filter, sorts, page_size, start_cursor }) => {
     const params = {
-      data_source_id: dealsDataSourceId(),
+      data_source_id: DEALS_DATA_SOURCE_ID,
       filter,
       sorts,
       page_size: page_size ?? 25,
@@ -84,7 +85,7 @@ export const create_deal = tool({
     if (notes) properties.Notes = { rich_text: [{ text: { content: notes } }] };
 
     const params = {
-      parent: { type: "data_source_id" as const, data_source_id: dealsDataSourceId() },
+      parent: { type: "data_source_id" as const, data_source_id: DEALS_DATA_SOURCE_ID },
       properties,
     } as CreatePageParameters;
     const page = await notion.pages.create(params);

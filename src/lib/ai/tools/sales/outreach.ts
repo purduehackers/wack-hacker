@@ -1,8 +1,13 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { env } from "../../../../env.ts";
-import { companiesDataSourceId, contactsDataSourceId, notion, resend } from "./client.ts";
+import { notion, resend } from "./client.ts";
+import {
+  COMPANIES_DATA_SOURCE_ID,
+  CONTACTS_DATA_SOURCE_ID,
+  SALES_FROM_EMAIL,
+  SALES_REPLY_TO_EMAIL,
+} from "./constants.ts";
 
 async function writeLastOutreach(pageId: string, emailId: string, sentAt: string): Promise<void> {
   await notion.pages.update({
@@ -24,7 +29,7 @@ async function preflight(pageId: string, target: "company" | "contact"): Promise
   const page = await notion.pages.retrieve({ page_id: pageId });
   if (!("properties" in page)) return "Could not read target page properties";
 
-  const expectedId = target === "company" ? companiesDataSourceId() : contactsDataSourceId();
+  const expectedId = target === "company" ? COMPANIES_DATA_SOURCE_ID : CONTACTS_DATA_SOURCE_ID;
   const parent = (page as { parent?: { data_source_id?: string; database_id?: string } }).parent;
   const actualId = parent?.data_source_id ?? parent?.database_id;
   if (actualId && actualId !== expectedId) {
@@ -40,7 +45,7 @@ async function preflight(pageId: string, target: "company" | "contact"): Promise
 }
 
 export const send_outreach_email = tool({
-  description: `Send an outreach email via Resend and record the resulting email id on the target Notion page ("Last Outreach ID", "Outreach Status" = Sent). The target page must not have "Do Not Contact" checked. Uses SALES_FROM_EMAIL and optional SALES_REPLY_TO_EMAIL from env.`,
+  description: `Send an outreach email via Resend and record the resulting email id on the target Notion page ("Last Outreach ID", "Outreach Status" = Sent). The target page must not have "Do Not Contact" checked. Sends from the fixed SALES_FROM_EMAIL with SALES_REPLY_TO_EMAIL in the Reply-To header.`,
   inputSchema: z.object({
     target: z.enum(["company", "contact"]).describe("Which CRM data source owns the page"),
     page_id: z.string().describe("Notion page id of the Company or Contact row"),
@@ -54,12 +59,12 @@ export const send_outreach_email = tool({
     if (block) return JSON.stringify({ error: block });
 
     const result = await resend().emails.send({
-      from: env.SALES_FROM_EMAIL,
+      from: SALES_FROM_EMAIL,
       to,
       subject,
       text,
       html,
-      replyTo: env.SALES_REPLY_TO_EMAIL,
+      replyTo: SALES_REPLY_TO_EMAIL,
     });
     if (result.error) {
       return JSON.stringify({ error: result.error.message, name: result.error.name });

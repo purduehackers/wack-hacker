@@ -8,8 +8,10 @@ vi.mock("@/lib/ai/tools/sales/client", () => ({
     dataSources: { query: queryMock },
     pages: { update: updateMock },
   },
-  companiesDataSourceId: () => "companies-ds",
-  contactsDataSourceId: () => "contacts-ds",
+}));
+vi.mock("@/lib/ai/tools/sales/constants", () => ({
+  COMPANIES_DATA_SOURCE_ID: "companies-ds",
+  CONTACTS_DATA_SOURCE_ID: "contacts-ds",
 }));
 
 const { applyResendEvent } = await import("./resend-webhook.ts");

@@ -2,13 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { toolOpts } from "@/lib/test/fixtures";
 
-vi.mock("../../../../env.ts", () => ({
-  env: {
-    SALES_FROM_EMAIL: "sales@ph.example",
-    SALES_REPLY_TO_EMAIL: "reply@ph.example",
-  },
-}));
-
 const sendMock = vi.fn();
 const retrieveMock = vi.fn();
 const updateMock = vi.fn();
@@ -16,8 +9,12 @@ const updateMock = vi.fn();
 vi.mock("./client.ts", () => ({
   notion: { pages: { retrieve: retrieveMock, update: updateMock } },
   resend: () => ({ emails: { send: sendMock } }),
-  companiesDataSourceId: () => "companies-ds",
-  contactsDataSourceId: () => "contacts-ds",
+}));
+vi.mock("./constants.ts", () => ({
+  COMPANIES_DATA_SOURCE_ID: "companies-ds",
+  CONTACTS_DATA_SOURCE_ID: "contacts-ds",
+  SALES_FROM_EMAIL: "sales@ph.example",
+  SALES_REPLY_TO_EMAIL: "reply@ph.example",
 }));
 
 const { send_outreach_email, get_email_status } = await import("./outreach.ts");

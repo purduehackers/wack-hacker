@@ -2,7 +2,8 @@ import type { UpdatePageParameters } from "@notionhq/client/build/src/api-endpoi
 
 import { log } from "evlog";
 
-import { companiesDataSourceId, contactsDataSourceId, notion } from "@/lib/ai/tools/sales/client";
+import { notion } from "@/lib/ai/tools/sales/client";
+import { COMPANIES_DATA_SOURCE_ID, CONTACTS_DATA_SOURCE_ID } from "@/lib/ai/tools/sales/constants";
 
 /**
  * Resend sends Svix-style payloads: `{ type: "email.delivered", created_at, data: { email_id, ... } }`.
@@ -101,8 +102,8 @@ export async function applyResendEvent(raw: unknown): Promise<void> {
   const emailId = raw.data.email_id;
 
   const page =
-    (await findPageByEmailId(companiesDataSourceId(), emailId)) ??
-    (await findPageByEmailId(contactsDataSourceId(), emailId));
+    (await findPageByEmailId(COMPANIES_DATA_SOURCE_ID, emailId)) ??
+    (await findPageByEmailId(CONTACTS_DATA_SOURCE_ID, emailId));
   if (!page) {
     log.info("resend", `No Notion row matches email_id ${emailId} (${eventType})`);
     return;

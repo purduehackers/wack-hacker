@@ -13,18 +13,6 @@ export function resend(): Resend {
   return resendClient;
 }
 
-export function companiesDataSourceId(): string {
-  return env.NOTION_CRM_COMPANIES_DS_ID;
-}
-
-export function contactsDataSourceId(): string {
-  return env.NOTION_CRM_CONTACTS_DS_ID;
-}
-
-export function dealsDataSourceId(): string {
-  return env.NOTION_CRM_DEALS_DS_ID;
-}
-
 export async function hunter<T>(
   path: string,
   params: Record<string, string | undefined>,

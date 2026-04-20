@@ -12,7 +12,9 @@ vi.mock("./client.ts", () => ({
     dataSources: { query: queryMock },
     pages: { retrieve: retrieveMock, update: updateMock, create: createMock },
   },
-  dealsDataSourceId: () => "deals-ds",
+}));
+vi.mock("./constants.ts", () => ({
+  DEALS_DATA_SOURCE_ID: "deals-ds",
 }));
 
 const { list_deals, get_deal, create_deal, update_deal_stage, update_deal } =
