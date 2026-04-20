@@ -1,0 +1,15 @@
+{
+  "id": "org_ph1",
+  "name": "Purdue Hackers",
+  "slug": "purdue-hackers",
+  "category": "hackathon",
+  "transparent": true,
+  "website": "https://purduehackers.com",
+  "description": "Community of student hackers at Purdue University.",
+  "balances": {
+    "balance_cents": 1234567,
+    "fee_balance_cents": -5000,
+    "incoming_balance_cents": 25000,
+    "total_raised": 4321000
+  }
+}
