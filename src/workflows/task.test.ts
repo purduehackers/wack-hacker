@@ -98,4 +98,20 @@ describe("taskWorkflow: agent action footer", () => {
       "task-run-42", // task ID
     );
   });
+
+  it("rehydrates scheduler's memberRoles into the agent context", async () => {
+    await taskWorkflow({
+      meta: {
+        description: "Organizer-scoped task",
+        action: { type: "agent", channelId: "ch-1", prompt: "check linear" },
+        schedule: { type: "once", at: new Date(Date.now() + 60_000).toISOString() },
+        context: { userId: "u-1", channelId: "ch-1", memberRoles: ["role-organizer"] },
+        createdAt: new Date().toISOString(),
+      },
+    });
+
+    const [, , , serializedContext] = (streaming.streamTurn as ReturnType<typeof vi.fn>).mock
+      .calls[0];
+    expect(serializedContext).toMatchObject({ memberRoles: ["role-organizer"] });
+  });
 });

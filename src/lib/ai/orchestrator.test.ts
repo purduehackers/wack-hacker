@@ -18,7 +18,7 @@ import { TurnUsageTracker } from "./turn-usage.ts";
 vi.mock("@/lib/ai/tools/docs", () => ({ documentation: stubTool("documentation") }));
 vi.mock("@/lib/ai/tools/roster", () => ({ resolve_organizer: stubTool("resolve_organizer") }));
 vi.mock("@/lib/ai/tools/schedule", () => ({
-  scheduleTask: stubTool("scheduleTask"),
+  createScheduleTask: () => stubTool("scheduleTask"),
   listScheduledTasks: stubTool("listScheduledTasks"),
   cancelTask: stubTool("cancelTask"),
 }));
