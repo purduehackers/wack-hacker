@@ -1,27 +1,39 @@
 /**
- * One-shot R2 → Vercel Blob data migration.
+ * One-shot R2 → Vercel Blob + Turso data migration.
  *
- * Copies every object in each R2 bucket to the corresponding Vercel Blob store,
- * preserving the object key as the Blob pathname. Idempotent (`allowOverwrite: true`),
- * so it's safe to re-run if interrupted.
+ * - Copies every non-index image/video blob from each R2 bucket to the
+ *   corresponding Vercel Blob store, preserving the object key as the pathname.
+ * - Parses every `images/<slug>/index.json` in the events bucket and seeds the
+ *   `hack_night_images` Turso table. The JSON indices themselves are NOT
+ *   copied to Blob — the table is the new source of truth.
  *
- * Needs R2_* and *_BLOB_READ_WRITE_TOKEN in the environment. Pull them locally with:
+ * Idempotent: blob writes use `allowOverwrite: true`, SQL inserts use
+ * `onConflictDoNothing`. Safe to re-run if interrupted.
+ *
+ * Needs R2_*, *_BLOB_READ_WRITE_TOKEN, and TURSO_{DATABASE_URL,AUTH_TOKEN} in
+ * the environment. Pull them locally with:
  *   bunx vercel env pull .env.local --yes
  * then run:
  *   bun run scripts/migrate-r2-to-blob.ts
  *
- * Disposable: delete this file (and `@aws-sdk/client-s3` from devDependencies) once
- * the migration has completed successfully.
+ * Disposable: delete this file (and `@aws-sdk/client-s3` from devDependencies)
+ * once the migration has completed successfully.
  */
 
 import { GetObjectCommand, ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
+import { createClient } from "@libsql/client";
 import { put } from "@vercel/blob";
+import { drizzle } from "drizzle-orm/libsql";
+
+import { hackNightImages } from "../src/lib/db/schemas/hack-night-images.ts";
 
 type BucketPass = {
-  label: string;
+  label: "events" | "ship";
   bucket: string;
   blobToken: string;
 };
+
+type Db = ReturnType<typeof drizzle>;
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -32,12 +44,71 @@ function requireEnv(name: string): string {
   return value;
 }
 
-async function migrateBucket(s3: S3Client, pass: BucketPass): Promise<void> {
+async function seedIndexFromJson(db: Db, eventSlug: string, body: Uint8Array): Promise<number> {
+  const text = new TextDecoder().decode(body);
+  const parsed = JSON.parse(text) as {
+    images?: Array<{
+      filename: string;
+      uploadedAt: string;
+      discordMessageId: string;
+      discordUserId: string;
+    }>;
+  };
+  const images = parsed.images ?? [];
+  if (images.length === 0) return 0;
+
+  await db
+    .insert(hackNightImages)
+    .values(
+      images.map((img) => ({
+        eventSlug,
+        filename: img.filename,
+        uploadedAt: img.uploadedAt,
+        discordMessageId: img.discordMessageId,
+        discordUserId: img.discordUserId,
+      })),
+    )
+    .onConflictDoNothing();
+  return images.length;
+}
+
+type PassStats = { copied: number; indexed: number; failed: number; bytes: number };
+
+const INDEX_KEY_PATTERN = /^images\/(.+)\/index\.json$/;
+
+async function handleObject(
+  s3: S3Client,
+  db: Db,
+  pass: BucketPass,
+  key: string,
+  stats: PassStats,
+): Promise<void> {
+  const got = await s3.send(new GetObjectCommand({ Bucket: pass.bucket, Key: key }));
+  if (!got.Body) throw new Error("empty body");
+  const arr = await got.Body.transformToByteArray();
+
+  const eventsIndexMatch = pass.label === "events" ? INDEX_KEY_PATTERN.exec(key) : null;
+  if (eventsIndexMatch) {
+    const slug = eventsIndexMatch[1]!;
+    stats.indexed += await seedIndexFromJson(db, slug, arr);
+    return;
+  }
+
+  await put(key, Buffer.from(arr), {
+    access: "public",
+    addRandomSuffix: false,
+    allowOverwrite: true,
+    contentType: got.ContentType ?? "application/octet-stream",
+    token: pass.blobToken,
+  });
+  stats.copied += 1;
+  stats.bytes += arr.byteLength;
+}
+
+async function migrateBucket(s3: S3Client, db: Db, pass: BucketPass): Promise<void> {
   console.log(`\n=== ${pass.label} (${pass.bucket}) ===`);
 
-  let copied = 0;
-  let failed = 0;
-  let bytes = 0;
+  const stats: PassStats = { copied: 0, indexed: 0, failed: 0, bytes: 0 };
   let continuationToken: string | undefined;
 
   do {
@@ -51,25 +122,13 @@ async function migrateBucket(s3: S3Client, pass: BucketPass): Promise<void> {
     for (const obj of res.Contents ?? []) {
       const key = obj.Key;
       if (!key) continue;
-
       try {
-        const got = await s3.send(new GetObjectCommand({ Bucket: pass.bucket, Key: key }));
-        if (!got.Body) throw new Error("empty body");
-        const arr = await got.Body.transformToByteArray();
-        const contentType = got.ContentType ?? "application/octet-stream";
-
-        await put(key, Buffer.from(arr), {
-          access: "public",
-          addRandomSuffix: false,
-          allowOverwrite: true,
-          contentType,
-          token: pass.blobToken,
-        });
-        copied += 1;
-        bytes += arr.byteLength;
-        if (copied % 25 === 0) console.log(`  ...${copied} copied`);
+        await handleObject(s3, db, pass, key, stats);
+        if (stats.copied > 0 && stats.copied % 25 === 0) {
+          console.log(`  ...${stats.copied} copied`);
+        }
       } catch (err) {
-        failed += 1;
+        stats.failed += 1;
         console.warn(`  FAIL ${key}: ${String(err)}`);
       }
     }
@@ -78,7 +137,7 @@ async function migrateBucket(s3: S3Client, pass: BucketPass): Promise<void> {
   } while (continuationToken);
 
   console.log(
-    `Done: ${copied} copied, ${failed} failed, ${(bytes / (1024 * 1024)).toFixed(2)} MiB`,
+    `Done: ${stats.copied} blobs copied, ${stats.indexed} rows indexed, ${stats.failed} failed, ${(stats.bytes / (1024 * 1024)).toFixed(2)} MiB`,
   );
 }
 
@@ -92,6 +151,13 @@ async function main(): Promise<void> {
     endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
     credentials: { accessKeyId, secretAccessKey },
   });
+
+  const db = drizzle(
+    createClient({
+      url: requireEnv("TURSO_DATABASE_URL"),
+      authToken: requireEnv("TURSO_AUTH_TOKEN"),
+    }),
+  );
 
   const passes: BucketPass[] = [
     {
@@ -107,7 +173,7 @@ async function main(): Promise<void> {
   ];
 
   for (const pass of passes) {
-    await migrateBucket(s3, pass);
+    await migrateBucket(s3, db, pass);
   }
 
   console.log("\nMigration complete.");

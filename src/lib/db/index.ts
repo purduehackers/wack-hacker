@@ -2,11 +2,12 @@ import { createClient, type Client } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 
 import { env } from "../../env.ts";
+import * as hackNightImages from "./schemas/hack-night-images.ts";
 import * as relations from "./schemas/relations.ts";
 import * as shoppingCartItems from "./schemas/shopping-cart-items.ts";
 import * as shoppingCarts from "./schemas/shopping-carts.ts";
 
-const schema = { ...shoppingCarts, ...shoppingCartItems, ...relations };
+const schema = { ...shoppingCarts, ...shoppingCartItems, ...hackNightImages, ...relations };
 
 type Db = ReturnType<typeof drizzle<typeof schema>>;
 

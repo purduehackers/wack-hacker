@@ -25,13 +25,13 @@ export const hackNightUpload = defineEvent({
     const imageAttachments = attachments.filter((a) => a.contentType?.startsWith("image/"));
     if (imageAttachments.length === 0) return;
 
-    const token = env.EVENTS_BLOB_READ_WRITE_TOKEN;
     const slug = generateEventSlug(new Date());
 
-    // Skip if this message's images were already uploaded
-    const index = await getEventIndex(slug, token);
+    // Skip if this message's images were already indexed
+    const index = await getEventIndex(slug);
     if (index?.images.some((img) => img.discordMessageId === messageId)) return;
 
+    const token = env.EVENTS_BLOB_READ_WRITE_TOKEN;
     const uploaded: ImageMetadata[] = [];
 
     for (const attachment of imageAttachments) {
@@ -64,11 +64,11 @@ export const hackNightUpload = defineEvent({
 
     if (uploaded.length > 0) {
       try {
-        await updateEventIndex(slug, uploaded, token);
+        await updateEventIndex(slug, uploaded);
       } catch (err) {
         log.warn(
           "hack-night",
-          `Failed to update index for ${slug} (${uploaded.length} images): ${String(err)}`,
+          `Failed to index ${uploaded.length} image(s) for ${slug}: ${String(err)}`,
         );
       }
     }

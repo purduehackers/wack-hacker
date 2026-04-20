@@ -8,6 +8,13 @@
       "when": 1776583374424,
       "tag": "0000_cuddly_sunfire",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1776726236012,
+      "tag": "0001_vengeful_santa_claus",
+      "breakpoints": true
     }
   ]
 }

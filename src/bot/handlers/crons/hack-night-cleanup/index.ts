@@ -2,7 +2,6 @@ import { log } from "evlog";
 
 import { defineCron } from "@/bot/crons/define";
 import { generateEventSlug, getEventIndex } from "@/bot/integrations/hack-night";
-import { env } from "@/env";
 import { DISCORD_IDS } from "@/lib/protocol/constants";
 
 export const hackNightCleanup = defineCron({
@@ -15,7 +14,7 @@ export const hackNightCleanup = defineCron({
     friday.setDate(now.getDate() - daysSinceFriday);
     const slug = generateEventSlug(friday);
 
-    const index = await getEventIndex(slug, env.EVENTS_BLOB_READ_WRITE_TOKEN);
+    const index = await getEventIndex(slug);
     if (!index || index.images.length === 0) {
       log.info("hack-night", `No images found for ${slug}`);
       return;
