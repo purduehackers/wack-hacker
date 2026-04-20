@@ -48,33 +48,38 @@ async function seedIndexFromJson(db: Db, eventSlug: string, body: Uint8Array): P
   const text = new TextDecoder().decode(body);
   const parsed = JSON.parse(text) as {
     images?: Array<{
-      filename: string;
-      uploadedAt: string;
-      discordMessageId: string;
-      discordUserId: string;
+      filename?: string;
+      uploadedAt?: string;
+      discordMessageId?: string;
+      discordUserId?: string;
     }>;
   };
-  const images = parsed.images ?? [];
-  if (images.length === 0) return 0;
+  const rows = (parsed.images ?? []).flatMap((img) =>
+    img.filename && img.uploadedAt && img.discordMessageId && img.discordUserId
+      ? [
+          {
+            eventSlug,
+            filename: img.filename,
+            uploadedAt: img.uploadedAt,
+            discordMessageId: img.discordMessageId,
+            discordUserId: img.discordUserId,
+          },
+        ]
+      : [],
+  );
+  if (rows.length === 0) return 0;
 
-  await db
-    .insert(hackNightImages)
-    .values(
-      images.map((img) => ({
-        eventSlug,
-        filename: img.filename,
-        uploadedAt: img.uploadedAt,
-        discordMessageId: img.discordMessageId,
-        discordUserId: img.discordUserId,
-      })),
-    )
-    .onConflictDoNothing();
-  return images.length;
+  await db.insert(hackNightImages).values(rows).onConflictDoNothing();
+  return rows.length;
 }
 
 type PassStats = { copied: number; indexed: number; failed: number; bytes: number };
 
-const INDEX_KEY_PATTERN = /^images\/(.+)\/index\.json$/;
+// Match `images/<slug>/index.json` where slug is a single path segment (no
+// nested folders) and starts with `hack-night-`. Legacy callout archives
+// (e.g. `images/callouts/fall-2022/index.json`) don't match and are copied
+// to Blob like any other file.
+const HACK_NIGHT_INDEX_PATTERN = /^images\/(hack-night-[^/]+)\/index\.json$/;
 
 async function handleObject(
   s3: S3Client,
@@ -87,9 +92,9 @@ async function handleObject(
   if (!got.Body) throw new Error("empty body");
   const arr = await got.Body.transformToByteArray();
 
-  const eventsIndexMatch = pass.label === "events" ? INDEX_KEY_PATTERN.exec(key) : null;
-  if (eventsIndexMatch) {
-    const slug = eventsIndexMatch[1]!;
+  const hackNightIndexMatch = pass.label === "events" ? HACK_NIGHT_INDEX_PATTERN.exec(key) : null;
+  if (hackNightIndexMatch) {
+    const slug = hackNightIndexMatch[1]!;
     stats.indexed += await seedIndexFromJson(db, slug, arr);
     return;
   }
