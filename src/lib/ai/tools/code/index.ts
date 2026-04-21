@@ -3,6 +3,7 @@ export { edit } from "./edit.ts";
 export { glob } from "./glob.ts";
 export { grep } from "./grep.ts";
 export { list_dir } from "./list_dir.ts";
+export { preview_url } from "./preview_url.ts";
 export { read } from "./read.ts";
 export { run_checks } from "./run_checks.ts";
 export { todo_write } from "./todo_write.ts";

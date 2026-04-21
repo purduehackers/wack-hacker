@@ -2,7 +2,7 @@
 name: execution
 description: Run shell commands in the sandbox and the repo's verification scripts
 criteria: Use when you need to run a shell command that isn't already covered by a dedicated tool (e.g. bun install, git status, custom scripts), OR when you need to validate your changes via typecheck/lint/test
-tools: [bash, run_checks]
+tools: [bash, run_checks, preview_url]
 minRole: admin
 mode: inline
 ---

@@ -63,6 +63,7 @@ export async function buildCodeExperimentalContext(
     repo: parsed.repo,
     githubToken: installationToken,
     gitUser: GIT_USER,
+    baseSnapshotId: env.SANDBOX_BASE_SNAPSHOT_ID,
   });
 
   return {

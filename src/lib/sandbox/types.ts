@@ -26,11 +26,35 @@ export interface Sandbox {
   readdir(path: string): Promise<DirEntry[]>;
   mkdir(path: string, options?: { recursive?: boolean }): Promise<void>;
   exec(command: string, options?: ExecOptions): Promise<ExecResult>;
+  /**
+   * Execute a command in detached (background) mode and stream stdout/stderr
+   * chunks. Returned async iterable runs until the command exits; the
+   * `commandId` is resolved before the first chunk.
+   */
+  streamExec(command: string, options?: ExecOptions): AsyncIterable<StreamExecChunk>;
+
+  /** Public URL for an exposed port (e.g. dev-server preview). Throws if port not routed. */
+  domain(port: number): string;
 
   /** Bump the sandbox's wall-clock deadline. No-op on in-memory impls. */
   extendTimeout(additionalMs: number): Promise<{ expiresAt: number }>;
+  /**
+   * Create a filesystem snapshot. Stops the sandbox as a side effect. Used
+   * by the lifecycle workflow for hibernation.
+   */
+  snapshot(): Promise<SnapshotResult>;
   /** Stop and clean up; runs `beforeStop` hook first. Idempotent. */
   stop(): Promise<void>;
+}
+
+export interface StreamExecChunk {
+  stream: "stdout" | "stderr";
+  data: string;
+}
+
+/** Opaque handle returned by `Sandbox.snapshot()`; persisted to Redis by session.ts. */
+export interface SnapshotResult {
+  snapshotId: string;
 }
 
 export interface SandboxHooks {
@@ -38,6 +62,13 @@ export interface SandboxHooks {
   afterStart?: (sandbox: Sandbox) => Promise<void>;
   /** Runs before the sandbox stops — e.g. last-ditch commit. Errors logged, not thrown. */
   beforeStop?: (sandbox: Sandbox) => Promise<void>;
+  /**
+   * Fires when the sandbox is approaching its wall-clock timeout. Differs
+   * from `beforeStop` in that the sandbox is still running here — the
+   * lifecycle workflow uses this to commit WIP and snapshot before the SDK
+   * stops the VM.
+   */
+  onTimeout?: (sandbox: Sandbox) => Promise<void>;
 }
 
 export interface ExecOptions {
@@ -120,6 +151,8 @@ export interface VercelSandboxCreateOptions {
   env?: Record<string, string>;
   /** Lifecycle hooks — afterStart fires before `create` returns. */
   hooks?: SandboxHooks;
+  /** Ports to expose as preview URLs (e.g. [3000, 5173]). */
+  ports?: number[];
 }
 
 export interface VercelSandboxReconnectOptions {
@@ -139,6 +172,8 @@ export interface SandboxHooksConfig {
   gitUser: { name: string; email: string };
   /** When true, skip apt-get install (the snapshot already has tools). */
   hasBaseSnapshot: boolean;
+  /** When true, skip `git clone` + branch creation (resume from hibernation). */
+  skipCloneAndBranch?: boolean;
 }
 
 // ─── factory ──────────────────────────────────────────────────────────────
@@ -158,6 +193,14 @@ export interface CreateCodingSandboxConfig {
   timeoutMs?: number;
   /** Optional pre-built base snapshot id (skips install-on-boot when set). */
   baseSnapshotId?: string;
+  /** Ports to expose for dev-server previews. Defaults to common dev ports. */
+  ports?: number[];
+  /**
+   * When true, the repo is assumed to already be cloned + branched inside
+   * the base snapshot (hibernation resume). afterStart only wires git
+   * identity + credentials.
+   */
+  skipCloneAndBranch?: boolean;
 }
 
 // ─── session ──────────────────────────────────────────────────────────────
@@ -174,6 +217,16 @@ export interface SandboxSessionMetadata {
   repoDir: string;
   /** ms since epoch — when the sandbox will self-stop if not extended. */
   expiresAt: number;
+  /**
+   * Set when the lifecycle workflow has hibernated the sandbox: the live VM
+   * is stopped but its filesystem lives in `snapshotId`. On next reconnect,
+   * `getOrCreateSession` creates a fresh sandbox from that snapshot.
+   */
+  hibernated?: boolean;
+  /** Snapshot produced by hibernation; also used when boot-from-snapshot is set globally. */
+  snapshotId?: string;
+  /** ms since epoch — records when the user last interacted. Drives idle-hibernation. */
+  lastUsedAt?: number;
 }
 
 export interface SandboxSession {

@@ -7,6 +7,8 @@ import type {
   Sandbox,
   SandboxHooks,
   SandboxStats,
+  SnapshotResult,
+  StreamExecChunk,
   VercelSandboxCreateOptions,
   VercelSandboxReconnectOptions,
 } from "./types.ts";
@@ -19,6 +21,7 @@ const MAX_OUTPUT_LENGTH = 50_000;
 const DEFAULT_WORKING_DIRECTORY = "/vercel/sandbox";
 const DEFAULT_EXEC_TIMEOUT_MS = 120_000;
 const DEFAULT_SANDBOX_TIMEOUT_MS = 30 * 60 * 1000;
+const TIMEOUT_HOOK_LEAD_MS = 30_000;
 
 interface VercelSandboxConstructorArgs {
   sdk: VercelSandboxSDK;
@@ -29,6 +32,7 @@ interface VercelSandboxConstructorArgs {
   currentBranch?: string;
   /** Absolute ms-since-epoch deadline; seeded by create/reconnect, incremented on extendTimeout. */
   expiresAt: number;
+  ports?: number[];
 }
 
 /**
@@ -51,6 +55,8 @@ export class VercelSandbox implements Sandbox {
   private env?: Record<string, string>;
   private stopped = false;
   private _expiresAt: number;
+  private timeoutTimer?: ReturnType<typeof setTimeout>;
+  readonly ports?: number[];
 
   private constructor(args: VercelSandboxConstructorArgs) {
     this.sdk = args.sdk;
@@ -60,11 +66,29 @@ export class VercelSandbox implements Sandbox {
     this.hooks = args.hooks;
     this.currentBranch = args.currentBranch;
     this._expiresAt = args.expiresAt;
+    this.ports = args.ports;
+    this.scheduleTimeoutHook();
   }
 
   /** Current absolute deadline (ms since epoch). Moves forward on extendTimeout. */
   get expiresAt(): number {
     return this._expiresAt;
+  }
+
+  private scheduleTimeoutHook(): void {
+    if (this.timeoutTimer) {
+      clearTimeout(this.timeoutTimer);
+      this.timeoutTimer = undefined;
+    }
+    if (!this.hooks?.onTimeout) return;
+    const leadMs = this._expiresAt - Date.now() - TIMEOUT_HOOK_LEAD_MS;
+    if (leadMs <= 0) return;
+    this.timeoutTimer = setTimeout(() => {
+      // Fire-and-forget; lifecycle owns the actual stop/snapshot decision.
+      this.hooks?.onTimeout?.(this).catch(() => {
+        // Hook errors are the lifecycle workflow's problem.
+      });
+    }, leadMs);
   }
 
   static async create(options: VercelSandboxCreateOptions = {}): Promise<VercelSandbox> {
@@ -76,6 +100,7 @@ export class VercelSandbox implements Sandbox {
       runtime = "node24",
       env,
       hooks,
+      ports,
     } = options;
 
     // When a base snapshot is provided the SDK types disallow `runtime`
@@ -87,6 +112,7 @@ export class VercelSandbox implements Sandbox {
           resources: { vcpus },
           networkPolicy: buildGitHubCredentialBrokeringPolicy(githubToken),
           env,
+          ports,
           source: { type: "snapshot", snapshotId: baseSnapshotId },
         })
       : VercelSandboxSDK.create({
@@ -95,6 +121,7 @@ export class VercelSandbox implements Sandbox {
           runtime,
           networkPolicy: buildGitHubCredentialBrokeringPolicy(githubToken),
           env,
+          ports,
         }));
 
     const sandbox = new VercelSandbox({
@@ -104,6 +131,7 @@ export class VercelSandbox implements Sandbox {
       env,
       hooks,
       expiresAt: Date.now() + timeoutMs,
+      ports,
     });
 
     if (hooks?.afterStart) {
@@ -249,12 +277,61 @@ export class VercelSandbox implements Sandbox {
     // Sandbox contract (and InMemorySandbox's semantics). session.ts then
     // persists the new value to Redis.
     this._expiresAt += additionalMs;
+    this.scheduleTimeoutHook();
     return { expiresAt: this._expiresAt };
+  }
+
+  async *streamExec(command: string, options: ExecOptions = {}): AsyncIterable<StreamExecChunk> {
+    const cwd = options.cwd ?? this.workingDirectory;
+    const detached = await this.sdk.runCommand({
+      cmd: "bash",
+      args: ["-c", command],
+      cwd,
+      env: this.mergedEnv(options.env),
+      detached: true,
+    });
+
+    const logs = detached.logs({ signal: options.signal });
+    try {
+      let total = 0;
+      for await (const entry of logs) {
+        total += entry.data.length;
+        yield { stream: entry.stream, data: entry.data };
+        if (total > MAX_OUTPUT_LENGTH) {
+          // Truncate silently; further output discarded so the tool stream
+          // doesn't overwhelm Discord.
+          break;
+        }
+      }
+      await detached.wait({ signal: options.signal });
+    } finally {
+      logs.close();
+    }
+  }
+
+  domain(port: number): string {
+    return this.sdk.domain(port);
+  }
+
+  async snapshot(): Promise<SnapshotResult> {
+    // The SDK's snapshot call stops the sandbox as a side effect. Clear our
+    // timeout hook so it doesn't fire against a dead VM.
+    if (this.timeoutTimer) {
+      clearTimeout(this.timeoutTimer);
+      this.timeoutTimer = undefined;
+    }
+    const snap = await this.sdk.snapshot();
+    this.stopped = true;
+    return { snapshotId: snap.snapshotId };
   }
 
   async stop(): Promise<void> {
     if (this.stopped) return;
     this.stopped = true;
+    if (this.timeoutTimer) {
+      clearTimeout(this.timeoutTimer);
+      this.timeoutTimer = undefined;
+    }
 
     if (this.hooks?.beforeStop) {
       try {

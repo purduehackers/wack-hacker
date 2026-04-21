@@ -7,6 +7,8 @@ import type {
   Sandbox,
   SandboxHooks,
   SandboxStats,
+  SnapshotResult,
+  StreamExecChunk,
 } from "./types.ts";
 
 export type { ExecHandler, InMemorySandboxOptions } from "./types.ts";
@@ -140,6 +142,25 @@ export class InMemorySandbox implements Sandbox {
     this.assertAlive("exec");
     const resolved = { cwd: options.cwd ?? this.workingDirectory, ...options };
     return this.execHandler(command, resolved);
+  }
+
+  async *streamExec(command: string, options: ExecOptions = {}): AsyncIterable<StreamExecChunk> {
+    this.assertAlive("streamExec");
+    // Fall back to the single-shot handler and replay its output as one
+    // stdout chunk followed by one stderr chunk. Tests that want finer-grained
+    // streaming can supply a custom `execHandler` + override directly.
+    const result = await this.exec(command, options);
+    if (result.stdout) yield { stream: "stdout", data: result.stdout };
+    if (result.stderr) yield { stream: "stderr", data: result.stderr };
+  }
+
+  domain(port: number): string {
+    return `https://${this.name}-${port}.example.test`;
+  }
+
+  async snapshot(): Promise<SnapshotResult> {
+    this.stopped = true;
+    return { snapshotId: `in-mem-${this.name}-${Date.now()}` };
   }
 
   async extendTimeout(additionalMs: number): Promise<{ expiresAt: number }> {

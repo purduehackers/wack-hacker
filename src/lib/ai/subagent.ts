@@ -15,6 +15,7 @@ import type { AgentContext } from "./context.ts";
 import type { SubagentSpec } from "./types.ts";
 
 import { wrapApprovalTools } from "./approvals/index.ts";
+import { addCacheControl } from "./cache-control.ts";
 import { SUBAGENT_MODEL, SUBAGENT_PREAMBLE, UserRole } from "./constants.ts";
 import {
   SkillRegistry,
@@ -43,6 +44,20 @@ const DEFAULT_TASK_INPUT_SCHEMA = z.object({
  * message history stays lean (full execution details live in the UI stream,
  * not in the model context).
  */
+function recordSubagentMetrics(
+  tracker: TurnUsageTracker,
+  spec: SubagentSpec,
+  usage: { totalTokens?: number },
+  steps: { toolCalls: unknown[] }[],
+): void {
+  const tokens = usage.totalTokens ?? 0;
+  const toolCalls = steps.reduce((sum, s) => sum + s.toolCalls.length, 0);
+  tracker.addSubagent({ tokens, toolCalls });
+  countMetric("ai.subagent.completed", { domain: spec.name });
+  recordDistribution("ai.subagent.tokens", tokens, { domain: spec.name });
+  recordDistribution("ai.subagent.tool_calls", toolCalls, { domain: spec.name });
+}
+
 export function createDelegationTool(
   spec: SubagentSpec,
   context: AgentContext,
@@ -68,32 +83,29 @@ export function createDelegationTool(
         context,
         delegateName: spec.name,
       });
-
       const baseToolNames = [...spec.baseToolNames, "loadSkill"];
       type ToolKey = keyof typeof tools;
+      const resolvedModel = spec.model ?? SUBAGENT_MODEL;
 
       const agent = new ToolLoopAgent({
-        model: spec.model ?? SUBAGENT_MODEL,
+        model: resolvedModel,
         instructions,
         tools,
         stopWhen: stepCountIs(spec.stopSteps ?? 15),
         activeTools: baseToolNames as ToolKey[],
-        prepareStep: ({ steps }) => {
+        prepareStep: ({ steps, messages }) => {
           const active = computeActiveTools({ steps, registry, role, baseToolNames });
-          return active ? { activeTools: active as ToolKey[] } : undefined;
+          return {
+            ...(active ? { activeTools: active as ToolKey[] } : {}),
+            tools: addCacheControl({ tools, model: resolvedModel }),
+            messages: addCacheControl({ messages, model: resolvedModel }),
+          };
         },
-        providerOptions: {
-          openai: {
-            parallelToolCalls: true,
-          },
-        },
+        providerOptions: { openai: { parallelToolCalls: true } },
         experimental_telemetry: {
           isEnabled: true,
           functionId: `subagent.${spec.name}`,
-          metadata: {
-            role,
-            subagent: spec.name,
-          },
+          metadata: { role, subagent: spec.name },
         },
       });
 
@@ -118,13 +130,7 @@ export function createDelegationTool(
       }
 
       const [usage, steps] = await Promise.all([result.totalUsage, result.steps]);
-      const tokens = usage.totalTokens ?? 0;
-      const toolCalls = steps.reduce((sum, s) => sum + s.toolCalls.length, 0);
-      tracker.addSubagent({ tokens, toolCalls });
-
-      countMetric("ai.subagent.completed", { domain: spec.name });
-      recordDistribution("ai.subagent.tokens", tokens, { domain: spec.name });
-      recordDistribution("ai.subagent.tool_calls", toolCalls, { domain: spec.name });
+      recordSubagentMetrics(tracker, spec, usage, steps as { toolCalls: unknown[] }[]);
 
       if (spec.postFinish) {
         for await (const message of spec.postFinish({

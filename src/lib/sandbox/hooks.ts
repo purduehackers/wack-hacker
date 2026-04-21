@@ -20,8 +20,10 @@ export function buildSandboxHooks(config: SandboxHooksConfig): SandboxHooks {
         await installToolchain(sandbox);
       }
       await configureGit(sandbox, config.gitUser);
-      await cloneRepo(sandbox, config.repo, config.baseBranch);
-      await createFeatureBranch(sandbox, config.branch);
+      if (!config.skipCloneAndBranch) {
+        await cloneRepo(sandbox, config.repo, config.baseBranch);
+        await createFeatureBranch(sandbox, config.branch);
+      }
     },
     beforeStop: async () => {
       log.info("sandbox", "beforeStop: sandbox shutting down");

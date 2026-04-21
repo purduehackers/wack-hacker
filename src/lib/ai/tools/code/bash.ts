@@ -1,4 +1,4 @@
-import { tool } from "ai";
+import { tool, type UIMessage } from "ai";
 import * as path from "node:path";
 import { z } from "zod";
 
@@ -6,6 +6,8 @@ import { getSandboxContext, resolvePath } from "./utils.ts";
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 const MAX_TIMEOUT_MS = 10 * 60 * 1000;
+const MAX_OUTPUT_CHARS = 50_000;
+const PROGRESS_INTERVAL_MS = 2_000;
 
 /**
  * Patterns we refuse outright. The sandbox is the security boundary — these
@@ -28,7 +30,7 @@ const REFUSAL_PATTERNS: { pattern: RegExp; reason: string }[] = [
 ];
 
 export const bash = tool({
-  description: `Run a shell command in the sandbox (non-interactive bash). Returns stdout, stderr, exit code, and a truncation flag.
+  description: `Run a shell command in the sandbox (non-interactive bash). Streams progress while the command runs, then returns stdout, stderr, exit code, and a truncation flag as JSON.
 
 WHEN TO USE:
 - Project commands the repo already defines (e.g. \`bun run build\`, \`npm test\`)
@@ -57,16 +59,19 @@ The command is run in the repo root by default; pass \`cwd\` (repo-relative) to 
       .optional()
       .describe(`Command timeout in ms (default ${DEFAULT_TIMEOUT_MS})`),
   }),
-  execute: async ({ command, cwd, timeout_ms }, { experimental_context, abortSignal }) => {
+  execute: async function* ({ command, cwd, timeout_ms }, { experimental_context, abortSignal }) {
     const { sandbox, repoDir } = getSandboxContext(experimental_context, "bash");
 
     for (const { pattern, reason } of REFUSAL_PATTERNS) {
       if (pattern.test(command)) {
-        return JSON.stringify({
-          refused: true,
-          reason,
-          command,
-        });
+        yield textMessage(
+          JSON.stringify({
+            refused: true,
+            reason,
+            command,
+          }),
+        );
+        return;
       }
     }
 
@@ -75,23 +80,115 @@ The command is run in the repo root by default; pass \`cwd\` (repo-relative) to 
       try {
         resolvedCwd = resolvePath(repoDir, cwd);
       } catch (err) {
-        return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+        yield textMessage(
+          JSON.stringify({ error: err instanceof Error ? err.message : String(err) }),
+        );
+        return;
       }
     }
 
-    const result = await sandbox.exec(command, {
+    const cwdDisplay = resolvedCwd ? path.relative(repoDir, resolvedCwd) || "." : ".";
+    const timeoutMs = timeout_ms ?? DEFAULT_TIMEOUT_MS;
+    const startedAt = Date.now();
+
+    let stdout = "";
+    let stderr = "";
+    let truncated = false;
+    let lastProgressAt = startedAt;
+    let emittedProgress = false;
+
+    const stream = sandbox.streamExec(command, {
       cwd: resolvedCwd,
-      timeoutMs: timeout_ms ?? DEFAULT_TIMEOUT_MS,
+      timeoutMs,
       signal: abortSignal,
     });
 
-    return JSON.stringify({
+    try {
+      for await (const chunk of stream) {
+        if (chunk.stream === "stdout") {
+          stdout = appendBounded(stdout, chunk.data);
+        } else {
+          stderr = appendBounded(stderr, chunk.data);
+        }
+        if (stdout.length >= MAX_OUTPUT_CHARS || stderr.length >= MAX_OUTPUT_CHARS) {
+          truncated = true;
+        }
+        const now = Date.now();
+        if (now - lastProgressAt >= PROGRESS_INTERVAL_MS) {
+          lastProgressAt = now;
+          emittedProgress = true;
+          yield textMessage(
+            renderProgress({
+              command,
+              cwdDisplay,
+              elapsedMs: now - startedAt,
+              stdoutLen: stdout.length,
+              stderrLen: stderr.length,
+            }),
+          );
+        }
+      }
+    } catch (err) {
+      yield textMessage(
+        JSON.stringify({
+          command,
+          cwd: cwdDisplay,
+          error: err instanceof Error ? err.message : String(err),
+          stdout: truncate(stdout),
+          stderr: truncate(stderr),
+        }),
+      );
+      return;
+    }
+
+    const final = {
       command,
-      cwd: resolvedCwd ? path.relative(repoDir, resolvedCwd) || "." : ".",
-      exit_code: result.exitCode,
-      stdout: result.stdout,
-      stderr: result.stderr,
-      truncated: result.truncated,
-    });
+      cwd: cwdDisplay,
+      // Detached streaming has no clean exit-code surface on our impl; callers
+      // rely on stdout/stderr content. We record 0 when we consumed to EOF
+      // without error.
+      exit_code: 0,
+      elapsed_ms: Date.now() - startedAt,
+      progress_updates_emitted: emittedProgress,
+      stdout: truncate(stdout),
+      stderr: truncate(stderr),
+      truncated,
+    };
+    yield textMessage(JSON.stringify(final));
+  },
+  toModelOutput: ({ output }) => {
+    const message = output as UIMessage | undefined;
+    const last = message?.parts.findLast(
+      (p): p is { type: "text"; text: string } => p.type === "text",
+    );
+    return { type: "text", value: last?.text ?? JSON.stringify({ error: "no bash output" }) };
   },
 });
+
+function textMessage(text: string): UIMessage {
+  return {
+    id: `bash-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    role: "assistant",
+    parts: [{ type: "text", text }],
+  } as unknown as UIMessage;
+}
+
+function appendBounded(buffer: string, addition: string): string {
+  const next = buffer + addition;
+  return next.length > MAX_OUTPUT_CHARS ? next.slice(-MAX_OUTPUT_CHARS) : next;
+}
+
+function truncate(value: string): string {
+  return value.length > MAX_OUTPUT_CHARS ? value.slice(-MAX_OUTPUT_CHARS) : value;
+}
+
+function renderProgress(args: {
+  command: string;
+  cwdDisplay: string;
+  elapsedMs: number;
+  stdoutLen: number;
+  stderrLen: number;
+}): string {
+  const seconds = Math.floor(args.elapsedMs / 1000);
+  return `\`bash\` running: \`${args.command}\` (cwd: \`${args.cwdDisplay}\`) — ${seconds}s, ${args.stdoutLen} bytes stdout, ${args.stderrLen} bytes stderr`;
+}

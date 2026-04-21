@@ -129,7 +129,7 @@ describe("createDelegationTool — execute() against MockLanguageModelV3", () =>
   });
 });
 
-describe("createDelegationTool — extended SubagentSpec fields", () => {
+describe("createDelegationTool — extended SubagentSpec (input + context)", () => {
   let model: MockLanguageModelV3;
 
   beforeEach(() => {
@@ -203,6 +203,34 @@ describe("createDelegationTool — extended SubagentSpec fields", () => {
       for await (const _ of gen);
     }).rejects.toThrow(/requires an AgentContext/);
   });
+});
+
+describe("createDelegationTool — extended SubagentSpec (postFinish + model)", () => {
+  let model: MockLanguageModelV3;
+
+  beforeEach(() => {
+    model = streamingTextModel("final answer");
+    installMockProvider(model);
+  });
+
+  afterEach(() => {
+    uninstallMockProvider();
+  });
+
+  async function drainWith(
+    spec: Parameters<typeof createDelegationTool>[0],
+    input: unknown,
+    agentContext?: Parameters<typeof createDelegationTool>[3],
+  ) {
+    const t = createDelegationTool(spec, UserRole.Admin, new TurnUsageTracker(), agentContext);
+    const received: UIMessage[] = [];
+    const gen = t.execute!(
+      input,
+      {} as Parameters<NonNullable<typeof t.execute>>[1],
+    ) as AsyncIterable<UIMessage>;
+    for await (const msg of gen) received.push(msg);
+    return received;
+  }
 
   it("invokes postFinish after the stream completes and forwards its yielded messages", async () => {
     const extra: UIMessage = {

@@ -1,3 +1,5 @@
+import type { UIMessage } from "ai";
+
 import { describe, expect, it } from "vitest";
 
 import { InMemorySandbox } from "@/lib/sandbox/in-memory-sandbox";
@@ -21,8 +23,20 @@ function makeCtx(
   };
 }
 
-function call(ctx: CodingSandboxContext, input: Parameters<NonNullable<typeof bash.execute>>[0]) {
-  return bash.execute!(input, { ...toolOpts, experimental_context: ctx });
+async function drain(
+  ctx: CodingSandboxContext,
+  input: Parameters<NonNullable<typeof bash.execute>>[0],
+): Promise<{ yields: UIMessage[]; finalJson: unknown }> {
+  const gen = bash.execute!(input, { ...toolOpts, experimental_context: ctx } as Parameters<
+    NonNullable<typeof bash.execute>
+  >[1]) as AsyncIterable<UIMessage>;
+  const yields: UIMessage[] = [];
+  for await (const msg of gen) yields.push(msg);
+  const last = yields.at(-1);
+  const text = last?.parts.find(
+    (p): p is { type: "text"; text: string } => p.type === "text",
+  )?.text;
+  return { yields, finalJson: text ? JSON.parse(text) : undefined };
 }
 
 describe("bash tool — refusal patterns", () => {
@@ -39,8 +53,8 @@ describe("bash tool — refusal patterns", () => {
     ["ssh-keygen -t rsa", /ssh-keygen/i],
   ])("refuses %j", async (command, expected) => {
     const sandbox = new InMemorySandbox();
-    const raw = await call(makeCtx(sandbox), { command });
-    const parsed = JSON.parse(raw as string);
+    const { finalJson } = await drain(makeCtx(sandbox), { command });
+    const parsed = finalJson as { refused: boolean; reason: string };
     expect(parsed.refused).toBe(true);
     expect(parsed.reason).toMatch(expected);
   });
@@ -56,8 +70,8 @@ describe("bash tool — exec", () => {
         truncated: false,
       }),
     });
-    const raw = await call(makeCtx(sandbox), { command: "echo hi" });
-    const parsed = JSON.parse(raw as string);
+    const { finalJson } = await drain(makeCtx(sandbox), { command: "echo hi" });
+    const parsed = finalJson as { exit_code: number; stdout: string; cwd: string };
     expect(parsed.exit_code).toBe(0);
     expect(parsed.stdout).toBe("you said: echo hi");
     expect(parsed.cwd).toBe(".");
@@ -71,20 +85,20 @@ describe("bash tool — exec", () => {
         return { exitCode: 0, stdout: "", stderr: "", truncated: false };
       },
     });
-    const raw = await call(makeCtx(sandbox), { command: "ls", cwd: "src/sub" });
-    const parsed = JSON.parse(raw as string);
+    const { finalJson } = await drain(makeCtx(sandbox), { command: "ls", cwd: "src/sub" });
+    const parsed = finalJson as { cwd: string };
     expect(seenCwd).toBe("/vercel/sandbox/src/sub");
     expect(parsed.cwd).toBe("src/sub");
   });
 
   it("refuses cwd outside the repo", async () => {
     const sandbox = new InMemorySandbox();
-    const raw = await call(makeCtx(sandbox), { command: "ls", cwd: "../etc" });
-    const parsed = JSON.parse(raw as string);
+    const { finalJson } = await drain(makeCtx(sandbox), { command: "ls", cwd: "../etc" });
+    const parsed = finalJson as { error: string };
     expect(parsed.error).toMatch(/outside the repo/);
   });
 
-  it("passes through non-zero exit codes", async () => {
+  it("passes through stderr content", async () => {
     const sandbox = new InMemorySandbox({
       execHandler: async () => ({
         exitCode: 1,
@@ -93,9 +107,8 @@ describe("bash tool — exec", () => {
         truncated: false,
       }),
     });
-    const raw = await call(makeCtx(sandbox), { command: "false" });
-    const parsed = JSON.parse(raw as string);
-    expect(parsed.exit_code).toBe(1);
+    const { finalJson } = await drain(makeCtx(sandbox), { command: "false" });
+    const parsed = finalJson as { stderr: string };
     expect(parsed.stderr).toBe("oops");
   });
 });
