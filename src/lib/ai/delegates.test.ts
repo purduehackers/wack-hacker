@@ -1,7 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { UserRole } from "@/lib/ai/constants";
+import { AgentContext } from "@/lib/ai/context";
 import { TurnUsageTracker } from "@/lib/ai/turn-usage";
+import { DISCORD_IDS } from "@/lib/protocol/constants";
+import { messagePacket } from "@/lib/test/fixtures";
+
+function contextFor(role: UserRole): AgentContext {
+  const memberRoles =
+    role === UserRole.Admin
+      ? [DISCORD_IDS.roles.ADMIN]
+      : role === UserRole.Organizer
+        ? [DISCORD_IDS.roles.ORGANIZER]
+        : [];
+  return AgentContext.fromPacket(messagePacket("hello", { memberRoles }));
+}
 
 // Mock the generated manifest so tests aren't coupled to the real skill set.
 vi.mock("@/lib/ai/skills/generated/manifest", () => ({
@@ -97,10 +110,10 @@ vi.mock("@/lib/ai/tools/shopping", () => ({}));
 
 // Stub createDelegationTool so we can see what spec each domain was passed.
 vi.mock("@/lib/ai/subagent", () => ({
-  createDelegationTool: vi.fn((spec: unknown, role: unknown, _metrics: unknown) => ({
+  createDelegationTool: vi.fn((spec: unknown, context: unknown, _metrics: unknown) => ({
     __marker: "delegation-tool",
     spec,
-    role,
+    context,
   })),
 }));
 
@@ -111,14 +124,14 @@ const createDelegationToolMock = vi.mocked(createDelegationTool);
 describe("buildDelegationTools", () => {
   it("returns an empty set for public users (all delegate skills are gated above public)", () => {
     createDelegationToolMock.mockClear();
-    const tools = buildDelegationTools(UserRole.Public, new TurnUsageTracker());
+    const tools = buildDelegationTools(contextFor(UserRole.Public), new TurnUsageTracker());
     expect(tools).toEqual({});
     expect(createDelegationToolMock).not.toHaveBeenCalled();
   });
 
   it("exposes only organizer-accessible delegate skills to organizers", () => {
     createDelegationToolMock.mockClear();
-    const tools = buildDelegationTools(UserRole.Organizer, new TurnUsageTracker());
+    const tools = buildDelegationTools(contextFor(UserRole.Organizer), new TurnUsageTracker());
     expect(Object.keys(tools).sort()).toEqual([
       "delegate_figma",
       "delegate_finance",
@@ -130,7 +143,7 @@ describe("buildDelegationTools", () => {
 
   it("exposes every delegate skill to admins", () => {
     createDelegationToolMock.mockClear();
-    const tools = buildDelegationTools(UserRole.Admin, new TurnUsageTracker());
+    const tools = buildDelegationTools(contextFor(UserRole.Admin), new TurnUsageTracker());
     expect(Object.keys(tools).sort()).toEqual([
       "delegate_figma",
       "delegate_finance",
@@ -143,23 +156,23 @@ describe("buildDelegationTools", () => {
 
   it("skips inline-mode skills even when the role qualifies", () => {
     createDelegationToolMock.mockClear();
-    const tools = buildDelegationTools(UserRole.Admin, new TurnUsageTracker());
+    const tools = buildDelegationTools(contextFor(UserRole.Admin), new TurnUsageTracker());
     expect(tools).not.toHaveProperty("delegate_discord");
   });
 
   it("passes the skill description and instructions through to createDelegationTool", () => {
     createDelegationToolMock.mockClear();
-    buildDelegationTools(UserRole.Admin, new TurnUsageTracker());
+    buildDelegationTools(contextFor(UserRole.Admin), new TurnUsageTracker());
 
     const linearCall = createDelegationToolMock.mock.calls.find(
       ([spec]) => (spec as { description: string }).description === "Linear delegate",
     );
     expect(linearCall).toBeDefined();
-    const [spec, role] = linearCall!;
+    const [spec, context] = linearCall!;
     expect((spec as { systemPrompt: string }).systemPrompt).toBe("Linear instructions.");
     expect((spec as { baseToolNames: readonly string[] }).baseToolNames).toContain(
       "search_entities",
     );
-    expect(role).toBe(UserRole.Admin);
+    expect((context as AgentContext).role).toBe(UserRole.Admin);
   });
 });
