@@ -14,6 +14,7 @@ function mockOrchestrator(
     toolCallsPerStep?: number;
     stepCount?: number;
     extraEvents?: StreamEvent[];
+    textParts?: string[][];
     totalUsage?: Promise<unknown>;
     steps?: Promise<unknown>;
     captureInput?: (input: unknown) => void;
@@ -27,8 +28,19 @@ function mockOrchestrator(
       return Promise.resolve({
         fullStream: (async function* () {
           for (const evt of options?.extraEvents ?? []) yield evt;
-          for (const text of textChunks) {
-            yield { type: "text-delta", text };
+          if (options?.textParts) {
+            for (let i = 0; i < options.textParts.length; i++) {
+              const id = `t${i}`;
+              yield { type: "text-start", id };
+              for (const text of options.textParts[i]) {
+                yield { type: "text-delta", id, text };
+              }
+              yield { type: "text-end", id };
+            }
+          } else {
+            for (const text of textChunks) {
+              yield { type: "text-delta", text };
+            }
           }
           yield { type: "finish" };
         })(),
@@ -355,6 +367,67 @@ describe("streamTurn: tool event edge cases", () => {
     const lastEdit = edits[edits.length - 1];
     const body = lastEdit[2] as { content: string };
     expect(body.content).toMatch(/-# \d+\.\ds$/);
+
+    vi.restoreAllMocks();
+  });
+});
+
+describe("streamTurn: multi-part text", () => {
+  it("joins text parts from separate steps with a paragraph break", async () => {
+    const orchestrator = await import("./orchestrator");
+    vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue(
+      mockOrchestrator([], {
+        textParts: [
+          ["I'll schedule that reminder for you in 2 days (April 23rd)!"],
+          ["Done! I'll ping you on April 23rd."],
+        ],
+        extraEvents: [
+          { type: "tool-input-start", toolName: "schedule_reminder" },
+          { type: "tool-result", preliminary: false, output: null },
+        ],
+      }) as any,
+    );
+
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("remind me"));
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("remind me"), ctx.toJSON());
+
+    expect(result.text).toBe(
+      "I'll schedule that reminder for you in 2 days (April 23rd)!\n\n" +
+        "Done! I'll ping you on April 23rd.",
+    );
+    expect(result.text).not.toContain("April 23rd)!Done!");
+
+    vi.restoreAllMocks();
+  });
+
+  it("does not prepend a separator before the first text part", async () => {
+    const orchestrator = await import("./orchestrator");
+    vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue(
+      mockOrchestrator([], { textParts: [["Single reply."]] }) as any,
+    );
+
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hi"));
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hi"), ctx.toJSON());
+
+    expect(result.text).toBe("Single reply.");
+    expect(result.text.startsWith("\n")).toBe(false);
+
+    vi.restoreAllMocks();
+  });
+
+  it("keeps deltas within the same part contiguous", async () => {
+    const orchestrator = await import("./orchestrator");
+    vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue(
+      mockOrchestrator([], { textParts: [["Hello ", "world", "!"]] }) as any,
+    );
+
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hi"));
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hi"), ctx.toJSON());
+
+    expect(result.text).toBe("Hello world!");
 
     vi.restoreAllMocks();
   });
