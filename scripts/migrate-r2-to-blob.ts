@@ -14,7 +14,9 @@
  * the environment. Pull them locally with:
  *   bunx vercel env pull .env.local --yes
  * then run:
- *   bun run scripts/migrate-r2-to-blob.ts
+ *   bun run scripts/migrate-r2-to-blob.ts            # both passes
+ *   bun run scripts/migrate-r2-to-blob.ts --only=ship    # ship bucket only
+ *   bun run scripts/migrate-r2-to-blob.ts --only=events  # events bucket only
  *
  * Disposable: delete this file (and `@aws-sdk/client-s3` from devDependencies)
  * once the migration has completed successfully.
@@ -164,7 +166,15 @@ async function main(): Promise<void> {
     }),
   );
 
-  const passes: BucketPass[] = [
+  const onlyArg = process.argv.find((a) => a.startsWith("--only="));
+  const onlyRaw = onlyArg?.slice("--only=".length);
+  if (onlyRaw && onlyRaw !== "events" && onlyRaw !== "ship") {
+    console.error(`Invalid --only value: "${onlyRaw}" (expected "events" or "ship")`);
+    process.exit(1);
+  }
+  const only = onlyRaw as BucketPass["label"] | undefined;
+
+  const allPasses: BucketPass[] = [
     {
       label: "events",
       bucket: requireEnv("EVENTS_R2_BUCKET_NAME"),
@@ -176,6 +186,7 @@ async function main(): Promise<void> {
       blobToken: requireEnv("SHIPS_BLOB_READ_WRITE_TOKEN"),
     },
   ];
+  const passes = only ? allPasses.filter((p) => p.label === only) : allPasses;
 
   for (const pass of passes) {
     await migrateBucket(s3, db, pass);
