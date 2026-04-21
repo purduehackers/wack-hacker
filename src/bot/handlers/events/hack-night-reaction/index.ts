@@ -1,8 +1,7 @@
 import { log } from "evlog";
 
 import { defineEvent } from "@/bot/events/define";
-import { generateEventSlug, removeImagesForMessage } from "@/bot/integrations/hack-night";
-import { env } from "@/env";
+import { deleteMedia, findMediaByDiscordMessageId } from "@/bot/integrations/payload";
 import { DISCORD_IDS } from "@/lib/protocol/constants";
 
 export const hackNightReaction = defineEvent({
@@ -20,11 +19,21 @@ export const hackNightReaction = defineEvent({
       if (!member.roles.includes(DISCORD_IDS.roles.ORGANIZER)) return;
     }
 
-    const slug = generateEventSlug(new Date());
-    const removed = await removeImagesForMessage(slug, messageId, env.EVENTS_BLOB_READ_WRITE_TOKEN);
-    if (removed > 0) {
-      await ctx.discord.channels.deleteOwnMessageReaction(channelId, messageId, "\u2705");
-      log.info("hack-night", `Removed ${removed} images for message ${messageId} by ${creator.id}`);
+    const found = await findMediaByDiscordMessageId(messageId);
+    if (found.totalDocs === 0) return;
+
+    for (const doc of found.docs) {
+      try {
+        await deleteMedia(doc.id);
+      } catch (err) {
+        log.warn("hack-night", `Failed to delete media ${doc.id}: ${String(err)}`);
+      }
     }
+
+    await ctx.discord.channels.deleteOwnMessageReaction(channelId, messageId, "\u2705");
+    log.info(
+      "hack-night",
+      `Removed ${found.totalDocs} media for message ${messageId} by ${creator.id}`,
+    );
   },
 });

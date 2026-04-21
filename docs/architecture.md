@@ -136,8 +136,9 @@ See [Agents](./agents/README.md) for the full breakdown.
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
 | AI Gateway         | `anthropic/claude-sonnet-4.6` (orchestrator) and `anthropic/claude-haiku-4.5` (subagents); routing, observability, model fallbacks |
 | Upstash Redis      | `ConversationStore`, dedup keys, per-channel locks, task registry                                                                  |
-| Turso (libSQL)     | Privacy preferences, ship submissions, hack-night image index                                                                      |
-| Vercel Blob        | Hack-night event images and ship uploads (two stores, one per use case)                                                            |
+| Turso (libSQL)     | Privacy preferences, ship submissions                                                                                              |
+| Vercel Blob        | Ship uploads (hack-night photos now live in Payload; events Blob store is legacy / pending teardown)                               |
+| Payload CMS        | Hack-night photos via `cms.purduehackers.com` (`media` collection; bot tags with `batchId`, editors link into `events.images[]`)   |
 | Vercel Edge Config | Hack night `version` key (used by the `/init-hn` command)                                                                          |
 | Vercel Queues      | `discord-events` (gateway → consumer), `tasks` (scheduling)                                                                        |
 

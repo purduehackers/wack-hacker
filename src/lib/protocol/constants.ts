@@ -15,6 +15,8 @@ export const DISCORD_IDS = {
     HACK_NIGHT: "1020777328172859412",
     LOUNGE: "809628073896443904",
     INTRO: "1182158612454449282",
+    // Organizer handoff channel for hack-night batch UUIDs. TODO: confirm id with the user.
+    PROJECT_HACK_NIGHT: "1020777328172859412",
   },
   categories: {
     SIGHORSE: "1381412394676518932",

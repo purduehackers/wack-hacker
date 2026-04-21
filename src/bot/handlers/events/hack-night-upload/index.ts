@@ -1,14 +1,13 @@
-import { put } from "@vercel/blob";
 import { log } from "evlog";
 
 import { defineEvent } from "@/bot/events/define";
 import {
-  generateEventSlug,
-  getEventIndex,
-  type ImageMetadata,
-  updateEventIndex,
-} from "@/bot/integrations/hack-night";
-import { env } from "@/env";
+  findMediaByDiscordMessageId,
+  getOrCreateBatchId,
+  hackNightDateKey,
+  snowflakeToDate,
+  uploadMedia,
+} from "@/bot/integrations/payload";
 import { DISCORD_IDS } from "@/lib/protocol/constants";
 
 const THREAD_NAME_PREFIX = "Hack Night Images";
@@ -25,14 +24,16 @@ export const hackNightUpload = defineEvent({
     const imageAttachments = attachments.filter((a) => a.contentType?.startsWith("image/"));
     if (imageAttachments.length === 0) return;
 
-    const slug = generateEventSlug(new Date());
+    // Key the batch off the thread's creation timestamp, not `now`, so a
+    // late upload still attaches to the right Friday.
+    const threadDate = snowflakeToDate(channel.id);
+    const dateKey = hackNightDateKey(threadDate);
 
-    // Skip if this message's images were already indexed
-    const index = await getEventIndex(slug);
-    if (index?.images.some((img) => img.discordMessageId === messageId)) return;
+    // Skip if this Discord message already has media uploaded.
+    const existing = await findMediaByDiscordMessageId(messageId);
+    if (existing.totalDocs >= imageAttachments.length) return;
 
-    const token = env.EVENTS_BLOB_READ_WRITE_TOKEN;
-    const uploaded: ImageMetadata[] = [];
+    const batchId = await getOrCreateBatchId(dateKey);
 
     for (const attachment of imageAttachments) {
       try {
@@ -40,36 +41,20 @@ export const hackNightUpload = defineEvent({
         if (!res.ok) throw new Error(`download failed: ${res.status}`);
         const buffer = Buffer.from(await res.arrayBuffer());
         const filename = `${messageId}-${attachment.filename}`;
-        await put(`images/${slug}/${filename}`, buffer, {
-          access: "public",
-          addRandomSuffix: false,
-          allowOverwrite: true,
-          contentType: attachment.contentType ?? "image/jpeg",
-          token,
-        });
-
-        uploaded.push({
+        await uploadMedia({
+          buffer,
           filename,
-          uploadedAt: new Date().toISOString(),
+          contentType: attachment.contentType ?? "image/jpeg",
+          alt: `Hack Night photo from ${author.username}`,
+          batchId,
           discordMessageId: messageId,
           discordUserId: author.id,
+          source: "hack-night",
         });
-
         await ctx.discord.channels.addMessageReaction(channel.id, messageId, "\u2705");
       } catch (err) {
         log.warn("hack-night", `Failed to upload ${attachment.filename}: ${String(err)}`);
         await ctx.discord.channels.addMessageReaction(channel.id, messageId, "\u274C");
-      }
-    }
-
-    if (uploaded.length > 0) {
-      try {
-        await updateEventIndex(slug, uploaded);
-      } catch (err) {
-        log.warn(
-          "hack-night",
-          `Failed to index ${uploaded.length} image(s) for ${slug}: ${String(err)}`,
-        );
       }
     }
   },
