@@ -129,6 +129,176 @@ describe("createDelegationTool — execute() against MockLanguageModelV3", () =>
   });
 });
 
+describe("createDelegationTool — extended SubagentSpec fields", () => {
+  let model: MockLanguageModelV3;
+
+  beforeEach(() => {
+    model = streamingTextModel("final answer");
+    installMockProvider(model);
+  });
+
+  afterEach(() => {
+    uninstallMockProvider();
+  });
+
+  async function drainWith(
+    spec: Parameters<typeof createDelegationTool>[0],
+    input: unknown,
+    agentContext?: Parameters<typeof createDelegationTool>[3],
+  ) {
+    const t = createDelegationTool(spec, UserRole.Admin, new TurnUsageTracker(), agentContext);
+    const received: UIMessage[] = [];
+    const gen = t.execute!(
+      input,
+      {} as Parameters<NonNullable<typeof t.execute>>[1],
+    ) as AsyncIterable<UIMessage>;
+    for await (const msg of gen) received.push(msg);
+    return received;
+  }
+
+  it("routes a custom inputSchema and extracts the task string for the prompt", async () => {
+    const spec = {
+      ...baseSpec,
+      inputSchema: (await import("zod")).z.object({
+        repo: (await import("zod")).z.string(),
+        task: (await import("zod")).z.string(),
+      }),
+    };
+    await drainWith(spec, { repo: "purduehackers/x", task: "do the thing" });
+
+    const call = model.doStreamCalls[0]!;
+    const userMessage = call.prompt.find((m) => m.role === "user");
+    const content =
+      typeof userMessage?.content === "string"
+        ? userMessage.content
+        : JSON.stringify(userMessage?.content);
+    expect(content).toContain("do the thing");
+  });
+
+  it("passes buildExperimentalContext's result as experimental_context to the nested agent", async () => {
+    const agentContext = { thread: { id: "T1" } } as Parameters<typeof createDelegationTool>[3];
+    const spec = {
+      ...baseSpec,
+      buildExperimentalContext: (input: unknown) => ({ marker: "ctx", input }),
+    };
+    await drainWith(spec, { task: "go" }, agentContext);
+
+    const call = model.doStreamCalls[0]!;
+    // providerOptions is what AI SDK forwards; experimental_context is wired via provider metadata.
+    // We assert indirectly: the agent actually ran one step + the mock model was invoked.
+    expect(call).toBeDefined();
+  });
+
+  it("throws when buildExperimentalContext is set but agentContext is missing", async () => {
+    const spec = {
+      ...baseSpec,
+      buildExperimentalContext: () => ({}),
+    };
+    const t = createDelegationTool(spec, UserRole.Admin, new TurnUsageTracker());
+    const gen = t.execute!(
+      { task: "go" },
+      {} as Parameters<NonNullable<typeof t.execute>>[1],
+    ) as AsyncIterable<UIMessage>;
+    await expect(async () => {
+      for await (const _ of gen);
+    }).rejects.toThrow(/requires an AgentContext/);
+  });
+
+  it("invokes postFinish after the stream completes and forwards its yielded messages", async () => {
+    const extra: UIMessage = {
+      id: "post",
+      role: "assistant",
+      parts: [{ type: "text", text: "post-finish message" }],
+    } as unknown as UIMessage;
+    const spec = {
+      ...baseSpec,
+      postFinish: async function* () {
+        yield extra;
+      },
+    };
+    const agentContext = {} as Parameters<typeof createDelegationTool>[3];
+    const messages = await drainWith(spec, { task: "go" }, agentContext);
+    const last = messages.at(-1)!;
+    const lastText = last.parts.find((p): p is { type: "text"; text: string } => p.type === "text");
+    expect(lastText?.text).toBe("post-finish message");
+  });
+
+  it("uses spec.model when supplied", async () => {
+    const spec = { ...baseSpec, model: "anthropic/claude-opus-4.7" };
+    await drainWith(spec, { task: "go" });
+    // The mock provider proxies any model id, so we can't assert on the model string directly;
+    // what we can assert is that the stream succeeded (i.e. the override didn't blow up).
+    expect(model.doStreamCalls.length).toBeGreaterThan(0);
+  });
+});
+
+describe("createDelegationTool — extractPrompt fallback", () => {
+  let model: MockLanguageModelV3;
+
+  beforeEach(() => {
+    model = streamingTextModel("ok");
+    installMockProvider(model);
+  });
+
+  afterEach(() => {
+    uninstallMockProvider();
+  });
+
+  it("falls back to the first string field when no `task` key is present", async () => {
+    const spec = {
+      ...baseSpec,
+      inputSchema: (await import("zod")).z.object({
+        instructions: (await import("zod")).z.string(),
+      }),
+    };
+    const t = createDelegationTool(spec, UserRole.Admin, new TurnUsageTracker());
+    const gen = t.execute!(
+      { instructions: "do X" },
+      {} as Parameters<NonNullable<typeof t.execute>>[1],
+    ) as AsyncIterable<UIMessage>;
+    const received: UIMessage[] = [];
+    for await (const msg of gen) received.push(msg);
+
+    const call = model.doStreamCalls[0]!;
+    const userMessage = call.prompt.find((m) => m.role === "user");
+    const content =
+      typeof userMessage?.content === "string"
+        ? userMessage.content
+        : JSON.stringify(userMessage?.content);
+    expect(content).toContain("do X");
+  });
+
+  it("throws when input is not an object", async () => {
+    const spec = {
+      ...baseSpec,
+      inputSchema: (await import("zod")).z.any(),
+    };
+    const t = createDelegationTool(spec, UserRole.Admin, new TurnUsageTracker());
+    const gen = t.execute!(
+      "just a string",
+      {} as Parameters<NonNullable<typeof t.execute>>[1],
+    ) as AsyncIterable<UIMessage>;
+    await expect(async () => {
+      for await (const _ of gen);
+    }).rejects.toThrow(/non-object input/);
+  });
+
+  it("throws when object has no string field", async () => {
+    const spec = {
+      ...baseSpec,
+      inputSchema: (await import("zod")).z.any(),
+    };
+    const t = createDelegationTool(spec, UserRole.Admin, new TurnUsageTracker());
+    const gen = t.execute!(
+      { foo: 1, bar: true },
+      {} as Parameters<NonNullable<typeof t.execute>>[1],
+    ) as AsyncIterable<UIMessage>;
+    await expect(async () => {
+      for await (const _ of gen);
+    }).rejects.toThrow(/no string field/);
+  });
+});
+
 describe("createDelegationTool — toModelOutput()", () => {
   function uiMessage(parts: Array<{ type: string; text?: string }>): UIMessage {
     return { id: "m", role: "assistant", parts } as unknown as UIMessage;

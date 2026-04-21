@@ -41,6 +41,33 @@ describe("glob tool", () => {
     expect(parsed.truncated).toBe(false);
   });
 
+  it("runs rg against a repo-relative root so paths come back relative", async () => {
+    let invoked = "";
+    const sandbox = new InMemorySandbox({
+      execHandler: async (command) => {
+        invoked = command;
+        return { exitCode: 0, stdout: "src/a.ts\n", stderr: "", truncated: false };
+      },
+    });
+    await call(makeCtx(sandbox), { pattern: "**/*.ts", path: ".", max_results: 100 });
+    // Root is ".", not the absolute path "/vercel/sandbox".
+    expect(invoked).toMatch(/rg --files --glob '\*\*\/\*\.ts' \./);
+    expect(invoked).not.toContain("/vercel/sandbox");
+  });
+
+  it("converts subdirectory paths to repo-relative before passing to rg", async () => {
+    let invoked = "";
+    const sandbox = new InMemorySandbox({
+      execHandler: async (command) => {
+        invoked = command;
+        return { exitCode: 0, stdout: "", stderr: "", truncated: false };
+      },
+    });
+    await call(makeCtx(sandbox), { pattern: "*.ts", path: "src/lib", max_results: 100 });
+    expect(invoked).toContain(" src/lib");
+    expect(invoked).not.toContain("/vercel/sandbox/src/lib");
+  });
+
   it("marks results as truncated when more than max_results are returned", async () => {
     const sandbox = new InMemorySandbox({
       execHandler: async () => ({

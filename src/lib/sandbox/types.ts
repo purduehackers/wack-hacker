@@ -126,6 +126,8 @@ export interface VercelSandboxReconnectOptions {
   githubToken?: string;
   env?: Record<string, string>;
   hooks?: SandboxHooks;
+  /** Absolute deadline (ms since epoch) the caller knows about (from Redis). */
+  expiresAt?: number;
 }
 
 // ─── hooks ────────────────────────────────────────────────────────────────

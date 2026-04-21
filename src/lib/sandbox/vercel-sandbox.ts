@@ -27,6 +27,8 @@ interface VercelSandboxConstructorArgs {
   env?: Record<string, string>;
   hooks?: SandboxHooks;
   currentBranch?: string;
+  /** Absolute ms-since-epoch deadline; seeded by create/reconnect, incremented on extendTimeout. */
+  expiresAt: number;
 }
 
 /**
@@ -48,6 +50,7 @@ export class VercelSandbox implements Sandbox {
   private sdk: VercelSandboxSDK;
   private env?: Record<string, string>;
   private stopped = false;
+  private _expiresAt: number;
 
   private constructor(args: VercelSandboxConstructorArgs) {
     this.sdk = args.sdk;
@@ -56,6 +59,12 @@ export class VercelSandbox implements Sandbox {
     this.env = args.env;
     this.hooks = args.hooks;
     this.currentBranch = args.currentBranch;
+    this._expiresAt = args.expiresAt;
+  }
+
+  /** Current absolute deadline (ms since epoch). Moves forward on extendTimeout. */
+  get expiresAt(): number {
+    return this._expiresAt;
   }
 
   static async create(options: VercelSandboxCreateOptions = {}): Promise<VercelSandbox> {
@@ -94,6 +103,7 @@ export class VercelSandbox implements Sandbox {
       workingDirectory: DEFAULT_WORKING_DIRECTORY,
       env,
       hooks,
+      expiresAt: Date.now() + timeoutMs,
     });
 
     if (hooks?.afterStart) {
@@ -113,12 +123,18 @@ export class VercelSandbox implements Sandbox {
       await sdk.updateNetworkPolicy(buildGitHubCredentialBrokeringPolicy(options.githubToken));
     }
 
+    // Reconnect callers (session.ts) know the cached deadline from Redis. Fall back
+    // to a conservative "now + 5 min" when no expiry is supplied so calls to
+    // extendTimeout still produce a monotonically increasing value.
+    const seedExpiresAt = options.expiresAt ?? Date.now() + 5 * 60 * 1000;
+
     const sandbox = new VercelSandbox({
       sdk,
       name: sandboxId,
       workingDirectory: DEFAULT_WORKING_DIRECTORY,
       env: options.env,
       hooks: options.hooks,
+      expiresAt: seedExpiresAt,
     });
 
     if (options.hooks?.afterStart) {
@@ -229,7 +245,11 @@ export class VercelSandbox implements Sandbox {
 
   async extendTimeout(additionalMs: number): Promise<{ expiresAt: number }> {
     await this.sdk.extendTimeout(additionalMs);
-    return { expiresAt: Date.now() + additionalMs };
+    // Extension is relative to the existing deadline, not to now — matches the
+    // Sandbox contract (and InMemorySandbox's semantics). session.ts then
+    // persists the new value to Redis.
+    this._expiresAt += additionalMs;
+    return { expiresAt: this._expiresAt };
   }
 
   async stop(): Promise<void> {

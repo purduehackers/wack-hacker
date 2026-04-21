@@ -51,6 +51,7 @@ export async function getOrCreateSession(
     try {
       const sandbox = await VercelSandbox.reconnect(cached.sandboxId, {
         githubToken: params.githubToken,
+        expiresAt: cached.expiresAt,
       });
       const bump = await sandbox.extendTimeout(params.timeoutMs ?? DEFAULT_TIMEOUT_MS);
       const metadata: SandboxSessionMetadata = { ...cached, expiresAt: bump.expiresAt };

@@ -1,4 +1,5 @@
 import { tool } from "ai";
+import * as path from "node:path";
 import { z } from "zod";
 
 import { getSandboxContext, resolvePath } from "./utils.ts";
@@ -32,7 +33,12 @@ Use this for "where is X?" discovery. Prefer \`grep\` when you need to search fi
       return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
     }
 
-    const command = `rg --files --glob ${shellQuote(pattern)} ${shellQuote(absolute)} | head -n ${max_results + 1}`;
+    // Run against a repo-relative root so rg emits relative paths. Using `.`
+    // when the target is the repo root itself means file listings like
+    // `src/foo.ts` instead of `/vercel/sandbox/src/foo.ts`.
+    const relativeRoot = path.relative(repoDir, absolute) || ".";
+
+    const command = `rg --files --glob ${shellQuote(pattern)} ${shellQuote(relativeRoot)} | head -n ${max_results + 1}`;
     const result = await sandbox.exec(command, {
       cwd: repoDir,
       signal: abortSignal,

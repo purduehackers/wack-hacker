@@ -14,15 +14,31 @@ import type { CodingSandboxContext } from "./utils.ts";
 import { env } from "../../../../env.ts";
 import { octokit } from "../github/client.ts";
 
+/**
+ * Matches exactly two slash-separated segments where the owner is the
+ * configured GitHub org and the repo name is a single valid path segment
+ * (alphanumeric, dot, hyphen, underscore). Prevents values like
+ * `purduehackers/repo/extra` or `purduehackers//x`.
+ */
+const repoPattern = new RegExp(`^${escapeRegExp(env.GITHUB_ORG)}/[A-Za-z0-9._-]+$`);
+
 /** Input schema for `delegate_code`. */
 export const codeDelegationInputSchema = z.object({
   repo: z
     .string()
+    .regex(
+      repoPattern,
+      `Repo must be \`${env.GITHUB_ORG}/<name>\` — exactly two path segments, no extra slashes.`,
+    )
     .describe(
       `Target repository in the \`${env.GITHUB_ORG}/<name>\` form. Refused if outside the org.`,
     ),
   task: z.string().describe("The user's task, forwarded verbatim to the coding subagent"),
 });
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 export type { CodeDelegationInput } from "./types.ts";
 
@@ -35,12 +51,9 @@ export async function buildCodeExperimentalContext(
   input: unknown,
   agentContext: AgentContext,
 ): Promise<CodingSandboxContext> {
+  // `codeDelegationInputSchema` already enforces the `${env.GITHUB_ORG}/<name>`
+  // shape via regex; `parse` surfaces any malformed input with a clear error.
   const parsed = codeDelegationInputSchema.parse(input);
-  if (!parsed.repo.startsWith(`${env.GITHUB_ORG}/`)) {
-    throw new Error(
-      `Repo ${parsed.repo} is outside ${env.GITHUB_ORG}; code delegation is scoped to that org.`,
-    );
-  }
 
   const threadKey = agentContext.thread?.id ?? agentContext.channel.id;
   const installationToken = await mintInstallationToken();
@@ -91,7 +104,14 @@ export async function* codePostFinish(args: {
 
   const commitMessage = extractCommitMessage(args.lastAssistantText);
 
-  await sandbox.exec("git add -A", { cwd: ctx.repoDir });
+  const addResult = await sandbox.exec("git add -A", { cwd: ctx.repoDir });
+  if (addResult.exitCode !== 0) {
+    yield statusMessage(
+      `Staging failed (exit ${addResult.exitCode}). stderr: ${truncate(addResult.stderr || addResult.stdout)}`,
+    );
+    return;
+  }
+
   const commitResult = await sandbox.exec(`git commit -m ${shellQuote(commitMessage)}`, {
     cwd: ctx.repoDir,
   });
