@@ -26,6 +26,10 @@ import { TurnUsageTracker } from "./turn-usage.ts";
 
 export type { SubagentSpec } from "./types.ts";
 
+const DEFAULT_TASK_INPUT_SCHEMA = z.object({
+  task: z.string().describe("The task to delegate, forwarded verbatim"),
+});
+
 /**
  * Create a delegation tool that spawns a focused domain subagent.
  *
@@ -45,12 +49,12 @@ export function createDelegationTool(
   tracker: TurnUsageTracker,
 ) {
   const role = context.role;
+  const inputSchema = spec.inputSchema ?? DEFAULT_TASK_INPUT_SCHEMA;
+
   return tool({
     description: spec.description,
-    inputSchema: z.object({
-      task: z.string().describe("The task to delegate, forwarded verbatim"),
-    }),
-    execute: async function* ({ task }, { abortSignal }) {
+    inputSchema,
+    execute: async function* (input, { abortSignal }) {
       const registry = new SkillRegistry(spec.subSkills);
       const loadSkill = createLoadSkillTool(registry, role);
       const instructions = `${SUBAGENT_PREAMBLE}\n\n${spec.systemPrompt.replace(
@@ -69,10 +73,10 @@ export function createDelegationTool(
       type ToolKey = keyof typeof tools;
 
       const agent = new ToolLoopAgent({
-        model: SUBAGENT_MODEL,
+        model: spec.model ?? SUBAGENT_MODEL,
         instructions,
         tools,
-        stopWhen: stepCountIs(15),
+        stopWhen: stepCountIs(spec.stopSteps ?? 15),
         activeTools: baseToolNames as ToolKey[],
         prepareStep: ({ steps }) => {
           const active = computeActiveTools({ steps, registry, role, baseToolNames });
@@ -93,11 +97,23 @@ export function createDelegationTool(
         },
       });
 
-      const result = await agent.stream({ prompt: task, abortSignal });
+      const prompt = extractPrompt(input);
+      const experimentalContext = spec.buildExperimentalContext
+        ? await spec.buildExperimentalContext(input, context)
+        : undefined;
 
+      const result = await agent.stream({
+        prompt,
+        abortSignal,
+        ...(experimentalContext !== undefined ? { experimental_context: experimentalContext } : {}),
+      });
+
+      let lastAssistantText = "";
       for await (const message of readUIMessageStream({
         stream: result.toUIMessageStream(),
       })) {
+        const text = message.parts.findLast(isTextUIPart)?.text;
+        if (text) lastAssistantText = text;
         yield message;
       }
 
@@ -109,6 +125,17 @@ export function createDelegationTool(
       countMetric("ai.subagent.completed", { domain: spec.name });
       recordDistribution("ai.subagent.tokens", tokens, { domain: spec.name });
       recordDistribution("ai.subagent.tool_calls", toolCalls, { domain: spec.name });
+
+      if (spec.postFinish) {
+        for await (const message of spec.postFinish({
+          input,
+          agentContext: context,
+          experimentalContext,
+          lastAssistantText,
+        })) {
+          yield message;
+        }
+      }
     },
     toModelOutput: ({ output }) => {
       const message = output as UIMessage | undefined;
@@ -119,4 +146,21 @@ export function createDelegationTool(
       };
     },
   });
+}
+
+/**
+ * Pulls the primary text input out of the delegation tool's argument. Accepts
+ * either the default `{ task }` shape or a custom shape whose first string
+ * field is used as the prompt (as with the code domain's `{ repo, task }`).
+ */
+function extractPrompt(input: unknown): string {
+  if (!input || typeof input !== "object") {
+    throw new Error("Delegation tool received a non-object input");
+  }
+  const record = input as Record<string, unknown>;
+  if (typeof record.task === "string") return record.task;
+  for (const value of Object.values(record)) {
+    if (typeof value === "string") return value;
+  }
+  throw new Error("Delegation tool input has no string field to use as prompt");
 }

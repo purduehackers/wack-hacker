@@ -11,6 +11,7 @@ import { buildContextSnapshot } from "@/lib/ai/snapshot";
 import { streamTurn } from "@/lib/ai/streaming";
 import { addTurnUsage, emptyTurnUsage } from "@/lib/ai/turn-usage";
 import { countMetric } from "@/lib/metrics";
+import { releaseSession } from "@/lib/sandbox/session";
 
 import type { ChatHookEvent, ChatPayload } from "./types";
 
@@ -66,11 +67,13 @@ async function persistSnapshot(
 
 async function cleanupConversation(channelId: string, threadId: string | undefined) {
   "use step";
-  // Snapshot deletion is best-effort; only the ConversationStore delete is
-  // load-bearing for starting a fresh workflow later.
-  const [conversationResult, snapshotResult] = await Promise.allSettled([
+  const threadKey = threadId ?? channelId;
+  // Snapshot + sandbox release are best-effort; only the ConversationStore
+  // delete is load-bearing for starting a fresh workflow later.
+  const [conversationResult, snapshotResult, sandboxResult] = await Promise.allSettled([
     new ConversationStore().delete(channelId),
     new ContextSnapshotStore().delete(channelId, threadId),
+    releaseSession(threadKey),
   ]);
   if (snapshotResult.status === "rejected") {
     log.warn(
@@ -78,6 +81,13 @@ async function cleanupConversation(channelId: string, threadId: string | undefin
       `Snapshot delete failed for ${channelId}: ${String(snapshotResult.reason)}`,
     );
     countMetric("workflow.chat.snapshot_cleanup_error");
+  }
+  if (sandboxResult.status === "rejected") {
+    log.warn(
+      "workflow",
+      `Sandbox release failed for ${threadKey}: ${String(sandboxResult.reason)}`,
+    );
+    countMetric("workflow.chat.sandbox_cleanup_error");
   }
   if (conversationResult.status === "rejected") {
     throw conversationResult.reason;

@@ -1,0 +1,252 @@
+import { Sandbox as VercelSandboxSDK } from "@vercel/sandbox";
+
+import type {
+  DirEntry,
+  ExecOptions,
+  ExecResult,
+  Sandbox,
+  SandboxHooks,
+  SandboxStats,
+  VercelSandboxCreateOptions,
+  VercelSandboxReconnectOptions,
+} from "./types.ts";
+
+import { buildGitHubCredentialBrokeringPolicy } from "./credential-brokering.ts";
+
+export type { VercelSandboxCreateOptions, VercelSandboxReconnectOptions } from "./types.ts";
+
+const MAX_OUTPUT_LENGTH = 50_000;
+const DEFAULT_WORKING_DIRECTORY = "/vercel/sandbox";
+const DEFAULT_EXEC_TIMEOUT_MS = 120_000;
+const DEFAULT_SANDBOX_TIMEOUT_MS = 30 * 60 * 1000;
+
+interface VercelSandboxConstructorArgs {
+  sdk: VercelSandboxSDK;
+  name: string;
+  workingDirectory: string;
+  env?: Record<string, string>;
+  hooks?: SandboxHooks;
+  currentBranch?: string;
+}
+
+/**
+ * Vercel Sandbox implementation of the `Sandbox` interface. Wraps
+ * `@vercel/sandbox` v1.10 while preserving the simpler open-agents-style
+ * contract our tools actually use (no preview URLs, no detached commands, no
+ * snapshot helpers — those are deferred per the v2 plan).
+ *
+ * A `VercelSandbox` IS its own session: the underlying SDK exposes a single
+ * durable handle, reconnect via `Sandbox.get({ sandboxId })`. We persist the
+ * id in Redis through `session.ts`; no separate "session" abstraction.
+ */
+export class VercelSandbox implements Sandbox {
+  readonly name: string;
+  readonly workingDirectory: string;
+  currentBranch?: string;
+  readonly hooks?: SandboxHooks;
+
+  private sdk: VercelSandboxSDK;
+  private env?: Record<string, string>;
+  private stopped = false;
+
+  private constructor(args: VercelSandboxConstructorArgs) {
+    this.sdk = args.sdk;
+    this.name = args.name;
+    this.workingDirectory = args.workingDirectory;
+    this.env = args.env;
+    this.hooks = args.hooks;
+    this.currentBranch = args.currentBranch;
+  }
+
+  static async create(options: VercelSandboxCreateOptions = {}): Promise<VercelSandbox> {
+    const {
+      githubToken,
+      baseSnapshotId,
+      timeoutMs = DEFAULT_SANDBOX_TIMEOUT_MS,
+      vcpus = 4,
+      runtime = "node24",
+      env,
+      hooks,
+    } = options;
+
+    // When a base snapshot is provided the SDK types disallow `runtime`
+    // (the snapshot encodes it). We branch because the discriminated union
+    // doesn't narrow from a spread.
+    const sdk = await (baseSnapshotId
+      ? VercelSandboxSDK.create({
+          timeout: timeoutMs,
+          resources: { vcpus },
+          networkPolicy: buildGitHubCredentialBrokeringPolicy(githubToken),
+          env,
+          source: { type: "snapshot", snapshotId: baseSnapshotId },
+        })
+      : VercelSandboxSDK.create({
+          timeout: timeoutMs,
+          resources: { vcpus },
+          runtime,
+          networkPolicy: buildGitHubCredentialBrokeringPolicy(githubToken),
+          env,
+        }));
+
+    const sandbox = new VercelSandbox({
+      sdk,
+      name: sdk.sandboxId,
+      workingDirectory: DEFAULT_WORKING_DIRECTORY,
+      env,
+      hooks,
+    });
+
+    if (hooks?.afterStart) {
+      await hooks.afterStart(sandbox);
+    }
+
+    return sandbox;
+  }
+
+  static async reconnect(
+    sandboxId: string,
+    options: VercelSandboxReconnectOptions = {},
+  ): Promise<VercelSandbox> {
+    const sdk = await VercelSandboxSDK.get({ sandboxId });
+
+    if (options.githubToken !== undefined) {
+      await sdk.updateNetworkPolicy(buildGitHubCredentialBrokeringPolicy(options.githubToken));
+    }
+
+    const sandbox = new VercelSandbox({
+      sdk,
+      name: sandboxId,
+      workingDirectory: DEFAULT_WORKING_DIRECTORY,
+      env: options.env,
+      hooks: options.hooks,
+    });
+
+    if (options.hooks?.afterStart) {
+      await options.hooks.afterStart(sandbox);
+    }
+
+    return sandbox;
+  }
+
+  /** Record the feature branch the agent is working on (called by `afterStart`). */
+  setCurrentBranch(branch: string): void {
+    this.currentBranch = branch;
+  }
+
+  private mergedEnv(extra?: Record<string, string>): Record<string, string> | undefined {
+    if (!this.env && !extra) return undefined;
+    return { ...this.env, ...extra };
+  }
+
+  async readFile(path: string): Promise<string> {
+    return this.sdk.fs.readFile(path, { encoding: "utf-8" });
+  }
+
+  async writeFile(path: string, content: string): Promise<void> {
+    await this.sdk.fs.writeFile(path, content);
+  }
+
+  async stat(path: string): Promise<SandboxStats> {
+    const s = await this.sdk.fs.stat(path);
+    return {
+      isFile: s.isFile(),
+      isDirectory: s.isDirectory(),
+      isSymlink: s.isSymbolicLink(),
+      size: s.size,
+    };
+  }
+
+  async readdir(path: string): Promise<DirEntry[]> {
+    const entries = await this.sdk.fs.readdir(path, { withFileTypes: true });
+    return entries.map((e) => ({
+      name: e.name,
+      type: e.isDirectory()
+        ? "directory"
+        : e.isFile()
+          ? "file"
+          : e.isSymbolicLink()
+            ? "symlink"
+            : "other",
+    }));
+  }
+
+  async mkdir(path: string, options?: { recursive?: boolean }): Promise<void> {
+    await this.sdk.fs.mkdir(path, { recursive: options?.recursive ?? false });
+  }
+
+  async exec(command: string, options: ExecOptions = {}): Promise<ExecResult> {
+    const cwd = options.cwd ?? this.workingDirectory;
+    const timeoutMs = options.timeoutMs ?? DEFAULT_EXEC_TIMEOUT_MS;
+
+    const timeoutSignal = AbortSignal.timeout(timeoutMs);
+    const signal = options.signal
+      ? AbortSignal.any([timeoutSignal, options.signal])
+      : timeoutSignal;
+
+    try {
+      const result = await this.sdk.runCommand({
+        cmd: "bash",
+        args: ["-c", command],
+        cwd,
+        env: this.mergedEnv(options.env),
+        signal,
+      });
+
+      const [stdoutRaw, stderrRaw] = await Promise.all([result.stdout(), result.stderr()]);
+
+      let stdout = stdoutRaw;
+      let truncated = false;
+      if (stdout.length > MAX_OUTPUT_LENGTH) {
+        stdout = stdout.slice(0, MAX_OUTPUT_LENGTH);
+        truncated = true;
+      }
+
+      let stderr = stderrRaw;
+      if (stderr.length > MAX_OUTPUT_LENGTH) {
+        stderr = stderr.slice(0, MAX_OUTPUT_LENGTH);
+        truncated = true;
+      }
+
+      return { exitCode: result.exitCode, stdout, stderr, truncated };
+    } catch (err) {
+      if (err instanceof Error && err.name === "TimeoutError") {
+        return {
+          exitCode: null,
+          stdout: "",
+          stderr: `Command timed out after ${timeoutMs}ms`,
+          truncated: false,
+        };
+      }
+      if (err instanceof Error && err.name === "AbortError") throw err;
+      return {
+        exitCode: null,
+        stdout: "",
+        stderr: err instanceof Error ? err.message : String(err),
+        truncated: false,
+      };
+    }
+  }
+
+  async extendTimeout(additionalMs: number): Promise<{ expiresAt: number }> {
+    await this.sdk.extendTimeout(additionalMs);
+    return { expiresAt: Date.now() + additionalMs };
+  }
+
+  async stop(): Promise<void> {
+    if (this.stopped) return;
+    this.stopped = true;
+
+    if (this.hooks?.beforeStop) {
+      try {
+        await this.hooks.beforeStop(this);
+      } catch (err) {
+        console.error(
+          "[VercelSandbox] beforeStop hook failed:",
+          err instanceof Error ? err.message : err,
+        );
+      }
+    }
+
+    await this.sdk.stop();
+  }
+}

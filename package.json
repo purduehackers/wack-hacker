@@ -65,6 +65,7 @@
     "@vercel/edge-config": "^1.4.3",
     "@vercel/functions": "^3.4.3",
     "@vercel/queue": "^0.1.6",
+    "@vercel/sandbox": "^1.10.0",
     "@vercel/sdk": "^1.19.35",
     "ai": "^6.0.160",
     "discord-api-types": "^0.38.46",

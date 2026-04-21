@@ -71,11 +71,21 @@ vi.mock("@/lib/ai/skills/generated/manifest", () => ({
       mode: "delegate",
       instructions: "Sales instructions.",
     },
+    code: {
+      name: "code",
+      description: "Code delegate",
+      criteria: "when asked to change code",
+      toolNames: [],
+      minRole: UserRole.Admin,
+      mode: "delegate",
+      instructions: "Code instructions.",
+    },
     // notion is intentionally omitted — buildDelegationTools should tolerate missing domains.
   },
 }));
 
 // Stub the per-domain sub-skill manifests with empty records.
+vi.mock("@/lib/ai/skills/generated/domains/code", () => ({ SKILL_MANIFEST: {} }));
 vi.mock("@/lib/ai/skills/generated/domains/linear", () => ({ SKILL_MANIFEST: {} }));
 vi.mock("@/lib/ai/skills/generated/domains/github", () => ({ SKILL_MANIFEST: {} }));
 vi.mock("@/lib/ai/skills/generated/domains/discord", () => ({ SKILL_MANIFEST: {} }));
@@ -87,6 +97,12 @@ vi.mock("@/lib/ai/skills/generated/domains/finance", () => ({ SKILL_MANIFEST: {}
 vi.mock("@/lib/ai/skills/generated/domains/shopping", () => ({ SKILL_MANIFEST: {} }));
 
 // Stub the heavy tool index modules so env-backed SDK clients don't initialize.
+vi.mock("@/lib/ai/tools/code", () => ({}));
+vi.mock("@/lib/ai/tools/code/delegation", () => ({
+  buildCodeExperimentalContext: vi.fn(),
+  codeDelegationInputSchema: { _mocked: true },
+  codePostFinish: vi.fn(),
+}));
 vi.mock("@/lib/ai/tools/linear", () => ({}));
 vi.mock("@/lib/ai/tools/github", () => ({}));
 vi.mock("@/lib/ai/tools/discord", () => ({}));
@@ -134,6 +150,7 @@ describe("buildDelegationTools", () => {
     createDelegationToolMock.mockClear();
     const tools = buildDelegationTools(contextForRole(UserRole.Admin), new TurnUsageTracker());
     expect(Object.keys(tools).sort()).toEqual([
+      "delegate_code",
       "delegate_figma",
       "delegate_finance",
       "delegate_github",
