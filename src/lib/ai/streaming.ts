@@ -85,11 +85,17 @@ export async function streamTurn(
   const startTime = Date.now();
   const result = await agent.stream({ messages: [...priorMessages, currentMessage] });
 
+  let lastTextId: string | undefined;
+
   for await (const event of result.fullStream) {
     switch (event.type) {
-      case "text-delta":
-        await renderer.appendText(event.text);
+      case "text-delta": {
+        const delta =
+          lastTextId !== undefined && event.id !== lastTextId ? "\n\n" + event.text : event.text;
+        lastTextId = event.id;
+        await renderer.appendText(delta);
         break;
+      }
       case "tool-input-start":
         await renderer.showToolCall(event.toolName);
         break;
