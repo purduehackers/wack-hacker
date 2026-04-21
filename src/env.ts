@@ -45,7 +45,6 @@ export const env = createEnv({
     RESEND_API_KEY: z.string(),
     RESEND_WEBHOOK_SECRET: z.string(),
     HUNTER_API_KEY: z.string(),
-    AI_GATEWAY_API_KEY: z.string(),
   },
   extends: [vercel()],
   runtimeEnv: process.env,
