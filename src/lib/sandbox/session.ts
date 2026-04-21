@@ -1,16 +1,28 @@
 import { Redis } from "@upstash/redis";
 import { log } from "evlog";
-import { start } from "workflow/api";
 
 import type { RedisLike } from "@/bot/types";
 
-import type { GetOrCreateSessionParams, SandboxSession, SandboxSessionMetadata } from "./types.ts";
+import type {
+  GetOrCreateSessionParams,
+  HibernateSessionOptions,
+  ReleaseSessionOptions,
+  SandboxProvider,
+  SandboxSession,
+  SandboxSessionMetadata,
+} from "./types.ts";
 
-import { sandboxLifecycleWorkflow } from "../../workflows/sandbox-lifecycle.ts";
-import { createCodingSandbox } from "./factory.ts";
-import { VercelSandbox } from "./vercel-sandbox.ts";
+import { startSandboxLifecycle } from "./lifecycle-starter.ts";
+import { defaultSandboxProvider } from "./provider.ts";
 
-export type { GetOrCreateSessionParams, SandboxSession, SandboxSessionMetadata } from "./types.ts";
+export type {
+  GetOrCreateSessionParams,
+  HibernateSessionOptions,
+  ReleaseSessionOptions,
+  SandboxProvider,
+  SandboxSession,
+  SandboxSessionMetadata,
+} from "./types.ts";
 
 const KEY_PREFIX = "sandbox:session:";
 const TTL_SECONDS = 35 * 60;
@@ -67,23 +79,24 @@ export async function getOrCreateSession(
   params: GetOrCreateSessionParams,
 ): Promise<SandboxSession> {
   const redis = getRedis(params.redis);
-  const key = redisKey(params.threadKey);
-  const cached = await redis.get<SandboxSessionMetadata>(key);
+  const provider = params.provider ?? defaultSandboxProvider();
+  const cached = await redis.get<SandboxSessionMetadata>(redisKey(params.threadKey));
 
-  const liveReuse = await tryLiveReuse(cached, params, redis);
+  const liveReuse = await tryLiveReuse(cached, params, redis, provider);
   if (liveReuse) return liveReuse;
 
   if (cached && cached.repo !== params.repo) {
-    await discardStaleSession(cached, params, redis);
+    await discardStaleSession(cached, params, redis, provider);
   }
 
-  return provisionFreshSession(params, redis);
+  return provisionFreshSession(params, redis, provider);
 }
 
 async function tryLiveReuse(
   cached: SandboxSessionMetadata | null,
   params: GetOrCreateSessionParams,
   redis: RedisLike,
+  provider: SandboxProvider,
 ): Promise<SandboxSession | null> {
   if (!cached) return null;
   if (cached.repo !== params.repo) return null;
@@ -91,7 +104,7 @@ async function tryLiveReuse(
   if (cached.expiresAt <= Date.now() + 60_000) return null;
 
   try {
-    const sandbox = await VercelSandbox.reconnect(cached.sandboxId, {
+    const sandbox = await provider.reconnect(cached.sandboxId, {
       githubToken: params.githubToken,
       expiresAt: cached.expiresAt,
     });
@@ -118,6 +131,7 @@ async function discardStaleSession(
   cached: SandboxSessionMetadata,
   params: GetOrCreateSessionParams,
   redis: RedisLike,
+  provider: SandboxProvider,
 ): Promise<void> {
   log.warn(
     "sandbox",
@@ -125,7 +139,7 @@ async function discardStaleSession(
   );
   if (!cached.hibernated) {
     try {
-      const old = await VercelSandbox.reconnect(cached.sandboxId, {
+      const old = await provider.reconnect(cached.sandboxId, {
         githubToken: params.githubToken,
       });
       await old.stop();
@@ -139,6 +153,7 @@ async function discardStaleSession(
 async function provisionFreshSession(
   params: GetOrCreateSessionParams,
   redis: RedisLike,
+  provider: SandboxProvider,
 ): Promise<SandboxSession> {
   const key = redisKey(params.threadKey);
   const freshCached = await redis.get<SandboxSessionMetadata>(key);
@@ -149,7 +164,7 @@ async function provisionFreshSession(
   const branch = freshCached?.branch ?? params.branch ?? generateBranchName(params.repo);
   const isResume = Boolean(freshCached?.hibernated && freshCached.snapshotId);
 
-  const sandbox = await createCodingSandbox({
+  const sandbox = await provider.create({
     repo: params.repo,
     githubToken: params.githubToken,
     branch,
@@ -175,18 +190,10 @@ async function provisionFreshSession(
     `${isResume ? "Resumed" : "Provisioned"} sandbox ${sandbox.name} for thread ${params.threadKey}`,
   );
 
-  await startLifecycleWorkflow(params.threadKey);
+  const onProvisioned = params.onProvisioned ?? startSandboxLifecycle;
+  await onProvisioned(params.threadKey);
 
   return { sandbox, metadata, fresh: true };
-}
-
-async function startLifecycleWorkflow(threadKey: string): Promise<void> {
-  try {
-    const run = await start(sandboxLifecycleWorkflow, [threadKey, crypto.randomUUID()]);
-    log.info("sandbox", `Lifecycle workflow started: ${run.runId} (${threadKey})`);
-  } catch (err) {
-    log.warn("sandbox", `Lifecycle workflow start failed (${threadKey}): ${String(err)}`);
-  }
 }
 
 /**
@@ -196,16 +203,17 @@ async function startLifecycleWorkflow(threadKey: string): Promise<void> {
  */
 export async function releaseSession(
   threadKey: string,
-  options: { redis?: RedisLike; githubToken?: string } = {},
+  options: ReleaseSessionOptions = {},
 ): Promise<void> {
   const redis = getRedis(options.redis);
+  const provider = options.provider ?? defaultSandboxProvider();
   const key = redisKey(threadKey);
   const metadata = await redis.get<SandboxSessionMetadata>(key);
   if (!metadata) return;
 
   if (!metadata.hibernated) {
     try {
-      const sandbox = await VercelSandbox.reconnect(metadata.sandboxId, {
+      const sandbox = await provider.reconnect(metadata.sandboxId, {
         githubToken: options.githubToken,
       });
       await sandbox.stop();
@@ -229,16 +237,16 @@ export async function releaseSession(
  */
 export async function hibernateSession(
   threadKey: string,
-  options: { redis?: RedisLike; githubToken?: string } = {},
+  options: HibernateSessionOptions = {},
 ): Promise<"hibernated" | "skipped-missing" | "skipped-already"> {
   const redis = getRedis(options.redis);
-  const key = redisKey(threadKey);
-  const metadata = await redis.get<SandboxSessionMetadata>(key);
+  const provider = options.provider ?? defaultSandboxProvider();
+  const metadata = await redis.get<SandboxSessionMetadata>(redisKey(threadKey));
   if (!metadata) return "skipped-missing";
   if (metadata.hibernated) return "skipped-already";
 
   try {
-    const sandbox = await VercelSandbox.reconnect(metadata.sandboxId, {
+    const sandbox = await provider.reconnect(metadata.sandboxId, {
       githubToken: options.githubToken,
       expiresAt: metadata.expiresAt,
     });

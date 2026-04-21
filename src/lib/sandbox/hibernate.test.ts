@@ -1,31 +1,61 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { createMemoryRedis } from "@/lib/test/fixtures/redis";
 
-import type { SandboxSessionMetadata } from "./session.ts";
+import type {
+  SandboxProvider,
+  SandboxSessionMetadata,
+  VercelSandboxReconnectOptions,
+} from "./types.ts";
 
 import { InMemorySandbox } from "./in-memory-sandbox.ts";
+import { hibernateSession, readSession } from "./session.ts";
 
-const mocks = vi.hoisted(() => ({
-  reconnect: vi.fn(),
-  createCodingSandbox: vi.fn(),
-}));
+interface ProviderState {
+  provider: SandboxProvider;
+  reconnectCalls: { id: string; options: VercelSandboxReconnectOptions }[];
+  sandbox: InMemorySandbox;
+  executed: string[];
+  snapshotId?: string;
+}
 
-vi.mock("./factory.ts", () => ({
-  createCodingSandbox: mocks.createCodingSandbox,
-}));
-
-vi.mock("./vercel-sandbox.ts", () => ({
-  VercelSandbox: {
-    reconnect: mocks.reconnect,
-  },
-}));
-
-vi.mock("workflow/api", () => ({
-  start: vi.fn(async () => ({ runId: "test-run" })),
-}));
-
-const { hibernateSession, readSession } = await import("./session.ts");
+function providerWithLiveSandbox(options: { reconnectFails?: boolean } = {}): ProviderState {
+  const executed: string[] = [];
+  const sandbox = new InMemorySandbox({
+    name: "sb-1",
+    execHandler: async (command) => {
+      executed.push(command);
+      return { exitCode: 0, stdout: "", stderr: "", truncated: false };
+    },
+  });
+  let snapshotId: string | undefined;
+  // Capture the id emitted by InMemorySandbox.snapshot() so the test can
+  // assert it was persisted back to Redis.
+  const originalSnapshot = sandbox.snapshot.bind(sandbox);
+  sandbox.snapshot = async () => {
+    const result = await originalSnapshot();
+    snapshotId = result.snapshotId;
+    return result;
+  };
+  const reconnectCalls: { id: string; options: VercelSandboxReconnectOptions }[] = [];
+  const provider: SandboxProvider = {
+    create: async () => sandbox,
+    reconnect: async (id, opts) => {
+      reconnectCalls.push({ id, options: opts });
+      if (options.reconnectFails) throw new Error("reconnect failed");
+      return sandbox;
+    },
+  };
+  return {
+    provider,
+    reconnectCalls,
+    sandbox,
+    executed,
+    get snapshotId() {
+      return snapshotId;
+    },
+  };
+}
 
 function seedMetadata(expiresIn = 10 * 60 * 1000): SandboxSessionMetadata {
   return {
@@ -38,57 +68,81 @@ function seedMetadata(expiresIn = 10 * 60 * 1000): SandboxSessionMetadata {
 }
 
 describe("hibernateSession", () => {
-  beforeEach(() => {
-    mocks.reconnect.mockReset();
-    mocks.createCodingSandbox.mockReset();
-  });
-
   it("returns skipped-missing when no session is stored", async () => {
     const redis = createMemoryRedis();
-    const result = await hibernateSession("T1", { redis });
+    const { provider } = providerWithLiveSandbox();
+    const result = await hibernateSession("T1", { redis, provider });
     expect(result).toBe("skipped-missing");
   });
 
   it("returns skipped-already when session is already hibernated", async () => {
     const redis = createMemoryRedis();
+    const { provider } = providerWithLiveSandbox();
     await redis.set(
       "sandbox:session:T1",
       { ...seedMetadata(), hibernated: true, snapshotId: "snap-old" },
       { ex: 60 },
     );
-    const result = await hibernateSession("T1", { redis });
+    const result = await hibernateSession("T1", { redis, provider });
     expect(result).toBe("skipped-already");
   });
 
-  it("commits WIP, snapshots, and marks session hibernated", async () => {
+  it("commits WIP, snapshots, and flips metadata to hibernated", async () => {
     const redis = createMemoryRedis();
+    const state = providerWithLiveSandbox();
     await redis.set("sandbox:session:T1", seedMetadata(), { ex: 60 });
 
-    const committed: string[] = [];
-    const liveSandbox = new InMemorySandbox({
-      name: "sb-1",
-      execHandler: async (command) => {
-        committed.push(command);
-        return { exitCode: 0, stdout: "", stderr: "", truncated: false };
-      },
-    });
-    mocks.reconnect.mockResolvedValueOnce(liveSandbox as unknown as never);
-
-    const result = await hibernateSession("T1", { redis });
+    const result = await hibernateSession("T1", { redis, provider: state.provider });
     expect(result).toBe("hibernated");
-    expect(committed.some((c) => c.includes("git add -A"))).toBe(true);
+
+    expect(state.executed.some((c) => c.includes("git add -A"))).toBe(true);
+    expect(state.executed.some((c) => c.includes("git commit"))).toBe(true);
 
     const stored = await readSession("T1", redis);
     expect(stored?.hibernated).toBe(true);
+    expect(stored?.snapshotId).toBe(state.snapshotId);
     expect(stored?.snapshotId).toMatch(/^in-mem-sb-1-/);
   });
 
   it("returns skipped-missing when the reconnect blows up", async () => {
     const redis = createMemoryRedis();
+    const state = providerWithLiveSandbox({ reconnectFails: true });
     await redis.set("sandbox:session:T1", seedMetadata(), { ex: 60 });
-    mocks.reconnect.mockRejectedValueOnce(new Error("404 not found"));
 
-    const result = await hibernateSession("T1", { redis });
+    const result = await hibernateSession("T1", { redis, provider: state.provider });
     expect(result).toBe("skipped-missing");
+
+    const stored = await readSession("T1", redis);
+    // Metadata is left alone so the lifecycle workflow can decide what to do
+    // next; only a successful hibernate flips `hibernated`.
+    expect(stored?.hibernated).toBeFalsy();
+  });
+
+  it("still snapshots when the WIP commit step errors", async () => {
+    const redis = createMemoryRedis();
+    // Custom sandbox whose exec throws — simulates the pre-commit git step
+    // failing (e.g. no git inside). Snapshot should still be attempted.
+    const sandbox = new InMemorySandbox({
+      name: "sb-1",
+      execHandler: async () => {
+        throw new Error("git not found");
+      },
+    });
+    let snapshotCalled = false;
+    const originalSnapshot = sandbox.snapshot.bind(sandbox);
+    sandbox.snapshot = async () => {
+      snapshotCalled = true;
+      return originalSnapshot();
+    };
+    const provider: SandboxProvider = {
+      create: async () => sandbox,
+      reconnect: async () => sandbox,
+    };
+
+    await redis.set("sandbox:session:T1", seedMetadata(), { ex: 60 });
+
+    const result = await hibernateSession("T1", { redis, provider });
+    expect(result).toBe("hibernated");
+    expect(snapshotCalled).toBe(true);
   });
 });

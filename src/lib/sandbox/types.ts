@@ -247,4 +247,30 @@ export interface GetOrCreateSessionParams {
   baseSnapshotId?: string;
   timeoutMs?: number;
   redis?: RedisLike;
+  /** Injection seam — tests pass a provider backed by `InMemorySandbox`. */
+  provider?: SandboxProvider;
+  /** Injection seam — tests can no-op the lifecycle workflow start. */
+  onProvisioned?: (threadKey: string) => Promise<void>;
+}
+
+/**
+ * Abstraction over "how do we make a sandbox?" so session/hibernate logic
+ * can be unit-tested with `InMemorySandbox` instead of mocking our own
+ * factory + VercelSandbox modules.
+ */
+export interface SandboxProvider {
+  create(config: CreateCodingSandboxConfig): Promise<Sandbox>;
+  reconnect(sandboxId: string, options: VercelSandboxReconnectOptions): Promise<Sandbox>;
+}
+
+export interface ReleaseSessionOptions {
+  redis?: RedisLike;
+  githubToken?: string;
+  provider?: SandboxProvider;
+}
+
+export interface HibernateSessionOptions {
+  redis?: RedisLike;
+  githubToken?: string;
+  provider?: SandboxProvider;
 }

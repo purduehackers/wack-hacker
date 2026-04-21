@@ -43,6 +43,8 @@ export default defineConfig({
         // SDK-glue assertions against mocks.
         "src/lib/sandbox/vercel-sandbox.ts",
         "src/lib/sandbox/factory.ts",
+        "src/lib/sandbox/provider.ts",
+        "src/lib/sandbox/lifecycle-starter.ts",
       ],
       reporter: ["text", "lcov"],
       thresholds: {

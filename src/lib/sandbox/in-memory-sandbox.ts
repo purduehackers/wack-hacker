@@ -65,17 +65,6 @@ export class InMemorySandbox implements Sandbox {
     }
   }
 
-  /** Directly seed/overwrite a file. Test-only; real code goes through `writeFile`. */
-  seedFile(path: string, content: string): void {
-    this.files.set(path, content);
-    this.ensureParentDirs(path);
-  }
-
-  /** List every path currently in the in-memory filesystem. Test-only. */
-  listFiles(): string[] {
-    return Array.from(this.files.keys()).sort();
-  }
-
   async readFile(path: string): Promise<string> {
     this.assertAlive("readFile");
     const content = this.files.get(path);
