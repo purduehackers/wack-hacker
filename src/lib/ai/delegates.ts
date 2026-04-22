@@ -12,6 +12,7 @@ import { SKILL_MANIFEST as NOTION_SUBSKILLS } from "./skills/generated/domains/n
 import { SKILL_MANIFEST as SALES_SUBSKILLS } from "./skills/generated/domains/sales.ts";
 import { SKILL_MANIFEST as SENTRY_SUBSKILLS } from "./skills/generated/domains/sentry.ts";
 import { SKILL_MANIFEST as SHOPPING_SUBSKILLS } from "./skills/generated/domains/shopping.ts";
+import { SKILL_MANIFEST as VERCEL_SUBSKILLS } from "./skills/generated/domains/vercel.ts";
 import { SKILL_MANIFEST } from "./skills/generated/manifest.ts";
 import { SkillRegistry } from "./skills/registry.ts";
 import { createDelegationTool } from "./subagent.ts";
@@ -24,6 +25,7 @@ import * as notionTools from "./tools/notion/index.ts";
 import * as salesTools from "./tools/sales/index.ts";
 import * as sentryTools from "./tools/sentry/index.ts";
 import * as shoppingTools from "./tools/shopping/index.ts";
+import * as vercelTools from "./tools/vercel/index.ts";
 
 const DELEGATE_PREFIX = "delegate_";
 
@@ -91,6 +93,20 @@ const DOMAINS = {
       "get_contact",
       "get_deal",
       "retrieve_crm_schema",
+    ],
+  },
+  vercel: {
+    tools: vercelTools as unknown as ToolSet,
+    subSkills: VERCEL_SUBSKILLS,
+    baseToolNames: [
+      "list_projects",
+      "get_project",
+      "list_deployments",
+      "get_deployment",
+      "list_aliases",
+      "list_domains",
+      "whoami",
+      "list_teams",
     ],
   },
 } as const satisfies Record<
