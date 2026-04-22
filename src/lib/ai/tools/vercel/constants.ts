@@ -7,7 +7,7 @@
  * To discover these values, call `whoami` + `list_teams` with a valid
  * `VERCEL_API_TOKEN`, or look at the Vercel dashboard URL.
  */
-export const VERCEL_TEAM_ID = "team_REPLACE_ME";
+export const VERCEL_TEAM_ID = "team_kOQWJUQYzGW4blWthdK71Y8A";
 export const VERCEL_TEAM_SLUG = "purduehackers";
 
 /** Dashboard URL prefix used for building links in tool responses. */
