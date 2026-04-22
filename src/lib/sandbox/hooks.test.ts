@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import { InMemorySandbox } from "@/lib/test/fixtures";
+
 import { buildSandboxHooks } from "./hooks.ts";
-import { InMemorySandbox } from "./in-memory-sandbox.ts";
 
 function recordingSandbox(
   responses: Record<string, { exitCode: number; stdout?: string; stderr?: string }> = {},
@@ -28,6 +29,31 @@ const BASE_CONFIG = {
   branch: "phoenix-agent/test",
   gitUser: { name: "Phoenix Bot", email: "bot@example.com" },
 };
+
+describe("buildSandboxHooks — skipCloneAndBranch", () => {
+  it("skips clone + branch when resuming from hibernation but still configures git", async () => {
+    const { sandbox, invocations } = recordingSandbox();
+    const hooks = buildSandboxHooks({
+      ...BASE_CONFIG,
+      hasBaseSnapshot: true,
+      skipCloneAndBranch: true,
+    });
+    await hooks.afterStart!(sandbox);
+
+    expect(invocations.some((c) => c.includes("git clone"))).toBe(false);
+    expect(invocations.some((c) => c.includes("git checkout -b"))).toBe(false);
+    // Git identity still configured so any resumed commits have author info.
+    expect(invocations.some((c) => c.includes("git config --global user.name"))).toBe(true);
+  });
+
+  it("surfaces the stdout tail when stderr is empty on failure", async () => {
+    const { sandbox } = recordingSandbox({
+      "git clone": { exitCode: 128, stdout: "fatal from stdout", stderr: "" },
+    });
+    const hooks = buildSandboxHooks({ ...BASE_CONFIG, hasBaseSnapshot: true });
+    await expect(hooks.afterStart!(sandbox)).rejects.toThrow(/fatal from stdout/);
+  });
+});
 
 describe("buildSandboxHooks — afterStart ordering", () => {
   it("runs install → git config → clone → branch when no base snapshot", async () => {

@@ -1,28 +1,38 @@
 import type {
+  CreateCodingSandboxConfig,
   DirEntry,
-  ExecHandler,
   ExecOptions,
   ExecResult,
-  InMemorySandboxOptions,
   Sandbox,
   SandboxHooks,
+  SandboxProvider,
   SandboxStats,
   SnapshotResult,
   StreamExecChunk,
-} from "./types.ts";
+  VercelSandboxReconnectOptions,
+} from "@/lib/sandbox/types";
 
-export type { ExecHandler, InMemorySandboxOptions } from "./types.ts";
+import type {
+  ExecHandler,
+  InMemorySandboxOptions,
+  TestSandboxProvider,
+  TestSandboxProviderOptions,
+} from "../types";
+
+export type {
+  ExecHandler,
+  InMemorySandboxOptions,
+  TestSandboxProvider,
+  TestSandboxProviderOptions,
+} from "../types";
 
 const DEFAULT_WORKING_DIRECTORY = "/vercel/sandbox";
 
 /**
- * Test double for `Sandbox`. Files live in a Map; `exec` defaults to a no-op
- * that returns exit code 0. Supply `execHandler` to simulate git/bash/tests
- * for specific unit tests.
- *
- * Not used in production — real work runs against `VercelSandbox`. The split
- * exists so tool tests don't need to mock `@vercel/sandbox` or stub network
- * policy internals.
+ * In-memory `Sandbox` test double. Files live in a `Map`; `exec` defaults to
+ * a no-op returning exit 0. Supply `execHandler` to simulate git/bash/tests
+ * for specific unit tests. Never used in production — coding tasks run
+ * against `VercelSandbox`.
  */
 export class InMemorySandbox implements Sandbox {
   readonly name: string;
@@ -34,7 +44,7 @@ export class InMemorySandbox implements Sandbox {
   private directories: Set<string>;
   private execHandler: ExecHandler;
   private stopped = false;
-  private expiresAt = Date.now() + 30 * 60 * 1000;
+  private deadline = Date.now() + 30 * 60 * 1000;
 
   constructor(options: InMemorySandboxOptions = {}) {
     this.name = options.name ?? "in-memory";
@@ -43,7 +53,6 @@ export class InMemorySandbox implements Sandbox {
     this.hooks = options.hooks;
     this.files = new Map(Object.entries(options.files ?? {}));
     this.directories = new Set([this.workingDirectory]);
-    // Any seeded file implies its ancestor directories exist too.
     for (const path of this.files.keys()) {
       this.ensureParentDirs(path);
     }
@@ -135,9 +144,6 @@ export class InMemorySandbox implements Sandbox {
 
   async *streamExec(command: string, options: ExecOptions = {}): AsyncIterable<StreamExecChunk> {
     this.assertAlive("streamExec");
-    // Fall back to the single-shot handler and replay its output as one
-    // stdout chunk followed by one stderr chunk. Tests that want finer-grained
-    // streaming can supply a custom `execHandler` + override directly.
     const result = await this.exec(command, options);
     if (result.stdout) yield { stream: "stdout", data: result.stdout };
     if (result.stderr) yield { stream: "stderr", data: result.stderr };
@@ -153,8 +159,8 @@ export class InMemorySandbox implements Sandbox {
   }
 
   async extendTimeout(additionalMs: number): Promise<{ expiresAt: number }> {
-    this.expiresAt += additionalMs;
-    return { expiresAt: this.expiresAt };
+    this.deadline += additionalMs;
+    return { expiresAt: this.deadline };
   }
 
   async stop(): Promise<void> {
@@ -181,3 +187,79 @@ const defaultExecHandler: ExecHandler = async () => ({
   stderr: "",
   truncated: false,
 });
+
+/**
+ * Build a `SandboxProvider` backed by `InMemorySandbox` for unit tests. The
+ * returned state object exposes call logs + helpers so tests can drive and
+ * assert on provider behaviour without mocking any Phoenix modules.
+ *
+ * - `create` spawns a new `InMemorySandbox` for each call, wraps its `stop`
+ *   to record the id in `stoppedIds`, and caches the sandbox for subsequent
+ *   `reconnect` calls with the same id.
+ * - `reconnect` returns the cached sandbox (or creates one on-the-fly for ids
+ *   the test seeds into Redis externally).
+ * - `failReconnectOnce()` primes the next `reconnect` call to throw.
+ */
+export function createTestSandboxProvider(
+  options: TestSandboxProviderOptions = {},
+): TestSandboxProvider {
+  const createCalls: CreateCodingSandboxConfig[] = [];
+  const reconnectCalls: { id: string; options: VercelSandboxReconnectOptions }[] = [];
+  const stoppedIds: string[] = [];
+  const knownSandboxes = new Map<string, InMemorySandbox>();
+  let counter = 0;
+  let pendingReconnectFailure = Boolean(options.reconnectFails);
+
+  const nextName = () => options.name ?? `sb-${counter++}`;
+
+  function trackStop(sandbox: InMemorySandbox): InMemorySandbox {
+    const originalStop = sandbox.stop.bind(sandbox);
+    sandbox.stop = async () => {
+      stoppedIds.push(sandbox.name);
+      await originalStop();
+    };
+    return sandbox;
+  }
+
+  const provider: SandboxProvider = {
+    create: async (config) => {
+      createCalls.push(config);
+      const fresh = trackStop(
+        new InMemorySandbox({
+          name: nextName(),
+          execHandler: options.execHandler,
+        }),
+      );
+      knownSandboxes.set(fresh.name, fresh);
+      return fresh;
+    },
+    reconnect: async (id, opts) => {
+      reconnectCalls.push({ id, options: opts });
+      if (pendingReconnectFailure) {
+        pendingReconnectFailure = false;
+        throw new Error("reconnect failed");
+      }
+      const existing = knownSandboxes.get(id);
+      if (existing) return existing;
+      const fresh = trackStop(
+        new InMemorySandbox({
+          name: id,
+          execHandler: options.execHandler,
+        }),
+      );
+      knownSandboxes.set(id, fresh);
+      return fresh;
+    },
+  };
+
+  return {
+    provider,
+    createCalls,
+    reconnectCalls,
+    stoppedIds,
+    sandboxesById: knownSandboxes,
+    failReconnectOnce: () => {
+      pendingReconnectFailure = true;
+    },
+  };
+}

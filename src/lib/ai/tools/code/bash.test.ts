@@ -2,8 +2,7 @@ import type { UIMessage } from "ai";
 
 import { describe, expect, it } from "vitest";
 
-import { InMemorySandbox } from "@/lib/sandbox/in-memory-sandbox";
-import { toolOpts } from "@/lib/test/fixtures";
+import { InMemorySandbox, toolOpts } from "@/lib/test/fixtures";
 
 import type { CodingSandboxContext } from "./utils.ts";
 

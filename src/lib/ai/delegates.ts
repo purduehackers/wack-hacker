@@ -139,8 +139,7 @@ const DOMAIN_SPEC_OVERRIDES: Partial<Record<keyof typeof DOMAINS, Partial<Subage
     stopSteps: 60,
     inputSchema: codeDelegationInputSchema,
     buildExperimentalContext: buildCodeExperimentalContext,
-    postFinish: ({ experimentalContext, lastAssistantText }) =>
-      codePostFinish({ experimentalContext, lastAssistantText }),
+    postFinish: codePostFinish,
   },
 };
 

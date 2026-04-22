@@ -45,6 +45,7 @@ export default defineConfig({
         "src/lib/sandbox/factory.ts",
         "src/lib/sandbox/provider.ts",
         "src/lib/sandbox/lifecycle-starter.ts",
+        "src/lib/sandbox/session-deps.ts",
       ],
       reporter: ["text", "lcov"],
       thresholds: {

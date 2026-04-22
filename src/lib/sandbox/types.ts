@@ -102,24 +102,6 @@ export interface DirEntry {
   type: "file" | "directory" | "symlink" | "other";
 }
 
-// ─── in-memory-sandbox ────────────────────────────────────────────────────
-
-export type ExecHandler = (
-  command: string,
-  options: Required<Pick<ExecOptions, "cwd">> & ExecOptions,
-) => Promise<ExecResult> | ExecResult;
-
-export interface InMemorySandboxOptions {
-  name?: string;
-  workingDirectory?: string;
-  currentBranch?: string;
-  hooks?: SandboxHooks;
-  /** Custom exec handler — default returns exit 0 with empty output. */
-  execHandler?: ExecHandler;
-  /** Seed files: path (absolute) → content. */
-  files?: Record<string, string>;
-}
-
 // ─── credential-brokering ─────────────────────────────────────────────────
 
 export interface NetworkPolicyTransform {

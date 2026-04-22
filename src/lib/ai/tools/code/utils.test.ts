@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { InMemorySandbox } from "@/lib/sandbox/in-memory-sandbox";
+import { InMemorySandbox } from "@/lib/test/fixtures";
 
 import { getSandboxContext, resolvePath, toRelative } from "./utils.ts";
 

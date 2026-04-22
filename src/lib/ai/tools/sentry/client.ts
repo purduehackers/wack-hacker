@@ -21,6 +21,14 @@ export function escapeQuery(value: string): string {
 
 const BASE_URL = "https://sentry.io/api/0";
 
+function primitiveString(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
+    return String(value);
+  }
+  return JSON.stringify(value);
+}
+
 /** GET helper for endpoints not covered by generated SDK methods. */
 export async function sentryGet<T = unknown>(
   path: string,
@@ -31,11 +39,11 @@ export async function sentryGet<T = unknown>(
     for (const [key, value] of Object.entries(query)) {
       if (value === undefined || value === null) continue;
       if (Array.isArray(value)) {
-        for (const v of value) url.searchParams.append(key, String(v));
+        for (const v of value) url.searchParams.append(key, primitiveString(v));
       } else if (typeof value === "object") {
         url.searchParams.set(key, JSON.stringify(value));
       } else {
-        url.searchParams.set(key, String(value));
+        url.searchParams.set(key, primitiveString(value));
       }
     }
   }

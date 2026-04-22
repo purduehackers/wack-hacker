@@ -1,4 +1,3 @@
-import { Redis } from "@upstash/redis";
 import { log } from "evlog";
 
 import type { RedisLike } from "@/bot/types";
@@ -12,8 +11,7 @@ import type {
   SandboxSessionMetadata,
 } from "./types.ts";
 
-import { startSandboxLifecycle } from "./lifecycle-starter.ts";
-import { defaultSandboxProvider } from "./provider.ts";
+import { resolveOnProvisioned, resolveProvider, resolveRedis } from "./session-deps.ts";
 
 export type {
   GetOrCreateSessionParams,
@@ -34,10 +32,6 @@ function redisKey(threadKey: string): string {
   return `${KEY_PREFIX}${threadKey}`;
 }
 
-function getRedis(redis?: RedisLike): RedisLike {
-  return redis ?? (Redis.fromEnv() as unknown as RedisLike);
-}
-
 function generateBranchName(repo: string): string {
   const [, name] = repo.split("/");
   const slug = (name ?? "repo").toLowerCase().replace(/[^a-z0-9-]/g, "-");
@@ -50,7 +44,7 @@ export async function readSession(
   threadKey: string,
   redis?: RedisLike,
 ): Promise<SandboxSessionMetadata | null> {
-  return getRedis(redis).get<SandboxSessionMetadata>(redisKey(threadKey));
+  return resolveRedis(redis).get<SandboxSessionMetadata>(redisKey(threadKey));
 }
 
 /** Exposed for the lifecycle workflow. */
@@ -60,7 +54,7 @@ export async function writeSession(
   redis?: RedisLike,
 ): Promise<void> {
   const ttl = metadata.hibernated ? HIBERNATED_TTL_SECONDS : TTL_SECONDS;
-  await getRedis(redis).set(redisKey(threadKey), metadata, { ex: ttl });
+  await resolveRedis(redis).set(redisKey(threadKey), metadata, { ex: ttl });
 }
 
 /**
@@ -78,8 +72,8 @@ export async function writeSession(
 export async function getOrCreateSession(
   params: GetOrCreateSessionParams,
 ): Promise<SandboxSession> {
-  const redis = getRedis(params.redis);
-  const provider = params.provider ?? defaultSandboxProvider();
+  const redis = resolveRedis(params.redis);
+  const provider = resolveProvider(params.provider);
   const cached = await redis.get<SandboxSessionMetadata>(redisKey(params.threadKey));
 
   const liveReuse = await tryLiveReuse(cached, params, redis, provider);
@@ -190,7 +184,7 @@ async function provisionFreshSession(
     `${isResume ? "Resumed" : "Provisioned"} sandbox ${sandbox.name} for thread ${params.threadKey}`,
   );
 
-  const onProvisioned = params.onProvisioned ?? startSandboxLifecycle;
+  const onProvisioned = resolveOnProvisioned(params.onProvisioned);
   await onProvisioned(params.threadKey);
 
   return { sandbox, metadata, fresh: true };
@@ -205,8 +199,8 @@ export async function releaseSession(
   threadKey: string,
   options: ReleaseSessionOptions = {},
 ): Promise<void> {
-  const redis = getRedis(options.redis);
-  const provider = options.provider ?? defaultSandboxProvider();
+  const redis = resolveRedis(options.redis);
+  const provider = resolveProvider(options.provider);
   const key = redisKey(threadKey);
   const metadata = await redis.get<SandboxSessionMetadata>(key);
   if (!metadata) return;
@@ -239,8 +233,8 @@ export async function hibernateSession(
   threadKey: string,
   options: HibernateSessionOptions = {},
 ): Promise<"hibernated" | "skipped-missing" | "skipped-already"> {
-  const redis = getRedis(options.redis);
-  const provider = options.provider ?? defaultSandboxProvider();
+  const redis = resolveRedis(options.redis);
+  const provider = resolveProvider(options.provider);
   const metadata = await redis.get<SandboxSessionMetadata>(redisKey(threadKey));
   if (!metadata) return "skipped-missing";
   if (metadata.hibernated) return "skipped-already";

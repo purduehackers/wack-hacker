@@ -81,6 +81,8 @@ export async function buildCodeExperimentalContext(
  * `UIMessage` so the PR URL shows up as the subagent's last visible output.
  */
 export async function* codePostFinish(args: {
+  input?: unknown;
+  agentContext?: unknown;
   experimentalContext: unknown;
   lastAssistantText: string;
 }): AsyncGenerator<UIMessage, void, void> {
