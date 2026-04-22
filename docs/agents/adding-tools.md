@@ -1,6 +1,6 @@
 # Adding a base tool to the orchestrator
 
-Base tools are flat — they're available to the orchestrator at all times, without going through the skill system. Use this path for tools that are either not domain-specific (`currentTime`, `documentation`) or that are cross-cutting utilities the orchestrator should always reach for directly (`schedule_task`, `cancel_task`).
+Base tools are flat — they're available to the orchestrator at all times, without going through the skill system. Use this path for tools that are either not domain-specific (`current_time`, `documentation`) or that are cross-cutting utilities the orchestrator should always reach for directly (`schedule_task`, `cancel_task`).
 
 ## Steps
 

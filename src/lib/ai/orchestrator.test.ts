@@ -40,7 +40,7 @@ const { createOrchestrator } = await import("./orchestrator.ts");
 
 const BASE_TOOLS = [
   "cancel_task",
-  "currentTime",
+  "current_time",
   "documentation",
   "list_scheduled_tasks",
   "resolve_organizer",

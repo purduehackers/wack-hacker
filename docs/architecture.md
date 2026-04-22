@@ -76,7 +76,7 @@ Three things are happening at once:
   │  Claude Sonnet 4.6 · via AI Gateway         │
   │                                             │
   │  tools                                      │
-  │   · currentTime                             │
+  │   · current_time                            │
   │   · documentation                           │
   │   · schedule_task                           │
   │   · list_scheduled_tasks                    │

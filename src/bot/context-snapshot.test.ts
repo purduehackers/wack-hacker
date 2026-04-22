@@ -20,7 +20,7 @@ const sampleSnapshot: ContextSnapshot = {
     date: "Wednesday, April 15, 2026",
   },
   systemPrompt: "You are a helpful assistant...",
-  tools: [{ name: "currentTime", description: "Get the current time.", inputSchema: {} }],
+  tools: [{ name: "current_time", description: "Get the current time.", inputSchema: {} }],
   messages: [
     { role: "user", content: "hi" },
     { role: "assistant", content: "hello" },

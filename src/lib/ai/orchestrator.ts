@@ -9,7 +9,7 @@ import { buildDelegationTools } from "./delegates.ts";
 import { documentation } from "./tools/docs/index.ts";
 import { resolve_organizer } from "./tools/roster/index.ts";
 import { createScheduleTask, list_scheduled_tasks, cancel_task } from "./tools/schedule/index.ts";
-import { currentTime } from "./tools/schedule/time.ts";
+import { current_time } from "./tools/schedule/time.ts";
 
 export { ORCHESTRATOR_MODEL, SYSTEM_PROMPT } from "./constants.ts";
 
@@ -22,7 +22,7 @@ export { ORCHESTRATOR_MODEL, SYSTEM_PROMPT } from "./constants.ts";
  */
 export function getOrchestratorTools(context: AgentContext, tracker: TurnUsageTracker): ToolSet {
   const tools: ToolSet = {
-    currentTime,
+    current_time,
     documentation,
     resolve_organizer,
     schedule_task: createScheduleTask(context),
