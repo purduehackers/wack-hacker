@@ -20,6 +20,14 @@ export function hcbTxnUrl(id: string): string {
   return `https://hcb.hackclub.com/hcb/${id}`;
 }
 
+function primitiveString(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
+    return String(value);
+  }
+  return JSON.stringify(value);
+}
+
 /** GET against the HCB v3 public API. Read-only; no auth required (Transparency Mode). */
 export async function hcbGet<T = unknown>(
   path: string,
@@ -30,9 +38,9 @@ export async function hcbGet<T = unknown>(
     for (const [key, value] of Object.entries(query)) {
       if (value === undefined || value === null) continue;
       if (Array.isArray(value)) {
-        for (const v of value) url.searchParams.append(key, String(v));
+        for (const v of value) url.searchParams.append(key, primitiveString(v));
       } else {
-        url.searchParams.set(key, String(value));
+        url.searchParams.set(key, primitiveString(value));
       }
     }
   }

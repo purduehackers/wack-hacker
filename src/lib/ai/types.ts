@@ -1,5 +1,7 @@
-import type { ToolSet } from "ai";
+import type { ToolSet, UIMessage } from "ai";
+import type { z } from "zod";
 
+import type { AgentContext } from "./context.ts";
 import type { SkillBundle } from "./skills/types.ts";
 
 export interface ChannelInfo {
@@ -123,6 +125,28 @@ export interface ContextBreakdown {
   totalCostUsd?: { input: number; output: number; total: number };
 }
 
+/**
+ * Builder signature used to inject `experimental_context` into the nested
+ * `ToolLoopAgent.stream()` call (e.g. the coding subagent passes
+ * `{ sandbox, repoDir, branch, threadKey, repo }` so every code tool's
+ * `execute` can resolve the target sandbox).
+ */
+export type BuildSubagentContext = (input: unknown, agentContext: AgentContext) => unknown;
+
+/**
+ * Post-finish hook for subagents that need to do work *after* the nested
+ * agent's tool loop completes — e.g. the coding subagent auto-commits,
+ * pushes, and opens a PR once the model has stopped editing. Yielded
+ * `UIMessage`s are forwarded to the parent's stream so the final Discord
+ * output includes the PR URL.
+ */
+export type SubagentPostFinish = (args: {
+  input: unknown;
+  agentContext: AgentContext;
+  experimentalContext: unknown;
+  lastAssistantText: string;
+}) => AsyncGenerator<UIMessage, void, void>;
+
 export interface SubagentSpec {
   /** Stable identifier used for telemetry/tracing. */
   name: string;
@@ -136,4 +160,28 @@ export interface SubagentSpec {
   subSkills: Record<string, SkillBundle>;
   /** Tool names always visible to the subagent (base tools). */
   baseToolNames: readonly string[];
+  /** Override the default `SUBAGENT_MODEL` (e.g. Claude for coding). */
+  model?: string;
+  /** Override the default `stepCountIs(15)` cap. */
+  stopSteps?: number;
+  /**
+   * Override the default `{ task: z.string() }` input schema. Required when
+   * the delegation tool needs extra structured input (e.g. the code subagent
+   * takes `{ repo, task }`).
+   */
+  inputSchema?: z.ZodType;
+  /**
+   * Build the `experimental_context` passed to the subagent's
+   * `ToolLoopAgent.stream()`. Invoked once per delegation call, before the
+   * agent starts, with the tool's validated input + the orchestrator's
+   * `AgentContext`. Tools receive the returned object via their
+   * `experimental_context` parameter.
+   */
+  buildExperimentalContext?: BuildSubagentContext;
+  /**
+   * Runs after the nested `ToolLoopAgent`'s stream is fully drained. The
+   * yielded `UIMessage`s are forwarded to the parent stream — used by the
+   * coding subagent to commit/push/open a PR and relay the result.
+   */
+  postFinish?: SubagentPostFinish;
 }
