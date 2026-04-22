@@ -30,6 +30,68 @@ export function wrapApprovalTools(tools: ToolSet, opts: WrapApprovalOptions): To
   return out;
 }
 
+function buildWrappedSchema(
+  originalSchema: z.ZodTypeAny | undefined,
+  staticReason: string | undefined,
+): z.ZodTypeAny {
+  const description = staticReason
+    ? "Short explanation of why this tool call is needed. Shown to the user for approval. Optional — falls back to the configured static reason when omitted."
+    : "Short explanation of why this tool call is needed. Shown to the user for approval.";
+  const reasonSchema = staticReason
+    ? z.string().optional().describe(description)
+    : z.string().describe(description);
+
+  if (originalSchema instanceof z.ZodObject) {
+    return originalSchema.extend({ _reason: reasonSchema });
+  }
+  return originalSchema ?? z.object({});
+}
+
+function buildWrappedDescription(
+  originalDescription: string | undefined,
+  staticReason: string | undefined,
+): string {
+  const note = staticReason
+    ? "⚠️ Requires user approval before execution. You may include a concise `_reason`; when omitted, the tool's configured static reason is used."
+    : "⚠️ Requires user approval before execution. You MUST include a concise `_reason` in your arguments explaining why this action is needed.";
+  return `${originalDescription ?? ""}\n\n${note}`;
+}
+
+async function postApprovalMessage(args: {
+  channelId: string;
+  requesterUserId: string;
+  embed: ReturnType<typeof buildApprovalEmbed>;
+  components: ReturnType<typeof buildApprovalComponents>;
+}): Promise<{ id: string }> {
+  const { channelId, requesterUserId, embed, components } = args;
+  return (await discord.post(Routes.channelMessages(channelId), {
+    body: {
+      content: `<@${requesterUserId}>`,
+      embeds: [embed],
+      components,
+      allowed_mentions: { users: [requesterUserId], parse: [] },
+    },
+  })) as { id: string };
+}
+
+async function* runApproved(
+  originalExecute: RuntimeExecuteFn | undefined,
+  toolName: string,
+  toolInput: Record<string, unknown>,
+  runtime: unknown,
+): AsyncGenerator<unknown> {
+  if (!originalExecute) {
+    yield `Tool \`${toolName}\` has no execute function; approval succeeded but nothing ran.`;
+    return;
+  }
+  const result = originalExecute(toolInput, runtime);
+  if (isAsyncIterable(result)) {
+    for await (const v of result) yield v;
+    return;
+  }
+  yield await (result as Promise<unknown>);
+}
+
 function wrapWithApproval(
   original: Tool,
   toolName: string,
@@ -39,44 +101,28 @@ function wrapWithApproval(
   const timeoutMs = wrapOpts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const ttlSeconds = Math.ceil(timeoutMs / 1000) + TTL_BUFFER_SECONDS;
   const staticReason = markerOpts.reason;
-
-  const originalSchema = original.inputSchema as z.ZodTypeAny | undefined;
-  const reasonDescription = staticReason
-    ? "Short explanation of why this tool call is needed. Shown to the user for approval. Optional — falls back to the configured static reason when omitted."
-    : "Short explanation of why this tool call is needed. Shown to the user for approval.";
-  const reasonSchema = staticReason
-    ? z.string().optional().describe(reasonDescription)
-    : z.string().describe(reasonDescription);
-
-  const schemaToUse: z.ZodTypeAny =
-    originalSchema instanceof z.ZodObject
-      ? originalSchema.extend({ _reason: reasonSchema })
-      : (originalSchema ?? z.object({}));
-
+  const schemaToUse = buildWrappedSchema(
+    original.inputSchema as z.ZodTypeAny | undefined,
+    staticReason,
+  );
   const originalExecute = original.execute as RuntimeExecuteFn | undefined;
-  const approvalNote = staticReason
-    ? "⚠️ Requires user approval before execution. You may include a concise `_reason`; when omitted, the tool's configured static reason is used."
-    : "⚠️ Requires user approval before execution. You MUST include a concise `_reason` in your arguments explaining why this action is needed.";
 
   return tool({
-    description: `${original.description ?? ""}\n\n${approvalNote}`,
+    description: buildWrappedDescription(original.description, staticReason),
     inputSchema: schemaToUse,
     execute: async function* (rawInput: unknown, runtime: unknown) {
-      const context = wrapOpts.context;
+      const { context, delegateName } = wrapOpts;
       const channelId = context.channel.id;
       const threadId = context.thread?.id;
       const requesterUserId = context.userId;
-
       const { reason, toolInput } = extractReason(rawInput, staticReason);
 
       const approvalId = crypto.randomUUID();
       const store = wrapOpts.store ?? new ApprovalStore();
-      const postMessage = wrapOpts.postMessage ?? defaultPostMessage;
-
       const state: ApprovalState = {
         id: approvalId,
         status: "pending",
-        delegateName: wrapOpts.delegateName,
+        delegateName,
         toolName,
         input: toolInput,
         reason,
@@ -85,25 +131,20 @@ function wrapWithApproval(
         requesterUserId,
         createdAt: new Date().toISOString(),
       };
-
       await store.create(state, ttlSeconds);
 
-      const targetChannelId = threadId ?? channelId;
-      const embed = buildApprovalEmbed({
-        delegateName: wrapOpts.delegateName,
-        toolName,
-        input: toolInput,
-        reason,
-        timeoutMs,
-      });
-      const components = buildApprovalComponents(approvalId);
-
       try {
-        const msg = await postMessage(targetChannelId, {
-          content: `<@${requesterUserId}>`,
-          embeds: [embed],
-          components,
-          allowed_mentions: { users: [requesterUserId], parse: [] },
+        const msg = await postApprovalMessage({
+          channelId: threadId ?? channelId,
+          requesterUserId,
+          embed: buildApprovalEmbed({
+            delegateName,
+            toolName,
+            input: toolInput,
+            reason,
+            timeoutMs,
+          }),
+          components: buildApprovalComponents(approvalId),
         });
         await store.setMessageId(approvalId, msg.id, ttlSeconds);
       } catch (err: unknown) {
@@ -115,26 +156,11 @@ function wrapWithApproval(
 
       const abortSignal = extractAbortSignal(runtime);
       const final = await store.waitFor(approvalId, { timeoutMs, signal: abortSignal });
-
       if (final.status !== "approved") {
         yield denialMessage(final.status, toolName);
         return;
       }
-
-      if (!originalExecute) {
-        yield `Tool \`${toolName}\` has no execute function; approval succeeded but nothing ran.`;
-        return;
-      }
-
-      // Call the original and forward its output. If it's an async iterable
-      // (streaming tool), yield every intermediate value so the approval
-      // wrapper is transparent to the caller's streaming contract.
-      const result = originalExecute(toolInput, runtime);
-      if (isAsyncIterable(result)) {
-        for await (const v of result) yield v;
-        return;
-      }
-      yield await (result as Promise<unknown>);
+      yield* runApproved(originalExecute, toolName, toolInput, runtime);
     },
   });
 }
@@ -169,19 +195,14 @@ function isAsyncIterable(v: unknown): v is AsyncIterable<unknown> {
   );
 }
 
-function denialMessage(status: ApprovalState["status"], toolName: string): string {
+function denialMessage(
+  status: Exclude<ApprovalState["status"], "approved">,
+  toolName: string,
+): string {
   if (status === "denied") {
     return `The user denied permission to run \`${toolName}\`. Do not retry this tool call.`;
   }
-  if (status === "timeout") {
-    return `The approval request for \`${toolName}\` timed out. Do not retry this tool call.`;
-  }
-  return `The approval for \`${toolName}\` is not approved (status: ${status}). Do not retry.`;
-}
-
-async function defaultPostMessage(
-  channelId: string,
-  body: Record<string, unknown>,
-): Promise<{ id: string }> {
-  return (await discord.post(Routes.channelMessages(channelId), { body })) as { id: string };
+  // status is narrowed to "timeout" — the wrapper only calls this for
+  // terminal non-approved states produced by `waitFor()`.
+  return `The approval request for \`${toolName}\` timed out. Do not retry this tool call.`;
 }

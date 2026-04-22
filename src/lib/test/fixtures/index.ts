@@ -1,3 +1,4 @@
+export { baseApprovalState, buttonInteraction } from "./approvals";
 export { createMemoryRedis, memoryStore } from "./redis";
 export {
   messagePacket,
@@ -13,6 +14,7 @@ export { createMockAPI, asAPI } from "./discord";
 export { toolOpts } from "../constants";
 export { TEST_SKILLS } from "./constants";
 export {
+  contextForRole,
   noopTool,
   streamingTextModel,
   installMockProvider,

@@ -29,7 +29,10 @@ function formatValue(v: unknown): string {
   try {
     s = JSON.stringify(v);
   } catch {
-    s = String(v);
+    // Circular / non-serializable payload — show a placeholder rather than
+    // relying on `String(v)`, which produces `[object Object]` for most
+    // structured values.
+    s = "<unserializable>";
   }
   if (s.length <= MAX_VALUE_LEN) return s;
   const wrapped = s.at(0) === '"';

@@ -38,14 +38,17 @@ export interface WaitForOptions {
   signal?: AbortSignal;
 }
 
-/** Injection points for `wrapApprovalTools()` — runtime uses the defaults, tests swap them out. */
+/**
+ * Injection points for `wrapApprovalTools()`. The `store` slot exists so tests
+ * can swap in an `ApprovalStore` constructed against the in-memory Redis
+ * fixture — Discord REST is mocked separately via `@discordjs/rest`.
+ */
 export interface WrapApprovalOptions {
   context: AgentContext;
   /** Subagent domain name (e.g. "github"). Omit for top-level orchestrator tools. */
   delegateName?: string;
   timeoutMs?: number;
   store?: ApprovalStoreLike;
-  postMessage?: (channelId: string, body: Record<string, unknown>) => Promise<{ id: string }>;
 }
 
 /**

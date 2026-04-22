@@ -53,12 +53,11 @@ describe("formatToolCall", () => {
     expect(out).toContain("maybe=undefined");
   });
 
-  it("falls back to String() when JSON.stringify throws (circular)", () => {
+  it("falls back to a placeholder when JSON.stringify throws (circular)", () => {
     const circular: Record<string, unknown> = {};
     circular.self = circular;
     const out = formatToolCall(undefined, "t", { ref: circular });
-    // Should not throw; renders using String()
-    expect(out).toContain("ref=");
+    expect(out).toContain("ref=<unserializable>");
   });
 
   it("truncates long non-string values with a trailing ellipsis (no trailing quote)", () => {

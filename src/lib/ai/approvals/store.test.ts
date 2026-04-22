@@ -1,24 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createMemoryRedis } from "@/lib/test/fixtures";
-
-import type { ApprovalState } from "./types.ts";
+import { baseApprovalState as baseState, createMemoryRedis } from "@/lib/test/fixtures";
 
 import { ApprovalStore } from "./store.ts";
-
-function baseState(overrides: Partial<ApprovalState> = {}): ApprovalState {
-  return {
-    id: "a1",
-    status: "pending",
-    toolName: "doit",
-    input: { foo: "bar" },
-    reason: "because",
-    channelId: "ch-1",
-    requesterUserId: "user-1",
-    createdAt: "2024-01-01T00:00:00Z",
-    ...overrides,
-  };
-}
 
 describe("ApprovalStore CRUD", () => {
   it("create + get round-trips state", async () => {
@@ -137,7 +121,7 @@ describe("ApprovalStore.waitFor", () => {
     expect(out.status).toBe("timeout");
   });
 
-  it("rejects when the abort signal fires", async () => {
+  it("rejects when the abort signal fires before the first sleep starts", async () => {
     const store = new ApprovalStore(createMemoryRedis());
     await store.create(baseState());
     const controller = new AbortController();
@@ -148,5 +132,36 @@ describe("ApprovalStore.waitFor", () => {
     });
     controller.abort();
     await expect(pending).rejects.toThrow(/aborted/);
+  });
+
+  it("rejects when the abort signal fires while a sleep is already waiting", async () => {
+    const store = new ApprovalStore(createMemoryRedis());
+    await store.create(baseState());
+    const controller = new AbortController();
+    const pending = store.waitFor("a1", {
+      intervalMs: 60_000,
+      timeoutMs: 120_000,
+      signal: controller.signal,
+    });
+    // Let the first iteration reach `sleep()` before aborting so the listener
+    // path (not the synchronous pre-check) is exercised.
+    await new Promise((r) => setTimeout(r, 30));
+    controller.abort();
+    await expect(pending).rejects.toThrow(/aborted/);
+  });
+
+  it("is a no-op when a pre-aborted signal is supplied to sleep via the inner branch", async () => {
+    // Pre-aborted signal: waitFor's outer check throws first, so sleep is not reached.
+    const store = new ApprovalStore(createMemoryRedis());
+    await store.create(baseState());
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      store.waitFor("a1", {
+        intervalMs: 10,
+        timeoutMs: 10_000,
+        signal: controller.signal,
+      }),
+    ).rejects.toThrow(/aborted/);
   });
 });
