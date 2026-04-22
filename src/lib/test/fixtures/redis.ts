@@ -2,6 +2,8 @@ import type { RedisLike } from "@/bot/types";
 
 import { ConversationStore } from "@/bot/store";
 
+import type { RichMemoryRedis, RichMemoryRedisPipeline } from "../types";
+
 export function createMemoryRedis(): RedisLike {
   const data = new Map<string, { value: unknown; expiresAt?: number }>();
 
@@ -43,4 +45,62 @@ export function createMemoryRedis(): RedisLike {
 
 export function memoryStore(): ConversationStore {
   return new ConversationStore(createMemoryRedis());
+}
+
+function buildPipeline(redis: RichMemoryRedis): RichMemoryRedisPipeline {
+  const ops: Array<() => Promise<unknown>> = [];
+  return {
+    get(key: string): RichMemoryRedisPipeline {
+      ops.push(() => redis.get(key));
+      return this;
+    },
+    exec: async <T>(): Promise<T> => (await Promise.all(ops.map((fn) => fn()))) as T,
+  };
+}
+
+/**
+ * In-memory redis stub that covers the surface `@upstash/redis` exposes for
+ * task registries and queues (sets + pipeline). Use when a test boots code
+ * that calls `sadd` / `smembers` / `srem` / `pipeline()` — the smaller
+ * `createMemoryRedis` (RedisLike) only covers key-value ops.
+ */
+export function createRichMemoryRedis(): RichMemoryRedis {
+  const data = new Map<string, unknown>();
+  const sets = new Map<string, Set<string>>();
+
+  return {
+    async get<T>(key: string): Promise<T | null> {
+      return (data.get(key) as T) ?? null;
+    },
+    async set(key: string, value: unknown) {
+      data.set(key, value);
+      return "OK" as const;
+    },
+    async del(key: string) {
+      data.delete(key);
+      return 1;
+    },
+    async sadd(key: string, ...members: string[]) {
+      if (!sets.has(key)) sets.set(key, new Set());
+      for (const m of members) sets.get(key)!.add(m);
+      return members.length;
+    },
+    async smembers<T>(key: string): Promise<T> {
+      return [...(sets.get(key) ?? [])] as T;
+    },
+    async srem(key: string, ...members: string[]) {
+      const set = sets.get(key);
+      if (!set) return 0;
+      let removed = 0;
+      for (const m of members) if (set.delete(m)) removed++;
+      return removed;
+    },
+    pipeline(): RichMemoryRedisPipeline {
+      return buildPipeline(this);
+    },
+    reset() {
+      data.clear();
+      sets.clear();
+    },
+  };
 }

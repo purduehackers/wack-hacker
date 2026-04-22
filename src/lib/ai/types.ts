@@ -3,6 +3,7 @@ import type { z } from "zod";
 
 import type { AgentContext } from "./context.ts";
 import type { SkillBundle } from "./skills/types.ts";
+import type { TurnUsageTracker } from "./turn-usage.ts";
 
 export interface ChannelInfo {
   id: string;
@@ -184,4 +185,37 @@ export interface SubagentSpec {
    * coding subagent to commit/push/open a PR and relay the result.
    */
   postFinish?: SubagentPostFinish;
+}
+
+/**
+ * Structural subset of the `ToolLoopAgent` interface that `streamTurn` uses —
+ * scoped to just `.stream()` so tests can hand-roll a fake without pulling in
+ * the AI SDK's full generic machinery.
+ */
+export interface OrchestratorAgent {
+  stream(input: { messages: unknown[] }): Promise<{
+    fullStream: AsyncIterable<unknown>;
+    totalUsage: Promise<unknown>;
+    steps: Promise<unknown>;
+  }>;
+}
+
+/**
+ * Factory signature for `createOrchestrator`. Exported so tests can inject a
+ * fake through `streamTurn`'s options bag without mocking our own modules.
+ */
+export type OrchestratorFactory = (
+  ctx: AgentContext,
+  tracker: TurnUsageTracker,
+) => OrchestratorAgent;
+
+/**
+ * Options bag for `streamTurn`. Split out so production callers don't need to
+ * deal with the test-injection hooks.
+ */
+export interface StreamTurnOptions {
+  /** Task ID to include in the message footer (e.g. for scheduled runs). */
+  taskId?: string;
+  /** Dependency-injected orchestrator factory; defaults to `createOrchestrator`. */
+  createAgent?: OrchestratorFactory;
 }

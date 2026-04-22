@@ -1,63 +1,40 @@
 import { describe, it, expect } from "vitest";
 
 import { DISCORD_IDS } from "@/lib/protocol/constants";
-
-import type { SlashCommandContext } from "./types";
+import { fakeSlashCommandCtx } from "@/lib/test/fixtures";
 
 import { isAdmin, isOrganizer } from "./helpers";
 
-function ctx(roles: string[]): SlashCommandContext {
-  return {
-    interaction: {
-      id: "i",
-      application_id: "a",
-      type: 2,
-      token: "t",
-      version: 1,
-      member: {
-        user: { id: "u", username: "u" },
-        roles,
-      },
-    },
-    discord: {} as SlashCommandContext["discord"],
-    options: new Map(),
-  };
-}
-
 describe("isOrganizer", () => {
   it("returns true when the organizer role is present", () => {
-    expect(isOrganizer(ctx([DISCORD_IDS.roles.ORGANIZER]))).toBe(true);
+    const { ctx } = fakeSlashCommandCtx({ roles: [DISCORD_IDS.roles.ORGANIZER] });
+    expect(isOrganizer(ctx)).toBe(true);
   });
 
   it("returns false when the role is absent", () => {
-    expect(isOrganizer(ctx(["other-role"]))).toBe(false);
+    const { ctx } = fakeSlashCommandCtx({ roles: ["other-role"] });
+    expect(isOrganizer(ctx)).toBe(false);
   });
 
   it("returns false when member is missing", () => {
-    const c: SlashCommandContext = {
-      interaction: { id: "i", application_id: "a", type: 2, token: "t", version: 1 },
-      discord: {} as SlashCommandContext["discord"],
-      options: new Map(),
-    };
-    expect(isOrganizer(c)).toBe(false);
+    const { ctx } = fakeSlashCommandCtx({ noMember: true });
+    expect(isOrganizer(ctx)).toBe(false);
   });
 });
 
 describe("isAdmin", () => {
   it("returns true when the admin role is present", () => {
-    expect(isAdmin(ctx([DISCORD_IDS.roles.ADMIN]))).toBe(true);
+    const { ctx } = fakeSlashCommandCtx({ roles: [DISCORD_IDS.roles.ADMIN] });
+    expect(isAdmin(ctx)).toBe(true);
   });
 
   it("returns false when the role is absent", () => {
-    expect(isAdmin(ctx([DISCORD_IDS.roles.ORGANIZER]))).toBe(false);
+    const { ctx } = fakeSlashCommandCtx({ roles: [DISCORD_IDS.roles.ORGANIZER] });
+    expect(isAdmin(ctx)).toBe(false);
   });
 
   it("returns false when member is missing", () => {
-    const c: SlashCommandContext = {
-      interaction: { id: "i", application_id: "a", type: 2, token: "t", version: 1 },
-      discord: {} as SlashCommandContext["discord"],
-      options: new Map(),
-    };
-    expect(isAdmin(c)).toBe(false);
+    const { ctx } = fakeSlashCommandCtx({ noMember: true });
+    expect(isAdmin(ctx)).toBe(false);
   });
 });

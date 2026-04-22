@@ -1,33 +1,60 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { messagePacket, toolOpts } from "@/lib/test/fixtures";
+import {
+  createRichMemoryRedis,
+  discordRESTClass,
+  linearClientClass,
+  messagePacket,
+  notionClientClass,
+  octokitClass,
+  resendClass,
+  toolOpts,
+} from "@/lib/test/fixtures";
 
-import { AgentContext } from "../../context.ts";
+const hoisted = vi.hoisted(() => ({
+  start: vi.fn().mockResolvedValue({ runId: "run-123" }),
+  cancel: vi.fn().mockResolvedValue(undefined),
+  redis: undefined as ReturnType<typeof createRichMemoryRedis> | undefined,
+}));
 
 vi.mock("workflow/api", () => ({
-  start: vi.fn().mockResolvedValue({ runId: "run-123" }),
-  getRun: vi.fn().mockReturnValue({
-    cancel: vi.fn().mockResolvedValue(undefined),
-  }),
+  start: hoisted.start,
+  getRun: vi.fn().mockReturnValue({ cancel: hoisted.cancel }),
 }));
 
-vi.mock("@/lib/tasks/registry", () => ({
-  listTasks: vi.fn().mockResolvedValue([]),
-  removeTask: vi.fn().mockResolvedValue(undefined),
+vi.mock("workflow", () => ({
+  sleep: vi.fn(),
+  getWorkflowMetadata: vi.fn(() => ({ workflowRunId: "task-run-test" })),
 }));
 
-vi.mock("@/workflows/task", () => ({
-  taskWorkflow: vi.fn(),
+vi.mock("@upstash/redis", () => ({
+  Redis: { fromEnv: () => hoisted.redis! },
 }));
 
-const workflowApi = await import("workflow/api");
-const registry = await import("@/lib/tasks/registry");
+// Third-party SDK mocks — schedule/index.ts transitively loads workflows/task,
+// which imports tool modules that instantiate SDK clients at import time.
+vi.mock("@linear/sdk", () => ({ LinearClient: linearClientClass() }));
+vi.mock("octokit", () => ({ Octokit: octokitClass() }));
+vi.mock("@octokit/auth-app", () => ({ createAppAuth: vi.fn(() => ({})) }));
+vi.mock("@discordjs/rest", () => ({ REST: discordRESTClass() }));
+vi.mock("@discordjs/core/http-only", () => ({
+  API: class MockAPI {
+    channels = { createMessage: vi.fn() };
+  },
+}));
+vi.mock("@notionhq/client", () => ({ Client: notionClientClass() }));
+vi.mock("resend", () => ({ Resend: resendClass() }));
+vi.mock("@vercel/edge-config", () => ({
+  createClient: vi.fn(() => ({ getAll: vi.fn().mockResolvedValue({}) })),
+}));
+
+const { AgentContext } = await import("../../context.ts");
 const { createScheduleTask, listScheduledTasks, cancelTask } = await import("./index.ts");
+const { saveTask } = await import("../../../tasks/registry.ts");
 
-const mockedStart = workflowApi.start as ReturnType<typeof vi.fn>;
-const mockedListTasks = registry.listTasks as ReturnType<typeof vi.fn>;
+type AgentContextInstance = Awaited<ReturnType<typeof AgentContext.fromPacket>>;
 
-function contextWithRoles(memberRoles?: string[]): AgentContext {
+function contextWithRoles(memberRoles?: string[]): AgentContextInstance {
   return AgentContext.fromPacket(messagePacket("hello", { memberRoles }));
 }
 
@@ -38,15 +65,20 @@ function futureISO(): string {
 type PersistedMeta = { meta: { context: { memberRoles?: string[] } } };
 
 function lastScheduledMeta(): PersistedMeta["meta"] {
-  const [, args] = mockedStart.mock.calls[0];
+  const [, args] = hoisted.start.mock.calls[0];
   return (args as [PersistedMeta])[0].meta;
 }
 
-describe("scheduleTask tool: scheduling", () => {
-  beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  hoisted.start.mockResolvedValue({ runId: "run-123" });
+  hoisted.cancel.mockResolvedValue(undefined);
+  hoisted.redis = createRichMemoryRedis();
+});
 
+describe("scheduleTask tool: scheduling", () => {
   it("schedules a one-time message task", async () => {
-    mockedStart.mockResolvedValueOnce({ runId: "run-abc" } as never);
+    hoisted.start.mockResolvedValueOnce({ runId: "run-abc" });
     const scheduleTask = createScheduleTask(contextWithRoles());
     const result = await scheduleTask.execute!(
       {
@@ -65,7 +97,7 @@ describe("scheduleTask tool: scheduling", () => {
   });
 
   it("schedules a recurring agent task", async () => {
-    mockedStart.mockResolvedValueOnce({ runId: "run-cron" } as never);
+    hoisted.start.mockResolvedValueOnce({ runId: "run-cron" });
     const scheduleTask = createScheduleTask(contextWithRoles());
     const result = await scheduleTask.execute!(
       {
@@ -85,8 +117,6 @@ describe("scheduleTask tool: scheduling", () => {
 });
 
 describe("scheduleTask tool: memberRoles propagation", () => {
-  beforeEach(() => vi.clearAllMocks());
-
   it("propagates scheduler's memberRoles into persisted task meta", async () => {
     const scheduleTask = createScheduleTask(contextWithRoles(["role-admin", "role-organizer"]));
     await scheduleTask.execute!(
@@ -102,7 +132,7 @@ describe("scheduleTask tool: memberRoles propagation", () => {
       toolOpts,
     );
 
-    expect(mockedStart).toHaveBeenCalledOnce();
+    expect(hoisted.start).toHaveBeenCalledOnce();
     expect(lastScheduledMeta().context.memberRoles).toEqual(["role-admin", "role-organizer"]);
   });
 
@@ -126,8 +156,6 @@ describe("scheduleTask tool: memberRoles propagation", () => {
 });
 
 describe("scheduleTask tool: validation", () => {
-  beforeEach(() => vi.clearAllMocks());
-
   it("rejects past run_at for one-time tasks", async () => {
     const scheduleTask = createScheduleTask(contextWithRoles());
     const result = await scheduleTask.execute!(
@@ -165,25 +193,20 @@ describe("scheduleTask tool: validation", () => {
 });
 
 describe("listScheduledTasks tool", () => {
-  beforeEach(() => vi.clearAllMocks());
-
   it("returns message when no tasks exist", async () => {
-    mockedListTasks.mockResolvedValueOnce([]);
     const result = await listScheduledTasks.execute!({ user_id: undefined }, toolOpts);
     expect(result).toContain("No active");
   });
 
   it("formats task list", async () => {
-    mockedListTasks.mockResolvedValueOnce([
-      {
-        id: "run-1",
-        description: "Daily standup",
-        action: { type: "message", channelId: "ch-1", content: "hi" },
-        schedule: { type: "recurring", cron: "0 9 * * *" },
-        context: { userId: "user-1", channelId: "ch-1" },
-        createdAt: "2026-04-08T00:00:00Z",
-      },
-    ]);
+    await saveTask({
+      id: "run-1",
+      description: "Daily standup",
+      action: { type: "message", channelId: "ch-1", content: "hi" },
+      schedule: { type: "recurring", cron: "0 9 * * *" },
+      context: { userId: "user-1", channelId: "ch-1" },
+      createdAt: "2026-04-08T00:00:00Z",
+    });
     const result = await listScheduledTasks.execute!({ user_id: undefined }, toolOpts);
     expect(result).toContain("Daily standup");
     expect(result).toContain("run-1");

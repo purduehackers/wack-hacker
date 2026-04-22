@@ -1,35 +1,22 @@
 import { describe, it, expect } from "vitest";
 
 import { DISCORD_IDS } from "@/lib/protocol/constants";
-import { createMockAPI, asAPI } from "@/lib/test/fixtures";
-
-import type { SlashCommandContext } from "./types";
+import { fakeSlashCommandCtx } from "@/lib/test/fixtures";
 
 import { respond, isOrganizer } from "./helpers";
 import { parseSubcommand, parseOptions } from "./registry";
 
-function fakeCtx(roles: string[] = []) {
-  const discord = createMockAPI();
-  return {
-    ctx: {
-      interaction: {
-        id: "1",
-        application_id: "app-1",
-        type: 2,
-        token: "tok-1",
-        version: 1,
-        member: { user: { id: "u1", username: "alice" }, roles, nick: null },
-      },
-      discord: asAPI(discord),
-      options: new Map(),
-    } as SlashCommandContext,
-    discord,
-  };
+function ctxWith(roles: string[] = []) {
+  return fakeSlashCommandCtx({
+    roles,
+    interaction: { id: "1", application_id: "app-1", token: "tok-1" },
+    user: { id: "u1", username: "alice" },
+  });
 }
 
 describe("respond", () => {
   it("calls interactions.editReply with correct args", async () => {
-    const { ctx, discord } = fakeCtx();
+    const { ctx, discord } = ctxWith();
     await respond(ctx, "hello");
     expect(discord.callsTo("interactions.editReply")).toEqual([
       ["app-1", "tok-1", { content: "hello" }],
@@ -39,16 +26,15 @@ describe("respond", () => {
 
 describe("isOrganizer", () => {
   it("returns true when user has organizer role", () => {
-    expect(isOrganizer(fakeCtx([DISCORD_IDS.roles.ORGANIZER]).ctx)).toBe(true);
+    expect(isOrganizer(ctxWith([DISCORD_IDS.roles.ORGANIZER]).ctx)).toBe(true);
   });
 
   it("returns false when user lacks organizer role", () => {
-    expect(isOrganizer(fakeCtx(["other-role"]).ctx)).toBe(false);
+    expect(isOrganizer(ctxWith(["other-role"]).ctx)).toBe(false);
   });
 
   it("returns false when member is undefined", () => {
-    const { ctx } = fakeCtx();
-    ctx.interaction.member = undefined;
+    const { ctx } = fakeSlashCommandCtx({ noMember: true });
     expect(isOrganizer(ctx)).toBe(false);
   });
 });
