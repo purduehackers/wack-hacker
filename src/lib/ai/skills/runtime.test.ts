@@ -49,7 +49,7 @@ describe("computeActiveTools — activation", () => {
       role: UserRole.Public,
       baseToolNames,
     });
-    expect(result?.sort()).toEqual(["cancelTask", "loadSkill", "scheduleTask"]);
+    expect(result?.sort()).toEqual(["cancel_task", "loadSkill", "schedule_task"]);
   });
 
   it("merges tools from multiple loaded skills", () => {
@@ -63,10 +63,10 @@ describe("computeActiveTools — activation", () => {
       baseToolNames,
     });
     expect(result?.sort()).toEqual([
-      "cancelTask",
+      "cancel_task",
       "createIssue",
       "loadSkill",
-      "scheduleTask",
+      "schedule_task",
       "searchIssues",
     ]);
   });
@@ -81,7 +81,7 @@ describe("computeActiveTools — activation", () => {
       role: UserRole.Public,
       baseToolNames,
     });
-    expect(result?.filter((t) => t === "scheduleTask")).toHaveLength(1);
+    expect(result?.filter((t) => t === "schedule_task")).toHaveLength(1);
   });
 
   it("ignores non-loadSkill tool calls when computing the active set", () => {
@@ -97,7 +97,7 @@ describe("computeActiveTools — activation", () => {
       role: UserRole.Public,
       baseToolNames,
     });
-    expect(result?.sort()).toEqual(["cancelTask", "loadSkill", "scheduleTask"]);
+    expect(result?.sort()).toEqual(["cancel_task", "loadSkill", "schedule_task"]);
   });
 });
 

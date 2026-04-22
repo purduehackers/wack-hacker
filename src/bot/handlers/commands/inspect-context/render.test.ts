@@ -23,9 +23,9 @@ const baseBreakdown: ContextBreakdown = {
       items: [
         { name: "currentTime", estimatedTokens: 80 },
         { name: "documentation", estimatedTokens: 150 },
-        { name: "scheduleTask", estimatedTokens: 120 },
-        { name: "listScheduledTasks", estimatedTokens: 70 },
-        { name: "cancelTask", estimatedTokens: 80 },
+        { name: "schedule_task", estimatedTokens: 120 },
+        { name: "list_scheduled_tasks", estimatedTokens: 70 },
+        { name: "cancel_task", estimatedTokens: 80 },
       ],
     },
     {

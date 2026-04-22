@@ -66,7 +66,7 @@ Three things are happening at once:
 - `cron → /gateway` keeps the discord.js client alive (see [Discord § gateway leader election](./discord/gateway.md)).
 - The bidi arrow between `Discord` and `/gateway` is the WebSocket: events flow up, heartbeats and replies flow down.
 - `/interactions` is HTTP and signature-verified; it never goes through the queue.
-- `Orchestrator` publishes to the `tasks` queue when an agent calls `scheduleTask`. The queue consumer (`/api/tasks`) starts a `taskWorkflow`, which can in turn spawn more agent runs at scheduled times.
+- `Orchestrator` publishes to the `tasks` queue when an agent calls `schedule_task`. The queue consumer (`/api/tasks`) starts a `taskWorkflow`, which can in turn spawn more agent runs at scheduled times.
 
 ## Agents
 
@@ -78,9 +78,9 @@ Three things are happening at once:
   │  tools                                      │
   │   · currentTime                             │
   │   · documentation                           │
-  │   · scheduleTask                            │
-  │   · listScheduledTasks                      │
-  │   · cancelTask                              │
+  │   · schedule_task                           │
+  │   · list_scheduled_tasks                    │
+  │   · cancel_task                             │
   │   · delegate_<domain>                       │
   └──────────────────────┬──────────────────────┘
                          │

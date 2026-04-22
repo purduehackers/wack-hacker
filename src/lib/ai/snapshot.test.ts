@@ -61,7 +61,7 @@ function syntheticTools(): ToolSet {
       inputSchema: z.object({ query: z.string() }),
       execute: async () => "",
     }),
-    scheduleTask: tool({
+    schedule_task: tool({
       description: "Schedule a task.",
       inputSchema: z.object({ when: z.string() }),
       execute: async () => "",
@@ -121,7 +121,7 @@ describe("buildContextSnapshot", () => {
     const names = snap.tools.map((t) => t.name);
     expect(names).toContain("currentTime");
     expect(names).toContain("documentation");
-    expect(names).toContain("scheduleTask");
+    expect(names).toContain("schedule_task");
     for (const tool of snap.tools) {
       expect(typeof tool.description).toBe("string");
       expect(tool.inputSchema).toBeDefined();
@@ -240,9 +240,9 @@ describe("buildContextSnapshot: default tool resolver", () => {
         "currentTime",
         "documentation",
         "resolve_organizer",
-        "scheduleTask",
-        "listScheduledTasks",
-        "cancelTask",
+        "schedule_task",
+        "list_scheduled_tasks",
+        "cancel_task",
       ]),
     );
   });

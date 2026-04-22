@@ -7,7 +7,7 @@ export const TEST_SKILLS: Record<string, SkillBundle> = {
     name: "scheduling",
     description: "Schedule tasks",
     criteria: "When user wants to schedule",
-    toolNames: ["scheduleTask", "cancelTask"],
+    toolNames: ["schedule_task", "cancel_task"],
     minRole: UserRole.Public,
     mode: "inline",
     instructions: "Use cron expressions.",

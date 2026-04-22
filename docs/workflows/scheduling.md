@@ -4,13 +4,13 @@ The orchestrator exposes three scheduling tools, all in `src/lib/ai/tools/schedu
 
 ## Tools
 
-| Tool                 | What it does                                                                        |
-| -------------------- | ----------------------------------------------------------------------------------- |
-| `scheduleTask`       | Validates the schedule (future date or parseable cron) and starts a `taskWorkflow`. |
-| `listScheduledTasks` | Reads from `registry.listTasks(opts?)`, optionally filtered by user.                |
-| `cancelTask`         | Cancels the workflow run and removes the registry entry.                            |
+| Tool                   | What it does                                                                                                                                                                          |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `schedule_task`        | Validates the schedule (future date or parseable cron) and starts a `taskWorkflow`. Wrapped with `approval()` — the user must confirm via Discord buttons before the task is created. |
+| `list_scheduled_tasks` | Reads from `registry.listTasks(opts?)`, optionally filtered by user.                                                                                                                  |
+| `cancel_task`          | Cancels the workflow run and removes the registry entry. Wrapped with `approval()`.                                                                                                   |
 
-## scheduleTask
+## schedule_task
 
 Inputs (via Zod schema):
 
@@ -23,13 +23,13 @@ Inputs (via Zod schema):
 - `timezone?: string` — IANA timezone, default `America/Indiana/Indianapolis`.
 - `user_id: string` — owning user (for `tasks:user:<id>` indexing).
 
-The tool validates the schedule before starting the workflow: `run_at` must parse as a future date, and `cron` must parse via `nextOccurrence`. On success it calls `start(taskWorkflow, [{ meta }])` and returns a confirmation message with the next run time.
+The tool validates the schedule before starting the workflow: `run_at` must parse as a future date, and `cron` must parse via `nextOccurrence`. It also rejects missing `content` / `prompt` for the respective `action_type`. On success it calls `start(taskWorkflow, [{ meta }])` and returns a confirmation message with the next run time.
 
-## listScheduledTasks
+## list_scheduled_tasks
 
 Calls `listTasks(opts?)` with an optional `user_id` filter. Returns a formatted list with each task's ID, description, schedule, and next run time. Use this for "what do I have coming up?" style queries.
 
-## cancelTask
+## cancel_task
 
 ```ts
 await getRun(task_id).cancel(); // wrapped in try/catch — workflow may already be gone

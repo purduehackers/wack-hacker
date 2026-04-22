@@ -62,7 +62,7 @@ Each named function below is its own `"use step"` so the workflow runtime checkp
 
 Two ways to cancel a task:
 
-1. The orchestrator's `cancelTask` tool calls `getRun(taskId).cancel()` followed by `removeTask(taskId)` — see [Scheduled tasks](./scheduling.md).
+1. The orchestrator's `cancel_task` tool calls `getRun(taskId).cancel()` followed by `removeTask(taskId)` — see [Scheduled tasks](./scheduling.md).
 2. Anything that removes the task from the registry (e.g. an admin script) will be picked up on the recurring loop's next wake.
 
 The recurring loop's `checkTask` recheck after sleep is what makes external removal work — the workflow exits gracefully instead of executing a deleted task. For one-shot tasks, external removal won't stop execution unless the workflow is also cancelled via `getRun`, because the one-shot path skips the recheck.

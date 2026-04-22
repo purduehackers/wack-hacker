@@ -17,7 +17,7 @@ These are always present, regardless of role:
 
 - **`currentTime`** — current wall clock and timezone, used for date math.
 - **`documentation`** — search and quote from [ask.purduehackers.com](https://ask.purduehackers.com).
-- **`scheduleTask`**, **`listScheduledTasks`**, **`cancelTask`** — scheduling tools that publish to, read from, or cancel jobs in the `tasks` queue. See [Workflows § scheduled tasks](../workflows/scheduling.md).
+- **`schedule_task`**, **`list_scheduled_tasks`**, **`cancel_task`** — scheduling tools that publish to, read from, or cancel jobs in the `tasks` queue. `schedule_task` and `cancel_task` are wrapped with `approval()` so the user confirms via Discord buttons. See [Workflows § scheduled tasks](../workflows/scheduling.md).
 
 ## Delegate tools
 

@@ -67,4 +67,4 @@ Both apply independently. A skill might be visible to organizers but contain ind
 
 ## What's not admin-gated
 
-The orchestrator's base tools (`currentTime`, `documentation`, `scheduleTask`, `listScheduledTasks`, `cancelTask`, `delegate_*`) are **not** run through `filterAdmin`. If you want a base tool to be admin-gated, you need to conditionally add it to the `tools` object in `createOrchestrator` based on `context.role`, or move it into a delegate domain where `filterAdmin` does apply.
+The orchestrator's base tools (`currentTime`, `documentation`, `schedule_task`, `list_scheduled_tasks`, `cancel_task`, `delegate_*`) are **not** run through `filterAdmin`. If you want a base tool to be admin-gated, you need to conditionally add it to the `tools` object in `createOrchestrator` based on `context.role`, or move it into a delegate domain where `filterAdmin` does apply.
