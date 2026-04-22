@@ -7,6 +7,13 @@ const { mockGet, patchSpy } = vi.hoisted(() => ({
 
 vi.mock("@vercel/edge-config", () => ({
   createClient: () => ({ get: mockGet }),
+  parseConnectionString: () => ({
+    baseUrl: "https://edge-config.vercel.com",
+    id: "ecfg_test",
+    token: "test-token",
+    version: "1",
+    type: "vercel",
+  }),
 }));
 
 vi.mock("@vercel/sdk", () => ({

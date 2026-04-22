@@ -6,6 +6,7 @@ import { defineCommand } from "@/bot/commands/define";
 import { isOrganizer, respond } from "@/bot/commands/helpers";
 import { env } from "@/env";
 import { DISCORD_IDS } from "@/lib/protocol/constants";
+import { getDashboardEdgeConfigId } from "@/lib/protocol/organizers/edge-config";
 
 const DEFAULT_EMOJI = "\u{1F319}";
 
@@ -16,7 +17,7 @@ function stripLeadingEmoji(name: string): string {
 async function updateEdgeConfig(version: string): Promise<void> {
   const vercel = new Vercel({ bearerToken: env.VERCEL_API_TOKEN });
   await vercel.edgeConfig.patchEdgeConfigItems({
-    edgeConfigId: env.VERCEL_EDGE_CONFIG_ID,
+    edgeConfigId: getDashboardEdgeConfigId(),
     requestBody: {
       items: [{ operation: "upsert", key: "version", value: version }],
     },
