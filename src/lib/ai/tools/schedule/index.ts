@@ -20,6 +20,19 @@ interface ScheduleInput {
   timezone?: string;
 }
 
+// `offset: true` accepts both `Z` and `+HH:MM` suffixes. Without this the
+// zod default rejects anything other than `Z`.
+const ISO_DATETIME_SCHEMA = z.string().datetime({ offset: true });
+
+function isValidTimezone(tz: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Returns an error string if the input is invalid, or `null` if it's ready to
  * schedule. Pulled out of the tool body to keep `createScheduleTask` small.
@@ -34,13 +47,18 @@ function validateScheduleInput(input: ScheduleInput): string | null {
     return "Error: prompt is required when action_type is 'agent'.";
   }
 
+  // Validate timezone once, up front — otherwise a bad IANA string would
+  // survive validation and crash the `toLocaleString` formatting step below.
+  if (timezone && !isValidTimezone(timezone)) {
+    return `Error: invalid timezone "${timezone}". Use IANA format like "America/New_York".`;
+  }
+
   try {
     if (schedule_type === "once" && run_at) {
-      const target = new Date(run_at);
-      if (Number.isNaN(target.getTime())) {
-        return "Error: run_at must be a valid ISO 8601 datetime.";
+      if (!ISO_DATETIME_SCHEMA.safeParse(run_at).success) {
+        return "Error: run_at must be a valid ISO 8601 datetime (e.g. '2026-04-22T10:00:00Z').";
       }
-      if (target <= new Date()) return "Error: run_at must be in the future.";
+      if (new Date(run_at) <= new Date()) return "Error: run_at must be in the future.";
     } else if (schedule_type === "recurring" && cron) {
       nextOccurrence(cron, new Date(), timezone);
     } else {
