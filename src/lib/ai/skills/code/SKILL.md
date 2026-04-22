@@ -81,12 +81,27 @@ If the repo has no `package.json` or no recognized scripts, `run_checks` returns
 
 ## Final Response Format
 
-Your last message MUST have exactly two sections:
+Your last message MUST use exactly this structure and nothing else:
 
-1. **Summary**: 2–5 sentences describing what you changed, any assumptions you made, and the verification status.
-2. **Commit message**: a single line ≤ 72 characters, imperative mood (e.g. `fix: reject invalid redirect URLs in auth handler`). This is the commit message the post-finish step will use.
+```
+## Summary
 
-No other content in the final message. The subagent's text parts feed straight into the commit + PR body, and the orchestrator extracts only the last text part.
+<2–5 sentences describing what changed, any assumptions made, and verification status>
+
+## Test Plan
+
+- <bulleted checklist item>
+- <bulleted checklist item>
+
+**Commit message**: <single imperative line ≤ 72 chars, e.g. `fix: reject invalid redirect URLs in auth handler`>
+```
+
+Notes:
+
+- `## Summary` and `## Test Plan` flow directly into the PR body — write them for a reviewer, not for yourself.
+- `## Test Plan` is required even for trivial changes. If nothing was run, say so explicitly (e.g. `- Docs-only change — no automated checks run.`).
+- `**Commit message**:` is extracted by the post-finish step and stripped before the body reaches GitHub; keep it on its own line.
+- No other sections, preamble, or trailing notes in the final message.
 
 ## What you DO NOT do
 
