@@ -70,6 +70,22 @@ vi.mock("@/lib/ai/tools/sales", () => ({
   get_deal: stubTool("get_deal"),
   retrieve_crm_schema: stubTool("retrieve_crm_schema"),
 }));
+vi.mock("@/lib/ai/tools/code", () => ({
+  read: stubTool("read"),
+  write: stubTool("write"),
+  edit: stubTool("edit"),
+  list_dir: stubTool("list_dir"),
+  grep: stubTool("grep"),
+  glob: stubTool("glob"),
+  bash: stubTool("bash"),
+  run_checks: stubTool("run_checks"),
+  todo_write: stubTool("todo_write"),
+}));
+vi.mock("@/lib/ai/tools/code/delegation", () => ({
+  buildCodeExperimentalContext: vi.fn(),
+  codeDelegationInputSchema: {},
+  codePostFinish: vi.fn(async function* () {}),
+}));
 
 const { createOrchestrator } = await import("./orchestrator.ts");
 

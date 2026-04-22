@@ -21,3 +21,10 @@ export {
   uninstallMockProvider,
   stepResult,
 } from "./ai";
+export { InMemorySandbox, createTestSandboxProvider } from "./sandbox";
+export type {
+  ExecHandler,
+  InMemorySandboxOptions,
+  TestSandboxProvider,
+  TestSandboxProviderOptions,
+} from "../types";

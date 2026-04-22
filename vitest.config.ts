@@ -38,6 +38,14 @@ export default defineConfig({
         "src/lib/ai/tools/**",
         "src/lib/evlog.ts",
         "src/lib/db/**",
+        // Thin wrappers around @vercel/sandbox / factory wiring. Covered by
+        // hooks.ts + integration tests — unit coverage here would be 90%
+        // SDK-glue assertions against mocks.
+        "src/lib/sandbox/vercel-sandbox.ts",
+        "src/lib/sandbox/factory.ts",
+        "src/lib/sandbox/provider.ts",
+        "src/lib/sandbox/lifecycle-starter.ts",
+        "src/lib/sandbox/session-deps.ts",
       ],
       reporter: ["text", "lcov"],
       thresholds: {
