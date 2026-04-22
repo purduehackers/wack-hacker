@@ -6,6 +6,7 @@ import { cmsAdminUrl, paginationQuery, payload, wrapPayloadError } from "./clien
 import { paginationInputShape } from "./constants.ts";
 
 const COLLECTION = "media";
+const UPLOAD_FETCH_TIMEOUT_MS = 15_000;
 
 interface PayloadMedia {
   id?: number | string;
@@ -115,7 +116,19 @@ export const upload_media = tool({
     discord_user_id,
   }) => {
     try {
-      const response = await fetch(url);
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          signal: AbortSignal.timeout(UPLOAD_FETCH_TIMEOUT_MS),
+        });
+      } catch (fetchErr) {
+        if (fetchErr instanceof DOMException && fetchErr.name === "TimeoutError") {
+          throw new Error(
+            `Timed out fetching ${url} after ${UPLOAD_FETCH_TIMEOUT_MS / 1000}s — host slow or unreachable.`,
+          );
+        }
+        throw fetchErr;
+      }
       if (!response.ok) {
         throw new Error(`Failed to fetch ${url}: ${response.status} ${response.statusText}`);
       }

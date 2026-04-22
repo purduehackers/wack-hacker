@@ -36,4 +36,21 @@ describe("createLoadSkillTool", () => {
     expect(result).toContain('<skill name="linear">');
     expect(result).toContain("You are a Linear agent.");
   });
+
+  it('renders "none" when a skill has no tools (delegate skills often have empty toolNames)', async () => {
+    const emptyRegistry = new SkillRegistry({
+      empty: {
+        name: "empty",
+        description: "No tools",
+        criteria: "Never",
+        toolNames: [],
+        minRole: UserRole.Public,
+        mode: "delegate",
+        instructions: "Empty skill body.",
+      },
+    });
+    const tool = createLoadSkillTool(emptyRegistry, UserRole.Public);
+    const result = await tool.execute!({ name: "empty" }, {} as never);
+    expect(result).toContain("<tools>none</tools>");
+  });
 });

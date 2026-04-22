@@ -40,7 +40,7 @@ function projectUser(u: PayloadUser) {
 export const list_users = admin(
   tool({
     description:
-      "List admin users of the CMS (email + assigned roles). Roles follow a hierarchy: admin > editor > viewer. Additional scoped roles: hack_night_dashboard, events_website, wack_hacker.",
+      "List CMS user accounts (email + assigned roles). The `users` collection holds every human account regardless of role; filter by `email` to find one. Roles follow a hierarchy: admin > editor > viewer. Additional scoped roles: hack_night_dashboard, events_website, wack_hacker.",
     inputSchema: z.object({
       ...paginationInputShape,
       email: z.email().optional().describe("Filter by exact email address"),

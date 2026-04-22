@@ -1,3 +1,5 @@
+import type { z } from "zod";
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { payloadSDKClass, toolOpts } from "@/lib/test/fixtures";
@@ -101,17 +103,31 @@ describe("create_hack_night_session", () => {
 });
 
 describe("update_hack_night_session", () => {
-  it("rebuilds host group only when a host field is provided", async () => {
+  it("rebuilds host group when both host fields are provided", async () => {
     mocks.update.mockResolvedValueOnce({ id: 1 });
-    await update_hack_night_session.execute!({ id: 1, host_preferred_name: "A" }, toolOpts);
-    const data = mocks.update.mock.calls[0][0].data;
-    expect(data.host).toEqual({ preferred_name: "A" });
+    await update_hack_night_session.execute!(
+      { id: 1, host_preferred_name: "A", host_discord_id: "d" },
+      toolOpts,
+    );
+    expect(mocks.update.mock.calls[0][0].data.host).toEqual({
+      preferred_name: "A",
+      discord_id: "d",
+    });
   });
 
   it("omits host when neither host field is provided", async () => {
     mocks.update.mockResolvedValueOnce({ id: 1 });
     await update_hack_night_session.execute!({ id: 1, title: "x" }, toolOpts);
     expect(mocks.update.mock.calls[0][0].data).toEqual({ title: "x" });
+  });
+
+  it("rejects partial host updates via the Zod refinement", () => {
+    const schema = update_hack_night_session.inputSchema as unknown as z.ZodType<unknown>;
+    const result = schema.safeParse({ id: 1, host_preferred_name: "A" });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0].message).toMatch(/host_preferred_name.*host_discord_id/);
+    }
   });
 });
 

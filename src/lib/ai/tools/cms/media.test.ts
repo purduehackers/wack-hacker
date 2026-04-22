@@ -143,6 +143,26 @@ describe("upload_media", () => {
       upload_media.execute!({ url: "https://cdn/none.jpg", alt: "a" }, toolOpts),
     ).rejects.toThrow(/Failed to fetch/);
   });
+
+  it("translates AbortSignal timeouts into a human-readable error", async () => {
+    ({ restore: restoreFetch } = mockFetch(() => {
+      throw new DOMException("timeout", "TimeoutError");
+    }));
+    await expect(
+      upload_media.execute!({ url: "https://cdn/slow.jpg", alt: "a" }, toolOpts),
+    ).rejects.toThrow(/Timed out fetching/);
+  });
+
+  it("passes a timeout signal into fetch", async () => {
+    const { fetch: fetchMock, restore } = mockFetch(
+      () => new Response(new Uint8Array([1]), { status: 200 }),
+    );
+    restoreFetch = restore;
+    mocks.create.mockResolvedValueOnce({ id: 1 });
+    await upload_media.execute!({ url: "https://cdn/x.jpg", alt: "a" }, toolOpts);
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
+    expect(init?.signal).toBeInstanceOf(AbortSignal);
+  });
 });
 
 describe("delete_media", () => {

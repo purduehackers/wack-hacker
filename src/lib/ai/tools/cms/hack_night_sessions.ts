@@ -137,24 +137,31 @@ export const create_hack_night_session = tool({
 
 export const update_hack_night_session = tool({
   description:
-    "Update a hack night session. Only fields you pass are changed. Description (if provided) is wrapped as a single Lexical paragraph.",
-  inputSchema: z.object({
-    id: z.union([z.string(), z.number()]),
-    title: z.string().optional(),
-    date: z.string().optional(),
-    host_preferred_name: z.string().optional(),
-    host_discord_id: z.string().optional(),
-    description: z.string().optional(),
-    published: z.boolean().optional(),
-  }),
+    "Update a hack night session. Only fields you pass are changed. If updating host, pass both host_preferred_name and host_discord_id (Payload treats the host group as a replace-on-write object; a partial patch would clobber the other subfield). Description (if provided) is wrapped as a single Lexical paragraph.",
+  inputSchema: z
+    .object({
+      id: z.union([z.string(), z.number()]),
+      title: z.string().optional(),
+      date: z.string().optional(),
+      host_preferred_name: z.string().optional(),
+      host_discord_id: z.string().optional(),
+      description: z.string().optional(),
+      published: z.boolean().optional(),
+    })
+    .refine(
+      ({ host_preferred_name, host_discord_id }) =>
+        (host_preferred_name === undefined) === (host_discord_id === undefined),
+      {
+        message:
+          "host_preferred_name and host_discord_id must be provided together when updating host.",
+        path: ["host_preferred_name"],
+      },
+    ),
   execute: async ({ id, host_preferred_name, host_discord_id, description, ...rest }) => {
     try {
       const data: Record<string, unknown> = { ...rest };
-      if (host_preferred_name !== undefined || host_discord_id !== undefined) {
-        data.host = {
-          ...(host_preferred_name !== undefined && { preferred_name: host_preferred_name }),
-          ...(host_discord_id !== undefined && { discord_id: host_discord_id }),
-        };
+      if (host_preferred_name !== undefined && host_discord_id !== undefined) {
+        data.host = { preferred_name: host_preferred_name, discord_id: host_discord_id };
       }
       if (description !== undefined) data.description = richTextParagraph(description);
       const doc = (await payload.update({
