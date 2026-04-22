@@ -26,7 +26,7 @@ export const env = createEnv({
     KV_REST_API_URL: z.string(),
     KV_REST_API_TOKEN: z.string(),
     VERCEL_API_TOKEN: z.string(),
-    VERCEL_EDGE_CONFIG_ID: z.string(),
+    DASHBOARD_EDGE_CONFIG: z.string(),
     EDGE_CONFIG: z.string(),
     SENTRY_AUTH_TOKEN: z.string(),
     SENTRY_ORG: z.string(),

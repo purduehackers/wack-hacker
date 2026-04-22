@@ -5,6 +5,7 @@ import { env } from "@/env";
 import type { Organizer, OrganizerPatch, UpsertResult } from "./types.ts";
 
 import { EDITABLE_PLATFORMS, ORGANIZER_KEY_PREFIX } from "./constants.ts";
+import { getDashboardEdgeConfigId } from "./edge-config.ts";
 import { getOrganizer } from "./reader.ts";
 
 /**
@@ -44,7 +45,7 @@ export async function upsertOrganizer(
 
   const vercel = new Vercel({ bearerToken: env.VERCEL_API_TOKEN });
   await vercel.edgeConfig.patchEdgeConfigItems({
-    edgeConfigId: env.VERCEL_EDGE_CONFIG_ID,
+    edgeConfigId: getDashboardEdgeConfigId(),
     requestBody: {
       items: [{ operation: "upsert", key: `${ORGANIZER_KEY_PREFIX}${discordId}`, value: next }],
     },
