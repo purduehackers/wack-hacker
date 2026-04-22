@@ -2,7 +2,7 @@ import { log } from "evlog";
 
 import { defineEvent } from "@/bot/events/define";
 import { deleteHackNightImagesForMessage } from "@/bot/integrations/cms";
-import { generateEventSlug } from "@/bot/integrations/hack-night";
+import { resolveEventSlug } from "@/bot/integrations/hack-night";
 import { DISCORD_IDS } from "@/lib/protocol/constants";
 
 export const hackNightReaction = defineEvent({
@@ -20,7 +20,7 @@ export const hackNightReaction = defineEvent({
       if (!member.roles.includes(DISCORD_IDS.roles.ORGANIZER)) return;
     }
 
-    const slug = generateEventSlug(new Date());
+    const slug = await resolveEventSlug(channelId, new Date(message.timestamp));
     const removed = await deleteHackNightImagesForMessage(slug, messageId);
     if (removed > 0) {
       await ctx.discord.channels.deleteOwnMessageReaction(channelId, messageId, "\u2705");

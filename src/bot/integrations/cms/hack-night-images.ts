@@ -97,45 +97,54 @@ export async function hasHackNightImageForMessage(
 }
 
 export async function listHackNightImages(slug: string): Promise<HackNightImage[]> {
-  const images: HackNightImage[] = [];
-  let page = 1;
-  while (page <= LIST_PAGE_CAP) {
-    const res = await payload.find({
-      collection: COLLECTION,
-      limit: LIST_PAGE_SIZE,
-      page,
-      sort: "createdAt",
-      where: {
-        source: { equals: SOURCE },
-        batchId: { equals: slug },
-      },
-    });
-    for (const doc of res.docs as PayloadMediaDoc[]) {
-      images.push(projectImage(doc));
+  try {
+    const images: HackNightImage[] = [];
+    let page = 1;
+    while (page <= LIST_PAGE_CAP) {
+      const res = await payload.find({
+        collection: COLLECTION,
+        limit: LIST_PAGE_SIZE,
+        page,
+        sort: "createdAt",
+        where: {
+          source: { equals: SOURCE },
+          batchId: { equals: slug },
+        },
+      });
+      for (const doc of res.docs as PayloadMediaDoc[]) {
+        images.push(projectImage(doc));
+      }
+      if (page >= res.totalPages) return images;
+      page += 1;
     }
-    if (page >= res.totalPages) return images;
-    page += 1;
+    log.warn(
+      "hack-night",
+      `listHackNightImages(${slug}) hit page cap ${LIST_PAGE_CAP}; truncating at ${images.length} images`,
+    );
+    return images;
+  } catch (err) {
+    throw wrapPayloadError(err);
   }
-  log.warn(
-    "hack-night",
-    `listHackNightImages(${slug}) hit page cap ${LIST_PAGE_CAP}; truncating at ${images.length} images`,
-  );
-  return images;
 }
 
 export async function deleteHackNightImagesForMessage(
   slug: string,
   discordMessageId: string,
 ): Promise<number> {
-  const res = await payload.find({
-    collection: COLLECTION,
-    limit: LIST_PAGE_SIZE,
-    where: {
-      source: { equals: SOURCE },
-      batchId: { equals: slug },
-      discordMessageId: { equals: discordMessageId },
-    },
-  });
+  let res;
+  try {
+    res = await payload.find({
+      collection: COLLECTION,
+      limit: LIST_PAGE_SIZE,
+      where: {
+        source: { equals: SOURCE },
+        batchId: { equals: slug },
+        discordMessageId: { equals: discordMessageId },
+      },
+    });
+  } catch (err) {
+    throw wrapPayloadError(err);
+  }
   let removed = 0;
   for (const doc of res.docs as PayloadMediaDoc[]) {
     if (doc.id === undefined) continue;

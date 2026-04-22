@@ -146,6 +146,20 @@ describe("hasHackNightImageForMessage", () => {
   });
 });
 
+describe("listHackNightImages error wrapping", () => {
+  it("normalizes non-Error SDK rejections through wrapPayloadError", async () => {
+    mocks.find.mockRejectedValueOnce("network down");
+    await expect(listHackNightImages(SLUG)).rejects.toThrow(/network down/);
+  });
+});
+
+describe("deleteHackNightImagesForMessage error wrapping", () => {
+  it("normalizes non-Error SDK rejections on find through wrapPayloadError", async () => {
+    mocks.find.mockRejectedValueOnce("network down");
+    await expect(deleteHackNightImagesForMessage(SLUG, "m1")).rejects.toBeInstanceOf(Error);
+  });
+});
+
 describe("listHackNightImages", () => {
   it("accumulates results across multiple pages", async () => {
     mocks.find.mockResolvedValueOnce({
