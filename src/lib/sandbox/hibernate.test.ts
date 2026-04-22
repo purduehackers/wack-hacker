@@ -10,7 +10,7 @@ function seedMetadata(expiresIn = 10 * 60 * 1000): SandboxSessionMetadata {
   return {
     sandboxId: "sb-1",
     repo: "purduehackers/agent-sandbox-test",
-    branch: "phoenix-agent/a",
+    branch: "wack-hacker/a",
     repoDir: "/vercel/sandbox",
     expiresAt: Date.now() + expiresIn,
   };

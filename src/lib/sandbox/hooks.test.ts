@@ -26,8 +26,8 @@ function recordingSandbox(
 
 const BASE_CONFIG = {
   repo: "purduehackers/agent-sandbox-test",
-  branch: "phoenix-agent/test",
-  gitUser: { name: "Phoenix Bot", email: "bot@example.com" },
+  branch: "wack-hacker/test",
+  gitUser: { name: "wack-hacker[bot]", email: "bot@example.com" },
 };
 
 describe("buildSandboxHooks — skipCloneAndBranch", () => {

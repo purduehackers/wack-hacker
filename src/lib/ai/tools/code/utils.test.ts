@@ -10,7 +10,7 @@ describe("getSandboxContext", () => {
     const ctx = {
       sandbox,
       repo: "purduehackers/x",
-      branch: "phoenix-agent/a",
+      branch: "wack-hacker/a",
       repoDir: "/vercel/sandbox",
       threadKey: "T1",
     };
