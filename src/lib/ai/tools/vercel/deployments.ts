@@ -133,28 +133,25 @@ export const delete_deployment = approval(
   }),
 );
 
-export const update_integration_deployment_action = approval(
-  tool({
-    description:
-      "Update the deployment integration action state for a specific integration install.",
-    inputSchema: z.object({
-      deployment_id: z.string(),
-      integrationConfigurationId: z.string(),
-      resourceId: z.string(),
-      action: z.string(),
-    }),
-    execute: async ({ deployment_id, integrationConfigurationId, resourceId, action }) => {
-      await vercel().deployments.updateIntegrationDeploymentAction({
-        ...TEAM,
-        deploymentId: deployment_id,
-        integrationConfigurationId,
-        resourceId,
-        action,
-      });
-      return JSON.stringify({ ok: true });
-    },
+export const update_integration_deployment_action = tool({
+  description: "Update the deployment integration action state for a specific integration install.",
+  inputSchema: z.object({
+    deployment_id: z.string(),
+    integrationConfigurationId: z.string(),
+    resourceId: z.string(),
+    action: z.string(),
   }),
-);
+  execute: async ({ deployment_id, integrationConfigurationId, resourceId, action }) => {
+    await vercel().deployments.updateIntegrationDeploymentAction({
+      ...TEAM,
+      deploymentId: deployment_id,
+      integrationConfigurationId,
+      resourceId,
+      action,
+    });
+    return JSON.stringify({ ok: true });
+  },
+});
 
 // ──────────────── PROMOTE / ROLLBACK ────────────────
 // Lives on the `projects` module in the Vercel SDK but semantically operates on deployments.
@@ -207,22 +204,20 @@ export const rollback_deployment = approval(
   }),
 );
 
-export const update_rollback_description = approval(
-  tool({
-    description: "Update the description (reason) attached to an active rollback.",
-    inputSchema: z.object({
-      project_id: z.string(),
-      deployment_id: z.string(),
-      description: z.string(),
-    }),
-    execute: async ({ project_id, deployment_id, description }) => {
-      await vercel().projects.updateProjectsByProjectIdRollbackByDeploymentIdUpdateDescription({
-        ...TEAM,
-        projectId: project_id,
-        deploymentId: deployment_id,
-        requestBody: { description },
-      });
-      return JSON.stringify({ ok: true });
-    },
+export const update_rollback_description = tool({
+  description: "Update the description (reason) attached to an active rollback.",
+  inputSchema: z.object({
+    project_id: z.string(),
+    deployment_id: z.string(),
+    description: z.string(),
   }),
-);
+  execute: async ({ project_id, deployment_id, description }) => {
+    await vercel().projects.updateProjectsByProjectIdRollbackByDeploymentIdUpdateDescription({
+      ...TEAM,
+      projectId: project_id,
+      deploymentId: deployment_id,
+      requestBody: { description },
+    });
+    return JSON.stringify({ ok: true });
+  },
+});

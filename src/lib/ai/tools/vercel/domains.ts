@@ -234,18 +234,16 @@ export const get_cert = tool({
   },
 });
 
-export const issue_cert = approval(
-  tool({
-    description: "Issue a new TLS certificate for one or more hostnames on the team's domains.",
-    inputSchema: z.object({
-      cns: z.array(z.string()).min(1).describe("Hostnames to include in the cert"),
-    }),
-    execute: async ({ cns }) => {
-      const result = await vercel().certs.issueCert({ ...TEAM, requestBody: { cns } });
-      return JSON.stringify(result);
-    },
+export const issue_cert = tool({
+  description: "Issue a new TLS certificate for one or more hostnames on the team's domains.",
+  inputSchema: z.object({
+    cns: z.array(z.string()).min(1).describe("Hostnames to include in the cert"),
   }),
-);
+  execute: async ({ cns }) => {
+    const result = await vercel().certs.issueCert({ ...TEAM, requestBody: { cns } });
+    return JSON.stringify(result);
+  },
+});
 
 export const remove_cert = approval(
   tool({

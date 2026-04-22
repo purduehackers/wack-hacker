@@ -128,23 +128,21 @@ export const get_observability_config = tool({
   },
 });
 
-export const update_observability_config = approval(
-  tool({
-    description: "Update the API Observability Plus setting (enabled/disabled) for a project.",
-    inputSchema: z.object({
-      project_id_or_name: z.string(),
-      disabled: z.boolean(),
-    }),
-    execute: async ({ project_id_or_name, disabled }) => {
-      const result = await vercel().apiObservability.updateObservabilityConfigurationProject({
-        ...TEAM,
-        projectIdOrName: project_id_or_name,
-        requestBody: { disabled },
-      });
-      return JSON.stringify(result);
-    },
+export const update_observability_config = tool({
+  description: "Update the API Observability Plus setting (enabled/disabled) for a project.",
+  inputSchema: z.object({
+    project_id_or_name: z.string(),
+    disabled: z.boolean(),
   }),
-);
+  execute: async ({ project_id_or_name, disabled }) => {
+    const result = await vercel().apiObservability.updateObservabilityConfigurationProject({
+      ...TEAM,
+      projectIdOrName: project_id_or_name,
+      requestBody: { disabled },
+    });
+    return JSON.stringify(result);
+  },
+});
 
 // ──────────────── ARTIFACTS (Turborepo remote cache) ────────────────
 

@@ -98,20 +98,18 @@ export const unpause_project = approval(
   }),
 );
 
-export const create_project_transfer_request = approval(
-  tool({
-    description:
-      "Create a project transfer request. Returns a `code` that another team can redeem within 24h to complete the transfer.",
-    inputSchema: z.object({ project_id_or_name: z.string() }),
-    execute: async ({ project_id_or_name }) => {
-      const result = await vercel().projects.createProjectTransferRequest({
-        ...TEAM,
-        idOrName: project_id_or_name,
-      });
-      return JSON.stringify(result);
-    },
-  }),
-);
+export const create_project_transfer_request = tool({
+  description:
+    "Create a project transfer request. Returns a `code` that another team can redeem within 24h to complete the transfer.",
+  inputSchema: z.object({ project_id_or_name: z.string() }),
+  execute: async ({ project_id_or_name }) => {
+    const result = await vercel().projects.createProjectTransferRequest({
+      ...TEAM,
+      idOrName: project_id_or_name,
+    });
+    return JSON.stringify(result);
+  },
+});
 
 // ──────────────── ENV VARS ────────────────
 
@@ -149,62 +147,58 @@ export const get_project_env_var = tool({
   },
 });
 
-export const create_project_env_vars = approval(
-  tool({
-    description:
-      "Create one or more environment variables on a project. Pass `upsert: true` to update-if-exists.",
-    inputSchema: z.object({
-      project_id_or_name: z.string(),
-      upsert: z.boolean().optional(),
-      entries: z
-        .array(
-          z.object({
-            key: z.string(),
-            value: z.string(),
-            type: z.enum(ENV_TYPES),
-            target: z.array(z.enum(ENV_TARGETS)),
-            gitBranch: z.string().optional(),
-            comment: z.string().optional(),
-          }),
-        )
-        .min(1),
-    }),
-    execute: async ({ project_id_or_name, upsert, entries }) => {
-      const result = await vercel().projects.createProjectEnv({
-        ...TEAM,
-        idOrName: project_id_or_name,
-        upsert: upsert ? "true" : undefined,
-        requestBody: entries,
-      });
-      return JSON.stringify(redactEnvValues(result));
-    },
+export const create_project_env_vars = tool({
+  description:
+    "Create one or more environment variables on a project. Pass `upsert: true` to update-if-exists.",
+  inputSchema: z.object({
+    project_id_or_name: z.string(),
+    upsert: z.boolean().optional(),
+    entries: z
+      .array(
+        z.object({
+          key: z.string(),
+          value: z.string(),
+          type: z.enum(ENV_TYPES),
+          target: z.array(z.enum(ENV_TARGETS)),
+          gitBranch: z.string().optional(),
+          comment: z.string().optional(),
+        }),
+      )
+      .min(1),
   }),
-);
+  execute: async ({ project_id_or_name, upsert, entries }) => {
+    const result = await vercel().projects.createProjectEnv({
+      ...TEAM,
+      idOrName: project_id_or_name,
+      upsert: upsert ? "true" : undefined,
+      requestBody: entries,
+    });
+    return JSON.stringify(redactEnvValues(result));
+  },
+});
 
-export const edit_project_env_var = approval(
-  tool({
-    description: "Edit a single environment variable.",
-    inputSchema: z.object({
-      project_id_or_name: z.string(),
-      env_var_id: z.string(),
-      key: z.string().optional(),
-      value: z.string().optional(),
-      type: z.enum(ENV_TYPES).optional(),
-      target: z.array(z.enum(ENV_TARGETS)).optional(),
-      gitBranch: z.string().optional(),
-      comment: z.string().optional(),
-    }),
-    execute: async ({ project_id_or_name, env_var_id, ...patch }) => {
-      const result = await vercel().projects.editProjectEnv({
-        ...TEAM,
-        idOrName: project_id_or_name,
-        id: env_var_id,
-        requestBody: patch,
-      });
-      return JSON.stringify(redactEnvValues(result));
-    },
+export const edit_project_env_var = tool({
+  description: "Edit a single environment variable.",
+  inputSchema: z.object({
+    project_id_or_name: z.string(),
+    env_var_id: z.string(),
+    key: z.string().optional(),
+    value: z.string().optional(),
+    type: z.enum(ENV_TYPES).optional(),
+    target: z.array(z.enum(ENV_TARGETS)).optional(),
+    gitBranch: z.string().optional(),
+    comment: z.string().optional(),
   }),
-);
+  execute: async ({ project_id_or_name, env_var_id, ...patch }) => {
+    const result = await vercel().projects.editProjectEnv({
+      ...TEAM,
+      idOrName: project_id_or_name,
+      id: env_var_id,
+      requestBody: patch,
+    });
+    return JSON.stringify(redactEnvValues(result));
+  },
+});
 
 export const remove_project_env_var = approval(
   tool({
@@ -287,23 +281,21 @@ export const remove_project_domain = approval(
   }),
 );
 
-export const verify_project_domain = approval(
-  tool({
-    description: "Trigger verification of a pending project domain.",
-    inputSchema: z.object({
-      project_id_or_name: z.string(),
-      domain: z.string(),
-    }),
-    execute: async ({ project_id_or_name, domain }) => {
-      const result = await vercel().projects.verifyProjectDomain({
-        ...TEAM,
-        idOrName: project_id_or_name,
-        domain,
-      });
-      return JSON.stringify(result);
-    },
+export const verify_project_domain = tool({
+  description: "Trigger verification of a pending project domain.",
+  inputSchema: z.object({
+    project_id_or_name: z.string(),
+    domain: z.string(),
   }),
-);
+  execute: async ({ project_id_or_name, domain }) => {
+    const result = await vercel().projects.verifyProjectDomain({
+      ...TEAM,
+      idOrName: project_id_or_name,
+      domain,
+    });
+    return JSON.stringify(result);
+  },
+});
 
 export const list_promote_aliases = tool({
   description:
