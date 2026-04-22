@@ -40,14 +40,12 @@ async function run(sandbox: Sandbox, command: string, label: string): Promise<vo
 }
 
 async function installToolchain(sandbox: Sandbox): Promise<void> {
-  // node24 base image already has git + curl. Install ripgrep (used by grep
-  // tool) and gh. bun is assumed preinstalled on the Vercel sandbox image.
-  const script = [
-    "set -e",
-    "apt-get update",
-    "apt-get install -y ripgrep",
-    "type -p gh >/dev/null || (curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg status=none && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg && echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main' > /etc/apt/sources.list.d/github-cli.list && apt-get update && apt-get install -y gh)",
-  ].join(" && ");
+  // Vercel Sandbox `node24` runtime runs on Amazon Linux 2023 — package
+  // manager is dnf, and sandbox commands run as a non-root user so system
+  // installs need sudo. node, git, curl, and bun are already on the image;
+  // we only pull in ripgrep (grep tool) and gh (used as a fallback by the
+  // post-finish PR step if the octokit path isn't taken).
+  const script = ["set -e", "sudo dnf install -y --skip-broken ripgrep gh"].join(" && ");
   await run(sandbox, script, "toolchain install");
 }
 
