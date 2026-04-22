@@ -78,6 +78,7 @@ Three things are happening at once:
   │  tools                                      │
   │   · current_time                            │
   │   · documentation                           │
+  │   · resolve_organizer                       │
   │   · schedule_task                           │
   │   · list_scheduled_tasks                    │
   │   · cancel_task                             │
@@ -89,7 +90,8 @@ Three things are happening at once:
                          ▼
   ┌─────────────────────────────────────────────┐
   │  Subagent                                   │
-  │  Claude Haiku 4.5 (default) · AI Gateway    │
+  │  GPT-5.4 mini (default) · AI Gateway        │
+  │  some domains override (code → Opus 4.7)    │
   │                                             │
   │  tools                                      │
   │   · loadSkill <progressively unlocks>       │
@@ -132,34 +134,38 @@ See [Agents](./agents/README.md) for the full breakdown.
 
 ## Storage and platform
 
-| Service            | Purpose                                                                                                                            |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| AI Gateway         | `anthropic/claude-sonnet-4.6` (orchestrator) and `anthropic/claude-haiku-4.5` (subagents); routing, observability, model fallbacks |
-| Upstash Redis      | `ConversationStore`, dedup keys, per-channel locks, task registry                                                                  |
-| Turso (libSQL)     | Privacy preferences, ship submissions                                                                                              |
-| Cloudflare R2      | Ship uploads                                                                                                                       |
-| Payload CMS        | Hack night photo archive, curated site content (events, hack-night-sessions, ugrants, shelter projects)                            |
-| Vercel Edge Config | Hack night `version` key (used by the `/init-hn` command)                                                                          |
-| Vercel Queues      | `discord-events` (gateway → consumer), `tasks` (scheduling)                                                                        |
+| Service            | Purpose                                                                                                                                                                 |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AI Gateway         | `anthropic/claude-sonnet-4.6` (orchestrator), `openai/gpt-5.4-mini` (subagents), `anthropic/claude-opus-4.7` (`delegate_code`); routing, observability, model fallbacks |
+| Upstash Redis      | `ConversationStore`, dedup keys, per-channel locks, task registry, approval state, sandbox session registry                                                             |
+| Turso (libSQL)     | Privacy preferences, ship submissions                                                                                                                                   |
+| Cloudflare R2      | Ship uploads                                                                                                                                                            |
+| Payload CMS        | Hack night photo archive, curated site content (events, hack-night-sessions, ugrants, shelter projects)                                                                 |
+| Vercel Edge Config | Organizer roster (read by `resolve_organizer`), hack night `version` key (used by `/init-hn`)                                                                           |
+| Vercel Queues      | `discord-events` (gateway → consumer), `tasks` (scheduling)                                                                                                             |
+| Vercel Sandbox     | Ephemeral Firecracker microVM per `delegate_code` run, pre-seeded with `ripgrep` + `gh` via optional base snapshot                                                      |
 
 ## Where things live
 
 ```
 src/
-  app/          Next.js routes (Hono catch-all + queue consumers)
+  app/          Next.js routes (Hono catch-all + queue consumers + webhooks)
   server/       Hono app + process-event dispatcher (gateway, interactions, crons)
-  workflows/    Workflow DevKit definitions (chat, task)
-  bot/          EventRouter, handlers, commands, components, crons
+  workflows/    Workflow DevKit definitions (chat, task, sandbox-lifecycle)
+  bot/          EventRouter, handlers, commands, components, crons, integrations
   lib/
     ai/
       orchestrator.ts   top-level agent
       subagent.ts       focused per-domain agent
-      delegates.ts      role-filtered delegation tools
+      delegates.ts      role-filtered delegation tools + DOMAIN_SPEC_OVERRIDES
+      approvals/        approval() wrapper, runtime, store, Discord button flow
       skills/           per-domain SKILL.md trees + registry
       tools/            per-domain tool implementations
+    sandbox/    Vercel Sandbox wrapper + credential brokering for delegate_code
     tasks/      scheduled task registry
     protocol/   Packet types, codec, interaction verify
+      organizers/ Edge Config organizer roster (resolve_organizer / /identity)
 
-scripts/        compile-skills, register-commands
+scripts/        compile-skills, register-commands, create-sandbox-snapshot
 vercel.ts       framework, crons, per-function config
 ```
