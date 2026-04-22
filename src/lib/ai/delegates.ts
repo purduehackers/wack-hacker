@@ -4,6 +4,7 @@ import type { AgentContext } from "./context.ts";
 import type { TurnUsageTracker } from "./turn-usage.ts";
 import type { SubagentSpec } from "./types.ts";
 
+import { SKILL_MANIFEST as CMS_SUBSKILLS } from "./skills/generated/domains/cms.ts";
 import { SKILL_MANIFEST as CODE_SUBSKILLS } from "./skills/generated/domains/code.ts";
 import { SKILL_MANIFEST as DISCORD_SUBSKILLS } from "./skills/generated/domains/discord.ts";
 import { SKILL_MANIFEST as FIGMA_SUBSKILLS } from "./skills/generated/domains/figma.ts";
@@ -18,6 +19,7 @@ import { SKILL_MANIFEST as VERCEL_SUBSKILLS } from "./skills/generated/domains/v
 import { SKILL_MANIFEST } from "./skills/generated/manifest.ts";
 import { SkillRegistry } from "./skills/registry.ts";
 import { createDelegationTool } from "./subagent.ts";
+import * as cmsTools from "./tools/cms/index.ts";
 import {
   buildCodeExperimentalContext,
   codeDelegationInputSchema,
@@ -121,6 +123,17 @@ const DOMAINS = {
     tools: codeTools as unknown as ToolSet,
     subSkills: CODE_SUBSKILLS,
     baseToolNames: ["read", "grep", "glob", "list_dir", "todo_write"],
+  },
+  cms: {
+    tools: cmsTools as unknown as ToolSet,
+    subSkills: CMS_SUBSKILLS,
+    baseToolNames: [
+      "list_events",
+      "list_hack_night_sessions",
+      "list_ugrants",
+      "list_shelter_projects",
+      "list_media",
+    ],
   },
 } as const satisfies Record<
   string,
