@@ -2,6 +2,7 @@ import { MessageType } from "discord-api-types/v10";
 import { log } from "evlog";
 
 import { defineCron } from "@/bot/crons/define";
+import { HackNightThreadStore, generateEventSlug } from "@/bot/integrations/hack-night";
 import { DISCORD_IDS } from "@/lib/protocol/constants";
 
 const HACK_NIGHT_MESSAGES = [
@@ -57,6 +58,9 @@ export const hackNightCreate = defineCron({
       content: `(<@&${DISCORD_IDS.roles.HACK_NIGHT_PING}>)`,
     });
 
-    log.info("hack-night", `Created thread ${thread.id} for Hack Night`);
+    const slug = generateEventSlug(now);
+    await new HackNightThreadStore().set(thread.id, slug);
+
+    log.info("hack-night", `Created thread ${thread.id} for Hack Night (slug=${slug})`);
   },
 });

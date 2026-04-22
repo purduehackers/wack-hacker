@@ -26,7 +26,6 @@ export const env = createEnv({
     R2_ACCOUNT_ID: z.string(),
     R2_ACCESS_KEY_ID: z.string(),
     R2_SECRET_ACCESS_KEY: z.string(),
-    EVENTS_R2_BUCKET_NAME: z.string(),
     SHIP_R2_BUCKET_NAME: z.string(),
     SHIP_DATABASE_TURSO_DATABASE_URL: z.string(),
     SHIP_DATABASE_TURSO_AUTH_TOKEN: z.string(),
