@@ -16,6 +16,8 @@ import { defineEvent } from "@/bot/events/define";
 import { env } from "@/env";
 import { DISCORD_IDS } from "@/lib/protocol/constants";
 
+const DASHBOARD_URL = "https://api.purduehackers.com/discord/bot";
+
 const DiscordMessageSchema = z.object({
   id: z.string(),
   channel: z.object({
@@ -103,7 +105,7 @@ export const dashboard = defineEvent({
     });
 
     try {
-      await fetch(env.DASHBOARD_URL, {
+      await fetch(DASHBOARD_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

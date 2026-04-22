@@ -5,6 +5,7 @@ import { defineCommand } from "@/bot/commands/define";
 import { isOrganizer, respond } from "@/bot/commands/helpers";
 import { env } from "@/env";
 
+const PHONEBELL_OPEN_URL = "https://api.purduehackers.com/phonebell/open";
 const FAILURE_MSG = "Failed to open the door. Try again later.";
 
 export const doorOpener = defineCommand({
@@ -18,7 +19,7 @@ export const doorOpener = defineCommand({
     }
 
     try {
-      const res = await fetch(env.PHONEBELL_OPEN_URL, {
+      const res = await fetch(PHONEBELL_OPEN_URL, {
         method: "POST",
         headers: { Authorization: `Bearer ${env.PHACK_API_TOKEN}` },
       });

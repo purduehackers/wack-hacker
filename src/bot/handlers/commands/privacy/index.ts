@@ -9,6 +9,8 @@ import { parseSubcommand } from "@/bot/commands/registry";
 import { PrivacyClient, PrivacyMode, PrivacyProject } from "@/bot/integrations/privacy";
 import { env } from "@/env";
 
+const PRIVACY_DB_URL = "https://pdb.purduehackers.com";
+
 const MODE_CHOICES = [
   { name: "Opt In (public)", value: "opt_in" },
   { name: "Opt Out (hidden, data kept)", value: "opt_out_privacy" },
@@ -145,7 +147,7 @@ export const privacy = defineCommand({
         ),
     ),
   async execute(ctx) {
-    const client = new PrivacyClient(env.PRIVACY_DB_URL, env.PRIVACY_DB_API_KEY);
+    const client = new PrivacyClient(PRIVACY_DB_URL, env.PRIVACY_DB_API_KEY);
     const sub = parseSubcommand(ctx.interaction.data?.options);
     const userId = ctx.interaction.member?.user.id ?? ctx.interaction.user?.id ?? "";
 
