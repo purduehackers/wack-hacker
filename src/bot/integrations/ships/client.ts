@@ -2,14 +2,13 @@ import { log } from "evlog";
 
 import type { CreateShipInput, CreateShipResponse, DeleteShipResponse } from "./types";
 
+const SHIPS_API_ORIGIN = "https://ships.purduehackers.com";
+
 export class ShipsClient {
-  constructor(
-    private baseUrl: string,
-    private apiKey: string,
-  ) {}
+  constructor(private apiKey: string) {}
 
   private url(path: string): string {
-    return `${this.baseUrl.replace(/\/$/, "")}${path}`;
+    return `${SHIPS_API_ORIGIN}${path}`;
   }
 
   private headers(): HeadersInit {

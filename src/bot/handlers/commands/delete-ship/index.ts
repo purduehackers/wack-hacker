@@ -27,7 +27,7 @@ export const deleteShip = defineCommand({
       return;
     }
 
-    const ships = new ShipsClient(env.SHIP_API_URL, env.SHIP_API_KEY);
+    const ships = new ShipsClient(env.SHIP_API_KEY);
     const result = await ships.deleteShipByMessageId(messageId);
 
     if (!result.deleted) {

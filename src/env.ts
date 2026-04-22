@@ -20,7 +20,6 @@ export const env = createEnv({
     GROQ_API_KEY: z.string(),
     PHACK_API_TOKEN: z.string(),
     PRIVACY_DB_API_KEY: z.string(),
-    SHIP_API_URL: z.string().url(),
     SHIP_API_KEY: z.string(),
     TURSO_DATABASE_URL: z.string(),
     TURSO_AUTH_TOKEN: z.string(),

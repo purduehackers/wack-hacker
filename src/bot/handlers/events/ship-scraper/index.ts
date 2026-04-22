@@ -70,7 +70,7 @@ export const shipScraper = defineEvent({
       ? `https://cdn.discordapp.com/avatars/${author.id}/${author.avatarHash}.png?size=128`
       : `https://cdn.discordapp.com/embed/avatars/${Number(BigInt(author.id) >> 22n) % 6}.png`;
 
-    const ships = new ShipsClient(env.SHIP_API_URL, env.SHIP_API_KEY);
+    const ships = new ShipsClient(env.SHIP_API_KEY);
 
     try {
       const result = await ships.createShip({

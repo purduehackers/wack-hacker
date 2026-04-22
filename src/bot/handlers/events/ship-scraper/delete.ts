@@ -10,7 +10,7 @@ export const shipMessageDelete = defineEvent({
   async handle(packet) {
     if (packet.data.channelId !== DISCORD_IDS.channels.SHIP) return;
 
-    const ships = new ShipsClient(env.SHIP_API_URL, env.SHIP_API_KEY);
+    const ships = new ShipsClient(env.SHIP_API_KEY);
 
     try {
       const result = await ships.deleteShipByMessageId(packet.data.id);

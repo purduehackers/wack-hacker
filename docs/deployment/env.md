@@ -12,7 +12,7 @@ The full list changes often; the canonical source is always [`src/env.ts`](../..
 - **Integrations — engineering** — Linear (`LINEAR_API_KEY`), Notion (`NOTION_TOKEN`), GitHub App (`GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_ORG`), Figma (`FIGMA_ACCESS_TOKEN`, `FIGMA_TEAM_ID`), Sentry (`SENTRY_AUTH_TOKEN`, `SENTRY_ORG`).
 - **Integrations — ops & platform** — Vercel (`VERCEL_API_TOKEN`, `VERCEL_EDGE_CONFIG_ID`, `EDGE_CONFIG`), Hack Club Bank (`HCB_ORG_SLUG`), SerpAPI for `delegate_shopping` (`SERPAPI_API_KEY`).
 - **Integrations — sales & CMS** — Resend (`RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`), Hunter.io (`HUNTER_API_KEY`), Payload CMS (`PAYLOAD_CMS_API_KEY`), ask.purduehackers.com (`PHACK_ASK_API_KEY`), Phack API (`PHACK_API_TOKEN`).
-- **Integrations — ships** — external gallery service at ship.purduehackers.com (`SHIP_API_URL`, `SHIP_API_KEY`); the bot no longer touches the ship DB or R2 directly.
+- **Integrations — ships** — external gallery service at ships.purduehackers.com (`SHIP_API_KEY`; base URL is a hardcoded constant in `src/bot/integrations/ships/client.ts`). The bot no longer touches the ship DB or R2 directly.
 - **Storage** — Upstash Redis (`KV_REST_API_URL`, `KV_REST_API_TOKEN`), Turso main (`TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`), privacy DB (`PRIVACY_DB_API_KEY`).
 - **Optional** — `SENTRY_DSN` (client-side error reporting), `SANDBOX_BASE_SNAPSHOT_ID` (preseeded Vercel Sandbox snapshot with `ripgrep` + `gh`; speeds up `delegate_code` cold starts by ~20-30s — create one via `scripts/create-sandbox-snapshot.ts`).
 

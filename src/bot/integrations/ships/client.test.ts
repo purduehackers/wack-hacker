@@ -6,7 +6,7 @@ import type { CreateShipInput } from "./types.ts";
 
 import { ShipsClient } from "./client.ts";
 
-const BASE = "https://ship.example.com";
+const BASE = "https://ships.purduehackers.com";
 const KEY = "test-key";
 
 function sampleInput(): CreateShipInput {
@@ -46,7 +46,7 @@ describe("ShipsClient.createShip", () => {
     });
     restoreFetch = restore;
 
-    const client = new ShipsClient(BASE, KEY);
+    const client = new ShipsClient(KEY);
     const out = await client.createShip(sampleInput());
 
     expect(out).toMatchObject({ ok: true, id: "ship-1" });
@@ -65,7 +65,7 @@ describe("ShipsClient.createShip", () => {
 
   it("normalizes non-2xx responses as Ships API errors", async () => {
     ({ restore: restoreFetch } = mockFetch(() => new Response("boom", { status: 500 })));
-    const client = new ShipsClient(BASE, KEY);
+    const client = new ShipsClient(KEY);
     await expect(client.createShip(sampleInput())).rejects.toThrow(/Ships API 500/);
   });
 });
@@ -81,7 +81,7 @@ describe("ShipsClient.deleteShipByMessageId", () => {
     );
     restoreFetch = restore;
 
-    const client = new ShipsClient(BASE, KEY);
+    const client = new ShipsClient(KEY);
     const out = await client.deleteShipByMessageId("m1");
 
     expect(out).toEqual({ deleted: true, id: "ship-1", attachmentsRemoved: 2 });
@@ -94,14 +94,14 @@ describe("ShipsClient.deleteShipByMessageId", () => {
     ({ restore: restoreFetch } = mockFetch(
       () => new Response(JSON.stringify({ ok: false }), { status: 404 }),
     ));
-    const client = new ShipsClient(BASE, KEY);
+    const client = new ShipsClient(KEY);
     const out = await client.deleteShipByMessageId("missing");
     expect(out).toEqual({ deleted: false, attachmentsRemoved: 0 });
   });
 
   it("throws on other non-2xx responses", async () => {
     ({ restore: restoreFetch } = mockFetch(() => new Response("nope", { status: 500 })));
-    const client = new ShipsClient(BASE, KEY);
+    const client = new ShipsClient(KEY);
     await expect(client.deleteShipByMessageId("m1")).rejects.toThrow(/Ships API 500/);
   });
 
@@ -110,20 +110,8 @@ describe("ShipsClient.deleteShipByMessageId", () => {
       () => new Response(JSON.stringify({ ok: true, id: "x" }), { status: 200 }),
     );
     restoreFetch = restore;
-    const client = new ShipsClient(BASE, KEY);
+    const client = new ShipsClient(KEY);
     await client.deleteShipByMessageId("weird/id with space");
     expect(String(fetch.mock.calls[0][0])).toBe(`${BASE}/api/ships/weird%2Fid%20with%20space`);
-  });
-});
-
-describe("ShipsClient base URL", () => {
-  it("strips a trailing slash from the base", async () => {
-    const { fetch, restore } = mockFetch(
-      () => new Response(JSON.stringify({ ok: true, id: "x" }), { status: 201 }),
-    );
-    restoreFetch = restore;
-    const client = new ShipsClient(`${BASE}/`, KEY);
-    await client.createShip(sampleInput());
-    expect(String(fetch.mock.calls[0][0])).toBe(`${BASE}/api/ships`);
   });
 });
