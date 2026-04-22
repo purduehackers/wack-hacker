@@ -1,2 +1,8 @@
-export { ShipDatabase } from "./client";
-export type { ShipAttachment, ShipRecord } from "./types";
+export { ShipsClient } from "./client";
+export type {
+  ShipAttachmentInput,
+  ShipAttachment,
+  CreateShipInput,
+  CreateShipResponse,
+  DeleteShipResponse,
+} from "./types";

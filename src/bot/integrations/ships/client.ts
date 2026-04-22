@@ -1,51 +1,68 @@
-import { createClient } from "@libsql/client";
+import { log } from "evlog";
 
-import type { ShipRecord } from "./types";
+import type { CreateShipInput, CreateShipResponse, DeleteShipResponse } from "./types";
 
-export class ShipDatabase {
-  private db;
+export class ShipsClient {
+  constructor(
+    private baseUrl: string,
+    private apiKey: string,
+  ) {}
 
-  constructor(url: string, authToken: string) {
-    this.db = createClient({ url, authToken });
+  private url(path: string): string {
+    return `${this.baseUrl.replace(/\/$/, "")}${path}`;
   }
 
-  async insertShip(ship: ShipRecord): Promise<string> {
-    const id = crypto.randomUUID();
-    await this.db.execute({
-      sql: `INSERT INTO ship (id, user_id, username, avatar_url, message_id, title, content, attachments, shipped_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
-      args: [
-        id,
-        ship.userId,
-        ship.username,
-        ship.avatarUrl,
-        ship.messageId,
-        ship.title,
-        ship.content,
-        JSON.stringify(ship.attachments),
-      ],
-    });
-    return id;
+  private headers(): HeadersInit {
+    return {
+      Authorization: `Bearer ${this.apiKey}`,
+      "Content-Type": "application/json",
+    };
   }
 
-  async deleteByMessageId(
-    messageId: string,
-  ): Promise<{ id: string; attachmentKeys: string[] } | null> {
-    const result = await this.db.execute({
-      sql: "DELETE FROM ship WHERE message_id = ? RETURNING id, attachments",
-      args: [messageId],
+  async createShip(input: CreateShipInput): Promise<CreateShipResponse> {
+    const res = await fetch(this.url("/api/ships"), {
+      method: "POST",
+      headers: this.headers(),
+      body: JSON.stringify(input),
     });
-    const row = result.rows[0];
-    if (!row) return null;
 
-    let attachmentKeys: string[] = [];
-    try {
-      const parsed = JSON.parse(row.attachments as string) as Array<{ key: string }>;
-      attachmentKeys = parsed.map((a) => a.key);
-    } catch {
-      // attachments column may be empty or malformed
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      log.warn("ships", `POST /api/ships failed: ${res.status} ${text.slice(0, 200)}`);
+      throw new Error(`Ships API ${res.status}: ${text.slice(0, 200) || res.statusText}`);
     }
 
-    return { id: row.id as string, attachmentKeys };
+    return (await res.json()) as CreateShipResponse;
+  }
+
+  async deleteShipByMessageId(messageId: string): Promise<DeleteShipResponse> {
+    const res = await fetch(this.url(`/api/ships/${encodeURIComponent(messageId)}`), {
+      method: "DELETE",
+      headers: this.headers(),
+    });
+
+    if (res.status === 404) {
+      return { deleted: false, attachmentsRemoved: 0 };
+    }
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      log.warn(
+        "ships",
+        `DELETE /api/ships/${messageId} failed: ${res.status} ${text.slice(0, 200)}`,
+      );
+      throw new Error(`Ships API ${res.status}: ${text.slice(0, 200) || res.statusText}`);
+    }
+
+    const body = (await res.json()) as {
+      ok?: boolean;
+      id?: string;
+      attachmentsRemoved?: number;
+    };
+    return {
+      deleted: Boolean(body.ok),
+      id: body.id,
+      attachmentsRemoved: body.attachmentsRemoved ?? 0,
+    };
   }
 }

@@ -2,11 +2,11 @@ import type { z } from "zod";
 
 import { log } from "evlog";
 
+import type { ShipAttachmentInput } from "@/bot/integrations/ships";
 import type { MessageCreatePacket } from "@/lib/protocol/packets";
 
 import { defineEvent } from "@/bot/events/define";
-import { R2Storage } from "@/bot/integrations/r2";
-import { ShipDatabase } from "@/bot/integrations/ships";
+import { ShipsClient } from "@/bot/integrations/ships";
 import { env } from "@/env";
 import { DISCORD_IDS } from "@/lib/protocol/constants";
 
@@ -35,43 +35,16 @@ function isMedia(contentType: string | undefined): boolean {
   return contentType.startsWith("image/") || contentType.startsWith("video/");
 }
 
-async function uploadMedia(
-  r2: R2Storage,
-  messageId: string,
-  mediaList: Attachment[],
-): Promise<
-  Array<{ key: string; type: string; filename: string; width?: number; height?: number }>
-> {
-  const uploaded: Array<{
-    key: string;
-    type: string;
-    filename: string;
-    width?: number;
-    height?: number;
-  }> = [];
-
-  for (const item of mediaList) {
-    if (!isMedia(item.contentType)) continue;
-
-    try {
-      const buffer = await r2.downloadBuffer(item.url);
-      const defaultName = item.contentType?.startsWith("video/") ? "video.mp4" : "image.jpg";
-      const fname = `${messageId}-${item.filename ?? defaultName}`;
-      const key = `images/ships/${fname}`;
-      await r2.uploadBuffer(key, buffer, item.contentType ?? "application/octet-stream");
-      uploaded.push({
-        key,
-        type: item.contentType ?? "application/octet-stream",
-        filename: item.filename ?? defaultName,
-        width: item.width ?? undefined,
-        height: item.height ?? undefined,
-      });
-    } catch (err) {
-      log.warn("ship-scraper", `Failed to upload ${item.filename}: ${String(err)}`);
-    }
-  }
-
-  return uploaded;
+function toShipAttachment(item: Attachment): ShipAttachmentInput | null {
+  if (!isMedia(item.contentType)) return null;
+  const defaultName = item.contentType?.startsWith("video/") ? "video.mp4" : "image.jpg";
+  return {
+    sourceUrl: item.url,
+    type: item.contentType ?? "application/octet-stream",
+    filename: item.filename ?? defaultName,
+    width: item.width,
+    height: item.height,
+  };
 }
 
 export const shipScraper = defineEvent({
@@ -86,38 +59,32 @@ export const shipScraper = defineEvent({
 
     if (!URL_PATTERN.test(content) && attachments.length === 0) return;
 
-    const r2 = new R2Storage(
-      env.R2_ACCOUNT_ID,
-      env.R2_ACCESS_KEY_ID,
-      env.R2_SECRET_ACCESS_KEY,
-      env.SHIP_R2_BUCKET_NAME,
-    );
-    const shipDb = new ShipDatabase(
-      env.SHIP_DATABASE_TURSO_DATABASE_URL,
-      env.SHIP_DATABASE_TURSO_AUTH_TOKEN,
-    );
-
-    const uploadedAttachments = await uploadMedia(r2, messageId, attachments);
+    const shipAttachments = attachments
+      .map(toShipAttachment)
+      .filter((a): a is ShipAttachmentInput => a !== null);
 
     const firstLine = content.split("\n")[0]?.trim() ?? "";
     const title = firstLine.length > 100 ? firstLine.slice(0, 100) + "..." : firstLine || null;
     const nickname = author.nickname ?? author.username;
+    const avatarUrl = author.avatarHash
+      ? `https://cdn.discordapp.com/avatars/${author.id}/${author.avatarHash}.png?size=128`
+      : `https://cdn.discordapp.com/embed/avatars/${Number(BigInt(author.id) >> 22n) % 6}.png`;
+
+    const ships = new ShipsClient(env.SHIP_API_URL, env.SHIP_API_KEY);
 
     try {
-      await shipDb.insertShip({
+      const result = await ships.createShip({
         userId: author.id,
         username: nickname,
-        avatarUrl: author.avatarHash
-          ? `https://cdn.discordapp.com/avatars/${author.id}/${author.avatarHash}.png?size=128`
-          : `https://cdn.discordapp.com/embed/avatars/${Number(BigInt(author.id) >> 22n) % 6}.png`,
+        avatarUrl,
         messageId,
         title,
         content,
-        attachments: uploadedAttachments,
+        attachments: shipAttachments,
       });
       log.info(
         "ship-scraper",
-        `Stored ship ${messageId} from ${nickname} (${uploadedAttachments.length} images)`,
+        `Stored ship ${result.id} from ${nickname} (${shipAttachments.length} attachments${result.alreadyExists ? ", idempotent" : ""})`,
       );
     } catch (err) {
       log.warn("ship-scraper", `Failed to store ship: ${String(err)}`);
