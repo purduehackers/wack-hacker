@@ -97,6 +97,7 @@ Your last message MUST use exactly this structure and nothing else:
 ```
 
 Notes:
+
 - `## Summary` and `## Test Plan` flow directly into the PR body — write them for a reviewer, not for yourself.
 - `## Test Plan` is required even for trivial changes. If nothing was run, say so explicitly (e.g. `- Docs-only change — no automated checks run.`).
 - `**Commit message**:` is extracted by the post-finish step and stripped before the body reaches GitHub; keep it on its own line.
