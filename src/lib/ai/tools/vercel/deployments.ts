@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { approval } from "../../approvals/index.ts";
 import { vercel } from "./client.ts";
 import { VERCEL_TEAM_ID, VERCEL_TEAM_SLUG } from "./constants.ts";
 
@@ -101,120 +102,127 @@ export const get_deployment_file_contents = tool({
   },
 });
 
-/** @destructive Cancels a deployment that's still building or queued. */
-export const cancel_deployment = tool({
-  description:
-    "Cancel an in-flight deployment (state must be BUILDING / QUEUED / INITIALIZING). Returns the deployment's new state.",
-  inputSchema: z.object({ deployment_id: z.string() }),
-  execute: async ({ deployment_id }) => {
-    const result = await vercel().deployments.cancelDeployment({ ...TEAM, id: deployment_id });
-    return JSON.stringify(result);
-  },
-});
-
-/** @destructive Permanently deletes a deployment. Irreversible. */
-export const delete_deployment = tool({
-  description:
-    "Permanently delete a deployment by id or URL. Irreversible. Cannot be used on the active production deployment.",
-  inputSchema: z.object({
-    id_or_url: z.string(),
-    url: z.string().optional(),
+export const cancel_deployment = approval(
+  tool({
+    description:
+      "Cancel an in-flight deployment (state must be BUILDING / QUEUED / INITIALIZING). Returns the deployment's new state.",
+    inputSchema: z.object({ deployment_id: z.string() }),
+    execute: async ({ deployment_id }) => {
+      const result = await vercel().deployments.cancelDeployment({ ...TEAM, id: deployment_id });
+      return JSON.stringify(result);
+    },
   }),
-  execute: async ({ id_or_url, url }) => {
-    const result = await vercel().deployments.deleteDeployment({
-      ...TEAM,
-      id: id_or_url,
-      url,
-    });
-    return JSON.stringify(result);
-  },
-});
+);
 
-/** @destructive Writes an integration's deployment action state. */
-export const update_integration_deployment_action = tool({
-  description: "Update the deployment integration action state for a specific integration install.",
-  inputSchema: z.object({
-    deployment_id: z.string(),
-    integrationConfigurationId: z.string(),
-    resourceId: z.string(),
-    action: z.string(),
+export const delete_deployment = approval(
+  tool({
+    description:
+      "Permanently delete a deployment by id or URL. Irreversible. Cannot be used on the active production deployment.",
+    inputSchema: z.object({
+      id_or_url: z.string(),
+      url: z.string().optional(),
+    }),
+    execute: async ({ id_or_url, url }) => {
+      const result = await vercel().deployments.deleteDeployment({
+        ...TEAM,
+        id: id_or_url,
+        url,
+      });
+      return JSON.stringify(result);
+    },
   }),
-  execute: async ({ deployment_id, integrationConfigurationId, resourceId, action }) => {
-    await vercel().deployments.updateIntegrationDeploymentAction({
-      ...TEAM,
-      deploymentId: deployment_id,
-      integrationConfigurationId,
-      resourceId,
-      action,
-    });
-    return JSON.stringify({ ok: true });
-  },
-});
+);
+
+export const update_integration_deployment_action = approval(
+  tool({
+    description:
+      "Update the deployment integration action state for a specific integration install.",
+    inputSchema: z.object({
+      deployment_id: z.string(),
+      integrationConfigurationId: z.string(),
+      resourceId: z.string(),
+      action: z.string(),
+    }),
+    execute: async ({ deployment_id, integrationConfigurationId, resourceId, action }) => {
+      await vercel().deployments.updateIntegrationDeploymentAction({
+        ...TEAM,
+        deploymentId: deployment_id,
+        integrationConfigurationId,
+        resourceId,
+        action,
+      });
+      return JSON.stringify({ ok: true });
+    },
+  }),
+);
 
 // ──────────────── PROMOTE / ROLLBACK ────────────────
 // Lives on the `projects` module in the Vercel SDK but semantically operates on deployments.
 
-/** @destructive Promotes a deployment to production — shifts live traffic. */
-export const promote_deployment = tool({
-  description:
-    "Promote a deployment to production without rebuilding it. Returns immediately; the actual traffic shift is async — check `list_promote_aliases` for status.",
-  inputSchema: z.object({
-    project_id: z.string(),
-    deployment_id: z.string(),
+export const promote_deployment = approval(
+  tool({
+    description:
+      "Promote a deployment to production without rebuilding it. Returns immediately; the actual traffic shift is async — check `list_promote_aliases` for status.",
+    inputSchema: z.object({
+      project_id: z.string(),
+      deployment_id: z.string(),
+    }),
+    execute: async ({ project_id, deployment_id }) => {
+      await vercel().projects.requestPromote({
+        ...TEAM,
+        projectId: project_id,
+        deploymentId: deployment_id,
+      });
+      return JSON.stringify({
+        ok: true,
+        projectId: project_id,
+        deploymentId: deployment_id,
+        note: "Promote request accepted. Poll list_promote_aliases for traffic status.",
+      });
+    },
   }),
-  execute: async ({ project_id, deployment_id }) => {
-    await vercel().projects.requestPromote({
-      ...TEAM,
-      projectId: project_id,
-      deploymentId: deployment_id,
-    });
-    return JSON.stringify({
-      ok: true,
-      projectId: project_id,
-      deploymentId: deployment_id,
-      note: "Promote request accepted. Poll list_promote_aliases for traffic status.",
-    });
-  },
-});
+);
 
-/** @destructive Rolls back production to an older deployment — shifts live traffic. */
-export const rollback_deployment = tool({
-  description:
-    "Roll production traffic back to an older deployment. Async — check `list_promote_aliases` for completion.",
-  inputSchema: z.object({
-    project_id: z.string(),
-    deployment_id: z.string(),
+export const rollback_deployment = approval(
+  tool({
+    description:
+      "Roll production traffic back to an older deployment. Async — check `list_promote_aliases` for completion.",
+    inputSchema: z.object({
+      project_id: z.string(),
+      deployment_id: z.string(),
+    }),
+    execute: async ({ project_id, deployment_id }) => {
+      await vercel().projects.requestRollback({
+        ...TEAM,
+        projectId: project_id,
+        deploymentId: deployment_id,
+      });
+      return JSON.stringify({
+        ok: true,
+        projectId: project_id,
+        deploymentId: deployment_id,
+        note: "Rollback request accepted. Poll list_promote_aliases for traffic status.",
+      });
+    },
   }),
-  execute: async ({ project_id, deployment_id }) => {
-    await vercel().projects.requestRollback({
-      ...TEAM,
-      projectId: project_id,
-      deploymentId: deployment_id,
-    });
-    return JSON.stringify({
-      ok: true,
-      projectId: project_id,
-      deploymentId: deployment_id,
-      note: "Rollback request accepted. Poll list_promote_aliases for traffic status.",
-    });
-  },
-});
+);
 
-/** @destructive Updates the human-readable reason attached to an active rollback. */
-export const update_rollback_description = tool({
-  description: "Update the description (reason) attached to an active rollback.",
-  inputSchema: z.object({
-    project_id: z.string(),
-    deployment_id: z.string(),
-    description: z.string(),
+export const update_rollback_description = approval(
+  tool({
+    description: "Update the description (reason) attached to an active rollback.",
+    inputSchema: z.object({
+      project_id: z.string(),
+      deployment_id: z.string(),
+      description: z.string(),
+    }),
+    execute: async ({ project_id, deployment_id, description }) => {
+      await vercel().projects.updateProjectsByProjectIdRollbackByDeploymentIdUpdateDescription({
+        ...TEAM,
+        projectId: project_id,
+        deploymentId: deployment_id,
+        requestBody: { description },
+      });
+      return JSON.stringify({ ok: true });
+    },
   }),
-  execute: async ({ project_id, deployment_id, description }) => {
-    await vercel().projects.updateProjectsByProjectIdRollbackByDeploymentIdUpdateDescription({
-      ...TEAM,
-      projectId: project_id,
-      deploymentId: deployment_id,
-      requestBody: { description },
-    });
-    return JSON.stringify({ ok: true });
-  },
-});
+);

@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { approval } from "../../approvals/index.ts";
 import { vercel } from "./client.ts";
 import { VERCEL_TEAM_ID, VERCEL_TEAM_SLUG } from "./constants.ts";
 
@@ -41,26 +42,27 @@ export const get_active_attack_status = tool({
   },
 });
 
-/** @destructive Toggles attack challenge mode — can gate or expose prod traffic. */
-export const update_attack_challenge_mode = tool({
-  description:
-    "Enable or disable attack challenge mode (shows a managed challenge page to suspected bots).",
-  inputSchema: z.object({
-    project_id: z.string(),
-    attackModeEnabled: z.boolean(),
-    attackModeActiveUntil: z.number().optional(),
+export const update_attack_challenge_mode = approval(
+  tool({
+    description:
+      "Enable or disable attack challenge mode (shows a managed challenge page to suspected bots).",
+    inputSchema: z.object({
+      project_id: z.string(),
+      attackModeEnabled: z.boolean(),
+      attackModeActiveUntil: z.number().optional(),
+    }),
+    execute: async ({ project_id, attackModeEnabled, attackModeActiveUntil }) => {
+      const result = await vercel().security.updateAttackChallengeMode({
+        ...TEAM,
+        requestBody:
+          attackModeActiveUntil !== undefined
+            ? { projectId: project_id, attackModeEnabled, attackModeActiveUntil }
+            : { projectId: project_id, attackModeEnabled },
+      });
+      return JSON.stringify(result);
+    },
   }),
-  execute: async ({ project_id, attackModeEnabled, attackModeActiveUntil }) => {
-    const result = await vercel().security.updateAttackChallengeMode({
-      ...TEAM,
-      requestBody:
-        attackModeActiveUntil !== undefined
-          ? { projectId: project_id, attackModeEnabled, attackModeActiveUntil }
-          : { projectId: project_id, attackModeEnabled },
-    });
-    return JSON.stringify(result);
-  },
-});
+);
 
 // ──────────────── BYPASS IPs ────────────────
 
@@ -124,12 +126,13 @@ export const get_auth_token = tool({
   },
 });
 
-/** @destructive Revokes an auth token — holder immediately loses access. */
-export const delete_auth_token = tool({
-  description: "Revoke (delete) an auth token.",
-  inputSchema: z.object({ token_id: z.string() }),
-  execute: async ({ token_id }) => {
-    const result = await vercel().authentication.deleteAuthToken({ tokenId: token_id });
-    return JSON.stringify(result);
-  },
-});
+export const delete_auth_token = approval(
+  tool({
+    description: "Revoke (delete) an auth token.",
+    inputSchema: z.object({ token_id: z.string() }),
+    execute: async ({ token_id }) => {
+      const result = await vercel().authentication.deleteAuthToken({ tokenId: token_id });
+      return JSON.stringify(result);
+    },
+  }),
+);

@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { approval } from "../../approvals/index.ts";
 import { vercel } from "./client.ts";
 import { VERCEL_TEAM_ID, VERCEL_TEAM_SLUG } from "./constants.ts";
 
@@ -54,33 +55,35 @@ export const list_deployment_aliases = tool({
   },
 });
 
-/** @destructive Assigns an alias to a deployment — shifts traffic. */
-export const assign_alias = tool({
-  description: "Assign an alias (hostname) to a deployment.",
-  inputSchema: z.object({
-    deployment_id: z.string(),
-    alias: z.string().describe("The hostname to assign (e.g. 'staging.purduehackers.com')"),
-    redirect: z.string().optional(),
+export const assign_alias = approval(
+  tool({
+    description: "Assign an alias (hostname) to a deployment.",
+    inputSchema: z.object({
+      deployment_id: z.string(),
+      alias: z.string().describe("The hostname to assign (e.g. 'staging.purduehackers.com')"),
+      redirect: z.string().optional(),
+    }),
+    execute: async ({ deployment_id, alias, redirect }) => {
+      const result = await vercel().aliases.assignAlias({
+        ...TEAM,
+        id: deployment_id,
+        requestBody: { alias, redirect },
+      });
+      return JSON.stringify(result);
+    },
   }),
-  execute: async ({ deployment_id, alias, redirect }) => {
-    const result = await vercel().aliases.assignAlias({
-      ...TEAM,
-      id: deployment_id,
-      requestBody: { alias, redirect },
-    });
-    return JSON.stringify(result);
-  },
-});
+);
 
-/** @destructive Deletes an alias — breaks any traffic using it. */
-export const delete_alias = tool({
-  description: "Delete an alias by id or hostname.",
-  inputSchema: z.object({ id_or_alias: z.string() }),
-  execute: async ({ id_or_alias }) => {
-    const result = await vercel().aliases.deleteAlias({ ...TEAM, aliasId: id_or_alias });
-    return JSON.stringify(result);
-  },
-});
+export const delete_alias = approval(
+  tool({
+    description: "Delete an alias by id or hostname.",
+    inputSchema: z.object({ id_or_alias: z.string() }),
+    execute: async ({ id_or_alias }) => {
+      const result = await vercel().aliases.deleteAlias({ ...TEAM, aliasId: id_or_alias });
+      return JSON.stringify(result);
+    },
+  }),
+);
 
 // ──────────────── DOMAINS ────────────────
 
@@ -119,16 +122,17 @@ export const get_domain_config = tool({
   },
 });
 
-/** @destructive Removes a domain from the team. Cannot be undone. */
-export const delete_domain = tool({
-  description:
-    "Remove a domain from the team. The registration itself may persist at the registrar.",
-  inputSchema: z.object({ domain: z.string() }),
-  execute: async ({ domain }) => {
-    const result = await vercel().domains.deleteDomain({ ...TEAM, domain });
-    return JSON.stringify(result);
-  },
-});
+export const delete_domain = approval(
+  tool({
+    description:
+      "Remove a domain from the team. The registration itself may persist at the registrar.",
+    inputSchema: z.object({ domain: z.string() }),
+    execute: async ({ domain }) => {
+      const result = await vercel().domains.deleteDomain({ ...TEAM, domain });
+      return JSON.stringify(result);
+    },
+  }),
+);
 
 // ──────────────── DNS ────────────────
 
@@ -146,18 +150,19 @@ export const list_dns_records = tool({
   },
 });
 
-/** @destructive Removes a DNS record. */
-export const remove_dns_record = tool({
-  description: "Remove a DNS record from a Vercel-managed domain.",
-  inputSchema: z.object({
-    domain: z.string(),
-    record_id: z.string(),
+export const remove_dns_record = approval(
+  tool({
+    description: "Remove a DNS record from a Vercel-managed domain.",
+    inputSchema: z.object({
+      domain: z.string(),
+      record_id: z.string(),
+    }),
+    execute: async ({ domain, record_id }) => {
+      const result = await vercel().dns.removeRecord({ ...TEAM, domain, recordId: record_id });
+      return JSON.stringify(result);
+    },
   }),
-  execute: async ({ domain, record_id }) => {
-    const result = await vercel().dns.removeRecord({ ...TEAM, domain, recordId: record_id });
-    return JSON.stringify(result);
-  },
-});
+);
 
 // ──────────────── REGISTRAR QUERIES ────────────────
 
@@ -229,24 +234,26 @@ export const get_cert = tool({
   },
 });
 
-/** @destructive Issues a new TLS cert for the given hostnames. */
-export const issue_cert = tool({
-  description: "Issue a new TLS certificate for one or more hostnames on the team's domains.",
-  inputSchema: z.object({
-    cns: z.array(z.string()).min(1).describe("Hostnames to include in the cert"),
+export const issue_cert = approval(
+  tool({
+    description: "Issue a new TLS certificate for one or more hostnames on the team's domains.",
+    inputSchema: z.object({
+      cns: z.array(z.string()).min(1).describe("Hostnames to include in the cert"),
+    }),
+    execute: async ({ cns }) => {
+      const result = await vercel().certs.issueCert({ ...TEAM, requestBody: { cns } });
+      return JSON.stringify(result);
+    },
   }),
-  execute: async ({ cns }) => {
-    const result = await vercel().certs.issueCert({ ...TEAM, requestBody: { cns } });
-    return JSON.stringify(result);
-  },
-});
+);
 
-/** @destructive Removes a TLS cert — breaks HTTPS for anything bound to it. */
-export const remove_cert = tool({
-  description: "Remove a TLS certificate.",
-  inputSchema: z.object({ cert_id: z.string() }),
-  execute: async ({ cert_id }) => {
-    const result = await vercel().certs.removeCert({ ...TEAM, id: cert_id });
-    return JSON.stringify(result);
-  },
-});
+export const remove_cert = approval(
+  tool({
+    description: "Remove a TLS certificate.",
+    inputSchema: z.object({ cert_id: z.string() }),
+    execute: async ({ cert_id }) => {
+      const result = await vercel().certs.removeCert({ ...TEAM, id: cert_id });
+      return JSON.stringify(result);
+    },
+  }),
+);

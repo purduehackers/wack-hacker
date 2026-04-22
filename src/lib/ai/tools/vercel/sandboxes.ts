@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { approval } from "../../approvals/index.ts";
 import { vercel } from "./client.ts";
 import { VERCEL_TEAM_ID, VERCEL_TEAM_SLUG } from "./constants.ts";
 
@@ -30,36 +31,38 @@ export const get_sandbox = tool({
   },
 });
 
-/** @destructive Stops a running Vercel Sandbox. */
-export const stop_sandbox = tool({
-  description: "Stop a running Vercel Sandbox. Files and state within the sandbox are lost.",
-  inputSchema: z.object({ sandbox_id: z.string() }),
-  execute: async ({ sandbox_id }) => {
-    const result = await vercel().sandboxes.stopSandbox({
-      ...TEAM,
-      sandboxId: sandbox_id,
-    });
-    return JSON.stringify(result);
-  },
-});
-
-/** @destructive Extends a sandbox's timeout — costs additional compute. */
-export const extend_sandbox_timeout = tool({
-  description:
-    "Extend a sandbox's maximum runtime by an additional `duration` (seconds). Costs additional compute.",
-  inputSchema: z.object({
-    sandbox_id: z.string(),
-    duration: z.number().describe("Additional runtime in seconds"),
+export const stop_sandbox = approval(
+  tool({
+    description: "Stop a running Vercel Sandbox. Files and state within the sandbox are lost.",
+    inputSchema: z.object({ sandbox_id: z.string() }),
+    execute: async ({ sandbox_id }) => {
+      const result = await vercel().sandboxes.stopSandbox({
+        ...TEAM,
+        sandboxId: sandbox_id,
+      });
+      return JSON.stringify(result);
+    },
   }),
-  execute: async ({ sandbox_id, duration }) => {
-    const result = await vercel().sandboxes.extendSandboxTimeout({
-      ...TEAM,
-      sandboxId: sandbox_id,
-      requestBody: { duration },
-    });
-    return JSON.stringify(result);
-  },
-});
+);
+
+export const extend_sandbox_timeout = approval(
+  tool({
+    description:
+      "Extend a sandbox's maximum runtime by an additional `duration` (seconds). Costs additional compute.",
+    inputSchema: z.object({
+      sandbox_id: z.string(),
+      duration: z.number().describe("Additional runtime in seconds"),
+    }),
+    execute: async ({ sandbox_id, duration }) => {
+      const result = await vercel().sandboxes.extendSandboxTimeout({
+        ...TEAM,
+        sandboxId: sandbox_id,
+        requestBody: { duration },
+      });
+      return JSON.stringify(result);
+    },
+  }),
+);
 
 // ──────────────── COMMANDS ────────────────
 
@@ -109,22 +112,23 @@ export const get_sandbox_command_logs = tool({
   },
 });
 
-/** @destructive Kills an in-flight sandbox command. */
-export const kill_sandbox_command = tool({
-  description: "Terminate a running sandbox command.",
-  inputSchema: z.object({
-    sandbox_id: z.string(),
-    command_id: z.string(),
+export const kill_sandbox_command = approval(
+  tool({
+    description: "Terminate a running sandbox command.",
+    inputSchema: z.object({
+      sandbox_id: z.string(),
+      command_id: z.string(),
+    }),
+    execute: async ({ sandbox_id, command_id }) => {
+      const result = await vercel().sandboxes.killCommand({
+        ...TEAM,
+        sandboxId: sandbox_id,
+        cmdId: command_id,
+      });
+      return JSON.stringify(result);
+    },
   }),
-  execute: async ({ sandbox_id, command_id }) => {
-    const result = await vercel().sandboxes.killCommand({
-      ...TEAM,
-      sandboxId: sandbox_id,
-      cmdId: command_id,
-    });
-    return JSON.stringify(result);
-  },
-});
+);
 
 // ──────────────── SNAPSHOTS ────────────────
 
@@ -153,15 +157,16 @@ export const get_sandbox_snapshot = tool({
   },
 });
 
-/** @destructive Deletes a sandbox snapshot. */
-export const delete_sandbox_snapshot = tool({
-  description: "Delete a sandbox snapshot.",
-  inputSchema: z.object({ snapshot_id: z.string() }),
-  execute: async ({ snapshot_id }) => {
-    const result = await vercel().sandboxes.deleteSnapshot({
-      ...TEAM,
-      snapshotId: snapshot_id,
-    });
-    return JSON.stringify(result);
-  },
-});
+export const delete_sandbox_snapshot = approval(
+  tool({
+    description: "Delete a sandbox snapshot.",
+    inputSchema: z.object({ snapshot_id: z.string() }),
+    execute: async ({ snapshot_id }) => {
+      const result = await vercel().sandboxes.deleteSnapshot({
+        ...TEAM,
+        snapshotId: snapshot_id,
+      });
+      return JSON.stringify(result);
+    },
+  }),
+);

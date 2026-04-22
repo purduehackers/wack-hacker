@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { approval } from "../../approvals/index.ts";
 import { vercel } from "./client.ts";
 import { VERCEL_TEAM_ID, VERCEL_TEAM_SLUG } from "./constants.ts";
 
@@ -44,53 +45,57 @@ export const get_rolling_release_billing_status = tool({
   },
 });
 
-/** @destructive Deletes the rolling-release config — future prod deploys ship 100% immediately. */
-export const delete_rolling_release_config = tool({
-  description: "Delete the rolling release configuration.",
-  inputSchema: z.object({ project_id_or_name: z.string() }),
-  execute: async ({ project_id_or_name }) => {
-    const result = await vercel().rollingRelease.deleteRollingReleaseConfig({
-      ...TEAM,
-      idOrName: project_id_or_name,
-    });
-    return JSON.stringify(result);
-  },
-});
-
-/** @destructive Approves the next stage of an in-flight rolling release. Shifts production traffic. */
-export const approve_rolling_release_stage = tool({
-  description: "Advance an in-flight rolling release to the next stage. Shifts production traffic.",
-  inputSchema: z.object({
-    project_id_or_name: z.string(),
-    canaryDeploymentId: z.string(),
-    nextStageIndex: z.number(),
+export const delete_rolling_release_config = approval(
+  tool({
+    description: "Delete the rolling release configuration.",
+    inputSchema: z.object({ project_id_or_name: z.string() }),
+    execute: async ({ project_id_or_name }) => {
+      const result = await vercel().rollingRelease.deleteRollingReleaseConfig({
+        ...TEAM,
+        idOrName: project_id_or_name,
+      });
+      return JSON.stringify(result);
+    },
   }),
-  execute: async ({ project_id_or_name, canaryDeploymentId, nextStageIndex }) => {
-    const result = await vercel().rollingRelease.approveRollingReleaseStage({
-      ...TEAM,
-      idOrName: project_id_or_name,
-      requestBody: { canaryDeploymentId, nextStageIndex },
-    });
-    return JSON.stringify(result);
-  },
-});
+);
 
-/** @destructive Completes the rolling release by routing 100% of traffic to the new deployment. */
-export const complete_rolling_release = tool({
-  description: "Complete a rolling release — route 100% of traffic to the new deployment.",
-  inputSchema: z.object({
-    project_id_or_name: z.string(),
-    canaryDeploymentId: z.string(),
+export const approve_rolling_release_stage = approval(
+  tool({
+    description:
+      "Advance an in-flight rolling release to the next stage. Shifts production traffic.",
+    inputSchema: z.object({
+      project_id_or_name: z.string(),
+      canaryDeploymentId: z.string(),
+      nextStageIndex: z.number(),
+    }),
+    execute: async ({ project_id_or_name, canaryDeploymentId, nextStageIndex }) => {
+      const result = await vercel().rollingRelease.approveRollingReleaseStage({
+        ...TEAM,
+        idOrName: project_id_or_name,
+        requestBody: { canaryDeploymentId, nextStageIndex },
+      });
+      return JSON.stringify(result);
+    },
   }),
-  execute: async ({ project_id_or_name, canaryDeploymentId }) => {
-    const result = await vercel().rollingRelease.completeRollingRelease({
-      ...TEAM,
-      idOrName: project_id_or_name,
-      requestBody: { canaryDeploymentId },
-    });
-    return JSON.stringify(result);
-  },
-});
+);
+
+export const complete_rolling_release = approval(
+  tool({
+    description: "Complete a rolling release — route 100% of traffic to the new deployment.",
+    inputSchema: z.object({
+      project_id_or_name: z.string(),
+      canaryDeploymentId: z.string(),
+    }),
+    execute: async ({ project_id_or_name, canaryDeploymentId }) => {
+      const result = await vercel().rollingRelease.completeRollingRelease({
+        ...TEAM,
+        idOrName: project_id_or_name,
+        requestBody: { canaryDeploymentId },
+      });
+      return JSON.stringify(result);
+    },
+  }),
+);
 
 // ──────────────── DEPLOYMENT CHECKS (v2) ────────────────
 
@@ -128,22 +133,23 @@ export const get_project_check = tool({
   },
 });
 
-/** @destructive Deletes a deployment check and all its runs. */
-export const delete_project_check = tool({
-  description: "Delete a deployment check and all its runs.",
-  inputSchema: z.object({
-    project_id_or_name: z.string(),
-    check_id: z.string(),
+export const delete_project_check = approval(
+  tool({
+    description: "Delete a deployment check and all its runs.",
+    inputSchema: z.object({
+      project_id_or_name: z.string(),
+      check_id: z.string(),
+    }),
+    execute: async ({ project_id_or_name, check_id }) => {
+      const result = await vercel().checksV2.deleteProjectCheck({
+        ...TEAM,
+        projectIdOrName: project_id_or_name,
+        checkId: check_id,
+      });
+      return JSON.stringify(result);
+    },
   }),
-  execute: async ({ project_id_or_name, check_id }) => {
-    const result = await vercel().checksV2.deleteProjectCheck({
-      ...TEAM,
-      projectIdOrName: project_id_or_name,
-      checkId: check_id,
-    });
-    return JSON.stringify(result);
-  },
-});
+);
 
 export const list_check_runs = tool({
   description: "List runs for a specific check.",

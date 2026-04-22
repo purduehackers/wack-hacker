@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { approval } from "../../approvals/index.ts";
 import { vercel } from "./client.ts";
 import { VERCEL_TEAM_ID, VERCEL_TEAM_SLUG } from "./constants.ts";
 
@@ -57,32 +58,34 @@ export const list_team_members = tool({
   },
 });
 
-/** @destructive Removes a member from the team. */
-export const remove_team_member = tool({
-  description: "Remove a member from the active team.",
-  inputSchema: z.object({ uid: z.string(), newDefaultTeamId: z.string().optional() }),
-  execute: async ({ uid, newDefaultTeamId }) => {
-    const result = await vercel().teams.removeTeamMember({
-      ...TEAM,
-      uid,
-      newDefaultTeamId,
-    });
-    return JSON.stringify(result);
-  },
-});
+export const remove_team_member = approval(
+  tool({
+    description: "Remove a member from the active team.",
+    inputSchema: z.object({ uid: z.string(), newDefaultTeamId: z.string().optional() }),
+    execute: async ({ uid, newDefaultTeamId }) => {
+      const result = await vercel().teams.removeTeamMember({
+        ...TEAM,
+        uid,
+        newDefaultTeamId,
+      });
+      return JSON.stringify(result);
+    },
+  }),
+);
 
-/** @destructive Revokes an invite code. */
-export const delete_team_invite_code = tool({
-  description: "Delete a pending team invite code.",
-  inputSchema: z.object({ inviteId: z.string() }),
-  execute: async ({ inviteId }) => {
-    const result = await vercel().teams.deleteTeamInviteCode({
-      ...TEAM,
-      inviteId,
-    });
-    return JSON.stringify(result);
-  },
-});
+export const delete_team_invite_code = approval(
+  tool({
+    description: "Delete a pending team invite code.",
+    inputSchema: z.object({ inviteId: z.string() }),
+    execute: async ({ inviteId }) => {
+      const result = await vercel().teams.deleteTeamInviteCode({
+        ...TEAM,
+        inviteId,
+      });
+      return JSON.stringify(result);
+    },
+  }),
+);
 
 // ──────────────── ACCESS GROUPS ────────────────
 
@@ -114,18 +117,19 @@ export const get_access_group = tool({
   },
 });
 
-/** @destructive Deletes an access group. */
-export const delete_access_group = tool({
-  description: "Delete an access group.",
-  inputSchema: z.object({ access_group_id_or_name: z.string() }),
-  execute: async ({ access_group_id_or_name }) => {
-    await vercel().accessGroups.deleteAccessGroup({
-      ...TEAM,
-      idOrName: access_group_id_or_name,
-    });
-    return JSON.stringify({ ok: true, id: access_group_id_or_name });
-  },
-});
+export const delete_access_group = approval(
+  tool({
+    description: "Delete an access group.",
+    inputSchema: z.object({ access_group_id_or_name: z.string() }),
+    execute: async ({ access_group_id_or_name }) => {
+      await vercel().accessGroups.deleteAccessGroup({
+        ...TEAM,
+        idOrName: access_group_id_or_name,
+      });
+      return JSON.stringify({ ok: true, id: access_group_id_or_name });
+    },
+  }),
+);
 
 export const list_access_group_members = tool({
   description: "List members of an access group.",
@@ -167,15 +171,16 @@ export const get_webhook = tool({
   },
 });
 
-/** @destructive Deletes a webhook — any consumer breaks. */
-export const delete_webhook = tool({
-  description: "Delete a team webhook.",
-  inputSchema: z.object({ webhook_id: z.string() }),
-  execute: async ({ webhook_id }) => {
-    await vercel().webhooks.deleteWebhook({ ...TEAM, id: webhook_id });
-    return JSON.stringify({ ok: true, id: webhook_id });
-  },
-});
+export const delete_webhook = approval(
+  tool({
+    description: "Delete a team webhook.",
+    inputSchema: z.object({ webhook_id: z.string() }),
+    execute: async ({ webhook_id }) => {
+      await vercel().webhooks.deleteWebhook({ ...TEAM, id: webhook_id });
+      return JSON.stringify({ ok: true, id: webhook_id });
+    },
+  }),
+);
 
 // ──────────────── PROJECT ROUTES ────────────────
 
@@ -230,15 +235,16 @@ export const get_connect_network = tool({
   },
 });
 
-/** @destructive Deletes a Vercel Connect network — breaks anything attached. */
-export const delete_connect_network = tool({
-  description: "Delete a Vercel Connect private network.",
-  inputSchema: z.object({ network_id: z.string() }),
-  execute: async ({ network_id }) => {
-    await vercel().connect.deleteNetwork({ ...TEAM, networkId: network_id });
-    return JSON.stringify({ ok: true, id: network_id });
-  },
-});
+export const delete_connect_network = approval(
+  tool({
+    description: "Delete a Vercel Connect private network.",
+    inputSchema: z.object({ network_id: z.string() }),
+    execute: async ({ network_id }) => {
+      await vercel().connect.deleteNetwork({ ...TEAM, networkId: network_id });
+      return JSON.stringify({ ok: true, id: network_id });
+    },
+  }),
+);
 
 // ──────────────── MICROFRONTENDS ────────────────
 
@@ -318,25 +324,26 @@ export const get_custom_environment = tool({
   },
 });
 
-/** @destructive Removes a custom preview environment. */
-export const remove_custom_environment = tool({
-  description: "Remove a custom preview environment from a project.",
-  inputSchema: z.object({
-    project_id_or_name: z.string(),
-    environment_id_or_slug: z.string(),
-    deleteUnassignedEnvironmentVariables: z.boolean().optional(),
+export const remove_custom_environment = approval(
+  tool({
+    description: "Remove a custom preview environment from a project.",
+    inputSchema: z.object({
+      project_id_or_name: z.string(),
+      environment_id_or_slug: z.string(),
+      deleteUnassignedEnvironmentVariables: z.boolean().optional(),
+    }),
+    execute: async ({
+      project_id_or_name,
+      environment_id_or_slug,
+      deleteUnassignedEnvironmentVariables,
+    }) => {
+      const result = await vercel().environment.removeCustomEnvironment({
+        ...TEAM,
+        idOrName: project_id_or_name,
+        environmentSlugOrId: environment_id_or_slug,
+        requestBody: { deleteUnassignedEnvironmentVariables },
+      });
+      return JSON.stringify(result);
+    },
   }),
-  execute: async ({
-    project_id_or_name,
-    environment_id_or_slug,
-    deleteUnassignedEnvironmentVariables,
-  }) => {
-    const result = await vercel().environment.removeCustomEnvironment({
-      ...TEAM,
-      idOrName: project_id_or_name,
-      environmentSlugOrId: environment_id_or_slug,
-      requestBody: { deleteUnassignedEnvironmentVariables },
-    });
-    return JSON.stringify(result);
-  },
-});
+);

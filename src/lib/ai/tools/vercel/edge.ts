@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { approval } from "../../approvals/index.ts";
 import { vercel } from "./client.ts";
 import { VERCEL_TEAM_ID, VERCEL_TEAM_SLUG } from "./constants.ts";
 
@@ -29,50 +30,53 @@ export const get_edge_config = tool({
   },
 });
 
-/** @destructive Creates a new Edge Config store. */
-export const create_edge_config = tool({
-  description: "Create a new Edge Config store.",
-  inputSchema: z.object({
-    slug: z.string(),
+export const create_edge_config = approval(
+  tool({
+    description: "Create a new Edge Config store.",
+    inputSchema: z.object({
+      slug: z.string(),
+    }),
+    execute: async ({ slug }) => {
+      const result = await vercel().edgeConfig.createEdgeConfig({
+        ...TEAM,
+        requestBody: { slug },
+      });
+      return JSON.stringify(result);
+    },
   }),
-  execute: async ({ slug }) => {
-    const result = await vercel().edgeConfig.createEdgeConfig({
-      ...TEAM,
-      requestBody: { slug },
-    });
-    return JSON.stringify(result);
-  },
-});
+);
 
-/** @destructive Renames an Edge Config. */
-export const update_edge_config = tool({
-  description: "Rename an Edge Config.",
-  inputSchema: z.object({
-    edge_config_id: z.string(),
-    slug: z.string(),
+export const update_edge_config = approval(
+  tool({
+    description: "Rename an Edge Config.",
+    inputSchema: z.object({
+      edge_config_id: z.string(),
+      slug: z.string(),
+    }),
+    execute: async ({ edge_config_id, slug }) => {
+      const result = await vercel().edgeConfig.updateEdgeConfig({
+        ...TEAM,
+        edgeConfigId: edge_config_id,
+        requestBody: { slug },
+      });
+      return JSON.stringify(result);
+    },
   }),
-  execute: async ({ edge_config_id, slug }) => {
-    const result = await vercel().edgeConfig.updateEdgeConfig({
-      ...TEAM,
-      edgeConfigId: edge_config_id,
-      requestBody: { slug },
-    });
-    return JSON.stringify(result);
-  },
-});
+);
 
-/** @destructive Permanently deletes an Edge Config store. */
-export const delete_edge_config = tool({
-  description: "Permanently delete an Edge Config store.",
-  inputSchema: z.object({ edge_config_id: z.string() }),
-  execute: async ({ edge_config_id }) => {
-    await vercel().edgeConfig.deleteEdgeConfig({
-      ...TEAM,
-      edgeConfigId: edge_config_id,
-    });
-    return JSON.stringify({ ok: true, id: edge_config_id });
-  },
-});
+export const delete_edge_config = approval(
+  tool({
+    description: "Permanently delete an Edge Config store.",
+    inputSchema: z.object({ edge_config_id: z.string() }),
+    execute: async ({ edge_config_id }) => {
+      await vercel().edgeConfig.deleteEdgeConfig({
+        ...TEAM,
+        edgeConfigId: edge_config_id,
+      });
+      return JSON.stringify({ ok: true, id: edge_config_id });
+    },
+  }),
+);
 
 // ──────────────── EDGE CONFIG — ITEMS ────────────────
 
@@ -104,31 +108,32 @@ export const get_edge_config_item = tool({
   },
 });
 
-/** @destructive Writes/deletes keys in an Edge Config — changes live config. */
-export const patch_edge_config_items = tool({
-  description:
-    "Upsert or delete items in an Edge Config. Pass an array of operations: { operation: 'create'|'update'|'upsert'|'delete', key, value? }.",
-  inputSchema: z.object({
-    edge_config_id: z.string(),
-    items: z
-      .array(
-        z.object({
-          operation: z.enum(["create", "update", "upsert", "delete"]),
-          key: z.string(),
-          value: z.unknown().optional(),
-        }),
-      )
-      .min(1),
+export const patch_edge_config_items = approval(
+  tool({
+    description:
+      "Upsert or delete items in an Edge Config. Pass an array of operations: { operation: 'create'|'update'|'upsert'|'delete', key, value? }.",
+    inputSchema: z.object({
+      edge_config_id: z.string(),
+      items: z
+        .array(
+          z.object({
+            operation: z.enum(["create", "update", "upsert", "delete"]),
+            key: z.string(),
+            value: z.unknown().optional(),
+          }),
+        )
+        .min(1),
+    }),
+    execute: async ({ edge_config_id, items }) => {
+      const result = await vercel().edgeConfig.patchEdgeConfigItems({
+        ...TEAM,
+        edgeConfigId: edge_config_id,
+        requestBody: { items },
+      });
+      return JSON.stringify(result);
+    },
   }),
-  execute: async ({ edge_config_id, items }) => {
-    const result = await vercel().edgeConfig.patchEdgeConfigItems({
-      ...TEAM,
-      edgeConfigId: edge_config_id,
-      requestBody: { items },
-    });
-    return JSON.stringify(result);
-  },
-});
+);
 
 // ──────────────── EDGE CONFIG — SCHEMA & TOKENS & BACKUPS ────────────────
 
@@ -144,18 +149,19 @@ export const get_edge_config_schema = tool({
   },
 });
 
-/** @destructive Removes the schema from an Edge Config. */
-export const delete_edge_config_schema = tool({
-  description: "Delete the schema definition on an Edge Config.",
-  inputSchema: z.object({ edge_config_id: z.string() }),
-  execute: async ({ edge_config_id }) => {
-    await vercel().edgeConfig.deleteEdgeConfigSchema({
-      ...TEAM,
-      edgeConfigId: edge_config_id,
-    });
-    return JSON.stringify({ ok: true });
-  },
-});
+export const delete_edge_config_schema = approval(
+  tool({
+    description: "Delete the schema definition on an Edge Config.",
+    inputSchema: z.object({ edge_config_id: z.string() }),
+    execute: async ({ edge_config_id }) => {
+      await vercel().edgeConfig.deleteEdgeConfigSchema({
+        ...TEAM,
+        edgeConfigId: edge_config_id,
+      });
+      return JSON.stringify({ ok: true });
+    },
+  }),
+);
 
 export const list_edge_config_tokens = tool({
   description: "List read tokens for an Edge Config.",
@@ -185,39 +191,41 @@ export const get_edge_config_token = tool({
   },
 });
 
-/** @destructive Creates a new read token for an Edge Config. */
-export const create_edge_config_token = tool({
-  description: "Create a new read token for an Edge Config.",
-  inputSchema: z.object({
-    edge_config_id: z.string(),
-    label: z.string(),
+export const create_edge_config_token = approval(
+  tool({
+    description: "Create a new read token for an Edge Config.",
+    inputSchema: z.object({
+      edge_config_id: z.string(),
+      label: z.string(),
+    }),
+    execute: async ({ edge_config_id, label }) => {
+      const result = await vercel().edgeConfig.createEdgeConfigToken({
+        ...TEAM,
+        edgeConfigId: edge_config_id,
+        requestBody: { label },
+      });
+      return JSON.stringify(result);
+    },
   }),
-  execute: async ({ edge_config_id, label }) => {
-    const result = await vercel().edgeConfig.createEdgeConfigToken({
-      ...TEAM,
-      edgeConfigId: edge_config_id,
-      requestBody: { label },
-    });
-    return JSON.stringify(result);
-  },
-});
+);
 
-/** @destructive Deletes Edge Config tokens — consumers using them break. */
-export const delete_edge_config_tokens = tool({
-  description: "Delete one or more Edge Config read tokens.",
-  inputSchema: z.object({
-    edge_config_id: z.string(),
-    tokens: z.array(z.string()).min(1),
+export const delete_edge_config_tokens = approval(
+  tool({
+    description: "Delete one or more Edge Config read tokens.",
+    inputSchema: z.object({
+      edge_config_id: z.string(),
+      tokens: z.array(z.string()).min(1),
+    }),
+    execute: async ({ edge_config_id, tokens }) => {
+      await vercel().edgeConfig.deleteEdgeConfigTokens({
+        ...TEAM,
+        edgeConfigId: edge_config_id,
+        requestBody: { tokens },
+      });
+      return JSON.stringify({ ok: true, tokens });
+    },
   }),
-  execute: async ({ edge_config_id, tokens }) => {
-    await vercel().edgeConfig.deleteEdgeConfigTokens({
-      ...TEAM,
-      edgeConfigId: edge_config_id,
-      requestBody: { tokens },
-    });
-    return JSON.stringify({ ok: true, tokens });
-  },
-});
+);
 
 export const list_edge_config_backups = tool({
   description: "List automatic backups for an Edge Config.",
@@ -253,74 +261,78 @@ export const get_edge_config_backup = tool({
 
 // ──────────────── EDGE CACHE ────────────────
 
-/** @destructive Invalidates cache entries by tag. Briefly raises origin load. */
-export const invalidate_edge_cache_by_tags = tool({
-  description: "Invalidate Vercel Edge Cache entries tagged with any of the given tags.",
-  inputSchema: z.object({
-    project_id_or_name: z.string(),
-    tags: z.array(z.string()).min(1),
+export const invalidate_edge_cache_by_tags = approval(
+  tool({
+    description: "Invalidate Vercel Edge Cache entries tagged with any of the given tags.",
+    inputSchema: z.object({
+      project_id_or_name: z.string(),
+      tags: z.array(z.string()).min(1),
+    }),
+    execute: async ({ project_id_or_name, tags }) => {
+      await vercel().edgeCache.invalidateByTags({
+        ...TEAM,
+        projectIdOrName: project_id_or_name,
+        requestBody: { tags },
+      });
+      return JSON.stringify({ ok: true, invalidated: tags });
+    },
   }),
-  execute: async ({ project_id_or_name, tags }) => {
-    await vercel().edgeCache.invalidateByTags({
-      ...TEAM,
-      projectIdOrName: project_id_or_name,
-      requestBody: { tags },
-    });
-    return JSON.stringify({ ok: true, invalidated: tags });
-  },
-});
+);
 
-/** @destructive Deletes cache entries by tag — harder than invalidate. */
-export const dangerously_delete_edge_cache_by_tags = tool({
-  description:
-    "Forcefully delete (not just invalidate) cache entries by tag. Use invalidate first unless you need storage freed immediately.",
-  inputSchema: z.object({
-    project_id_or_name: z.string(),
-    tags: z.array(z.string()).min(1),
+export const dangerously_delete_edge_cache_by_tags = approval(
+  tool({
+    description:
+      "Forcefully delete (not just invalidate) cache entries by tag. Use invalidate first unless you need storage freed immediately.",
+    inputSchema: z.object({
+      project_id_or_name: z.string(),
+      tags: z.array(z.string()).min(1),
+    }),
+    execute: async ({ project_id_or_name, tags }) => {
+      await vercel().edgeCache.dangerouslyDeleteByTags({
+        ...TEAM,
+        projectIdOrName: project_id_or_name,
+        requestBody: { tags },
+      });
+      return JSON.stringify({ ok: true, deleted: tags });
+    },
   }),
-  execute: async ({ project_id_or_name, tags }) => {
-    await vercel().edgeCache.dangerouslyDeleteByTags({
-      ...TEAM,
-      projectIdOrName: project_id_or_name,
-      requestBody: { tags },
-    });
-    return JSON.stringify({ ok: true, deleted: tags });
-  },
-});
+);
 
-/** @destructive Invalidates image optimizer cache for specific source URLs. */
-export const invalidate_edge_cache_by_src_images = tool({
-  description: "Invalidate the image optimizer cache for specific source image URLs.",
-  inputSchema: z.object({
-    project_id_or_name: z.string(),
-    srcImages: z.array(z.string().url()).min(1),
+export const invalidate_edge_cache_by_src_images = approval(
+  tool({
+    description: "Invalidate the image optimizer cache for specific source image URLs.",
+    inputSchema: z.object({
+      project_id_or_name: z.string(),
+      srcImages: z.array(z.string().url()).min(1),
+    }),
+    execute: async ({ project_id_or_name, srcImages }) => {
+      await vercel().edgeCache.invalidateBySrcImages({
+        ...TEAM,
+        projectIdOrName: project_id_or_name,
+        requestBody: { srcImages },
+      });
+      return JSON.stringify({ ok: true, invalidated: srcImages });
+    },
   }),
-  execute: async ({ project_id_or_name, srcImages }) => {
-    await vercel().edgeCache.invalidateBySrcImages({
-      ...TEAM,
-      projectIdOrName: project_id_or_name,
-      requestBody: { srcImages },
-    });
-    return JSON.stringify({ ok: true, invalidated: srcImages });
-  },
-});
+);
 
-/** @destructive Deletes image cache entries by source URL. */
-export const dangerously_delete_edge_cache_by_src_images = tool({
-  description: "Forcefully delete image optimizer cache entries for source URLs.",
-  inputSchema: z.object({
-    project_id_or_name: z.string(),
-    srcImages: z.array(z.string().url()).min(1),
+export const dangerously_delete_edge_cache_by_src_images = approval(
+  tool({
+    description: "Forcefully delete image optimizer cache entries for source URLs.",
+    inputSchema: z.object({
+      project_id_or_name: z.string(),
+      srcImages: z.array(z.string().url()).min(1),
+    }),
+    execute: async ({ project_id_or_name, srcImages }) => {
+      await vercel().edgeCache.dangerouslyDeleteBySrcImages({
+        ...TEAM,
+        projectIdOrName: project_id_or_name,
+        requestBody: { srcImages },
+      });
+      return JSON.stringify({ ok: true, deleted: srcImages });
+    },
   }),
-  execute: async ({ project_id_or_name, srcImages }) => {
-    await vercel().edgeCache.dangerouslyDeleteBySrcImages({
-      ...TEAM,
-      projectIdOrName: project_id_or_name,
-      requestBody: { srcImages },
-    });
-    return JSON.stringify({ ok: true, deleted: srcImages });
-  },
-});
+);
 
 // ──────────────── FEATURE FLAGS ────────────────
 
@@ -356,22 +368,23 @@ export const get_flag = tool({
   },
 });
 
-/** @destructive Deletes a feature flag. */
-export const delete_flag = tool({
-  description: "Permanently delete a feature flag.",
-  inputSchema: z.object({
-    project_id_or_name: z.string(),
-    flag_id: z.string(),
+export const delete_flag = approval(
+  tool({
+    description: "Permanently delete a feature flag.",
+    inputSchema: z.object({
+      project_id_or_name: z.string(),
+      flag_id: z.string(),
+    }),
+    execute: async ({ project_id_or_name, flag_id }) => {
+      await vercel().featureFlags.deleteFlag({
+        ...TEAM,
+        projectIdOrName: project_id_or_name,
+        flagIdOrSlug: flag_id,
+      });
+      return JSON.stringify({ ok: true, id: flag_id });
+    },
   }),
-  execute: async ({ project_id_or_name, flag_id }) => {
-    await vercel().featureFlags.deleteFlag({
-      ...TEAM,
-      projectIdOrName: project_id_or_name,
-      flagIdOrSlug: flag_id,
-    });
-    return JSON.stringify({ ok: true, id: flag_id });
-  },
-});
+);
 
 export const list_flag_versions = tool({
   description: "List historical versions of a feature flag.",
@@ -453,22 +466,23 @@ export const get_flag_segment = tool({
   },
 });
 
-/** @destructive Deletes a targeting segment. */
-export const delete_flag_segment = tool({
-  description: "Delete a targeting segment.",
-  inputSchema: z.object({
-    project_id_or_name: z.string(),
-    segment_id: z.string(),
+export const delete_flag_segment = approval(
+  tool({
+    description: "Delete a targeting segment.",
+    inputSchema: z.object({
+      project_id_or_name: z.string(),
+      segment_id: z.string(),
+    }),
+    execute: async ({ project_id_or_name, segment_id }) => {
+      await vercel().featureFlags.deleteFlagSegment({
+        ...TEAM,
+        projectIdOrName: project_id_or_name,
+        segmentIdOrSlug: segment_id,
+      });
+      return JSON.stringify({ ok: true, id: segment_id });
+    },
   }),
-  execute: async ({ project_id_or_name, segment_id }) => {
-    await vercel().featureFlags.deleteFlagSegment({
-      ...TEAM,
-      projectIdOrName: project_id_or_name,
-      segmentIdOrSlug: segment_id,
-    });
-    return JSON.stringify({ ok: true, id: segment_id });
-  },
-});
+);
 
 export const get_deployment_feature_flags = tool({
   description: "Get the feature flags evaluated during a specific deployment.",
@@ -494,38 +508,40 @@ export const list_sdk_keys = tool({
   },
 });
 
-/** @destructive Creates a new SDK key — grants clients programmatic access to flags. */
-export const create_sdk_key = tool({
-  description: "Create a new feature-flags SDK key for a project.",
-  inputSchema: z.object({
-    project_id_or_name: z.string(),
-    sdkKeyType: z.enum(["server", "client"]),
-    environment: z.string(),
-    label: z.string().optional(),
+export const create_sdk_key = approval(
+  tool({
+    description: "Create a new feature-flags SDK key for a project.",
+    inputSchema: z.object({
+      project_id_or_name: z.string(),
+      sdkKeyType: z.enum(["server", "client"]),
+      environment: z.string(),
+      label: z.string().optional(),
+    }),
+    execute: async ({ project_id_or_name, sdkKeyType, environment, label }) => {
+      const result = await vercel().featureFlags.createSDKKey({
+        ...TEAM,
+        projectIdOrName: project_id_or_name,
+        requestBody: { sdkKeyType, environment, label },
+      });
+      return JSON.stringify(result);
+    },
   }),
-  execute: async ({ project_id_or_name, sdkKeyType, environment, label }) => {
-    const result = await vercel().featureFlags.createSDKKey({
-      ...TEAM,
-      projectIdOrName: project_id_or_name,
-      requestBody: { sdkKeyType, environment, label },
-    });
-    return JSON.stringify(result);
-  },
-});
+);
 
-/** @destructive Deletes an SDK key — clients using it break. */
-export const delete_sdk_key = tool({
-  description: "Delete a feature-flags SDK key.",
-  inputSchema: z.object({
-    project_id_or_name: z.string(),
-    key_id: z.string(),
+export const delete_sdk_key = approval(
+  tool({
+    description: "Delete a feature-flags SDK key.",
+    inputSchema: z.object({
+      project_id_or_name: z.string(),
+      key_id: z.string(),
+    }),
+    execute: async ({ project_id_or_name, key_id }) => {
+      await vercel().featureFlags.deleteSDKKey({
+        ...TEAM,
+        projectIdOrName: project_id_or_name,
+        hashKey: key_id,
+      });
+      return JSON.stringify({ ok: true, id: key_id });
+    },
   }),
-  execute: async ({ project_id_or_name, key_id }) => {
-    await vercel().featureFlags.deleteSDKKey({
-      ...TEAM,
-      projectIdOrName: project_id_or_name,
-      hashKey: key_id,
-    });
-    return JSON.stringify({ ok: true, id: key_id });
-  },
-});
+);

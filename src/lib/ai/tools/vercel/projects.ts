@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { approval } from "../../approvals/index.ts";
 import { vercel } from "./client.ts";
 import { VERCEL_TEAM_ID, VERCEL_TEAM_SLUG } from "./constants.ts";
 
@@ -61,52 +62,56 @@ export const get_project = tool({
   },
 });
 
-/** @destructive Permanently deletes the project and ALL its deployments. Irreversible. */
-export const delete_project = tool({
-  description:
-    "Permanently delete a Vercel project and every deployment underneath it. Irreversible.",
-  inputSchema: z.object({
-    project_id_or_name: z.string(),
+export const delete_project = approval(
+  tool({
+    description:
+      "Permanently delete a Vercel project and every deployment underneath it. Irreversible.",
+    inputSchema: z.object({
+      project_id_or_name: z.string(),
+    }),
+    execute: async ({ project_id_or_name }) => {
+      await vercel().projects.deleteProject({ ...TEAM, idOrName: project_id_or_name });
+      return JSON.stringify({ ok: true, id: project_id_or_name });
+    },
   }),
-  execute: async ({ project_id_or_name }) => {
-    await vercel().projects.deleteProject({ ...TEAM, idOrName: project_id_or_name });
-    return JSON.stringify({ ok: true, id: project_id_or_name });
-  },
-});
+);
 
-/** @destructive Pauses the project — blocks the active production deployment. */
-export const pause_project = tool({
-  description: "Pause a project. Blocks the active production deployment until unpaused.",
-  inputSchema: z.object({ project_id: z.string() }),
-  execute: async ({ project_id }) => {
-    await vercel().projects.pauseProject({ ...TEAM, projectId: project_id });
-    return JSON.stringify({ ok: true, id: project_id, paused: true });
-  },
-});
+export const pause_project = approval(
+  tool({
+    description: "Pause a project. Blocks the active production deployment until unpaused.",
+    inputSchema: z.object({ project_id: z.string() }),
+    execute: async ({ project_id }) => {
+      await vercel().projects.pauseProject({ ...TEAM, projectId: project_id });
+      return JSON.stringify({ ok: true, id: project_id, paused: true });
+    },
+  }),
+);
 
-/** @destructive Unpauses a paused project. */
-export const unpause_project = tool({
-  description: "Unpause a previously paused project. Restores the active production deployment.",
-  inputSchema: z.object({ project_id: z.string() }),
-  execute: async ({ project_id }) => {
-    await vercel().projects.unpauseProject({ ...TEAM, projectId: project_id });
-    return JSON.stringify({ ok: true, id: project_id, paused: false });
-  },
-});
+export const unpause_project = approval(
+  tool({
+    description: "Unpause a previously paused project. Restores the active production deployment.",
+    inputSchema: z.object({ project_id: z.string() }),
+    execute: async ({ project_id }) => {
+      await vercel().projects.unpauseProject({ ...TEAM, projectId: project_id });
+      return JSON.stringify({ ok: true, id: project_id, paused: false });
+    },
+  }),
+);
 
-/** @destructive Initiates a project transfer to another team. */
-export const create_project_transfer_request = tool({
-  description:
-    "Create a project transfer request. Returns a `code` that another team can redeem within 24h to complete the transfer.",
-  inputSchema: z.object({ project_id_or_name: z.string() }),
-  execute: async ({ project_id_or_name }) => {
-    const result = await vercel().projects.createProjectTransferRequest({
-      ...TEAM,
-      idOrName: project_id_or_name,
-    });
-    return JSON.stringify(result);
-  },
-});
+export const create_project_transfer_request = approval(
+  tool({
+    description:
+      "Create a project transfer request. Returns a `code` that another team can redeem within 24h to complete the transfer.",
+    inputSchema: z.object({ project_id_or_name: z.string() }),
+    execute: async ({ project_id_or_name }) => {
+      const result = await vercel().projects.createProjectTransferRequest({
+        ...TEAM,
+        idOrName: project_id_or_name,
+      });
+      return JSON.stringify(result);
+    },
+  }),
+);
 
 // ──────────────── ENV VARS ────────────────
 
@@ -144,77 +149,80 @@ export const get_project_env_var = tool({
   },
 });
 
-/** @destructive Writes environment variables — can break a project if a required key is malformed. */
-export const create_project_env_vars = tool({
-  description:
-    "Create one or more environment variables on a project. Pass `upsert: true` to update-if-exists.",
-  inputSchema: z.object({
-    project_id_or_name: z.string(),
-    upsert: z.boolean().optional(),
-    entries: z
-      .array(
-        z.object({
-          key: z.string(),
-          value: z.string(),
-          type: z.enum(ENV_TYPES),
-          target: z.array(z.enum(ENV_TARGETS)),
-          gitBranch: z.string().optional(),
-          comment: z.string().optional(),
-        }),
-      )
-      .min(1),
+export const create_project_env_vars = approval(
+  tool({
+    description:
+      "Create one or more environment variables on a project. Pass `upsert: true` to update-if-exists.",
+    inputSchema: z.object({
+      project_id_or_name: z.string(),
+      upsert: z.boolean().optional(),
+      entries: z
+        .array(
+          z.object({
+            key: z.string(),
+            value: z.string(),
+            type: z.enum(ENV_TYPES),
+            target: z.array(z.enum(ENV_TARGETS)),
+            gitBranch: z.string().optional(),
+            comment: z.string().optional(),
+          }),
+        )
+        .min(1),
+    }),
+    execute: async ({ project_id_or_name, upsert, entries }) => {
+      const result = await vercel().projects.createProjectEnv({
+        ...TEAM,
+        idOrName: project_id_or_name,
+        upsert: upsert ? "true" : undefined,
+        requestBody: entries,
+      });
+      return JSON.stringify(redactEnvValues(result));
+    },
   }),
-  execute: async ({ project_id_or_name, upsert, entries }) => {
-    const result = await vercel().projects.createProjectEnv({
-      ...TEAM,
-      idOrName: project_id_or_name,
-      upsert: upsert ? "true" : undefined,
-      requestBody: entries,
-    });
-    return JSON.stringify(redactEnvValues(result));
-  },
-});
+);
 
-/** @destructive Edits an environment variable. Malformed values can break deploys. */
-export const edit_project_env_var = tool({
-  description: "Edit a single environment variable.",
-  inputSchema: z.object({
-    project_id_or_name: z.string(),
-    env_var_id: z.string(),
-    key: z.string().optional(),
-    value: z.string().optional(),
-    type: z.enum(ENV_TYPES).optional(),
-    target: z.array(z.enum(ENV_TARGETS)).optional(),
-    gitBranch: z.string().optional(),
-    comment: z.string().optional(),
+export const edit_project_env_var = approval(
+  tool({
+    description: "Edit a single environment variable.",
+    inputSchema: z.object({
+      project_id_or_name: z.string(),
+      env_var_id: z.string(),
+      key: z.string().optional(),
+      value: z.string().optional(),
+      type: z.enum(ENV_TYPES).optional(),
+      target: z.array(z.enum(ENV_TARGETS)).optional(),
+      gitBranch: z.string().optional(),
+      comment: z.string().optional(),
+    }),
+    execute: async ({ project_id_or_name, env_var_id, ...patch }) => {
+      const result = await vercel().projects.editProjectEnv({
+        ...TEAM,
+        idOrName: project_id_or_name,
+        id: env_var_id,
+        requestBody: patch,
+      });
+      return JSON.stringify(redactEnvValues(result));
+    },
   }),
-  execute: async ({ project_id_or_name, env_var_id, ...patch }) => {
-    const result = await vercel().projects.editProjectEnv({
-      ...TEAM,
-      idOrName: project_id_or_name,
-      id: env_var_id,
-      requestBody: patch,
-    });
-    return JSON.stringify(redactEnvValues(result));
-  },
-});
+);
 
-/** @destructive Removes an environment variable. */
-export const remove_project_env_var = tool({
-  description: "Remove a single environment variable from a project by its id.",
-  inputSchema: z.object({
-    project_id_or_name: z.string(),
-    env_var_id: z.string(),
+export const remove_project_env_var = approval(
+  tool({
+    description: "Remove a single environment variable from a project by its id.",
+    inputSchema: z.object({
+      project_id_or_name: z.string(),
+      env_var_id: z.string(),
+    }),
+    execute: async ({ project_id_or_name, env_var_id }) => {
+      const result = await vercel().projects.removeProjectEnv({
+        ...TEAM,
+        idOrName: project_id_or_name,
+        id: env_var_id,
+      });
+      return JSON.stringify(redactEnvValues(result));
+    },
   }),
-  execute: async ({ project_id_or_name, env_var_id }) => {
-    const result = await vercel().projects.removeProjectEnv({
-      ...TEAM,
-      idOrName: project_id_or_name,
-      id: env_var_id,
-    });
-    return JSON.stringify(redactEnvValues(result));
-  },
-});
+);
 
 // ──────────────── DOMAINS ────────────────
 
@@ -261,39 +269,41 @@ export const get_project_domain = tool({
   },
 });
 
-/** @destructive Detaches a domain from a project. */
-export const remove_project_domain = tool({
-  description: "Remove a domain from a project.",
-  inputSchema: z.object({
-    project_id_or_name: z.string(),
-    domain: z.string(),
+export const remove_project_domain = approval(
+  tool({
+    description: "Remove a domain from a project.",
+    inputSchema: z.object({
+      project_id_or_name: z.string(),
+      domain: z.string(),
+    }),
+    execute: async ({ project_id_or_name, domain }) => {
+      const result = await vercel().projects.removeProjectDomain({
+        ...TEAM,
+        idOrName: project_id_or_name,
+        domain,
+      });
+      return JSON.stringify(result);
+    },
   }),
-  execute: async ({ project_id_or_name, domain }) => {
-    const result = await vercel().projects.removeProjectDomain({
-      ...TEAM,
-      idOrName: project_id_or_name,
-      domain,
-    });
-    return JSON.stringify(result);
-  },
-});
+);
 
-/** @destructive Verifies a pending domain — runs the challenge check. */
-export const verify_project_domain = tool({
-  description: "Trigger verification of a pending project domain.",
-  inputSchema: z.object({
-    project_id_or_name: z.string(),
-    domain: z.string(),
+export const verify_project_domain = approval(
+  tool({
+    description: "Trigger verification of a pending project domain.",
+    inputSchema: z.object({
+      project_id_or_name: z.string(),
+      domain: z.string(),
+    }),
+    execute: async ({ project_id_or_name, domain }) => {
+      const result = await vercel().projects.verifyProjectDomain({
+        ...TEAM,
+        idOrName: project_id_or_name,
+        domain,
+      });
+      return JSON.stringify(result);
+    },
   }),
-  execute: async ({ project_id_or_name, domain }) => {
-    const result = await vercel().projects.verifyProjectDomain({
-      ...TEAM,
-      idOrName: project_id_or_name,
-      domain,
-    });
-    return JSON.stringify(result);
-  },
-});
+);
 
 export const list_promote_aliases = tool({
   description:
@@ -340,19 +350,20 @@ export const list_project_members = tool({
   },
 });
 
-/** @destructive Revokes a team member's access to a project. */
-export const remove_project_member = tool({
-  description: "Remove a member from a project.",
-  inputSchema: z.object({
-    project_id_or_name: z.string(),
-    uid: z.string(),
+export const remove_project_member = approval(
+  tool({
+    description: "Remove a member from a project.",
+    inputSchema: z.object({
+      project_id_or_name: z.string(),
+      uid: z.string(),
+    }),
+    execute: async ({ project_id_or_name, uid }) => {
+      const result = await vercel().projectMembers.removeProjectMember({
+        ...TEAM,
+        idOrName: project_id_or_name,
+        uid,
+      });
+      return JSON.stringify(result);
+    },
   }),
-  execute: async ({ project_id_or_name, uid }) => {
-    const result = await vercel().projectMembers.removeProjectMember({
-      ...TEAM,
-      idOrName: project_id_or_name,
-      uid,
-    });
-    return JSON.stringify(result);
-  },
-});
+);
