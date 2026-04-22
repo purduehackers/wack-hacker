@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { env } from "../../../../env.ts";
+import { approval } from "../../approvals/index.ts";
 import { octokit } from "./client.ts";
 
 export const list_environments = tool({
@@ -96,19 +97,20 @@ export const create_or_update_environment = tool({
   },
 });
 
-// destructive
-export const delete_environment = tool({
-  description: "Delete a deployment environment. Associated deployments become unenvironmented.",
-  inputSchema: z.object({
-    repo: z.string().describe("Repository name"),
-    environment_name: z.string().describe("Environment name"),
+export const delete_environment = approval(
+  tool({
+    description: "Delete a deployment environment. Associated deployments become unenvironmented.",
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name"),
+      environment_name: z.string().describe("Environment name"),
+    }),
+    execute: async ({ repo, environment_name }) => {
+      await octokit.rest.repos.deleteAnEnvironment({
+        owner: env.GITHUB_ORG,
+        repo,
+        environment_name,
+      });
+      return JSON.stringify({ deleted: true, environment_name });
+    },
   }),
-  execute: async ({ repo, environment_name }) => {
-    await octokit.rest.repos.deleteAnEnvironment({
-      owner: env.GITHUB_ORG,
-      repo,
-      environment_name,
-    });
-    return JSON.stringify({ deleted: true, environment_name });
-  },
-});
+);

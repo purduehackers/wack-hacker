@@ -3,6 +3,7 @@ import { Routes } from "discord-api-types/v10";
 import { z } from "zod";
 
 import { DISCORD_GUILD_ID } from "../../../protocol/constants.ts";
+import { approval } from "../../approvals/index.ts";
 import { discord } from "./client.ts";
 
 // ---------------------------------------------------------------------------
@@ -221,15 +222,16 @@ export const follow_announcement_channel = tool({
   },
 });
 
-// destructive
-export const delete_channel = tool({
-  description:
-    "Delete a channel from the server. This is irreversible and will permanently remove the channel and all its messages.",
-  inputSchema: z.object({
-    channel_id: z.string().describe("Channel ID"),
+export const delete_channel = approval(
+  tool({
+    description:
+      "Delete a channel from the server. This is irreversible and will permanently remove the channel and all its messages.",
+    inputSchema: z.object({
+      channel_id: z.string().describe("Channel ID"),
+    }),
+    execute: async ({ channel_id }) => {
+      const channel = (await discord.delete(Routes.channel(channel_id))) as any;
+      return JSON.stringify({ success: true, deleted: channel.name });
+    },
   }),
-  execute: async ({ channel_id }) => {
-    const channel = (await discord.delete(Routes.channel(channel_id))) as any;
-    return JSON.stringify({ success: true, deleted: channel.name });
-  },
-});
+);

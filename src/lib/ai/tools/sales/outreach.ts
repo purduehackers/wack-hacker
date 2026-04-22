@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { approval } from "../../approvals/index.ts";
 import { notion, resend } from "./client.ts";
 import {
   COMPANIES_DATA_SOURCE_ID,
@@ -44,41 +45,42 @@ async function preflight(pageId: string, target: "company" | "contact"): Promise
   return null;
 }
 
-// destructive
-export const send_outreach_email = tool({
-  description: `Send an outreach email via Resend and record the resulting email id on the target Notion page ("Last Outreach ID", "Outreach Status" = Sent). The target page must not have "Do Not Contact" checked. Sends from the fixed SALES_FROM_EMAIL with SALES_REPLY_TO_EMAIL in the Reply-To header.`,
-  inputSchema: z.object({
-    target: z.enum(["company", "contact"]).describe("Which CRM data source owns the page"),
-    page_id: z.string().describe("Notion page id of the Company or Contact row"),
-    to: z.email().describe("Recipient email (must already be verified)"),
-    subject: z.string(),
-    text: z.string().describe("Plain-text body"),
-    html: z.string().optional().describe("Optional HTML body"),
-  }),
-  execute: async ({ target, page_id, to, subject, text, html }) => {
-    const block = await preflight(page_id, target);
-    if (block) return JSON.stringify({ error: block });
+export const send_outreach_email = approval(
+  tool({
+    description: `Send an outreach email via Resend and record the resulting email id on the target Notion page ("Last Outreach ID", "Outreach Status" = Sent). The target page must not have "Do Not Contact" checked. Sends from the fixed SALES_FROM_EMAIL with SALES_REPLY_TO_EMAIL in the Reply-To header.`,
+    inputSchema: z.object({
+      target: z.enum(["company", "contact"]).describe("Which CRM data source owns the page"),
+      page_id: z.string().describe("Notion page id of the Company or Contact row"),
+      to: z.email().describe("Recipient email (must already be verified)"),
+      subject: z.string(),
+      text: z.string().describe("Plain-text body"),
+      html: z.string().optional().describe("Optional HTML body"),
+    }),
+    execute: async ({ target, page_id, to, subject, text, html }) => {
+      const block = await preflight(page_id, target);
+      if (block) return JSON.stringify({ error: block });
 
-    const result = await resend().emails.send({
-      from: SALES_FROM_EMAIL,
-      to,
-      subject,
-      text,
-      html,
-      replyTo: SALES_REPLY_TO_EMAIL,
-    });
-    if (result.error) {
-      return JSON.stringify({ error: result.error.message, name: result.error.name });
-    }
-    const emailId = result.data?.id;
-    if (!emailId) {
-      return JSON.stringify({ error: "Resend returned no email id" });
-    }
-    const sentAt = new Date().toISOString();
-    await writeLastOutreach(page_id, emailId, sentAt);
-    return JSON.stringify({ id: emailId, target, page_id, sent_at: sentAt });
-  },
-});
+      const result = await resend().emails.send({
+        from: SALES_FROM_EMAIL,
+        to,
+        subject,
+        text,
+        html,
+        replyTo: SALES_REPLY_TO_EMAIL,
+      });
+      if (result.error) {
+        return JSON.stringify({ error: result.error.message, name: result.error.name });
+      }
+      const emailId = result.data?.id;
+      if (!emailId) {
+        return JSON.stringify({ error: "Resend returned no email id" });
+      }
+      const sentAt = new Date().toISOString();
+      await writeLastOutreach(page_id, emailId, sentAt);
+      return JSON.stringify({ id: emailId, target, page_id, sent_at: sentAt });
+    },
+  }),
+);
 
 export const get_email_status = tool({
   description: `Read the outreach tracking properties off a Company or Contact page. Returns Last Outreach ID, Outreach Status, Outreach Last Event At, Do Not Contact. The Resend webhook keeps these authoritative.`,

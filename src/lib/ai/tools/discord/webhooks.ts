@@ -3,6 +3,7 @@ import { Routes } from "discord-api-types/v10";
 import { z } from "zod";
 
 import { DISCORD_GUILD_ID } from "../../../protocol/constants.ts";
+import { approval } from "../../approvals/index.ts";
 import { discord } from "./client.ts";
 
 // ---------------------------------------------------------------------------
@@ -94,17 +95,18 @@ export const edit_webhook = tool({
   },
 });
 
-// destructive
-export const delete_webhook = tool({
-  description:
-    "Delete a webhook. This is irreversible and will break any integrations using this webhook's URL.",
-  inputSchema: z.object({
-    webhook_id: z.string().describe("Webhook ID to delete"),
+export const delete_webhook = approval(
+  tool({
+    description:
+      "Delete a webhook. This is irreversible and will break any integrations using this webhook's URL.",
+    inputSchema: z.object({
+      webhook_id: z.string().describe("Webhook ID to delete"),
+    }),
+    execute: async ({ webhook_id }) => {
+      // Fetch webhook first to get its name
+      const webhook = (await discord.get(Routes.webhook(webhook_id))) as any;
+      await discord.delete(Routes.webhook(webhook_id));
+      return JSON.stringify({ success: true, deleted: webhook.name });
+    },
   }),
-  execute: async ({ webhook_id }) => {
-    // Fetch webhook first to get its name
-    const webhook = (await discord.get(Routes.webhook(webhook_id))) as any;
-    await discord.delete(Routes.webhook(webhook_id));
-    return JSON.stringify({ success: true, deleted: webhook.name });
-  },
-});
+);

@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { approval } from "../../approvals/index.ts";
 import { linear } from "./client.ts";
 
 export const list_cycles = tool({
@@ -90,13 +91,14 @@ export const update_cycle = tool({
   },
 });
 
-// destructive
-export const archive_cycle = tool({
-  description:
-    "Archive a cycle. Cycles cannot be hard-deleted in Linear — archiving is the closest equivalent.",
-  inputSchema: z.object({ id: z.string().describe("Cycle UUID") }),
-  execute: async ({ id }) => {
-    const payload = await linear.archiveCycle(id);
-    return JSON.stringify({ success: payload.success });
-  },
-});
+export const archive_cycle = approval(
+  tool({
+    description:
+      "Archive a cycle. Cycles cannot be hard-deleted in Linear — archiving is the closest equivalent.",
+    inputSchema: z.object({ id: z.string().describe("Cycle UUID") }),
+    execute: async ({ id }) => {
+      const payload = await linear.archiveCycle(id);
+      return JSON.stringify({ success: payload.success });
+    },
+  }),
+);

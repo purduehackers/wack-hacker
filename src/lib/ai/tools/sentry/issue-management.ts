@@ -8,6 +8,7 @@ import {
 import { tool } from "ai";
 import { z } from "zod";
 
+import { approval } from "../../approvals/index.ts";
 import { admin } from "../../skills/index.ts";
 import { sentryOpts, sentryOrg, sentryGet } from "./client.ts";
 
@@ -59,61 +60,63 @@ export const update_issue = tool({
 });
 
 /** Delete a Sentry issue permanently. */
-// destructive
 export const delete_issue = admin(
-  tool({
-    description: "Permanently delete a Sentry issue. This action cannot be undone.",
-    inputSchema: z.object({
-      issue_id: z.string().describe("Sentry issue ID (numeric)"),
+  approval(
+    tool({
+      description: "Permanently delete a Sentry issue. This action cannot be undone.",
+      inputSchema: z.object({
+        issue_id: z.string().describe("Sentry issue ID (numeric)"),
+      }),
+      execute: async ({ issue_id }) => {
+        const result = await removeAnIssue({
+          ...sentryOpts(),
+          path: {
+            organization_id_or_slug: sentryOrg(),
+            issue_id,
+          },
+        });
+        unwrapResult(result, "deleteIssue");
+        return JSON.stringify({ deleted: true });
+      },
     }),
-    execute: async ({ issue_id }) => {
-      const result = await removeAnIssue({
-        ...sentryOpts(),
-        path: {
-          organization_id_or_slug: sentryOrg(),
-          issue_id,
-        },
-      });
-      unwrapResult(result, "deleteIssue");
-      return JSON.stringify({ deleted: true });
-    },
-  }),
+  ),
 );
 
 /** Bulk update multiple issues at once. */
-// destructive
-export const bulk_update_issues = tool({
-  description:
-    "Bulk update multiple Sentry issues. Can resolve, ignore, or assign multiple issues at once.",
-  inputSchema: z.object({
-    project_slug: z.string().describe("Project slug"),
-    issue_ids: z.array(z.string()).describe("Array of issue IDs to update"),
-    status: z.enum(["resolved", "unresolved", "ignored"]).optional(),
-    assigned_to: z.string().optional(),
-    has_seen: z.boolean().optional(),
-    is_bookmarked: z.boolean().optional(),
-    priority: z.enum(["critical", "high", "medium", "low"]).optional(),
+export const bulk_update_issues = approval(
+  tool({
+    description:
+      "Bulk update multiple Sentry issues. Can resolve, ignore, or assign multiple issues at once.",
+    inputSchema: z.object({
+      project_slug: z.string().describe("Project slug"),
+      issue_ids: z.array(z.string()).describe("Array of issue IDs to update"),
+      status: z.enum(["resolved", "unresolved", "ignored"]).optional(),
+      assigned_to: z.string().optional(),
+      has_seen: z.boolean().optional(),
+      is_bookmarked: z.boolean().optional(),
+      priority: z.enum(["critical", "high", "medium", "low"]).optional(),
+    }),
+    execute: async ({ project_slug, issue_ids, ...input }) => {
+      const body: Record<string, unknown> = {};
+      if (input.status !== undefined) body.status = input.status;
+      if (input.assigned_to !== undefined) body.assignedTo = input.assigned_to;
+      if (input.has_seen !== undefined) body.hasSeen = input.has_seen;
+      if (input.is_bookmarked !== undefined) body.isBookmarked = input.is_bookmarked;
+      if (input.priority !== undefined) body.priority = input.priority;
+      const result = await bulkMutateAListOfIssues({
+        ...sentryOpts(),
+        path: {
+          organization_id_or_slug: sentryOrg(),
+          project_id_or_slug: project_slug,
+        },
+        query: { id: issue_ids.map(Number) as unknown as number },
+        body: body as Parameters<typeof bulkMutateAListOfIssues>[0]["body"],
+      });
+      const { data } = unwrapResult(result, "bulkUpdateIssues");
+      return JSON.stringify(data);
+    },
   }),
-  execute: async ({ project_slug, issue_ids, ...input }) => {
-    const body: Record<string, unknown> = {};
-    if (input.status !== undefined) body.status = input.status;
-    if (input.assigned_to !== undefined) body.assignedTo = input.assigned_to;
-    if (input.has_seen !== undefined) body.hasSeen = input.has_seen;
-    if (input.is_bookmarked !== undefined) body.isBookmarked = input.is_bookmarked;
-    if (input.priority !== undefined) body.priority = input.priority;
-    const result = await bulkMutateAListOfIssues({
-      ...sentryOpts(),
-      path: {
-        organization_id_or_slug: sentryOrg(),
-        project_id_or_slug: project_slug,
-      },
-      query: { id: issue_ids.map(Number) as unknown as number },
-      body: body as Parameters<typeof bulkMutateAListOfIssues>[0]["body"],
-    });
-    const { data } = unwrapResult(result, "bulkUpdateIssues");
-    return JSON.stringify(data);
-  },
-});
+);
 
 /** List tag distributions for a Sentry issue. */
 export const list_issue_tags = tool({

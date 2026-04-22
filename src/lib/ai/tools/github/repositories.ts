@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { env } from "../../../../env.ts";
+import { approval } from "../../approvals/index.ts";
 import { octokit } from "./client.ts";
 
 export const create_repository = tool({
@@ -66,17 +67,18 @@ export const update_repository = tool({
   },
 });
 
-// destructive
-export const delete_repository = tool({
-  description: `Permanently delete a repository. Irreversible — destroys all code, issues, and history.`,
-  inputSchema: z.object({
-    repo: z.string().describe("Repository name to delete"),
+export const delete_repository = approval(
+  tool({
+    description: `Permanently delete a repository. Irreversible — destroys all code, issues, and history.`,
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name to delete"),
+    }),
+    execute: async ({ repo }) => {
+      await octokit.rest.repos.delete({ owner: env.GITHUB_ORG, repo });
+      return JSON.stringify({ deleted: true, repo: `${env.GITHUB_ORG}/${repo}` });
+    },
   }),
-  execute: async ({ repo }) => {
-    await octokit.rest.repos.delete({ owner: env.GITHUB_ORG, repo });
-    return JSON.stringify({ deleted: true, repo: `${env.GITHUB_ORG}/${repo}` });
-  },
-});
+);
 
 export const list_branches = tool({
   description: `List branches for a repository. Optionally filter to only protected branches. Returns branch name and protection status.`,
@@ -179,19 +181,20 @@ export const set_branch_protection = tool({
   },
 });
 
-// destructive
-export const delete_branch_protection = tool({
-  description: `Remove all branch protection rules from a branch, making it unprotected.`,
-  inputSchema: z.object({
-    repo: z.string().describe("Repository name"),
-    branch: z.string().describe("Branch name"),
+export const delete_branch_protection = approval(
+  tool({
+    description: `Remove all branch protection rules from a branch, making it unprotected.`,
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name"),
+      branch: z.string().describe("Branch name"),
+    }),
+    execute: async ({ repo, branch }) => {
+      await octokit.rest.repos.deleteBranchProtection({
+        owner: env.GITHUB_ORG,
+        repo,
+        branch,
+      });
+      return JSON.stringify({ deleted: true, repo, branch });
+    },
   }),
-  execute: async ({ repo, branch }) => {
-    await octokit.rest.repos.deleteBranchProtection({
-      owner: env.GITHUB_ORG,
-      repo,
-      branch,
-    });
-    return JSON.stringify({ deleted: true, repo, branch });
-  },
-});
+);

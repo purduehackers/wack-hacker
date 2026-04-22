@@ -3,6 +3,7 @@ import { Routes } from "discord-api-types/v10";
 import { z } from "zod";
 
 import { DISCORD_GUILD_ID } from "../../../protocol/constants.ts";
+import { approval } from "../../approvals/index.ts";
 import { discord } from "./client.ts";
 
 // ---------------------------------------------------------------------------
@@ -173,15 +174,16 @@ export const edit_thread = tool({
   },
 });
 
-// destructive
-export const delete_thread = tool({
-  description:
-    "Delete a thread. This is irreversible and will permanently remove the thread and all its messages.",
-  inputSchema: z.object({
-    thread_id: z.string().describe("Thread ID to delete"),
+export const delete_thread = approval(
+  tool({
+    description:
+      "Delete a thread. This is irreversible and will permanently remove the thread and all its messages.",
+    inputSchema: z.object({
+      thread_id: z.string().describe("Thread ID to delete"),
+    }),
+    execute: async ({ thread_id }) => {
+      const thread = (await discord.delete(Routes.channel(thread_id))) as any;
+      return JSON.stringify({ success: true, deleted: thread.name });
+    },
   }),
-  execute: async ({ thread_id }) => {
-    const thread = (await discord.delete(Routes.channel(thread_id))) as any;
-    return JSON.stringify({ success: true, deleted: thread.name });
-  },
-});
+);

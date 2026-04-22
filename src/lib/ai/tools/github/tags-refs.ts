@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { env } from "../../../../env.ts";
+import { approval } from "../../approvals/index.ts";
 import { octokit } from "./client.ts";
 
 export const list_tags = tool({
@@ -109,20 +110,21 @@ export const update_ref = tool({
   },
 });
 
-// destructive
-export const delete_ref = tool({
-  description:
-    "Delete a git ref (branch or tag). Irreversible. Ref path without 'refs/' prefix (e.g. 'heads/old-branch').",
-  inputSchema: z.object({
-    repo: z.string().describe("Repository name"),
-    ref: z.string().describe("Ref path (e.g. 'heads/old-branch')"),
+export const delete_ref = approval(
+  tool({
+    description:
+      "Delete a git ref (branch or tag). Irreversible. Ref path without 'refs/' prefix (e.g. 'heads/old-branch').",
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name"),
+      ref: z.string().describe("Ref path (e.g. 'heads/old-branch')"),
+    }),
+    execute: async ({ repo, ref }) => {
+      await octokit.rest.git.deleteRef({
+        owner: env.GITHUB_ORG,
+        repo,
+        ref,
+      });
+      return JSON.stringify({ deleted: true, ref });
+    },
   }),
-  execute: async ({ repo, ref }) => {
-    await octokit.rest.git.deleteRef({
-      owner: env.GITHUB_ORG,
-      repo,
-      ref,
-    });
-    return JSON.stringify({ deleted: true, ref });
-  },
-});
+);

@@ -9,6 +9,7 @@ import type {
 import { tool } from "ai";
 import { z } from "zod";
 
+import { approval } from "../../approvals/index.ts";
 import { admin } from "../../skills/admin.ts";
 import { figma } from "./client.ts";
 
@@ -106,16 +107,17 @@ export const update_webhook = admin(
   }),
 );
 
-// destructive
 export const delete_webhook = admin(
-  tool({
-    description: "Delete a webhook permanently.",
-    inputSchema: z.object({
-      webhook_id: z.string().describe("The webhook ID to delete"),
+  approval(
+    tool({
+      description: "Delete a webhook permanently.",
+      inputSchema: z.object({
+        webhook_id: z.string().describe("The webhook ID to delete"),
+      }),
+      execute: async ({ webhook_id }) => {
+        const result = await figma.delete<WebhookV2>(`/v2/webhooks/${webhook_id}`);
+        return JSON.stringify(summarizeWebhook(result));
+      },
     }),
-    execute: async ({ webhook_id }) => {
-      const result = await figma.delete<WebhookV2>(`/v2/webhooks/${webhook_id}`);
-      return JSON.stringify(summarizeWebhook(result));
-    },
-  }),
+  ),
 );

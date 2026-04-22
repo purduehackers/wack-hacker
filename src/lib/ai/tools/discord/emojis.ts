@@ -3,6 +3,7 @@ import { Routes } from "discord-api-types/v10";
 import { z } from "zod";
 
 import { DISCORD_GUILD_ID } from "../../../protocol/constants.ts";
+import { approval } from "../../approvals/index.ts";
 import { discord } from "./client.ts";
 
 // ---------------------------------------------------------------------------
@@ -99,17 +100,18 @@ export const edit_emoji = tool({
   },
 });
 
-// destructive
-export const delete_emoji = tool({
-  description:
-    "Delete a custom emoji. This is irreversible and will remove the emoji from all messages where it was used (they will show as unknown emoji).",
-  inputSchema: z.object({
-    emoji_id: z.string().describe("Emoji ID to delete"),
+export const delete_emoji = approval(
+  tool({
+    description:
+      "Delete a custom emoji. This is irreversible and will remove the emoji from all messages where it was used (they will show as unknown emoji).",
+    inputSchema: z.object({
+      emoji_id: z.string().describe("Emoji ID to delete"),
+    }),
+    execute: async ({ emoji_id }) => {
+      // Fetch emoji first to get its name
+      const emoji = (await discord.get(Routes.guildEmoji(DISCORD_GUILD_ID, emoji_id))) as any;
+      await discord.delete(Routes.guildEmoji(DISCORD_GUILD_ID, emoji_id));
+      return JSON.stringify({ success: true, deleted: emoji.name });
+    },
   }),
-  execute: async ({ emoji_id }) => {
-    // Fetch emoji first to get its name
-    const emoji = (await discord.get(Routes.guildEmoji(DISCORD_GUILD_ID, emoji_id))) as any;
-    await discord.delete(Routes.guildEmoji(DISCORD_GUILD_ID, emoji_id));
-    return JSON.stringify({ success: true, deleted: emoji.name });
-  },
-});
+);

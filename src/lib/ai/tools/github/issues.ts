@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { env } from "../../../../env.ts";
+import { approval } from "../../approvals/index.ts";
 import { octokit } from "./client.ts";
 
 /** Create a new issue in a repository. */
@@ -128,22 +129,23 @@ export const update_issue_comment = tool({
 });
 
 /** Delete an issue comment. */
-// destructive
-export const delete_issue_comment = tool({
-  description: `Permanently delete an issue comment by its ID. This action cannot be undone.`,
-  inputSchema: z.object({
-    repo: z.string().describe("Repository name"),
-    comment_id: z.number().describe("Comment ID"),
+export const delete_issue_comment = approval(
+  tool({
+    description: `Permanently delete an issue comment by its ID. This action cannot be undone.`,
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name"),
+      comment_id: z.number().describe("Comment ID"),
+    }),
+    execute: async ({ repo, comment_id }) => {
+      await octokit.rest.issues.deleteComment({
+        owner: env.GITHUB_ORG,
+        repo,
+        comment_id,
+      });
+      return JSON.stringify({ deleted: true });
+    },
   }),
-  execute: async ({ repo, comment_id }) => {
-    await octokit.rest.issues.deleteComment({
-      owner: env.GITHUB_ORG,
-      repo,
-      comment_id,
-    });
-    return JSON.stringify({ deleted: true });
-  },
-});
+);
 
 /** Create, update, or delete a label in a repository. */
 export const manage_labels = tool({

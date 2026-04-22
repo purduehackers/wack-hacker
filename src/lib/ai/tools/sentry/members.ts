@@ -14,6 +14,7 @@ import {
 import { tool } from "ai";
 import { z } from "zod";
 
+import { approval } from "../../approvals/index.ts";
 import { admin } from "../../skills/index.ts";
 import { sentryOpts, sentryOrg } from "./client.ts";
 
@@ -198,25 +199,26 @@ export const update_team = admin(
 );
 
 /** Delete a team. */
-// destructive
 export const delete_team = admin(
-  tool({
-    description: "Permanently delete a Sentry team. This action cannot be undone.",
-    inputSchema: z.object({
-      team_slug: z.string().describe("Team slug"),
+  approval(
+    tool({
+      description: "Permanently delete a Sentry team. This action cannot be undone.",
+      inputSchema: z.object({
+        team_slug: z.string().describe("Team slug"),
+      }),
+      execute: async ({ team_slug }) => {
+        const result = await deleteATeam({
+          ...sentryOpts(),
+          path: {
+            organization_id_or_slug: sentryOrg(),
+            team_id_or_slug: team_slug,
+          },
+        });
+        unwrapResult(result, "deleteTeam");
+        return JSON.stringify({ deleted: true });
+      },
     }),
-    execute: async ({ team_slug }) => {
-      const result = await deleteATeam({
-        ...sentryOpts(),
-        path: {
-          organization_id_or_slug: sentryOrg(),
-          team_id_or_slug: team_slug,
-        },
-      });
-      unwrapResult(result, "deleteTeam");
-      return JSON.stringify({ deleted: true });
-    },
-  }),
+  ),
 );
 
 /** Add a member to a team. */
@@ -243,25 +245,26 @@ export const add_team_member = admin(
 );
 
 /** Remove a member from a team. */
-// destructive
 export const remove_team_member = admin(
-  tool({
-    description: "Remove a member from a Sentry team.",
-    inputSchema: z.object({
-      member_id: z.string().describe("Organization member ID"),
-      team_slug: z.string().describe("Team slug"),
+  approval(
+    tool({
+      description: "Remove a member from a Sentry team.",
+      inputSchema: z.object({
+        member_id: z.string().describe("Organization member ID"),
+        team_slug: z.string().describe("Team slug"),
+      }),
+      execute: async ({ member_id, team_slug }) => {
+        const result = await deleteAnOrganizationMemberFromATeam({
+          ...sentryOpts(),
+          path: {
+            organization_id_or_slug: sentryOrg(),
+            member_id,
+            team_id_or_slug: team_slug,
+          },
+        });
+        unwrapResult(result, "removeTeamMember");
+        return JSON.stringify({ removed: true });
+      },
     }),
-    execute: async ({ member_id, team_slug }) => {
-      const result = await deleteAnOrganizationMemberFromATeam({
-        ...sentryOpts(),
-        path: {
-          organization_id_or_slug: sentryOrg(),
-          member_id,
-          team_id_or_slug: team_slug,
-        },
-      });
-      unwrapResult(result, "removeTeamMember");
-      return JSON.stringify({ removed: true });
-    },
-  }),
+  ),
 );

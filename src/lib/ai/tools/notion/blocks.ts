@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { approval } from "../../approvals/index.ts";
 import { notion } from "./client.ts";
 
 export const retrieve_block = tool({
@@ -35,18 +36,22 @@ export const update_block = tool({
   },
 });
 
-// destructive
-export const delete_block = tool({
-  description:
-    "Archive (soft-delete) a block. Notion does not permanently delete blocks — this sets archived=true.",
-  inputSchema: z.object({
-    block_id: z.string().describe("Block UUID"),
+export const delete_block = approval(
+  tool({
+    description:
+      "Archive (soft-delete) a block. Notion does not permanently delete blocks — this sets archived=true.",
+    inputSchema: z.object({
+      block_id: z.string().describe("Block UUID"),
+    }),
+    execute: async ({ block_id }) => {
+      const block = await notion.blocks.delete({ block_id });
+      return JSON.stringify({
+        id: block.id,
+        archived: "archived" in block ? block.archived : true,
+      });
+    },
   }),
-  execute: async ({ block_id }) => {
-    const block = await notion.blocks.delete({ block_id });
-    return JSON.stringify({ id: block.id, archived: "archived" in block ? block.archived : true });
-  },
-});
+);
 
 export const list_block_children = tool({
   description:

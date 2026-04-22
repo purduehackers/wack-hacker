@@ -3,6 +3,7 @@ import { Routes } from "discord-api-types/v10";
 import { z } from "zod";
 
 import { DISCORD_GUILD_ID } from "../../../protocol/constants.ts";
+import { approval } from "../../approvals/index.ts";
 import { discord } from "./client.ts";
 
 interface Sticker {
@@ -81,15 +82,16 @@ export const edit_sticker = tool({
   },
 });
 
-// destructive
-export const delete_sticker = tool({
-  description:
-    "Delete a custom sticker. Irreversible — all prior uses of the sticker become unresolved references.",
-  inputSchema: z.object({
-    sticker_id: z.string().describe("Sticker ID to delete"),
+export const delete_sticker = approval(
+  tool({
+    description:
+      "Delete a custom sticker. Irreversible — all prior uses of the sticker become unresolved references.",
+    inputSchema: z.object({
+      sticker_id: z.string().describe("Sticker ID to delete"),
+    }),
+    execute: async ({ sticker_id }) => {
+      await discord.delete(Routes.guildSticker(DISCORD_GUILD_ID, sticker_id));
+      return JSON.stringify({ deleted: true, sticker_id });
+    },
   }),
-  execute: async ({ sticker_id }) => {
-    await discord.delete(Routes.guildSticker(DISCORD_GUILD_ID, sticker_id));
-    return JSON.stringify({ deleted: true, sticker_id });
-  },
-});
+);

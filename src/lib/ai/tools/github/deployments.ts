@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { env } from "../../../../env.ts";
+import { approval } from "../../approvals/index.ts";
 import { octokit } from "./client.ts";
 
 /** List deployments for a repository. */
@@ -152,17 +153,18 @@ export const list_pages_builds = tool({
 });
 
 /** Request a GitHub Pages build. */
-// destructive
-export const trigger_pages_build = tool({
-  description: `Manually trigger a GitHub Pages build for a repository. Returns the build status and URL. Only works for repos with Pages enabled.`,
-  inputSchema: z.object({
-    repo: z.string().describe("Repository name"),
+export const trigger_pages_build = approval(
+  tool({
+    description: `Manually trigger a GitHub Pages build for a repository. Returns the build status and URL. Only works for repos with Pages enabled.`,
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name"),
+    }),
+    execute: async ({ repo }) => {
+      const { data } = await octokit.rest.repos.requestPagesBuild({
+        owner: env.GITHUB_ORG,
+        repo,
+      });
+      return JSON.stringify({ status: data.status, url: data.url });
+    },
   }),
-  execute: async ({ repo }) => {
-    const { data } = await octokit.rest.repos.requestPagesBuild({
-      owner: env.GITHUB_ORG,
-      repo,
-    });
-    return JSON.stringify({ status: data.status, url: data.url });
-  },
-});
+);

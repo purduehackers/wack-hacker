@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { approval } from "../../approvals/index.ts";
 import { linear } from "./client.ts";
 
 export const list_labels = tool({
@@ -84,13 +85,14 @@ export const update_label = tool({
   },
 });
 
-// destructive
-export const delete_label = tool({
-  description:
-    "Delete a label. This removes it from all issues. Irreversible — always confirm with the user.",
-  inputSchema: z.object({ id: z.string().describe("Label UUID") }),
-  execute: async ({ id }) => {
-    const payload = await linear.deleteIssueLabel(id);
-    return JSON.stringify({ success: payload.success });
-  },
-});
+export const delete_label = approval(
+  tool({
+    description:
+      "Delete a label. This removes it from all issues. Irreversible — always confirm with the user.",
+    inputSchema: z.object({ id: z.string().describe("Label UUID") }),
+    execute: async ({ id }) => {
+      const payload = await linear.deleteIssueLabel(id);
+      return JSON.stringify({ success: payload.success });
+    },
+  }),
+);

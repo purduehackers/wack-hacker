@@ -3,6 +3,7 @@ import { Routes } from "discord-api-types/v10";
 import { z } from "zod";
 
 import { DISCORD_GUILD_ID } from "../../../protocol/constants.ts";
+import { approval } from "../../approvals/index.ts";
 import { discord } from "./client.ts";
 
 // ---------------------------------------------------------------------------
@@ -170,19 +171,20 @@ export const edit_event = tool({
   },
 });
 
-// destructive
-export const delete_event = tool({
-  description:
-    "Delete a scheduled event. This is irreversible and will notify users who have indicated interest.",
-  inputSchema: z.object({
-    event_id: z.string().describe("Event ID to delete"),
+export const delete_event = approval(
+  tool({
+    description:
+      "Delete a scheduled event. This is irreversible and will notify users who have indicated interest.",
+    inputSchema: z.object({
+      event_id: z.string().describe("Event ID to delete"),
+    }),
+    execute: async ({ event_id }) => {
+      // Fetch event first to get its name
+      const event = (await discord.get(
+        Routes.guildScheduledEvent(DISCORD_GUILD_ID, event_id),
+      )) as any;
+      await discord.delete(Routes.guildScheduledEvent(DISCORD_GUILD_ID, event_id));
+      return JSON.stringify({ success: true, deleted: event.name });
+    },
   }),
-  execute: async ({ event_id }) => {
-    // Fetch event first to get its name
-    const event = (await discord.get(
-      Routes.guildScheduledEvent(DISCORD_GUILD_ID, event_id),
-    )) as any;
-    await discord.delete(Routes.guildScheduledEvent(DISCORD_GUILD_ID, event_id));
-    return JSON.stringify({ success: true, deleted: event.name });
-  },
-});
+);

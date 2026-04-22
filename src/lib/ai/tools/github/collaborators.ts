@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { env } from "../../../../env.ts";
+import { approval } from "../../approvals/index.ts";
 import { admin } from "../../skills/index.ts";
 import { octokit } from "./client.ts";
 
@@ -58,23 +59,24 @@ export const add_collaborator = admin(
   }),
 );
 
-// destructive
 export const remove_collaborator = admin(
-  tool({
-    description: "Remove a collaborator from a repository. Revokes their direct access.",
-    inputSchema: z.object({
-      repo: z.string().describe("Repository name"),
-      username: z.string().describe("GitHub username to remove"),
+  approval(
+    tool({
+      description: "Remove a collaborator from a repository. Revokes their direct access.",
+      inputSchema: z.object({
+        repo: z.string().describe("Repository name"),
+        username: z.string().describe("GitHub username to remove"),
+      }),
+      execute: async ({ repo, username }) => {
+        await octokit.rest.repos.removeCollaborator({
+          owner: env.GITHUB_ORG,
+          repo,
+          username,
+        });
+        return JSON.stringify({ removed: true, username });
+      },
     }),
-    execute: async ({ repo, username }) => {
-      await octokit.rest.repos.removeCollaborator({
-        owner: env.GITHUB_ORG,
-        repo,
-        username,
-      });
-      return JSON.stringify({ removed: true, username });
-    },
-  }),
+  ),
 );
 
 export const list_repo_invitations = admin(
@@ -105,21 +107,22 @@ export const list_repo_invitations = admin(
   }),
 );
 
-// destructive
 export const cancel_repo_invitation = admin(
-  tool({
-    description: "Revoke a pending collaborator invitation by ID.",
-    inputSchema: z.object({
-      repo: z.string().describe("Repository name"),
-      invitation_id: z.number().describe("Invitation ID"),
+  approval(
+    tool({
+      description: "Revoke a pending collaborator invitation by ID.",
+      inputSchema: z.object({
+        repo: z.string().describe("Repository name"),
+        invitation_id: z.number().describe("Invitation ID"),
+      }),
+      execute: async ({ repo, invitation_id }) => {
+        await octokit.rest.repos.deleteInvitation({
+          owner: env.GITHUB_ORG,
+          repo,
+          invitation_id,
+        });
+        return JSON.stringify({ revoked: true, invitation_id });
+      },
     }),
-    execute: async ({ repo, invitation_id }) => {
-      await octokit.rest.repos.deleteInvitation({
-        owner: env.GITHUB_ORG,
-        repo,
-        invitation_id,
-      });
-      return JSON.stringify({ revoked: true, invitation_id });
-    },
-  }),
+  ),
 );

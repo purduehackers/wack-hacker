@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { approval } from "../../approvals/index.ts";
 import { admin } from "../../skills/index.ts";
 import { linear } from "./client.ts";
 
@@ -91,35 +92,37 @@ export const get_user_assigned_issues = tool({
   },
 });
 
-// destructive
 export const suspend_user = admin(
-  tool({
-    description:
-      "Suspend a user, disabling their access. Data is preserved. Resolve user identity first — never suspend on ambiguous input.",
-    inputSchema: z.object({
-      id: z.string().describe("User UUID to suspend"),
+  approval(
+    tool({
+      description:
+        "Suspend a user, disabling their access. Data is preserved. Resolve user identity first — never suspend on ambiguous input.",
+      inputSchema: z.object({
+        id: z.string().describe("User UUID to suspend"),
+      }),
+      execute: async ({ id }) => {
+        const u = await linear.user(id);
+        const payload = await u.suspend();
+        return JSON.stringify({ success: payload.success });
+      },
     }),
-    execute: async ({ id }) => {
-      const u = await linear.user(id);
-      const payload = await u.suspend();
-      return JSON.stringify({ success: payload.success });
-    },
-  }),
+  ),
 );
 
-// destructive
 export const unsuspend_user = admin(
-  tool({
-    description: "Restore a suspended user's access.",
-    inputSchema: z.object({
-      id: z.string().describe("User UUID to unsuspend"),
+  approval(
+    tool({
+      description: "Restore a suspended user's access.",
+      inputSchema: z.object({
+        id: z.string().describe("User UUID to unsuspend"),
+      }),
+      execute: async ({ id }) => {
+        const u = await linear.user(id);
+        const payload = await u.unsuspend();
+        return JSON.stringify({ success: payload.success });
+      },
     }),
-    execute: async ({ id }) => {
-      const u = await linear.user(id);
-      const payload = await u.unsuspend();
-      return JSON.stringify({ success: payload.success });
-    },
-  }),
+  ),
 );
 
 export const invite_user = admin(
@@ -172,16 +175,17 @@ export const list_invites = admin(
   }),
 );
 
-// destructive
 export const delete_invite = admin(
-  tool({
-    description: "Revoke a pending invite by ID. Use list_invites first to find the ID.",
-    inputSchema: z.object({
-      id: z.string().describe("Invite UUID to revoke"),
+  approval(
+    tool({
+      description: "Revoke a pending invite by ID. Use list_invites first to find the ID.",
+      inputSchema: z.object({
+        id: z.string().describe("Invite UUID to revoke"),
+      }),
+      execute: async ({ id }) => {
+        const payload = await linear.deleteOrganizationInvite(id);
+        return JSON.stringify({ success: payload.success });
+      },
     }),
-    execute: async ({ id }) => {
-      const payload = await linear.deleteOrganizationInvite(id);
-      return JSON.stringify({ success: payload.success });
-    },
-  }),
+  ),
 );

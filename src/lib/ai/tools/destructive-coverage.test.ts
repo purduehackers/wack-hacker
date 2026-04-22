@@ -9,7 +9,7 @@ const DESTRUCTIVE_NAME_PATTERN =
 
 const SKIP_FILES = new Set(["index.ts", "client.ts", "constants.ts"]);
 
-const EXPORT_PATTERN = /^export\s+const\s+(\w+)\s*=/;
+const EXPORT_PATTERN = /^export\s+const\s+(\w+)\s*=\s*(.+)$/;
 
 async function walk(dir: string, out: string[] = []): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true });
@@ -29,57 +29,55 @@ async function walk(dir: string, out: string[] = []): Promise<string[]> {
   return out;
 }
 
-function previousNonBlankLine(allLines: string[], index: number): string | null {
-  for (let i = index - 1; i >= 0; i--) {
-    const trimmed = allLines[i].trim();
-    if (trimmed.length > 0) return trimmed;
-  }
-  return null;
-}
-
 interface Violation {
   file: string;
   line: number;
   name: string;
-  previous: string | null;
+  snippet: string;
+}
+
+function isApprovedExport(lines: readonly string[], exportIdx: number): boolean {
+  if (lines[exportIdx].includes("approval(")) return true;
+  // Multiline admin wrap: check the first non-blank line after the export.
+  const lookahead = lines.slice(exportIdx + 1, exportIdx + 4);
+  const nextContent = lookahead.find((l) => l.trim().length > 0);
+  return nextContent !== undefined && nextContent.trim().startsWith("approval(");
+}
+
+function scanFile(sourceText: string, relPath: string): Violation[] {
+  const out: Violation[] = [];
+  const lines = sourceText.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const match = lines[i].match(EXPORT_PATTERN);
+    if (!match) continue;
+    const name = match[1];
+    if (!DESTRUCTIVE_NAME_PATTERN.test(name)) continue;
+    if (isApprovedExport(lines, i)) continue;
+    out.push({ file: relPath, line: i + 1, name, snippet: lines[i].trim() });
+  }
+  return out;
 }
 
 async function findViolations(): Promise<Violation[]> {
   const discoveredPaths = await walk(TOOLS_DIR);
   const violations: Violation[] = [];
-
   for (const target of discoveredPaths) {
     const source = await readFile(target, "utf8");
-    const lines = source.split("\n");
-    for (let i = 0; i < lines.length; i++) {
-      const match = lines[i].match(EXPORT_PATTERN);
-      if (!match) continue;
-      const name = match[1];
-      if (!DESTRUCTIVE_NAME_PATTERN.test(name)) continue;
-      const prev = previousNonBlankLine(lines, i);
-      if (prev !== "// destructive") {
-        violations.push({
-          file: target.slice(target.indexOf("/src/") + 1),
-          line: i + 1,
-          name,
-          previous: prev,
-        });
-      }
-    }
+    const relPath = target.slice(target.indexOf("/src/") + 1);
+    violations.push(...scanFile(source, relPath));
   }
-
   return violations;
 }
 
-describe("destructive tool tagging coverage", () => {
-  it("every tool whose name matches the destructive pattern has `// destructive` above it", async () => {
+describe("destructive tool approval coverage", () => {
+  it("every tool whose name matches the destructive pattern is wrapped with approval()", async () => {
     const violations = await findViolations();
     if (violations.length > 0) {
       const details = violations
-        .map((v) => `  ${v.file}:${v.line} — ${v.name} (prev line: ${JSON.stringify(v.previous)})`)
+        .map((v) => `  ${v.file}:${v.line} — ${v.name}  (${v.snippet})`)
         .join("\n");
       throw new Error(
-        `Tools with destructive-looking names must have \`// destructive\` on the preceding line:\n${details}`,
+        `Tools with destructive-looking names must be wrapped with approval():\n${details}`,
       );
     }
     expect(violations).toHaveLength(0);

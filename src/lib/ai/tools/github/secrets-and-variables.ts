@@ -6,6 +6,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { env } from "../../../../env.ts";
+import { approval } from "../../approvals/index.ts";
 import { octokit } from "./client.ts";
 
 // NaCl "expand 32-byte k" sigma constant
@@ -106,22 +107,23 @@ export const create_or_update_repo_secret = tool({
   },
 });
 
-// destructive
-export const delete_repo_secret = tool({
-  description: `Delete an Actions secret from a repository.`,
-  inputSchema: z.object({
-    repo: z.string().describe("Repository name"),
-    secret_name: z.string().describe("Secret name"),
+export const delete_repo_secret = approval(
+  tool({
+    description: `Delete an Actions secret from a repository.`,
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name"),
+      secret_name: z.string().describe("Secret name"),
+    }),
+    execute: async ({ repo, secret_name }) => {
+      await octokit.rest.actions.deleteRepoSecret({
+        owner: env.GITHUB_ORG,
+        repo,
+        secret_name,
+      });
+      return JSON.stringify({ deleted: true, secret_name });
+    },
   }),
-  execute: async ({ repo, secret_name }) => {
-    await octokit.rest.actions.deleteRepoSecret({
-      owner: env.GITHUB_ORG,
-      repo,
-      secret_name,
-    });
-    return JSON.stringify({ deleted: true, secret_name });
-  },
-});
+);
 
 // ---------------------------------------------------------------------------
 // Repository Variables
@@ -182,22 +184,23 @@ export const create_or_update_repo_variable = tool({
   },
 });
 
-// destructive
-export const delete_repo_variable = tool({
-  description: `Delete an Actions variable from a repository.`,
-  inputSchema: z.object({
-    repo: z.string().describe("Repository name"),
-    name: z.string().describe("Variable name"),
+export const delete_repo_variable = approval(
+  tool({
+    description: `Delete an Actions variable from a repository.`,
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name"),
+      name: z.string().describe("Variable name"),
+    }),
+    execute: async ({ repo, name }) => {
+      await octokit.rest.actions.deleteRepoVariable({
+        owner: env.GITHUB_ORG,
+        repo,
+        name,
+      });
+      return JSON.stringify({ deleted: true, name });
+    },
   }),
-  execute: async ({ repo, name }) => {
-    await octokit.rest.actions.deleteRepoVariable({
-      owner: env.GITHUB_ORG,
-      repo,
-      name,
-    });
-    return JSON.stringify({ deleted: true, name });
-  },
-});
+);
 
 // ---------------------------------------------------------------------------
 // Organization Secrets
@@ -255,20 +258,21 @@ export const create_or_update_org_secret = tool({
   },
 });
 
-// destructive
-export const delete_org_secret = tool({
-  description: `Delete an Actions secret from the organization.`,
-  inputSchema: z.object({
-    secret_name: z.string().describe("Secret name"),
+export const delete_org_secret = approval(
+  tool({
+    description: `Delete an Actions secret from the organization.`,
+    inputSchema: z.object({
+      secret_name: z.string().describe("Secret name"),
+    }),
+    execute: async ({ secret_name }) => {
+      await octokit.rest.actions.deleteOrgSecret({
+        org: env.GITHUB_ORG,
+        secret_name,
+      });
+      return JSON.stringify({ deleted: true, secret_name });
+    },
   }),
-  execute: async ({ secret_name }) => {
-    await octokit.rest.actions.deleteOrgSecret({
-      org: env.GITHUB_ORG,
-      secret_name,
-    });
-    return JSON.stringify({ deleted: true, secret_name });
-  },
-});
+);
 
 // ---------------------------------------------------------------------------
 // Organization Variables
@@ -331,14 +335,15 @@ export const create_or_update_org_variable = tool({
   },
 });
 
-// destructive
-export const delete_org_variable = tool({
-  description: `Delete an Actions variable from the organization.`,
-  inputSchema: z.object({
-    name: z.string().describe("Variable name"),
+export const delete_org_variable = approval(
+  tool({
+    description: `Delete an Actions variable from the organization.`,
+    inputSchema: z.object({
+      name: z.string().describe("Variable name"),
+    }),
+    execute: async ({ name }) => {
+      await octokit.rest.actions.deleteOrgVariable({ org: env.GITHUB_ORG, name });
+      return JSON.stringify({ deleted: true, name });
+    },
   }),
-  execute: async ({ name }) => {
-    await octokit.rest.actions.deleteOrgVariable({ org: env.GITHUB_ORG, name });
-    return JSON.stringify({ deleted: true, name });
-  },
-});
+);

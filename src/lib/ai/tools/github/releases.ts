@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { env } from "../../../../env.ts";
+import { approval } from "../../approvals/index.ts";
 import { octokit } from "./client.ts";
 
 export const list_releases = tool({
@@ -127,22 +128,23 @@ export const update_release = tool({
   },
 });
 
-// destructive
-export const delete_release = tool({
-  description: "Delete a release by ID. The associated tag is not deleted automatically.",
-  inputSchema: z.object({
-    repo: z.string().describe("Repository name"),
-    release_id: z.number().describe("Release ID"),
+export const delete_release = approval(
+  tool({
+    description: "Delete a release by ID. The associated tag is not deleted automatically.",
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name"),
+      release_id: z.number().describe("Release ID"),
+    }),
+    execute: async ({ repo, release_id }) => {
+      await octokit.rest.repos.deleteRelease({
+        owner: env.GITHUB_ORG,
+        repo,
+        release_id,
+      });
+      return JSON.stringify({ deleted: true, release_id });
+    },
   }),
-  execute: async ({ repo, release_id }) => {
-    await octokit.rest.repos.deleteRelease({
-      owner: env.GITHUB_ORG,
-      repo,
-      release_id,
-    });
-    return JSON.stringify({ deleted: true, release_id });
-  },
-});
+);
 
 export const list_release_assets = tool({
   description:

@@ -3,6 +3,7 @@ import { Routes } from "discord-api-types/v10";
 import { z } from "zod";
 
 import { DISCORD_GUILD_ID } from "../../../protocol/constants.ts";
+import { approval } from "../../approvals/index.ts";
 import { discord } from "./client.ts";
 
 interface AutoModRule {
@@ -116,14 +117,15 @@ export const update_auto_mod_rule = tool({
   },
 });
 
-// destructive
-export const delete_auto_mod_rule = tool({
-  description: "Delete an auto-moderation rule. Cannot be undone.",
-  inputSchema: z.object({
-    rule_id: z.string().describe("Auto-moderation rule ID"),
+export const delete_auto_mod_rule = approval(
+  tool({
+    description: "Delete an auto-moderation rule. Cannot be undone.",
+    inputSchema: z.object({
+      rule_id: z.string().describe("Auto-moderation rule ID"),
+    }),
+    execute: async ({ rule_id }) => {
+      await discord.delete(Routes.guildAutoModerationRule(DISCORD_GUILD_ID, rule_id));
+      return JSON.stringify({ deleted: true, rule_id });
+    },
   }),
-  execute: async ({ rule_id }) => {
-    await discord.delete(Routes.guildAutoModerationRule(DISCORD_GUILD_ID, rule_id));
-    return JSON.stringify({ deleted: true, rule_id });
-  },
-});
+);

@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { env } from "../../../../env.ts";
+import { approval } from "../../approvals/index.ts";
 import { octokit } from "./client.ts";
 
 const packageTypeSchema = z.enum(["npm", "maven", "rubygems", "docker", "nuget", "container"]);
@@ -91,21 +92,22 @@ export const list_package_versions = tool({
 });
 
 /** Delete a specific package version. */
-// destructive
-export const delete_package_version = tool({
-  description: `Delete a specific version of a package from the purduehackers organization. This action is irreversible. You need the package version ID (get it from list_package_versions).`,
-  inputSchema: z.object({
-    package_type: packageTypeSchema,
-    package_name: z.string().describe("Package name"),
-    package_version_id: z.number().describe("Package version ID"),
+export const delete_package_version = approval(
+  tool({
+    description: `Delete a specific version of a package from the purduehackers organization. This action is irreversible. You need the package version ID (get it from list_package_versions).`,
+    inputSchema: z.object({
+      package_type: packageTypeSchema,
+      package_name: z.string().describe("Package name"),
+      package_version_id: z.number().describe("Package version ID"),
+    }),
+    execute: async ({ package_type, package_name, package_version_id }) => {
+      await octokit.rest.packages.deletePackageVersionForOrg({
+        org: env.GITHUB_ORG,
+        package_type,
+        package_name,
+        package_version_id,
+      });
+      return JSON.stringify({ deleted: true });
+    },
   }),
-  execute: async ({ package_type, package_name, package_version_id }) => {
-    await octokit.rest.packages.deletePackageVersionForOrg({
-      org: env.GITHUB_ORG,
-      package_type,
-      package_name,
-      package_version_id,
-    });
-    return JSON.stringify({ deleted: true });
-  },
-});
+);

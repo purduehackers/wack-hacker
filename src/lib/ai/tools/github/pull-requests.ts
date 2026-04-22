@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { env } from "../../../../env.ts";
+import { approval } from "../../approvals/index.ts";
 import { octokit } from "./client.ts";
 
 /** Create a new pull request. */
@@ -59,30 +60,31 @@ export const update_pull_request = tool({
 });
 
 /** Merge a pull request using merge, squash, or rebase. */
-// destructive
-export const merge_pull_request = tool({
-  description: `Merge a pull request. Supports merge commit, squash, and rebase strategies. Optionally set a custom commit title and message. Returns whether the merge succeeded and the resulting SHA.`,
-  inputSchema: z.object({
-    repo: z.string().describe("Repository name"),
-    pull_number: z.number().describe("PR number"),
-    commit_title: z.string().optional().describe("Merge commit title"),
-    commit_message: z.string().optional().describe("Merge commit body"),
-    merge_method: z.enum(["merge", "squash", "rebase"]).optional(),
+export const merge_pull_request = approval(
+  tool({
+    description: `Merge a pull request. Supports merge commit, squash, and rebase strategies. Optionally set a custom commit title and message. Returns whether the merge succeeded and the resulting SHA.`,
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name"),
+      pull_number: z.number().describe("PR number"),
+      commit_title: z.string().optional().describe("Merge commit title"),
+      commit_message: z.string().optional().describe("Merge commit body"),
+      merge_method: z.enum(["merge", "squash", "rebase"]).optional(),
+    }),
+    execute: async ({ repo, pull_number, ...input }) => {
+      const { data } = await octokit.rest.pulls.merge({
+        owner: env.GITHUB_ORG,
+        repo,
+        pull_number,
+        ...input,
+      });
+      return JSON.stringify({
+        merged: data.merged,
+        sha: data.sha,
+        message: data.message,
+      });
+    },
   }),
-  execute: async ({ repo, pull_number, ...input }) => {
-    const { data } = await octokit.rest.pulls.merge({
-      owner: env.GITHUB_ORG,
-      repo,
-      pull_number,
-      ...input,
-    });
-    return JSON.stringify({
-      merged: data.merged,
-      sha: data.sha,
-      message: data.message,
-    });
-  },
-});
+);
 
 /** List reviews on a pull request. */
 export const list_pr_reviews = tool({

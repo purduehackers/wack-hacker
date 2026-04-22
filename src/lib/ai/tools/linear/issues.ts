@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { approval } from "../../approvals/index.ts";
 import { linear, applyIssueRelations } from "./client.ts";
 import { issueFields, issueRelationSchema } from "./constants.ts";
 
@@ -55,16 +56,17 @@ export const update_issue = tool({
   },
 });
 
-// destructive
-export const delete_issue = tool({
-  description:
-    "Permanently delete an issue by ID. Only use when the user explicitly asks to delete.",
-  inputSchema: z.object({ id: z.string() }),
-  execute: async ({ id }) => {
-    const payload = await linear.deleteIssue(id);
-    return JSON.stringify({ success: payload.success });
-  },
-});
+export const delete_issue = approval(
+  tool({
+    description:
+      "Permanently delete an issue by ID. Only use when the user explicitly asks to delete.",
+    inputSchema: z.object({ id: z.string() }),
+    execute: async ({ id }) => {
+      const payload = await linear.deleteIssue(id);
+      return JSON.stringify({ success: payload.success });
+    },
+  }),
+);
 
 export const query_issue_activity = tool({
   description:

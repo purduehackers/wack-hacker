@@ -11,6 +11,7 @@ import {
 import { tool } from "ai";
 import { z } from "zod";
 
+import { approval } from "../../approvals/index.ts";
 import { admin } from "../../skills/index.ts";
 import { sentryOpts, sentryOrg } from "./client.ts";
 
@@ -67,26 +68,27 @@ export const update_project = tool({
   },
 });
 
-// destructive
 export const delete_project = admin(
-  tool({
-    description:
-      "Permanently delete a Sentry project. This removes all issues, events, and configuration. Irreversible.",
-    inputSchema: z.object({
-      project_slug: z.string().describe("Project slug"),
+  approval(
+    tool({
+      description:
+        "Permanently delete a Sentry project. This removes all issues, events, and configuration. Irreversible.",
+      inputSchema: z.object({
+        project_slug: z.string().describe("Project slug"),
+      }),
+      execute: async ({ project_slug }) => {
+        const result = await deleteAProject({
+          ...sentryOpts(),
+          path: {
+            organization_id_or_slug: sentryOrg(),
+            project_id_or_slug: project_slug,
+          },
+        });
+        unwrapResult(result, "deleteProject");
+        return JSON.stringify({ deleted: true, project_slug });
+      },
     }),
-    execute: async ({ project_slug }) => {
-      const result = await deleteAProject({
-        ...sentryOpts(),
-        path: {
-          organization_id_or_slug: sentryOrg(),
-          project_id_or_slug: project_slug,
-        },
-      });
-      unwrapResult(result, "deleteProject");
-      return JSON.stringify({ deleted: true, project_slug });
-    },
-  }),
+  ),
 );
 
 export const list_project_environments = tool({
@@ -155,24 +157,25 @@ export const create_project_key = tool({
   },
 });
 
-// destructive
-export const delete_project_key = tool({
-  description:
-    "Delete a Sentry client key (DSN). All SDKs using this key will stop sending events. Irreversible.",
-  inputSchema: z.object({
-    project_slug: z.string().describe("Project slug"),
-    key_id: z.string().describe("Client key ID"),
+export const delete_project_key = approval(
+  tool({
+    description:
+      "Delete a Sentry client key (DSN). All SDKs using this key will stop sending events. Irreversible.",
+    inputSchema: z.object({
+      project_slug: z.string().describe("Project slug"),
+      key_id: z.string().describe("Client key ID"),
+    }),
+    execute: async ({ project_slug, key_id }) => {
+      const result = await deleteAClientKey({
+        ...sentryOpts(),
+        path: {
+          organization_id_or_slug: sentryOrg(),
+          project_id_or_slug: project_slug,
+          key_id,
+        },
+      });
+      unwrapResult(result, "deleteKey");
+      return JSON.stringify({ deleted: true, key_id });
+    },
   }),
-  execute: async ({ project_slug, key_id }) => {
-    const result = await deleteAClientKey({
-      ...sentryOpts(),
-      path: {
-        organization_id_or_slug: sentryOrg(),
-        project_id_or_slug: project_slug,
-        key_id,
-      },
-    });
-    unwrapResult(result, "deleteKey");
-    return JSON.stringify({ deleted: true, key_id });
-  },
-});
+);
