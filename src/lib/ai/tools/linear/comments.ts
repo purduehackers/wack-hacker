@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { approval } from "../../approvals/index.ts";
 import { linear } from "./client.ts";
 
 export const create_comment = tool({
@@ -26,11 +27,13 @@ export const edit_comment = tool({
   },
 });
 
-export const delete_comment = tool({
-  description: "Delete a comment by ID. Only use when explicitly asked.",
-  inputSchema: z.object({ id: z.string() }),
-  execute: async ({ id }) => {
-    const payload = await linear.deleteComment(id);
-    return JSON.stringify({ success: payload.success });
-  },
-});
+export const delete_comment = approval(
+  tool({
+    description: "Delete a comment by ID. Only use when explicitly asked.",
+    inputSchema: z.object({ id: z.string() }),
+    execute: async ({ id }) => {
+      const payload = await linear.deleteComment(id);
+      return JSON.stringify({ success: payload.success });
+    },
+  }),
+);

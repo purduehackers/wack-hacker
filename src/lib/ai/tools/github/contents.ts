@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { env } from "../../../../env.ts";
+import { approval } from "../../approvals/index.ts";
 import { octokit } from "./client.ts";
 
 /** Get the content of a file or list a directory in a repository. */
@@ -80,27 +81,29 @@ export const create_or_update_file = tool({
 });
 
 /** Delete a file from a repository via a commit. */
-export const delete_file = tool({
-  description: `Delete a file from a repository by creating a commit that removes it. Requires the file's current SHA (get it from get_file_content).`,
-  inputSchema: z.object({
-    repo: z.string().describe("Repository name"),
-    path: z.string().describe("File path to delete"),
-    message: z.string().describe("Commit message"),
-    sha: z.string().describe("SHA of the file to delete"),
-    branch: z.string().optional(),
+export const delete_file = approval(
+  tool({
+    description: `Delete a file from a repository by creating a commit that removes it. Requires the file's current SHA (get it from get_file_content).`,
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name"),
+      path: z.string().describe("File path to delete"),
+      message: z.string().describe("Commit message"),
+      sha: z.string().describe("SHA of the file to delete"),
+      branch: z.string().optional(),
+    }),
+    execute: async ({ repo, path, message, sha, branch }) => {
+      await octokit.rest.repos.deleteFile({
+        owner: env.GITHUB_ORG,
+        repo,
+        path,
+        message,
+        sha,
+        branch,
+      });
+      return JSON.stringify({ deleted: true, path });
+    },
   }),
-  execute: async ({ repo, path, message, sha, branch }) => {
-    await octokit.rest.repos.deleteFile({
-      owner: env.GITHUB_ORG,
-      repo,
-      path,
-      message,
-      sha,
-      branch,
-    });
-    return JSON.stringify({ deleted: true, path });
-  },
-});
+);
 
 /** Get the full recursive directory tree of a repository. */
 export const get_directory_tree = tool({

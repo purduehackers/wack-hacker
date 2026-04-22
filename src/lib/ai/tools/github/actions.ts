@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { env } from "../../../../env.ts";
+import { approval } from "../../approvals/index.ts";
 import { octokit } from "./client.ts";
 
 /** List workflow definitions in a repository. */
@@ -141,61 +142,67 @@ export const get_workflow_run = tool({
 });
 
 /** Trigger a workflow dispatch event to manually run a workflow. */
-export const trigger_workflow = tool({
-  description: `Trigger a workflow_dispatch event to manually run a workflow. The workflow must have a workflow_dispatch trigger defined. Specify the branch/tag to run on and optional input parameters.`,
-  inputSchema: z.object({
-    repo: z.string().describe("Repository name"),
-    workflow_id: z
-      .union([z.number(), z.string()])
-      .describe("Workflow ID or filename (e.g. 'deploy.yml')"),
-    ref: z.string().describe("Branch or tag to run the workflow on"),
-    inputs: z.record(z.string(), z.string()).optional().describe("Workflow input parameters"),
+export const trigger_workflow = approval(
+  tool({
+    description: `Trigger a workflow_dispatch event to manually run a workflow. The workflow must have a workflow_dispatch trigger defined. Specify the branch/tag to run on and optional input parameters.`,
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name"),
+      workflow_id: z
+        .union([z.number(), z.string()])
+        .describe("Workflow ID or filename (e.g. 'deploy.yml')"),
+      ref: z.string().describe("Branch or tag to run the workflow on"),
+      inputs: z.record(z.string(), z.string()).optional().describe("Workflow input parameters"),
+    }),
+    execute: async ({ repo, workflow_id, ref, inputs }) => {
+      await octokit.rest.actions.createWorkflowDispatch({
+        owner: env.GITHUB_ORG,
+        repo,
+        workflow_id,
+        ref,
+        inputs,
+      });
+      return JSON.stringify({ triggered: true, workflow_id, ref });
+    },
   }),
-  execute: async ({ repo, workflow_id, ref, inputs }) => {
-    await octokit.rest.actions.createWorkflowDispatch({
-      owner: env.GITHUB_ORG,
-      repo,
-      workflow_id,
-      ref,
-      inputs,
-    });
-    return JSON.stringify({ triggered: true, workflow_id, ref });
-  },
-});
+);
 
 /** Cancel a workflow run that is in progress. */
-export const cancel_workflow_run = tool({
-  description: `Cancel a workflow run that is currently in progress or queued. Returns confirmation of cancellation.`,
-  inputSchema: z.object({
-    repo: z.string().describe("Repository name"),
-    run_id: z.number().describe("Workflow run ID"),
+export const cancel_workflow_run = approval(
+  tool({
+    description: `Cancel a workflow run that is currently in progress or queued. Returns confirmation of cancellation.`,
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name"),
+      run_id: z.number().describe("Workflow run ID"),
+    }),
+    execute: async ({ repo, run_id }) => {
+      await octokit.rest.actions.cancelWorkflowRun({
+        owner: env.GITHUB_ORG,
+        repo,
+        run_id,
+      });
+      return JSON.stringify({ cancelled: true, run_id });
+    },
   }),
-  execute: async ({ repo, run_id }) => {
-    await octokit.rest.actions.cancelWorkflowRun({
-      owner: env.GITHUB_ORG,
-      repo,
-      run_id,
-    });
-    return JSON.stringify({ cancelled: true, run_id });
-  },
-});
+);
 
 /** Re-run a completed workflow run. */
-export const rerun_workflow = tool({
-  description: `Re-run a completed workflow run. This creates a new attempt of the same run. Useful for retrying failed builds or deployments.`,
-  inputSchema: z.object({
-    repo: z.string().describe("Repository name"),
-    run_id: z.number().describe("Workflow run ID"),
+export const rerun_workflow = approval(
+  tool({
+    description: `Re-run a completed workflow run. This creates a new attempt of the same run. Useful for retrying failed builds or deployments.`,
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name"),
+      run_id: z.number().describe("Workflow run ID"),
+    }),
+    execute: async ({ repo, run_id }) => {
+      await octokit.rest.actions.reRunWorkflow({
+        owner: env.GITHUB_ORG,
+        repo,
+        run_id,
+      });
+      return JSON.stringify({ rerun: true, run_id });
+    },
   }),
-  execute: async ({ repo, run_id }) => {
-    await octokit.rest.actions.reRunWorkflow({
-      owner: env.GITHUB_ORG,
-      repo,
-      run_id,
-    });
-    return JSON.stringify({ rerun: true, run_id });
-  },
-});
+);
 
 /** List jobs for a workflow run with their steps and statuses. */
 export const list_workflow_jobs = tool({

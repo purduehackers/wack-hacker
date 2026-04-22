@@ -5,6 +5,8 @@ export * from "./alerts.ts";
 export * from "./performance.ts";
 export * from "./issue-management.ts";
 export * from "./members.ts";
+export * from "./membership.ts";
+export * from "./projects-management.ts";
 export * from "./stats.ts";
 export * from "./metrics.ts";
 export * from "./traces.ts";

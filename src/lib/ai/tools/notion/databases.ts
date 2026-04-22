@@ -7,6 +7,7 @@ import type {
 import { tool } from "ai";
 import { z } from "zod";
 
+import { approval } from "../../approvals/index.ts";
 import { notion, richTextToPlain } from "./client.ts";
 
 export const query_database = tool({
@@ -105,3 +106,23 @@ export const update_database = tool({
     });
   },
 });
+
+export const archive_database = approval(
+  tool({
+    description:
+      "Archive (soft-delete) a Notion database. The database and its pages become hidden from default views but can be restored from the Notion UI.",
+    inputSchema: z.object({
+      database_id: z.string().describe("Database UUID"),
+    }),
+    execute: async ({ database_id }) => {
+      const db = await notion.databases.update({
+        database_id,
+        archived: true,
+      } as UpdateDatabaseParameters);
+      return JSON.stringify({
+        id: db.id,
+        archived: "archived" in db ? db.archived : true,
+      });
+    },
+  }),
+);

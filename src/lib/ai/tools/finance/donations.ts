@@ -45,6 +45,19 @@ export const list_donations = tool({
   },
 });
 
+/** Fetch a single donation by ID. */
+export const get_donation = tool({
+  description:
+    "Fetch a single donation by ID. Returns donor name (or '(anonymous)'), amount_cents, status, recurring flag, and message.",
+  inputSchema: z.object({
+    id: z.string().describe("Donation ID"),
+  }),
+  execute: async ({ id }) => {
+    const data = await hcbGet<HcbDonation>(`/donations/${id}`);
+    return JSON.stringify(projectDonation(data));
+  },
+});
+
 /** Sum donations in a date window. */
 export const donation_totals = tool({
   description:

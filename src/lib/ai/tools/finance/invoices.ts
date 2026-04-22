@@ -45,6 +45,19 @@ export const list_invoices = tool({
   },
 });
 
+/** Get a single invoice by ID. */
+export const get_invoice = tool({
+  description:
+    "Get a single invoice by ID — sponsor name, amount_cents, status, due/paid dates, and memo.",
+  inputSchema: z.object({
+    id: z.string().describe("Invoice ID"),
+  }),
+  execute: async ({ id }) => {
+    const data = await hcbGet<HcbInvoice>(`/invoices/${id}`);
+    return JSON.stringify(projectInvoice(data));
+  },
+});
+
 /** List outstanding (unpaid) invoices. */
 export const list_open_invoices = tool({
   description:

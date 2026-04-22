@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { env } from "../../../../env.ts";
+import { approval } from "../../approvals/index.ts";
 import { admin } from "../../skills/index.ts";
 import { octokit } from "./client.ts";
 
@@ -163,19 +164,21 @@ export const invite_org_member = admin(
 );
 
 export const remove_org_member = admin(
-  tool({
-    description: `Remove a user from the purduehackers organization. This revokes all their access to org repos.`,
-    inputSchema: z.object({
-      username: z.string().describe("GitHub username to remove"),
+  approval(
+    tool({
+      description: `Remove a user from the purduehackers organization. This revokes all their access to org repos.`,
+      inputSchema: z.object({
+        username: z.string().describe("GitHub username to remove"),
+      }),
+      execute: async ({ username }) => {
+        await octokit.rest.orgs.removeMembershipForUser({
+          org: env.GITHUB_ORG,
+          username,
+        });
+        return JSON.stringify({ removed: true, username });
+      },
     }),
-    execute: async ({ username }) => {
-      await octokit.rest.orgs.removeMembershipForUser({
-        org: env.GITHUB_ORG,
-        username,
-      });
-      return JSON.stringify({ removed: true, username });
-    },
-  }),
+  ),
 );
 
 export const add_team_member = admin(
@@ -199,21 +202,23 @@ export const add_team_member = admin(
 );
 
 export const remove_team_member = admin(
-  tool({
-    description: `Remove a user from a team. They keep org membership but lose team-specific repo access.`,
-    inputSchema: z.object({
-      team_slug: z.string().describe("Team slug"),
-      username: z.string().describe("GitHub username"),
+  approval(
+    tool({
+      description: `Remove a user from a team. They keep org membership but lose team-specific repo access.`,
+      inputSchema: z.object({
+        team_slug: z.string().describe("Team slug"),
+        username: z.string().describe("GitHub username"),
+      }),
+      execute: async ({ team_slug, username }) => {
+        await octokit.rest.teams.removeMembershipForUserInOrg({
+          org: env.GITHUB_ORG,
+          team_slug,
+          username,
+        });
+        return JSON.stringify({ removed: true, team_slug, username });
+      },
     }),
-    execute: async ({ team_slug, username }) => {
-      await octokit.rest.teams.removeMembershipForUserInOrg({
-        org: env.GITHUB_ORG,
-        team_slug,
-        username,
-      });
-      return JSON.stringify({ removed: true, team_slug, username });
-    },
-  }),
+  ),
 );
 
 export const create_webhook = tool({
@@ -274,21 +279,23 @@ export const update_webhook = tool({
   },
 });
 
-export const delete_webhook = tool({
-  description: `Delete a repository webhook. Irreversible — the webhook stops receiving events immediately.`,
-  inputSchema: z.object({
-    repo: z.string().describe("Repository name"),
-    hook_id: z.number().describe("Webhook ID"),
+export const delete_webhook = approval(
+  tool({
+    description: `Delete a repository webhook. Irreversible — the webhook stops receiving events immediately.`,
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name"),
+      hook_id: z.number().describe("Webhook ID"),
+    }),
+    execute: async ({ repo, hook_id }) => {
+      await octokit.rest.repos.deleteWebhook({
+        owner: env.GITHUB_ORG,
+        repo,
+        hook_id,
+      });
+      return JSON.stringify({ deleted: true, hook_id });
+    },
   }),
-  execute: async ({ repo, hook_id }) => {
-    await octokit.rest.repos.deleteWebhook({
-      owner: env.GITHUB_ORG,
-      repo,
-      hook_id,
-    });
-    return JSON.stringify({ deleted: true, hook_id });
-  },
-});
+);
 
 export const list_org_webhooks = tool({
   description: `List webhooks configured for the purduehackers organization. Returns ID, active status, subscribed events, and config URL.`,

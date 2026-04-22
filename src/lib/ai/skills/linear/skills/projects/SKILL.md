@@ -6,6 +6,10 @@ tools:
   [
     create_project,
     update_project,
+    get_project,
+    archive_project,
+    unarchive_project,
+    delete_project,
     create_project_milestone,
     update_project_milestone,
     query_project_activity,
@@ -31,3 +35,8 @@ mode: inline
 - Use history for "when did status/lead/dates change?"
 - Supports pagination and date ranges.
 </activity>
+
+<archiving>
+- Prefer archive_project over delete_project — archive is reversible via unarchive_project.
+- delete_project is permanent and only for mistaken creations.
+</archiving>

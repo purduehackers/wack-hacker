@@ -2,7 +2,8 @@
 name: issues
 description: Create, update, delete issues; query issue activity and history.
 criteria: Use when the user wants to create, update, delete, or inspect the history of a specific issue.
-tools: [create_issue, update_issue, delete_issue, query_issue_activity]
+tools:
+  [create_issue, update_issue, delete_issue, archive_issue, unarchive_issue, query_issue_activity]
 minRole: organizer
 mode: inline
 ---
@@ -25,6 +26,7 @@ mode: inline
 
 <deleting>
 - Only when explicitly asked. Only delete issues created by me earlier in this thread.
+- Prefer archive_issue over delete_issue — archive is reversible via unarchive_issue.
 </deleting>
 
 <activity>

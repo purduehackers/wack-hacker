@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { approval } from "../../approvals/index.ts";
 import { admin } from "../../skills/index.ts";
 import { linear } from "./client.ts";
 
@@ -51,26 +52,28 @@ export const add_user_to_team = admin(
 );
 
 export const remove_user_from_team = admin(
-  tool({
-    description:
-      "Remove a user from a Linear team. Resolve user and team IDs first via list_users and suggest_property_values.",
-    inputSchema: z.object({
-      team_id: z.string().describe("Team UUID"),
-      user_id: z.string().describe("User UUID to remove"),
-    }),
-    execute: async ({ team_id, user_id }) => {
-      const user = await linear.user(user_id);
-      const memberships = await user.teamMemberships();
+  approval(
+    tool({
+      description:
+        "Remove a user from a Linear team. Resolve user and team IDs first via list_users and suggest_property_values.",
+      inputSchema: z.object({
+        team_id: z.string().describe("Team UUID"),
+        user_id: z.string().describe("User UUID to remove"),
+      }),
+      execute: async ({ team_id, user_id }) => {
+        const user = await linear.user(user_id);
+        const memberships = await user.teamMemberships();
 
-      for (const m of memberships.nodes) {
-        const team = await m.team;
-        if (team && team.id === team_id) {
-          const payload = await linear.deleteTeamMembership(m.id);
-          return JSON.stringify({ success: payload.success });
+        for (const m of memberships.nodes) {
+          const team = await m.team;
+          if (team && team.id === team_id) {
+            const payload = await linear.deleteTeamMembership(m.id);
+            return JSON.stringify({ success: payload.success });
+          }
         }
-      }
 
-      return JSON.stringify({ error: "User is not a member of this team" });
-    },
-  }),
+        return JSON.stringify({ error: "User is not a member of this team" });
+      },
+    }),
+  ),
 );

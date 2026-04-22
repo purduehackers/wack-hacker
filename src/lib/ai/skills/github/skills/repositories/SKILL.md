@@ -7,6 +7,8 @@ tools:
     create_repository,
     update_repository,
     delete_repository,
+    archive_repository,
+    transfer_repository,
     list_branches,
     get_branch_protection,
     set_branch_protection,

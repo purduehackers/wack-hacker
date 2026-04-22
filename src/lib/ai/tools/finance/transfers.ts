@@ -14,6 +14,31 @@ interface HcbTransfer {
   receiver?: { id?: string; name?: string; slug?: string };
 }
 
+function projectTransfer(t: HcbTransfer) {
+  return {
+    id: t.id,
+    amount_cents: t.amount_cents,
+    memo: t.memo,
+    status: t.status,
+    created_at: t.created_at,
+    sender: t.sender?.name ?? t.sender?.slug,
+    receiver: t.receiver?.name ?? t.receiver?.slug,
+  };
+}
+
+/** Get a single inter-org transfer by ID. */
+export const get_transfer = tool({
+  description:
+    "Get a single HCB inter-org transfer by ID — sender, receiver, amount_cents, status, and memo.",
+  inputSchema: z.object({
+    id: z.string().describe("Transfer ID"),
+  }),
+  execute: async ({ id }) => {
+    const data = await hcbGet<HcbTransfer>(`/transfers/${id}`);
+    return JSON.stringify(projectTransfer(data));
+  },
+});
+
 /** List inter-org transfers (disbursements between HCB orgs). */
 export const list_transfers = tool({
   description:
@@ -24,16 +49,6 @@ export const list_transfers = tool({
       `/organizations/${hcbOrgSlug()}/transfers`,
       paginationQuery(input),
     );
-    return JSON.stringify(
-      data.map((t) => ({
-        id: t.id,
-        amount_cents: t.amount_cents,
-        memo: t.memo,
-        status: t.status,
-        created_at: t.created_at,
-        sender: t.sender?.name ?? t.sender?.slug,
-        receiver: t.receiver?.name ?? t.receiver?.slug,
-      })),
-    );
+    return JSON.stringify(data.map(projectTransfer));
   },
 });

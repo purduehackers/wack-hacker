@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { env } from "../../../../env.ts";
+import { approval } from "../../approvals/index.ts";
 import { octokit } from "./client.ts";
 
 /** Create a new issue in a repository. */
@@ -58,6 +59,94 @@ export const update_issue = tool({
     });
   },
 });
+
+/** Lock an issue's conversation. */
+export const lock_issue = approval(
+  tool({
+    description:
+      "Lock the conversation on an issue or PR so only collaborators can comment. Useful for derailed threads.",
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name"),
+      issue_number: z.number().describe("Issue or PR number"),
+      lock_reason: z
+        .enum(["off-topic", "too heated", "resolved", "spam"])
+        .optional()
+        .describe("Reason for locking"),
+    }),
+    execute: async ({ repo, issue_number, lock_reason }) => {
+      await octokit.rest.issues.lock({
+        owner: env.GITHUB_ORG,
+        repo,
+        issue_number,
+        lock_reason,
+      });
+      return JSON.stringify({ locked: true, issue_number });
+    },
+  }),
+);
+
+/** Unlock an issue's conversation. */
+export const unlock_issue = tool({
+  description: "Unlock a previously locked issue or PR conversation.",
+  inputSchema: z.object({
+    repo: z.string().describe("Repository name"),
+    issue_number: z.number().describe("Issue or PR number"),
+  }),
+  execute: async ({ repo, issue_number }) => {
+    await octokit.rest.issues.unlock({
+      owner: env.GITHUB_ORG,
+      repo,
+      issue_number,
+    });
+    return JSON.stringify({ unlocked: true, issue_number });
+  },
+});
+
+/** Add assignees to an issue or PR. */
+export const add_assignees = tool({
+  description: "Add assignees to an issue or PR. Up to 10 assignees.",
+  inputSchema: z.object({
+    repo: z.string().describe("Repository name"),
+    issue_number: z.number().describe("Issue or PR number"),
+    assignees: z.array(z.string()).min(1).max(10).describe("GitHub usernames to assign"),
+  }),
+  execute: async ({ repo, issue_number, assignees }) => {
+    const { data } = await octokit.rest.issues.addAssignees({
+      owner: env.GITHUB_ORG,
+      repo,
+      issue_number,
+      assignees,
+    });
+    return JSON.stringify({
+      number: data.number,
+      assignees: data.assignees?.map((a) => a.login),
+    });
+  },
+});
+
+/** Remove assignees from an issue or PR. */
+export const remove_assignees = approval(
+  tool({
+    description: "Remove assignees from an issue or PR.",
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name"),
+      issue_number: z.number().describe("Issue or PR number"),
+      assignees: z.array(z.string()).min(1).describe("GitHub usernames to unassign"),
+    }),
+    execute: async ({ repo, issue_number, assignees }) => {
+      const { data } = await octokit.rest.issues.removeAssignees({
+        owner: env.GITHUB_ORG,
+        repo,
+        issue_number,
+        assignees,
+      });
+      return JSON.stringify({
+        number: data.number,
+        assignees: data.assignees?.map((a) => a.login),
+      });
+    },
+  }),
+);
 
 /** List comments on an issue with pagination. */
 export const list_issue_comments = tool({
@@ -128,21 +217,23 @@ export const update_issue_comment = tool({
 });
 
 /** Delete an issue comment. */
-export const delete_issue_comment = tool({
-  description: `Permanently delete an issue comment by its ID. This action cannot be undone.`,
-  inputSchema: z.object({
-    repo: z.string().describe("Repository name"),
-    comment_id: z.number().describe("Comment ID"),
+export const delete_issue_comment = approval(
+  tool({
+    description: `Permanently delete an issue comment by its ID. This action cannot be undone.`,
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name"),
+      comment_id: z.number().describe("Comment ID"),
+    }),
+    execute: async ({ repo, comment_id }) => {
+      await octokit.rest.issues.deleteComment({
+        owner: env.GITHUB_ORG,
+        repo,
+        comment_id,
+      });
+      return JSON.stringify({ deleted: true });
+    },
   }),
-  execute: async ({ repo, comment_id }) => {
-    await octokit.rest.issues.deleteComment({
-      owner: env.GITHUB_ORG,
-      repo,
-      comment_id,
-    });
-    return JSON.stringify({ deleted: true });
-  },
-});
+);
 
 /** Create, update, or delete a label in a repository. */
 export const manage_labels = tool({

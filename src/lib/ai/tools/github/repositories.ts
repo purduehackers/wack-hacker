@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { env } from "../../../../env.ts";
+import { approval } from "../../approvals/index.ts";
 import { octokit } from "./client.ts";
 
 export const create_repository = tool({
@@ -66,16 +67,64 @@ export const update_repository = tool({
   },
 });
 
-export const delete_repository = tool({
-  description: `Permanently delete a repository. Irreversible — destroys all code, issues, and history.`,
-  inputSchema: z.object({
-    repo: z.string().describe("Repository name to delete"),
+export const delete_repository = approval(
+  tool({
+    description: `Permanently delete a repository. Irreversible — destroys all code, issues, and history.`,
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name to delete"),
+    }),
+    execute: async ({ repo }) => {
+      await octokit.rest.repos.delete({ owner: env.GITHUB_ORG, repo });
+      return JSON.stringify({ deleted: true, repo: `${env.GITHUB_ORG}/${repo}` });
+    },
   }),
-  execute: async ({ repo }) => {
-    await octokit.rest.repos.delete({ owner: env.GITHUB_ORG, repo });
-    return JSON.stringify({ deleted: true, repo: `${env.GITHUB_ORG}/${repo}` });
-  },
-});
+);
+
+export const archive_repository = approval(
+  tool({
+    description:
+      "Archive a repository — makes it read-only. Reversible via update_repository archived=false, but users can no longer push, open issues/PRs, or fork while archived.",
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name"),
+    }),
+    execute: async ({ repo }) => {
+      const { data } = await octokit.rest.repos.update({
+        owner: env.GITHUB_ORG,
+        repo,
+        archived: true,
+      });
+      return JSON.stringify({
+        archived: true,
+        repo: data.full_name,
+      });
+    },
+  }),
+);
+
+export const transfer_repository = approval(
+  tool({
+    description:
+      "Transfer a repository to a different owner (user or org). The new owner receives a transfer invitation which they must accept.",
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name"),
+      new_owner: z.string().describe("New owner's username or org slug"),
+      team_ids: z.array(z.number()).optional().describe("Team IDs to add on transfer"),
+    }),
+    execute: async ({ repo, new_owner, team_ids }) => {
+      const { data } = await octokit.rest.repos.transfer({
+        owner: env.GITHUB_ORG,
+        repo,
+        new_owner,
+        team_ids,
+      });
+      return JSON.stringify({
+        transferring: true,
+        new_full_name: `${new_owner}/${repo}`,
+        html_url: data.html_url,
+      });
+    },
+  }),
+);
 
 export const list_branches = tool({
   description: `List branches for a repository. Optionally filter to only protected branches. Returns branch name and protection status.`,
@@ -178,18 +227,20 @@ export const set_branch_protection = tool({
   },
 });
 
-export const delete_branch_protection = tool({
-  description: `Remove all branch protection rules from a branch, making it unprotected.`,
-  inputSchema: z.object({
-    repo: z.string().describe("Repository name"),
-    branch: z.string().describe("Branch name"),
+export const delete_branch_protection = approval(
+  tool({
+    description: `Remove all branch protection rules from a branch, making it unprotected.`,
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name"),
+      branch: z.string().describe("Branch name"),
+    }),
+    execute: async ({ repo, branch }) => {
+      await octokit.rest.repos.deleteBranchProtection({
+        owner: env.GITHUB_ORG,
+        repo,
+        branch,
+      });
+      return JSON.stringify({ deleted: true, repo, branch });
+    },
   }),
-  execute: async ({ repo, branch }) => {
-    await octokit.rest.repos.deleteBranchProtection({
-      owner: env.GITHUB_ORG,
-      repo,
-      branch,
-    });
-    return JSON.stringify({ deleted: true, repo, branch });
-  },
-});
+);
