@@ -145,9 +145,9 @@ describe("createDelegationTool — extended SubagentSpec (input + context)", () 
   async function drainWith(
     spec: Parameters<typeof createDelegationTool>[0],
     input: unknown,
-    agentContext?: Parameters<typeof createDelegationTool>[3],
+    context: Parameters<typeof createDelegationTool>[1] = contextForRole(UserRole.Admin),
   ) {
-    const t = createDelegationTool(spec, UserRole.Admin, new TurnUsageTracker(), agentContext);
+    const t = createDelegationTool(spec, context, new TurnUsageTracker());
     const received: UIMessage[] = [];
     const gen = t.execute!(
       input,
@@ -177,32 +177,16 @@ describe("createDelegationTool — extended SubagentSpec (input + context)", () 
   });
 
   it("passes buildExperimentalContext's result as experimental_context to the nested agent", async () => {
-    const agentContext = { thread: { id: "T1" } } as Parameters<typeof createDelegationTool>[3];
     const spec = {
       ...baseSpec,
       buildExperimentalContext: (input: unknown) => ({ marker: "ctx", input }),
     };
-    await drainWith(spec, { task: "go" }, agentContext);
+    await drainWith(spec, { task: "go" });
 
     const call = model.doStreamCalls[0]!;
     // providerOptions is what AI SDK forwards; experimental_context is wired via provider metadata.
     // We assert indirectly: the agent actually ran one step + the mock model was invoked.
     expect(call).toBeDefined();
-  });
-
-  it("throws when buildExperimentalContext is set but agentContext is missing", async () => {
-    const spec = {
-      ...baseSpec,
-      buildExperimentalContext: () => ({}),
-    };
-    const t = createDelegationTool(spec, UserRole.Admin, new TurnUsageTracker());
-    const gen = t.execute!(
-      { task: "go" },
-      {} as Parameters<NonNullable<typeof t.execute>>[1],
-    ) as AsyncIterable<UIMessage>;
-    await expect(async () => {
-      for await (const _ of gen);
-    }).rejects.toThrow(/requires an AgentContext/);
   });
 });
 
@@ -221,9 +205,9 @@ describe("createDelegationTool — extended SubagentSpec (postFinish + model)", 
   async function drainWith(
     spec: Parameters<typeof createDelegationTool>[0],
     input: unknown,
-    agentContext?: Parameters<typeof createDelegationTool>[3],
+    context: Parameters<typeof createDelegationTool>[1] = contextForRole(UserRole.Admin),
   ) {
-    const t = createDelegationTool(spec, UserRole.Admin, new TurnUsageTracker(), agentContext);
+    const t = createDelegationTool(spec, context, new TurnUsageTracker());
     const received: UIMessage[] = [];
     const gen = t.execute!(
       input,
@@ -245,8 +229,7 @@ describe("createDelegationTool — extended SubagentSpec (postFinish + model)", 
         yield extra;
       },
     };
-    const agentContext = {} as Parameters<typeof createDelegationTool>[3];
-    const messages = await drainWith(spec, { task: "go" }, agentContext);
+    const messages = await drainWith(spec, { task: "go" });
     const last = messages.at(-1)!;
     const lastText = last.parts.find((p): p is { type: "text"; text: string } => p.type === "text");
     expect(lastText?.text).toBe("post-finish message");
@@ -280,7 +263,7 @@ describe("createDelegationTool — extractPrompt fallback", () => {
         instructions: (await import("zod")).z.string(),
       }),
     };
-    const t = createDelegationTool(spec, UserRole.Admin, new TurnUsageTracker());
+    const t = createDelegationTool(spec, contextForRole(UserRole.Admin), new TurnUsageTracker());
     const gen = t.execute!(
       { instructions: "do X" },
       {} as Parameters<NonNullable<typeof t.execute>>[1],
@@ -302,7 +285,7 @@ describe("createDelegationTool — extractPrompt fallback", () => {
       ...baseSpec,
       inputSchema: (await import("zod")).z.any(),
     };
-    const t = createDelegationTool(spec, UserRole.Admin, new TurnUsageTracker());
+    const t = createDelegationTool(spec, contextForRole(UserRole.Admin), new TurnUsageTracker());
     const gen = t.execute!(
       "just a string",
       {} as Parameters<NonNullable<typeof t.execute>>[1],
@@ -317,7 +300,7 @@ describe("createDelegationTool — extractPrompt fallback", () => {
       ...baseSpec,
       inputSchema: (await import("zod")).z.any(),
     };
-    const t = createDelegationTool(spec, UserRole.Admin, new TurnUsageTracker());
+    const t = createDelegationTool(spec, contextForRole(UserRole.Admin), new TurnUsageTracker());
     const gen = t.execute!(
       { foo: 1, bar: true },
       {} as Parameters<NonNullable<typeof t.execute>>[1],
