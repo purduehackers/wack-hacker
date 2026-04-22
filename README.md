@@ -1,6 +1,6 @@
-# Wack Hacker
+# Hack Wacker
 
-AI-powered Discord bot for [Purdue Hackers](https://purduehackers.com). Wack Hacker coordinates specialized subagents to manage many of our resources from Discord threads.
+AI-powered Discord bot for [Purdue Hackers](https://purduehackers.com). Hack Wacker coordinates specialized subagents to manage many of our resources from Discord threads.
 
 - **Talk to your tools.** @mention the bot in any thread to read and act on the services we use without leaving Discord.
 - **Multi-turn memory.** Conversations persist across messages, restarts, and deploys, so you can come back to a thread hours later and pick up where you left off.
