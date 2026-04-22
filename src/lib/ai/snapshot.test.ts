@@ -220,3 +220,30 @@ describe("buildContextSnapshot: tool schema serialization", () => {
     expect(malformed?.inputSchema).toEqual({});
   });
 });
+
+describe("buildContextSnapshot: default tool resolver", () => {
+  // Exercises the `getTools = getOrchestratorTools` default so the DI hook's
+  // fallback branch doesn't rot. SDK mocks above let the real orchestrator
+  // tool set load safely.
+  it("resolves tools via getOrchestratorTools when getTools is omitted", () => {
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    const snap = buildContextSnapshot({
+      context: ctx.toJSON(),
+      messages: [],
+      totalUsage: usage,
+      turnCount: 1,
+    });
+    // The real orchestrator always exposes these base tools.
+    const names = snap.tools.map((t) => t.name);
+    expect(names).toEqual(
+      expect.arrayContaining([
+        "currentTime",
+        "documentation",
+        "resolve_organizer",
+        "scheduleTask",
+        "listScheduledTasks",
+        "cancelTask",
+      ]),
+    );
+  });
+});

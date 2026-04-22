@@ -25,8 +25,12 @@ const hoisted = vi.hoisted(() => ({
     async (_ch: string, _id: string, body: { content: string }) =>
       ({ id: _id, content: body.content, channel_id: _ch }) as unknown,
   ),
-  redis: undefined as ReturnType<typeof createRichMemoryRedis> | undefined,
 }));
+
+// `tasks/registry.ts` memoizes the redis instance from `Redis.fromEnv()` on
+// first use (`redis ??= ...`), so we keep the same fixture instance across
+// every test and rely on `reset()` in beforeEach to wipe state.
+const redis = createRichMemoryRedis();
 
 vi.mock("@discordjs/core/http-only", () => ({
   API: class MockAPI {
@@ -56,14 +60,14 @@ vi.mock("workflow", () => ({
 }));
 
 vi.mock("@upstash/redis", () => ({
-  Redis: { fromEnv: () => hoisted.redis! },
+  Redis: { fromEnv: () => redis },
 }));
 
 const { taskWorkflow } = await import("./task.ts");
 
 beforeEach(() => {
   vi.clearAllMocks();
-  hoisted.redis = createRichMemoryRedis();
+  redis.reset();
   hoisted.createMessage.mockImplementation(async (_ch: string, body: { content: string }) => ({
     id: "msg-1",
     content: body.content,
@@ -91,7 +95,7 @@ describe("taskWorkflow: message action footer", () => {
     });
 
     // Registry persisted the task under the workflow run ID.
-    const stored = await hoisted.redis!.get<unknown>("task:task-run-42");
+    const stored = await redis.get<unknown>("task:task-run-42");
     expect(stored).toBeDefined();
 
     expect(hoisted.createMessage).toHaveBeenCalledOnce();

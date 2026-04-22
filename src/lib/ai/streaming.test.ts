@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 
 import type { ChatMessage } from "./types.ts";
 
@@ -6,11 +6,14 @@ import {
   asAPI,
   createMockAPI,
   discordRESTClass,
+  installMockProvider,
   linearClientClass,
   messagePacket,
   notionClientClass,
   octokitClass,
   resendClass,
+  streamingTextModel,
+  uninstallMockProvider,
 } from "../test/fixtures/index.ts";
 
 // Third-party SDK mocks — streaming.ts transitively imports the real tool
@@ -479,5 +482,28 @@ describe("streamTurn: messages array", () => {
     expect(typeof messages[0].content).toBe("string");
     expect(typeof messages[1].content).toBe("string");
     expect(Array.isArray(messages[2].content)).toBe(true);
+  });
+});
+
+describe("streamTurn: default orchestrator factory", () => {
+  // Exercises the `createAgent = createOrchestrator` default so the DI hook's
+  // fallback branch doesn't rot. The real orchestrator talks to an AI SDK
+  // provider, so we pin it to a mock via `installMockProvider`.
+  beforeEach(() => {
+    installMockProvider(streamingTextModel("hi there."));
+  });
+
+  afterEach(() => {
+    uninstallMockProvider();
+  });
+
+  it("uses createOrchestrator when no createAgent is provided", async () => {
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON());
+
+    expect(result.text).toBe("hi there.");
+    expect(discord.callsTo("channels.createMessage").length).toBeGreaterThanOrEqual(1);
   });
 });

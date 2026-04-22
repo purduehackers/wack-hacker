@@ -2,12 +2,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createMemoryRedis, notionClientClass, svixMocks } from "@/lib/test/fixtures";
 
-const mocks = vi.hoisted(() => ({
-  verify: vi.fn(),
-  query: vi.fn().mockResolvedValue({ results: [] }),
-  pagesUpdate: vi.fn(),
-  redis: undefined as ReturnType<typeof createMemoryRedis> | undefined,
-}));
+const mocks = vi.hoisted(() => {
+  // Set the webhook secret before any module that reads `env` is imported.
+  // vi.hoisted runs before top-level imports and vi.mock factories, so this
+  // is the earliest point we can inject process.env safely.
+  process.env.RESEND_WEBHOOK_SECRET = "whsec_test";
+  return {
+    verify: vi.fn(),
+    query: vi.fn().mockResolvedValue({ results: [] }),
+    pagesUpdate: vi.fn(),
+    redis: undefined as ReturnType<typeof createMemoryRedis> | undefined,
+  };
+});
 
 vi.mock("svix", () => svixMocks({ verify: mocks.verify }));
 
@@ -18,6 +24,9 @@ vi.mock("@notionhq/client", () => ({
   }),
 }));
 
+// `route.ts` constructs a fresh `ConversationStore` per request, which in
+// turn calls `Redis.fromEnv()` each time — so it's safe to swap `mocks.redis`
+// between tests (no caller caches the returned instance).
 vi.mock("@upstash/redis", () => ({
   Redis: { fromEnv: () => mocks.redis! },
 }));
@@ -39,7 +48,6 @@ const GOOD_HEADERS = {
 };
 
 beforeEach(() => {
-  vi.stubEnv("RESEND_WEBHOOK_SECRET", "whsec_test");
   vi.clearAllMocks();
   mocks.query.mockResolvedValue({ results: [] });
   mocks.redis = createMemoryRedis();

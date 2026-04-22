@@ -1,3 +1,5 @@
+import { stringifyQueryValue } from "@/lib/http/query";
+
 import { env } from "../../../../env.ts";
 
 export function sentryOrg(): string {
@@ -20,13 +22,6 @@ export function escapeQuery(value: string): string {
 }
 
 const BASE_URL = "https://sentry.io/api/0";
-
-/** Stringify a primitive; JSON-encode objects so query params don't render as "[object Object]". */
-function stringifyQueryValue(value: unknown): string {
-  if (value === null || value === undefined) return "";
-  if (typeof value === "object") return JSON.stringify(value);
-  return String(value as string | number | boolean | bigint);
-}
 
 /** GET helper for endpoints not covered by generated SDK methods. */
 export async function sentryGet<T = unknown>(

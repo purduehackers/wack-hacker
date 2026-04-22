@@ -1,3 +1,5 @@
+import { stringifyQueryValue } from "@/lib/http/query";
+
 import { env } from "../../../../env.ts";
 
 const BASE_URL = "https://hcb.hackclub.com/api/v3";
@@ -18,14 +20,6 @@ export function hcbOrgSlug(): string {
 /** Build a link to the HCB web UI for a transaction id. */
 export function hcbTxnUrl(id: string): string {
   return `https://hcb.hackclub.com/hcb/${id}`;
-}
-
-/** Stringify a primitive; JSON-encode objects so query params don't render as "[object Object]". */
-function stringifyQueryValue(value: unknown): string {
-  if (value === null || value === undefined) return "";
-  if (typeof value === "object") return JSON.stringify(value);
-  // At this point value is a primitive (string / number / boolean / bigint / symbol).
-  return String(value as string | number | boolean | bigint);
 }
 
 /** GET against the HCB v3 public API. Read-only; no auth required (Transparency Mode). */

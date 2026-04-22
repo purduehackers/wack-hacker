@@ -14,8 +14,12 @@ import {
 const hoisted = vi.hoisted(() => ({
   start: vi.fn().mockResolvedValue({ runId: "run-123" }),
   cancel: vi.fn().mockResolvedValue(undefined),
-  redis: undefined as ReturnType<typeof createRichMemoryRedis> | undefined,
 }));
+
+// `tasks/registry.ts` memoizes the redis instance from `Redis.fromEnv()` on
+// first use (`redis ??= ...`), so we keep the same fixture instance across
+// every test and rely on `reset()` in beforeEach to wipe state.
+const redis = createRichMemoryRedis();
 
 vi.mock("workflow/api", () => ({
   start: hoisted.start,
@@ -28,7 +32,7 @@ vi.mock("workflow", () => ({
 }));
 
 vi.mock("@upstash/redis", () => ({
-  Redis: { fromEnv: () => hoisted.redis! },
+  Redis: { fromEnv: () => redis },
 }));
 
 // Third-party SDK mocks — schedule/index.ts transitively loads workflows/task,
@@ -73,7 +77,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   hoisted.start.mockResolvedValue({ runId: "run-123" });
   hoisted.cancel.mockResolvedValue(undefined);
-  hoisted.redis = createRichMemoryRedis();
+  redis.reset();
 });
 
 describe("scheduleTask tool: scheduling", () => {

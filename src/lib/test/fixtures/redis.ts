@@ -77,13 +77,25 @@ export function createRichMemoryRedis(): RichMemoryRedis {
       return "OK" as const;
     },
     async del(key: string) {
+      // Match Upstash/Redis DEL semantics: return the number of keys removed.
+      if (!data.has(key)) return 0;
       data.delete(key);
       return 1;
     },
     async sadd(key: string, ...members: string[]) {
       if (!sets.has(key)) sets.set(key, new Set());
-      for (const m of members) sets.get(key)!.add(m);
-      return members.length;
+      const set = sets.get(key)!;
+      // Real Redis SADD returns the count of newly added members (duplicates
+      // are not counted); mirror that so tests that assert on the return
+      // value don't pass on the stub but fail in production.
+      let added = 0;
+      for (const m of members) {
+        if (!set.has(m)) {
+          set.add(m);
+          added++;
+        }
+      }
+      return added;
     },
     async smembers<T>(key: string): Promise<T> {
       return [...(sets.get(key) ?? [])] as T;
