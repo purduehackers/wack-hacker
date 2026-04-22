@@ -8,8 +8,8 @@ import { AgentContext } from "./context.ts";
 import { buildDelegationTools } from "./delegates.ts";
 import { documentation } from "./tools/docs/index.ts";
 import { resolve_organizer } from "./tools/roster/index.ts";
-import { createScheduleTask, listScheduledTasks, cancelTask } from "./tools/schedule/index.ts";
-import { currentTime } from "./tools/schedule/time.ts";
+import { createScheduleTask, list_scheduled_tasks, cancel_task } from "./tools/schedule/index.ts";
+import { current_time } from "./tools/schedule/time.ts";
 
 export { ORCHESTRATOR_MODEL, SYSTEM_PROMPT } from "./constants.ts";
 
@@ -17,17 +17,17 @@ export { ORCHESTRATOR_MODEL, SYSTEM_PROMPT } from "./constants.ts";
  * Build the exact orchestrator tool surface for the scheduler's context.
  * Exported so the context inspector can snapshot the same tool set the
  * orchestrator runs with. Takes the full `AgentContext` because role-aware
- * tools (delegates, scheduleTask) need both the resolved role and the
+ * tools (delegates, schedule_task) need both the resolved role and the
  * scheduler's `memberRoles` for propagation into persisted task meta.
  */
 export function getOrchestratorTools(context: AgentContext, tracker: TurnUsageTracker): ToolSet {
   const tools: ToolSet = {
-    currentTime,
+    current_time,
     documentation,
     resolve_organizer,
-    scheduleTask: createScheduleTask(context),
-    listScheduledTasks,
-    cancelTask,
+    schedule_task: createScheduleTask(context),
+    list_scheduled_tasks,
+    cancel_task,
     ...buildDelegationTools(context, tracker),
   };
   return wrapApprovalTools(tools, { context });

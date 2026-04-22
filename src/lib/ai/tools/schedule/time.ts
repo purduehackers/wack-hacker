@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-export const currentTime = tool({
+export const current_time = tool({
   description: "Get the current date and time, optionally in a specific timezone.",
   inputSchema: z.object({
     timezone: z

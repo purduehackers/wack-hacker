@@ -39,12 +39,12 @@ vi.mock("@vercel/sandbox", () => ({
 const { createOrchestrator } = await import("./orchestrator.ts");
 
 const BASE_TOOLS = [
-  "cancelTask",
-  "currentTime",
+  "cancel_task",
+  "current_time",
   "documentation",
-  "listScheduledTasks",
+  "list_scheduled_tasks",
   "resolve_organizer",
-  "scheduleTask",
+  "schedule_task",
 ];
 
 describe("createOrchestrator", () => {

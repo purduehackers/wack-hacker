@@ -21,11 +21,11 @@ const baseBreakdown: ContextBreakdown = {
       chars: 2000,
       estimatedTokens: 500,
       items: [
-        { name: "currentTime", estimatedTokens: 80 },
+        { name: "current_time", estimatedTokens: 80 },
         { name: "documentation", estimatedTokens: 150 },
-        { name: "scheduleTask", estimatedTokens: 120 },
-        { name: "listScheduledTasks", estimatedTokens: 70 },
-        { name: "cancelTask", estimatedTokens: 80 },
+        { name: "schedule_task", estimatedTokens: 120 },
+        { name: "list_scheduled_tasks", estimatedTokens: 70 },
+        { name: "cancel_task", estimatedTokens: 80 },
       ],
     },
     {
@@ -157,7 +157,7 @@ describe("renderContextReport — details section", () => {
   it("emits a flat tools section with per-tool tokens", () => {
     const out = joinPages(baseBreakdown);
     expect(out).toContain("**Tools** (5)");
-    expect(out).toContain("`currentTime`: ~80 tokens");
+    expect(out).toContain("`current_time`: ~80 tokens");
   });
 
   it("nests loadable skills under each delegate with per-skill tokens", () => {

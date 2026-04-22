@@ -49,7 +49,7 @@ const malformedZodLike = {
 /** Synthetic tool set for snapshot serialization tests. Passed via DI. */
 function syntheticTools(): ToolSet {
   return {
-    currentTime: tool({
+    current_time: tool({
       description: "Get the current time.",
       inputSchema: z.object({
         timezone: z.string().optional().describe("IANA timezone."),
@@ -61,7 +61,7 @@ function syntheticTools(): ToolSet {
       inputSchema: z.object({ query: z.string() }),
       execute: async () => "",
     }),
-    scheduleTask: tool({
+    schedule_task: tool({
       description: "Schedule a task.",
       inputSchema: z.object({ when: z.string() }),
       execute: async () => "",
@@ -119,9 +119,9 @@ describe("buildContextSnapshot", () => {
       getTools: syntheticTools,
     });
     const names = snap.tools.map((t) => t.name);
-    expect(names).toContain("currentTime");
+    expect(names).toContain("current_time");
     expect(names).toContain("documentation");
-    expect(names).toContain("scheduleTask");
+    expect(names).toContain("schedule_task");
     for (const tool of snap.tools) {
       expect(typeof tool.description).toBe("string");
       expect(tool.inputSchema).toBeDefined();
@@ -137,8 +137,8 @@ describe("buildContextSnapshot", () => {
       turnCount: 1,
       getTools: syntheticTools,
     });
-    const currentTime = snap.tools.find((t) => t.name === "currentTime");
-    const schema = currentTime?.inputSchema as {
+    const current_time = snap.tools.find((t) => t.name === "current_time");
+    const schema = current_time?.inputSchema as {
       type?: string;
       properties?: Record<string, unknown>;
     };
@@ -237,12 +237,12 @@ describe("buildContextSnapshot: default tool resolver", () => {
     const names = snap.tools.map((t) => t.name);
     expect(names).toEqual(
       expect.arrayContaining([
-        "currentTime",
+        "current_time",
         "documentation",
         "resolve_organizer",
-        "scheduleTask",
-        "listScheduledTasks",
-        "cancelTask",
+        "schedule_task",
+        "list_scheduled_tasks",
+        "cancel_task",
       ]),
     );
   });

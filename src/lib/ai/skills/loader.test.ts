@@ -14,7 +14,7 @@ describe("createLoadSkillTool", () => {
     const result = await tool.execute!({ name: "scheduling" }, {} as never);
     expect(result).toContain('<skill name="scheduling">');
     expect(result).toContain("Use cron expressions.");
-    expect(result).toContain("scheduleTask, cancelTask");
+    expect(result).toContain("schedule_task, cancel_task");
   });
 
   it("returns error for inaccessible skill", async () => {

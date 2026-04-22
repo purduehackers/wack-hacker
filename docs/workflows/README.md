@@ -19,11 +19,11 @@ We use it for the two cases above and nothing else; one-off operations stay in p
 
 ## Contents
 
-| Doc                                | Topic                                                                      |
-| ---------------------------------- | -------------------------------------------------------------------------- |
-| [chatWorkflow](./chat.md)          | Multi-turn conversation workflow, hooks, state lifetime.                   |
-| [taskWorkflow](./task.md)          | Scheduled task workflow, `TaskMeta`, registry, cron parsing, cancellation. |
-| [Scheduled tasks](./scheduling.md) | The orchestrator's `scheduleTask`/`listScheduledTasks`/`cancelTask` tools. |
+| Doc                                | Topic                                                                          |
+| ---------------------------------- | ------------------------------------------------------------------------------ |
+| [chatWorkflow](./chat.md)          | Multi-turn conversation workflow, hooks, state lifetime.                       |
+| [taskWorkflow](./task.md)          | Scheduled task workflow, `TaskMeta`, registry, cron parsing, cancellation.     |
+| [Scheduled tasks](./scheduling.md) | The orchestrator's `schedule_task`/`list_scheduled_tasks`/`cancel_task` tools. |
 
 ## Lifecycle at a glance
 
@@ -51,7 +51,7 @@ chat:
                        cleanup
 
 task:
-  scheduleTask tool ──▶ start(taskWorkflow, [{ meta }])
+  schedule_task tool ─▶ start(taskWorkflow, [{ meta }])
                             │
                             ▼
                       persistTask
@@ -83,5 +83,5 @@ task:
 | `src/lib/tasks/types.ts`     | `TaskMeta`, `TaskAction`, `TaskSchedule`, `TaskContext`                                      |
 | `src/lib/tasks/registry.ts`  | `saveTask`, `getTask`, `listTasks`, `removeTask`                                             |
 | `src/lib/tasks/cron.ts`      | `nextOccurrence` (cron parser with IANA timezone support)                                    |
-| `src/lib/ai/tools/schedule/` | `scheduleTask`, `listScheduledTasks`, `cancelTask` tool definitions                          |
+| `src/lib/ai/tools/schedule/` | `schedule_task`, `list_scheduled_tasks`, `cancel_task` tool definitions                      |
 | `src/app/api/tasks/route.ts` | The `tasks` queue consumer (Vercel Queue trigger)                                            |
