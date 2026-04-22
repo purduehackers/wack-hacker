@@ -38,6 +38,7 @@ export type {
 export { mockFetch } from "./http";
 export {
   notionClientClass,
+  payloadSDKClass,
   resendClass,
   linearClientClass,
   octokitClass,

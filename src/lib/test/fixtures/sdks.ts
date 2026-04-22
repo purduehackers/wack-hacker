@@ -1,6 +1,6 @@
 import { vi, type Mock } from "vitest";
 
-import type { NotionClientMocks } from "../types";
+import type { NotionClientMocks, PayloadSDKMocks } from "../types";
 
 /**
  * Shared class builders for stubbing third-party SDKs. Keep SDK-shape
@@ -48,6 +48,29 @@ export function notionClientClass(mocks: NotionClientMocks = {}) {
 export function resendClass(mocks: { send?: Mock } = {}) {
   return class MockResend {
     emails = { send: mocks.send ?? vi.fn() };
+  };
+}
+
+/**
+ * Build a `@payloadcms/sdk` `PayloadSDK` mock class. Call inside
+ * `vi.mock("@payloadcms/sdk", ...)` alongside a stub `PayloadSDKError` if the
+ * test needs to construct one.
+ */
+export function payloadSDKClass(mocks: PayloadSDKMocks = {}) {
+  return class MockPayloadSDK {
+    baseURL: string;
+    baseInit: RequestInit;
+    find = mocks.find ?? vi.fn();
+    findByID = mocks.findByID ?? vi.fn();
+    create = mocks.create ?? vi.fn();
+    update = mocks.update ?? vi.fn();
+    delete = mocks.delete ?? vi.fn();
+    count = mocks.count ?? vi.fn();
+
+    constructor(args: { baseURL: string; baseInit?: RequestInit }) {
+      this.baseURL = args.baseURL;
+      this.baseInit = args.baseInit ?? {};
+    }
   };
 }
 
