@@ -103,7 +103,7 @@ describe("edge config stores", () => {
   });
 
   it("tokens", async () => {
-    edgeConfig.createEdgeConfigToken.mockResolvedValueOnce({ token: "t" });
+    edgeConfig.createEdgeConfigToken.mockResolvedValueOnce({ token: "t", id: "tok_1" });
     await mod.create_edge_config_token.execute!(
       { edge_config_id: "ec_1", label: "reader" },
       toolOpts,
@@ -117,6 +117,55 @@ describe("edge config stores", () => {
       { edge_config_id: "ec_1", tokens: ["t1"] },
       toolOpts,
     );
+  });
+});
+
+describe("edge config token redaction — security regression", () => {
+  it("strips raw `token` from create response", async () => {
+    edgeConfig.createEdgeConfigToken.mockResolvedValueOnce({
+      token: "secret-token-do-not-leak",
+      id: "tok_1",
+    });
+    const raw = await mod.create_edge_config_token.execute!(
+      { edge_config_id: "ec_1", label: "reader" },
+      toolOpts,
+    );
+    expect(raw).not.toContain("secret-token-do-not-leak");
+    const parsed = JSON.parse(raw as string);
+    expect(Object.keys(parsed)).not.toContain("token");
+    expect(parsed.id).toBe("tok_1");
+    expect(parsed.note).toMatch(/dashboard/i);
+  });
+
+  it("strips `token` from list response", async () => {
+    edgeConfig.getEdgeConfigTokens.mockResolvedValueOnce([
+      { token: "secret-one", id: "tok_1", label: "reader", createdAt: 1 },
+      { token: "secret-two", id: "tok_2", label: "admin", createdAt: 2 },
+    ]);
+    const raw = await mod.list_edge_config_tokens.execute!({ edge_config_id: "ec_1" }, toolOpts);
+    expect(raw).not.toContain("secret-one");
+    expect(raw).not.toContain("secret-two");
+    const parsed = JSON.parse(raw as string) as { id: string; token?: string }[];
+    for (const entry of parsed) {
+      expect(Object.keys(entry)).not.toContain("token");
+    }
+  });
+
+  it("strips `token` from get response", async () => {
+    edgeConfig.getEdgeConfigToken.mockResolvedValueOnce({
+      token: "secret-leak-attempt",
+      id: "tok_1",
+      label: "reader",
+      createdAt: 1,
+    });
+    const raw = await mod.get_edge_config_token.execute!(
+      { edge_config_id: "ec_1", token: "tok_1" },
+      toolOpts,
+    );
+    expect(raw).not.toContain("secret-leak-attempt");
+    const parsed = JSON.parse(raw as string);
+    expect(Object.keys(parsed)).not.toContain("token");
+    expect(parsed.id).toBe("tok_1");
   });
 });
 

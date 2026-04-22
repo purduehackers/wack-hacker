@@ -7,6 +7,25 @@ import { VERCEL_TEAM_ID, VERCEL_TEAM_SLUG } from "./constants.ts";
 
 const TEAM = { teamId: VERCEL_TEAM_ID, slug: VERCEL_TEAM_SLUG } as const;
 
+/**
+ * Strip the secret `token` field from Edge Config token payloads. The Vercel
+ * SDK returns raw tokens on list/get/create; surfacing those into Discord or
+ * logs would leak credentials. The SDK's `id` field is explicitly documented
+ * as a non-secret reference, so we keep it along with label/createdAt.
+ */
+function redactTokens<T>(input: T): T {
+  if (Array.isArray(input)) return input.map((item) => redactTokens(item)) as unknown as T;
+  if (input && typeof input === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(input as Record<string, unknown>)) {
+      if (key === "token") continue;
+      out[key] = redactTokens(val);
+    }
+    return out as T;
+  }
+  return input;
+}
+
 // ──────────────── EDGE CONFIG — STORES ────────────────
 
 export const list_edge_configs = tool({
@@ -164,19 +183,21 @@ export const delete_edge_config_schema = approval(
 );
 
 export const list_edge_config_tokens = tool({
-  description: "List read tokens for an Edge Config.",
+  description:
+    "List read tokens for an Edge Config. **Always strips the raw `token` field** — returns id/label/createdAt metadata only. The Vercel dashboard is the only path for retrieving an existing token's secret.",
   inputSchema: z.object({ edge_config_id: z.string() }),
   execute: async ({ edge_config_id }) => {
     const result = await vercel().edgeConfig.getEdgeConfigTokens({
       ...TEAM,
       edgeConfigId: edge_config_id,
     });
-    return JSON.stringify(result);
+    return JSON.stringify(redactTokens(result));
   },
 });
 
 export const get_edge_config_token = tool({
-  description: "Retrieve a specific Edge Config read token.",
+  description:
+    "Retrieve a specific Edge Config read token's metadata. **Strips the raw `token` field** from the response.",
   inputSchema: z.object({
     edge_config_id: z.string(),
     token: z.string(),
@@ -187,13 +208,14 @@ export const get_edge_config_token = tool({
       edgeConfigId: edge_config_id,
       token,
     });
-    return JSON.stringify(result);
+    return JSON.stringify(redactTokens(result));
   },
 });
 
 export const create_edge_config_token = approval(
   tool({
-    description: "Create a new read token for an Edge Config.",
+    description:
+      "Create a new read token for an Edge Config. **Does NOT return the token value** — only its id and label. Retrieve the secret from the Vercel dashboard to avoid leaking it into Discord/logs.",
     inputSchema: z.object({
       edge_config_id: z.string(),
       label: z.string(),
@@ -204,7 +226,11 @@ export const create_edge_config_token = approval(
         edgeConfigId: edge_config_id,
         requestBody: { label },
       });
-      return JSON.stringify(result);
+      const safe = redactTokens(result);
+      return JSON.stringify({
+        ...safe,
+        note: "Token value redacted. Retrieve it from the Vercel dashboard under Edge Config → Tokens.",
+      });
     },
   }),
 );
