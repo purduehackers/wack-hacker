@@ -143,6 +143,19 @@ describe("toolApproval — customId parsing", () => {
     const follows = mockAPI.callsTo("interactions.followUp");
     expect((follows[0]![2] as { content: string }).content).toMatch(/Malformed/);
   });
+
+  it("rejects custom ids with no approval id part", async () => {
+    const { handler, discord, mockAPI } = setup();
+
+    await handler.handle({
+      interaction: buttonInteraction("tool-approval:approve", "user-1"),
+      discord,
+      customId: "tool-approval:approve",
+    });
+
+    const follows = mockAPI.callsTo("interactions.followUp");
+    expect((follows[0]![2] as { content: string }).content).toMatch(/Malformed/);
+  });
 });
 
 describe("toolApproval — message + context", () => {
@@ -248,6 +261,51 @@ describe("toolApproval — Discord error paths", () => {
         customId: "tool-approval:approve:missing",
       }),
     ).resolves.toBeUndefined();
+  });
+
+  it("swallows an editMessage failure thrown as a non-Error value", async () => {
+    const { store, handler, discord, mockAPI } = setup();
+    await store.create(baseApprovalState());
+    vi.spyOn(mockAPI.channels, "editMessage").mockRejectedValueOnce("plain string reason");
+
+    await expect(
+      handler.handle({
+        interaction: buttonInteraction("tool-approval:approve:a1", "user-1"),
+        discord,
+        customId: "tool-approval:approve:a1",
+      }),
+    ).resolves.toBeUndefined();
+    const after = await store.get("a1");
+    expect(after?.status).toBe("approved");
+  });
+
+  it("swallows a followUp failure thrown as a non-Error value", async () => {
+    const { handler, discord, mockAPI } = setup();
+    vi.spyOn(mockAPI.interactions, "followUp").mockRejectedValueOnce({ code: "boom" });
+
+    await expect(
+      handler.handle({
+        interaction: buttonInteraction("tool-approval:approve:missing", "user-1"),
+        discord,
+        customId: "tool-approval:approve:missing",
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("falls back to the read state when decide() returns null mid-flight", async () => {
+    const { store, handler, discord, mockAPI } = setup();
+    await store.create(baseApprovalState());
+    // Simulate the row being evicted between the initial `get` and `decide`,
+    // so `const finalState = updated ?? state` picks the `state` branch.
+    vi.spyOn(store, "decide").mockResolvedValueOnce(null);
+
+    await handler.handle({
+      interaction: buttonInteraction("tool-approval:approve:a1", "user-1"),
+      discord,
+      customId: "tool-approval:approve:a1",
+    });
+
+    expect(mockAPI.callsTo("channels.editMessage")).toHaveLength(1);
   });
 });
 

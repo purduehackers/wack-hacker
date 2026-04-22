@@ -23,6 +23,12 @@ vi.mock("@discordjs/rest", () => ({
   },
 }));
 
+// Mock the third-party Upstash Redis client so `new ApprovalStore()` (the
+// default path when no store is injected) uses an in-memory backend.
+vi.mock("@upstash/redis", () => ({
+  Redis: { fromEnv: () => createMemoryRedis() },
+}));
+
 const context = AgentContext.fromPacket(messagePacket("hello"));
 
 function gatedTool() {
@@ -117,6 +123,27 @@ describe("wrapApprovalTools — shape", () => {
     );
     const out = wrapApprovalTools({ t: gated }, { context });
     expect(out.t.inputSchema).toBe(nonObjectSchema);
+  });
+
+  it("substitutes an empty object schema when the original has no inputSchema", () => {
+    // Raw tool object with no schema. approval() just tags it.
+    const bare = approval({ description: "raw" } as unknown as ReturnType<typeof gatedTool>);
+    const out = wrapApprovalTools({ t: bare }, { context });
+    // Should not throw and should produce a callable tool definition.
+    expect(out.t.inputSchema).toBeDefined();
+  });
+
+  it("tolerates tools that carry no description when wrapping", () => {
+    const bare = approval(
+      tool({
+        // no description
+        inputSchema: z.object({}),
+        execute: async () => "ok",
+      }) as unknown as ReturnType<typeof gatedTool>,
+    );
+    const out = wrapApprovalTools({ t: bare }, { context });
+    // Wrapper's synthesized description still carries the approval note.
+    expect(out.t.description).toMatch(/Requires user approval/);
   });
 });
 
@@ -242,6 +269,35 @@ describe("wrapApprovalTools — Discord integration", () => {
     expect(values.at(-1)).toMatch(/failed to send/i);
     expect(innerExec).not.toHaveBeenCalled();
   });
+
+  it("surfaces a post failure thrown as a non-Error value", async () => {
+    restPost.mockRejectedValueOnce("plain string reason");
+    const store = new ApprovalStore(createMemoryRedis());
+    const innerExec = vi.fn(async () => "should-not-run");
+    const gated = approval(
+      tool({
+        description: "t",
+        inputSchema: z.object({ x: z.string() }),
+        execute: innerExec,
+      }),
+    );
+
+    const out = wrapApprovalTools({ t: gated }, { context, store });
+    const { values, drain } = startExec(out.t, { x: "a", _reason: "r" });
+    await drain;
+
+    expect(values.at(-1)).toMatch(/unknown error/);
+    expect(innerExec).not.toHaveBeenCalled();
+  });
+
+  it("uses a default ApprovalStore when none is injected (real Redis.fromEnv path)", async () => {
+    const out = wrapApprovalTools({ t: gatedTool() }, { context, timeoutMs: 50 });
+    const { values, drain } = startExec(out.t, { name: "x", _reason: "r" });
+    // No store injected → `new ApprovalStore()` path runs. Wait for the
+    // wrapper's internal polling deadline to pass; it'll yield a timeout.
+    await drain;
+    expect(values.at(-1)).toMatch(/timed out/i);
+  });
 });
 
 describe("wrapApprovalTools — reason handling", () => {
@@ -293,7 +349,9 @@ describe("wrapApprovalTools — reason handling", () => {
     await store.decide(id, "approved", context.userId);
     await drain;
   });
+});
 
+describe("wrapApprovalTools — reason precedence", () => {
   it("prefers the agent-supplied _reason over the static reason", async () => {
     const store = new ApprovalStore(createMemoryRedis());
     const gated = approval(
@@ -335,6 +393,80 @@ describe("wrapApprovalTools — reason handling", () => {
     const id = extractApprovalId();
     await store.decide(id, "approved", context.userId);
     await drain;
+  });
+});
+
+describe("wrapApprovalTools — defensive input handling", () => {
+  it("handles a null raw input by using the static reason", async () => {
+    const store = new ApprovalStore(createMemoryRedis());
+    const gated = approval(
+      tool({
+        description: "t",
+        inputSchema: z.object({}),
+        execute: async () => "ok",
+      }),
+      { reason: "fallback reason" },
+    );
+    const out = wrapApprovalTools({ t: gated }, { context, store, timeoutMs: 10_000 });
+    // Type-cast to bypass the wrapper's input signature — the AI SDK can't
+    // actually send null after Zod validation, but the extractReason guard
+    // must still handle it defensively.
+    const { drain } = startExec(out.t, null as unknown as Record<string, unknown>);
+
+    await new Promise((r) => setTimeout(r, 20));
+    const [, opts] = restPost.mock.calls[0]!;
+    const body = opts.body as { embeds: { fields: { name: string; value: string }[] }[] };
+    const reasonField = body.embeds[0].fields.find((f) => f.name === "Reason");
+    expect(reasonField?.value).toBe("fallback reason");
+
+    const id = extractApprovalId();
+    await store.decide(id, "approved", context.userId);
+    await drain;
+  });
+
+  it("handles a null raw input with no static reason via the default placeholder", async () => {
+    const store = new ApprovalStore(createMemoryRedis());
+    const out = wrapApprovalTools({ t: gatedTool() }, { context, store, timeoutMs: 10_000 });
+    const { drain } = startExec(out.t, null as unknown as Record<string, unknown>);
+
+    await new Promise((r) => setTimeout(r, 20));
+    const [, opts] = restPost.mock.calls[0]!;
+    const body = opts.body as { embeds: { fields: { name: string; value: string }[] }[] };
+    const reasonField = body.embeds[0].fields.find((f) => f.name === "Reason");
+    expect(reasonField?.value).toBe("(not provided)");
+
+    const id = extractApprovalId();
+    await store.decide(id, "approved", context.userId);
+    await drain;
+  });
+});
+
+describe("wrapApprovalTools — abort signal extraction", () => {
+  it("ignores a non-object runtime", async () => {
+    const store = new ApprovalStore(createMemoryRedis());
+    const out = wrapApprovalTools({ t: gatedTool() }, { context, store, timeoutMs: 50 });
+    // Call execute with `undefined` for the runtime arg — extractAbortSignal
+    // must take the non-object branch and return undefined.
+    const exec = (out.t as { execute: (input: unknown, opts: unknown) => unknown }).execute;
+    const iter = exec({ name: "x", _reason: "r" }, undefined) as AsyncIterable<unknown>;
+    const values: unknown[] = [];
+    for await (const v of iter) values.push(v);
+    expect(values.at(-1)).toMatch(/timed out/i);
+  });
+
+  it("ignores a runtime whose abortSignal is not an AbortSignal", async () => {
+    const store = new ApprovalStore(createMemoryRedis());
+    const out = wrapApprovalTools({ t: gatedTool() }, { context, store, timeoutMs: 50 });
+    const exec = (out.t as { execute: (input: unknown, opts: unknown) => unknown }).execute;
+    // Pass a string where an AbortSignal is expected — the `instanceof`
+    // check must fall through to the `undefined` branch.
+    const iter = exec(
+      { name: "x", _reason: "r" },
+      { abortSignal: "not-a-signal" },
+    ) as AsyncIterable<unknown>;
+    const values: unknown[] = [];
+    for await (const v of iter) values.push(v);
+    expect(values.at(-1)).toMatch(/timed out/i);
   });
 });
 

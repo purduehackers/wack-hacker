@@ -144,4 +144,21 @@ describe("buildDecisionEmbed", () => {
     expect(e.fields?.find((f) => f.name === "Decided by")).toBeUndefined();
     expect(e.footer?.text).toMatch(/Timed Out.*auto-expired/);
   });
+
+  it("renders the reason placeholder when state.reason is empty", () => {
+    const e = buildDecisionEmbed({ ...state, reason: "" }, "approved", "user-1");
+    const reasonField = e.fields?.find((f) => f.name === "Reason");
+    expect(reasonField?.value).toBe("(not provided)");
+  });
+
+  it("uses the current time as the timestamp when state.decidedAt is missing", () => {
+    const e = buildDecisionEmbed({ ...state, decidedAt: undefined }, "approved", "user-1");
+    expect(e.timestamp).toBeTruthy();
+    expect(new Date(e.timestamp!).toString()).not.toBe("Invalid Date");
+  });
+
+  it("omits the Decided-by field when decidedByUserId is null even for non-timeout actions", () => {
+    const e = buildDecisionEmbed(state, "approved", null);
+    expect(e.fields?.find((f) => f.name === "Decided by")).toBeUndefined();
+  });
 });
