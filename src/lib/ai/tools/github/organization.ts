@@ -162,6 +162,7 @@ export const invite_org_member = admin(
   }),
 );
 
+// destructive
 export const remove_org_member = admin(
   tool({
     description: `Remove a user from the purduehackers organization. This revokes all their access to org repos.`,
@@ -198,6 +199,7 @@ export const add_team_member = admin(
   }),
 );
 
+// destructive
 export const remove_team_member = admin(
   tool({
     description: `Remove a user from a team. They keep org membership but lose team-specific repo access.`,
@@ -274,6 +276,7 @@ export const update_webhook = tool({
   },
 });
 
+// destructive
 export const delete_webhook = tool({
   description: `Delete a repository webhook. Irreversible — the webhook stops receiving events immediately.`,
   inputSchema: z.object({

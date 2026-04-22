@@ -104,6 +104,7 @@ export const edit_role = tool({
   },
 });
 
+// destructive
 export const delete_role = tool({
   description:
     "Delete a role from the server. This is irreversible and will remove the role from all members who have it.",
@@ -133,6 +134,7 @@ export const assign_role = tool({
   },
 });
 
+// destructive
 export const remove_role = tool({
   description:
     "Remove a role from a server member. Requires both the member's user ID and the role ID.",

@@ -173,6 +173,7 @@ export const edit_thread = tool({
   },
 });
 
+// destructive
 export const delete_thread = tool({
   description:
     "Delete a thread. This is irreversible and will permanently remove the thread and all its messages.",

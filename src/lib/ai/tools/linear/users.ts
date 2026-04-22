@@ -91,6 +91,7 @@ export const get_user_assigned_issues = tool({
   },
 });
 
+// destructive
 export const suspend_user = admin(
   tool({
     description:
@@ -106,6 +107,7 @@ export const suspend_user = admin(
   }),
 );
 
+// destructive
 export const unsuspend_user = admin(
   tool({
     description: "Restore a suspended user's access.",
@@ -170,6 +172,7 @@ export const list_invites = admin(
   }),
 );
 
+// destructive
 export const delete_invite = admin(
   tool({
     description: "Revoke a pending invite by ID. Use list_invites first to find the ID.",

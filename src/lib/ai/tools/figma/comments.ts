@@ -68,6 +68,7 @@ export const create_comment = tool({
   },
 });
 
+// destructive
 export const delete_comment = tool({
   description: "Delete a comment from a Figma file.",
   inputSchema: z.object({
@@ -93,6 +94,7 @@ export const add_reaction = tool({
   },
 });
 
+// destructive
 export const delete_reaction = tool({
   description: "Remove an emoji reaction from a comment on a Figma file.",
   inputSchema: z.object({

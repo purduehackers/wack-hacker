@@ -106,6 +106,7 @@ export const update_webhook = admin(
   }),
 );
 
+// destructive
 export const delete_webhook = admin(
   tool({
     description: "Delete a webhook permanently.",

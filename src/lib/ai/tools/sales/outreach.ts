@@ -44,6 +44,7 @@ async function preflight(pageId: string, target: "company" | "contact"): Promise
   return null;
 }
 
+// destructive
 export const send_outreach_email = tool({
   description: `Send an outreach email via Resend and record the resulting email id on the target Notion page ("Last Outreach ID", "Outreach Status" = Sent). The target page must not have "Do Not Contact" checked. Sends from the fixed SALES_FROM_EMAIL with SALES_REPLY_TO_EMAIL in the Reply-To header.`,
   inputSchema: z.object({

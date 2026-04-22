@@ -166,6 +166,7 @@ export const update_alert_rule = tool({
 });
 
 /** Delete an issue alert rule. */
+// destructive
 export const delete_alert_rule = admin(
   tool({
     description: "Permanently delete a Sentry issue alert rule. This action cannot be undone.",

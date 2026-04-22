@@ -53,6 +53,7 @@ export const add_to_cart = tool({
   },
 });
 
+// destructive
 export const remove_from_cart = tool({
   description: "Remove a product from the cart by ASIN.",
   inputSchema: z.object({
@@ -106,6 +107,7 @@ export const view_cart = tool({
   },
 });
 
+// destructive
 export const clear_cart = tool({
   description:
     "Remove every item from the shared cart. This is irreversible — always confirm with the user before calling.",

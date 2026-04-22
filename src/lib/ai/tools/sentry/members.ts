@@ -198,6 +198,7 @@ export const update_team = admin(
 );
 
 /** Delete a team. */
+// destructive
 export const delete_team = admin(
   tool({
     description: "Permanently delete a Sentry team. This action cannot be undone.",
@@ -242,6 +243,7 @@ export const add_team_member = admin(
 );
 
 /** Remove a member from a team. */
+// destructive
 export const remove_team_member = admin(
   tool({
     description: "Remove a member from a Sentry team.",

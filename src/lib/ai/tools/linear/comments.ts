@@ -26,6 +26,7 @@ export const edit_comment = tool({
   },
 });
 
+// destructive
 export const delete_comment = tool({
   description: "Delete a comment by ID. Only use when explicitly asked.",
   inputSchema: z.object({ id: z.string() }),

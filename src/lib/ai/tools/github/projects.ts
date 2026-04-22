@@ -223,6 +223,7 @@ export const update_project_item = tool({
 });
 
 /** Remove an item from a GitHub Project v2. */
+// destructive
 export const delete_project_item = tool({
   description: `Remove an item from a GitHub Project v2. This only removes it from the project board -- it does not delete the underlying issue or pull request.`,
   inputSchema: z.object({

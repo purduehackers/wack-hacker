@@ -91,6 +91,7 @@ export const list_package_versions = tool({
 });
 
 /** Delete a specific package version. */
+// destructive
 export const delete_package_version = tool({
   description: `Delete a specific version of a package from the purduehackers organization. This action is irreversible. You need the package version ID (get it from list_package_versions).`,
   inputSchema: z.object({

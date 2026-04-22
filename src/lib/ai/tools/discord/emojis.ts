@@ -99,6 +99,7 @@ export const edit_emoji = tool({
   },
 });
 
+// destructive
 export const delete_emoji = tool({
   description:
     "Delete a custom emoji. This is irreversible and will remove the emoji from all messages where it was used (they will show as unknown emoji).",

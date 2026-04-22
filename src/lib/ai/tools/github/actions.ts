@@ -141,6 +141,7 @@ export const get_workflow_run = tool({
 });
 
 /** Trigger a workflow dispatch event to manually run a workflow. */
+// destructive
 export const trigger_workflow = tool({
   description: `Trigger a workflow_dispatch event to manually run a workflow. The workflow must have a workflow_dispatch trigger defined. Specify the branch/tag to run on and optional input parameters.`,
   inputSchema: z.object({
@@ -164,6 +165,7 @@ export const trigger_workflow = tool({
 });
 
 /** Cancel a workflow run that is in progress. */
+// destructive
 export const cancel_workflow_run = tool({
   description: `Cancel a workflow run that is currently in progress or queued. Returns confirmation of cancellation.`,
   inputSchema: z.object({
@@ -181,6 +183,7 @@ export const cancel_workflow_run = tool({
 });
 
 /** Re-run a completed workflow run. */
+// destructive
 export const rerun_workflow = tool({
   description: `Re-run a completed workflow run. This creates a new attempt of the same run. Useful for retrying failed builds or deployments.`,
   inputSchema: z.object({

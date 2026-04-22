@@ -55,6 +55,7 @@ export const update_issue = tool({
   },
 });
 
+// destructive
 export const delete_issue = tool({
   description:
     "Permanently delete an issue by ID. Only use when the user explicitly asks to delete.",

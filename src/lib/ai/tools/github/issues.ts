@@ -128,6 +128,7 @@ export const update_issue_comment = tool({
 });
 
 /** Delete an issue comment. */
+// destructive
 export const delete_issue_comment = tool({
   description: `Permanently delete an issue comment by its ID. This action cannot be undone.`,
   inputSchema: z.object({

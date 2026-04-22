@@ -79,6 +79,7 @@ export const create_invite = admin(
   }),
 );
 
+// destructive
 export const delete_invite = admin(
   tool({
     description:

@@ -2,7 +2,15 @@
 name: pages
 description: Create, update, read, and edit pages — properties and Notion-flavored markdown content.
 criteria: Use when the user wants to create a new page, update page properties, read or edit page content.
-tools: [create_page, update_page, retrieve_page_property, read_page_content, update_page_content]
+tools:
+  [
+    create_page,
+    update_page,
+    archive_page,
+    retrieve_page_property,
+    read_page_content,
+    update_page_content,
+  ]
 minRole: organizer
 mode: inline
 ---
@@ -41,6 +49,6 @@ Notion markdown supports: headings, lists, to-dos, blockquotes, code blocks, div
 <updating>
 - Update only properties the user asked for.
 - To clear a property: `{ "select": null }`, `{ "rich_text": [] }`.
-- Archive a page by setting `archived: true` (Notion's soft-delete).
+- archive_page is the explicit wrapper for soft-deleting a page.
 - For targeted edits, use "update_content" mode with old_str/new_str.
 </updating>

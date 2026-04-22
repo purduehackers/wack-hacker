@@ -164,6 +164,7 @@ export const update_monitor = tool({
 });
 
 /** Delete a cron monitor. */
+// destructive
 export const delete_monitor = admin(
   tool({
     description: "Permanently delete a Sentry cron monitor. This action cannot be undone.",

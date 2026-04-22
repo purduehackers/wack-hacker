@@ -185,6 +185,43 @@ export const edit_channel = tool({
   },
 });
 
+export const get_channel = tool({
+  description:
+    "Get a single channel's details by ID. Returns type, name, topic, position, parent category, and other settings.",
+  inputSchema: z.object({
+    channel_id: z.string().describe("Channel ID"),
+  }),
+  execute: async ({ channel_id }) => {
+    const channel = (await discord.get(Routes.channel(channel_id))) as any;
+    return JSON.stringify(summarizeChannel(channel));
+  },
+});
+
+export const follow_announcement_channel = tool({
+  description:
+    "Follow an announcement channel — its messages will be auto-crossposted to the target channel in this server. Only announcement channels can be followed.",
+  inputSchema: z.object({
+    source_channel_id: z
+      .string()
+      .describe("ID of the announcement channel to follow (in any server the bot can see)"),
+    target_channel_id: z
+      .string()
+      .describe("ID of the channel in THIS server that will receive the crossposts"),
+  }),
+  execute: async ({ source_channel_id, target_channel_id }) => {
+    const result = (await discord.post(Routes.channelFollowers(source_channel_id), {
+      body: { webhook_channel_id: target_channel_id },
+    })) as { channel_id: string; webhook_id: string };
+    return JSON.stringify({
+      followed: true,
+      source: source_channel_id,
+      target: result.channel_id,
+      webhook_id: result.webhook_id,
+    });
+  },
+});
+
+// destructive
 export const delete_channel = tool({
   description:
     "Delete a channel from the server. This is irreversible and will permanently remove the channel and all its messages.",

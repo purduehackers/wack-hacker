@@ -50,6 +50,7 @@ export const add_user_to_team = admin(
   }),
 );
 
+// destructive
 export const remove_user_from_team = admin(
   tool({
     description:

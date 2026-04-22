@@ -75,6 +75,7 @@ export const update_dev_resource = tool({
   },
 });
 
+// destructive
 export const delete_dev_resource = tool({
   description: "Delete a dev resource from a Figma file.",
   inputSchema: z.object({

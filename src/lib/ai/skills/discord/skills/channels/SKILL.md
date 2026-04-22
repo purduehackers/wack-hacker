@@ -2,7 +2,7 @@
 name: channels
 description: Create, edit, and delete channels and categories.
 criteria: Use when the user wants to create, edit, move, rename, or delete a channel or category.
-tools: [create_channel, edit_channel, delete_channel]
+tools: [create_channel, edit_channel, delete_channel, get_channel, follow_announcement_channel]
 minRole: organizer
 mode: inline
 ---
@@ -27,3 +27,11 @@ mode: inline
 - Always confirm with the user before deleting. Channel deletion is irreversible.
 - Deleting a category does NOT delete its child channels — they become uncategorized.
 </deleting>
+
+<inspecting>
+- get_channel returns settings for one channel by ID.
+</inspecting>
+
+<following>
+- follow_announcement_channel pipes messages from a source announcement channel into a target channel in this server.
+</following>

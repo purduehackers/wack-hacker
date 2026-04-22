@@ -66,6 +66,7 @@ export const update_repository = tool({
   },
 });
 
+// destructive
 export const delete_repository = tool({
   description: `Permanently delete a repository. Irreversible — destroys all code, issues, and history.`,
   inputSchema: z.object({
@@ -178,6 +179,7 @@ export const set_branch_protection = tool({
   },
 });
 
+// destructive
 export const delete_branch_protection = tool({
   description: `Remove all branch protection rules from a branch, making it unprotected.`,
   inputSchema: z.object({

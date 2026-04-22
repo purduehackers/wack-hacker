@@ -80,6 +80,7 @@ export const create_or_update_file = tool({
 });
 
 /** Delete a file from a repository via a commit. */
+// destructive
 export const delete_file = tool({
   description: `Delete a file from a repository by creating a commit that removes it. Requires the file's current SHA (get it from get_file_content).`,
   inputSchema: z.object({

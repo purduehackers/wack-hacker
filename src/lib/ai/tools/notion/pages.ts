@@ -112,6 +112,25 @@ export const read_page_content = tool({
   },
 });
 
+// destructive
+export const archive_page = tool({
+  description:
+    "Archive (soft-delete) a Notion page. Equivalent to update_page with archived=true, but as an explicit intent.",
+  inputSchema: z.object({
+    page_id: z.string().describe("Page UUID"),
+  }),
+  execute: async ({ page_id }) => {
+    const page = await notion.pages.update({
+      page_id,
+      archived: true,
+    } as UpdatePageParameters);
+    return JSON.stringify({
+      id: page.id,
+      archived: "archived" in page ? page.archived : true,
+    });
+  },
+});
+
 export const update_page_content = tool({
   description: `Update a page's body content using markdown. Two modes: "replace_content" replaces the entire page body, or "update_content" does search-and-replace on specific text. Use read_page_content first to see current content.`,
   inputSchema: z.object({

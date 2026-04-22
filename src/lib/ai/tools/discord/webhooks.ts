@@ -94,6 +94,7 @@ export const edit_webhook = tool({
   },
 });
 
+// destructive
 export const delete_webhook = tool({
   description:
     "Delete a webhook. This is irreversible and will break any integrations using this webhook's URL.",

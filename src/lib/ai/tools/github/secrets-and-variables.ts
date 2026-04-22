@@ -106,6 +106,7 @@ export const create_or_update_repo_secret = tool({
   },
 });
 
+// destructive
 export const delete_repo_secret = tool({
   description: `Delete an Actions secret from a repository.`,
   inputSchema: z.object({
@@ -181,6 +182,7 @@ export const create_or_update_repo_variable = tool({
   },
 });
 
+// destructive
 export const delete_repo_variable = tool({
   description: `Delete an Actions variable from a repository.`,
   inputSchema: z.object({
@@ -253,6 +255,7 @@ export const create_or_update_org_secret = tool({
   },
 });
 
+// destructive
 export const delete_org_secret = tool({
   description: `Delete an Actions secret from the organization.`,
   inputSchema: z.object({
@@ -328,6 +331,7 @@ export const create_or_update_org_variable = tool({
   },
 });
 
+// destructive
 export const delete_org_variable = tool({
   description: `Delete an Actions variable from the organization.`,
   inputSchema: z.object({

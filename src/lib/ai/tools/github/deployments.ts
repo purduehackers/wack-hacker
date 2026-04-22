@@ -152,6 +152,7 @@ export const list_pages_builds = tool({
 });
 
 /** Request a GitHub Pages build. */
+// destructive
 export const trigger_pages_build = tool({
   description: `Manually trigger a GitHub Pages build for a repository. Returns the build status and URL. Only works for repos with Pages enabled.`,
   inputSchema: z.object({

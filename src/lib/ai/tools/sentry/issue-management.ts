@@ -59,6 +59,7 @@ export const update_issue = tool({
 });
 
 /** Delete a Sentry issue permanently. */
+// destructive
 export const delete_issue = admin(
   tool({
     description: "Permanently delete a Sentry issue. This action cannot be undone.",
@@ -80,6 +81,7 @@ export const delete_issue = admin(
 );
 
 /** Bulk update multiple issues at once. */
+// destructive
 export const bulk_update_issues = tool({
   description:
     "Bulk update multiple Sentry issues. Can resolve, ignore, or assign multiple issues at once.",

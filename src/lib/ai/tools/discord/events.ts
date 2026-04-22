@@ -170,6 +170,7 @@ export const edit_event = tool({
   },
 });
 
+// destructive
 export const delete_event = tool({
   description:
     "Delete a scheduled event. This is irreversible and will notify users who have indicated interest.",

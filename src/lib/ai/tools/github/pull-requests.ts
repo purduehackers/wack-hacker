@@ -59,6 +59,7 @@ export const update_pull_request = tool({
 });
 
 /** Merge a pull request using merge, squash, or rebase. */
+// destructive
 export const merge_pull_request = tool({
   description: `Merge a pull request. Supports merge commit, squash, and rebase strategies. Optionally set a custom commit title and message. Returns whether the merge succeeded and the resulting SHA.`,
   inputSchema: z.object({
