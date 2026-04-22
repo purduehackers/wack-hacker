@@ -61,7 +61,7 @@ describe("buildSandboxHooks — afterStart ordering", () => {
     const hooks = buildSandboxHooks({ ...BASE_CONFIG, hasBaseSnapshot: false });
     await hooks.afterStart!(sandbox);
 
-    const first = invocations.findIndex((c) => c.includes("apt-get install"));
+    const first = invocations.findIndex((c) => c.includes("dnf install"));
     const userName = invocations.findIndex((c) => c.includes("git config --global user.name"));
     const clone = invocations.findIndex((c) => c.includes("git clone"));
     const branch = invocations.findIndex((c) => c.includes("git checkout -b"));
@@ -77,7 +77,7 @@ describe("buildSandboxHooks — afterStart ordering", () => {
     const hooks = buildSandboxHooks({ ...BASE_CONFIG, hasBaseSnapshot: true });
     await hooks.afterStart!(sandbox);
 
-    expect(invocations.some((c) => c.includes("apt-get install"))).toBe(false);
+    expect(invocations.some((c) => c.includes("dnf install"))).toBe(false);
     // Still configures git, clones, and branches.
     expect(invocations.some((c) => c.includes("git config --global user.name"))).toBe(true);
     expect(invocations.some((c) => c.includes("git clone"))).toBe(true);

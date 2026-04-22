@@ -13,12 +13,9 @@
 
 import { Sandbox } from "@vercel/sandbox";
 
-const TOOLCHAIN_SCRIPT = [
-  "set -e",
-  "apt-get update",
-  "apt-get install -y ripgrep",
-  "type -p gh >/dev/null || (curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg status=none && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg && echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main' > /etc/apt/sources.list.d/github-cli.list && apt-get update && apt-get install -y gh)",
-].join(" && ");
+// Vercel Sandbox `node24` runtime runs on Amazon Linux 2023 — dnf, not apt —
+// and system commands need sudo since the default shell is non-root.
+const TOOLCHAIN_SCRIPT = ["set -e", "sudo dnf install -y --skip-broken ripgrep gh"].join(" && ");
 
 async function main() {
   console.log("Creating temporary sandbox for snapshot build…");
