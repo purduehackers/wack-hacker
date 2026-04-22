@@ -11,8 +11,10 @@ import { z } from "zod";
 
 import { countMetric, recordDistribution } from "@/lib/metrics";
 
+import type { AgentContext } from "./context.ts";
 import type { SubagentSpec } from "./types.ts";
 
+import { wrapApprovalTools } from "./approvals/index.ts";
 import { SUBAGENT_MODEL, SUBAGENT_PREAMBLE, UserRole } from "./constants.ts";
 import {
   SkillRegistry,
@@ -39,9 +41,10 @@ export type { SubagentSpec } from "./types.ts";
  */
 export function createDelegationTool(
   spec: SubagentSpec,
-  role: UserRole,
+  context: AgentContext,
   tracker: TurnUsageTracker,
 ) {
+  const role = context.role;
   return tool({
     description: spec.description,
     inputSchema: z.object({
@@ -56,7 +59,11 @@ export function createDelegationTool(
       )}`;
 
       const allTools: ToolSet = { ...spec.tools, loadSkill };
-      const tools = role === UserRole.Admin ? allTools : filterAdmin(allTools);
+      const roleFiltered = role === UserRole.Admin ? allTools : filterAdmin(allTools);
+      const tools = wrapApprovalTools(roleFiltered, {
+        context,
+        delegateName: spec.name,
+      });
 
       const baseToolNames = [...spec.baseToolNames, "loadSkill"];
       type ToolKey = keyof typeof tools;

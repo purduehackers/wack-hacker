@@ -8,19 +8,21 @@ function fakeMessage(id: string, content: string): DiscordMessage {
   return { id, content, channel_id: "ch-test" } as DiscordMessage;
 }
 
+type MessageBody = { content?: string; [key: string]: unknown };
+
 export function createMockAPI(): MockDiscord {
   const calls: MockCall[] = [];
   let counter = 0;
 
   return {
     channels: {
-      createMessage: async (channelId: string, body: { content: string }) => {
+      createMessage: async (channelId: string, body: MessageBody) => {
         calls.push({ method: "channels.createMessage", args: [channelId, body] });
-        return fakeMessage(`msg-${++counter}`, body.content);
+        return fakeMessage(`msg-${++counter}`, body.content ?? "");
       },
-      editMessage: async (channelId: string, msgId: string, body: { content: string }) => {
+      editMessage: async (channelId: string, msgId: string, body: MessageBody) => {
         calls.push({ method: "channels.editMessage", args: [channelId, msgId, body] });
-        return fakeMessage(msgId, body.content);
+        return fakeMessage(msgId, body.content ?? "");
       },
       getMessage: async (channelId: string, msgId: string) => {
         calls.push({ method: "channels.getMessage", args: [channelId, msgId] });
@@ -77,9 +79,13 @@ export function createMockAPI(): MockDiscord {
       },
     },
     interactions: {
-      editReply: async (appId: string, token: string, body: { content: string }) => {
+      editReply: async (appId: string, token: string, body: MessageBody) => {
         calls.push({ method: "interactions.editReply", args: [appId, token, body] });
-        return fakeMessage("msg-interaction", body.content);
+        return fakeMessage("msg-interaction", body.content ?? "");
+      },
+      followUp: async (appId: string, token: string, body: MessageBody) => {
+        calls.push({ method: "interactions.followUp", args: [appId, token, body] });
+        return fakeMessage(`followup-${++counter}`, body.content ?? "");
       },
     },
     _calls: calls,

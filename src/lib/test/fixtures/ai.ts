@@ -4,6 +4,28 @@ import { tool } from "ai";
 import { MockLanguageModelV3, MockProviderV3, simulateReadableStream } from "ai/test";
 import { z } from "zod";
 
+import { UserRole } from "@/lib/ai/constants";
+import { AgentContext } from "@/lib/ai/context";
+import { DISCORD_IDS } from "@/lib/protocol/constants";
+
+import { messagePacket } from "./packets";
+
+/**
+ * Build an `AgentContext` whose `role` resolves to the requested tier by
+ * populating `memberRoles` with the matching Discord role ID. Consolidates
+ * the duplicate helpers that delegate/subagent/schedule tests used to
+ * hand-roll.
+ */
+export function contextForRole(role: UserRole): AgentContext {
+  const memberRoles =
+    role === UserRole.Admin
+      ? [DISCORD_IDS.roles.ADMIN]
+      : role === UserRole.Organizer
+        ? [DISCORD_IDS.roles.ORGANIZER]
+        : [];
+  return AgentContext.fromPacket(messagePacket("hello", { memberRoles }));
+}
+
 /** No-op AI SDK tool that returns its name when invoked. */
 export function noopTool(name: string) {
   return tool({
