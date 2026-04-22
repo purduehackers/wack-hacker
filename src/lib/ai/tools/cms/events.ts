@@ -4,6 +4,7 @@ import { z } from "zod";
 import { approval } from "../../approvals/index.ts";
 import { cmsAdminUrl, paginationQuery, payload, wrapPayloadError } from "./client.ts";
 import { paginationInputShape } from "./constants.ts";
+import { richTextParagraph } from "./richtext.ts";
 
 const COLLECTION = "events";
 
@@ -40,35 +41,6 @@ function projectEvent(e: PayloadEvent) {
     created_at: e.createdAt,
     updated_at: e.updatedAt,
     href: e.id === undefined ? undefined : cmsAdminUrl(COLLECTION, e.id),
-  };
-}
-
-/**
- * Wrap a plain-text description as minimal Lexical JSON, which is the format
- * Payload's richText field expects on writes. Users can pass plain prose and
- * the server will render it as a single paragraph.
- */
-function richTextParagraph(text: string) {
-  return {
-    root: {
-      type: "root",
-      format: "",
-      indent: 0,
-      version: 1,
-      direction: null,
-      children: [
-        {
-          type: "paragraph",
-          format: "",
-          indent: 0,
-          version: 1,
-          direction: null,
-          children: [
-            { type: "text", text, format: 0, detail: 0, mode: "normal", style: "", version: 1 },
-          ],
-        },
-      ],
-    },
   };
 }
 

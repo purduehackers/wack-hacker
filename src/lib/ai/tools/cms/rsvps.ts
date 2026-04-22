@@ -41,7 +41,7 @@ export const list_rsvps = tool({
   inputSchema: z.object({
     ...paginationInputShape,
     event_id: z.union([z.string(), z.number()]).optional(),
-    email: z.string().optional(),
+    email: z.email().optional(),
     unsubscribed: z.boolean().optional().describe("Filter by unsubscribed status (true/false)"),
   }),
   execute: async ({ event_id, email, unsubscribed, ...input }) => {
