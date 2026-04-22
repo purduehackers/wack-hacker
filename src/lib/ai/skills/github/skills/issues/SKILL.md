@@ -6,6 +6,10 @@ tools:
   [
     create_issue,
     update_issue,
+    lock_issue,
+    unlock_issue,
+    add_assignees,
+    remove_assignees,
     list_issue_comments,
     create_issue_comment,
     update_issue_comment,

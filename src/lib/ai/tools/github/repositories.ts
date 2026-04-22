@@ -80,6 +80,52 @@ export const delete_repository = approval(
   }),
 );
 
+export const archive_repository = approval(
+  tool({
+    description:
+      "Archive a repository — makes it read-only. Reversible via update_repository archived=false, but users can no longer push, open issues/PRs, or fork while archived.",
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name"),
+    }),
+    execute: async ({ repo }) => {
+      const { data } = await octokit.rest.repos.update({
+        owner: env.GITHUB_ORG,
+        repo,
+        archived: true,
+      });
+      return JSON.stringify({
+        archived: true,
+        repo: data.full_name,
+      });
+    },
+  }),
+);
+
+export const transfer_repository = approval(
+  tool({
+    description:
+      "Transfer a repository to a different owner (user or org). The new owner receives a transfer invitation which they must accept.",
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name"),
+      new_owner: z.string().describe("New owner's username or org slug"),
+      team_ids: z.array(z.number()).optional().describe("Team IDs to add on transfer"),
+    }),
+    execute: async ({ repo, new_owner, team_ids }) => {
+      const { data } = await octokit.rest.repos.transfer({
+        owner: env.GITHUB_ORG,
+        repo,
+        new_owner,
+        team_ids,
+      });
+      return JSON.stringify({
+        transferring: true,
+        new_full_name: `${new_owner}/${repo}`,
+        html_url: data.html_url,
+      });
+    },
+  }),
+);
+
 export const list_branches = tool({
   description: `List branches for a repository. Optionally filter to only protected branches. Returns branch name and protection status.`,
   inputSchema: z.object({

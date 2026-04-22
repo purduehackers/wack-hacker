@@ -2,7 +2,7 @@
 name: transfers
 description: View Hack Club Bank inter-org transfers (disbursements between HCB organizations).
 criteria: Use when the user asks about transfers, disbursements, or money sent to / received from another HCB org.
-tools: [list_transfers]
+tools: [list_transfers, get_transfer]
 minRole: organizer
 mode: inline
 ---

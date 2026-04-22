@@ -10,6 +10,8 @@ tools:
     retrieve_page_property,
     read_page_content,
     update_page_content,
+    retrieve_user,
+    retrieve_bot_user,
   ]
 minRole: organizer
 mode: inline

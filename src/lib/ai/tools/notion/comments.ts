@@ -28,6 +28,24 @@ export const create_comment = tool({
   },
 });
 
+export const retrieve_comment = tool({
+  description:
+    "Get a single Notion comment by ID. Returns text, author, discussion thread ID, and timestamp.",
+  inputSchema: z.object({
+    comment_id: z.string().describe("Comment UUID"),
+  }),
+  execute: async ({ comment_id }) => {
+    const c = await notion.comments.retrieve({ comment_id });
+    return JSON.stringify({
+      id: c.id,
+      discussion_id: "discussion_id" in c ? c.discussion_id : undefined,
+      text: "rich_text" in c ? c.rich_text.map((t) => t.plain_text).join("") : "",
+      created_by: "created_by" in c ? c.created_by.id : undefined,
+      created_time: "created_time" in c ? c.created_time : undefined,
+    });
+  },
+});
+
 export const list_comments = tool({
   description: `List comments on a page. Returns comment text, author, timestamp, and discussion thread ID (for replies). Paginated.`,
   inputSchema: z.object({

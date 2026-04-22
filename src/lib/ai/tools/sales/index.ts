@@ -4,3 +4,7 @@ export * from "./deals.ts";
 export * from "./enrichment.ts";
 export * from "./outreach.ts";
 export * from "./schema.ts";
+export * from "./emails.ts";
+export * from "./audiences.ts";
+export * from "./broadcasts.ts";
+export * from "./domains.ts";

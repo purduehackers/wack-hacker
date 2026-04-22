@@ -86,6 +86,78 @@ export const merge_pull_request = approval(
   }),
 );
 
+/** Close a pull request without merging. */
+export const close_pull_request = approval(
+  tool({
+    description:
+      "Close a pull request without merging. Does not delete the branch. Use update_pull_request with state='open' to reopen.",
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name"),
+      pull_number: z.number().describe("PR number"),
+    }),
+    execute: async ({ repo, pull_number }) => {
+      const { data } = await octokit.rest.pulls.update({
+        owner: env.GITHUB_ORG,
+        repo,
+        pull_number,
+        state: "closed",
+      });
+      return JSON.stringify({ closed: true, number: data.number, html_url: data.html_url });
+    },
+  }),
+);
+
+/** Request reviewers on a pull request. */
+export const request_reviewers = tool({
+  description: "Request reviewers on a pull request. Can request individual users and/or teams.",
+  inputSchema: z.object({
+    repo: z.string().describe("Repository name"),
+    pull_number: z.number().describe("PR number"),
+    reviewers: z.array(z.string()).optional().describe("GitHub usernames to request as reviewers"),
+    team_reviewers: z.array(z.string()).optional().describe("Team slugs to request as reviewers"),
+  }),
+  execute: async ({ repo, pull_number, reviewers, team_reviewers }) => {
+    const { data } = await octokit.rest.pulls.requestReviewers({
+      owner: env.GITHUB_ORG,
+      repo,
+      pull_number,
+      reviewers,
+      team_reviewers,
+    });
+    return JSON.stringify({
+      number: data.number,
+      requested_reviewers: data.requested_reviewers?.map((r) => r.login),
+      requested_teams: data.requested_teams?.map((t) => t.slug),
+    });
+  },
+});
+
+/** Remove requested reviewers from a pull request. */
+export const remove_requested_reviewers = approval(
+  tool({
+    description: "Remove previously-requested reviewers from a pull request.",
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name"),
+      pull_number: z.number().describe("PR number"),
+      reviewers: z.array(z.string()).describe("GitHub usernames to remove"),
+      team_reviewers: z.array(z.string()).optional().describe("Team slugs to remove"),
+    }),
+    execute: async ({ repo, pull_number, reviewers, team_reviewers }) => {
+      const { data } = await octokit.rest.pulls.removeRequestedReviewers({
+        owner: env.GITHUB_ORG,
+        repo,
+        pull_number,
+        reviewers,
+        team_reviewers: team_reviewers ?? [],
+      });
+      return JSON.stringify({
+        number: data.number,
+        requested_reviewers: data.requested_reviewers?.map((r) => r.login),
+      });
+    },
+  }),
+);
+
 /** List reviews on a pull request. */
 export const list_pr_reviews = tool({
   description: `List reviews on a pull request. Returns each review's ID, author, state (APPROVED, CHANGES_REQUESTED, COMMENTED, etc.), body, and timestamp. Useful for checking approval status.`,

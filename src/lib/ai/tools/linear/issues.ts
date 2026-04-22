@@ -68,6 +68,27 @@ export const delete_issue = approval(
   }),
 );
 
+export const archive_issue = approval(
+  tool({
+    description:
+      "Archive an issue. Archived issues are hidden from default views but preserved. Prefer this over delete_issue for most cases.",
+    inputSchema: z.object({ id: z.string().describe("Issue UUID") }),
+    execute: async ({ id }) => {
+      const payload = await linear.archiveIssue(id);
+      return JSON.stringify({ success: payload.success });
+    },
+  }),
+);
+
+export const unarchive_issue = tool({
+  description: "Restore an archived issue back to its previous state.",
+  inputSchema: z.object({ id: z.string().describe("Issue UUID") }),
+  execute: async ({ id }) => {
+    const payload = await linear.unarchiveIssue(id);
+    return JSON.stringify({ success: payload.success });
+  },
+});
+
 export const query_issue_activity = tool({
   description:
     "Fetch an issue's field change history and comment thread. Use 'history' for who/when of changes, 'comments' for discussion context.",

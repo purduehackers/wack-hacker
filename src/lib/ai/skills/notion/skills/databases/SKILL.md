@@ -2,7 +2,7 @@
 name: databases
 description: Query database entries with filters/sorts; create and update databases.
 criteria: Use when the user wants to query, filter, or sort database entries, or create/modify a database schema.
-tools: [query_database, create_database, update_database]
+tools: [query_database, create_database, update_database, archive_database]
 minRole: organizer
 mode: inline
 ---

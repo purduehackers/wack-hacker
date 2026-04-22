@@ -9,6 +9,7 @@ import {
   deleteATeam,
   addAnOrganizationMemberToATeam,
   deleteAnOrganizationMemberFromATeam,
+  updateAnOrganizationMember_sRoles,
   unwrapResult,
 } from "@sentry/api";
 import { tool } from "ai";
@@ -267,4 +268,30 @@ export const remove_team_member = admin(
       },
     }),
   ),
+);
+
+/** Update a member's organization role. */
+export const update_member_role = admin(
+  tool({
+    description:
+      "Update a Sentry organization member's role. Common roles: owner, manager, admin, member, billing.",
+    inputSchema: z.object({
+      member_id: z.string().describe("Organization member ID"),
+      role: z
+        .enum(["owner", "manager", "admin", "member", "billing"])
+        .describe("New organization role"),
+    }),
+    execute: async ({ member_id, role }) => {
+      const result = await updateAnOrganizationMember_sRoles({
+        ...sentryOpts(),
+        path: {
+          organization_id_or_slug: sentryOrg(),
+          member_id,
+        },
+        body: { orgRole: role } as Parameters<typeof updateAnOrganizationMember_sRoles>[0]["body"],
+      });
+      const { data } = unwrapResult(result, "updateMemberRole");
+      return JSON.stringify(data);
+    },
+  }),
 );

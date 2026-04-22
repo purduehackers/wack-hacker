@@ -3,6 +3,7 @@ import type { QueryDataSourceParameters } from "@notionhq/client/build/src/api-e
 import { tool } from "ai";
 import { z } from "zod";
 
+import { approval } from "../../approvals/index.ts";
 import { notion } from "./client.ts";
 import { CONTACTS_DATA_SOURCE_ID } from "./constants.ts";
 
@@ -59,6 +60,48 @@ export const get_contact = tool({
     return JSON.stringify(summarizePage(page as { id: string }));
   },
 });
+
+export const create_contact = tool({
+  description: `Create a new Contact row in the CRM. Provide at least a name; optionally link to a Company via the Company relation property and set any other schema properties.`,
+  inputSchema: z.object({
+    name: z.string().describe("Contact name (required)"),
+    properties: z
+      .record(z.string(), z.unknown())
+      .optional()
+      .describe("Additional Notion properties keyed by property name"),
+  }),
+  execute: async ({ name, properties }) => {
+    const page = await notion.pages.create({
+      parent: { data_source_id: CONTACTS_DATA_SOURCE_ID },
+      properties: {
+        Name: { title: [{ text: { content: name } }] },
+        ...properties,
+      },
+    } as Parameters<typeof notion.pages.create>[0]);
+    return JSON.stringify({
+      id: page.id,
+      url: "url" in page ? page.url : undefined,
+      name,
+    });
+  },
+});
+
+export const archive_contact = approval(
+  tool({
+    description:
+      "Archive (soft-delete) a Contact CRM row. The Notion page is marked archived and drops out of lists.",
+    inputSchema: z.object({
+      contact_id: z.string().describe("Notion page UUID for the Contact row"),
+    }),
+    execute: async ({ contact_id }) => {
+      const page = await notion.pages.update({
+        page_id: contact_id,
+        archived: true,
+      } as Parameters<typeof notion.pages.update>[0]);
+      return JSON.stringify({ id: page.id, archived: true });
+    },
+  }),
+);
 
 export const update_contact_status = tool({
   description: `Set the Contact Status property. Options: "New", "Nurturing", "Active", "Inactive". Call retrieve_crm_schema first if unsure.`,
