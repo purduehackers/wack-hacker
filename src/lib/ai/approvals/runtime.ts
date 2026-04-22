@@ -11,6 +11,7 @@ import { getApprovalOptions } from "./index.ts";
 import { ApprovalStore } from "./store.ts";
 
 const DEFAULT_TIMEOUT_MS = 240_000;
+const TTL_BUFFER_SECONDS = 60;
 
 type RuntimeExecuteFn = (input: unknown, runtime: unknown) => unknown;
 
@@ -36,26 +37,31 @@ function wrapWithApproval(
   wrapOpts: WrapApprovalOptions,
 ): Tool {
   const timeoutMs = wrapOpts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const ttlSeconds = Math.ceil(timeoutMs / 1000) + TTL_BUFFER_SECONDS;
   const staticReason = markerOpts.reason;
 
   const originalSchema = original.inputSchema as z.ZodTypeAny | undefined;
+  const reasonDescription = staticReason
+    ? "Short explanation of why this tool call is needed. Shown to the user for approval. Optional — falls back to the configured static reason when omitted."
+    : "Short explanation of why this tool call is needed. Shown to the user for approval.";
+  const reasonSchema = staticReason
+    ? z.string().optional().describe(reasonDescription)
+    : z.string().describe(reasonDescription);
+
   const schemaToUse: z.ZodTypeAny =
     originalSchema instanceof z.ZodObject
-      ? originalSchema.extend({
-          _reason: z
-            .string()
-            .describe(
-              "Short explanation of why this tool call is needed. Shown to the user for approval.",
-            ),
-        })
+      ? originalSchema.extend({ _reason: reasonSchema })
       : (originalSchema ?? z.object({}));
 
   const originalExecute = original.execute as RuntimeExecuteFn | undefined;
+  const approvalNote = staticReason
+    ? "⚠️ Requires user approval before execution. You may include a concise `_reason`; when omitted, the tool's configured static reason is used."
+    : "⚠️ Requires user approval before execution. You MUST include a concise `_reason` in your arguments explaining why this action is needed.";
 
   return tool({
-    description: `${original.description ?? ""}\n\n⚠️ Requires user approval before execution. You MUST include a concise \`_reason\` in your arguments explaining why this action is needed.`,
+    description: `${original.description ?? ""}\n\n${approvalNote}`,
     inputSchema: schemaToUse,
-    execute: async (rawInput: unknown, runtime: unknown) => {
+    execute: async function* (rawInput: unknown, runtime: unknown) {
       const context = wrapOpts.context;
       const channelId = context.channel.id;
       const threadId = context.thread?.id;
@@ -80,7 +86,7 @@ function wrapWithApproval(
         createdAt: new Date().toISOString(),
       };
 
-      await store.create(state);
+      await store.create(state, ttlSeconds);
 
       const targetChannelId = threadId ?? channelId;
       const embed = buildApprovalEmbed({
@@ -99,17 +105,36 @@ function wrapWithApproval(
           components,
           allowed_mentions: { users: [requesterUserId], parse: [] },
         });
-        await store.setMessageId(approvalId, msg.id);
+        await store.setMessageId(approvalId, msg.id, ttlSeconds);
       } catch (err: unknown) {
         const errorMessage = err instanceof Error ? err.message : "unknown error";
         log.error("approval", `Failed to send approval prompt: ${errorMessage}`);
-        return `Approval prompt failed to send (${errorMessage}). The tool was NOT run.`;
+        yield `Approval prompt failed to send (${errorMessage}). The tool was NOT run.`;
+        return;
       }
 
       const abortSignal = extractAbortSignal(runtime);
       const final = await store.waitFor(approvalId, { timeoutMs, signal: abortSignal });
 
-      return runFinal({ final, originalExecute, toolInput, runtime, toolName });
+      if (final.status !== "approved") {
+        yield denialMessage(final.status, toolName);
+        return;
+      }
+
+      if (!originalExecute) {
+        yield `Tool \`${toolName}\` has no execute function; approval succeeded but nothing ran.`;
+        return;
+      }
+
+      // Call the original and forward its output. If it's an async iterable
+      // (streaming tool), yield every intermediate value so the approval
+      // wrapper is transparent to the caller's streaming contract.
+      const result = originalExecute(toolInput, runtime);
+      if (isAsyncIterable(result)) {
+        for await (const v of result) yield v;
+        return;
+      }
+      yield await (result as Promise<unknown>);
     },
   });
 }
@@ -134,31 +159,6 @@ function extractAbortSignal(runtime: unknown): AbortSignal | undefined {
   if (!runtime || typeof runtime !== "object") return undefined;
   const sig = (runtime as { abortSignal?: unknown }).abortSignal;
   return sig instanceof AbortSignal ? sig : undefined;
-}
-
-async function runFinal(args: {
-  final: ApprovalState;
-  originalExecute: RuntimeExecuteFn | undefined;
-  toolInput: Record<string, unknown>;
-  runtime: unknown;
-  toolName: string;
-}): Promise<unknown> {
-  const { final, originalExecute, toolInput, runtime, toolName } = args;
-
-  if (final.status === "approved") {
-    if (!originalExecute) {
-      return `Tool \`${toolName}\` has no execute function; approval succeeded but nothing ran.`;
-    }
-    const result = originalExecute(toolInput, runtime);
-    if (isAsyncIterable(result)) {
-      let last: unknown = undefined;
-      for await (const v of result) last = v;
-      return last;
-    }
-    return await (result as Promise<unknown>);
-  }
-
-  return denialMessage(final.status, toolName);
 }
 
 function isAsyncIterable(v: unknown): v is AsyncIterable<unknown> {

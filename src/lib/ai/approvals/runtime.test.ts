@@ -38,6 +38,16 @@ function runtimeOpts(): Parameters<NonNullable<ReturnType<typeof gatedTool>["exe
   >[1];
 }
 
+function startExec(t: unknown, input: Record<string, unknown>) {
+  const exec = (t as { execute: (input: unknown, opts: unknown) => unknown }).execute;
+  const iter = exec(input, runtimeOpts()) as AsyncIterable<unknown>;
+  const values: unknown[] = [];
+  const drain = (async () => {
+    for await (const v of iter) values.push(v);
+  })();
+  return { values, drain };
+}
+
 describe("wrapApprovalTools — shape", () => {
   it("passes through unmarked tools by identity", () => {
     const plain = tool({
@@ -55,6 +65,28 @@ describe("wrapApprovalTools — shape", () => {
     expect(schema.shape._reason).toBeDefined();
     expect(schema.shape.name).toBeDefined();
   });
+
+  it("makes _reason required when no static reason is configured", () => {
+    const out = wrapApprovalTools({ t: gatedTool() }, { context });
+    const schema = out.t.inputSchema as z.ZodObject<z.ZodRawShape>;
+    expect(schema.safeParse({ name: "x" }).success).toBe(false);
+    expect(schema.safeParse({ name: "x", _reason: "r" }).success).toBe(true);
+  });
+
+  it("makes _reason optional when a static reason is configured", () => {
+    const gated = approval(
+      tool({
+        description: "t",
+        inputSchema: z.object({ name: z.string() }),
+        execute: async () => "ok",
+      }),
+      { reason: "default" },
+    );
+    const out = wrapApprovalTools({ t: gated }, { context });
+    const schema = out.t.inputSchema as z.ZodObject<z.ZodRawShape>;
+    expect(schema.safeParse({ name: "x" }).success).toBe(true);
+    expect(schema.safeParse({ name: "x", _reason: "override" }).success).toBe(true);
+  });
 });
 
 describe("wrapApprovalTools — decisions", () => {
@@ -67,16 +99,14 @@ describe("wrapApprovalTools — decisions", () => {
       { context, store, postMessage, timeoutMs: 10_000 },
     );
 
-    const pending = out.make.execute!(
-      { name: "widget", _reason: "needed" },
-      runtimeOpts(),
-    ) as Promise<unknown>;
+    const { values, drain } = startExec(out.make, { name: "widget", _reason: "needed" });
 
     await new Promise((r) => setTimeout(r, 20));
     const id = extractApprovalId(postMessage);
     await store.decide(id, "approved", context.userId);
 
-    expect(await pending).toBe("created widget");
+    await drain;
+    expect(values.at(-1)).toBe("created widget");
   });
 
   it("returns a denial string when the approval is denied", async () => {
@@ -87,16 +117,58 @@ describe("wrapApprovalTools — decisions", () => {
       { make: gatedTool() },
       { context, store, postMessage, timeoutMs: 10_000 },
     );
-    const pending = out.make.execute!(
-      { name: "widget", _reason: "maybe" },
-      runtimeOpts(),
-    ) as Promise<unknown>;
+    const { values, drain } = startExec(out.make, { name: "widget", _reason: "maybe" });
 
     await new Promise((r) => setTimeout(r, 20));
     const id = extractApprovalId(postMessage);
     await store.decide(id, "denied", context.userId);
 
-    expect(await pending).toMatch(/denied permission/);
+    await drain;
+    expect(values.at(-1)).toMatch(/denied permission/);
+  });
+
+  it("returns a timeout string when the approval polling deadline passes", async () => {
+    const store = new ApprovalStore(createMemoryRedis());
+    const postMessage = vi.fn(async () => ({ id: "msg-t" }));
+
+    const out = wrapApprovalTools(
+      { make: gatedTool() },
+      { context, store, postMessage, timeoutMs: 50 },
+    );
+    const { values, drain } = startExec(out.make, { name: "widget", _reason: "tick" });
+    await drain;
+    expect(values.at(-1)).toMatch(/timed out/i);
+  });
+});
+
+describe("wrapApprovalTools — streaming", () => {
+  it("forwards every value yielded by a streaming original tool", async () => {
+    const store = new ApprovalStore(createMemoryRedis());
+    const postMessage = vi.fn(async () => ({ id: "msg-s" }));
+    const streamingTool = approval(
+      tool({
+        description: "streaming",
+        inputSchema: z.object({}),
+        async *execute() {
+          yield "a";
+          yield "b";
+          yield "c";
+        },
+      }),
+    );
+
+    const out = wrapApprovalTools(
+      { s: streamingTool },
+      { context, store, postMessage, timeoutMs: 10_000 },
+    );
+    const { values, drain } = startExec(out.s, { _reason: "stream" });
+
+    await new Promise((r) => setTimeout(r, 20));
+    const id = extractApprovalId(postMessage);
+    await store.decide(id, "approved", context.userId);
+
+    await drain;
+    expect(values).toEqual(["a", "b", "c"]);
   });
 });
 
@@ -116,9 +188,10 @@ describe("wrapApprovalTools — edge cases", () => {
     );
 
     const out = wrapApprovalTools({ t: gated }, { context, store, postMessage });
-    const result = await out.t.execute!({ x: "a", _reason: "r" }, runtimeOpts());
+    const { values, drain } = startExec(out.t, { x: "a", _reason: "r" });
+    await drain;
 
-    expect(result).toMatch(/failed to send/i);
+    expect(values.at(-1)).toMatch(/failed to send/i);
     expect(innerExec).not.toHaveBeenCalled();
   });
 
@@ -135,18 +208,89 @@ describe("wrapApprovalTools — edge cases", () => {
     );
 
     const out = wrapApprovalTools({ t: gated }, { context, store, postMessage, timeoutMs: 10_000 });
-    const pending = out.t.execute!(
-      { x: "hello", _reason: "because" },
-      runtimeOpts(),
-    ) as Promise<unknown>;
+    const { drain } = startExec(out.t, { x: "hello", _reason: "because" });
 
     await new Promise((r) => setTimeout(r, 20));
     const id = extractApprovalId(postMessage);
     await store.decide(id, "approved", context.userId);
 
-    await pending;
+    await drain;
 
     const [innerInput] = innerExec.mock.calls[0]!;
     expect(innerInput).toEqual({ x: "hello" });
+  });
+
+  it("uses the static reason when the agent omits _reason", async () => {
+    const store = new ApprovalStore(createMemoryRedis());
+    const postMessage: PostMessageMock = vi.fn(async () => ({ id: "m" }));
+    const gated = approval(
+      tool({
+        description: "t",
+        inputSchema: z.object({}),
+        execute: async () => "ok",
+      }),
+      { reason: "static fallback" },
+    );
+
+    const out = wrapApprovalTools({ t: gated }, { context, store, postMessage, timeoutMs: 10_000 });
+    const { drain } = startExec(out.t, {});
+
+    await new Promise((r) => setTimeout(r, 20));
+    const [, body] = postMessage.mock.calls[0]!;
+    const embed = (body as { embeds: { fields: { name: string; value: string }[] }[] }).embeds[0];
+    const reasonField = embed.fields.find((f) => f.name === "Reason");
+    expect(reasonField?.value).toBe("static fallback");
+
+    const id = extractApprovalId(postMessage);
+    await store.decide(id, "approved", context.userId);
+    await drain;
+  });
+
+  it("prefers the agent-supplied _reason over the static reason", async () => {
+    const store = new ApprovalStore(createMemoryRedis());
+    const postMessage: PostMessageMock = vi.fn(async () => ({ id: "m" }));
+    const gated = approval(
+      tool({
+        description: "t",
+        inputSchema: z.object({}),
+        execute: async () => "ok",
+      }),
+      { reason: "static fallback" },
+    );
+
+    const out = wrapApprovalTools({ t: gated }, { context, store, postMessage, timeoutMs: 10_000 });
+    const { drain } = startExec(out.t, { _reason: "dynamic override" });
+
+    await new Promise((r) => setTimeout(r, 20));
+    const [, body] = postMessage.mock.calls[0]!;
+    const embed = (body as { embeds: { fields: { name: string; value: string }[] }[] }).embeds[0];
+    const reasonField = embed.fields.find((f) => f.name === "Reason");
+    expect(reasonField?.value).toBe("dynamic override");
+
+    const id = extractApprovalId(postMessage);
+    await store.decide(id, "approved", context.userId);
+    await drain;
+  });
+
+  it("passes a TTL derived from timeoutMs to store.create", async () => {
+    const store = new ApprovalStore(createMemoryRedis());
+    const createSpy = vi.spyOn(store, "create");
+    const postMessage = vi.fn(async () => ({ id: "m" }));
+
+    const out = wrapApprovalTools(
+      { t: gatedTool() },
+      { context, store, postMessage, timeoutMs: 120_000 },
+    );
+    const { drain } = startExec(out.t, { name: "x", _reason: "r" });
+
+    await new Promise((r) => setTimeout(r, 20));
+    expect(createSpy).toHaveBeenCalledTimes(1);
+    const [, ttlArg] = createSpy.mock.calls[0]!;
+    // 120s timeout + 60s buffer = 180s TTL
+    expect(ttlArg).toBe(180);
+
+    const id = extractApprovalId(postMessage);
+    await store.decide(id, "approved", context.userId);
+    await drain;
   });
 });

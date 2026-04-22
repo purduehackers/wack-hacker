@@ -29,6 +29,15 @@ describe("ApprovalStore CRUD", () => {
     expect(got?.status).toBe("pending");
   });
 
+  it("create passes a ttlSeconds override through to Redis", async () => {
+    const redis = createMemoryRedis();
+    const setSpy = vi.spyOn(redis, "set");
+    const store = new ApprovalStore(redis);
+    await store.create(baseState(), 999);
+    const [, , opts] = setSpy.mock.calls[0]!;
+    expect((opts as { ex?: number }).ex).toBe(999);
+  });
+
   it("get returns null for missing ids", async () => {
     const store = new ApprovalStore(createMemoryRedis());
     expect(await store.get("nope")).toBeNull();
@@ -72,6 +81,19 @@ describe("ApprovalStore.decide", () => {
     const second = await store.decide("a1", "denied", "user-2");
     expect(second?.status).toBe("approved");
     expect(second?.decidedByUserId).toBe("user-1");
+  });
+
+  it("serializes concurrent decides — exactly one wins, both see the winner", async () => {
+    const store = new ApprovalStore(createMemoryRedis());
+    await store.create(baseState());
+    const [a, b] = await Promise.all([
+      store.decide("a1", "approved", "user-1"),
+      store.decide("a1", "timeout", null),
+    ]);
+    expect(a?.status).toBe(b?.status);
+    expect(["approved", "timeout"]).toContain(a?.status);
+    const persisted = await store.get("a1");
+    expect(persisted?.status).toBe(a?.status);
   });
 });
 

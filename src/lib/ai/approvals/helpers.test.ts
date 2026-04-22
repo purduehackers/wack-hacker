@@ -47,6 +47,26 @@ describe("formatToolCall", () => {
     const out = formatToolCall(undefined, "t", { opts: { a: 1, b: true } });
     expect(out).toContain(`opts={"a":1,"b":true}`);
   });
+
+  it("renders undefined values as 'undefined' (not 'null')", () => {
+    const out = formatToolCall(undefined, "t", { maybe: undefined });
+    expect(out).toContain("maybe=undefined");
+  });
+
+  it("falls back to String() when JSON.stringify throws (circular)", () => {
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+    const out = formatToolCall(undefined, "t", { ref: circular });
+    // Should not throw; renders using String()
+    expect(out).toContain("ref=");
+  });
+
+  it("truncates long non-string values with a trailing ellipsis (no trailing quote)", () => {
+    const longArray = Array.from({ length: 500 }, (_, i) => i);
+    const out = formatToolCall(undefined, "t", { nums: longArray });
+    expect(out).toContain("…");
+    expect(out).not.toContain(`…"`);
+  });
 });
 
 describe("buildApprovalEmbed", () => {

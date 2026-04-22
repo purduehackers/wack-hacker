@@ -5,15 +5,22 @@ import type { RedisLike } from "@/bot/types";
 import type { ApprovalState, ApprovalStoreLike, WaitForOptions } from "./types.ts";
 
 const KEY_PREFIX = "approval:";
-const TTL_SECONDS = 300;
+const CLAIM_SUFFIX = ":claim";
+const DEFAULT_TTL_SECONDS = 300;
 const DEFAULT_TIMEOUT_MS = 240_000;
 const DEFAULT_INTERVAL_MS = 1500;
 
+type DecisionPatch = Pick<ApprovalState, "status" | "decidedByUserId" | "decidedAt">;
+
 /**
  * Upstash-backed store for pending tool-approval requests. State is TTL'd so
- * abandoned approvals expire without cleanup. Mirrors the shape of
- * `ConversationStore` — accepts an injected `RedisLike` so tests can run
- * against the in-memory fixture.
+ * abandoned approvals expire without cleanup.
+ *
+ * Transitions from `pending` are atomic: `decide()` uses a separate claim key
+ * set with `NX` so concurrent calls (e.g. a button click racing `waitFor`'s
+ * timeout path) agree on a single winner. Readers merge the claim into the
+ * primary row in `get()` so the winning decision is visible immediately, even
+ * before the winner has finished writing the primary row back.
  */
 export class ApprovalStore implements ApprovalStoreLike {
   private redis: RedisLike;
@@ -26,41 +33,74 @@ export class ApprovalStore implements ApprovalStoreLike {
     return `${KEY_PREFIX}${id}`;
   }
 
-  async create(state: ApprovalState): Promise<void> {
-    await this.redis.set(this.key(state.id), state, { ex: TTL_SECONDS });
+  private claimKey(id: string): string {
+    return `${KEY_PREFIX}${id}${CLAIM_SUFFIX}`;
+  }
+
+  async create(state: ApprovalState, ttlSeconds: number = DEFAULT_TTL_SECONDS): Promise<void> {
+    await this.redis.set(this.key(state.id), state, { ex: ttlSeconds });
   }
 
   async get(id: string): Promise<ApprovalState | null> {
-    return this.redis.get<ApprovalState>(this.key(id));
+    const [primary, claim] = await Promise.all([
+      this.redis.get<ApprovalState>(this.key(id)),
+      this.redis.get<DecisionPatch>(this.claimKey(id)),
+    ]);
+    if (!primary) return null;
+    if (!claim) return primary;
+    return { ...primary, ...claim };
   }
 
-  async setMessageId(id: string, messageId: string): Promise<void> {
-    const state = await this.get(id);
-    if (!state) return;
-    await this.redis.set(this.key(id), { ...state, messageId }, { ex: TTL_SECONDS });
+  async setMessageId(
+    id: string,
+    messageId: string,
+    ttlSeconds: number = DEFAULT_TTL_SECONDS,
+  ): Promise<void> {
+    const primary = await this.redis.get<ApprovalState>(this.key(id));
+    if (!primary) return;
+    await this.redis.set(this.key(id), { ...primary, messageId }, { ex: ttlSeconds });
   }
 
   /**
-   * Flip a pending approval to a final status. Returns the updated state, or
-   * `null` if the approval no longer exists (TTL expired between creation
-   * and decision). No-op if the approval is already in a non-pending state —
-   * returns the existing row so callers can observe who decided first.
+   * Flip a pending approval to a final status atomically. Returns the updated
+   * state, or `null` if the approval no longer exists (TTL expired between
+   * creation and decision).
+   *
+   * The transition is serialized across concurrent callers via a Redis-level
+   * `SET ... NX` on a separate claim key: the first writer wins, subsequent
+   * writers see the claim, skip the primary write, and return the merged
+   * state reflecting the winner's decision.
    */
   async decide(
     id: string,
     status: Exclude<ApprovalState["status"], "pending">,
     decidedByUserId: string | null,
   ): Promise<ApprovalState | null> {
-    const state = await this.get(id);
-    if (!state) return null;
-    if (state.status !== "pending") return state;
-    const updated: ApprovalState = {
-      ...state,
+    const decidedAt = new Date().toISOString();
+    const patch: DecisionPatch = {
       status,
       decidedByUserId: decidedByUserId ?? undefined,
-      decidedAt: new Date().toISOString(),
+      decidedAt,
     };
-    await this.redis.set(this.key(id), updated, { ex: TTL_SECONDS });
+
+    const claimed = await this.redis.set(this.claimKey(id), patch, {
+      nx: true,
+      ex: DEFAULT_TTL_SECONDS,
+    });
+
+    const primary = await this.redis.get<ApprovalState>(this.key(id));
+    if (!primary) return null;
+
+    if (claimed === null) {
+      // Lost the race — read the winner's claim and return the merged view.
+      const winner = await this.redis.get<DecisionPatch>(this.claimKey(id));
+      return winner ? { ...primary, ...winner } : primary;
+    }
+
+    // Won the race — write the updated primary so readers without the claim
+    // merge logic still see the terminal status.
+    const updated: ApprovalState = { ...primary, ...patch };
+    await this.redis.set(this.key(id), updated, { ex: DEFAULT_TTL_SECONDS });
     return updated;
   }
 

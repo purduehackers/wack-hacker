@@ -151,4 +151,92 @@ describe("toolApproval component handler", () => {
     expect(follow).toBeTruthy();
     expect((follow!.args[2] as { content: string }).content).toMatch(/Malformed/);
   });
+
+  it("skips the message edit when no messageId was stored", async () => {
+    const { store, handler, discord, calls } = setup();
+    await seed(store, { messageId: undefined });
+
+    await handler.handle({
+      interaction: buildInteraction("tool-approval:approve:a1", "user-1"),
+      discord,
+      customId: "tool-approval:approve:a1",
+    });
+
+    expect(calls.some((c) => c.method === "channels.editMessage")).toBe(false);
+    const after = await store.get("a1");
+    expect(after?.status).toBe("approved");
+  });
+
+  it("swallows an editMessage failure so the decision still persists", async () => {
+    const { store } = setup();
+    await seed(store);
+    const calls: { method: string; args: unknown[] }[] = [];
+    const mock = {
+      channels: {
+        editMessage: async (..._args: unknown[]) => {
+          calls.push({ method: "channels.editMessage", args: _args });
+          throw new Error("message was deleted");
+        },
+      },
+      interactions: {
+        followUp: async (appId: string, token: string, body: unknown) => {
+          calls.push({ method: "interactions.followUp", args: [appId, token, body] });
+          return { id: "f" };
+        },
+      },
+    };
+    const discord = asAPI(mock as unknown as Parameters<typeof asAPI>[0]) as API;
+    const handler = buildToolApprovalHandler(store);
+
+    await handler.handle({
+      interaction: buildInteraction("tool-approval:approve:a1", "user-1"),
+      discord,
+      customId: "tool-approval:approve:a1",
+    });
+
+    expect(calls.some((c) => c.method === "channels.editMessage")).toBe(true);
+    const after = await store.get("a1");
+    expect(after?.status).toBe("approved");
+  });
+
+  it("swallows a followUp failure without throwing", async () => {
+    const { store } = setup();
+    const mock = {
+      channels: { editMessage: async () => ({ id: "x" }) },
+      interactions: {
+        followUp: async () => {
+          throw new Error("unknown interaction");
+        },
+      },
+    };
+    const discord = asAPI(mock as unknown as Parameters<typeof asAPI>[0]) as API;
+    const handler = buildToolApprovalHandler(store);
+
+    await expect(
+      handler.handle({
+        interaction: buildInteraction("tool-approval:approve:missing", "user-1"),
+        discord,
+        customId: "tool-approval:approve:missing",
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("rejects clicks from anonymous sources (no member, no user)", async () => {
+    const { store, handler, discord, calls } = setup();
+    await seed(store);
+    const interaction = buildInteraction("tool-approval:approve:a1", "user-1");
+    delete interaction.member;
+    delete interaction.user;
+
+    await handler.handle({
+      interaction,
+      discord,
+      customId: "tool-approval:approve:a1",
+    });
+
+    const follow = calls.find((c) => c.method === "interactions.followUp");
+    expect((follow!.args[2] as { content: string }).content).toMatch(/identify/i);
+    const after = await store.get("a1");
+    expect(after?.status).toBe("pending");
+  });
 });

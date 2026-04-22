@@ -53,9 +53,9 @@ export interface WrapApprovalOptions {
  * class can live in a non-types file without creating a cycle.
  */
 export interface ApprovalStoreLike {
-  create(state: ApprovalState): Promise<void>;
+  create(state: ApprovalState, ttlSeconds?: number): Promise<void>;
   get(id: string): Promise<ApprovalState | null>;
-  setMessageId(id: string, messageId: string): Promise<void>;
+  setMessageId(id: string, messageId: string, ttlSeconds?: number): Promise<void>;
   decide(
     id: string,
     status: Exclude<ApprovalState["status"], "pending">,

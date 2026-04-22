@@ -24,13 +24,13 @@ const STATUS_STYLE: Record<DecidedStatus, { color: number; label: string; icon: 
 };
 
 function formatValue(v: unknown): string {
+  if (v === undefined) return "undefined";
   let s: string;
   try {
     s = JSON.stringify(v);
   } catch {
     s = String(v);
   }
-  if (s === undefined) s = "null";
   if (s.length <= MAX_VALUE_LEN) return s;
   const wrapped = s.at(0) === '"';
   const body = wrapped ? s.slice(1, MAX_VALUE_LEN - 2) : s.slice(0, MAX_VALUE_LEN - 1);
@@ -120,7 +120,7 @@ export function buildDecisionEmbed(
   const footerText =
     action === "timeout"
       ? `${style.icon} ${style.label} · auto-expired`
-      : `${style.icon} ${style.label}${decidedByUserId ? "" : ""}`;
+      : `${style.icon} ${style.label}`;
 
   return {
     color: style.color,
