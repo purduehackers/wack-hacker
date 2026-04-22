@@ -91,6 +91,39 @@ export const retrieve_database = tool({
   },
 });
 
+export const retrieve_user = tool({
+  description:
+    "Get a single Notion user by ID. Returns name, email (for people), type (person or bot), and avatar URL.",
+  inputSchema: z.object({
+    user_id: z.string().describe("Notion user UUID"),
+  }),
+  execute: async ({ user_id }) => {
+    const u = await notion.users.retrieve({ user_id });
+    return JSON.stringify({
+      id: u.id,
+      name: u.name,
+      type: u.type,
+      avatar_url: u.avatar_url,
+      email: u.type === "person" ? u.person.email : undefined,
+    });
+  },
+});
+
+export const retrieve_bot_user = tool({
+  description:
+    "Get info about the bot user backing this integration — useful for confirming which workspace and user the integration is acting as.",
+  inputSchema: z.object({}),
+  execute: async () => {
+    const me = await notion.users.me({});
+    return JSON.stringify({
+      id: me.id,
+      name: me.name,
+      type: me.type,
+      workspace_name: me.type === "bot" ? me.bot.workspace_name : undefined,
+    });
+  },
+});
+
 export const list_users = tool({
   description: `List workspace users. Returns name, email, type (person or bot), and avatar URL. Use to resolve user names to IDs for people properties.`,
   inputSchema: z.object({

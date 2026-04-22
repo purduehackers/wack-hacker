@@ -3,6 +3,7 @@ import type { QueryDataSourceParameters } from "@notionhq/client/build/src/api-e
 import { tool } from "ai";
 import { z } from "zod";
 
+import { approval } from "../../approvals/index.ts";
 import { notion } from "./client.ts";
 import { COMPANIES_DATA_SOURCE_ID } from "./constants.ts";
 
@@ -62,6 +63,48 @@ export const get_company = tool({
     return JSON.stringify(summarizePage(page as { id: string }));
   },
 });
+
+export const create_company = tool({
+  description: `Create a new Company row in the CRM. Provide at least the company name; other properties should match the Companies data source schema (call retrieve_crm_schema first if unsure).`,
+  inputSchema: z.object({
+    name: z.string().describe("Company name (required)"),
+    properties: z
+      .record(z.string(), z.unknown())
+      .optional()
+      .describe("Additional Notion properties keyed by property name"),
+  }),
+  execute: async ({ name, properties }) => {
+    const page = await notion.pages.create({
+      parent: { data_source_id: COMPANIES_DATA_SOURCE_ID },
+      properties: {
+        Name: { title: [{ text: { content: name } }] },
+        ...properties,
+      },
+    } as Parameters<typeof notion.pages.create>[0]);
+    return JSON.stringify({
+      id: page.id,
+      url: "url" in page ? page.url : undefined,
+      name,
+    });
+  },
+});
+
+export const archive_company = approval(
+  tool({
+    description:
+      "Archive (soft-delete) a Company CRM row. The Notion page is marked archived and drops out of lists but can be restored from the Notion UI.",
+    inputSchema: z.object({
+      company_id: z.string().describe("Notion page UUID for the Company row"),
+    }),
+    execute: async ({ company_id }) => {
+      const page = await notion.pages.update({
+        page_id: company_id,
+        archived: true,
+      } as Parameters<typeof notion.pages.update>[0]);
+      return JSON.stringify({ id: page.id, archived: true });
+    },
+  }),
+);
 
 export const update_company_status = tool({
   description: `Set the Company Status property. Use an option that matches the data source schema (e.g. "Not Contacted", "Contacted", "Awaiting Response", "Donated"). Call retrieve_crm_schema first if unsure.`,

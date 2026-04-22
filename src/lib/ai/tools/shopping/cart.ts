@@ -10,6 +10,7 @@ import {
   removeCartItem,
   setCartItemQuantity,
 } from "../../../shopping/cart.ts";
+import { approval } from "../../approvals/index.ts";
 
 const PAGE_SIZE = 10;
 
@@ -53,17 +54,22 @@ export const add_to_cart = tool({
   },
 });
 
-export const remove_from_cart = tool({
-  description: "Remove a product from the cart by ASIN.",
-  inputSchema: z.object({
-    asin: z.string().min(1).describe("ASIN of the item to remove"),
+export const remove_from_cart = approval(
+  tool({
+    description: "Remove a product from the cart by ASIN.",
+    inputSchema: z.object({
+      asin: z.string().min(1).describe("ASIN of the item to remove"),
+    }),
+    execute: async ({ asin }) => {
+      const result = await removeCartItem(asin);
+      if (!result) return JSON.stringify({ error: `ASIN ${asin} not in cart` });
+      return JSON.stringify({
+        removed: toPublic(result.item),
+        ...summarize(result.snapshot.items),
+      });
+    },
   }),
-  execute: async ({ asin }) => {
-    const result = await removeCartItem(asin);
-    if (!result) return JSON.stringify({ error: `ASIN ${asin} not in cart` });
-    return JSON.stringify({ removed: toPublic(result.item), ...summarize(result.snapshot.items) });
-  },
-});
+);
 
 export const update_quantity = tool({
   description:
@@ -106,12 +112,14 @@ export const view_cart = tool({
   },
 });
 
-export const clear_cart = tool({
-  description:
-    "Remove every item from the shared cart. This is irreversible — always confirm with the user before calling.",
-  inputSchema: z.object({}),
-  execute: async () => {
-    await clearCart();
-    return JSON.stringify({ cleared: true });
-  },
-});
+export const clear_cart = approval(
+  tool({
+    description:
+      "Remove every item from the shared cart. This is irreversible — always confirm with the user before calling.",
+    inputSchema: z.object({}),
+    execute: async () => {
+      await clearCart();
+      return JSON.stringify({ cleared: true });
+    },
+  }),
+);

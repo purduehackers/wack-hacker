@@ -9,6 +9,7 @@ import {
 import { tool } from "ai";
 import { z } from "zod";
 
+import { approval } from "../../approvals/index.ts";
 import { admin } from "../../skills/index.ts";
 import { sentryOpts, sentryOrg } from "./client.ts";
 
@@ -165,21 +166,23 @@ export const update_monitor = tool({
 
 /** Delete a cron monitor. */
 export const delete_monitor = admin(
-  tool({
-    description: "Permanently delete a Sentry cron monitor. This action cannot be undone.",
-    inputSchema: z.object({
-      monitor_slug: z.string().describe("Monitor slug"),
+  approval(
+    tool({
+      description: "Permanently delete a Sentry cron monitor. This action cannot be undone.",
+      inputSchema: z.object({
+        monitor_slug: z.string().describe("Monitor slug"),
+      }),
+      execute: async ({ monitor_slug }) => {
+        const result = await deleteAMonitorOrMonitorEnvironments({
+          ...sentryOpts(),
+          path: {
+            organization_id_or_slug: sentryOrg(),
+            monitor_id_or_slug: monitor_slug,
+          },
+        });
+        unwrapResult(result, "deleteMonitor");
+        return JSON.stringify({ deleted: true });
+      },
     }),
-    execute: async ({ monitor_slug }) => {
-      const result = await deleteAMonitorOrMonitorEnvironments({
-        ...sentryOpts(),
-        path: {
-          organization_id_or_slug: sentryOrg(),
-          monitor_id_or_slug: monitor_slug,
-        },
-      });
-      unwrapResult(result, "deleteMonitor");
-      return JSON.stringify({ deleted: true });
-    },
-  }),
+  ),
 );

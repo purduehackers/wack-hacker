@@ -3,6 +3,7 @@ import { Routes } from "discord-api-types/v10";
 import { z } from "zod";
 
 import { DISCORD_GUILD_ID } from "../../../protocol/constants.ts";
+import { approval } from "../../approvals/index.ts";
 import { admin } from "../../skills/index.ts";
 import { discord } from "./client.ts";
 
@@ -80,18 +81,20 @@ export const create_invite = admin(
 );
 
 export const delete_invite = admin(
-  tool({
-    description:
-      "Revoke an active invite by its code. Use list_invites first to find available codes.",
-    inputSchema: z.object({
-      code: z.string().describe("Invite code to delete (e.g. 'abc123' from discord.gg/abc123)"),
-      reason: z.string().optional().describe("Audit log reason"),
+  approval(
+    tool({
+      description:
+        "Revoke an active invite by its code. Use list_invites first to find available codes.",
+      inputSchema: z.object({
+        code: z.string().describe("Invite code to delete (e.g. 'abc123' from discord.gg/abc123)"),
+        reason: z.string().optional().describe("Audit log reason"),
+      }),
+      execute: async ({ code, reason }) => {
+        await discord.delete(Routes.invite(code), {
+          reason: reason ?? undefined,
+        });
+        return JSON.stringify({ success: true, deleted: code });
+      },
     }),
-    execute: async ({ code, reason }) => {
-      await discord.delete(Routes.invite(code), {
-        reason: reason ?? undefined,
-      });
-      return JSON.stringify({ success: true, deleted: code });
-    },
-  }),
+  ),
 );

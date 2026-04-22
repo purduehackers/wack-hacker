@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { approval } from "../../approvals/index.ts";
 import { linear, applyIssueRelations } from "./client.ts";
 import { issueFields, issueRelationSchema } from "./constants.ts";
 
@@ -55,12 +56,35 @@ export const update_issue = tool({
   },
 });
 
-export const delete_issue = tool({
-  description:
-    "Permanently delete an issue by ID. Only use when the user explicitly asks to delete.",
-  inputSchema: z.object({ id: z.string() }),
+export const delete_issue = approval(
+  tool({
+    description:
+      "Permanently delete an issue by ID. Only use when the user explicitly asks to delete.",
+    inputSchema: z.object({ id: z.string() }),
+    execute: async ({ id }) => {
+      const payload = await linear.deleteIssue(id);
+      return JSON.stringify({ success: payload.success });
+    },
+  }),
+);
+
+export const archive_issue = approval(
+  tool({
+    description:
+      "Archive an issue. Archived issues are hidden from default views but preserved. Prefer this over delete_issue for most cases.",
+    inputSchema: z.object({ id: z.string().describe("Issue UUID") }),
+    execute: async ({ id }) => {
+      const payload = await linear.archiveIssue(id);
+      return JSON.stringify({ success: payload.success });
+    },
+  }),
+);
+
+export const unarchive_issue = tool({
+  description: "Restore an archived issue back to its previous state.",
+  inputSchema: z.object({ id: z.string().describe("Issue UUID") }),
   execute: async ({ id }) => {
-    const payload = await linear.deleteIssue(id);
+    const payload = await linear.unarchiveIssue(id);
     return JSON.stringify({ success: payload.success });
   },
 });

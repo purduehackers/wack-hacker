@@ -2,43 +2,48 @@ import { tool } from "ai";
 import { Routes } from "discord-api-types/v10";
 import { z } from "zod";
 
+import { approval } from "../../approvals/index.ts";
 import { discord } from "./client.ts";
 
 // ---------------------------------------------------------------------------
 // Tools
 // ---------------------------------------------------------------------------
 
-export const send_message = tool({
-  description:
-    "Send a message to a channel. Supports Discord markdown formatting. Returns the sent message's ID, channel ID, and content.",
-  inputSchema: z.object({
-    channel_id: z.string().describe("Channel ID to send the message to"),
-    content: z.string().describe("Message content (supports Discord markdown)"),
+export const send_message = approval(
+  tool({
+    description:
+      "Send a message to a channel. Supports Discord markdown formatting. Returns the sent message's ID, channel ID, and content.",
+    inputSchema: z.object({
+      channel_id: z.string().describe("Channel ID to send the message to"),
+      content: z.string().describe("Message content (supports Discord markdown)"),
+    }),
+    execute: async ({ channel_id, content }) => {
+      const msg = (await discord.post(Routes.channelMessages(channel_id), {
+        body: { content },
+      })) as any;
+      return JSON.stringify({
+        id: msg.id,
+        channelId: msg.channel_id,
+        content: msg.content,
+      });
+    },
   }),
-  execute: async ({ channel_id, content }) => {
-    const msg = (await discord.post(Routes.channelMessages(channel_id), {
-      body: { content },
-    })) as any;
-    return JSON.stringify({
-      id: msg.id,
-      channelId: msg.channel_id,
-      content: msg.content,
-    });
-  },
-});
+);
 
-export const delete_message = tool({
-  description:
-    "Delete a message from a channel. Requires the message ID and channel ID. This is irreversible.",
-  inputSchema: z.object({
-    channel_id: z.string().describe("Channel ID"),
-    message_id: z.string().describe("Message ID to delete"),
+export const delete_message = approval(
+  tool({
+    description:
+      "Delete a message from a channel. Requires the message ID and channel ID. This is irreversible.",
+    inputSchema: z.object({
+      channel_id: z.string().describe("Channel ID"),
+      message_id: z.string().describe("Message ID to delete"),
+    }),
+    execute: async ({ channel_id, message_id }) => {
+      await discord.delete(Routes.channelMessage(channel_id, message_id));
+      return JSON.stringify({ success: true, deleted: message_id });
+    },
   }),
-  execute: async ({ channel_id, message_id }) => {
-    await discord.delete(Routes.channelMessage(channel_id, message_id));
-    return JSON.stringify({ success: true, deleted: message_id });
-  },
-});
+);
 
 export const pin_message = tool({
   description:
@@ -53,18 +58,20 @@ export const pin_message = tool({
   },
 });
 
-export const unpin_message = tool({
-  description:
-    "Unpin a message in a channel. Removes the message from the channel's pinned messages panel.",
-  inputSchema: z.object({
-    channel_id: z.string().describe("Channel ID"),
-    message_id: z.string().describe("Message ID to unpin"),
+export const unpin_message = approval(
+  tool({
+    description:
+      "Unpin a message in a channel. Removes the message from the channel's pinned messages panel.",
+    inputSchema: z.object({
+      channel_id: z.string().describe("Channel ID"),
+      message_id: z.string().describe("Message ID to unpin"),
+    }),
+    execute: async ({ channel_id, message_id }) => {
+      await discord.delete(Routes.channelPin(channel_id, message_id));
+      return JSON.stringify({ success: true, unpinned: message_id });
+    },
   }),
-  execute: async ({ channel_id, message_id }) => {
-    await discord.delete(Routes.channelPin(channel_id, message_id));
-    return JSON.stringify({ success: true, unpinned: message_id });
-  },
-});
+);
 
 export const add_reaction = tool({
   description:
@@ -83,6 +90,114 @@ export const add_reaction = tool({
     return JSON.stringify({ success: true, reacted: emoji });
   },
 });
+
+export const get_message = tool({
+  description:
+    "Get a single message by channel ID and message ID. Returns the message content, author, timestamps, attachments, embeds, and pin status.",
+  inputSchema: z.object({
+    channel_id: z.string().describe("Channel ID"),
+    message_id: z.string().describe("Message ID"),
+  }),
+  execute: async ({ channel_id, message_id }) => {
+    const m = (await discord.get(Routes.channelMessage(channel_id, message_id))) as any;
+    return JSON.stringify({
+      id: m.id,
+      author: m.author.global_name ?? m.author.username,
+      authorId: m.author.id,
+      content: m.content,
+      timestamp: m.timestamp,
+      editedTimestamp: m.edited_timestamp,
+      pinned: m.pinned,
+      attachments: (m.attachments ?? []).map((a: any) => ({ name: a.filename, url: a.url })),
+    });
+  },
+});
+
+export const edit_message = approval(
+  tool({
+    description:
+      "Edit a message the bot sent. Only the bot's own messages can be edited. Replaces the content entirely.",
+    inputSchema: z.object({
+      channel_id: z.string().describe("Channel ID"),
+      message_id: z.string().describe("Message ID (must be sent by this bot)"),
+      content: z.string().describe("New message content"),
+    }),
+    execute: async ({ channel_id, message_id, content }) => {
+      const msg = (await discord.patch(Routes.channelMessage(channel_id, message_id), {
+        body: { content },
+      })) as any;
+      return JSON.stringify({ id: msg.id, content: msg.content });
+    },
+  }),
+);
+
+export const bulk_delete_messages = approval(
+  tool({
+    description:
+      "Bulk delete 2-100 messages from a channel in a single call. Messages must be less than 14 days old. Irreversible.",
+    inputSchema: z.object({
+      channel_id: z.string().describe("Channel ID"),
+      message_ids: z.array(z.string()).min(2).max(100).describe("Message IDs to delete (2-100)"),
+    }),
+    execute: async ({ channel_id, message_ids }) => {
+      await discord.post(Routes.channelBulkDelete(channel_id), {
+        body: { messages: message_ids },
+      });
+      return JSON.stringify({ deleted: message_ids.length, message_ids });
+    },
+  }),
+);
+
+export const crosspost_message = tool({
+  description:
+    "Publish (crosspost) a message in an announcement channel so it's sent to following channels.",
+  inputSchema: z.object({
+    channel_id: z.string().describe("Announcement channel ID"),
+    message_id: z.string().describe("Message ID to crosspost"),
+  }),
+  execute: async ({ channel_id, message_id }) => {
+    const msg = (await discord.post(Routes.channelMessageCrosspost(channel_id, message_id))) as any;
+    return JSON.stringify({ id: msg.id, crossposted: true });
+  },
+});
+
+export const remove_reaction = approval(
+  tool({
+    description:
+      "Remove a specific user's reaction from a message. Pass '@me' for the bot's own reaction.",
+    inputSchema: z.object({
+      channel_id: z.string().describe("Channel ID"),
+      message_id: z.string().describe("Message ID"),
+      emoji: z.string().describe("Emoji (Unicode or name:id format)"),
+      user_id: z.string().describe("User ID whose reaction to remove, or '@me' for bot"),
+    }),
+    execute: async ({ channel_id, message_id, emoji, user_id }) => {
+      const encoded = encodeURIComponent(emoji);
+      if (user_id === "@me") {
+        await discord.delete(Routes.channelMessageOwnReaction(channel_id, message_id, encoded));
+      } else {
+        await discord.delete(
+          Routes.channelMessageUserReaction(channel_id, message_id, encoded, user_id),
+        );
+      }
+      return JSON.stringify({ removed: true });
+    },
+  }),
+);
+
+export const remove_all_reactions = approval(
+  tool({
+    description: "Remove every reaction from a message. Irreversible.",
+    inputSchema: z.object({
+      channel_id: z.string().describe("Channel ID"),
+      message_id: z.string().describe("Message ID"),
+    }),
+    execute: async ({ channel_id, message_id }) => {
+      await discord.delete(Routes.channelMessageAllReactions(channel_id, message_id));
+      return JSON.stringify({ cleared: true });
+    },
+  }),
+);
 
 export const fetch_messages = tool({
   description:

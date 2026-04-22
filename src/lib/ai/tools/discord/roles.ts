@@ -3,6 +3,7 @@ import { Routes } from "discord-api-types/v10";
 import { z } from "zod";
 
 import { DISCORD_GUILD_ID } from "../../../protocol/constants.ts";
+import { approval } from "../../approvals/index.ts";
 import { discord } from "./client.ts";
 
 // ---------------------------------------------------------------------------
@@ -104,21 +105,23 @@ export const edit_role = tool({
   },
 });
 
-export const delete_role = tool({
-  description:
-    "Delete a role from the server. This is irreversible and will remove the role from all members who have it.",
-  inputSchema: z.object({
-    role_id: z.string().describe("Role ID"),
+export const delete_role = approval(
+  tool({
+    description:
+      "Delete a role from the server. This is irreversible and will remove the role from all members who have it.",
+    inputSchema: z.object({
+      role_id: z.string().describe("Role ID"),
+    }),
+    execute: async ({ role_id }) => {
+      // Fetch the role first to get its name
+      const allRoles = (await discord.get(Routes.guildRoles(DISCORD_GUILD_ID))) as any[];
+      const target = allRoles.find((r) => r.id === role_id);
+      if (!target) return JSON.stringify({ error: "Role not found" });
+      await discord.delete(Routes.guildRole(DISCORD_GUILD_ID, role_id));
+      return JSON.stringify({ success: true, deleted: target.name });
+    },
   }),
-  execute: async ({ role_id }) => {
-    // Fetch the role first to get its name
-    const allRoles = (await discord.get(Routes.guildRoles(DISCORD_GUILD_ID))) as any[];
-    const target = allRoles.find((r) => r.id === role_id);
-    if (!target) return JSON.stringify({ error: "Role not found" });
-    await discord.delete(Routes.guildRole(DISCORD_GUILD_ID, role_id));
-    return JSON.stringify({ success: true, deleted: target.name });
-  },
-});
+);
 
 export const assign_role = tool({
   description:
@@ -133,15 +136,17 @@ export const assign_role = tool({
   },
 });
 
-export const remove_role = tool({
-  description:
-    "Remove a role from a server member. Requires both the member's user ID and the role ID.",
-  inputSchema: z.object({
-    member_id: z.string().describe("Member (user) ID"),
-    role_id: z.string().describe("Role ID to remove"),
+export const remove_role = approval(
+  tool({
+    description:
+      "Remove a role from a server member. Requires both the member's user ID and the role ID.",
+    inputSchema: z.object({
+      member_id: z.string().describe("Member (user) ID"),
+      role_id: z.string().describe("Role ID to remove"),
+    }),
+    execute: async ({ member_id, role_id }) => {
+      await discord.delete(Routes.guildMemberRole(DISCORD_GUILD_ID, member_id, role_id));
+      return JSON.stringify({ success: true, member: member_id, role: role_id });
+    },
   }),
-  execute: async ({ member_id, role_id }) => {
-    await discord.delete(Routes.guildMemberRole(DISCORD_GUILD_ID, member_id, role_id));
-    return JSON.stringify({ success: true, member: member_id, role: role_id });
-  },
-});
+);

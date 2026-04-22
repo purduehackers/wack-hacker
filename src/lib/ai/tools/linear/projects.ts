@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { approval } from "../../approvals/index.ts";
 import { linear } from "./client.ts";
 
 export const create_project = tool({
@@ -79,6 +80,57 @@ export const update_project_milestone = tool({
     return JSON.stringify({ id: milestone.id, name: milestone.name });
   },
 });
+
+export const get_project = tool({
+  description:
+    "Get a single project's details by ID — name, status, description, progress, lead, target/start dates, and URL.",
+  inputSchema: z.object({ id: z.string().describe("Project UUID") }),
+  execute: async ({ id }) => {
+    const project = await linear.project(id);
+    return JSON.stringify({
+      id: project.id,
+      name: project.name,
+      description: project.description,
+      state: project.state,
+      progress: project.progress,
+      startDate: project.startDate,
+      targetDate: project.targetDate,
+      url: project.url,
+    });
+  },
+});
+
+export const archive_project = approval(
+  tool({
+    description:
+      "Archive a project. Archived projects are hidden from default views but preserved. Prefer this over delete_project.",
+    inputSchema: z.object({ id: z.string().describe("Project UUID") }),
+    execute: async ({ id }) => {
+      const payload = await linear.archiveProject(id);
+      return JSON.stringify({ success: payload.success });
+    },
+  }),
+);
+
+export const unarchive_project = tool({
+  description: "Restore an archived project.",
+  inputSchema: z.object({ id: z.string().describe("Project UUID") }),
+  execute: async ({ id }) => {
+    const payload = await linear.unarchiveProject(id);
+    return JSON.stringify({ success: payload.success });
+  },
+});
+
+export const delete_project = approval(
+  tool({
+    description: "Permanently delete a project. Irreversible — prefer archive_project.",
+    inputSchema: z.object({ id: z.string().describe("Project UUID") }),
+    execute: async ({ id }) => {
+      const payload = await linear.deleteProject(id);
+      return JSON.stringify({ success: payload.success });
+    },
+  }),
+);
 
 export const query_project_activity = tool({
   description:

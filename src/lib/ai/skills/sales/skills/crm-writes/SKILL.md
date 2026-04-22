@@ -4,6 +4,10 @@ description: Update Company and Contact fields — status, email, next follow-up
 criteria: Use when the user wants to change a Company or Contact row (e.g. mark "Contacted", set an email, schedule a follow-up).
 tools:
   [
+    create_company,
+    create_contact,
+    archive_company,
+    archive_contact,
     update_company_status,
     update_company_email,
     update_company_next_followup,

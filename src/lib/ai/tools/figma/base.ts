@@ -79,6 +79,23 @@ export const list_project_files = tool({
   },
 });
 
+export const get_me = tool({
+  description:
+    "Get details about the Figma user backing the access token — email, ID, and display name. Useful for confirming which identity the bot is acting as.",
+  inputSchema: z.object({}),
+  execute: async () => {
+    const me = await figma.get<{ id: string; email: string; handle: string; img_url?: string }>(
+      "/v1/me",
+    );
+    return JSON.stringify({
+      id: me.id,
+      email: me.email,
+      handle: me.handle,
+      avatar: me.img_url,
+    });
+  },
+});
+
 export const search_files = tool({
   description:
     "Search for files by name across all team projects. Fetches all projects and their files, then filters by query. May be slow for large teams.",

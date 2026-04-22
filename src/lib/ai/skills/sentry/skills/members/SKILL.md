@@ -6,6 +6,7 @@ tools:
   [
     list_members,
     get_member,
+    update_member_role,
     list_teams,
     get_team,
     list_team_members,

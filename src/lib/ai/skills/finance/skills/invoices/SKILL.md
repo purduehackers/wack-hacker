@@ -2,7 +2,7 @@
 name: invoices
 description: List Hack Club Bank invoices and surface outstanding (unpaid) ones for sponsor follow-ups.
 criteria: Use when the user asks about invoices, sponsor payments, billing status, or outstanding balances.
-tools: [list_invoices, list_open_invoices]
+tools: [list_invoices, get_invoice, list_open_invoices]
 minRole: organizer
 mode: inline
 ---

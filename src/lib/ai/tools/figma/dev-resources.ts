@@ -9,6 +9,7 @@ import type {
 import { tool } from "ai";
 import { z } from "zod";
 
+import { approval } from "../../approvals/index.ts";
 import { figma } from "./client.ts";
 
 export const list_dev_resources = tool({
@@ -75,14 +76,16 @@ export const update_dev_resource = tool({
   },
 });
 
-export const delete_dev_resource = tool({
-  description: "Delete a dev resource from a Figma file.",
-  inputSchema: z.object({
-    file_key: z.string().describe("The file key"),
-    dev_resource_id: z.string().describe("The dev resource ID to delete"),
+export const delete_dev_resource = approval(
+  tool({
+    description: "Delete a dev resource from a Figma file.",
+    inputSchema: z.object({
+      file_key: z.string().describe("The file key"),
+      dev_resource_id: z.string().describe("The dev resource ID to delete"),
+    }),
+    execute: async ({ file_key, dev_resource_id }) => {
+      await figma.delete(`/v1/files/${file_key}/dev_resources/${dev_resource_id}`);
+      return JSON.stringify({ deleted: true });
+    },
   }),
-  execute: async ({ file_key, dev_resource_id }) => {
-    await figma.delete(`/v1/files/${file_key}/dev_resources/${dev_resource_id}`);
-    return JSON.stringify({ deleted: true });
-  },
-});
+);
