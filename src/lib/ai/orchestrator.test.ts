@@ -32,21 +32,8 @@ vi.mock("workflow/api", () => ({
   start: vi.fn().mockResolvedValue({ runId: "run-test" }),
   getRun: vi.fn(() => ({ cancel: vi.fn().mockResolvedValue(undefined) })),
 }));
-vi.mock("@/lib/ai/tools/code", () => ({
-  read: stubTool("read"),
-  write: stubTool("write"),
-  edit: stubTool("edit"),
-  list_dir: stubTool("list_dir"),
-  grep: stubTool("grep"),
-  glob: stubTool("glob"),
-  bash: stubTool("bash"),
-  run_checks: stubTool("run_checks"),
-  todo_write: stubTool("todo_write"),
-}));
-vi.mock("@/lib/ai/tools/code/delegation", () => ({
-  buildCodeExperimentalContext: vi.fn(),
-  codeDelegationInputSchema: {},
-  codePostFinish: vi.fn(async function* () {}),
+vi.mock("@vercel/sandbox", () => ({
+  Sandbox: class MockSandbox {},
 }));
 
 const { createOrchestrator } = await import("./orchestrator.ts");
