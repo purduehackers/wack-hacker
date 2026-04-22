@@ -77,6 +77,21 @@ export const someJob = defineCron({
 });
 ```
 
-Crons are reached by hitting `GET /api/crons/:name` with `Authorization: Bearer ${CRON_SECRET}`. The route looks the cron up by `name` and calls `cron.handle(discord)` — the cron's `schedule` field is metadata only, not actually wired to Vercel's scheduler.
+Crons are reached by hitting `GET /api/crons/:name` with `Authorization: Bearer ${CRON_SECRET}`. The route looks the cron up by `name` and calls `cron.handle(discord)`.
 
-To make Vercel actually fire the cron, add `{ path: "/api/crons/<name>", schedule: "..." }` to the `crons` array in `vercel.ts`. As of writing only the gateway cron is registered there.
+Any cron created via `defineCron` is automatically picked up by `buildCronRoutes()` in [`vercel.ts`](../deployment/vercel-config.md) — you do not edit the `crons` array by hand. The gateway cron is the one exception because it lives outside `src/bot/handlers/crons/`. To add a new cron, drop a handler file under `src/bot/handlers/crons/<name>/` and re-export it from the barrel; the next deploy will register it.
+
+## Shipped commands
+
+One directory per handler under `src/bot/handlers/commands/`. Barrel-exported from `commands/index.ts`; `register-commands.ts` reads the exports when you run `bun run build`.
+
+| Command                     | Kind                | Purpose                                                                                   |
+| --------------------------- | ------------------- | ----------------------------------------------------------------------------------------- |
+| `/ping`                     | slash               | Health check.                                                                             |
+| `/door-opener`              | slash               | Triggers the Phonebell open URL.                                                          |
+| `/privacy`                  | slash               | Manage the user's privacy preferences in the privacy DB.                                  |
+| `/delete-ship`              | slash               | Admin — delete a Ship submission by ID (R2 asset + Turso row).                            |
+| `/restart-bot`              | slash               | Admin — nuke the discord.js gateway leader so the next cron picks it up cleanly.          |
+| `/init-hn`                  | slash               | Organizer — bootstrap a hack night: creates the thread, bumps the Edge Config version.    |
+| `/identity`                 | slash (opens modal) | Organizer — write your Linear/Notion/Sentry/GitHub/Figma IDs to the Edge Config roster.   |
+| `Inspect Context` (message) | context menu        | Organizer — right-click a bot message to see the conversation's context-budget breakdown. |

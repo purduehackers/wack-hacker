@@ -22,15 +22,15 @@ This is what actually goes into the orchestrator's message history — the full 
 
 ## Subagent configuration
 
-| Field         | Value                                                                                                               |
-| ------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Model         | `SUBAGENT_MODEL` constant in `src/lib/ai/constants.ts`, currently `anthropic/claude-haiku-4.5`                      |
-| Instructions  | `SUBAGENT_PREAMBLE` + the domain's `SKILL.md` body, with `{{SKILL_MENU}}` substituted                               |
-| Tools         | All domain tools + `loadSkill`, then run through `filterAdmin(allTools)` when role is not admin                     |
-| `activeTools` | Initially `[...spec.baseToolNames, "loadSkill"]` — discovery tools plus the always-present `loadSkill`              |
-| `prepareStep` | Re-computes `activeTools` every step by scanning previous `loadSkill` calls — see [Skills](../skills/disclosure.md) |
-| `stopWhen`    | `stepCountIs(15)` — hard cap on tool calls per delegation                                                           |
-| Telemetry     | `experimental_telemetry: { isEnabled: true, functionId: "subagent.<name>", metadata: { role, subagent } }`          |
+| Field         | Value                                                                                                                                                 |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Model         | `SUBAGENT_MODEL` in `src/lib/ai/constants.ts`, currently `openai/gpt-5.4-mini`; a domain can override via `DOMAIN_SPEC_OVERRIDES` (see below)         |
+| Instructions  | `SUBAGENT_PREAMBLE` + the domain's `SKILL.md` body, with `{{SKILL_MENU}}` substituted                                                                 |
+| Tools         | All domain tools + `loadSkill`, then run through `filterAdmin(allTools)` when role is not admin, then `wrapApprovalTools` for any `approval()`-marked |
+| `activeTools` | Initially `[...spec.baseToolNames, "loadSkill"]` — discovery tools plus the always-present `loadSkill`                                                |
+| `prepareStep` | Re-computes `activeTools` every step by scanning previous `loadSkill` calls — see [Skills](../skills/disclosure.md)                                   |
+| `stopWhen`    | `stepCountIs(spec.stopSteps ?? 15)` — hard cap on tool calls per delegation, overridable per domain                                                   |
+| Telemetry     | `experimental_telemetry: { isEnabled: true, functionId: "subagent.<name>", metadata: { role, subagent } }`                                            |
 
 ## SubagentSpec
 
@@ -45,6 +45,18 @@ At call time, `buildDelegationTools` layers on:
 - `name` — the domain key (e.g. `"linear"`).
 - `description` — from the domain's top-level `SKILL.md`, shown to the orchestrator on the delegation tool.
 - `systemPrompt` — the same `SKILL.md` body, used as the subagent's instructions.
+
+## Per-domain overrides (`DOMAIN_SPEC_OVERRIDES`)
+
+Most subagents use the defaults. `delegates.ts` also exports a `DOMAIN_SPEC_OVERRIDES` map — a `Partial<Record<domain, Partial<SubagentSpec>>>` — for domains that need non-default wiring. The overridable fields are:
+
+- `model` — swap the subagent model (e.g. a stronger one for harder tasks).
+- `stopSteps` — raise or lower the per-delegation step cap.
+- `inputSchema` — replace the default `{ task: string }` with a domain-specific Zod schema; the orchestrator sees the richer shape on the delegation tool.
+- `buildExperimentalContext` — a function that runs before the subagent starts. Whatever it returns is threaded into the agent's `experimental_context` and is visible to tools via `tool.execute`'s second argument. Use this to provision external state (a sandbox, a DB session, etc.).
+- `postFinish` — an async generator that runs after the subagent emits its final message. It can yield more `UIMessage`s that stream back as the subagent's apparent last output (used, for example, to append a PR URL).
+
+Today only `code` has overrides. Its entry sets `model: "anthropic/claude-opus-4.7"`, `stopSteps: 60`, a repo-constrained `inputSchema` (`{ repo: "purduehackers/<name>", task: string }`), a `buildCodeExperimentalContext` that provisions a Vercel Sandbox session, and a `codePostFinish` that commits, pushes, and opens (or reuses) a PR. The full flow is documented in [Code sandbox](./code-sandbox.md).
 
 ## Fire-and-forget semantics
 

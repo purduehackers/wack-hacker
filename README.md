@@ -10,11 +10,29 @@ AI-powered Discord bot for [Purdue Hackers](https://purduehackers.com). Wack Hac
 
 ### Domains
 
-- **Discord** — manage channels, threads, messages, members, roles, emojis, webhooks, and scheduled events.
-- **GitHub** — browse and edit repositories, file issues and PRs, read file contents, trigger workflows, manage deployments, packages, projects, secrets, and org settings.
-- **Linear** — create and triage issues, run views, comment, manage projects, initiatives, updates, documents, reminders, customer requests, and users.
+Subagents are grouped by what they touch, not by how they're wired up. Organizer role unlocks everything except `delegate_code`, which is admin-only.
+
+**Communication & knowledge**
+
+- **Discord** — channels, threads, messages, members, roles, emojis, webhooks, scheduled events.
 - **Notion** — read and write pages, query and update databases, post and resolve comments.
-- **Documentation** — search and quote from [ask.purduehackers.com](https://ask.purduehackers.com) so the bot can answer questions grounded in Purdue Hackers' own docs.
+- **Documentation** — search and quote from [ask.purduehackers.com](https://ask.purduehackers.com) for questions grounded in Purdue Hackers' own docs.
+
+**Engineering**
+
+- **GitHub** — repositories, issues, PRs, file contents, workflows, deployments, packages, projects, secrets, org settings.
+- **Linear** — issues, views, projects, initiatives, updates, documents, reminders, customer requests, users.
+- **Sentry** — error monitoring, events, stack traces, releases, alerts.
+- **Vercel** — projects, deployments, runtime logs, env vars, domains, edge config, feature flags, rolling releases, marketplace integrations (Turso/Upstash/Neon), sandboxes, firewall.
+- **Figma** — files, components, styles, design tokens, variables, comments, dev resources.
+- **Code** (admin-only) — autonomous coding agent that runs inside a Vercel Sandbox against a `purduehackers/*` repo, makes changes on a feature branch, runs checks, and opens a PR.
+
+**Operations**
+
+- **Finance** — read-only Hack Club Bank lookups: balances, transactions, donations, invoices, card spend.
+- **Shopping** — Amazon product search and a shared virtual cart/wishlist.
+- **Sales** — Notion CRM (Companies/Contacts/Deals), Hunter.io email finder, Resend outreach send/tracking.
+- **CMS** — Payload CMS at [cms.purduehackers.com](https://cms.purduehackers.com): events, RSVPs, hack-night sessions, email campaigns, media, microgrants, shelter projects, users.
 
 Built on [Next.js](https://nextjs.org) App Router + [Hono](https://hono.dev) (via `hono/vercel`), [AI SDK](https://ai-sdk.dev) v6, and [Workflow DevKit](https://useworkflow.dev). Deployed on Vercel with Fluid Compute.
 

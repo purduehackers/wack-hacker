@@ -5,10 +5,11 @@
 ```ts
 import { type VercelConfig } from "@vercel/config/v1";
 
+import { buildCronRoutes } from "@/bot/crons/config";
+
 export const config: VercelConfig = {
   framework: "nextjs",
-  bunVersion: "1.x",
-  crons: [{ path: "/api/discord/gateway", schedule: "*/9 * * * *" }],
+  crons: [{ path: "/api/discord/gateway", schedule: "*/9 * * * *" }, ...buildCronRoutes()],
   functions: {
     "src/app/api/tasks/route.ts": {
       maxDuration: 600,
@@ -31,7 +32,10 @@ export const config: VercelConfig = {
 
 ## Cron
 
-`*/9 * * * *` → `/api/discord/gateway`. This is the gateway leader cron — it makes sure something is always trying to be the active discord.js client. The cadence overlaps with the listener's 10-minute hold, so there's always a leader. See [Discord § gateway leader election](../discord/gateway.md).
+Two sources:
+
+1. **Gateway leader cron** — `*/9 * * * *` → `/api/discord/gateway`. Hand-registered because it lives outside the handler registry. Keeps something always trying to be the active discord.js client; the cadence overlaps with the listener's 10-minute hold so there's always a leader. See [Discord § gateway leader election](../discord/gateway.md).
+2. **Handler-derived crons** — `buildCronRoutes()` (from `@/bot/crons/config`) walks `src/bot/handlers/crons/` and emits one `{ path: "/api/crons/<name>", schedule }` entry per `defineCron` handler. At time of writing that's `heartbeat`, `hack-night-create`, and `hack-night-cleanup`. Add a new cron by dropping a `defineCron` handler in that directory; no `vercel.ts` edit required. See [Discord § writing handlers](../discord/handlers.md).
 
 ## Queue triggers
 
@@ -48,7 +52,3 @@ Scoping is critical. Next.js compiles each route file into its own `.func` direc
 
 - `600` (10 minutes) on both queue consumers — long enough for an agent run with subagent delegation.
 - `"max"` on the catch-all Hono function — Fluid Compute's plan maximum, since that's where streaming chat turns and long-running interactions live.
-
-## Bun version
-
-`bunVersion: "1.x"` pins the Bun runtime to the 1.x line. Update this when moving to 2.x.

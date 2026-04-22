@@ -6,12 +6,14 @@
 
 The full list changes often; the canonical source is always [`src/env.ts`](../../src/env.ts). Today it covers:
 
-- **Discord** — bot token, client ID, public key, guild ID.
+- **Discord** — `DISCORD_BOT_TOKEN`, `DISCORD_BOT_CLIENT_ID`, `DISCORD_BOT_PUBLIC_KEY`. The guild ID is a hard-coded constant in `src/lib/constants.ts`, not an env var.
 - **Cron auth** — `CRON_SECRET` (bearer token for `/api/crons/*`).
-- **Integrations** — Linear, Notion, GitHub App credentials (org-installed), Groq, ask.purduehackers.com API key, dashboard URL, Phonebell open URL.
-- **Storage** — Upstash Redis (KV REST), Cloudflare R2 (account ID + access keys + ship bucket), Payload CMS (API key for hack-night media + curated content), Turso libSQL (privacy DB and ship DB).
-- **Vercel** — API token, Edge Config ID. The `vercel()` preset auto-loads `VERCEL_*` deployment vars.
-- **Optional** — Sentry DSN.
+- **AI** — `GROQ_API_KEY` (used by one specialized tool). The AI SDK Gateway authenticates via the standard `VERCEL_*` OIDC vars loaded by the `vercel()` preset.
+- **Integrations — engineering** — Linear (`LINEAR_API_KEY`), Notion (`NOTION_TOKEN`), GitHub App (`GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_ORG`), Figma (`FIGMA_ACCESS_TOKEN`, `FIGMA_TEAM_ID`), Sentry (`SENTRY_AUTH_TOKEN`, `SENTRY_ORG`).
+- **Integrations — ops & platform** — Vercel (`VERCEL_API_TOKEN`, `VERCEL_EDGE_CONFIG_ID`, `EDGE_CONFIG`), Hack Club Bank (`HCB_ORG_SLUG`), SerpAPI for `delegate_shopping` (`SERPAPI_API_KEY`).
+- **Integrations — sales & CMS** — Resend (`RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`), Hunter.io (`HUNTER_API_KEY`), Payload CMS (`PAYLOAD_CMS_API_KEY`), ask.purduehackers.com (`PHACK_ASK_API_KEY`), Phack API (`PHACK_API_TOKEN`), `PHONEBELL_OPEN_URL`, `DASHBOARD_URL`.
+- **Storage** — Upstash Redis (`KV_REST_API_URL`, `KV_REST_API_TOKEN`), Turso main (`TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`), Turso ship (`SHIP_DATABASE_TURSO_DATABASE_URL`, `SHIP_DATABASE_TURSO_AUTH_TOKEN`), Cloudflare R2 (`R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `SHIP_R2_BUCKET_NAME`), privacy DB (`PRIVACY_DB_URL`, `PRIVACY_DB_API_KEY`).
+- **Optional** — `SENTRY_DSN` (client-side error reporting), `SANDBOX_BASE_SNAPSHOT_ID` (preseeded Vercel Sandbox snapshot with `ripgrep` + `gh`; speeds up `delegate_code` cold starts by ~20-30s — create one via `scripts/create-sandbox-snapshot.ts`).
 
 ## Adding a new env var
 
