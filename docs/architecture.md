@@ -138,8 +138,8 @@ See [Agents](./agents/README.md) for the full breakdown.
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | AI Gateway         | `anthropic/claude-sonnet-4.6` (orchestrator), `openai/gpt-5.4-mini` (subagents), `anthropic/claude-opus-4.7` (`delegate_code`); routing, observability, model fallbacks |
 | Upstash Redis      | `ConversationStore`, dedup keys, per-channel locks, task registry, approval state, sandbox session registry                                                             |
-| Turso (libSQL)     | Privacy preferences, ship submissions                                                                                                                                   |
-| Cloudflare R2      | Ship uploads                                                                                                                                                            |
+| Turso (libSQL)     | Privacy preferences                                                                                                                                                     |
+| Ships API          | Ship submissions and media — external service at ships.purduehackers.com; bot posts via `ShipsClient`                                                                   |
 | Payload CMS        | Hack night photo archive, curated site content (events, hack-night-sessions, ugrants, shelter projects)                                                                 |
 | Vercel Edge Config | Organizer roster (read by `resolve_organizer`), hack night `version` key (used by `/init-hn`)                                                                           |
 | Vercel Queues      | `discord-events` (gateway → consumer), `tasks` (scheduling)                                                                                                             |

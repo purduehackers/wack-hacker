@@ -2,7 +2,7 @@ import { SlashCommandBuilder } from "discord.js";
 
 import { defineCommand } from "@/bot/commands/define";
 import { isOrganizer, respond } from "@/bot/commands/helpers";
-import { ShipDatabase } from "@/bot/integrations/ships";
+import { ShipsClient } from "@/bot/integrations/ships";
 import { env } from "@/env";
 
 export const deleteShip = defineCommand({
@@ -27,11 +27,17 @@ export const deleteShip = defineCommand({
       return;
     }
 
-    const shipDb = new ShipDatabase(
-      env.SHIP_DATABASE_TURSO_DATABASE_URL,
-      env.SHIP_DATABASE_TURSO_AUTH_TOKEN,
+    const ships = new ShipsClient(env.SHIP_API_KEY);
+    const result = await ships.deleteShipByMessageId(messageId);
+
+    if (!result.deleted) {
+      await respond(ctx, `No ship found for message ID \`${messageId}\`.`);
+      return;
+    }
+
+    await respond(
+      ctx,
+      `Ship with message ID \`${messageId}\` has been deleted from the gallery (${result.attachmentsRemoved} attachments removed).`,
     );
-    await shipDb.deleteByMessageId(messageId);
-    await respond(ctx, `Ship with message ID \`${messageId}\` has been deleted from the gallery.`);
   },
 });
