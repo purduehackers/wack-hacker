@@ -6,7 +6,7 @@ import { z } from "zod";
 import type { ApprovalState, WrapApprovalOptions } from "./types.ts";
 
 import { discord } from "../tools/discord/client.ts";
-import { buildApprovalComponents, buildApprovalEmbed } from "./helpers.ts";
+import { buildApprovalComponents, buildApprovalEmbed, buildDecisionEmbed } from "./helpers.ts";
 import { getApprovalOptions } from "./index.ts";
 import { ApprovalStore } from "./store.ts";
 
@@ -41,10 +41,19 @@ function buildWrappedSchema(
     ? z.string().optional().describe(description)
     : z.string().describe(description);
 
+  if (originalSchema === undefined) {
+    return z.object({ _reason: reasonSchema });
+  }
   if (originalSchema instanceof z.ZodObject) {
     return originalSchema.extend({ _reason: reasonSchema });
   }
-  return originalSchema ?? z.object({});
+  // Silently passing a non-object schema through would mean `_reason` never
+  // lands in the schema and `extractReason` would drop whatever primitive /
+  // array / union input the agent actually sent. Fail fast at wrap time so
+  // the misconfiguration is caught in tests, not at runtime.
+  throw new Error(
+    "approval() can only be applied to tools with a ZodObject inputSchema (or no inputSchema).",
+  );
 }
 
 function buildWrappedDescription(
@@ -72,6 +81,32 @@ async function postApprovalMessage(args: {
       allowed_mentions: { users: [requesterUserId], parse: [] },
     },
   })) as { id: string };
+}
+
+/**
+ * Best-effort swap of the original approval embed for the terminal decision
+ * embed (green / red / grey) and remove the buttons. Called from the wrapper
+ * when the approval resolves to a non-approved status so the channel UI
+ * converges to what's stored — especially the timeout path, which otherwise
+ * leaves the prompt amber with live buttons indefinitely.
+ */
+async function convergeApprovalMessage(state: ApprovalState): Promise<void> {
+  if (!state.messageId || state.status === "pending" || state.status === "approved") return;
+  const channelId = state.threadId ?? state.channelId;
+  try {
+    await discord.patch(Routes.channelMessage(channelId, state.messageId), {
+      body: {
+        embeds: [buildDecisionEmbed(state, state.status, state.decidedByUserId ?? null)],
+        components: [],
+      },
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "unknown error";
+    log.warn(
+      "approval",
+      `Failed to converge approval message ${state.messageId} to ${state.status}: ${message}`,
+    );
+  }
 }
 
 async function* runApproved(
@@ -157,6 +192,7 @@ function wrapWithApproval(
       const abortSignal = extractAbortSignal(runtime);
       const final = await store.waitFor(approvalId, { timeoutMs, signal: abortSignal });
       if (final.status !== "approved") {
+        await convergeApprovalMessage(final);
         yield denialMessage(final.status, toolName);
         return;
       }

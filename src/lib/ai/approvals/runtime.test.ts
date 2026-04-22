@@ -10,9 +10,11 @@ import { wrapApprovalTools } from "./runtime.ts";
 import { ApprovalStore } from "./store.ts";
 
 // Mock the third-party Discord REST client at the module level so the wrapper
-// exercises its real `discord.post(...)` path without hitting the network.
-const { restPost } = vi.hoisted(() => ({
+// exercises its real `discord.post(...)` / `discord.patch(...)` paths
+// without hitting the network.
+const { restPost, restPatch } = vi.hoisted(() => ({
   restPost: vi.fn<(route: string, opts: { body: unknown }) => Promise<unknown>>(),
+  restPatch: vi.fn<(route: string, opts: { body: unknown }) => Promise<unknown>>(),
 }));
 vi.mock("@discordjs/rest", () => ({
   REST: class {
@@ -20,6 +22,7 @@ vi.mock("@discordjs/rest", () => ({
       return this;
     }
     post = restPost;
+    patch = restPatch;
   },
 }));
 
@@ -66,10 +69,13 @@ function extractApprovalId(callIdx = 0): string {
 beforeEach(() => {
   restPost.mockReset();
   restPost.mockResolvedValue({ id: "msg-1" });
+  restPatch.mockReset();
+  restPatch.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
   restPost.mockReset();
+  restPatch.mockReset();
 });
 
 describe("wrapApprovalTools — shape", () => {
@@ -112,7 +118,7 @@ describe("wrapApprovalTools — shape", () => {
     expect(schema.safeParse({ name: "x", _reason: "override" }).success).toBe(true);
   });
 
-  it("wraps tools whose inputSchema is not a ZodObject without extending it", () => {
+  it("throws when the original inputSchema isn't a ZodObject (would silently drop args)", () => {
     const nonObjectSchema = z.union([z.string(), z.number()]);
     const gated = approval(
       tool({
@@ -121,16 +127,15 @@ describe("wrapApprovalTools — shape", () => {
         execute: async () => "ok",
       }),
     );
-    const out = wrapApprovalTools({ t: gated }, { context });
-    expect(out.t.inputSchema).toBe(nonObjectSchema);
+    expect(() => wrapApprovalTools({ t: gated }, { context })).toThrow(/ZodObject inputSchema/);
   });
 
-  it("substitutes an empty object schema when the original has no inputSchema", () => {
+  it("substitutes a `{ _reason }` object schema when the original has no inputSchema", () => {
     // Raw tool object with no schema. approval() just tags it.
     const bare = approval({ description: "raw" } as unknown as ReturnType<typeof gatedTool>);
     const out = wrapApprovalTools({ t: bare }, { context });
-    // Should not throw and should produce a callable tool definition.
-    expect(out.t.inputSchema).toBeDefined();
+    const schema = out.t.inputSchema as z.ZodObject<z.ZodRawShape>;
+    expect(schema.shape._reason).toBeDefined();
   });
 
   it("tolerates tools that carry no description when wrapping", () => {
@@ -180,6 +185,102 @@ describe("wrapApprovalTools — decisions", () => {
     const out = wrapApprovalTools({ make: gatedTool() }, { context, store, timeoutMs: 50 });
     const { values, drain } = startExec(out.make, { name: "widget", _reason: "tick" });
     await drain;
+    expect(values.at(-1)).toMatch(/timed out/i);
+  });
+});
+
+describe("wrapApprovalTools — message convergence on non-approved", () => {
+  it("patches the original message to a decision embed on timeout", async () => {
+    const store = new ApprovalStore(createMemoryRedis());
+    const out = wrapApprovalTools({ make: gatedTool() }, { context, store, timeoutMs: 50 });
+    const { values, drain } = startExec(out.make, { name: "x", _reason: "r" });
+    await drain;
+
+    expect(values.at(-1)).toMatch(/timed out/i);
+    expect(restPatch).toHaveBeenCalledTimes(1);
+    const [, opts] = restPatch.mock.calls[0]!;
+    const body = opts.body as { components: unknown[]; embeds: unknown[] };
+    expect(body.components).toEqual([]); // buttons cleared
+    expect(body.embeds).toHaveLength(1);
+  });
+
+  it("patches the original message to a decision embed on deny", async () => {
+    const store = new ApprovalStore(createMemoryRedis());
+    const out = wrapApprovalTools({ make: gatedTool() }, { context, store, timeoutMs: 10_000 });
+    const { drain } = startExec(out.make, { name: "x", _reason: "r" });
+
+    await new Promise((r) => setTimeout(r, 20));
+    const id = extractApprovalId();
+    await store.decide(id, "denied", context.userId);
+    await drain;
+
+    expect(restPatch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not patch on approve (the inner tool runs and the request resolves normally)", async () => {
+    const store = new ApprovalStore(createMemoryRedis());
+    const out = wrapApprovalTools({ make: gatedTool() }, { context, store, timeoutMs: 10_000 });
+    const { drain } = startExec(out.make, { name: "x", _reason: "r" });
+
+    await new Promise((r) => setTimeout(r, 20));
+    const id = extractApprovalId();
+    await store.decide(id, "approved", context.userId);
+    await drain;
+
+    expect(restPatch).not.toHaveBeenCalled();
+  });
+
+  it("swallows a patch failure so the denial still surfaces to the model", async () => {
+    restPatch.mockRejectedValueOnce(new Error("message gone"));
+    const store = new ApprovalStore(createMemoryRedis());
+    const out = wrapApprovalTools({ make: gatedTool() }, { context, store, timeoutMs: 50 });
+    const { values, drain } = startExec(out.make, { name: "x", _reason: "r" });
+    await drain;
+
+    expect(values.at(-1)).toMatch(/timed out/i);
+  });
+
+  it("skips the patch when no messageId was ever stored (synthetic timeout)", async () => {
+    // If the initial post never succeeded, the approval row has no messageId
+    // and there's nothing to converge.
+    restPost.mockRejectedValueOnce(new Error("network down"));
+    const store = new ApprovalStore(createMemoryRedis());
+    const out = wrapApprovalTools({ make: gatedTool() }, { context, store, timeoutMs: 50 });
+    const { drain } = startExec(out.make, { name: "x", _reason: "r" });
+    await drain;
+
+    expect(restPatch).not.toHaveBeenCalled();
+  });
+
+  it("skips the patch when waitFor returns a synthetic timeout (row vanished)", async () => {
+    // Force waitFor to return the synthetic fallback by stubbing the store:
+    // the row was created + the message posted, but `waitFor` resolves with
+    // a missing-messageId synthetic. `convergeApprovalMessage` must bail.
+    const store = new ApprovalStore(createMemoryRedis());
+    vi.spyOn(store, "waitFor").mockResolvedValueOnce({
+      id: "x",
+      status: "timeout",
+      toolName: "",
+      input: null,
+      reason: "",
+      channelId: "",
+      requesterUserId: "",
+      createdAt: "",
+    });
+    const out = wrapApprovalTools({ make: gatedTool() }, { context, store, timeoutMs: 50 });
+    const { drain } = startExec(out.make, { name: "x", _reason: "r" });
+    await drain;
+
+    expect(restPatch).not.toHaveBeenCalled();
+  });
+
+  it("swallows a non-Error throw from the patch call", async () => {
+    restPatch.mockRejectedValueOnce("plain-string-reason");
+    const store = new ApprovalStore(createMemoryRedis());
+    const out = wrapApprovalTools({ make: gatedTool() }, { context, store, timeoutMs: 50 });
+    const { values, drain } = startExec(out.make, { name: "x", _reason: "r" });
+    await drain;
+
     expect(values.at(-1)).toMatch(/timed out/i);
   });
 });

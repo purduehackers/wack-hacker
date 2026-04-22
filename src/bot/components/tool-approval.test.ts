@@ -88,7 +88,7 @@ describe("toolApproval — authorization", () => {
 });
 
 describe("toolApproval — already decided / expired", () => {
-  it("sends an ephemeral reply when the approval is already decided", async () => {
+  it("converges the channel message and sends an ephemeral reply when already decided", async () => {
     const { store, handler, discord, mockAPI } = setup();
     await store.create(baseApprovalState({ status: "approved", decidedByUserId: "user-1" }));
 
@@ -98,9 +98,26 @@ describe("toolApproval — already decided / expired", () => {
       customId: "tool-approval:deny:a1",
     });
 
-    expect(mockAPI.callsTo("channels.editMessage")).toHaveLength(0);
+    // Belt-and-suspenders: even on a late click, the message is patched to
+    // reflect the stored decision so the UI converges to truth.
+    expect(mockAPI.callsTo("channels.editMessage")).toHaveLength(1);
     const follows = mockAPI.callsTo("interactions.followUp");
     expect((follows[0]![2] as { content: string }).content).toMatch(/already been approved/);
+  });
+
+  it("converges without a decidedByUserId field when the stored status is timeout", async () => {
+    const { store, handler, discord, mockAPI } = setup();
+    await store.create(baseApprovalState({ status: "timeout" }));
+
+    await handler.handle({
+      interaction: buttonInteraction("tool-approval:approve:a1", "user-1"),
+      discord,
+      customId: "tool-approval:approve:a1",
+    });
+
+    expect(mockAPI.callsTo("channels.editMessage")).toHaveLength(1);
+    const follows = mockAPI.callsTo("interactions.followUp");
+    expect((follows[0]![2] as { content: string }).content).toMatch(/already been timeout/);
   });
 
   it("sends an ephemeral reply when the approval has expired (missing row)", async () => {

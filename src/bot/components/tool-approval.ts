@@ -61,6 +61,9 @@ export function buildToolApprovalHandler(store?: ApprovalStoreLike): ComponentHa
       }
 
       if (state.status !== "pending") {
+        // Best-effort: converge the channel message to the stored decision
+        // in case the wrapper's timeout path or a previous edit failed.
+        await editOriginalMessage(discord, state, state.status, state.decidedByUserId ?? null);
         await sendEphemeral(discord, interaction, `This request has already been ${state.status}.`);
         return;
       }
@@ -103,7 +106,7 @@ async function editOriginalMessage(
   discord: API,
   state: ApprovalState,
   action: DecidedStatus,
-  decidedByUserId: string,
+  decidedByUserId: string | null,
 ): Promise<void> {
   if (!state.messageId) {
     log.warn("tool-approval", `No messageId stored for approval ${state.id}; skipping edit.`);
