@@ -1,13 +1,30 @@
-import { createClient } from "@libsql/client";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/db", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/db")>("@/lib/db");
-  const client = createClient({ url: "file::memory:?cache=shared" });
-  const db = actual.buildDb(client);
+// Swap the libsql client for an in-memory SQLite so drizzle runs against a
+// real (but ephemeral) database. This mocks the third-party SDK, not our
+// `@/lib/db` module.
+const { memoryClient } = await vi.hoisted(async () => {
+  const actual = await import("@libsql/client");
+  return { memoryClient: actual.createClient({ url: "file::memory:?cache=shared" }) };
+});
 
+vi.mock("@libsql/client", async () => {
+  const actual = await vi.importActual<typeof import("@libsql/client")>("@libsql/client");
+  return {
+    ...actual,
+    createClient: vi.fn(() => memoryClient),
+  };
+});
+
+const { getDb } = await import("./../db/index.ts");
+const { shoppingCartItems } = await import("../db/schemas/shopping-cart-items.ts");
+const { shoppingCarts } = await import("../db/schemas/shopping-carts.ts");
+const { getCart, addCartItem, removeCartItem, setCartItemQuantity, clearCart } =
+  await import("./cart.ts");
+
+beforeAll(async () => {
   const migrationsDir = "./drizzle";
   const migrationFiles = readdirSync(migrationsDir)
     .filter((name) => name.endsWith(".sql"))
@@ -16,18 +33,10 @@ vi.mock("@/lib/db", async () => {
     const raw = readFileSync(join(migrationsDir, migration), "utf-8");
     for (const statement of raw.split("--> statement-breakpoint")) {
       const trimmed = statement.trim();
-      if (trimmed) await client.execute(trimmed);
+      if (trimmed) await memoryClient.execute(trimmed);
     }
   }
-
-  return { ...actual, getDb: () => db };
 });
-
-const { getDb } = await import("@/lib/db");
-const { getCart, addCartItem, removeCartItem, setCartItemQuantity, clearCart } =
-  await import("./cart.ts");
-const { shoppingCartItems } = await import("@/lib/db/schemas/shopping-cart-items");
-const { shoppingCarts } = await import("@/lib/db/schemas/shopping-carts");
 
 beforeEach(async () => {
   const db = getDb();

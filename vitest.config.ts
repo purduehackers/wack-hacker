@@ -15,6 +15,10 @@ export default defineConfig({
     exclude: ["src/**/*.integration.test.ts"],
     env: {
       SKIP_ENV_VALIDATION: "1",
+      // `@/lib/ai/tools/code/delegation` builds a regex from `env.GITHUB_ORG`
+      // at module-load time, so tests importing anything in the code-subagent
+      // chain need it defined before their first import evaluates.
+      GITHUB_ORG: "purduehackers",
     },
     coverage: {
       provider: "istanbul",

@@ -1,84 +1,51 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { toolOpts } from "@/lib/test/fixtures";
 
-import type { CartItem, CartSnapshot, NewCartItemInput } from "../../../shopping/types.ts";
+// Swap libsql for an in-memory SQLite so the real cart module runs end-to-end
+// over ephemeral test data. Mocks the third-party SDK, not `@/lib/db`.
+const { memoryClient } = await vi.hoisted(async () => {
+  const actual = await import("@libsql/client");
+  return { memoryClient: actual.createClient({ url: "file::memory:?cache=shared" }) };
+});
 
-type Store = { items: CartItem[]; updatedAt: string | null };
-const store: Store = { items: [], updatedAt: null };
-
-function makeRow(input: NewCartItemInput, existing?: CartItem): CartItem {
-  if (existing) {
-    return {
-      ...existing,
-      title: input.title,
-      price: input.price,
-      quantity: existing.quantity + input.quantity,
-    };
-  }
+vi.mock("@libsql/client", async () => {
+  const actual = await vi.importActual<typeof import("@libsql/client")>("@libsql/client");
   return {
-    id: `id-${input.asin}`,
-    cartId: "global",
-    asin: input.asin,
-    title: input.title,
-    price: input.price,
-    quantity: input.quantity,
-    addedAt: "mocked",
+    ...actual,
+    createClient: vi.fn(() => memoryClient),
   };
-}
-
-function snapshot(): CartSnapshot {
-  return { items: store.items, updatedAt: store.updatedAt };
-}
-
-vi.mock("@/lib/shopping/cart", () => ({
-  getCart: vi.fn(async () => snapshot()),
-  addCartItem: vi.fn(async (input: NewCartItemInput) => {
-    const existing = store.items.find((entry) => entry.asin === input.asin);
-    const row = makeRow(input, existing);
-    if (existing) Object.assign(existing, row);
-    else store.items.push(row);
-    store.updatedAt = "mocked";
-    return { item: row, snapshot: snapshot() };
-  }),
-  removeCartItem: vi.fn(async (asin: string) => {
-    const index = store.items.findIndex((entry) => entry.asin === asin);
-    if (index === -1) return null;
-    const [removed] = store.items.splice(index, 1);
-    store.updatedAt = "mocked";
-    return { item: removed, snapshot: snapshot() };
-  }),
-  setCartItemQuantity: vi.fn(async (asin: string, quantity: number) => {
-    const existing = store.items.find((entry) => entry.asin === asin);
-    if (!existing) return null;
-    const before: CartItem = { ...existing };
-    if (quantity === 0) {
-      store.items = store.items.filter((entry) => entry.asin !== asin);
-    } else {
-      existing.quantity = quantity;
-    }
-    store.updatedAt = "mocked";
-    return { item: { ...before, quantity }, snapshot: snapshot() };
-  }),
-  clearCart: vi.fn(async () => {
-    store.items = [];
-    store.updatedAt = null;
-  }),
-}));
+});
 
 const { add_to_cart, remove_from_cart, update_quantity, view_cart, clear_cart } =
   await import("./cart.ts");
-const cartModule = await import("@/lib/shopping/cart");
+const { shoppingCartItems } = await import("@/lib/db/schemas/shopping-cart-items");
+const { shoppingCarts } = await import("@/lib/db/schemas/shopping-carts");
+const { getDb } = await import("@/lib/db");
 
-function resetState() {
-  store.items = [];
-  store.updatedAt = null;
-  vi.clearAllMocks();
-}
+beforeAll(async () => {
+  const migrationsDir = "./drizzle";
+  const migrationFiles = readdirSync(migrationsDir)
+    .filter((name) => name.endsWith(".sql"))
+    .sort();
+  for (const migration of migrationFiles) {
+    const raw = readFileSync(join(migrationsDir, migration), "utf-8");
+    for (const statement of raw.split("--> statement-breakpoint")) {
+      const trimmed = statement.trim();
+      if (trimmed) await memoryClient.execute(trimmed);
+    }
+  }
+});
+
+beforeEach(async () => {
+  const db = getDb();
+  await db.delete(shoppingCartItems);
+  await db.delete(shoppingCarts);
+});
 
 describe("add_to_cart", () => {
-  beforeEach(resetState);
-
   it("adds a new item with default quantity 1", async () => {
     const raw = await add_to_cart.execute!(
       { asin: "B01", title: "Widget", price: 10, quantity: 1 },
@@ -88,19 +55,10 @@ describe("add_to_cart", () => {
     expect(parsed.added.quantity).toBe(1);
     expect(parsed.subtotal).toBe(10);
     expect(parsed.item_count).toBe(1);
-    expect(vi.mocked(cartModule.addCartItem)).toHaveBeenCalledOnce();
   });
 
   it("merges quantity via addCartItem for existing ASIN", async () => {
-    store.items.push({
-      id: "id-B01",
-      cartId: "global",
-      asin: "B01",
-      title: "Widget",
-      price: 10,
-      quantity: 2,
-      addedAt: "seed",
-    });
+    await add_to_cart.execute!({ asin: "B01", title: "Widget", price: 10, quantity: 2 }, toolOpts);
     const raw = await add_to_cart.execute!(
       { asin: "B01", title: "Widget", price: 10, quantity: 3 },
       toolOpts,
@@ -111,15 +69,7 @@ describe("add_to_cart", () => {
   });
 
   it("computes subtotal across mixed items", async () => {
-    store.items.push({
-      id: "id-B01",
-      cartId: "global",
-      asin: "B01",
-      title: "A",
-      price: 5,
-      quantity: 2,
-      addedAt: "seed",
-    });
+    await add_to_cart.execute!({ asin: "B01", title: "A", price: 5, quantity: 2 }, toolOpts);
     const raw = await add_to_cart.execute!(
       { asin: "B02", title: "B", price: 3.5, quantity: 2 },
       toolOpts,
@@ -130,29 +80,9 @@ describe("add_to_cart", () => {
 });
 
 describe("remove_from_cart", () => {
-  beforeEach(resetState);
-
   it("removes an existing item", async () => {
-    store.items.push(
-      {
-        id: "id-B01",
-        cartId: "global",
-        asin: "B01",
-        title: "A",
-        price: 5,
-        quantity: 1,
-        addedAt: "seed",
-      },
-      {
-        id: "id-B02",
-        cartId: "global",
-        asin: "B02",
-        title: "B",
-        price: 5,
-        quantity: 1,
-        addedAt: "seed",
-      },
-    );
+    await add_to_cart.execute!({ asin: "B01", title: "A", price: 5, quantity: 1 }, toolOpts);
+    await add_to_cart.execute!({ asin: "B02", title: "B", price: 5, quantity: 1 }, toolOpts);
     const raw = await remove_from_cart.execute!({ asin: "B01" }, toolOpts);
     const parsed = JSON.parse(raw as string);
     expect(parsed.removed.asin).toBe("B01");
@@ -167,18 +97,8 @@ describe("remove_from_cart", () => {
 });
 
 describe("update_quantity", () => {
-  beforeEach(resetState);
-
   it("updates the quantity of an existing item", async () => {
-    store.items.push({
-      id: "id-B01",
-      cartId: "global",
-      asin: "B01",
-      title: "A",
-      price: 5,
-      quantity: 1,
-      addedAt: "seed",
-    });
+    await add_to_cart.execute!({ asin: "B01", title: "A", price: 5, quantity: 1 }, toolOpts);
     const raw = await update_quantity.execute!({ asin: "B01", quantity: 4 }, toolOpts);
     const parsed = JSON.parse(raw as string);
     expect(parsed.quantity).toBe(4);
@@ -186,17 +106,11 @@ describe("update_quantity", () => {
   });
 
   it("removes the item when quantity is 0", async () => {
-    store.items.push({
-      id: "id-B01",
-      cartId: "global",
-      asin: "B01",
-      title: "A",
-      price: 5,
-      quantity: 3,
-      addedAt: "seed",
-    });
+    await add_to_cart.execute!({ asin: "B01", title: "A", price: 5, quantity: 3 }, toolOpts);
     await update_quantity.execute!({ asin: "B01", quantity: 0 }, toolOpts);
-    expect(store.items).toHaveLength(0);
+    const raw = await view_cart.execute!({ page: 1 }, toolOpts);
+    const parsed = JSON.parse(raw as string);
+    expect(parsed.items).toHaveLength(0);
   });
 
   it("errors when the item is not in the cart", async () => {
@@ -207,39 +121,23 @@ describe("update_quantity", () => {
 });
 
 describe("view_cart", () => {
-  beforeEach(resetState);
-
   it("returns items and totals with a default page", async () => {
-    store.items.push({
-      id: "id-B01",
-      cartId: "global",
-      asin: "B01",
-      title: "A",
-      price: 2,
-      quantity: 3,
-      addedAt: "seed",
-    });
-    store.updatedAt = "2026-01-01T00:00:00Z";
+    await add_to_cart.execute!({ asin: "B01", title: "A", price: 2, quantity: 3 }, toolOpts);
     const raw = await view_cart.execute!({ page: 1 }, toolOpts);
     const parsed = JSON.parse(raw as string);
     expect(parsed.page).toBe(1);
     expect(parsed.total_pages).toBe(1);
     expect(parsed.subtotal).toBe(6);
     expect(parsed.item_count).toBe(3);
-    expect(parsed.updated_at).toBe("2026-01-01T00:00:00Z");
+    expect(parsed.updated_at).toBeTypeOf("string");
   });
 
   it("paginates when more than ten items exist", async () => {
     for (let i = 0; i < 25; i++) {
-      store.items.push({
-        id: `id-${i}`,
-        cartId: "global",
-        asin: `B${i}`,
-        title: `T${i}`,
-        price: 1,
-        quantity: 1,
-        addedAt: "seed",
-      });
+      await add_to_cart.execute!(
+        { asin: `B${i}`, title: `T${i}`, price: 1, quantity: 1 },
+        toolOpts,
+      );
     }
     const first = JSON.parse((await view_cart.execute!({ page: 1 }, toolOpts)) as string);
     const last = JSON.parse((await view_cart.execute!({ page: 3 }, toolOpts)) as string);
@@ -250,15 +148,7 @@ describe("view_cart", () => {
   });
 
   it("clamps page beyond the last page to the last page", async () => {
-    store.items.push({
-      id: "id-B01",
-      cartId: "global",
-      asin: "B01",
-      title: "A",
-      price: 1,
-      quantity: 1,
-      addedAt: "seed",
-    });
+    await add_to_cart.execute!({ asin: "B01", title: "A", price: 1, quantity: 1 }, toolOpts);
     const raw = await view_cart.execute!({ page: 99 }, toolOpts);
     const parsed = JSON.parse(raw as string);
     expect(parsed.page).toBe(1);
@@ -266,21 +156,13 @@ describe("view_cart", () => {
 });
 
 describe("clear_cart", () => {
-  beforeEach(resetState);
-
   it("clears the cart", async () => {
-    store.items.push({
-      id: "id-B01",
-      cartId: "global",
-      asin: "B01",
-      title: "A",
-      price: 1,
-      quantity: 1,
-      addedAt: "seed",
-    });
+    await add_to_cart.execute!({ asin: "B01", title: "A", price: 1, quantity: 1 }, toolOpts);
     const raw = await clear_cart.execute!({}, toolOpts);
     const parsed = JSON.parse(raw as string);
     expect(parsed.cleared).toBe(true);
-    expect(vi.mocked(cartModule.clearCart)).toHaveBeenCalledOnce();
+
+    const view = JSON.parse((await view_cart.execute!({ page: 1 }, toolOpts)) as string);
+    expect(view.items).toHaveLength(0);
   });
 });

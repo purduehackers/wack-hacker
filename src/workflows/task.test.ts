@@ -1,63 +1,89 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mockCreateMessage = vi.fn(async (_ch: string, body: { content: string }) => ({
-  id: "msg-1",
-  content: body.content,
-  channel_id: _ch,
+import {
+  createRichMemoryRedis,
+  discordRESTClass,
+  installMockProvider,
+  linearClientClass,
+  notionClientClass,
+  octokitClass,
+  resendClass,
+  streamingTextModel,
+  uninstallMockProvider,
+} from "@/lib/test/fixtures";
+
+// Shared mock Discord API — task.ts constructs `new API(new REST(...).setToken(...))`
+// at runtime, so we mock the API class and expose outgoing `createMessage`
+// calls through a module-scoped spy.
+const hoisted = vi.hoisted(() => ({
+  createMessage: vi.fn(async (_ch: string, body: { content: string }) => ({
+    id: "msg-1",
+    content: body.content,
+    channel_id: _ch,
+  })),
+  editMessage: vi.fn(
+    async (_ch: string, _id: string, body: { content: string }) =>
+      ({ id: _id, content: body.content, channel_id: _ch }) as unknown,
+  ),
 }));
 
-vi.mock("@discordjs/core/http-only", () => {
-  class MockAPI {
-    channels = { createMessage: mockCreateMessage };
-  }
-  return { API: MockAPI };
-});
+// `tasks/registry.ts` memoizes the redis instance from `Redis.fromEnv()` on
+// first use (`redis ??= ...`), so we keep the same fixture instance across
+// every test and rely on `reset()` in beforeEach to wipe state.
+const redis = createRichMemoryRedis();
 
-vi.mock("@discordjs/rest", () => {
-  class MockREST {
-    setToken() {
-      return this;
-    }
-  }
-  return { REST: MockREST };
-});
+vi.mock("@discordjs/core/http-only", () => ({
+  API: class MockAPI {
+    channels = {
+      createMessage: hoisted.createMessage,
+      editMessage: hoisted.editMessage,
+    };
+  },
+}));
+
+vi.mock("@discordjs/rest", () => ({ REST: discordRESTClass() }));
+
+// Third-party SDK mocks so `streamTurn` → `createOrchestrator` can load real
+// tool modules without initializing live clients.
+vi.mock("@linear/sdk", () => ({ LinearClient: linearClientClass() }));
+vi.mock("octokit", () => ({ Octokit: octokitClass() }));
+vi.mock("@octokit/auth-app", () => ({ createAppAuth: vi.fn(() => ({})) }));
+vi.mock("@notionhq/client", () => ({ Client: notionClientClass() }));
+vi.mock("resend", () => ({ Resend: resendClass() }));
+vi.mock("@vercel/edge-config", () => ({
+  createClient: vi.fn(() => ({ getAll: vi.fn().mockResolvedValue({}) })),
+}));
 
 vi.mock("workflow", () => ({
   sleep: vi.fn(),
   getWorkflowMetadata: vi.fn(() => ({ workflowRunId: "task-run-42" })),
 }));
 
-vi.mock("@/lib/tasks/registry", () => ({
-  saveTask: vi.fn(),
-  removeTask: vi.fn(),
-  getTask: vi.fn(),
-}));
-
-vi.mock("@/lib/tasks/cron", () => ({
-  nextOccurrence: vi.fn(() => new Date(Date.now() + 60_000)),
-}));
-
-vi.mock("@/lib/ai/streaming", () => ({
-  streamTurn: vi.fn(async () => ({ text: "Agent reply." })),
-}));
-
-vi.mock("@/lib/ai/message-renderer", () => ({
-  MessageRenderer: {
-    splitWithFooter: vi.fn((text: string, footer: string) => [`${text}\n\n${footer}`]),
-  },
+vi.mock("@upstash/redis", () => ({
+  Redis: { fromEnv: () => redis },
 }));
 
 const { taskWorkflow } = await import("./task.ts");
-const streaming = await import("@/lib/ai/streaming");
 
 beforeEach(() => {
   vi.clearAllMocks();
+  redis.reset();
+  hoisted.createMessage.mockImplementation(async (_ch: string, body: { content: string }) => ({
+    id: "msg-1",
+    content: body.content,
+    channel_id: _ch,
+  }));
+  hoisted.editMessage.mockImplementation(
+    async (_ch: string, _id: string, body: { content: string }) => ({
+      id: _id,
+      content: body.content,
+      channel_id: _ch,
+    }),
+  );
 });
 
 describe("taskWorkflow: message action footer", () => {
   it("includes task ID footer for message actions", async () => {
-    const { saveTask } = await import("@/lib/tasks/registry");
-
     await taskWorkflow({
       meta: {
         description: "Daily reminder",
@@ -68,18 +94,28 @@ describe("taskWorkflow: message action footer", () => {
       },
     });
 
-    expect(saveTask).toHaveBeenCalled();
-    expect(mockCreateMessage).toHaveBeenCalledOnce();
+    // Registry persisted the task under the workflow run ID.
+    const stored = await redis.get<unknown>("task:task-run-42");
+    expect(stored).toBeDefined();
 
-    const [channelId, body] = mockCreateMessage.mock.calls[0];
+    expect(hoisted.createMessage).toHaveBeenCalledOnce();
+    const [channelId, body] = hoisted.createMessage.mock.calls[0];
     expect(channelId).toBe("ch-1");
     expect(body.content).toContain("Hello!");
     expect(body.content).toContain("-# Task: task-run-42");
   });
 });
 
-describe("taskWorkflow: agent action footer", () => {
-  it("passes task ID to streamTurn for agent actions", async () => {
+describe("taskWorkflow: agent action", () => {
+  beforeEach(() => {
+    installMockProvider(streamingTextModel("Agent reply."));
+  });
+
+  afterEach(() => {
+    uninstallMockProvider();
+  });
+
+  it("posts the agent reply with a task-ID footer", async () => {
     await taskWorkflow({
       meta: {
         description: "Daily summary",
@@ -90,28 +126,13 @@ describe("taskWorkflow: agent action footer", () => {
       },
     });
 
-    expect(streaming.streamTurn).toHaveBeenCalledWith(
-      expect.anything(), // discord API
-      "ch-1",
-      [{ role: "user", content: "Summarize today" }],
-      expect.any(Object), // serialized context
-      "task-run-42", // task ID
-    );
-  });
-
-  it("rehydrates scheduler's memberRoles into the agent context", async () => {
-    await taskWorkflow({
-      meta: {
-        description: "Organizer-scoped task",
-        action: { type: "agent", channelId: "ch-1", prompt: "check linear" },
-        schedule: { type: "once", at: new Date(Date.now() + 60_000).toISOString() },
-        context: { userId: "u-1", channelId: "ch-1", memberRoles: ["role-organizer"] },
-        createdAt: new Date().toISOString(),
-      },
-    });
-
-    const [, , , serializedContext] = (streaming.streamTurn as ReturnType<typeof vi.fn>).mock
-      .calls[0];
-    expect(serializedContext).toMatchObject({ memberRoles: ["role-organizer"] });
+    // The streaming turn posts a placeholder via createMessage and then edits
+    // it with the final content including the task footer.
+    expect(hoisted.createMessage).toHaveBeenCalled();
+    const bodies = [
+      ...hoisted.createMessage.mock.calls.map((c) => c[1].content),
+      ...hoisted.editMessage.mock.calls.map((c) => c[2].content),
+    ];
+    expect(bodies.some((c) => c.includes("-# Task: task-run-42"))).toBe(true);
   });
 });

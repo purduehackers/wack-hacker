@@ -1,3 +1,6 @@
+import type { Mock } from "vitest";
+
+import type { SlashCommandContext } from "@/bot/commands/types";
 import type {
   CreateCodingSandboxConfig,
   ExecOptions,
@@ -20,6 +23,45 @@ export interface MockDiscord {
   interactions: Record<string, (...args: any[]) => Promise<any>>;
   _calls: MockCall[];
   callsTo(method: string): unknown[][];
+}
+
+export type FetchImpl = (url: URL) => Response | Promise<Response>;
+
+export interface NotionClientMocks {
+  dataSourcesQuery?: Mock;
+  dataSourcesRetrieve?: Mock;
+  pagesRetrieve?: Mock;
+  pagesUpdate?: Mock;
+  pagesCreate?: Mock;
+  usersList?: Mock;
+  search?: Mock;
+  databasesRetrieve?: Mock;
+}
+
+export interface FakeSlashCommandCtxOptions {
+  roles?: string[];
+  /** Override interaction fields (id, application_id, token, etc.). */
+  interaction?: Partial<SlashCommandContext["interaction"]>;
+  /** Override member.user fields. */
+  user?: { id?: string; username?: string };
+  /** When true, omit `member` entirely (e.g. DM interaction). */
+  noMember?: boolean;
+}
+
+export interface RichMemoryRedisPipeline {
+  get(key: string): RichMemoryRedisPipeline;
+  exec<T>(): Promise<T>;
+}
+
+export interface RichMemoryRedis {
+  get<T>(key: string): Promise<T | null>;
+  set(key: string, value: unknown): Promise<"OK">;
+  del(key: string): Promise<number>;
+  sadd(key: string, ...members: string[]): Promise<number>;
+  smembers<T>(key: string): Promise<T>;
+  srem(key: string, ...members: string[]): Promise<number>;
+  pipeline(): RichMemoryRedisPipeline;
+  reset(): void;
 }
 
 // ─── sandbox test fixtures ────────────────────────────────────────────────

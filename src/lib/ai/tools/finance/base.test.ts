@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { toolOpts } from "@/lib/test/fixtures";
+import { mockFetch, toolOpts } from "@/lib/test/fixtures";
 import organizationFixture from "@/lib/test/fixtures/hcb/organization.json";
 import transactionsFixture from "@/lib/test/fixtures/hcb/transactions.json";
 
@@ -10,26 +10,22 @@ import { donation_totals } from "./donations.ts";
 import { get_receipt_status, list_missing_receipts } from "./receipts.ts";
 import { find_transactions, list_transactions } from "./transactions.ts";
 
-const originalFetch = globalThis.fetch;
-
-function mockFetch(impl: (url: URL) => Response) {
-  globalThis.fetch = vi.fn(async (input: RequestInfo | URL) =>
-    impl(input as URL),
-  ) as unknown as typeof fetch;
-}
+let restoreFetch: () => void = () => {};
 
 beforeEach(() => {
   process.env.HCB_ORG_SLUG = "purdue-hackers";
 });
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  restoreFetch();
   vi.restoreAllMocks();
 });
 
 describe("get_organization", () => {
   it("returns a compact projection of the org profile", async () => {
-    mockFetch(() => new Response(JSON.stringify(organizationFixture), { status: 200 }));
+    ({ restore: restoreFetch } = mockFetch(
+      () => new Response(JSON.stringify(organizationFixture), { status: 200 }),
+    ));
     const raw = await get_organization.execute!({}, toolOpts);
     const parsed = JSON.parse(raw as string);
     expect(parsed).toMatchObject({
@@ -45,7 +41,9 @@ describe("get_organization", () => {
 
 describe("get_balance", () => {
   it("returns only the balance fields", async () => {
-    mockFetch(() => new Response(JSON.stringify(organizationFixture), { status: 200 }));
+    ({ restore: restoreFetch } = mockFetch(
+      () => new Response(JSON.stringify(organizationFixture), { status: 200 }),
+    ));
     const raw = await get_balance.execute!({}, toolOpts);
     expect(JSON.parse(raw as string)).toEqual({
       balance_cents: 1_234_567,
@@ -59,11 +57,11 @@ describe("get_balance", () => {
 describe("list_transactions", () => {
   it("hits the transactions endpoint with default paging", async () => {
     const seen: URL[] = [];
-    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
-      const url = input as URL;
+    const { restore } = mockFetch((url) => {
       seen.push(url);
       return new Response(JSON.stringify(transactionsFixture), { status: 200 });
-    }) as unknown as typeof fetch;
+    });
+    restoreFetch = restore;
     const raw = await list_transactions.execute!(
       { per_page: undefined, page: undefined },
       toolOpts,
@@ -78,24 +76,24 @@ describe("list_transactions", () => {
 
 describe("find_transactions", () => {
   it("filters by memo substring (case-insensitive)", async () => {
-    mockFetch((url) => {
+    ({ restore: restoreFetch } = mockFetch((url) => {
       if (Number(url.searchParams.get("page")) > 1) {
         return new Response("[]", { status: 200 });
       }
       return new Response(JSON.stringify(transactionsFixture), { status: 200 });
-    });
+    }));
     const raw = await find_transactions.execute!({ memo_contains: "HACK NIGHT" }, toolOpts);
     const parsed = JSON.parse(raw as string);
     expect(parsed.map((t: { id: string }) => t.id).sort()).toEqual(["txn_food_1", "txn_food_2"]);
   });
 
   it("filters by amount and pending status", async () => {
-    mockFetch((url) => {
+    ({ restore: restoreFetch } = mockFetch((url) => {
       if (Number(url.searchParams.get("page")) > 1) {
         return new Response("[]", { status: 200 });
       }
       return new Response(JSON.stringify(transactionsFixture), { status: 200 });
-    });
+    }));
     const raw = await find_transactions.execute!(
       { min_amount_cents: 1, pending: "exclude" },
       toolOpts,
@@ -105,12 +103,12 @@ describe("find_transactions", () => {
   });
 
   it("filters by ISO date range", async () => {
-    mockFetch((url) => {
+    ({ restore: restoreFetch } = mockFetch((url) => {
       if (Number(url.searchParams.get("page")) > 1) {
         return new Response("[]", { status: 200 });
       }
       return new Response(JSON.stringify(transactionsFixture), { status: 200 });
-    });
+    }));
     const raw = await find_transactions.execute!(
       { since: "2026-04-01", until: "2026-04-30" },
       toolOpts,
@@ -131,12 +129,12 @@ describe("donation_totals", () => {
       { amount_cents: 100_000, status: "deposited", created_at: "2026-05-01", recurring: false },
       { amount_cents: 999, status: "pending", created_at: "2026-04-06", recurring: false },
     ];
-    mockFetch((url) => {
+    ({ restore: restoreFetch } = mockFetch((url) => {
       if (Number(url.searchParams.get("page")) > 1) {
         return new Response("[]", { status: 200 });
       }
       return new Response(JSON.stringify(donations), { status: 200 });
-    });
+    }));
     const raw = await donation_totals.execute!(
       { since: "2026-04-01", until: "2026-04-30" },
       toolOpts,
@@ -152,12 +150,12 @@ describe("donation_totals", () => {
 
 describe("list_missing_receipts", () => {
   it("surfaces only transactions flagged missing a receipt", async () => {
-    mockFetch((url) => {
+    ({ restore: restoreFetch } = mockFetch((url) => {
       if (Number(url.searchParams.get("page")) > 1) {
         return new Response("[]", { status: 200 });
       }
       return new Response(JSON.stringify(transactionsFixture), { status: 200 });
-    });
+    }));
     const raw = await list_missing_receipts.execute!({ limit: undefined }, toolOpts);
     const parsed = JSON.parse(raw as string);
     expect(parsed.map((t: { id: string }) => t.id).sort()).toEqual(["txn_badge_1", "txn_food_2"]);
@@ -167,12 +165,12 @@ describe("list_missing_receipts", () => {
 
 describe("get_receipt_status", () => {
   it("returns a receipts object consistent with other finance tools", async () => {
-    mockFetch(
+    ({ restore: restoreFetch } = mockFetch(
       () =>
         new Response(JSON.stringify({ id: "txn_food_2", receipts: { count: 0, missing: true } }), {
           status: 200,
         }),
-    );
+    ));
     const raw = await get_receipt_status.execute!({ id: "txn_food_2" }, toolOpts);
     expect(JSON.parse(raw as string)).toEqual({
       id: "txn_food_2",
@@ -188,12 +186,12 @@ describe("list_card_charges", () => {
       { id: "cc_1", user: { name: "Alice Adams", email: "alice@example.com" }, amount_cents: -500 },
       { id: "cc_2", user: { name: "Bob Baker", email: "bob@example.com" }, amount_cents: -700 },
     ];
-    mockFetch((url) => {
+    ({ restore: restoreFetch } = mockFetch((url) => {
       if (Number(url.searchParams.get("page")) > 1) {
         return new Response("[]", { status: 200 });
       }
       return new Response(JSON.stringify(charges), { status: 200 });
-    });
+    }));
     const raw = await list_card_charges.execute!({ user: "alice" }, toolOpts);
     const parsed = JSON.parse(raw as string);
     expect(parsed).toHaveLength(1);

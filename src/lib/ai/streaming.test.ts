@@ -1,14 +1,46 @@
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 
 import type { ChatMessage } from "./types.ts";
 
-import { createMockAPI, asAPI, messagePacket } from "../test/fixtures/index.ts";
-import { AgentContext } from "./context.ts";
-import { buildUserMessage, streamTurn } from "./streaming.ts";
+import {
+  asAPI,
+  createMockAPI,
+  discordRESTClass,
+  installMockProvider,
+  linearClientClass,
+  messagePacket,
+  notionClientClass,
+  octokitClass,
+  resendClass,
+  streamingTextModel,
+  uninstallMockProvider,
+} from "../test/fixtures/index.ts";
+
+// Third-party SDK mocks — streaming.ts transitively imports the real tool
+// modules via ./orchestrator, and those modules instantiate SDK clients at
+// import time.
+vi.mock("@linear/sdk", () => ({ LinearClient: linearClientClass() }));
+vi.mock("octokit", () => ({ Octokit: octokitClass() }));
+vi.mock("@octokit/auth-app", () => ({ createAppAuth: vi.fn(() => ({})) }));
+vi.mock("@discordjs/rest", () => ({ REST: discordRESTClass() }));
+vi.mock("@notionhq/client", () => ({ Client: notionClientClass() }));
+vi.mock("resend", () => ({ Resend: resendClass() }));
+vi.mock("@vercel/edge-config", () => ({
+  createClient: vi.fn(() => ({ getAll: vi.fn().mockResolvedValue({}) })),
+}));
+
+const { AgentContext } = await import("./context.ts");
+const { buildUserMessage, streamTurn } = await import("./streaming.ts");
+type OrchestratorFactory = import("./streaming.ts").OrchestratorFactory;
 
 type StreamEvent = Record<string, unknown>;
 
-function mockOrchestrator(
+/**
+ * Build a test-owned fake orchestrator that emits pre-scripted stream events.
+ * Not a mock of our production orchestrator — a stand-in implementation of the
+ * `OrchestratorFactory` contract supplied to `streamTurn` via DI.
+ */
+function fakeOrchestrator(
   textChunks: string[],
   options?: {
     toolCallsPerStep?: number;
@@ -19,10 +51,10 @@ function mockOrchestrator(
     steps?: Promise<unknown>;
     captureInput?: (input: unknown) => void;
   },
-) {
+): OrchestratorFactory {
   const stepCount = options?.stepCount ?? 1;
   const toolCallsPerStep = options?.toolCallsPerStep ?? 0;
-  return {
+  const agent = {
     stream: (input: unknown) => {
       options?.captureInput?.(input);
       return Promise.resolve({
@@ -61,12 +93,9 @@ function mockOrchestrator(
           ),
       });
     },
-  } as any;
+  };
+  return () => agent as unknown as ReturnType<OrchestratorFactory>;
 }
-
-vi.mock("./orchestrator", () => ({
-  createOrchestrator: vi.fn(() => mockOrchestrator(["Hello ", "world!"])),
-}));
 
 const userMsg = (content: string): ChatMessage[] => [{ role: "user", content }];
 
@@ -126,12 +155,14 @@ describe("buildUserMessage", () => {
   });
 });
 
-describe("streamTurn: basic streaming", () => {
+describe("streamTurn: basic text rendering", () => {
   it("streams text and edits discord message", async () => {
     const discord = createMockAPI();
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
 
-    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON());
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+      createAgent: fakeOrchestrator(["Hello ", "world!"]),
+    });
 
     expect(result.text).toBe("Hello world!");
     expect(discord.callsTo("channels.createMessage")[0]).toEqual([
@@ -151,7 +182,10 @@ describe("streamTurn: basic streaming", () => {
     const discord = createMockAPI();
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
 
-    await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), "task-abc-123");
+    await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+      taskId: "task-abc-123",
+      createAgent: fakeOrchestrator(["Hello ", "world!"]),
+    });
 
     const edits = discord.callsTo("channels.editMessage");
     const lastEdit = edits[edits.length - 1];
@@ -159,7 +193,9 @@ describe("streamTurn: basic streaming", () => {
     expect(body.content).toContain("-# Task: task-abc-123");
     expect(body.content).toMatch(/-# .+s · .+\n-# Task: task-abc-123/);
   });
+});
 
+describe("streamTurn: edit fallback + empty stream", () => {
   it("falls back to createMessage when editMessage fails", async () => {
     const discord = createMockAPI();
     discord.channels.editMessage = async () => {
@@ -167,7 +203,9 @@ describe("streamTurn: basic streaming", () => {
     };
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
 
-    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON());
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+      createAgent: fakeOrchestrator(["Hello ", "world!"]),
+    });
 
     expect(result.text).toBe("Hello world!");
     const sends = discord.callsTo("channels.createMessage");
@@ -191,7 +229,9 @@ describe("streamTurn: basic streaming", () => {
     });
 
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
-    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON());
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+      createAgent: fakeOrchestrator(["Hello ", "world!"]),
+    });
 
     expect(result.text).toBe("Hello world!");
     expect(editCount).toBeGreaterThanOrEqual(2);
@@ -200,12 +240,11 @@ describe("streamTurn: basic streaming", () => {
   });
 
   it("uses fallback text when stream produces no content", async () => {
-    const orchestrator = await import("./orchestrator");
-    vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue(mockOrchestrator([]) as any);
-
     const discord = createMockAPI();
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
-    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON());
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+      createAgent: fakeOrchestrator([]),
+    });
 
     expect(result.text).toBe("");
     const edits = discord.callsTo("channels.editMessage");
@@ -213,39 +252,25 @@ describe("streamTurn: basic streaming", () => {
     const body = lastEdit[2] as { content: string };
     expect(body.content).toContain("I didn't have anything to say.");
     expect(body.content).toMatch(/-# .+s/);
-
-    vi.restoreAllMocks();
   });
 });
 
 describe("streamTurn: multi-message splitting", () => {
   it("splits long responses across multiple messages", async () => {
-    const orchestrator = await import("./orchestrator");
     const longText = "a".repeat(3000);
-    vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue(
-      mockOrchestrator([longText]) as any,
-    );
-
     const discord = createMockAPI();
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
-    await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON());
+    await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+      createAgent: fakeOrchestrator([longText]),
+    });
 
     const sends = discord.callsTo("channels.createMessage");
     expect(sends.length).toBeGreaterThanOrEqual(2);
-
-    vi.restoreAllMocks();
   });
 });
 
 describe("streamTurn: tool events and metadata", () => {
   it("shows tool activity for tool-input-start events", async () => {
-    const orchestrator = await import("./orchestrator");
-    vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue(
-      mockOrchestrator(["Done."], {
-        extraEvents: [{ type: "tool-input-start", toolName: "search_entities" }],
-      }) as any,
-    );
-
     const realNow = Date.now;
     let now = realNow.call(Date);
     vi.spyOn(Date, "now").mockImplementation(() => {
@@ -255,7 +280,11 @@ describe("streamTurn: tool events and metadata", () => {
 
     const discord = createMockAPI();
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
-    await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON());
+    await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+      createAgent: fakeOrchestrator(["Done."], {
+        extraEvents: [{ type: "tool-input-start", toolName: "search_entities" }],
+      }),
+    });
 
     const edits = discord.callsTo("channels.editMessage");
     const editBodies = edits.map((e) => (e[2] as { content: string }).content);
@@ -265,9 +294,17 @@ describe("streamTurn: tool events and metadata", () => {
   });
 
   it("shows subagent preview for preliminary tool-result events", async () => {
-    const orchestrator = await import("./orchestrator");
-    vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue(
-      mockOrchestrator(["Final answer."], {
+    const realNow = Date.now;
+    let now = realNow.call(Date);
+    vi.spyOn(Date, "now").mockImplementation(() => {
+      now += 2000;
+      return now;
+    });
+
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+      createAgent: fakeOrchestrator(["Final answer."], {
         extraEvents: [
           { type: "tool-input-start", toolName: "delegate_linear" },
           {
@@ -279,19 +316,8 @@ describe("streamTurn: tool events and metadata", () => {
           },
           { type: "tool-result", preliminary: false, output: null },
         ],
-      }) as any,
-    );
-
-    const realNow = Date.now;
-    let now = realNow.call(Date);
-    vi.spyOn(Date, "now").mockImplementation(() => {
-      now += 2000;
-      return now;
+      }),
     });
-
-    const discord = createMockAPI();
-    const ctx = AgentContext.fromPacket(messagePacket("hello"));
-    await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON());
 
     const edits = discord.callsTo("channels.editMessage");
     const editBodies = edits.map((e) => (e[2] as { content: string }).content);
@@ -303,9 +329,10 @@ describe("streamTurn: tool events and metadata", () => {
 
 describe("streamTurn: tool event edge cases", () => {
   it("ignores empty subagent preview from preliminary tool-result", async () => {
-    const orchestrator = await import("./orchestrator");
-    vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue(
-      mockOrchestrator(["Done."], {
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+      createAgent: fakeOrchestrator(["Done."], {
         extraEvents: [
           {
             type: "tool-result",
@@ -313,70 +340,56 @@ describe("streamTurn: tool event edge cases", () => {
             output: { parts: [{ type: "text", text: "" }] },
           },
         ],
-      }) as any,
-    );
-
-    const discord = createMockAPI();
-    const ctx = AgentContext.fromPacket(messagePacket("hello"));
-    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON());
+      }),
+    });
 
     expect(result.text).toBe("Done.");
-    vi.restoreAllMocks();
   });
 
   it("handles undefined totalTokens in usage", async () => {
-    const orchestrator = await import("./orchestrator");
-    vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue(
-      mockOrchestrator(["Ok."], {
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+      createAgent: fakeOrchestrator(["Ok."], {
         totalUsage: Promise.resolve({
           inputTokens: undefined,
           outputTokens: undefined,
           totalTokens: undefined,
         }),
-      }) as any,
-    );
-
-    const discord = createMockAPI();
-    const ctx = AgentContext.fromPacket(messagePacket("hello"));
-    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON());
+      }),
+    });
 
     expect(result.text).toBe("Ok.");
     const edits = discord.callsTo("channels.editMessage");
     const lastEdit = edits[edits.length - 1];
     const body = lastEdit[2] as { content: string };
     expect(body.content).toContain("0 tokens");
-
-    vi.restoreAllMocks();
   });
 
   it("falls back to time-only footer when metadata promises reject", async () => {
-    const orchestrator = await import("./orchestrator");
-    vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue(
-      mockOrchestrator(["Response."], {
-        totalUsage: Promise.reject(new Error("usage unavailable")),
-        steps: Promise.reject(new Error("steps unavailable")),
-      }) as any,
-    );
-
     const discord = createMockAPI();
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
-    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON());
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+      createAgent: fakeOrchestrator(["Response."], {
+        totalUsage: Promise.reject(new Error("usage unavailable")),
+        steps: Promise.reject(new Error("steps unavailable")),
+      }),
+    });
 
     expect(result.text).toBe("Response.");
     const edits = discord.callsTo("channels.editMessage");
     const lastEdit = edits[edits.length - 1];
     const body = lastEdit[2] as { content: string };
     expect(body.content).toMatch(/-# \d+\.\ds$/);
-
-    vi.restoreAllMocks();
   });
 });
 
 describe("streamTurn: multi-part text", () => {
   it("joins text parts from separate steps with a paragraph break", async () => {
-    const orchestrator = await import("./orchestrator");
-    vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue(
-      mockOrchestrator([], {
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("remind me"));
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("remind me"), ctx.toJSON(), {
+      createAgent: fakeOrchestrator([], {
         textParts: [
           ["I'll schedule that reminder for you in 2 days (April 23rd)!"],
           ["Done! I'll ping you on April 23rd."],
@@ -385,62 +398,41 @@ describe("streamTurn: multi-part text", () => {
           { type: "tool-input-start", toolName: "schedule_reminder" },
           { type: "tool-result", preliminary: false, output: null },
         ],
-      }) as any,
-    );
-
-    const discord = createMockAPI();
-    const ctx = AgentContext.fromPacket(messagePacket("remind me"));
-    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("remind me"), ctx.toJSON());
+      }),
+    });
 
     expect(result.text).toBe(
       "I'll schedule that reminder for you in 2 days (April 23rd)!\n\n" +
         "Done! I'll ping you on April 23rd.",
     );
     expect(result.text).not.toContain("April 23rd)!Done!");
-
-    vi.restoreAllMocks();
   });
 
   it("does not prepend a separator before the first text part", async () => {
-    const orchestrator = await import("./orchestrator");
-    vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue(
-      mockOrchestrator([], { textParts: [["Single reply."]] }) as any,
-    );
-
     const discord = createMockAPI();
     const ctx = AgentContext.fromPacket(messagePacket("hi"));
-    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hi"), ctx.toJSON());
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hi"), ctx.toJSON(), {
+      createAgent: fakeOrchestrator([], { textParts: [["Single reply."]] }),
+    });
 
     expect(result.text).toBe("Single reply.");
     expect(result.text.startsWith("\n")).toBe(false);
-
-    vi.restoreAllMocks();
   });
 
   it("keeps deltas within the same part contiguous", async () => {
-    const orchestrator = await import("./orchestrator");
-    vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue(
-      mockOrchestrator([], { textParts: [["Hello ", "world", "!"]] }) as any,
-    );
-
     const discord = createMockAPI();
     const ctx = AgentContext.fromPacket(messagePacket("hi"));
-    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hi"), ctx.toJSON());
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hi"), ctx.toJSON(), {
+      createAgent: fakeOrchestrator([], { textParts: [["Hello ", "world", "!"]] }),
+    });
 
     expect(result.text).toBe("Hello world!");
-
-    vi.restoreAllMocks();
   });
 });
 
 describe("streamTurn: messages array", () => {
   it("passes full conversation history to the agent", async () => {
-    const orchestrator = await import("./orchestrator");
     let capturedInput: unknown;
-    vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue(
-      mockOrchestrator(["ok"], { captureInput: (i) => (capturedInput = i) }) as any,
-    );
-
     const discord = createMockAPI();
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
     const history: ChatMessage[] = [
@@ -449,24 +441,19 @@ describe("streamTurn: messages array", () => {
       { role: "user", content: "any time works" },
     ];
 
-    await streamTurn(asAPI(discord), "ch-1", history, ctx.toJSON());
+    await streamTurn(asAPI(discord), "ch-1", history, ctx.toJSON(), {
+      createAgent: fakeOrchestrator(["ok"], { captureInput: (i) => (capturedInput = i) }),
+    });
 
     const { messages } = capturedInput as { messages: Array<{ role: string; content: unknown }> };
     expect(messages).toHaveLength(3);
     expect(messages[0]).toEqual({ role: "user", content: "remind me friday" });
     expect(messages[1]).toEqual({ role: "assistant", content: "what time?" });
     expect(messages[2]).toEqual({ role: "user", content: "any time works" });
-
-    vi.restoreAllMocks();
   });
 
   it("applies attachments to the last user message only", async () => {
-    const orchestrator = await import("./orchestrator");
     let capturedInput: unknown;
-    vi.spyOn(orchestrator, "createOrchestrator").mockReturnValue(
-      mockOrchestrator(["ok"], { captureInput: (i) => (capturedInput = i) }) as any,
-    );
-
     const discord = createMockAPI();
     const ctx = AgentContext.fromPacket(
       messagePacket("hello", {
@@ -487,13 +474,36 @@ describe("streamTurn: messages array", () => {
       { role: "user", content: "latest" },
     ];
 
-    await streamTurn(asAPI(discord), "ch-1", history, ctx.toJSON());
+    await streamTurn(asAPI(discord), "ch-1", history, ctx.toJSON(), {
+      createAgent: fakeOrchestrator(["ok"], { captureInput: (i) => (capturedInput = i) }),
+    });
 
     const { messages } = capturedInput as { messages: Array<{ role: string; content: unknown }> };
     expect(typeof messages[0].content).toBe("string");
     expect(typeof messages[1].content).toBe("string");
     expect(Array.isArray(messages[2].content)).toBe(true);
+  });
+});
 
-    vi.restoreAllMocks();
+describe("streamTurn: default orchestrator factory", () => {
+  // Exercises the `createAgent = createOrchestrator` default so the DI hook's
+  // fallback branch doesn't rot. The real orchestrator talks to an AI SDK
+  // provider, so we pin it to a mock via `installMockProvider`.
+  beforeEach(() => {
+    installMockProvider(streamingTextModel("hi there."));
+  });
+
+  afterEach(() => {
+    uninstallMockProvider();
+  });
+
+  it("uses createOrchestrator when no createAgent is provided", async () => {
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON());
+
+    expect(result.text).toBe("hi there.");
+    expect(discord.callsTo("channels.createMessage").length).toBeGreaterThanOrEqual(1);
   });
 });
