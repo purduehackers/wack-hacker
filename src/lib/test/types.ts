@@ -38,6 +38,15 @@ export interface NotionClientMocks {
   databasesRetrieve?: Mock;
 }
 
+export interface PayloadSDKMocks {
+  find?: Mock;
+  findByID?: Mock;
+  create?: Mock;
+  update?: Mock;
+  delete?: Mock;
+  count?: Mock;
+}
+
 export interface FakeSlashCommandCtxOptions {
   roles?: string[];
   /** Override interaction fields (id, application_id, token, etc.). */
