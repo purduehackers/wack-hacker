@@ -2,6 +2,7 @@ import { ToolLoopAgent, type ToolSet } from "ai";
 
 import type { TurnUsageTracker } from "./turn-usage.ts";
 
+import { wrapApprovalTools } from "./approvals/index.ts";
 import { ORCHESTRATOR_MODEL, SYSTEM_PROMPT } from "./constants.ts";
 import { AgentContext } from "./context.ts";
 import { buildDelegationTools } from "./delegates.ts";
@@ -20,15 +21,16 @@ export { ORCHESTRATOR_MODEL, SYSTEM_PROMPT } from "./constants.ts";
  * scheduler's `memberRoles` for propagation into persisted task meta.
  */
 export function getOrchestratorTools(context: AgentContext, tracker: TurnUsageTracker): ToolSet {
-  return {
+  const tools: ToolSet = {
     currentTime,
     documentation,
     resolve_organizer,
     scheduleTask: createScheduleTask(context),
     listScheduledTasks,
     cancelTask,
-    ...buildDelegationTools(context.role, tracker),
+    ...buildDelegationTools(context, tracker),
   };
+  return wrapApprovalTools(tools, { context });
 }
 
 export function createOrchestrator(context: AgentContext, tracker: TurnUsageTracker) {
