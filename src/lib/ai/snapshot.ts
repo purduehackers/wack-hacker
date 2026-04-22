@@ -35,20 +35,22 @@ function describeSchema(schema: unknown): unknown {
  * AgentContext.buildInstructions) so the snapshot is the orchestrator's view.
  *
  * `totalUsage` is the conversation-wide cumulative spend; the workflow accumulates
- * each turn's usage into a running total before calling this.
+ * each turn's usage into a running total before calling this. `getTools` is the
+ * tool-set resolver; overridden in tests to inject synthetic tool shapes.
  */
 export function buildContextSnapshot(args: {
   context: SerializedAgentContext;
   messages: ChatMessage[];
   totalUsage: TurnUsage;
   turnCount: number;
+  getTools?: typeof getOrchestratorTools;
 }): ContextSnapshot {
-  const { context, messages, totalUsage, turnCount } = args;
+  const { context, messages, totalUsage, turnCount, getTools = getOrchestratorTools } = args;
   const agentCtx = AgentContext.fromJSON(context);
 
   // The tracker is write-only here — the snapshot only needs the tool set's
   // shape, not its accumulated counts.
-  const toolSet = getOrchestratorTools(agentCtx, new TurnUsageTracker());
+  const toolSet = getTools(agentCtx, new TurnUsageTracker());
 
   const tools: ToolDefSnapshot[] = Object.entries(toolSet).map(([name, tool]) => {
     const t = tool as MinimalTool;

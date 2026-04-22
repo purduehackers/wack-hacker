@@ -1,23 +1,31 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { toolOpts } from "@/lib/test/fixtures";
+import { notionClientClass, resendClass, toolOpts } from "@/lib/test/fixtures";
 
-const sendMock = vi.fn();
-const retrieveMock = vi.fn();
-const updateMock = vi.fn();
-
-vi.mock("./client.ts", () => ({
-  notion: { pages: { retrieve: retrieveMock, update: updateMock } },
-  resend: () => ({ emails: { send: sendMock } }),
+const mocks = vi.hoisted(() => ({
+  send: vi.fn(),
+  pagesRetrieve: vi.fn(),
+  pagesUpdate: vi.fn(),
 }));
-vi.mock("./constants.ts", () => ({
-  COMPANIES_DATA_SOURCE_ID: "companies-ds",
-  CONTACTS_DATA_SOURCE_ID: "contacts-ds",
-  SALES_FROM_EMAIL: "sales@ph.example",
-  SALES_REPLY_TO_EMAIL: "reply@ph.example",
+
+vi.mock("@notionhq/client", () => ({
+  Client: notionClientClass({
+    pagesRetrieve: mocks.pagesRetrieve,
+    pagesUpdate: mocks.pagesUpdate,
+  }),
+}));
+
+vi.mock("resend", () => ({
+  Resend: resendClass({ send: mocks.send }),
 }));
 
 const { send_outreach_email, get_email_status } = await import("./outreach.ts");
+const {
+  COMPANIES_DATA_SOURCE_ID,
+  CONTACTS_DATA_SOURCE_ID,
+  SALES_FROM_EMAIL,
+  SALES_REPLY_TO_EMAIL,
+} = await import("./constants.ts");
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -25,9 +33,9 @@ beforeEach(() => {
 
 describe("send_outreach_email: preflight", () => {
   it("blocks when Do Not Contact is checked", async () => {
-    retrieveMock.mockResolvedValueOnce({
+    mocks.pagesRetrieve.mockResolvedValueOnce({
       id: "p-1",
-      parent: { data_source_id: "companies-ds" },
+      parent: { data_source_id: COMPANIES_DATA_SOURCE_ID },
       properties: { "Do Not Contact": { type: "checkbox", checkbox: true } },
     });
     const raw = await send_outreach_email.execute!(
@@ -42,13 +50,13 @@ describe("send_outreach_email: preflight", () => {
     );
     const parsed = JSON.parse(raw as string);
     expect(parsed.error).toMatch(/Do Not Contact/i);
-    expect(sendMock).not.toHaveBeenCalled();
+    expect(mocks.send).not.toHaveBeenCalled();
   });
 
   it("blocks when the page belongs to a different data source than target", async () => {
-    retrieveMock.mockResolvedValueOnce({
+    mocks.pagesRetrieve.mockResolvedValueOnce({
       id: "p-wrong",
-      parent: { data_source_id: "contacts-ds" },
+      parent: { data_source_id: CONTACTS_DATA_SOURCE_ID },
       properties: { "Do Not Contact": { type: "checkbox", checkbox: false } },
     });
     const raw = await send_outreach_email.execute!(
@@ -63,19 +71,19 @@ describe("send_outreach_email: preflight", () => {
     );
     const parsed = JSON.parse(raw as string);
     expect(parsed.error).toMatch(/parent data source does not match/i);
-    expect(sendMock).not.toHaveBeenCalled();
+    expect(mocks.send).not.toHaveBeenCalled();
   });
 });
 
 describe("send_outreach_email: send path", () => {
   it("sends via Resend and writes Last Outreach ID", async () => {
-    retrieveMock.mockResolvedValueOnce({
+    mocks.pagesRetrieve.mockResolvedValueOnce({
       id: "p-2",
-      parent: { data_source_id: "contacts-ds" },
+      parent: { data_source_id: CONTACTS_DATA_SOURCE_ID },
       properties: { "Do Not Contact": { type: "checkbox", checkbox: false } },
     });
-    sendMock.mockResolvedValueOnce({ data: { id: "re_abc" }, error: null });
-    updateMock.mockResolvedValueOnce({ id: "p-2" });
+    mocks.send.mockResolvedValueOnce({ data: { id: "re_abc" }, error: null });
+    mocks.pagesUpdate.mockResolvedValueOnce({ id: "p-2" });
 
     const raw = await send_outreach_email.execute!(
       {
@@ -90,15 +98,15 @@ describe("send_outreach_email: send path", () => {
     const parsed = JSON.parse(raw as string);
     expect(parsed.id).toBe("re_abc");
     expect(parsed.target).toBe("contact");
-    expect(sendMock).toHaveBeenCalledWith({
-      from: "sales@ph.example",
+    expect(mocks.send).toHaveBeenCalledWith({
+      from: SALES_FROM_EMAIL,
       to: "bob@acme.com",
       subject: "Hello",
       text: "Body",
       html: undefined,
-      replyTo: "reply@ph.example",
+      replyTo: SALES_REPLY_TO_EMAIL,
     });
-    expect(updateMock).toHaveBeenCalledWith(
+    expect(mocks.pagesUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         page_id: "p-2",
         properties: expect.objectContaining({
@@ -110,12 +118,12 @@ describe("send_outreach_email: send path", () => {
   });
 
   it("surfaces Resend errors without writing Notion", async () => {
-    retrieveMock.mockResolvedValueOnce({
+    mocks.pagesRetrieve.mockResolvedValueOnce({
       id: "p-3",
-      parent: { data_source_id: "companies-ds" },
+      parent: { data_source_id: COMPANIES_DATA_SOURCE_ID },
       properties: { "Do Not Contact": { type: "checkbox", checkbox: false } },
     });
-    sendMock.mockResolvedValueOnce({
+    mocks.send.mockResolvedValueOnce({
       data: null,
       error: { message: "domain not verified", name: "validation_error" },
     });
@@ -131,13 +139,13 @@ describe("send_outreach_email: send path", () => {
     );
     const parsed = JSON.parse(raw as string);
     expect(parsed.error).toBe("domain not verified");
-    expect(updateMock).not.toHaveBeenCalled();
+    expect(mocks.pagesUpdate).not.toHaveBeenCalled();
   });
 });
 
 describe("get_email_status", () => {
   it("summarizes tracking properties from the page", async () => {
-    retrieveMock.mockResolvedValueOnce({
+    mocks.pagesRetrieve.mockResolvedValueOnce({
       id: "p-4",
       properties: {
         "Last Outreach ID": {
@@ -158,7 +166,7 @@ describe("get_email_status", () => {
   });
 
   it("returns nulls when tracking properties are absent", async () => {
-    retrieveMock.mockResolvedValueOnce({ id: "p-5", properties: {} });
+    mocks.pagesRetrieve.mockResolvedValueOnce({ id: "p-5", properties: {} });
     const raw = await get_email_status.execute!({ page_id: "p-5" }, toolOpts);
     const parsed = JSON.parse(raw as string);
     expect(parsed.last_outreach_id).toBeNull();

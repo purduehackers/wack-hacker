@@ -1,3 +1,4 @@
+import type { LanguageModelV3StreamPart } from "@ai-sdk/provider";
 import type { StepResult, ToolSet } from "ai";
 
 import { tool } from "ai";
@@ -40,26 +41,26 @@ export function noopTool(name: string) {
  * finishes. Exposes call arguments via `model.doStreamCalls` for assertions.
  */
 export function streamingTextModel(text: string) {
+  const chunks: LanguageModelV3StreamPart[] = [
+    { type: "stream-start", warnings: [] },
+    { type: "text-start", id: "t1" },
+    { type: "text-delta", id: "t1", delta: text },
+    { type: "text-end", id: "t1" },
+    {
+      type: "finish",
+      finishReason: { unified: "stop", raw: undefined },
+      usage: {
+        inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
+        outputTokens: { total: 1, text: 1, reasoning: 0 },
+      },
+    },
+  ];
   return new MockLanguageModelV3({
     doStream: async () => ({
-      stream: simulateReadableStream({
+      stream: simulateReadableStream<LanguageModelV3StreamPart>({
         initialDelayInMs: null,
         chunkDelayInMs: null,
-        chunks: [
-          { type: "stream-start", warnings: [] },
-          { type: "text-start", id: "t1" },
-          { type: "text-delta", id: "t1", delta: text },
-          { type: "text-end", id: "t1" },
-          {
-            type: "finish",
-            finishReason: { unified: "stop", raw: undefined },
-            usage: {
-              inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
-              outputTokens: { total: 1, text: 1, reasoning: 0 },
-            },
-          },
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ] as any,
+        chunks,
       }),
     }),
   });

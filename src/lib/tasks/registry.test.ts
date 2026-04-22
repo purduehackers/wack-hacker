@@ -1,62 +1,16 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
+import { createRichMemoryRedis } from "@/lib/test/fixtures";
+
 import type { TaskMeta } from "./types";
 
-const mockRedis = {
-  data: new Map<string, unknown>(),
-  sets: new Map<string, Set<string>>(),
-
-  async get<T>(key: string): Promise<T | null> {
-    return (this.data.get(key) as T) ?? null;
-  },
-  async set(key: string, value: unknown) {
-    this.data.set(key, value);
-    return "OK";
-  },
-  async del(key: string) {
-    this.data.delete(key);
-    return 1;
-  },
-  async sadd(key: string, ...members: string[]) {
-    if (!this.sets.has(key)) this.sets.set(key, new Set());
-    for (const m of members) this.sets.get(key)!.add(m);
-    return members.length;
-  },
-  async smembers<T>(key: string): Promise<T> {
-    return [...(this.sets.get(key) ?? [])] as T;
-  },
-  async srem(key: string, ...members: string[]) {
-    const set = this.sets.get(key);
-    if (!set) return 0;
-    let removed = 0;
-    for (const m of members) {
-      if (set.delete(m)) removed++;
-    }
-    return removed;
-  },
-  pipeline() {
-    const ops: Array<() => Promise<unknown>> = [];
-    // eslint-disable-next-line oxclippy/let-and-return -- self-referential object
-    const pipe = {
-      get: (key: string) => {
-        ops.push(() => mockRedis.get(key));
-        return pipe;
-      },
-      exec: async <T>(): Promise<T> => {
-        return (await Promise.all(ops.map((fn) => fn()))) as T;
-      },
-    };
-    return pipe;
-  },
-
-  reset() {
-    this.data.clear();
-    this.sets.clear();
-  },
-};
+// Built once at module scope — `registry.ts` memoizes the redis instance it
+// gets back from `Redis.fromEnv`, so reassigning between tests would be
+// ignored. Reset the data in beforeEach instead.
+const redis = createRichMemoryRedis();
 
 vi.mock("@upstash/redis", () => ({
-  Redis: { fromEnv: () => mockRedis },
+  Redis: { fromEnv: () => redis },
 }));
 
 const { saveTask, getTask, listTasks, removeTask } = await import("./registry");
@@ -74,7 +28,9 @@ function makeMeta(overrides?: Partial<TaskMeta>): TaskMeta {
 }
 
 describe("task registry", () => {
-  beforeEach(() => mockRedis.reset());
+  beforeEach(() => {
+    redis.reset();
+  });
 
   it("saves and retrieves a task", async () => {
     const meta = makeMeta();

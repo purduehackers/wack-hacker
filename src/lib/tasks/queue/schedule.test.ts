@@ -1,17 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("./client.ts", () => ({
+const hoisted = vi.hoisted(() => ({
   send: vi.fn().mockResolvedValue({ messageId: "qmsg-1" }),
+  handleCallback: vi.fn(),
 }));
 
-const { send } = await import("./client.ts");
-const { scheduleTask } = await import("./schedule");
+vi.mock("@vercel/queue", () => ({
+  QueueClient: class MockQueueClient {
+    send = hoisted.send;
+    handleCallback = hoisted.handleCallback;
+  },
+}));
 
-const mockedSend = vi.mocked(send);
+const { scheduleTask } = await import("./schedule");
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockedSend.mockResolvedValue({ messageId: "qmsg-1" });
+  hoisted.send.mockResolvedValue({ messageId: "qmsg-1" });
 });
 
 describe("scheduleTask", () => {
@@ -23,7 +28,7 @@ describe("scheduleTask", () => {
     );
 
     expect(id).toBe("qmsg-1");
-    expect(mockedSend).toHaveBeenCalledWith(
+    expect(hoisted.send).toHaveBeenCalledWith(
       "tasks",
       expect.objectContaining({
         task: "send-message",
@@ -35,13 +40,13 @@ describe("scheduleTask", () => {
 
   it("defaults delaySeconds to 0", async () => {
     await scheduleTask("send-message", {});
-    expect(mockedSend).toHaveBeenCalledWith("tasks", expect.any(Object), { delaySeconds: 0 });
+    expect(hoisted.send).toHaveBeenCalledWith("tasks", expect.any(Object), { delaySeconds: 0 });
   });
 
   it("includes recurring config with repetitionCount 0", async () => {
     await scheduleTask("send-message", {}, { recurring: { delaySeconds: 300, maxRepetitions: 5 } });
 
-    expect(mockedSend).toHaveBeenCalledWith(
+    expect(hoisted.send).toHaveBeenCalledWith(
       "tasks",
       expect.objectContaining({
         recurring: { delaySeconds: 300, maxRepetitions: 5, repetitionCount: 0 },
@@ -51,7 +56,7 @@ describe("scheduleTask", () => {
   });
 
   it("returns null when send returns no messageId", async () => {
-    mockedSend.mockResolvedValueOnce({ messageId: null });
+    hoisted.send.mockResolvedValueOnce({ messageId: null });
     const id = await scheduleTask("send-message", {});
     expect(id).toBeNull();
   });

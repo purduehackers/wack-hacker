@@ -1,5 +1,5 @@
 export { baseApprovalState, buttonInteraction } from "./approvals";
-export { createMemoryRedis, memoryStore } from "./redis";
+export { createMemoryRedis, createRichMemoryRedis, memoryStore } from "./redis";
 export {
   messagePacket,
   reactionPacket,
@@ -10,7 +10,14 @@ export {
 } from "./packets";
 export { handlerCtx } from "./handler-ctx";
 export { TEST_PUBLIC_KEY, signedRequest } from "./signing";
-export { createMockAPI, asAPI } from "./discord";
+export {
+  createMockAPI,
+  asAPI,
+  fakeRawMessage,
+  withMessages,
+  withAnchor,
+  fakeSlashCommandCtx,
+} from "./discord";
 export { toolOpts } from "../constants";
 export { TEST_SKILLS } from "./constants";
 export {
@@ -28,3 +35,12 @@ export type {
   TestSandboxProvider,
   TestSandboxProviderOptions,
 } from "../types";
+export { mockFetch } from "./http";
+export {
+  notionClientClass,
+  resendClass,
+  linearClientClass,
+  octokitClass,
+  discordRESTClass,
+  svixMocks,
+} from "./sdks";

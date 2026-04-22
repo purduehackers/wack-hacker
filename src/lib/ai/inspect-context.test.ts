@@ -1,18 +1,25 @@
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 
 import type { ContextSnapshot } from "@/bot/context-snapshot";
 
+import { mockFetch } from "@/lib/test/fixtures";
+
 import type { ModelInfo } from "./models-dev.ts";
 
-vi.mock("./models-dev.ts", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./models-dev.ts")>();
-  return {
-    ...actual,
-    fetchModelInfo: vi.fn().mockResolvedValue(null),
-  };
+const { breakdownFromSnapshot, estimateTokens } = await import("./inspect-context.ts");
+
+// `fetchModelInfo` hits https://models.dev/api.json via global fetch. Stub it
+// to an empty catalog by default; individual tests override via `fetchInfo`
+// injected into `breakdownFromSnapshot`.
+let restoreFetch: () => void;
+
+beforeEach(() => {
+  ({ restore: restoreFetch } = mockFetch(() => new Response(JSON.stringify({}), { status: 200 })));
 });
 
-const { breakdownFromSnapshot, estimateTokens } = await import("./inspect-context.ts");
+afterEach(() => {
+  restoreFetch();
+});
 
 const baseSnap: ContextSnapshot = {
   model: "anthropic/claude-sonnet-4.6",

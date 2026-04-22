@@ -5,13 +5,20 @@ import { log } from "evlog";
 
 import { countMetric, recordDistribution, recordDuration } from "@/lib/metrics";
 
-import type { Attachment, ChatMessage, SerializedAgentContext, TurnUsage } from "./types.ts";
+import type {
+  Attachment,
+  ChatMessage,
+  SerializedAgentContext,
+  StreamTurnOptions,
+  TurnUsage,
+} from "./types.ts";
 
 import { AgentContext } from "./context.ts";
 import { MessageRenderer } from "./message-renderer.ts";
 import { createOrchestrator } from "./orchestrator.ts";
 import { TurnUsageTracker } from "./turn-usage.ts";
 
+export type { OrchestratorAgent, OrchestratorFactory, StreamTurnOptions } from "./types.ts";
 export { MessageRenderer } from "./message-renderer.ts";
 
 type UserContentPart =
@@ -67,11 +74,15 @@ export async function streamTurn(
   channelId: string,
   messages: ChatMessage[],
   serializedContext: SerializedAgentContext,
-  taskId?: string,
+  options: StreamTurnOptions = {},
 ): Promise<{ text: string; usage: TurnUsage }> {
+  const { taskId, createAgent = createOrchestrator } = options;
   const agentCtx = AgentContext.fromJSON(serializedContext);
   const tracker = new TurnUsageTracker();
-  const agent = createOrchestrator(agentCtx, tracker);
+  // The `OrchestratorFactory` return type is a structural subset of the real
+  // ToolLoopAgent, so we cast back to the concrete agent type here to keep the
+  // stream-event discriminated union typed.
+  const agent = createAgent(agentCtx, tracker) as ReturnType<typeof createOrchestrator>;
   const renderer = new MessageRenderer(discord, channelId, { taskId });
 
   await renderer.init();

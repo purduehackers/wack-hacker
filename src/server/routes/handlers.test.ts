@@ -1,18 +1,38 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { handlerCtx, messagePacket } from "@/lib/test/fixtures";
+import {
+  discordRESTClass,
+  handlerCtx,
+  linearClientClass,
+  messagePacket,
+  notionClientClass,
+  octokitClass,
+  resendClass,
+} from "@/lib/test/fixtures";
 
-vi.mock("workflow/api", () => ({
+const hoisted = vi.hoisted(() => ({
   resumeHook: vi.fn().mockResolvedValue(undefined),
   start: vi.fn().mockResolvedValue({ runId: "run-1" }),
 }));
 
-vi.mock("@/bot/handlers/events", () => ({
-  handleMention: vi.fn(),
+vi.mock("workflow/api", () => ({
+  resumeHook: hoisted.resumeHook,
+  start: hoisted.start,
+}));
+
+// Third-party SDK mocks — handlers.ts transitively loads streaming →
+// orchestrator → real tool modules that instantiate SDK clients on import.
+vi.mock("@linear/sdk", () => ({ LinearClient: linearClientClass() }));
+vi.mock("octokit", () => ({ Octokit: octokitClass() }));
+vi.mock("@octokit/auth-app", () => ({ createAppAuth: vi.fn(() => ({})) }));
+vi.mock("@discordjs/rest", () => ({ REST: discordRESTClass() }));
+vi.mock("@notionhq/client", () => ({ Client: notionClientClass() }));
+vi.mock("resend", () => ({ Resend: resendClass() }));
+vi.mock("@vercel/edge-config", () => ({
+  createClient: vi.fn(() => ({ getAll: vi.fn().mockResolvedValue({}) })),
 }));
 
 const { router } = await import("./handlers");
-const { resumeHook } = await import("workflow/api");
 
 const BOT = "bot-123";
 
@@ -35,7 +55,7 @@ describe("message handler – thread filtering", () => {
       ctx,
     );
 
-    expect(resumeHook).not.toHaveBeenCalled();
+    expect(hoisted.resumeHook).not.toHaveBeenCalled();
   });
 
   it("forwards non-mention messages in a channel with an active conversation", async () => {
@@ -48,6 +68,6 @@ describe("message handler – thread filtering", () => {
 
     await router.dispatch(messagePacket("hello"), ctx);
 
-    expect(resumeHook).toHaveBeenCalledOnce();
+    expect(hoisted.resumeHook).toHaveBeenCalledOnce();
   });
 });

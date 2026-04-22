@@ -67,7 +67,7 @@ async function executeAction(meta: TaskMeta) {
       meta.action.channelId,
       [{ role: "user", content: meta.action.prompt }],
       context.toJSON(),
-      meta.id,
+      { taskId: meta.id },
     );
     log.info("task-workflow", `Ran agent for task ${meta.id}`);
   }

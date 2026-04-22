@@ -3,9 +3,13 @@ import type { MockLanguageModelV3 } from "ai/test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  discordRESTClass,
   installMockProvider,
+  linearClientClass,
   messagePacket,
-  noopTool as stubTool,
+  notionClientClass,
+  octokitClass,
+  resendClass,
   streamingTextModel,
   uninstallMockProvider,
 } from "@/lib/test/fixtures";
@@ -13,78 +17,23 @@ import {
 import { AgentContext } from "./context.ts";
 import { TurnUsageTracker } from "./turn-usage.ts";
 
-// --- Boundary mocks: tools that hit external APIs or initialize SDK clients ---
-
-vi.mock("@/lib/ai/tools/docs", () => ({ documentation: stubTool("documentation") }));
-vi.mock("@/lib/ai/tools/roster", () => ({ resolve_organizer: stubTool("resolve_organizer") }));
-vi.mock("@/lib/ai/tools/schedule", () => ({
-  createScheduleTask: () => stubTool("scheduleTask"),
-  listScheduledTasks: stubTool("listScheduledTasks"),
-  cancelTask: stubTool("cancelTask"),
+// Third-party SDK mocks — neutralize clients that our tool modules
+// instantiate at import time so the real tool definitions load safely.
+vi.mock("@linear/sdk", () => ({ LinearClient: linearClientClass() }));
+vi.mock("octokit", () => ({ Octokit: octokitClass() }));
+vi.mock("@octokit/auth-app", () => ({ createAppAuth: vi.fn(() => ({})) }));
+vi.mock("@discordjs/rest", () => ({ REST: discordRESTClass() }));
+vi.mock("@notionhq/client", () => ({ Client: notionClientClass() }));
+vi.mock("resend", () => ({ Resend: resendClass() }));
+vi.mock("@vercel/edge-config", () => ({
+  createClient: vi.fn(() => ({ getAll: vi.fn().mockResolvedValue({}) })),
 }));
-vi.mock("@/lib/ai/tools/schedule/time", () => ({ currentTime: stubTool("currentTime") }));
-
-// Domain tool modules initialize SDK clients at import time.
-vi.mock("@/lib/ai/tools/linear", () => ({
-  search_entities: stubTool("search_entities"),
-  retrieve_entities: stubTool("retrieve_entities"),
-  suggest_property_values: stubTool("suggest_property_values"),
-  aggregate_issues: stubTool("aggregate_issues"),
+vi.mock("workflow/api", () => ({
+  start: vi.fn().mockResolvedValue({ runId: "run-test" }),
+  getRun: vi.fn(() => ({ cancel: vi.fn().mockResolvedValue(undefined) })),
 }));
-vi.mock("@/lib/ai/tools/github", () => ({
-  list_repositories: stubTool("list_repositories"),
-  get_repository: stubTool("get_repository"),
-  search_code: stubTool("search_code"),
-  search_issues: stubTool("search_issues"),
-}));
-vi.mock("@/lib/ai/tools/discord", () => ({
-  get_server_info: stubTool("get_server_info"),
-  list_channels: stubTool("list_channels"),
-  list_roles: stubTool("list_roles"),
-  search_members: stubTool("search_members"),
-}));
-vi.mock("@/lib/ai/tools/figma", () => ({
-  get_file: stubTool("get_file"),
-  list_projects: stubTool("list_projects"),
-  list_project_files: stubTool("list_project_files"),
-  search_files: stubTool("search_files"),
-}));
-vi.mock("@/lib/ai/tools/notion", () => ({
-  search_notion: stubTool("search_notion"),
-  retrieve_page: stubTool("retrieve_page"),
-  retrieve_database: stubTool("retrieve_database"),
-  list_users: stubTool("list_users"),
-}));
-vi.mock("@/lib/ai/tools/sentry", () => ({
-  list_projects: stubTool("list_projects"),
-  get_project: stubTool("get_project"),
-  search_issues: stubTool("search_issues"),
-  get_issue: stubTool("get_issue"),
-}));
-vi.mock("@/lib/ai/tools/sales", () => ({
-  list_companies: stubTool("list_companies"),
-  list_contacts: stubTool("list_contacts"),
-  list_deals: stubTool("list_deals"),
-  get_company: stubTool("get_company"),
-  get_contact: stubTool("get_contact"),
-  get_deal: stubTool("get_deal"),
-  retrieve_crm_schema: stubTool("retrieve_crm_schema"),
-}));
-vi.mock("@/lib/ai/tools/code", () => ({
-  read: stubTool("read"),
-  write: stubTool("write"),
-  edit: stubTool("edit"),
-  list_dir: stubTool("list_dir"),
-  grep: stubTool("grep"),
-  glob: stubTool("glob"),
-  bash: stubTool("bash"),
-  run_checks: stubTool("run_checks"),
-  todo_write: stubTool("todo_write"),
-}));
-vi.mock("@/lib/ai/tools/code/delegation", () => ({
-  buildCodeExperimentalContext: vi.fn(),
-  codeDelegationInputSchema: {},
-  codePostFinish: vi.fn(async function* () {}),
+vi.mock("@vercel/sandbox", () => ({
+  Sandbox: class MockSandbox {},
 }));
 
 const { createOrchestrator } = await import("./orchestrator.ts");

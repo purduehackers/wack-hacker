@@ -1,23 +1,22 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { toolOpts } from "@/lib/test/fixtures";
+import { notionClientClass, toolOpts } from "@/lib/test/fixtures";
 
-const retrieveMock = vi.fn();
-
-vi.mock("./client.ts", () => ({
-  notion: { dataSources: { retrieve: retrieveMock } },
+const mocks = vi.hoisted(() => ({
+  retrieve: vi.fn(),
 }));
-vi.mock("./constants.ts", () => ({
-  COMPANIES_DATA_SOURCE_ID: "companies-ds",
-  CONTACTS_DATA_SOURCE_ID: "contacts-ds",
-  DEALS_DATA_SOURCE_ID: "deals-ds",
+
+vi.mock("@notionhq/client", () => ({
+  Client: notionClientClass({ dataSourcesRetrieve: mocks.retrieve }),
 }));
 
 const { retrieve_crm_schema } = await import("./schema.ts");
+const { COMPANIES_DATA_SOURCE_ID, CONTACTS_DATA_SOURCE_ID, DEALS_DATA_SOURCE_ID } =
+  await import("./constants.ts");
 
 describe("retrieve_crm_schema", () => {
   it("queries all three data sources and merges the result", async () => {
-    retrieveMock
+    mocks.retrieve
       .mockResolvedValueOnce({ id: "c", title: "Companies", properties: { Company: {} } })
       .mockResolvedValueOnce({ id: "t", title: "Contacts", properties: { Name: {} } })
       .mockResolvedValueOnce({ id: "d", title: "Deals", properties: { Deal: {} } });
@@ -27,9 +26,9 @@ describe("retrieve_crm_schema", () => {
     expect(parsed.companies.id).toBe("c");
     expect(parsed.contacts.id).toBe("t");
     expect(parsed.deals.id).toBe("d");
-    expect(retrieveMock).toHaveBeenCalledTimes(3);
-    expect(retrieveMock).toHaveBeenCalledWith({ data_source_id: "companies-ds" });
-    expect(retrieveMock).toHaveBeenCalledWith({ data_source_id: "contacts-ds" });
-    expect(retrieveMock).toHaveBeenCalledWith({ data_source_id: "deals-ds" });
+    expect(mocks.retrieve).toHaveBeenCalledTimes(3);
+    expect(mocks.retrieve).toHaveBeenCalledWith({ data_source_id: COMPANIES_DATA_SOURCE_ID });
+    expect(mocks.retrieve).toHaveBeenCalledWith({ data_source_id: CONTACTS_DATA_SOURCE_ID });
+    expect(mocks.retrieve).toHaveBeenCalledWith({ data_source_id: DEALS_DATA_SOURCE_ID });
   });
 });

@@ -1,11 +1,34 @@
+import type { ToolSet } from "ai";
+
 import { tool } from "ai";
 import { describe, it, expect, vi } from "vitest";
 import { z } from "zod";
 
 import type { TurnUsage } from "./types.ts";
 
-import { messagePacket } from "../test/fixtures/index.ts";
-import { AgentContext } from "./context.ts";
+import {
+  discordRESTClass,
+  linearClientClass,
+  messagePacket,
+  notionClientClass,
+  octokitClass,
+  resendClass,
+} from "../test/fixtures/index.ts";
+
+// Third-party SDK mocks — snapshot.ts transitively imports tool modules via
+// ./orchestrator, which instantiate SDK clients at import time.
+vi.mock("@linear/sdk", () => ({ LinearClient: linearClientClass() }));
+vi.mock("octokit", () => ({ Octokit: octokitClass() }));
+vi.mock("@octokit/auth-app", () => ({ createAppAuth: vi.fn(() => ({})) }));
+vi.mock("@discordjs/rest", () => ({ REST: discordRESTClass() }));
+vi.mock("@notionhq/client", () => ({ Client: notionClientClass() }));
+vi.mock("resend", () => ({ Resend: resendClass() }));
+vi.mock("@vercel/edge-config", () => ({
+  createClient: vi.fn(() => ({ getAll: vi.fn().mockResolvedValue({}) })),
+}));
+
+const { AgentContext } = await import("./context.ts");
+const { buildContextSnapshot } = await import("./snapshot.ts");
 
 const rawJsonSchemaTool = {
   description: "Raw JSON-schema tool.",
@@ -23,8 +46,9 @@ const malformedZodLike = {
   inputSchema: { _zod: { notAValidSchema: true } },
 };
 
-vi.mock("./orchestrator", () => ({
-  getOrchestratorTools: () => ({
+/** Synthetic tool set for snapshot serialization tests. Passed via DI. */
+function syntheticTools(): ToolSet {
+  return {
     currentTime: tool({
       description: "Get the current time.",
       inputSchema: z.object({
@@ -45,11 +69,8 @@ vi.mock("./orchestrator", () => ({
     rawJsonSchemaTool,
     toolWithoutSchema,
     malformedZodLike,
-  }),
-}));
-
-// Import after vi.mock so the mock is active.
-const { buildContextSnapshot } = await import("./snapshot.ts");
+  } as unknown as ToolSet;
+}
 
 const usage: TurnUsage = {
   inputTokens: 100,
@@ -68,6 +89,7 @@ describe("buildContextSnapshot", () => {
       messages: [{ role: "user", content: "hi" }],
       totalUsage: usage,
       turnCount: 1,
+      getTools: syntheticTools,
     });
     expect(snap.model).toMatch(/^anthropic\//);
   });
@@ -79,6 +101,7 @@ describe("buildContextSnapshot", () => {
       messages: [{ role: "user", content: "hi" }],
       totalUsage: usage,
       turnCount: 1,
+      getTools: syntheticTools,
     });
     expect(snap.systemPrompt).toContain("<execution_context>");
     expect(snap.systemPrompt).toContain("<identity>");
@@ -93,6 +116,7 @@ describe("buildContextSnapshot", () => {
       messages: [],
       totalUsage: usage,
       turnCount: 1,
+      getTools: syntheticTools,
     });
     const names = snap.tools.map((t) => t.name);
     expect(names).toContain("currentTime");
@@ -111,6 +135,7 @@ describe("buildContextSnapshot", () => {
       messages: [],
       totalUsage: usage,
       turnCount: 1,
+      getTools: syntheticTools,
     });
     const currentTime = snap.tools.find((t) => t.name === "currentTime");
     const schema = currentTime?.inputSchema as {
@@ -132,6 +157,7 @@ describe("buildContextSnapshot", () => {
       messages: msgs,
       totalUsage: usage,
       turnCount: 7,
+      getTools: syntheticTools,
     });
     expect(snap.messages).toEqual(msgs);
     expect(snap.totalUsage).toEqual(usage);
@@ -145,6 +171,7 @@ describe("buildContextSnapshot", () => {
       messages: [],
       totalUsage: usage,
       turnCount: 1,
+      getTools: syntheticTools,
     });
     expect(snap.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
@@ -158,6 +185,7 @@ describe("buildContextSnapshot: tool schema serialization", () => {
       messages: [],
       totalUsage: usage,
       turnCount: 1,
+      getTools: syntheticTools,
     });
     const raw = snap.tools.find((t) => t.name === "rawJsonSchemaTool");
     expect(raw?.inputSchema).toEqual({
@@ -173,6 +201,7 @@ describe("buildContextSnapshot: tool schema serialization", () => {
       messages: [],
       totalUsage: usage,
       turnCount: 1,
+      getTools: syntheticTools,
     });
     const opaque = snap.tools.find((t) => t.name === "toolWithoutSchema");
     expect(opaque?.inputSchema).toEqual({});
@@ -185,8 +214,36 @@ describe("buildContextSnapshot: tool schema serialization", () => {
       messages: [],
       totalUsage: usage,
       turnCount: 1,
+      getTools: syntheticTools,
     });
     const malformed = snap.tools.find((t) => t.name === "malformedZodLike");
     expect(malformed?.inputSchema).toEqual({});
+  });
+});
+
+describe("buildContextSnapshot: default tool resolver", () => {
+  // Exercises the `getTools = getOrchestratorTools` default so the DI hook's
+  // fallback branch doesn't rot. SDK mocks above let the real orchestrator
+  // tool set load safely.
+  it("resolves tools via getOrchestratorTools when getTools is omitted", () => {
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    const snap = buildContextSnapshot({
+      context: ctx.toJSON(),
+      messages: [],
+      totalUsage: usage,
+      turnCount: 1,
+    });
+    // The real orchestrator always exposes these base tools.
+    const names = snap.tools.map((t) => t.name);
+    expect(names).toEqual(
+      expect.arrayContaining([
+        "currentTime",
+        "documentation",
+        "resolve_organizer",
+        "scheduleTask",
+        "listScheduledTasks",
+        "cancelTask",
+      ]),
+    );
   });
 });
