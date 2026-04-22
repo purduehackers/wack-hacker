@@ -152,7 +152,7 @@ export interface SandboxHooksConfig {
   baseBranch?: string;
   branch: string;
   gitUser: { name: string; email: string };
-  /** When true, skip apt-get install (the snapshot already has tools). */
+  /** When true, skip dnf install (the snapshot already has tools). */
   hasBaseSnapshot: boolean;
   /** When true, skip `git clone` + branch creation (resume from hibernation). */
   skipCloneAndBranch?: boolean;
