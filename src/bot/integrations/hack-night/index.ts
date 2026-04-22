@@ -2,7 +2,7 @@ import { Redis } from "@upstash/redis";
 
 import type { RedisLike } from "@/bot/types";
 
-const THREAD_SLUG_TTL_SECONDS = 14 * 24 * 60 * 60;
+const THREAD_SLUG_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 export function generateEventSlug(date: Date): string {
   const y = date.getFullYear();
