@@ -1,10 +1,33 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createMemoryRedis, createTestSandboxProvider, InMemorySandbox } from "@/lib/test/fixtures";
 
 import type { SandboxSessionMetadata } from "./types.ts";
 
-import { getOrCreateSession, readSession, releaseSession, writeSession } from "./session.ts";
+import {
+  getOrCreateSession,
+  hibernateSession,
+  readSession,
+  releaseSession,
+  writeSession,
+} from "./session.ts";
+
+// `@upstash/redis` is a third-party client we only need to stub for the
+// "default options" branch tests below (where we call session functions
+// without passing `redis`). Mocking an external library is OK; this
+// deliberately avoids mocking any Phoenix module. Hoisted so the mock is
+// installed before `session.ts` imports `@upstash/redis`.
+const envRedisStore = vi.hoisted(() => ({
+  redis: null as ReturnType<typeof createMemoryRedis> | null,
+}));
+vi.mock("@upstash/redis", () => ({
+  Redis: {
+    fromEnv: () => envRedisStore.redis,
+  },
+}));
+// Initialize after import — the shared memory redis is what `Redis.fromEnv`
+// returns when session functions are called without an explicit `redis`.
+envRedisStore.redis = createMemoryRedis();
 
 const baseParams = {
   threadKey: "T1",
@@ -322,5 +345,34 @@ describe("InMemorySandbox (smoke — confirms the fixture round-trips data for s
     const sandbox = new InMemorySandbox();
     await sandbox.writeFile("/vercel/sandbox/a.txt", "hello");
     expect(await sandbox.readFile("/vercel/sandbox/a.txt")).toBe("hello");
+  });
+});
+
+describe("generateBranchName (via provisionFreshSession)", () => {
+  it("falls back to the 'repo' placeholder when the repo string has no slash", async () => {
+    const redis = createMemoryRedis();
+    const { provider } = createTestSandboxProvider();
+    const session = await getOrCreateSession({
+      ...baseParams,
+      // No slash → `split("/")[1]` is undefined → the `?? "repo"` fallback kicks in.
+      repo: "bareword",
+      redis,
+      provider,
+      onProvisioned: async () => {},
+    });
+    expect(session.metadata.branch).toMatch(/^phoenix-agent\/repo-[a-z0-9]+$/);
+  });
+});
+
+describe("default options (Redis.fromEnv fallback)", () => {
+  it("releaseSession works with no options when no session exists", async () => {
+    // No second argument → `options: ReleaseSessionOptions = {}` default kicks
+    // in, which drives `resolveRedis(undefined)` → mocked `Redis.fromEnv`.
+    await expect(releaseSession("no-such-thread")).resolves.toBeUndefined();
+  });
+
+  it("hibernateSession returns skipped-missing with no options when no session exists", async () => {
+    const result = await hibernateSession("no-such-thread-2");
+    expect(result).toBe("skipped-missing");
   });
 });

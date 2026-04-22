@@ -4,6 +4,8 @@ import {
   stepCountIs,
   readUIMessageStream,
   isTextUIPart,
+  type ModelMessage,
+  type StepResult,
   type ToolSet,
   type UIMessage,
 } from "ai";
@@ -44,9 +46,14 @@ const DEFAULT_TASK_INPUT_SCHEMA = z.object({
  * message history stays lean (full execution details live in the UI stream,
  * not in the model context).
  */
-function recordSubagentMetrics(
+/**
+ * Push subagent usage into the TurnUsageTracker and emit Sentry metrics.
+ * Exported so we can unit-test the `?? 0` fallback for missing totalTokens
+ * without driving a full mocked ToolLoopAgent.
+ */
+export function recordSubagentMetrics(
   tracker: TurnUsageTracker,
-  spec: SubagentSpec,
+  spec: Pick<SubagentSpec, "name">,
   usage: { totalTokens?: number },
   steps: { toolCalls: unknown[] }[],
 ): void {
@@ -56,6 +63,29 @@ function recordSubagentMetrics(
   countMetric("ai.subagent.completed", { domain: spec.name });
   recordDistribution("ai.subagent.tokens", tokens, { domain: spec.name });
   recordDistribution("ai.subagent.tool_calls", toolCalls, { domain: spec.name });
+}
+
+/**
+ * Build the `prepareStep` handler for a subagent's `ToolLoopAgent`. Returns
+ * the combined active-tools update + Anthropic cache-control layering.
+ * Exported so we can unit-test the active-vs-empty branch.
+ */
+export function buildPrepareStep(args: {
+  registry: SkillRegistry;
+  role: UserRole;
+  baseToolNames: string[];
+  tools: ToolSet;
+  model: string;
+}) {
+  const { registry, role, baseToolNames, tools, model } = args;
+  return ({ steps, messages }: { steps: StepResult<ToolSet>[]; messages: ModelMessage[] }) => {
+    const active = computeActiveTools({ steps, registry, role, baseToolNames });
+    return {
+      ...(active ? { activeTools: active } : {}),
+      tools: addCacheControl({ tools, model }),
+      messages: addCacheControl({ messages, model }),
+    };
+  };
 }
 
 export function createDelegationTool(
@@ -93,14 +123,15 @@ export function createDelegationTool(
         tools,
         stopWhen: stepCountIs(spec.stopSteps ?? 15),
         activeTools: baseToolNames as ToolKey[],
-        prepareStep: ({ steps, messages }) => {
-          const active = computeActiveTools({ steps, registry, role, baseToolNames });
-          return {
-            ...(active ? { activeTools: active as ToolKey[] } : {}),
-            tools: addCacheControl({ tools, model: resolvedModel }),
-            messages: addCacheControl({ messages, model: resolvedModel }),
-          };
-        },
+        prepareStep: buildPrepareStep({
+          registry,
+          role,
+          baseToolNames,
+          tools,
+          model: resolvedModel,
+        }) as unknown as ConstructorParameters<
+          typeof ToolLoopAgent<typeof tools>
+        >[0]["prepareStep"],
         providerOptions: { openai: { parallelToolCalls: true } },
         experimental_telemetry: {
           isEnabled: true,

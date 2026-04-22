@@ -1,4 +1,5 @@
 import type { UIMessage } from "ai";
+import type { ModelMessage, StepResult, ToolSet } from "ai";
 import type { MockLanguageModelV3 } from "ai/test";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -14,7 +15,7 @@ import {
 } from "@/lib/test/fixtures";
 
 import { admin, SkillRegistry } from "./skills/index.ts";
-import { createDelegationTool } from "./subagent.ts";
+import { buildPrepareStep, createDelegationTool, recordSubagentMetrics } from "./subagent.ts";
 import { TurnUsageTracker } from "./turn-usage.ts";
 
 const baseSpec = {
@@ -371,5 +372,68 @@ describe("createDelegationTool — toModelOutput()", () => {
         NonNullable<typeof t.toModelOutput>
       >[0]),
     ).toEqual({ type: "text", value: "Task completed." });
+  });
+});
+
+describe("recordSubagentMetrics", () => {
+  it("records the model's totalTokens when present", () => {
+    const tracker = new TurnUsageTracker();
+    recordSubagentMetrics(tracker, { name: "test" }, { totalTokens: 42 }, [
+      { toolCalls: [{}, {}] },
+      { toolCalls: [{}] },
+    ]);
+    expect(tracker.totalTokens).toBe(42);
+    expect(tracker.totalToolCalls).toBe(3);
+  });
+
+  it("falls back to 0 when totalTokens is undefined", () => {
+    const tracker = new TurnUsageTracker();
+    recordSubagentMetrics(tracker, { name: "test" }, {}, []);
+    expect(tracker.totalTokens).toBe(0);
+    expect(tracker.totalToolCalls).toBe(0);
+  });
+});
+
+describe("buildPrepareStep", () => {
+  const tools: ToolSet = {
+    alpha: noopTool("alpha"),
+    beta: noopTool("beta"),
+  };
+  const registry = new SkillRegistry(TEST_SKILLS);
+
+  it("omits activeTools when computeActiveTools returns null (no skill loaded yet)", () => {
+    const prepare = buildPrepareStep({
+      registry,
+      role: UserRole.Admin,
+      baseToolNames: ["alpha", "beta", "loadSkill"],
+      tools,
+      model: "openai/gpt-5.4-mini",
+    });
+    const out = prepare({
+      steps: [] as StepResult<ToolSet>[],
+      messages: [] as ModelMessage[],
+    });
+    expect("activeTools" in out).toBe(false);
+    expect(out.tools).toBe(tools);
+  });
+
+  it("sets activeTools when a skill-load step unlocks new tools", () => {
+    const skillName = Object.keys(TEST_SKILLS)[0];
+    if (!skillName) throw new Error("TEST_SKILLS fixture is empty");
+
+    const prepare = buildPrepareStep({
+      registry,
+      role: UserRole.Admin,
+      baseToolNames: ["alpha", "loadSkill"],
+      tools,
+      model: "anthropic/claude-opus-4.7",
+    });
+    const steps = [
+      {
+        toolCalls: [{ toolName: "loadSkill", input: { name: skillName } }],
+      } as unknown as StepResult<ToolSet>,
+    ];
+    const out = prepare({ steps, messages: [{ role: "user", content: "hi" }] });
+    expect(Array.isArray(out.activeTools)).toBe(true);
   });
 });
