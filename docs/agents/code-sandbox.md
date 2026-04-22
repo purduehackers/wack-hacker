@@ -55,7 +55,7 @@ Unlike the other delegates, `delegate_code` doesn't just call APIs. It provision
 2. Mints a fresh GitHub App installation access token via Octokit (`octokit.auth({ type: "installation" })`).
 3. Calls `getOrCreateSession({ threadKey, repo, githubToken, gitUser, baseSnapshotId })`:
    - If Redis has a live session for this thread, it's reused. The subagent picks up the same feature branch from the previous turn.
-   - Otherwise a new `VercelSandbox` is created, the repo is cloned, and a feature branch (`phoenix-agent/<slug>-<suffix>`) is checked out.
+   - Otherwise a new `VercelSandbox` is created, the repo is cloned, and a feature branch (`wack-hacker/<slug>-<suffix>`) is checked out.
 4. Returns `{ sandbox, repo, branch, repoDir, threadKey }` — this object is wired into every coding tool's `execute(input, runtime)` via `runtime.experimental_context`.
 
 The `Sandbox` interface in `src/lib/sandbox/types.ts` is the contract the coding tools code against. Today the only implementation is `VercelSandbox`, but the abstraction exists so tests can swap in an in-memory fake.

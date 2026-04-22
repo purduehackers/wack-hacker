@@ -191,7 +191,7 @@ const defaultExecHandler: ExecHandler = async () => ({
 /**
  * Build a `SandboxProvider` backed by `InMemorySandbox` for unit tests. The
  * returned state object exposes call logs + helpers so tests can drive and
- * assert on provider behaviour without mocking any Phoenix modules.
+ * assert on provider behaviour without mocking any internal modules.
  *
  * - `create` spawns a new `InMemorySandbox` for each call, wraps its `stop`
  *   to record the id in `stoppedIds`, and caches the sandbox for subsequent

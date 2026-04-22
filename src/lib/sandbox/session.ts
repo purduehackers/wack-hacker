@@ -36,7 +36,7 @@ function generateBranchName(repo: string): string {
   const [, name] = repo.split("/");
   const slug = (name ?? "repo").toLowerCase().replace(/[^a-z0-9-]/g, "-");
   const suffix = Math.random().toString(36).slice(2, 8);
-  return `phoenix-agent/${slug}-${suffix}`;
+  return `wack-hacker/${slug}-${suffix}`;
 }
 
 /** Exposed so the lifecycle workflow can fetch the current metadata. */

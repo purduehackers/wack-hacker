@@ -15,7 +15,7 @@ import {
 // `@upstash/redis` is a third-party client we only need to stub for the
 // "default options" branch tests below (where we call session functions
 // without passing `redis`). Mocking an external library is OK; this
-// deliberately avoids mocking any Phoenix module. Hoisted so the mock is
+// deliberately avoids mocking any internal module. Hoisted so the mock is
 // installed before `session.ts` imports `@upstash/redis`.
 const envRedisStore = vi.hoisted(() => ({
   redis: null as ReturnType<typeof createMemoryRedis> | null,
@@ -33,7 +33,7 @@ const baseParams = {
   threadKey: "T1",
   repo: "purduehackers/agent-sandbox-test",
   githubToken: "ghs_token",
-  gitUser: { name: "Phoenix Bot", email: "bot@example.com" },
+  gitUser: { name: "wack-hacker[bot]", email: "bot@example.com" },
 };
 
 function redisKey(threadKey = baseParams.threadKey): string {
@@ -44,7 +44,7 @@ function sessionMetadata(overrides: Partial<SandboxSessionMetadata> = {}): Sandb
   return {
     sandboxId: "sb-existing",
     repo: baseParams.repo,
-    branch: "phoenix-agent/existing",
+    branch: "wack-hacker/existing",
     repoDir: "/vercel/sandbox",
     expiresAt: Date.now() + 10 * 60 * 1000,
     ...overrides,
@@ -70,7 +70,7 @@ describe("getOrCreateSession — fresh provisioning", () => {
     expect(createCalls).toHaveLength(1);
     expect(createCalls[0]!.repo).toBe(baseParams.repo);
     expect(createCalls[0]!.skipCloneAndBranch).toBeFalsy();
-    expect(session.metadata.branch).toMatch(/^phoenix-agent\/agent-sandbox-test-/);
+    expect(session.metadata.branch).toMatch(/^wack-hacker\/agent-sandbox-test-/);
     expect(session.metadata.sandboxId).toBe("sb-0");
     expect(provisionedCount).toBe(1);
   });
@@ -267,7 +267,7 @@ describe("getOrCreateSession — resume from hibernation", () => {
     expect(session.fresh).toBe(true);
     expect(pv.createCalls[0]!.baseSnapshotId).toBe("snap-1");
     expect(pv.createCalls[0]!.skipCloneAndBranch).toBe(true);
-    expect(session.metadata.branch).toBe("phoenix-agent/existing");
+    expect(session.metadata.branch).toBe("wack-hacker/existing");
   });
 });
 
@@ -360,7 +360,7 @@ describe("generateBranchName (via provisionFreshSession)", () => {
       provider,
       onProvisioned: async () => {},
     });
-    expect(session.metadata.branch).toMatch(/^phoenix-agent\/repo-[a-z0-9]+$/);
+    expect(session.metadata.branch).toMatch(/^wack-hacker\/repo-[a-z0-9]+$/);
   });
 });
 

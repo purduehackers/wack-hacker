@@ -43,7 +43,7 @@ function escapeRegExp(value: string): string {
 export type { CodeDelegationInput } from "./types.ts";
 
 const GIT_USER = {
-  name: "phoenix-bot",
+  name: "wack-hacker[bot]",
   email: "bot@purduehackers.com",
 };
 
