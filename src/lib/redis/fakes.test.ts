@@ -72,6 +72,10 @@ describe("createMemoryRedis", () => {
       await redis.sadd("s", "a", "b");
       expect(await redis.srem("s", "a", "missing")).toBe(1);
     });
+
+    it("srem returns 0 when the set does not exist", async () => {
+      expect(await redis.srem("never-touched", "x")).toBe(0);
+    });
   });
 
   describe("pipeline", () => {
