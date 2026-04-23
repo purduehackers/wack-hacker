@@ -30,30 +30,29 @@ async function transcribeOnce(audio: Uint8Array): Promise<string> {
 
 async function transcribeChunked(buffer: Uint8Array): Promise<{ text: string; partCount: number }> {
   const { chunks } = splitOggOpus(buffer, { targetBytes: CHUNK_TARGET });
-  const parts: string[] = [];
-  let successes = 0;
 
-  for (let i = 0; i < chunks.length; i++) {
-    const chunk = chunks[i]!;
-    const label = i + 1 + "/" + chunks.length;
-    try {
-      parts.push(await transcribeOnce(chunk));
-      successes++;
-      continue;
-    } catch (err) {
-      log.warn("voice-transcription", "Chunk " + label + " first attempt failed: " + String(err));
-    }
+  const settled = await Promise.allSettled(
+    chunks.map(async (chunk, i) => {
+      const label = i + 1 + "/" + chunks.length;
+      try {
+        return await transcribeOnce(chunk);
+      } catch (err) {
+        log.warn("voice-transcription", "Chunk " + label + " first attempt failed: " + String(err));
+        await new Promise((resolve) => setTimeout(resolve, CHUNK_RETRY_DELAY_MS));
+        try {
+          return await transcribeOnce(chunk);
+        } catch (retryErr) {
+          log.warn("voice-transcription", "Chunk " + label + " retry failed: " + String(retryErr));
+          throw retryErr;
+        }
+      }
+    }),
+  );
 
-    await new Promise((resolve) => setTimeout(resolve, CHUNK_RETRY_DELAY_MS));
-
-    try {
-      parts.push(await transcribeOnce(chunk));
-      successes++;
-    } catch (err) {
-      log.warn("voice-transcription", "Chunk " + label + " retry failed: " + String(err));
-      parts.push("[part " + label + " failed]");
-    }
-  }
+  const parts = settled.map((s, i) =>
+    s.status === "fulfilled" ? s.value : "[part " + (i + 1) + "/" + chunks.length + " failed]",
+  );
+  const successes = settled.filter((s) => s.status === "fulfilled").length;
 
   if (successes === 0) {
     throw new Error("all chunks failed to transcribe");
