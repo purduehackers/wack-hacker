@@ -10,7 +10,7 @@ Reference documentation for the Wack Hacker codebase. The top-level [README](../
 | [Discord layer](./discord/README.md)            | Gateway, interactions, `EventRouter`, queue consumer, and how to write commands/components/events/crons.            |
 | [Agents](./agents/README.md)                    | Orchestrator, delegate subagents, `AgentContext`, role gating, `streamTurn`.                                        |
 | [Skills](./skills/README.md)                    | `SKILL.md` format, the registry, progressive disclosure, admin gating, and adding skills or whole delegate domains. |
-| [Workflows & scheduling](./workflows/README.md) | Workflow DevKit usage (`chatWorkflow`, `taskWorkflow`), durable suspension, the tasks queue.                        |
+| [Workflows & scheduling](./workflows/README.md) | `chatWorkflow` for multi-turn conversations, Vercel Queue + Turso for scheduled reminders.                          |
 | [Deployment](./deployment/README.md)            | `vercel.ts`, queue triggers, environment variables, build pipeline.                                                 |
 | [Testing](./testing.md)                         | Vitest setup, unit vs integration suites, coverage thresholds.                                                      |
 

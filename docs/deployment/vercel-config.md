@@ -41,10 +41,10 @@ Two sources:
 
 Two queue topics are configured, each scoped to **exactly one** route file:
 
-| Topic            | Route file                            | Purpose                                  |
-| ---------------- | ------------------------------------- | ---------------------------------------- |
-| `discord-events` | `src/app/api/discord/events/route.ts` | Gateway packets → `EventRouter`          |
-| `tasks`          | `src/app/api/tasks/route.ts`          | Scheduled task wake-ups → `taskWorkflow` |
+| Topic            | Route file                            | Purpose                                        |
+| ---------------- | ------------------------------------- | ---------------------------------------------- |
+| `discord-events` | `src/app/api/discord/events/route.ts` | Gateway packets → `EventRouter`                |
+| `tasks`          | `src/app/api/tasks/route.ts`          | Scheduled task wake-ups + ad-hoc message sends |
 
 Scoping is critical. Next.js compiles each route file into its own `.func` directory, and queue triggers attach to a single function. If you scoped `experimentalTriggers` to the catch-all (`[[...route]]`), every Hono route would suddenly be a queue consumer.
 

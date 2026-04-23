@@ -49,12 +49,12 @@ const malformedZodLike = {
 /** Synthetic tool set for snapshot serialization tests. Passed via DI. */
 function syntheticTools(): ToolSet {
   return {
-    current_time: tool({
-      description: "Get the current time.",
+    resolve_organizer: tool({
+      description: "Resolve an organizer by name.",
       inputSchema: z.object({
-        timezone: z.string().optional().describe("IANA timezone."),
+        name: z.string().optional().describe("Organizer display name."),
       }),
-      execute: async () => "now",
+      execute: async () => "",
     }),
     documentation: tool({
       description: "Look up documentation.",
@@ -120,7 +120,7 @@ describe("buildContextSnapshot", () => {
       getTools: syntheticTools,
     });
     const names = snap.tools.map((t) => t.name);
-    expect(names).toContain("current_time");
+    expect(names).toContain("resolve_organizer");
     expect(names).toContain("documentation");
     expect(names).toContain("schedule_task");
     for (const tool of snap.tools) {
@@ -138,8 +138,8 @@ describe("buildContextSnapshot", () => {
       turnCount: 1,
       getTools: syntheticTools,
     });
-    const current_time = snap.tools.find((t) => t.name === "current_time");
-    const schema = current_time?.inputSchema as {
+    const resolver = snap.tools.find((t) => t.name === "resolve_organizer");
+    const schema = resolver?.inputSchema as {
       type?: string;
       properties?: Record<string, unknown>;
     };
@@ -238,7 +238,6 @@ describe("buildContextSnapshot: default tool resolver", () => {
     const names = snap.tools.map((t) => t.name);
     expect(names).toEqual(
       expect.arrayContaining([
-        "current_time",
         "documentation",
         "resolve_organizer",
         "schedule_task",

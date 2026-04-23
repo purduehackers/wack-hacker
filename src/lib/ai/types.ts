@@ -42,6 +42,21 @@ export interface SerializedAgentContext {
   channel: ChannelInfo;
   thread?: ThreadInfo;
   date: string;
+  /**
+   * Current instant as UTC ISO 8601 — the moment the orchestrator was invoked
+   * (or for scheduled actions, the moment the handler fired). Injected into
+   * the system prompt as `{{NOW_ISO}}` so the LLM never has to guess the time
+   * when computing relative schedules like "in 10 minutes". Optional on the
+   * serialized form so legacy contexts still deserialize.
+   */
+  nowISO?: string;
+  /**
+   * IANA timezone name (e.g. `America/New_York`). Injected as `{{USER_TZ}}`
+   * and used as the default tz when interpreting clock times the user types
+   * without an explicit zone. Optional on the wire; defaults to
+   * `America/New_York` when absent.
+   */
+  timezone?: string;
   attachments?: Attachment[];
   memberRoles?: string[];
   recentMessages?: RecentMessage[];

@@ -18,6 +18,8 @@ export type {
   SerializedAgentContext,
 } from "./types.ts";
 
+import { DEFAULT_TIMEZONE } from "../tasks/constants.ts";
+
 export class AgentContext {
   readonly userId: string;
   readonly username: string;
@@ -25,6 +27,8 @@ export class AgentContext {
   readonly channel: ChannelInfo;
   readonly thread?: ThreadInfo;
   readonly date: string;
+  readonly nowISO: string;
+  readonly timezone: string;
   readonly attachments?: Attachment[];
   readonly memberRoles?: string[];
   readonly recentMessages?: RecentMessage[];
@@ -38,6 +42,10 @@ export class AgentContext {
     this.channel = data.channel;
     this.thread = data.thread;
     this.date = data.date;
+    // Default nowISO/timezone on deserialize so legacy serialized contexts
+    // (written before these fields existed) still round-trip cleanly.
+    this.nowISO = data.nowISO ?? new Date().toISOString();
+    this.timezone = data.timezone ?? DEFAULT_TIMEZONE;
     this.attachments = data.attachments;
     this.memberRoles = data.memberRoles;
     this.recentMessages = data.recentMessages;
@@ -104,18 +112,21 @@ export class AgentContext {
     const recentMessagesFromThread =
       recentMessages !== undefined && Boolean(data.thread) && !threadOverride;
 
+    const now = new Date();
     return new AgentContext({
       userId: data.author.id,
       username: data.author.username,
       nickname: data.author.nickname ?? data.author.username,
       channel,
       thread,
-      date: new Date().toLocaleDateString("en-US", {
+      date: now.toLocaleDateString("en-US", {
         weekday: "long",
         year: "numeric",
         month: "long",
         day: "numeric",
       }),
+      nowISO: now.toISOString(),
+      timezone: DEFAULT_TIMEZONE,
       attachments:
         data.attachments.length > 0
           ? data.attachments.map((a) => ({
@@ -143,6 +154,8 @@ export class AgentContext {
       channel: this.channel,
       thread: this.thread,
       date: this.date,
+      nowISO: this.nowISO,
+      timezone: this.timezone,
       attachments: this.attachments,
       memberRoles: this.memberRoles,
       recentMessages: this.recentMessages,
@@ -152,7 +165,11 @@ export class AgentContext {
   }
 
   buildInstructions(baseInstructions: string): string {
-    return `${baseInstructions.replace("{{DATE}}", this.date)}\n\n${this.contextBlock()}`;
+    const replaced = baseInstructions
+      .replace("{{DATE}}", this.date)
+      .replace("{{NOW_ISO}}", this.nowISO)
+      .replace("{{USER_TZ}}", this.timezone);
+    return `${replaced}\n\n${this.contextBlock()}`;
   }
 
   /**

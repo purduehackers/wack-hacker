@@ -70,7 +70,7 @@ Two constructors:
 - **`AgentContext.fromPacket(packet, options?)`** — build from a `MessageCreatePacketType`. Options:
   - `threadOverride: { id, name }` — supply when a thread was just created for this mention. The packet still describes the parent channel; pass the new thread and `channel`/`thread` on the resulting context will reflect the thread instead.
   - `recentMessages: RecentMessage[]` — attach the lead-in block fetched separately (only meaningful on workflow start; follow-up hook resumes omit this).
-- **`AgentContext.fromJSON(serialized)`** — rebuild from a `SerializedAgentContext`. Used at the top of `streamTurn` to rehydrate context inside a workflow step, and by `taskWorkflow.executeAction` to fabricate a synthetic context for scheduled agent tasks.
+- **`AgentContext.fromJSON(serialized)`** — rebuild from a `SerializedAgentContext`. Used at the top of `streamTurn` to rehydrate context inside a workflow step, and by the `scheduled-task-fire` handler's `executeAction` to fabricate a synthetic context for scheduled agent tasks (with a fresh `nowISO` at fire time).
 
 The constructor is private; you can only go through these two paths.
 

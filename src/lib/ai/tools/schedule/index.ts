@@ -1,20 +1,24 @@
 import { tool } from "ai";
-import { start, getRun } from "workflow/api";
+import { ulid } from "ulid";
 import { z } from "zod";
 
-import type { TaskAction, TaskSchedule } from "../../../tasks/types.ts";
+import type { TaskAction } from "@/lib/tasks/types";
+
+import { DEFAULT_TIMEZONE } from "@/lib/tasks/constants";
+import { listScheduledTasks, saveScheduledTask, updateScheduledTask } from "@/lib/tasks/db";
+import { ScheduledTaskStatus, ScheduleType } from "@/lib/tasks/enums";
+import { sendScheduledFire } from "@/lib/tasks/queue/schedule-fire";
+
 import type { AgentContext } from "../../context.ts";
 
-import { taskWorkflow } from "../../../../workflows/task.ts";
 import { nextOccurrence } from "../../../tasks/cron.ts";
-import { listTasks as listTasksFromRegistry, removeTask } from "../../../tasks/registry.ts";
 import { approval } from "../../approvals/index.ts";
 
 interface ScheduleInput {
   action_type: "message" | "agent";
   content?: string;
   prompt?: string;
-  schedule_type: "once" | "recurring";
+  schedule_type: ScheduleType;
   run_at?: string;
   cron?: string;
   timezone?: string;
@@ -35,7 +39,7 @@ function isValidTimezone(tz: string): boolean {
 
 /**
  * Returns an error string if the input is invalid, or `null` if it's ready to
- * schedule. Pulled out of the tool body to keep `createScheduleTask` small.
+ * schedule. Kept out of the tool body to keep `createScheduleTask` small.
  */
 function validateScheduleInput(input: ScheduleInput): string | null {
   const { action_type, content, prompt, schedule_type, run_at, cron, timezone } = input;
@@ -47,8 +51,6 @@ function validateScheduleInput(input: ScheduleInput): string | null {
     return "Error: prompt is required when action_type is 'agent'.";
   }
 
-  // Validate timezone once, up front — otherwise a bad IANA string would
-  // survive validation and crash the `toLocaleString` formatting step below.
   if (timezone && !isValidTimezone(timezone)) {
     return `Error: invalid timezone "${timezone}". Use IANA format like "America/New_York".`;
   }
@@ -71,10 +73,10 @@ function validateScheduleInput(input: ScheduleInput): string | null {
 }
 
 /**
- * Build the schedule tool bound to the scheduler's `AgentContext`. The closure
- * captures `context.memberRoles` so the persisted `TaskMeta` carries the
- * scheduler's Discord role IDs — without that, scheduled agent runs resolve to
- * `UserRole.Public` and lose access to every `delegate_*` subagent.
+ * Build the schedule tool bound to the scheduler's `AgentContext`. The
+ * closure captures `context.memberRoles` so the persisted row carries the
+ * scheduler's Discord role IDs — without that, scheduled agent runs resolve
+ * to `UserRole.Public` and lose access to every `delegate_*` subagent.
  */
 export function createScheduleTask(context: AgentContext) {
   return approval(
@@ -92,16 +94,13 @@ export function createScheduleTask(context: AgentContext) {
           .optional()
           .describe("Message text (required if action_type is 'message')"),
         prompt: z.string().optional().describe("Agent prompt (required if action_type is 'agent')"),
-        schedule_type: z.enum(["once", "recurring"]),
+        schedule_type: z.enum([ScheduleType.Once, ScheduleType.Recurring]),
         run_at: z.string().optional().describe("ISO 8601 datetime for one-time tasks"),
         cron: z
           .string()
           .optional()
           .describe("5-field cron expression for recurring tasks (e.g. '0 9 * * 1-5')"),
-        timezone: z
-          .string()
-          .optional()
-          .describe("IANA timezone (default: America/Indiana/Indianapolis)"),
+        timezone: z.string().optional().describe(`IANA timezone (default: ${DEFAULT_TIMEZONE})`),
         user_id: z.string().describe("Discord user ID of the person requesting this task"),
       }),
       execute: async ({
@@ -132,43 +131,36 @@ export function createScheduleTask(context: AgentContext) {
             ? { type: "message", channelId: channel_id, content: content! }
             : { type: "agent", channelId: channel_id, prompt: prompt! };
 
-        const schedule: TaskSchedule = {
-          type: schedule_type,
-          at: schedule_type === "once" ? run_at : undefined,
-          cron: schedule_type === "recurring" ? cron : undefined,
-          timezone,
-        };
+        const tz = timezone ?? DEFAULT_TIMEZONE;
+        const target =
+          schedule_type === ScheduleType.Once
+            ? new Date(run_at!)
+            : nextOccurrence(cron!, new Date(), timezone);
+        const delaySec = Math.max(0, Math.floor((target.getTime() - Date.now()) / 1000));
 
-        // Start the workflow — it self-registers with its runId via getWorkflowMetadata()
-        const run = await start(taskWorkflow, [
-          {
-            meta: {
-              description,
-              action,
-              schedule,
-              context: {
-                userId: user_id,
-                channelId: channel_id,
-                memberRoles: context.memberRoles,
-              },
-              createdAt: new Date().toISOString(),
-            },
-          },
-        ]);
+        const id = ulid();
+        // Send first: a failed send surfaces to the user immediately and
+        // leaves no orphan DB row. If the save fails after a successful send,
+        // the fire handler looks up a missing row and no-ops — no side effect.
+        const { messageId } = await sendScheduledFire(id, target, delaySec);
+        await saveScheduledTask({
+          id,
+          userId: user_id,
+          channelId: channel_id,
+          description,
+          scheduleType: schedule_type,
+          runAt: run_at ?? null,
+          cron: cron ?? null,
+          timezone: timezone ?? null,
+          action,
+          memberRoles: context.memberRoles ?? null,
+          status: ScheduledTaskStatus.Active,
+          nextRunAt: target.toISOString(),
+          queueMessageId: messageId,
+        });
 
-        const tz = timezone ?? "America/Indiana/Indianapolis";
-        let nextRunStr: string;
-        if (schedule_type === "once" && run_at) {
-          nextRunStr = new Date(run_at).toLocaleString("en-US", { timeZone: tz });
-        } else if (cron) {
-          nextRunStr = nextOccurrence(cron, new Date(), timezone).toLocaleString("en-US", {
-            timeZone: tz,
-          });
-        } else {
-          nextRunStr = "unknown";
-        }
-
-        return `Scheduled "${description}" (ID: ${run.runId}). Next run: ${nextRunStr}.`;
+        const nextRunStr = target.toLocaleString("en-US", { timeZone: tz });
+        return `Scheduled "${description}" (ID: ${id}). Next run: ${nextRunStr}.`;
       },
     }),
   );
@@ -180,15 +172,13 @@ export const list_scheduled_tasks = tool({
     user_id: z.string().optional().describe("Filter by creator's Discord user ID"),
   }),
   execute: async ({ user_id }) => {
-    const tasks = await listTasksFromRegistry(user_id ? { userId: user_id } : undefined);
+    const tasks = await listScheduledTasks(user_id ? { userId: user_id } : undefined);
     if (!tasks.length) return "No active scheduled tasks.";
 
     return tasks
       .map((t) => {
         const schedStr =
-          t.schedule.type === "once"
-            ? `once at ${t.schedule.at}`
-            : `recurring (${t.schedule.cron})`;
+          t.scheduleType === ScheduleType.Once ? `once at ${t.runAt}` : `recurring (${t.cron})`;
         return `- **${t.description}** (ID: ${t.id}) — ${schedStr}, ${t.action.type} action`;
       })
       .join("\n");
@@ -198,17 +188,15 @@ export const list_scheduled_tasks = tool({
 export const cancel_task = approval(
   tool({
     description:
-      "Cancel a scheduled task by its ID. This stops the workflow and removes the task from the registry.",
+      "Cancel a scheduled task by its ID. This marks the task inactive so its next wake-up is a no-op.",
     inputSchema: z.object({
       task_id: z.string().describe("The task ID to cancel"),
     }),
     execute: async ({ task_id }) => {
-      try {
-        await getRun(task_id).cancel();
-      } catch {
-        // Workflow may already be completed/cancelled
-      }
-      await removeTask(task_id);
+      await updateScheduledTask(task_id, {
+        status: ScheduledTaskStatus.Cancelled,
+        nextRunAt: null,
+      });
       return `Task ${task_id} cancelled.`;
     },
   }),

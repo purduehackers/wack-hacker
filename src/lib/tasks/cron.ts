@@ -1,4 +1,4 @@
-const DEFAULT_TZ = "America/Indiana/Indianapolis";
+import { DEFAULT_TIMEZONE } from "./constants.ts";
 
 function parseField(field: string, min: number, max: number): Set<number> {
   const values = new Set<number>();
@@ -70,7 +70,7 @@ function fromTZ(
  * Supports: `*`, ranges (`1-5`), lists (`1,3,5`), and steps (`*​/15`).
  */
 export function nextOccurrence(cron: string, after: Date, timezone?: string): Date {
-  const tz = timezone ?? DEFAULT_TZ;
+  const tz = timezone ?? DEFAULT_TIMEZONE;
   const fields = parseCron(cron);
 
   // Start one minute past `after` in the target timezone
