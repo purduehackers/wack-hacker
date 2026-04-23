@@ -1,6 +1,6 @@
 # Streaming
 
-`src/lib/ai/streaming.ts` exports `streamTurn(discord, channelId, messages, serializedContext, taskId?)`. This is the function `chatWorkflow` and `taskWorkflow` actually call — it owns the entire loop from "bot was mentioned" to "Discord message is updated".
+`src/lib/ai/streaming.ts` exports `streamTurn(discord, channelId, messages, serializedContext, taskId?)`. This is the function `chatWorkflow` and the `scheduled-task-fire` queue handler actually call — it owns the entire loop from "bot was mentioned" to "Discord message is updated".
 
 `messages` is the full `ChatMessage[]` conversation history so far; the **last entry is the current user input** and prior entries are passed to the model as assistant/user turns. For single-turn callers (scheduled tasks), wrap the prompt as `[{ role: "user", content: prompt }]`.
 
@@ -58,6 +58,6 @@ Attachments are only applied to the current turn's user message — not to prior
 ## Where streamTurn gets called
 
 - **`chatWorkflow` → `runTurn` → `streamTurn`** — for every user turn. `runTurn` is marked `"use step"` so the workflow checkpoints its output.
-- **`taskWorkflow` → `executeAction` → `streamTurn`** — for scheduled tasks with `action.type === "agent"`. A synthetic `AgentContext` is built with `username: "system"` and `nickname: "Scheduled Task"`.
+- **`scheduled-task-fire` handler → `executeAction` → `streamTurn`** — for scheduled tasks with `action.type === "agent"`. A synthetic `AgentContext` is built with `username: "system"` and `nickname: "Scheduled Task"`, with a fresh `nowISO` captured at fire time.
 
 You should not call `streamTurn` from anywhere else.

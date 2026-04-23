@@ -55,11 +55,22 @@ describe("nextOccurrence", () => {
     expect(next.toISOString()).toBe("2027-01-01T05:00:00.000Z");
   });
 
-  it("uses default timezone (Indianapolis) when none specified", () => {
+  it("uses default timezone (America/New_York) when none specified", () => {
     const after = new Date("2026-04-08T14:00:00Z"); // 10 AM EDT
     const next = nextOccurrence("0 9 * * *", after);
-    // Indianapolis is also EDT (UTC-4) in April
+    // America/New_York is EDT (UTC-4) in April
     expect(next.toISOString()).toBe("2026-04-09T13:00:00.000Z");
+  });
+
+  it("handles DST spring-forward (non-existent 2:30 AM maps to the next valid instant)", () => {
+    // March 8, 2026: clocks jump 2:00 AM EST → 3:00 AM EDT in America/New_York.
+    // A cron of `30 2 * * *` on March 8 has no 2:30 AM local time; the parser
+    // should resolve to the next real instant, which is 3:30 AM EDT (07:30 UTC).
+    const after = new Date("2026-03-08T06:00:00Z"); // 1 AM EST
+    const next = nextOccurrence("30 2 * * *", after, "America/New_York");
+    // 3:30 AM EDT = 07:30 UTC. The non-existent 2:30 wall-clock collapses
+    // forward through the DST boundary rather than erroring.
+    expect(next.toISOString()).toBe("2026-03-08T07:30:00.000Z");
   });
 
   it("throws for invalid cron expression", () => {

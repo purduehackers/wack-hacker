@@ -8,7 +8,7 @@ Next.js compiles each `route.ts` into its own Vercel Function. Fluid Compute reu
 | ------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | `src/app/api/[[...route]]/route.ts`   | Hono catch-all: mounts `/api/discord/gateway`, `/api/discord/interactions`, `/api/crons/:name`. |
 | `src/app/api/discord/events/route.ts` | Standalone queue consumer for `discord-events` (calls `processEvent` → `EventRouter`).          |
-| `src/app/api/tasks/route.ts`          | Standalone queue consumer for `tasks` (wakes a `taskWorkflow`).                                 |
+| `src/app/api/tasks/route.ts`          | Standalone queue consumer for `tasks` (dispatches by `envelope.task` name).                     |
 
 ## Why two consumers exist as standalone files
 

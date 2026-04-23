@@ -1,37 +1,56 @@
-export interface TaskMeta {
-  /** Workflow run ID — doubles as the unique task identifier. */
-  id: string;
-  /** Human-readable summary shown in list_tasks output. */
-  description: string;
-  action: TaskAction;
-  schedule: TaskSchedule;
-  context: TaskContext;
-  createdAt: string;
-}
+import type { ScheduledTaskStatus, ScheduleType } from "./enums.ts";
 
 export type TaskAction =
   | { type: "message"; channelId: string; content: string }
   | { type: "agent"; channelId: string; prompt: string };
 
-export interface TaskSchedule {
-  type: "once" | "recurring";
-  /** ISO 8601 datetime — used for one-time tasks. */
-  at?: string;
-  /** 5-field cron expression — used for recurring tasks. */
-  cron?: string;
-  /** IANA timezone. Defaults to America/Indiana/Indianapolis. */
-  timezone?: string;
-}
-
-export interface TaskContext {
+export interface ScheduledTaskRow {
+  id: string;
   userId: string;
   channelId: string;
-  /**
-   * Discord role IDs the scheduler held at schedule time. Rehydrated into the
-   * scheduled `AgentContext` so the scheduled run resolves to the same
-   * `UserRole` (and therefore the same delegate toolset) the scheduler had.
-   * Role is re-resolved at execute time, so a revocation between scheduling
-   * and firing is respected.
-   */
-  memberRoles?: string[];
+  description: string;
+  scheduleType: ScheduleType;
+  runAt: string | null;
+  cron: string | null;
+  timezone: string | null;
+  action: TaskAction;
+  memberRoles: string[] | null;
+  status: ScheduledTaskStatus;
+  nextRunAt: string | null;
+  queueMessageId: string | null;
+  lastFiredAt: string | null;
+  fireCount: number;
+  maxDriftMs: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type NewScheduledTask = Pick<
+  ScheduledTaskRow,
+  | "id"
+  | "userId"
+  | "channelId"
+  | "description"
+  | "scheduleType"
+  | "runAt"
+  | "cron"
+  | "timezone"
+  | "action"
+  | "memberRoles"
+  | "status"
+  | "nextRunAt"
+  | "queueMessageId"
+>;
+
+export type ScheduledTaskPatch = Partial<
+  Pick<
+    ScheduledTaskRow,
+    "status" | "nextRunAt" | "queueMessageId" | "lastFiredAt" | "fireCount" | "maxDriftMs"
+  >
+>;
+
+export interface ScheduledTaskFirePayload {
+  taskId: string;
+  /** Original ISO target; unchanged across checkpoint hops. */
+  targetIso: string;
 }

@@ -21,4 +21,4 @@ The subagent is **progressive**: it starts with a small discovery toolkit plus a
 
 ## Where they plug in
 
-The orchestrator is only instantiated inside `streamTurn`, which is in turn only called from `chatWorkflow` and `taskWorkflow` (see [Workflows](../workflows/README.md)). You should rarely need to call `createOrchestrator` directly from anywhere else.
+The orchestrator is only instantiated inside `streamTurn`, which is in turn only called from `chatWorkflow` and the scheduled-task fire handler (see [Workflows](../workflows/README.md)). You should rarely need to call `createOrchestrator` directly from anywhere else.

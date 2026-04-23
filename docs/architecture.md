@@ -44,9 +44,10 @@ Three things are happening at once:
                        │
                        ▼
       ┌───────────────────────────────────────────┐
-      │              Vercel Workflows             │
+      │             Durability layer              │
       │  ┌────────────────┐   ┌────────────────┐  │
-      │  │  chatWorkflow  │   │  taskWorkflow  │  │
+      │  │  chatWorkflow  │   │ scheduled_tasks│  │
+      │  │   (Workflow)   │   │  (Turso table) │  │
       │  └────────┬───────┘   └────────▲───────┘  │
       └───────────┼────────────────────┼──────────┘
                   │                    │
@@ -66,7 +67,7 @@ Three things are happening at once:
 - `cron → /gateway` keeps the discord.js client alive (see [Discord § gateway leader election](./discord/gateway.md)).
 - The bidi arrow between `Discord` and `/gateway` is the WebSocket: events flow up, heartbeats and replies flow down.
 - `/interactions` is HTTP and signature-verified; it never goes through the queue.
-- `Orchestrator` publishes to the `tasks` queue when an agent calls `schedule_task`. The queue consumer (`/api/tasks`) starts a `taskWorkflow`, which can in turn spawn more agent runs at scheduled times.
+- `Orchestrator` inserts a `scheduled_tasks` row and publishes to the `tasks` queue with `delaySeconds` when an agent calls `schedule_task`. When the queue delivers, the `scheduled-task-fire` handler reads the row, runs the action, and — for recurring tasks — enqueues the next occurrence.
 
 ## Agents
 
@@ -76,7 +77,6 @@ Three things are happening at once:
   │  Claude Sonnet 4.6 · via AI Gateway         │
   │                                             │
   │  tools                                      │
-  │   · current_time                            │
   │   · documentation                           │
   │   · resolve_organizer                       │
   │   · schedule_task                           │

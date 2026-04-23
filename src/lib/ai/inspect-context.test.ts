@@ -172,7 +172,7 @@ describe("breakdownFromSnapshot — tool partitioning", () => {
     const snap = {
       ...baseSnap,
       tools: [
-        { name: "current_time", description: "time", inputSchema: {} },
+        { name: "resolve_organizer", description: "resolve", inputSchema: {} },
         { name: "documentation", description: "docs", inputSchema: {} },
         { name: "delegate_linear", description: "linear", inputSchema: {} },
         { name: "delegate_github", description: "github", inputSchema: {} },
@@ -181,7 +181,7 @@ describe("breakdownFromSnapshot — tool partitioning", () => {
     const out = await breakdownFromSnapshot(snap, fetchInfo);
     const tools = out.categories.find((c) => c.label === "Tools");
     const delegates = out.categories.find((c) => c.label === "Delegate agents");
-    expect(tools?.items?.map((i) => i.name)).toEqual(["current_time", "documentation"]);
+    expect(tools?.items?.map((i) => i.name)).toEqual(["resolve_organizer", "documentation"]);
     expect(delegates?.items?.map((i) => i.name)).toEqual(["delegate_linear", "delegate_github"]);
     for (const item of [...(tools?.items ?? []), ...(delegates?.items ?? [])]) {
       expect(item.estimatedTokens).toBeGreaterThan(0);

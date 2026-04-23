@@ -15,7 +15,6 @@ The orchestrator is **flat**: all tools are visible from the start. There is no 
 
 These are always present, regardless of role:
 
-- **`current_time`** — current wall clock and timezone, used for date math.
 - **`documentation`** — search and quote from [ask.purduehackers.com](https://ask.purduehackers.com).
 - **`resolve_organizer`** — authoritative name-to-platform-ID lookup for the Purdue Hackers organizer roster stored in Vercel Edge Config. Returns the caller's Discord/Linear/Notion/Sentry/GitHub/Figma IDs so the orchestrator can forward real IDs to delegates instead of free-text names. The `/identity` slash command is what writes into that roster. See `src/lib/protocol/organizers/` for the reader/writer.
 - **`schedule_task`**, **`list_scheduled_tasks`**, **`cancel_task`** — scheduling tools that publish to, read from, or cancel jobs in the `tasks` queue. `schedule_task` and `cancel_task` are wrapped with [`approval()`](./approvals.md) so the user confirms via Discord buttons. See [Workflows § scheduled tasks](../workflows/scheduling.md).
@@ -32,10 +31,11 @@ The resulting tools are keyed by `delegate_<domain>` and merged into the orchest
 
 ## System prompt
 
-The static template is defined at the top of `orchestrator.ts`. It has four sections:
+The static template is defined at the top of `orchestrator.ts`. It has five sections:
 
 - `<identity>` — role, audience, first-person voice.
-- `<date>` — a `{{DATE}}` placeholder that `buildInstructions` replaces with `context.date`.
+- `<date>` — `{{DATE}}`, `{{NOW_ISO}}`, `{{USER_TZ}}` placeholders that `buildInstructions` replaces with `context.date`, `context.nowISO`, and `context.timezone`. The ISO instant lets the model compute relative schedules ("in 10 minutes") without guessing; the IANA timezone defaults to `America/New_York` and gates interpretation of clock times.
+- `<scheduling_rules>` — reminds the model to use the injected instant + timezone when computing schedules, and to emit `run_at` as a fully-qualified ISO 8601 string.
 - `<tools>` — a human-readable description of the base and delegate tools, so the model knows when to pick each one. It covers the full 12-domain delegate set (listed in [Delegation & subagents](./subagents.md) along with their per-domain overrides); `delegate_code` is called out separately as admin-only. **When you add a base tool or a new delegate domain, update this section.**
 - `<tone>`, `<formatting>` — output style rules (Discord markdown, 2000 char limit, no preamble, etc.).
 

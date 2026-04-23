@@ -101,6 +101,18 @@ describe("AgentContext.fromPacket", () => {
   });
 });
 
+describe("AgentContext.fromPacket: scheduling fields", () => {
+  it("captures the current instant as ISO 8601", () => {
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    expect(ctx.nowISO).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    expect(Math.abs(Date.now() - new Date(ctx.nowISO).getTime())).toBeLessThan(5_000);
+  });
+
+  it("defaults timezone to America/New_York", () => {
+    expect(AgentContext.fromPacket(messagePacket("hello")).timezone).toBe("America/New_York");
+  });
+});
+
 describe("AgentContext serialization", () => {
   it("roundtrips through toJSON/fromJSON", () => {
     const original = AgentContext.fromPacket(
@@ -122,6 +134,23 @@ describe("AgentContext serialization", () => {
     expect(restored.channel).toEqual(original.channel);
     expect(restored.thread).toEqual(original.thread);
     expect(restored.attachments).toEqual(original.attachments);
+    expect(restored.nowISO).toBe(original.nowISO);
+    expect(restored.timezone).toBe(original.timezone);
+  });
+
+  it("defaults nowISO + timezone when deserializing a legacy payload", () => {
+    // Legacy serialized contexts pre-date nowISO/timezone — fromJSON must
+    // still accept them and compute fresh defaults so the orchestrator gets
+    // a usable `{{NOW_ISO}}` for the turn.
+    const ctx = AgentContext.fromJSON({
+      userId: "u",
+      username: "u",
+      nickname: "u",
+      channel: { id: "c", name: "c" },
+      date: "Monday, April 13, 2026",
+    });
+    expect(ctx.timezone).toBe("America/New_York");
+    expect(Math.abs(Date.now() - new Date(ctx.nowISO).getTime())).toBeLessThan(5_000);
   });
 });
 
@@ -177,6 +206,15 @@ describe("AgentContext.buildInstructions", () => {
     const result = ctx.buildInstructions("Today is {{DATE}}.");
     expect(result).not.toContain("{{DATE}}");
     expect(result).toContain(ctx.date);
+  });
+
+  it("replaces {{NOW_ISO}} and {{USER_TZ}} placeholders", () => {
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    const result = ctx.buildInstructions("Now: {{NOW_ISO}}\nTZ: {{USER_TZ}}");
+    expect(result).not.toContain("{{NOW_ISO}}");
+    expect(result).not.toContain("{{USER_TZ}}");
+    expect(result).toContain(ctx.nowISO);
+    expect(result).toContain(ctx.timezone);
   });
 
   it("appends execution context block", () => {
