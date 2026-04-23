@@ -30,7 +30,7 @@ vi.mock("@vercel/edge-config", () => ({
 }));
 
 const { AgentContext } = await import("./context.ts");
-const { buildUserMessage, streamTurn } = await import("./streaming.ts");
+const { buildUserMessage, parseModelSlug, streamTurn } = await import("./streaming.ts");
 type OrchestratorFactory = import("./streaming.ts").OrchestratorFactory;
 
 type StreamEvent = Record<string, unknown>;
@@ -482,6 +482,112 @@ describe("streamTurn: messages array", () => {
     expect(typeof messages[0].content).toBe("string");
     expect(typeof messages[1].content).toBe("string");
     expect(Array.isArray(messages[2].content)).toBe(true);
+  });
+});
+
+describe("parseModelSlug", () => {
+  it("splits a provider/model slug", () => {
+    expect(parseModelSlug("anthropic/claude-sonnet-4.6")).toEqual({
+      provider: "anthropic",
+      model: "claude-sonnet-4.6",
+    });
+  });
+
+  it("returns undefined provider for a bare model name", () => {
+    expect(parseModelSlug("claude-sonnet-4.6")).toEqual({
+      provider: undefined,
+      model: "claude-sonnet-4.6",
+    });
+  });
+
+  it("treats a leading slash as no provider", () => {
+    expect(parseModelSlug("/foo")).toEqual({
+      provider: undefined,
+      model: "/foo",
+    });
+  });
+});
+
+describe("streamTurn: result shape", () => {
+  it("returns tool names, model slug, and the discord message id", async () => {
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+      createAgent: fakeOrchestrator(["Done."], { toolCallsPerStep: 2, stepCount: 2 }),
+    });
+
+    expect(result.model).toBe("anthropic/claude-sonnet-4.6");
+    // Two steps × two tool calls = four "mock" entries from fakeOrchestrator.
+    expect(result.usage.toolNames).toEqual(["mock", "mock", "mock", "mock"]);
+    expect(result.discordMessageId).toBe("msg-1");
+  });
+
+  it("returns empty toolNames when the turn makes no tool calls", async () => {
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+      createAgent: fakeOrchestrator(["Hi."]),
+    });
+    expect(result.usage.toolNames).toEqual([]);
+  });
+
+  it("returns the fallback message id when the placeholder edit fails", async () => {
+    const discord = createMockAPI();
+    discord.channels.editMessage = async () => {
+      throw new Error("rate limited");
+    };
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+      createAgent: fakeOrchestrator(["Hello!"]),
+    });
+    // Mock counter starts at 1 for the placeholder; the fallback createMessage
+    // is the second call, so `msg-2`.
+    expect(result.discordMessageId).toBe("msg-2");
+  });
+});
+
+describe("streamTurn: stream-event edge cases", () => {
+  it("handles tool-input-start without a toolName", async () => {
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+      createAgent: fakeOrchestrator(["Done."], {
+        extraEvents: [{ type: "tool-input-start" }],
+      }),
+    });
+    // No toolName means no activity indicator was appended — the reply text
+    // should still be the streamed content, not wrapped in `Calling …`.
+    expect(result.text).toBe("Done.");
+  });
+
+  it("treats a text-delta without a text field as an empty string", async () => {
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+      createAgent: fakeOrchestrator(["First."], {
+        extraEvents: [{ type: "text-delta" }],
+      }),
+    });
+    expect(result.text).toBe("First.");
+  });
+
+  it("returns empty preview when subagent output has no text parts", async () => {
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+      createAgent: fakeOrchestrator(["Final."], {
+        extraEvents: [
+          {
+            type: "tool-result",
+            preliminary: true,
+            // Only a non-text part — findLast(isTextUIPart) returns undefined,
+            // so the `?? ""` fallback kicks in and the preview is skipped.
+            output: { parts: [{ type: "tool-call" }] },
+          },
+        ],
+      }),
+    });
+    expect(result.text).toBe("Final.");
   });
 });
 

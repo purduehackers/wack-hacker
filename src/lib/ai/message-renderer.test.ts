@@ -454,4 +454,16 @@ describe("MessageRenderer: finalize edge cases", () => {
     const lastSend = sends[sends.length - 1];
     expect((lastSend[1] as { content: string }).content).toContain("Hello!");
   });
+
+  it("finalize throws when called before init()", async () => {
+    const discord = createMockAPI();
+    const renderer = new MessageRenderer(asAPI(discord), "ch-1");
+    const meta: FooterMeta = {
+      elapsedMs: 1000,
+      totalTokens: 100,
+      toolCallCount: 0,
+      stepCount: 1,
+    };
+    await expect(renderer.finalize(meta)).rejects.toThrow(/before init/);
+  });
 });

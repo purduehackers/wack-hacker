@@ -244,11 +244,11 @@ export interface StreamTurnResult {
   usage: TurnUsage;
   /**
    * Primary Discord message id for the reply (either the edited placeholder
-   * or a fallback createMessage). Null only if the renderer never saw an
-   * `init()` call successfully persist a message id — not expected in
-   * practice.
+   * or a fallback `createMessage`). Always a string because `streamTurn`
+   * runs `renderer.init()` before it can reach `finalize()`, and `finalize()`
+   * throws if that invariant is broken.
    */
-  discordMessageId: string | null;
+  discordMessageId: string;
   /**
    * Full gateway model slug used by the orchestrator for this turn, e.g.
    * `anthropic/claude-sonnet-4.6`. Included so the wide event records what

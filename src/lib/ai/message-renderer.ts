@@ -73,19 +73,26 @@ export class MessageRenderer {
    * or the fallback new message — plus the ids of any overflow chunks that
    * were sent as additional messages. These surface on the turn's wide event
    * and span so operators can resolve a trace back to the Discord reply.
+   *
+   * Requires `init()` to have completed first; throws otherwise so callers
+   * don't accidentally skip the placeholder message and silently lose the
+   * primary reply id from observability.
    */
-  async finalize(meta: FooterMeta): Promise<{ messageId: string | null; overflowIds: string[] }> {
+  async finalize(meta: FooterMeta): Promise<{ messageId: string; overflowIds: string[] }> {
+    if (this.messageId === null) {
+      throw new Error("MessageRenderer.finalize() called before init()");
+    }
+    let primaryId = this.messageId;
+
     let footer = MessageRenderer.formatFooter(meta);
     if (this.taskId) footer += `\n-# Task: ${this.taskId}`;
 
     const finalText = this.text || "I didn't have anything to say.";
     const chunks = MessageRenderer.splitWithFooter(finalText, footer);
 
-    let primaryId = this.messageId;
-
     // Edit the original message with the first chunk
     try {
-      await this.discord.channels.editMessage(this.channelId, this.messageId!, {
+      await this.discord.channels.editMessage(this.channelId, primaryId, {
         content: chunks[0],
       });
     } catch (err) {

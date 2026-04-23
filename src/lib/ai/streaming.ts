@@ -27,7 +27,7 @@ import { TurnUsageTracker } from "./turn-usage.ts";
  * provider + model parts for separate span attributes. Falls back to the
  * whole slug as the model name when no provider prefix is present.
  */
-function parseModelSlug(slug: string): { provider: string | undefined; model: string } {
+export function parseModelSlug(slug: string): { provider: string | undefined; model: string } {
   const slash = slug.indexOf("/");
   if (slash <= 0) return { provider: undefined, model: slug };
   return { provider: slug.slice(0, slash), model: slug.slice(slash + 1) };
@@ -179,7 +179,7 @@ async function runStreamTurn(args: {
     "ai.tool_calls": usage.toolCallCount,
     "ai.steps": usage.stepCount,
     ...(usage.toolNames.length > 0 ? { "ai.tool_names": usage.toolNames } : {}),
-    ...(finalized.messageId ? { "chat.discord_message_id": finalized.messageId } : {}),
+    "chat.discord_message_id": finalized.messageId,
   });
 
   logger.emit({
@@ -248,7 +248,7 @@ async function renderStream(
 
 interface FinalizeResult {
   metadataError: unknown;
-  finalized: { messageId: string | null; overflowIds: string[] };
+  finalized: { messageId: string; overflowIds: string[] };
 }
 
 async function finalizeTurn(args: {
