@@ -11,10 +11,11 @@ import {
 } from "ai";
 import { z } from "zod";
 
+import { createWideLogger } from "@/lib/logging/wide";
 import { countMetric, recordDistribution } from "@/lib/metrics";
 
 import type { AgentContext } from "./context.ts";
-import type { SubagentSpec } from "./types.ts";
+import type { SubagentSpec, TelemetryMetadata } from "./types.ts";
 
 import { wrapApprovalTools } from "./approvals/index.ts";
 import { addCacheControl } from "./cache-control.ts";
@@ -63,6 +64,15 @@ export function recordSubagentMetrics(
   countMetric("ai.subagent.completed", { domain: spec.name });
   recordDistribution("ai.subagent.tokens", tokens, { domain: spec.name });
   recordDistribution("ai.subagent.tool_calls", toolCalls, { domain: spec.name });
+  createWideLogger({
+    op: "ai.subagent",
+    subagent: { domain: spec.name },
+  }).emit({
+    outcome: "ok",
+    tokens,
+    tool_calls: toolCalls,
+    steps: steps.length,
+  });
 }
 
 /**
@@ -92,6 +102,7 @@ export function createDelegationTool(
   spec: SubagentSpec,
   context: AgentContext,
   tracker: TurnUsageTracker,
+  extraMetadata?: TelemetryMetadata,
 ) {
   const role = context.role;
   const inputSchema = spec.inputSchema ?? DEFAULT_TASK_INPUT_SCHEMA;
@@ -136,7 +147,7 @@ export function createDelegationTool(
         experimental_telemetry: {
           isEnabled: true,
           functionId: `subagent.${spec.name}`,
-          metadata: { role, subagent: spec.name },
+          metadata: { role, subagent: spec.name, ...extraMetadata },
         },
       });
 

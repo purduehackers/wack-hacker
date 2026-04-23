@@ -1,6 +1,5 @@
 import type { API } from "@discordjs/core/http-only";
 
-import { log } from "evlog";
 import { start, resumeHook } from "workflow/api";
 
 import type { HandlerContext } from "@/bot/types";
@@ -11,9 +10,13 @@ import type { ChatHookEvent } from "@/workflows/chat";
 import { stripBotMention } from "@/bot/mention";
 import { fetchRecentMessages, fetchReferencedMessageContext } from "@/bot/recent-messages";
 import { AgentContext } from "@/lib/ai/context";
+import { createWideLogger } from "@/lib/logging/wide";
+import { countMetric } from "@/lib/metrics";
+import { setActiveSpanAttributes, withSpan } from "@/lib/otel/tracing";
 import { chatWorkflow } from "@/workflows/chat";
 
 type MessageData = MessageCreatePacketType["data"];
+type WideLogger = ReturnType<typeof createWideLogger>;
 
 async function fetchLeadInMessages(
   discord: API,
@@ -37,71 +40,173 @@ async function fetchLeadInMessages(
   return { recentMessages, referencedContext };
 }
 
-export async function handleMention(
-  packet: MessageCreatePacketType,
-  ctx: HandlerContext,
-): Promise<void> {
+interface MentionRouting {
+  sourceChannelId: string;
+  lookupThreadId: string | undefined;
+  alreadyInThread: boolean;
+}
+
+/**
+ * Try to resume an existing chat workflow by replaying the mention as a hook
+ * event. Returns `true` on success so the caller can short-circuit. Returns
+ * `false` when the workflow has expired; the caller should start fresh.
+ */
+async function tryResumeExistingWorkflow(args: {
+  packet: MessageCreatePacketType;
+  ctx: HandlerContext;
+  existing: { workflowRunId: string };
+  content: string;
+  routing: MentionRouting;
+  logger: WideLogger;
+}): Promise<boolean> {
+  const { packet, ctx, existing, content, routing, logger } = args;
+  setActiveSpanAttributes({ "chat.id": existing.workflowRunId });
+  logger.set({ chat: { id: existing.workflowRunId } });
+  try {
+    // No recentMessages fetch on resume: the lead-in context was pinned at
+    // workflow start; turn-to-turn conversation memory comes from the
+    // workflow's accumulated messages array instead.
+    const turnContext = AgentContext.fromPacket(packet).toJSON();
+    const event: ChatHookEvent = { type: "message", content, context: turnContext };
+    await resumeHook(existing.workflowRunId, event);
+    await ctx.store.touch(routing.sourceChannelId, routing.lookupThreadId);
+    countMetric("chat.workflow.resumed");
+    return true;
+  } catch (err) {
+    countMetric("chat.workflow.resume_expired");
+    logger.warn("resume failed, starting fresh", { reason: String(err) });
+    await ctx.store.delete(routing.sourceChannelId, routing.lookupThreadId);
+    return false;
+  }
+}
+
+/**
+ * Ensure the conversation has a dedicated thread. If the mention is already
+ * inside a thread we reuse it; otherwise we try to open one. A failure to open
+ * the thread is non-fatal — the conversation falls back to the source channel.
+ */
+async function ensureConversationThread(args: {
+  ctx: HandlerContext;
+  packet: MessageCreatePacketType;
+  routing: MentionRouting;
+  content: string;
+  logger: WideLogger;
+}): Promise<{
+  conversationChannelId: string;
+  conversationThreadId: string | undefined;
+  createdThread: { id: string; name: string } | undefined;
+}> {
+  const { ctx, packet, routing, content, logger } = args;
   const { data } = packet;
-  const sourceChannelId = data.channel.id;
-  const alreadyInThread = Boolean(data.thread);
-  const lookupThreadId = alreadyInThread ? sourceChannelId : undefined;
-
-  const content = stripBotMention(data.content, ctx.botUserId);
-
-  if (!content) {
-    await ctx.discord.channels.createMessage(sourceChannelId, {
-      content: "Hey! What can I help you with?",
-    });
-    return;
-  }
-
-  const existing = await ctx.store.get(sourceChannelId, lookupThreadId);
-
-  if (existing) {
-    log.info("mention", `Resuming workflow ${existing.workflowRunId} for ${data.author.username}`);
-    try {
-      // No recentMessages fetch on resume: the lead-in context was pinned at
-      // workflow start; turn-to-turn conversation memory comes from the
-      // workflow's accumulated messages array instead.
-      const turnContext = AgentContext.fromPacket(packet).toJSON();
-      const event: ChatHookEvent = { type: "message", content, context: turnContext };
-      await resumeHook(existing.workflowRunId, event);
-      await ctx.store.touch(sourceChannelId, lookupThreadId);
-      return;
-    } catch (err) {
-      log.info(
-        "mention",
-        `Workflow ${existing.workflowRunId} expired, starting fresh: ${String(err)}`,
-      );
-      await ctx.store.delete(sourceChannelId, lookupThreadId);
-    }
-  }
-
-  let conversationChannelId = sourceChannelId;
-  let conversationThreadId = lookupThreadId;
+  let conversationChannelId = routing.sourceChannelId;
+  let conversationThreadId = routing.lookupThreadId;
   let createdThread: { id: string; name: string } | undefined;
 
-  if (!alreadyInThread) {
+  if (!routing.alreadyInThread) {
     try {
       const threadName =
         `${data.author.nickname ?? data.author.username} — ${content.slice(0, 54)}`.trim();
       const thread = await ctx.discord.channels.createThread(
-        sourceChannelId,
+        routing.sourceChannelId,
         { name: threadName, auto_archive_duration: 60 },
         data.id,
       );
       conversationChannelId = thread.id;
       conversationThreadId = thread.id;
       createdThread = { id: thread.id, name: thread.name };
-      log.info("mention", `Created thread ${thread.id} for ${data.author.username}`);
+      countMetric("chat.thread.created");
+      logger.set({ chat: { thread_id: thread.id } });
     } catch (err) {
-      log.warn("mention", `Failed to create thread, replying in channel: ${String(err)}`);
+      countMetric("chat.thread.create_failed");
+      logger.warn("thread create failed", { reason: String(err) });
     }
   }
 
+  return { conversationChannelId, conversationThreadId, createdThread };
+}
+
+export async function handleMention(
+  packet: MessageCreatePacketType,
+  ctx: HandlerContext,
+): Promise<void> {
+  const { data } = packet;
+  const sourceChannelId = data.channel.id;
+
+  return withSpan(
+    "chat.mention",
+    {
+      "chat.channel_id": sourceChannelId,
+      "chat.user_id": data.author.id,
+      "chat.already_in_thread": Boolean(data.thread),
+    },
+    async () => {
+      const alreadyInThread = Boolean(data.thread);
+      const lookupThreadId = alreadyInThread ? sourceChannelId : undefined;
+      const logger = createWideLogger({
+        op: "chat.mention",
+        chat: {
+          channel_id: sourceChannelId,
+          user_id: data.author.id,
+          already_in_thread: alreadyInThread,
+        },
+      });
+      const startTime = Date.now();
+
+      const content = stripBotMention(data.content, ctx.botUserId);
+
+      if (!content) {
+        countMetric("chat.mention.empty");
+        await ctx.discord.channels.createMessage(sourceChannelId, {
+          content: "Hey! What can I help you with?",
+        });
+        logger.emit({ outcome: "empty", duration_ms: Date.now() - startTime });
+        return;
+      }
+
+      const existing = await ctx.store.get(sourceChannelId, lookupThreadId);
+      const routing: MentionRouting = { sourceChannelId, lookupThreadId, alreadyInThread };
+
+      if (existing) {
+        const resumed = await tryResumeExistingWorkflow({
+          packet,
+          ctx,
+          existing,
+          content,
+          routing,
+          logger,
+        });
+        if (resumed) {
+          logger.emit({ outcome: "resumed", duration_ms: Date.now() - startTime });
+          return;
+        }
+      }
+
+      await startFreshWorkflow({ packet, ctx, content, routing, logger, startTime });
+    },
+  );
+}
+
+/**
+ * Start a fresh chat workflow for a mention that didn't have a live resume
+ * target. Creates a thread (best-effort), fetches lead-in context, kicks off
+ * `chatWorkflow`, and emits the final wide event.
+ */
+async function startFreshWorkflow(args: {
+  packet: MessageCreatePacketType;
+  ctx: HandlerContext;
+  content: string;
+  routing: MentionRouting;
+  logger: WideLogger;
+  startTime: number;
+}): Promise<void> {
+  const { packet, ctx, content, routing, logger, startTime } = args;
+  const { data } = packet;
+  const { conversationChannelId, conversationThreadId, createdThread } =
+    await ensureConversationThread({ ctx, packet, routing, content, logger });
+
   const { recentMessages, referencedContext } = await fetchLeadInMessages(
     ctx.discord,
-    sourceChannelId,
+    routing.sourceChannelId,
     data,
   );
 
@@ -110,8 +215,6 @@ export async function handleMention(
     recentMessages,
     referencedContext,
   }).toJSON();
-
-  log.info("mention", `Starting workflow for ${data.author.username} in ${data.channel.name}`);
 
   const run = await start(chatWorkflow, [
     {
@@ -122,12 +225,24 @@ export async function handleMention(
     },
   ]);
 
-  log.info("mention", `Workflow ${run.runId} started`);
+  setActiveSpanAttributes({ "chat.id": run.runId });
+  countMetric("chat.workflow.started");
 
   await ctx.store.set({
     workflowRunId: run.runId,
-    channelId: sourceChannelId,
+    channelId: routing.sourceChannelId,
     threadId: conversationThreadId,
     startedAt: new Date().toISOString(),
+  });
+
+  logger.emit({
+    outcome: "started",
+    duration_ms: Date.now() - startTime,
+    chat: {
+      id: run.runId,
+      workflow_run_id: run.runId,
+      lead_in_count: recentMessages?.length ?? 0,
+      referenced_count: referencedContext?.length ?? 0,
+    },
   });
 }

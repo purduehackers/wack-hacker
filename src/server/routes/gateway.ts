@@ -10,6 +10,9 @@ import { monotonicFactory } from "ulid";
 import type { Packet } from "@/lib/protocol/types";
 
 import { env } from "@/env";
+import { createWideLogger } from "@/lib/logging/wide";
+import { countMetric, recordDuration } from "@/lib/metrics";
+import { withSpan } from "@/lib/otel/tracing";
 import { PacketCodec } from "@/lib/protocol/packets";
 import { isTextChannel } from "@/lib/protocol/utils";
 import { send } from "@/lib/tasks/queue/client";
@@ -35,11 +38,22 @@ end`;
 const ulid = monotonicFactory();
 
 async function relay(packet: Packet, oidcToken: string): Promise<void> {
-  try {
-    await send(DISCORD_EVENT_TOPIC, PacketCodec.encode(packet), { oidcToken });
-  } catch (err) {
-    log.error("gateway", `Failed to publish packet: ${String(err)}`);
-  }
+  return withSpan("gateway.relay", { "packet.type": packet.type }, async () => {
+    const logger = createWideLogger({
+      op: "gateway.relay",
+      event: { type: packet.type },
+    });
+    const startTime = Date.now();
+    try {
+      await send(DISCORD_EVENT_TOPIC, PacketCodec.encode(packet), { oidcToken });
+      countMetric("gateway.packet.relayed", { type: packet.type });
+      logger.emit({ outcome: "ok", duration_ms: Date.now() - startTime });
+    } catch (err) {
+      countMetric("gateway.packet.relay_failed", { type: packet.type });
+      logger.error(err as Error);
+      logger.emit({ outcome: "error", duration_ms: Date.now() - startTime });
+    }
+  });
 }
 
 type Publish = (packet: Packet) => Promise<void>;
@@ -52,9 +66,11 @@ async function releaseLease(redis: Redis, listenerId: string): Promise<void> {
       [listenerId],
     );
     if (released === 1) {
+      countMetric("gateway.lease.released");
       log.info("gateway", `released lease for ${listenerId}`);
     }
   } catch (err) {
+    countMetric("gateway.lease.release_failed");
     log.error("gateway", `lease release failed: ${String(err)}`);
   }
 }
@@ -76,17 +92,22 @@ async function startGatewayListener(client: Client): Promise<{ hold: Promise<voi
   const redis = Redis.fromEnv();
   const listenerId = `gw_${ulid()}`;
   const abort = new AbortController();
+  const logger = createWideLogger({
+    op: "gateway.listener",
+    gateway: { listener_id: listenerId },
+  });
 
-  log.info("gateway", `listener ${listenerId} starting`);
+  countMetric("gateway.listener.started");
+  logger.info("listener starting");
 
   const existing = await redis.get<string>(LEADER_KEY).catch(() => null);
   await redis.set(LEADER_KEY, listenerId, { px: LEASE_TTL_MS });
 
   if (existing && existing !== listenerId) {
-    log.info(
-      "gateway",
-      `prior leader ${existing} detected, waiting ${HANDOFF_WAIT_MS}ms for handoff`,
-    );
+    logger.info("prior leader detected, waiting for handoff", {
+      prior_leader: existing,
+      handoff_wait_ms: HANDOFF_WAIT_MS,
+    });
     await new Promise((r) => setTimeout(r, HANDOFF_WAIT_MS));
   }
 
@@ -95,16 +116,15 @@ async function startGatewayListener(client: Client): Promise<{ hold: Promise<voi
     try {
       const current = await redis.get<string>(LEADER_KEY);
       if (current !== listenerId) {
-        log.info(
-          "gateway",
-          `leadership lost (current=${current ?? "null"}), aborting ${listenerId}`,
-        );
+        countMetric("gateway.leader.lost");
+        logger.info("leadership lost", { current_leader: current ?? null });
         abort.abort();
         return;
       }
       await redis.set(LEADER_KEY, listenerId, { px: LEASE_TTL_MS });
     } catch (err) {
-      log.error("gateway", `lease poll failed: ${String(err)}`);
+      countMetric("gateway.lease.poll_failed");
+      logger.warn("lease poll failed", { reason: String(err) });
     }
   }, POLL_INTERVAL_MS);
 
@@ -116,9 +136,12 @@ async function startGatewayListener(client: Client): Promise<{ hold: Promise<voi
     const ready = once(client, Events.ClientReady, { signal: readySignal });
     await client.login(env.DISCORD_BOT_TOKEN);
     await ready;
-    log.info("gateway", `ready for ${listenerId}`);
+    countMetric("gateway.listener.ready");
+    logger.set({ ready: true });
   } catch (err) {
-    log.error("gateway", `login/ready failed: ${String(err)}`);
+    countMetric("gateway.listener.login_failed");
+    logger.error(err as Error);
+    logger.emit({ outcome: "login_failed" });
     clearInterval(poll);
     await destroyClient(client, listenerId);
     await releaseLease(redis, listenerId);
@@ -126,22 +149,22 @@ async function startGatewayListener(client: Client): Promise<{ hold: Promise<voi
   }
 
   const hold = (async () => {
+    const holdStart = Date.now();
+    let exitReason: string = "hold_elapsed";
     try {
       // Fast-path: abort fired between ready and hold-executor running.
       // AbortSignal listeners added post-abort never fire, so teardown
       // would otherwise wait out the full HOLD_MS.
       if (abort.signal.aborted) {
-        log.info("gateway", `hold skipped, already aborted for ${listenerId}`);
+        exitReason = "aborted_pre_hold";
         return;
       }
       await new Promise<void>((resolve) => {
-        const timer = setTimeout(() => {
-          log.info("gateway", `hold elapsed for ${listenerId}`);
-          resolve();
-        }, HOLD_MS);
+        const timer = setTimeout(() => resolve(), HOLD_MS);
         abort.signal.addEventListener(
           "abort",
           () => {
+            exitReason = "aborted";
             clearTimeout(timer);
             resolve();
           },
@@ -149,9 +172,15 @@ async function startGatewayListener(client: Client): Promise<{ hold: Promise<voi
         );
       });
     } finally {
+      recordDuration("gateway.listener.hold_duration", Date.now() - holdStart);
       clearInterval(poll);
       await destroyClient(client, listenerId);
       await releaseLease(redis, listenerId);
+      logger.emit({
+        outcome: "ok",
+        exit_reason: exitReason,
+        hold_duration_ms: Date.now() - holdStart,
+      });
     }
   })();
 

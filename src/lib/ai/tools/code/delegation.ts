@@ -1,10 +1,10 @@
 import type { UIMessage } from "ai";
 
-import { log } from "evlog";
 import { z } from "zod";
 
 import type { Sandbox } from "@/lib/sandbox/types";
 
+import { createWideLogger } from "@/lib/logging/wide";
 import { countMetric } from "@/lib/metrics";
 import { getOrCreateSession } from "@/lib/sandbox/session";
 
@@ -88,20 +88,29 @@ export async function* codePostFinish(args: {
 }): AsyncGenerator<UIMessage, void, void> {
   const ctx = args.experimentalContext as CodingSandboxContext | undefined;
   if (!ctx) {
-    log.warn("code-delegation", "postFinish invoked without experimental context — skipping");
+    createWideLogger({ op: "ai.code_delegate.post_finish" }).emit({
+      outcome: "skipped",
+      reason: "no_experimental_context",
+    });
     return;
   }
   const authorUsername = (args.agentContext as AgentContext | undefined)?.username;
   const { sandbox, repo, branch } = ctx;
+  const logger = createWideLogger({
+    op: "ai.code_delegate.post_finish",
+    code_delegate: { repo, branch, thread_key: ctx.threadKey },
+  });
 
   const status = await sandbox.exec("git status --porcelain", { cwd: ctx.repoDir });
   if (status.exitCode !== 0) {
+    logger.emit({ outcome: "aborted", reason: "git_status_failed", exit_code: status.exitCode });
     yield statusMessage(
       `Post-finish aborted: \`git status\` exited ${status.exitCode}. stderr: ${truncate(status.stderr)}`,
     );
     return;
   }
   if (!status.stdout.trim()) {
+    logger.emit({ outcome: "no_changes" });
     yield statusMessage("No changes to commit. Nothing pushed; no PR opened.");
     return;
   }
@@ -110,6 +119,7 @@ export async function* codePostFinish(args: {
 
   const addResult = await sandbox.exec("git add -A", { cwd: ctx.repoDir });
   if (addResult.exitCode !== 0) {
+    logger.emit({ outcome: "staging_failed", exit_code: addResult.exitCode });
     yield statusMessage(
       `Staging failed (exit ${addResult.exitCode}). stderr: ${truncate(addResult.stderr || addResult.stdout)}`,
     );
@@ -120,6 +130,7 @@ export async function* codePostFinish(args: {
     cwd: ctx.repoDir,
   });
   if (commitResult.exitCode !== 0) {
+    logger.emit({ outcome: "commit_failed", exit_code: commitResult.exitCode });
     yield statusMessage(
       `Commit failed (exit ${commitResult.exitCode}). stderr: ${truncate(commitResult.stderr || commitResult.stdout)}`,
     );
@@ -131,6 +142,7 @@ export async function* codePostFinish(args: {
     timeoutMs: 3 * 60 * 1000,
   });
   if (push.exitCode !== 0) {
+    logger.emit({ outcome: "push_failed", exit_code: push.exitCode });
     yield statusMessage(
       `Push failed (exit ${push.exitCode}). stderr: ${truncate(push.stderr || push.stdout)}`,
     );
@@ -148,6 +160,8 @@ export async function* codePostFinish(args: {
       repoDir: ctx.repoDir,
     });
   } catch (err) {
+    logger.error(err as Error);
+    logger.emit({ outcome: "pr_open_failed" });
     yield statusMessage(
       `Branch \`${branch}\` pushed but opening the PR failed: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -155,6 +169,7 @@ export async function* codePostFinish(args: {
   }
 
   countMetric("ai.code_delegate.pr_opened");
+  logger.emit({ outcome: "pr_opened", pr_url: prUrl });
   yield statusMessage(`${args.lastAssistantText.trim()}\n\n**PR**: ${prUrl}`.trim());
 }
 

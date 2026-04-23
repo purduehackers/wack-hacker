@@ -201,12 +201,23 @@ export interface OrchestratorAgent {
 }
 
 /**
+ * Telemetry metadata passed through to every AI SDK `experimental_telemetry.metadata`
+ * call in an orchestrator + its subagents. Flat key/value pairs; the AI SDK
+ * flattens these into `ai.telemetry.metadata.<key>` span attributes so Axiom
+ * can query by `chat.id` across the whole conversation. Undefined values are
+ * tolerated so callers can build metadata from optional fields without first
+ * filtering them out.
+ */
+export type TelemetryMetadata = Record<string, string | number | undefined>;
+
+/**
  * Factory signature for `createOrchestrator`. Exported so tests can inject a
  * fake through `streamTurn`'s options bag without mocking our own modules.
  */
 export type OrchestratorFactory = (
   ctx: AgentContext,
   tracker: TurnUsageTracker,
+  extraMetadata?: TelemetryMetadata,
 ) => OrchestratorAgent;
 
 /**
@@ -218,4 +229,12 @@ export interface StreamTurnOptions {
   taskId?: string;
   /** Dependency-injected orchestrator factory; defaults to `createOrchestrator`. */
   createAgent?: OrchestratorFactory;
+  /**
+   * Workflow run id for the containing chat workflow. Used to populate
+   * `chat.*` attributes on the turn span + every AI SDK span so a whole
+   * conversation is one Axiom query (`chat.id == <workflowRunId>`).
+   */
+  workflowRunId?: string;
+  /** Turn number within the conversation (1 = first turn). */
+  turnIndex?: number;
 }

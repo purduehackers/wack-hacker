@@ -1,6 +1,5 @@
 import { API } from "@discordjs/core/http-only";
 import { REST } from "@discordjs/rest";
-import { log } from "evlog";
 import { createHook, getWorkflowMetadata } from "workflow";
 
 import type { ChatMessage, SerializedAgentContext, TurnUsage } from "@/lib/ai/types";
@@ -10,7 +9,9 @@ import { ConversationStore } from "@/bot/store";
 import { buildContextSnapshot } from "@/lib/ai/snapshot";
 import { streamTurn } from "@/lib/ai/streaming";
 import { addTurnUsage, emptyTurnUsage } from "@/lib/ai/turn-usage";
-import { countMetric } from "@/lib/metrics";
+import { createWideLogger } from "@/lib/logging/wide";
+import { countMetric, recordDuration } from "@/lib/metrics";
+import { withSpan } from "@/lib/otel/tracing";
 import { releaseSession } from "@/lib/sandbox/session";
 
 import type { ChatHookEvent, ChatPayload } from "./types";
@@ -35,10 +36,57 @@ async function runTurn(
   channelId: string,
   messages: ChatMessage[],
   serializedContext: SerializedAgentContext,
+  workflowRunId: string,
+  turnIndex: number,
 ) {
   "use step";
-  const discord = new API(new REST({ version: "10" }).setToken(process.env.DISCORD_BOT_TOKEN!));
-  return streamTurn(discord, channelId, messages, serializedContext);
+  return withSpan(
+    "workflow.chat.run_turn",
+    {
+      "chat.id": workflowRunId,
+      "chat.channel_id": channelId,
+      "chat.turn_index": turnIndex,
+      "chat.user_id": serializedContext.userId,
+    },
+    async () => {
+      const logger = createWideLogger({
+        op: "workflow.chat.run_turn",
+        chat: {
+          id: workflowRunId,
+          channel_id: channelId,
+          thread_id: serializedContext.thread?.id,
+          user_id: serializedContext.userId,
+          turn_index: turnIndex,
+        },
+      });
+      const startTime = Date.now();
+      const discord = new API(new REST({ version: "10" }).setToken(process.env.DISCORD_BOT_TOKEN!));
+      try {
+        const result = await streamTurn(discord, channelId, messages, serializedContext, {
+          workflowRunId,
+          turnIndex,
+        });
+        logger.emit({
+          outcome: "ok",
+          duration_ms: Date.now() - startTime,
+          turn: turnIndex === 1 ? "first" : "followup",
+          tokens: result.usage.totalTokens,
+          tool_calls: result.usage.toolCallCount,
+          steps: result.usage.stepCount,
+          text_length: result.text.length,
+        });
+        return result;
+      } catch (err) {
+        logger.error(err as Error);
+        logger.emit({ outcome: "error", duration_ms: Date.now() - startTime });
+        throw err;
+      } finally {
+        recordDuration("workflow.chat.run_turn_duration", Date.now() - startTime, {
+          turn: turnIndex === 1 ? "first" : "followup",
+        });
+      }
+    },
+  );
 }
 
 async function persistSnapshot(
@@ -52,46 +100,87 @@ async function persistSnapshot(
   },
 ) {
   "use step";
-  // Build the snapshot inside the step. buildContextSnapshot materializes the
-  // full orchestrator tool set (AI SDK `tool()` wrappers, Zod → JSON Schema
-  // conversion), which must not run in the workflow sandbox. Best-effort: a
-  // Redis blip should not abort the chat workflow.
-  try {
-    const snapshot = buildContextSnapshot(args);
-    await new ContextSnapshotStore().set(channelId, threadId, snapshot);
-  } catch (err) {
-    log.warn("workflow", `Snapshot persist failed for ${channelId}: ${String(err)}`);
-    countMetric("workflow.chat.snapshot_error");
-  }
+  return withSpan(
+    "workflow.chat.persist_snapshot",
+    {
+      "chat.channel_id": channelId,
+      ...(threadId ? { "chat.thread_id": threadId } : {}),
+      "chat.turn_count": args.turnCount,
+    },
+    async () => {
+      const logger = createWideLogger({
+        op: "workflow.chat.persist_snapshot",
+        chat: {
+          channel_id: channelId,
+          thread_id: threadId,
+          turn_count: args.turnCount,
+          total_tokens: args.totalUsage.totalTokens,
+        },
+      });
+      const startTime = Date.now();
+      // Build the snapshot inside the step. buildContextSnapshot materializes the
+      // full orchestrator tool set (AI SDK `tool()` wrappers, Zod → JSON Schema
+      // conversion), which must not run in the workflow sandbox. Best-effort: a
+      // Redis blip should not abort the chat workflow.
+      try {
+        const snapshot = buildContextSnapshot(args);
+        await new ContextSnapshotStore().set(channelId, threadId, snapshot);
+        logger.emit({ outcome: "ok", duration_ms: Date.now() - startTime });
+      } catch (err) {
+        countMetric("workflow.chat.snapshot_error");
+        logger.error(err as Error);
+        logger.emit({ outcome: "error", duration_ms: Date.now() - startTime });
+      } finally {
+        recordDuration("workflow.chat.persist_snapshot_duration", Date.now() - startTime);
+      }
+    },
+  );
 }
 
 async function cleanupConversation(channelId: string, threadId: string | undefined) {
   "use step";
-  const threadKey = threadId ?? channelId;
-  // Snapshot + sandbox release are best-effort; only the ConversationStore
-  // delete is load-bearing for starting a fresh workflow later.
-  const [conversationResult, snapshotResult, sandboxResult] = await Promise.allSettled([
-    new ConversationStore().delete(channelId),
-    new ContextSnapshotStore().delete(channelId, threadId),
-    releaseSession(threadKey),
-  ]);
-  if (snapshotResult.status === "rejected") {
-    log.warn(
-      "workflow",
-      `Snapshot delete failed for ${channelId}: ${String(snapshotResult.reason)}`,
-    );
-    countMetric("workflow.chat.snapshot_cleanup_error");
-  }
-  if (sandboxResult.status === "rejected") {
-    log.warn(
-      "workflow",
-      `Sandbox release failed for ${threadKey}: ${String(sandboxResult.reason)}`,
-    );
-    countMetric("workflow.chat.sandbox_cleanup_error");
-  }
-  if (conversationResult.status === "rejected") {
-    throw conversationResult.reason;
-  }
+  return withSpan(
+    "workflow.chat.cleanup",
+    {
+      "chat.channel_id": channelId,
+      ...(threadId ? { "chat.thread_id": threadId } : {}),
+    },
+    async () => {
+      const logger = createWideLogger({
+        op: "workflow.chat.cleanup",
+        chat: { channel_id: channelId, thread_id: threadId },
+      });
+      const startTime = Date.now();
+      const threadKey = threadId ?? channelId;
+      // Snapshot + sandbox release are best-effort; only the ConversationStore
+      // delete is load-bearing for starting a fresh workflow later.
+      const [conversationResult, snapshotResult, sandboxResult] = await Promise.allSettled([
+        new ConversationStore().delete(channelId),
+        new ContextSnapshotStore().delete(channelId, threadId),
+        releaseSession(threadKey),
+      ]);
+      const cleanup = {
+        snapshot: snapshotResult.status,
+        sandbox: sandboxResult.status,
+        conversation: conversationResult.status,
+      };
+      if (snapshotResult.status === "rejected") {
+        countMetric("workflow.chat.snapshot_cleanup_error");
+        logger.warn("snapshot delete failed", { reason: String(snapshotResult.reason) });
+      }
+      if (sandboxResult.status === "rejected") {
+        countMetric("workflow.chat.sandbox_cleanup_error");
+        logger.warn("sandbox release failed", { reason: String(sandboxResult.reason) });
+      }
+      recordDuration("workflow.chat.cleanup_duration", Date.now() - startTime);
+      if (conversationResult.status === "rejected") {
+        logger.error(conversationResult.reason as Error);
+        logger.emit({ outcome: "error", duration_ms: Date.now() - startTime, cleanup });
+        throw conversationResult.reason;
+      }
+      logger.emit({ outcome: "ok", duration_ms: Date.now() - startTime, cleanup });
+    },
+  );
 }
 
 export async function chatWorkflow(payload: ChatPayload) {
@@ -100,7 +189,16 @@ export async function chatWorkflow(payload: ChatPayload) {
   const { channelId, threadId, content, context } = payload;
   const { workflowRunId } = getWorkflowMetadata();
 
-  log.info("workflow", `Chat started: ${workflowRunId}`);
+  const workflowLogger = createWideLogger({
+    op: "workflow.chat",
+    chat: {
+      id: workflowRunId,
+      channel_id: channelId,
+      thread_id: threadId,
+      user_id: context.userId,
+    },
+  });
+  workflowLogger.info("chat workflow started");
   countMetric("workflow.chat.started");
 
   // Stable for the lifetime of this workflow — the conversation is pinned to
@@ -111,8 +209,9 @@ export async function chatWorkflow(payload: ChatPayload) {
   const stableRecentMessages = context.recentMessages;
   const stableReferencedContext = context.referencedContext;
 
+  const workflowStart = Date.now();
   const messages: ChatMessage[] = [{ role: "user", content }];
-  const first = await runTurn(channelId, messages, context);
+  const first = await runTurn(channelId, messages, context, workflowRunId, 1);
   messages.push({ role: "assistant", content: first.text });
   capHistory(messages);
 
@@ -122,15 +221,17 @@ export async function chatWorkflow(payload: ChatPayload) {
 
   using hook = createHook<ChatHookEvent>({ token: workflowRunId });
 
+  let endedByUser = false;
+
   for await (const event of hook) {
+    countMetric("workflow.chat.hook_event", { type: event.type });
     if (event.type === "done") {
-      log.info("workflow", `Chat ended by user: ${workflowRunId}`);
       countMetric("workflow.chat.ended");
+      endedByUser = true;
       break;
     }
     if (!event.content) continue;
 
-    log.info("workflow", `Follow-up from ${event.context.username}: ${workflowRunId}`);
     countMetric("workflow.chat.followup");
 
     // Merge the fresh per-turn identity from the event with the stable
@@ -144,7 +245,7 @@ export async function chatWorkflow(payload: ChatPayload) {
     };
 
     messages.push({ role: "user", content: event.content });
-    const turn = await runTurn(channelId, messages, turnContext);
+    const turn = await runTurn(channelId, messages, turnContext, workflowRunId, turnCount + 1);
     messages.push({ role: "assistant", content: turn.text });
     capHistory(messages);
     turnCount += 1;
@@ -158,5 +259,12 @@ export async function chatWorkflow(payload: ChatPayload) {
   }
 
   await cleanupConversation(channelId, threadId);
-  log.info("workflow", `Chat cleaned up: ${workflowRunId}`);
+  workflowLogger.emit({
+    outcome: "ok",
+    duration_ms: Date.now() - workflowStart,
+    ended_by: endedByUser ? "user" : "hook_close",
+    turn_count: turnCount,
+    total_tokens: totalUsage.totalTokens,
+    tool_calls: totalUsage.toolCallCount,
+  });
 }

@@ -1,5 +1,3 @@
-import { log } from "evlog";
-
 import type { RedisLike } from "@/bot/types";
 
 import type {
@@ -11,6 +9,9 @@ import type {
   SandboxSessionMetadata,
 } from "./types.ts";
 
+import { createWideLogger } from "../logging/wide.ts";
+import { countMetric, recordDuration } from "../metrics.ts";
+import { withSpan } from "../otel/tracing.ts";
 import { resolveOnProvisioned, resolveProvider, resolveRedis } from "./session-deps.ts";
 
 export type {
@@ -72,18 +73,58 @@ export async function writeSession(
 export async function getOrCreateSession(
   params: GetOrCreateSessionParams,
 ): Promise<SandboxSession> {
-  const redis = resolveRedis(params.redis);
-  const provider = resolveProvider(params.provider);
-  const cached = await redis.get<SandboxSessionMetadata>(redisKey(params.threadKey));
+  return withSpan(
+    "sandbox.session.get_or_create",
+    { "sandbox.thread_key": params.threadKey, "sandbox.repo": params.repo },
+    async (span) => {
+      const logger = createWideLogger({
+        op: "sandbox.session.get_or_create",
+        sandbox: { thread_key: params.threadKey, repo: params.repo },
+      });
+      const startTime = Date.now();
+      try {
+        const redis = resolveRedis(params.redis);
+        const provider = resolveProvider(params.provider);
+        const cached = await redis.get<SandboxSessionMetadata>(redisKey(params.threadKey));
 
-  const liveReuse = await tryLiveReuse(cached, params, redis, provider);
-  if (liveReuse) return liveReuse;
+        const liveReuse = await tryLiveReuse(cached, params, redis, provider);
+        if (liveReuse) {
+          countMetric("sandbox.session.reused");
+          span.setAttribute("sandbox.outcome", "reused");
+          logger.emit({
+            outcome: "reused",
+            duration_ms: Date.now() - startTime,
+            sandbox_id: liveReuse.metadata.sandboxId,
+          });
+          return liveReuse;
+        }
 
-  if (cached && cached.repo !== params.repo) {
-    await discardStaleSession(cached, params, redis, provider);
-  }
+        if (cached && cached.repo !== params.repo) {
+          await discardStaleSession(cached, params, redis, provider);
+          countMetric("sandbox.session.discarded_stale");
+          logger.set({ discarded: { prior_repo: cached.repo } });
+        }
 
-  return provisionFreshSession(params, redis, provider);
+        const result = await provisionFreshSession(params, redis, provider);
+        const outcome = result.metadata.sandboxId && cached?.hibernated ? "resumed" : "provisioned";
+        countMetric("sandbox.session.provisioned", { outcome });
+        span.setAttribute("sandbox.outcome", outcome);
+        logger.emit({
+          outcome,
+          duration_ms: Date.now() - startTime,
+          sandbox_id: result.metadata.sandboxId,
+          branch: result.metadata.branch,
+        });
+        return result;
+      } catch (err) {
+        logger.error(err as Error);
+        logger.emit({ outcome: "error", duration_ms: Date.now() - startTime });
+        throw err;
+      } finally {
+        recordDuration("sandbox.session.get_or_create_duration", Date.now() - startTime);
+      }
+    },
+  );
 }
 
 async function tryLiveReuse(
@@ -109,13 +150,13 @@ async function tryLiveReuse(
       lastUsedAt: Date.now(),
     };
     await writeSession(params.threadKey, metadata, redis);
-    log.info("sandbox", `Reused sandbox ${cached.sandboxId} for thread ${params.threadKey}`);
     return { sandbox, metadata, fresh: false };
   } catch (err) {
-    log.warn(
-      "sandbox",
-      `Reconnect failed for sandbox ${cached.sandboxId}: ${String(err)}. Provisioning fresh.`,
-    );
+    countMetric("sandbox.session.reconnect_failed");
+    createWideLogger({
+      op: "sandbox.session.reconnect",
+      sandbox: { thread_key: params.threadKey, sandbox_id: cached.sandboxId },
+    }).emit({ outcome: "failed", reason: String(err) });
     await redis.del(redisKey(params.threadKey));
     return null;
   }
@@ -127,19 +168,28 @@ async function discardStaleSession(
   redis: RedisLike,
   provider: SandboxProvider,
 ): Promise<void> {
-  log.warn(
-    "sandbox",
-    `Repo changed for thread ${params.threadKey} (${cached.repo} → ${params.repo}); discarding old session`,
-  );
+  const logger = createWideLogger({
+    op: "sandbox.session.discard_stale",
+    sandbox: {
+      thread_key: params.threadKey,
+      sandbox_id: cached.sandboxId,
+      prior_repo: cached.repo,
+      new_repo: params.repo,
+    },
+  });
   if (!cached.hibernated) {
     try {
       const old = await provider.reconnect(cached.sandboxId, {
         githubToken: params.githubToken,
       });
       await old.stop();
+      logger.emit({ outcome: "stopped" });
     } catch (err) {
-      log.warn("sandbox", `Failed to stop stale sandbox ${cached.sandboxId}: ${String(err)}`);
+      logger.warn("failed to stop stale sandbox", { reason: String(err) });
+      logger.emit({ outcome: "stop_failed" });
     }
+  } else {
+    logger.emit({ outcome: "hibernated_discarded" });
   }
   await redis.del(redisKey(params.threadKey));
 }
@@ -179,10 +229,6 @@ async function provisionFreshSession(
   };
 
   await writeSession(params.threadKey, metadata, redis);
-  log.info(
-    "sandbox",
-    `${isResume ? "Resumed" : "Provisioned"} sandbox ${sandbox.name} for thread ${params.threadKey}`,
-  );
 
   const onProvisioned = resolveOnProvisioned(params.onProvisioned);
   await onProvisioned(params.threadKey);
@@ -199,27 +245,42 @@ export async function releaseSession(
   threadKey: string,
   options: ReleaseSessionOptions = {},
 ): Promise<void> {
-  const redis = resolveRedis(options.redis);
-  const provider = resolveProvider(options.provider);
-  const key = redisKey(threadKey);
-  const metadata = await redis.get<SandboxSessionMetadata>(key);
-  if (!metadata) return;
-
-  if (!metadata.hibernated) {
-    try {
-      const sandbox = await provider.reconnect(metadata.sandboxId, {
-        githubToken: options.githubToken,
-      });
-      await sandbox.stop();
-    } catch (err) {
-      log.warn(
-        "sandbox",
-        `Release failed for sandbox ${metadata.sandboxId} (${threadKey}): ${String(err)}`,
-      );
+  return withSpan("sandbox.session.release", { "sandbox.thread_key": threadKey }, async () => {
+    const logger = createWideLogger({
+      op: "sandbox.session.release",
+      sandbox: { thread_key: threadKey },
+    });
+    const redis = resolveRedis(options.redis);
+    const provider = resolveProvider(options.provider);
+    const key = redisKey(threadKey);
+    const metadata = await redis.get<SandboxSessionMetadata>(key);
+    if (!metadata) {
+      logger.emit({ outcome: "no-session" });
+      return;
     }
-  }
 
-  await redis.del(key);
+    logger.set({ sandbox: { sandbox_id: metadata.sandboxId, hibernated: metadata.hibernated } });
+
+    if (!metadata.hibernated) {
+      try {
+        const sandbox = await provider.reconnect(metadata.sandboxId, {
+          githubToken: options.githubToken,
+        });
+        await sandbox.stop();
+        countMetric("sandbox.session.released");
+        logger.emit({ outcome: "stopped" });
+      } catch (err) {
+        countMetric("sandbox.session.release_failed");
+        logger.warn("release failed", { reason: String(err) });
+        logger.emit({ outcome: "release_failed" });
+      }
+    } else {
+      countMetric("sandbox.session.released", { hibernated: "true" });
+      logger.emit({ outcome: "released_hibernated" });
+    }
+
+    await redis.del(key);
+  });
 }
 
 /**
@@ -233,45 +294,66 @@ export async function hibernateSession(
   threadKey: string,
   options: HibernateSessionOptions = {},
 ): Promise<"hibernated" | "skipped-missing" | "skipped-already"> {
-  const redis = resolveRedis(options.redis);
-  const provider = resolveProvider(options.provider);
-  const metadata = await redis.get<SandboxSessionMetadata>(redisKey(threadKey));
-  if (!metadata) return "skipped-missing";
-  if (metadata.hibernated) return "skipped-already";
+  return withSpan(
+    "sandbox.session.hibernate",
+    { "sandbox.thread_key": threadKey },
+    async (span) => {
+      const logger = createWideLogger({
+        op: "sandbox.session.hibernate",
+        sandbox: { thread_key: threadKey },
+      });
+      const redis = resolveRedis(options.redis);
+      const provider = resolveProvider(options.provider);
+      const metadata = await redis.get<SandboxSessionMetadata>(redisKey(threadKey));
+      if (!metadata) {
+        span.setAttribute("sandbox.outcome", "skipped-missing");
+        logger.emit({ outcome: "skipped-missing" });
+        return "skipped-missing";
+      }
+      if (metadata.hibernated) {
+        span.setAttribute("sandbox.outcome", "skipped-already");
+        logger.emit({ outcome: "skipped-already", sandbox_id: metadata.sandboxId });
+        return "skipped-already";
+      }
 
-  try {
-    const sandbox = await provider.reconnect(metadata.sandboxId, {
-      githubToken: options.githubToken,
-      expiresAt: metadata.expiresAt,
-    });
+      logger.set({ sandbox: { sandbox_id: metadata.sandboxId } });
 
-    // Best-effort commit of uncommitted WIP so resume starts from a clean tree.
-    try {
-      await sandbox.exec(
-        "git add -A && git diff --cached --quiet || git commit -m 'wip: hibernation checkpoint'",
-        {
-          cwd: metadata.repoDir,
-          timeoutMs: 30_000,
-        },
-      );
-    } catch (err) {
-      log.warn("sandbox", `WIP commit before hibernation failed (${threadKey}): ${String(err)}`);
-    }
+      try {
+        const sandbox = await provider.reconnect(metadata.sandboxId, {
+          githubToken: options.githubToken,
+          expiresAt: metadata.expiresAt,
+        });
 
-    const snap = await sandbox.snapshot();
-    const next: SandboxSessionMetadata = {
-      ...metadata,
-      hibernated: true,
-      snapshotId: snap.snapshotId,
-    };
-    await writeSession(threadKey, next, redis);
-    log.info(
-      "sandbox",
-      `Hibernated ${metadata.sandboxId} → snapshot ${snap.snapshotId} (${threadKey})`,
-    );
-    return "hibernated";
-  } catch (err) {
-    log.warn("sandbox", `Hibernate failed for ${threadKey}: ${String(err)}`);
-    return "skipped-missing";
-  }
+        // Best-effort commit of uncommitted WIP so resume starts from a clean tree.
+        try {
+          await sandbox.exec(
+            "git add -A && git diff --cached --quiet || git commit -m 'wip: hibernation checkpoint'",
+            {
+              cwd: metadata.repoDir,
+              timeoutMs: 30_000,
+            },
+          );
+        } catch (err) {
+          logger.warn("wip commit before hibernation failed", { reason: String(err) });
+        }
+
+        const snap = await sandbox.snapshot();
+        const next: SandboxSessionMetadata = {
+          ...metadata,
+          hibernated: true,
+          snapshotId: snap.snapshotId,
+        };
+        await writeSession(threadKey, next, redis);
+        span.setAttribute("sandbox.outcome", "hibernated");
+        logger.emit({ outcome: "hibernated", snapshot_id: snap.snapshotId });
+        return "hibernated";
+      } catch (err) {
+        countMetric("sandbox.session.hibernate_failed");
+        span.setAttribute("sandbox.outcome", "hibernate-failed");
+        logger.error(err as Error);
+        logger.emit({ outcome: "hibernate_failed" });
+        return "skipped-missing";
+      }
+    },
+  );
 }

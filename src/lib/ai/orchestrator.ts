@@ -1,6 +1,7 @@
 import { ToolLoopAgent, type ToolSet } from "ai";
 
 import type { TurnUsageTracker } from "./turn-usage.ts";
+import type { TelemetryMetadata } from "./types.ts";
 
 import { wrapApprovalTools } from "./approvals/index.ts";
 import { ORCHESTRATOR_MODEL, SYSTEM_PROMPT } from "./constants.ts";
@@ -19,8 +20,15 @@ export { ORCHESTRATOR_MODEL, SYSTEM_PROMPT } from "./constants.ts";
  * orchestrator runs with. Takes the full `AgentContext` because role-aware
  * tools (delegates, schedule_task) need both the resolved role and the
  * scheduler's `memberRoles` for propagation into persisted task meta.
+ *
+ * `extraMetadata` flows through to every delegation subagent so the whole
+ * chat trace shares `chat.*` attributes without baggage plumbing.
  */
-export function getOrchestratorTools(context: AgentContext, tracker: TurnUsageTracker): ToolSet {
+export function getOrchestratorTools(
+  context: AgentContext,
+  tracker: TurnUsageTracker,
+  extraMetadata?: TelemetryMetadata,
+): ToolSet {
   const tools: ToolSet = {
     current_time,
     documentation,
@@ -28,14 +36,18 @@ export function getOrchestratorTools(context: AgentContext, tracker: TurnUsageTr
     schedule_task: createScheduleTask(context),
     list_scheduled_tasks,
     cancel_task,
-    ...buildDelegationTools(context, tracker),
+    ...buildDelegationTools(context, tracker, extraMetadata),
   };
   return wrapApprovalTools(tools, { context });
 }
 
-export function createOrchestrator(context: AgentContext, tracker: TurnUsageTracker) {
+export function createOrchestrator(
+  context: AgentContext,
+  tracker: TurnUsageTracker,
+  extraMetadata?: TelemetryMetadata,
+) {
   const instructions = context.buildInstructions(SYSTEM_PROMPT);
-  const tools = getOrchestratorTools(context, tracker);
+  const tools = getOrchestratorTools(context, tracker, extraMetadata);
 
   return new ToolLoopAgent({
     model: ORCHESTRATOR_MODEL,
@@ -46,6 +58,7 @@ export function createOrchestrator(context: AgentContext, tracker: TurnUsageTrac
       functionId: "orchestrator",
       metadata: {
         role: context.role,
+        ...extraMetadata,
       },
     },
   });
