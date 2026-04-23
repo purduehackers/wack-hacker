@@ -2,7 +2,7 @@ import type { ToolSet } from "ai";
 
 import type { AgentContext } from "./context.ts";
 import type { TurnUsageTracker } from "./turn-usage.ts";
-import type { SubagentSpec } from "./types.ts";
+import type { SubagentSpec, TelemetryMetadata } from "./types.ts";
 
 import { SKILL_MANIFEST as CMS_SUBSKILLS } from "./skills/generated/domains/cms.ts";
 import { SKILL_MANIFEST as CODE_SUBSKILLS } from "./skills/generated/domains/code.ts";
@@ -159,7 +159,11 @@ const DOMAIN_SPEC_OVERRIDES: Partial<Record<keyof typeof DOMAINS, Partial<Subage
 const registry = new SkillRegistry(SKILL_MANIFEST);
 
 /** Build delegation tools for every delegate-mode skill the role can access. */
-export function buildDelegationTools(context: AgentContext, tracker: TurnUsageTracker): ToolSet {
+export function buildDelegationTools(
+  context: AgentContext,
+  tracker: TurnUsageTracker,
+  extraMetadata?: TelemetryMetadata,
+): ToolSet {
   const tools: ToolSet = {};
   for (const [name, config] of Object.entries(DOMAINS)) {
     const skill = registry.loadSkill(name, context.role);
@@ -175,6 +179,7 @@ export function buildDelegationTools(context: AgentContext, tracker: TurnUsageTr
       },
       context,
       tracker,
+      extraMetadata,
     );
   }
   return tools;

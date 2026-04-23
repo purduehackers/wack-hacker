@@ -1,6 +1,5 @@
 import { API } from "@discordjs/core/http-only";
 import { waitUntil } from "@vercel/functions";
-import { log } from "evlog";
 
 import type {
   InteractionResponsePayload,
@@ -11,7 +10,9 @@ import type { DiscordInteraction } from "@/lib/protocol/types";
 
 import { parseOptions } from "@/bot/commands/registry";
 import * as commands from "@/bot/handlers/commands";
-import { countMetric } from "@/lib/metrics";
+import { createWideLogger } from "@/lib/logging/wide";
+import { countMetric, recordDuration } from "@/lib/metrics";
+import { withSpan } from "@/lib/otel/tracing";
 import { InteractionResponseType } from "@/lib/protocol/constants";
 
 import type { DispatcherResult } from "./types.ts";
@@ -35,7 +36,6 @@ export async function handleApplicationCommand(
     };
   }
 
-  log.info("interactions", `Executing /${name}`);
   countMetric("interaction.command", { command: name });
 
   if (command.modal) return runModalCommand(command, interaction);
@@ -50,18 +50,43 @@ async function runModalCommand(
   command: SlashCommand,
   interaction: DiscordInteraction,
 ): Promise<InteractionResponsePayload> {
-  const discord = buildDiscord();
-  try {
-    const response = await command.execute(buildCtx(interaction, discord));
-    if (response) return response;
-    log.error("interactions", `/${command.name} (modal) returned no response`);
-    countMetric("interaction.command_error", { command: command.name });
-    return ephemeralError(`/${command.name} did not produce a response.`);
-  } catch (err) {
-    log.error("interactions", `/${command.name} failed: ${describeError(err)}`);
-    countMetric("interaction.command_error", { command: command.name });
-    return ephemeralError(`Error executing /${command.name}.`);
-  }
+  return withSpan(
+    "interaction.command",
+    { "command.name": command.name, "command.mode": "modal" },
+    async () => {
+      const logger = createWideLogger({
+        op: "interaction.command",
+        command: { name: command.name, mode: "modal" },
+        user: { id: interaction.member?.user?.id ?? interaction.user?.id },
+      });
+      const startTime = Date.now();
+      const discord = buildDiscord();
+      try {
+        const response = await command.execute(buildCtx(interaction, discord));
+        if (response) {
+          logger.emit({ outcome: "ok", duration_ms: Date.now() - startTime });
+          return response;
+        }
+        countMetric("interaction.command_error", { command: command.name });
+        logger.emit({
+          outcome: "error",
+          duration_ms: Date.now() - startTime,
+          reason: "no_response",
+        });
+        return ephemeralError(`/${command.name} did not produce a response.`);
+      } catch (err) {
+        countMetric("interaction.command_error", { command: command.name });
+        logger.error(err as Error);
+        logger.emit({ outcome: "error", duration_ms: Date.now() - startTime });
+        return ephemeralError(`Error executing /${command.name}.`);
+      } finally {
+        recordDuration("interaction.command_duration", Date.now() - startTime, {
+          command: command.name,
+          mode: "modal",
+        });
+      }
+    },
+  );
 }
 
 function runDeferredCommand(
@@ -70,17 +95,45 @@ function runDeferredCommand(
 ): InteractionResponsePayload {
   const discord = buildDiscord();
   waitUntil(
-    command.execute(buildCtx(interaction, discord)).catch((err: unknown) => {
-      log.error("interactions", `/${command.name} failed: ${describeError(err)}`);
-      countMetric("interaction.command_error", { command: command.name });
-      discord.interactions
-        .editReply(interaction.application_id, interaction.token, {
-          content: `Error executing /${command.name}.`,
-        })
-        .catch((e: unknown) =>
-          log.error("interactions", `Failed to send error response: ${describeError(e)}`),
-        );
-    }),
+    withSpan(
+      "interaction.command",
+      { "command.name": command.name, "command.mode": "deferred" },
+      async () => {
+        const logger = createWideLogger({
+          op: "interaction.command",
+          command: { name: command.name, mode: "deferred" },
+          user: { id: interaction.member?.user?.id ?? interaction.user?.id },
+        });
+        const startTime = Date.now();
+        try {
+          await command.execute(buildCtx(interaction, discord));
+          logger.emit({ outcome: "ok", duration_ms: Date.now() - startTime });
+        } catch (err) {
+          countMetric("interaction.command_error", { command: command.name });
+          logger.error(err as Error);
+          logger.emit({
+            outcome: "error",
+            duration_ms: Date.now() - startTime,
+            error_summary: describeError(err),
+          });
+          await discord.interactions
+            .editReply(interaction.application_id, interaction.token, {
+              content: `Error executing /${command.name}.`,
+            })
+            .catch((e: unknown) =>
+              createWideLogger({
+                op: "interaction.command.error_reply",
+                command: { name: command.name },
+              }).error(e as Error),
+            );
+        } finally {
+          recordDuration("interaction.command_duration", Date.now() - startTime, {
+            command: command.name,
+            mode: "deferred",
+          });
+        }
+      },
+    ),
   );
   return {
     type: InteractionResponseType.DeferredChannelMessageWithSource,

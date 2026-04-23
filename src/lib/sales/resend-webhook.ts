@@ -1,9 +1,9 @@
 import type { UpdatePageParameters } from "@notionhq/client/build/src/api-endpoints";
 
-import { log } from "evlog";
-
 import { notion } from "@/lib/ai/tools/sales/client";
 import { COMPANIES_DATA_SOURCE_ID, CONTACTS_DATA_SOURCE_ID } from "@/lib/ai/tools/sales/constants";
+import { createWideLogger } from "@/lib/logging/wide";
+import { countMetric, recordDuration } from "@/lib/metrics";
 
 /**
  * Resend sends Svix-style payloads: `{ type: "email.delivered", created_at, data: { email_id, ... } }`.
@@ -88,49 +88,67 @@ function currentEventAt(properties: Record<string, unknown>): string | null {
 }
 
 export async function applyResendEvent(raw: unknown): Promise<void> {
-  if (!isResendEvent(raw)) {
-    log.warn("resend", `Discarded event — shape does not match ResendEvent`);
-    return;
-  }
-  if (!(raw.type in STATUS_BY_EVENT)) {
-    log.info("resend", `Ignoring unsupported event type ${raw.type}`);
-    return;
-  }
+  const logger = createWideLogger({ op: "resend.event.apply" });
+  const startTime = Date.now();
+  try {
+    if (!isResendEvent(raw)) {
+      countMetric("resend.event.discarded", { reason: "shape_mismatch" });
+      logger.emit({ outcome: "discarded", reason: "shape_mismatch" });
+      return;
+    }
+    if (!(raw.type in STATUS_BY_EVENT)) {
+      countMetric("resend.event.unsupported", { type: raw.type });
+      logger.emit({ outcome: "unsupported", type: raw.type });
+      return;
+    }
 
-  const eventType = raw.type as ResendEventType;
-  const nextStatus = STATUS_BY_EVENT[eventType];
-  const emailId = raw.data.email_id;
+    const eventType = raw.type as ResendEventType;
+    const nextStatus = STATUS_BY_EVENT[eventType];
+    const emailId = raw.data.email_id;
+    logger.set({ resend: { event_type: eventType, email_id: emailId } });
 
-  const page =
-    (await findPageByEmailId(COMPANIES_DATA_SOURCE_ID, emailId)) ??
-    (await findPageByEmailId(CONTACTS_DATA_SOURCE_ID, emailId));
-  if (!page) {
-    log.info("resend", `No Notion row matches email_id ${emailId} (${eventType})`);
-    return;
+    const page =
+      (await findPageByEmailId(COMPANIES_DATA_SOURCE_ID, emailId)) ??
+      (await findPageByEmailId(CONTACTS_DATA_SOURCE_ID, emailId));
+    if (!page) {
+      countMetric("resend.event.no_match", { type: eventType });
+      logger.emit({ outcome: "no_match" });
+      return;
+    }
+
+    const currentRank = STATUS_RANK[currentStatus(page.properties) ?? "Sent"];
+    const applyStatus = STATUS_RANK[nextStatus] >= currentRank;
+    const shouldBlock = eventType === "email.bounced" || eventType === "email.complained";
+
+    const existingEventAt = currentEventAt(page.properties);
+    const applyEventAt = !existingEventAt || raw.created_at > existingEventAt;
+
+    const properties: Record<string, unknown> = {};
+    if (applyEventAt) {
+      properties["Outreach Last Event At"] = { date: { start: raw.created_at } };
+    }
+    if (applyStatus) {
+      properties["Outreach Status"] = { select: { name: nextStatus } };
+    }
+    if (shouldBlock) {
+      properties["Do Not Contact"] = { checkbox: true };
+    }
+
+    if (Object.keys(properties).length === 0) {
+      countMetric("resend.event.noop", { type: eventType });
+      logger.emit({ outcome: "noop" });
+      return;
+    }
+
+    await notion.pages.update({ page_id: page.id, properties } as UpdatePageParameters);
+    countMetric("resend.event.applied", { type: eventType, status: nextStatus });
+    logger.emit({
+      outcome: "applied",
+      next_status: nextStatus,
+      blocked: shouldBlock,
+      duration_ms: Date.now() - startTime,
+    });
+  } finally {
+    recordDuration("resend.event.apply_duration", Date.now() - startTime);
   }
-
-  const currentRank = STATUS_RANK[currentStatus(page.properties) ?? "Sent"];
-  const applyStatus = STATUS_RANK[nextStatus] >= currentRank;
-  const shouldBlock = eventType === "email.bounced" || eventType === "email.complained";
-
-  const existingEventAt = currentEventAt(page.properties);
-  const applyEventAt = !existingEventAt || raw.created_at > existingEventAt;
-
-  const properties: Record<string, unknown> = {};
-  if (applyEventAt) {
-    properties["Outreach Last Event At"] = { date: { start: raw.created_at } };
-  }
-  if (applyStatus) {
-    properties["Outreach Status"] = { select: { name: nextStatus } };
-  }
-  if (shouldBlock) {
-    properties["Do Not Contact"] = { checkbox: true };
-  }
-
-  if (Object.keys(properties).length === 0) {
-    log.info("resend", `No-op for ${emailId} (${eventType}) — already newer state`);
-    return;
-  }
-
-  await notion.pages.update({ page_id: page.id, properties } as UpdatePageParameters);
 }

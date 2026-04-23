@@ -1,10 +1,10 @@
-import { log } from "evlog";
-
 import type { ModalHandler } from "@/bot/modals/types";
 import type { DiscordInteraction } from "@/lib/protocol/types";
 
 import * as modalHandlers from "@/bot/handlers/modals";
-import { countMetric } from "@/lib/metrics";
+import { createWideLogger } from "@/lib/logging/wide";
+import { countMetric, recordDuration } from "@/lib/metrics";
+import { withSpan } from "@/lib/otel/tracing";
 
 import type { DispatcherResult } from "./types.ts";
 
@@ -20,30 +20,48 @@ export async function handleModalSubmit(
   const customId = interaction.data?.custom_id;
   if (!customId) return { error: "Missing custom_id", status: 400 };
 
-  const prefix = customId.split(":")[0];
+  const prefix = customId.split(":")[0] ?? "unknown";
   const handler = modalHandlerList.find((h) => h.prefix === prefix);
 
   if (!handler) {
-    log.warn("interactions", `Unexpected modal submit: ${customId}`);
+    createWideLogger({ op: "interaction.modal", modal: { prefix, custom_id: customId } }).emit({
+      outcome: "unknown",
+    });
     return ephemeralError("This form is no longer supported.");
   }
 
-  log.info("interactions", `Handling modal ${prefix}`);
-  countMetric("interaction.modal", { prefix });
-
-  const discord = buildDiscord();
-  try {
-    return await handler.handle({
-      interaction,
-      discord,
-      customId,
-      fields: extractModalFields(interaction),
+  return withSpan("interaction.modal", { "modal.prefix": prefix }, async () => {
+    const logger = createWideLogger({
+      op: "interaction.modal",
+      modal: { prefix, custom_id: customId },
+      user: { id: interaction.member?.user?.id ?? interaction.user?.id },
     });
-  } catch (err: unknown) {
-    log.error("interactions", `Modal ${customId} failed: ${describeError(err)}`);
-    countMetric("interaction.modal_error", { prefix });
-    return ephemeralError("Something went wrong processing the form.");
-  }
+    const startTime = Date.now();
+    countMetric("interaction.modal", { prefix });
+
+    const discord = buildDiscord();
+    try {
+      const result = await handler.handle({
+        interaction,
+        discord,
+        customId,
+        fields: extractModalFields(interaction),
+      });
+      logger.emit({ outcome: "ok", duration_ms: Date.now() - startTime });
+      return result;
+    } catch (err: unknown) {
+      countMetric("interaction.modal_error", { prefix });
+      logger.error(err as Error);
+      logger.emit({
+        outcome: "error",
+        duration_ms: Date.now() - startTime,
+        error_summary: describeError(err),
+      });
+      return ephemeralError("Something went wrong processing the form.");
+    } finally {
+      recordDuration("interaction.modal_duration", Date.now() - startTime, { prefix });
+    }
+  });
 }
 
 function extractModalFields(interaction: DiscordInteraction): Map<string, string> {

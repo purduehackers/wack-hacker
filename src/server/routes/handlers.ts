@@ -1,4 +1,3 @@
-import { log } from "evlog";
 import { resumeHook } from "workflow/api";
 
 import type { EventHandler } from "@/bot/events/types";
@@ -9,6 +8,9 @@ import { handleMention } from "@/bot/handlers/events";
 import { isBotMention } from "@/bot/mention";
 import { EventRouter } from "@/bot/router";
 import { AgentContext } from "@/lib/ai/context";
+import { createWideLogger } from "@/lib/logging/wide";
+import { countMetric } from "@/lib/metrics";
+import { withSpan } from "@/lib/otel/tracing";
 
 export const router = new EventRouter();
 
@@ -25,21 +27,42 @@ router.onMessage(async (packet, ctx) => {
   const existing = await ctx.store.get(channelId);
   if (!existing) return;
 
-  log.info("handlers", `Forwarding message to workflow ${existing.workflowRunId}`);
-
-  try {
-    const turnContext = AgentContext.fromPacket(packet).toJSON();
-    const event: ChatHookEvent = {
-      type: "message",
-      content: packet.data.content,
-      context: turnContext,
-    };
-    await resumeHook(existing.workflowRunId, event);
-    await ctx.store.touch(channelId);
-  } catch (err) {
-    log.info("handlers", `Conversation ended for ${channelId}: ${String(err)}`);
-    await ctx.store.delete(channelId);
-  }
+  return withSpan(
+    "chat.resume_hook",
+    {
+      "chat.id": existing.workflowRunId,
+      "chat.channel_id": channelId,
+      "chat.workflow_run_id": existing.workflowRunId,
+    },
+    async () => {
+      const logger = createWideLogger({
+        op: "chat.resume_hook",
+        chat: {
+          id: existing.workflowRunId,
+          workflow_run_id: existing.workflowRunId,
+          channel_id: channelId,
+          user_id: packet.data.author.id,
+        },
+      });
+      try {
+        const turnContext = AgentContext.fromPacket(packet).toJSON();
+        const event: ChatHookEvent = {
+          type: "message",
+          content: packet.data.content,
+          context: turnContext,
+        };
+        await resumeHook(existing.workflowRunId, event);
+        await ctx.store.touch(channelId);
+        countMetric("chat.resume_hook.ok");
+        logger.emit({ outcome: "ok" });
+      } catch (err) {
+        countMetric("chat.resume_hook.ended");
+        await ctx.store.delete(channelId);
+        logger.warn("workflow ended", { reason: String(err) });
+        logger.emit({ outcome: "ended" });
+      }
+    },
+  );
 });
 
 for (const h of Object.values(userEvents) as EventHandler[]) {

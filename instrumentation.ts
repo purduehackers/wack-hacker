@@ -1,6 +1,15 @@
 import * as Sentry from "@sentry/nextjs";
 
 export async function register() {
+  // Bump the per-attribute length cap before Sentry's OTEL SDK reads env. The
+  // AI SDK stores full prompt messages and tool-call args/results as span
+  // attributes, which routinely exceed the 1024 default. 64 KB keeps the full
+  // conversation history on `ai.prompt.messages` and tool inputs/outputs so
+  // traces in Sentry show the whole agent interaction.
+  if (!process.env.OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT) {
+    process.env.OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT = "65536";
+  }
+
   try {
     const { register } = await import("./src/lib/evlog");
     register();

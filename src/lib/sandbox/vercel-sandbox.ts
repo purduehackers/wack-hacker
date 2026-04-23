@@ -13,7 +13,26 @@ import type {
   VercelSandboxReconnectOptions,
 } from "./types.ts";
 
+import { countMetric, recordDuration } from "../metrics.ts";
+import { withSpan } from "../otel/tracing.ts";
 import { buildGitHubCredentialBrokeringPolicy } from "./credential-brokering.ts";
+
+/**
+ * Categorize a shell command into a low-cardinality bucket so we can tag
+ * sandbox.exec spans without leaking raw command text. `git` and common file
+ * utilities get dedicated labels; everything else falls to `bash`.
+ */
+function cmdCategory(command: string): string {
+  const first = command.trim().split(/\s+/)[0] ?? "";
+  if (first === "git" || first.startsWith("git")) return "git";
+  if (
+    /^(cat|ls|rm|mv|cp|mkdir|touch|stat|find|head|tail|echo|pwd|which|tree|diff|grep|sed|awk|wc|sort|uniq)$/.test(
+      first,
+    )
+  )
+    return "file";
+  return "bash";
+}
 
 export type { VercelSandboxCreateOptions, VercelSandboxReconnectOptions } from "./types.ts";
 
@@ -219,69 +238,99 @@ export class VercelSandbox implements Sandbox {
   }
 
   async exec(command: string, options: ExecOptions = {}): Promise<ExecResult> {
-    const cwd = options.cwd ?? this.workingDirectory;
-    const timeoutMs = options.timeoutMs ?? DEFAULT_EXEC_TIMEOUT_MS;
+    const category = cmdCategory(command);
+    return withSpan(
+      "sandbox.exec",
+      { "sandbox.id": this.name, "cmd.category": category },
+      async (span) => {
+        const startTime = Date.now();
+        const cwd = options.cwd ?? this.workingDirectory;
+        const timeoutMs = options.timeoutMs ?? DEFAULT_EXEC_TIMEOUT_MS;
 
-    const timeoutSignal = AbortSignal.timeout(timeoutMs);
-    const signal = options.signal
-      ? AbortSignal.any([timeoutSignal, options.signal])
-      : timeoutSignal;
+        const timeoutSignal = AbortSignal.timeout(timeoutMs);
+        const signal = options.signal
+          ? AbortSignal.any([timeoutSignal, options.signal])
+          : timeoutSignal;
 
-    try {
-      const result = await this.sdk.runCommand({
-        cmd: "bash",
-        args: ["-c", command],
-        cwd,
-        env: this.mergedEnv(options.env),
-        signal,
-      });
+        try {
+          const result = await this.sdk.runCommand({
+            cmd: "bash",
+            args: ["-c", command],
+            cwd,
+            env: this.mergedEnv(options.env),
+            signal,
+          });
 
-      const [stdoutRaw, stderrRaw] = await Promise.all([result.stdout(), result.stderr()]);
+          const [stdoutRaw, stderrRaw] = await Promise.all([result.stdout(), result.stderr()]);
 
-      let stdout = stdoutRaw;
-      let truncated = false;
-      if (stdout.length > MAX_OUTPUT_LENGTH) {
-        stdout = stdout.slice(0, MAX_OUTPUT_LENGTH);
-        truncated = true;
-      }
+          let stdout = stdoutRaw;
+          let truncated = false;
+          if (stdout.length > MAX_OUTPUT_LENGTH) {
+            stdout = stdout.slice(0, MAX_OUTPUT_LENGTH);
+            truncated = true;
+          }
 
-      let stderr = stderrRaw;
-      if (stderr.length > MAX_OUTPUT_LENGTH) {
-        stderr = stderr.slice(0, MAX_OUTPUT_LENGTH);
-        truncated = true;
-      }
+          let stderr = stderrRaw;
+          if (stderr.length > MAX_OUTPUT_LENGTH) {
+            stderr = stderr.slice(0, MAX_OUTPUT_LENGTH);
+            truncated = true;
+          }
 
-      return { exitCode: result.exitCode, stdout, stderr, truncated };
-    } catch (err) {
-      if (err instanceof Error && err.name === "TimeoutError") {
-        return {
-          exitCode: null,
-          stdout: "",
-          stderr: `Command timed out after ${timeoutMs}ms`,
-          truncated: false,
-        };
-      }
-      if (err instanceof Error && err.name === "AbortError") throw err;
-      return {
-        exitCode: null,
-        stdout: "",
-        stderr: err instanceof Error ? err.message : String(err),
-        truncated: false,
-      };
-    }
+          span.setAttributes({
+            "sandbox.exit_code": result.exitCode ?? -1,
+            "sandbox.truncated": truncated,
+          });
+          countMetric("sandbox.exec.completed", { category });
+          return { exitCode: result.exitCode, stdout, stderr, truncated };
+        } catch (err) {
+          if (err instanceof Error && err.name === "TimeoutError") {
+            countMetric("sandbox.exec.timeout", { category });
+            span.setAttribute("sandbox.timed_out", true);
+            return {
+              exitCode: null,
+              stdout: "",
+              stderr: `Command timed out after ${timeoutMs}ms`,
+              truncated: false,
+            };
+          }
+          if (err instanceof Error && err.name === "AbortError") {
+            countMetric("sandbox.exec.aborted", { category });
+            throw err;
+          }
+          countMetric("sandbox.exec.error", { category });
+          return {
+            exitCode: null,
+            stdout: "",
+            stderr: err instanceof Error ? err.message : String(err),
+            truncated: false,
+          };
+        } finally {
+          recordDuration("sandbox.exec.duration", Date.now() - startTime, { category });
+        }
+      },
+    );
   }
 
   async extendTimeout(additionalMs: number): Promise<{ expiresAt: number }> {
-    await this.sdk.extendTimeout(additionalMs);
-    // Extension is relative to the existing deadline, not to now — matches the
-    // Sandbox contract (and InMemorySandbox's semantics). session.ts then
-    // persists the new value to Redis.
-    this._expiresAt += additionalMs;
-    this.scheduleTimeoutHook();
-    return { expiresAt: this._expiresAt };
+    return withSpan(
+      "sandbox.extend_timeout",
+      { "sandbox.id": this.name, "sandbox.extend_ms": additionalMs },
+      async () => {
+        await this.sdk.extendTimeout(additionalMs);
+        // Extension is relative to the existing deadline, not to now — matches the
+        // Sandbox contract (and InMemorySandbox's semantics). session.ts then
+        // persists the new value to Redis.
+        this._expiresAt += additionalMs;
+        this.scheduleTimeoutHook();
+        countMetric("sandbox.extend_timeout");
+        return { expiresAt: this._expiresAt };
+      },
+    );
   }
 
   async *streamExec(command: string, options: ExecOptions = {}): AsyncIterable<StreamExecChunk> {
+    const category = cmdCategory(command);
+    const startTime = Date.now();
     const cwd = options.cwd ?? this.workingDirectory;
     const detached = await this.sdk.runCommand({
       cmd: "bash",
@@ -306,6 +355,8 @@ export class VercelSandbox implements Sandbox {
       await detached.wait({ signal: options.signal });
     } finally {
       logs.close();
+      recordDuration("sandbox.stream_exec.duration", Date.now() - startTime, { category });
+      countMetric("sandbox.stream_exec.completed", { category });
     }
   }
 
@@ -314,36 +365,52 @@ export class VercelSandbox implements Sandbox {
   }
 
   async snapshot(): Promise<SnapshotResult> {
-    // The SDK's snapshot call stops the sandbox as a side effect. Clear our
-    // timeout hook so it doesn't fire against a dead VM.
-    if (this.timeoutTimer) {
-      clearTimeout(this.timeoutTimer);
-      this.timeoutTimer = undefined;
-    }
-    const snap = await this.sdk.snapshot();
-    this.stopped = true;
-    return { snapshotId: snap.snapshotId };
+    return withSpan("sandbox.snapshot", { "sandbox.id": this.name }, async () => {
+      const startTime = Date.now();
+      try {
+        // The SDK's snapshot call stops the sandbox as a side effect. Clear our
+        // timeout hook so it doesn't fire against a dead VM.
+        if (this.timeoutTimer) {
+          clearTimeout(this.timeoutTimer);
+          this.timeoutTimer = undefined;
+        }
+        const snap = await this.sdk.snapshot();
+        this.stopped = true;
+        countMetric("sandbox.snapshot.completed");
+        return { snapshotId: snap.snapshotId };
+      } finally {
+        recordDuration("sandbox.snapshot.duration", Date.now() - startTime);
+      }
+    });
   }
 
   async stop(): Promise<void> {
     if (this.stopped) return;
-    this.stopped = true;
-    if (this.timeoutTimer) {
-      clearTimeout(this.timeoutTimer);
-      this.timeoutTimer = undefined;
-    }
-
-    if (this.hooks?.beforeStop) {
+    await withSpan("sandbox.stop", { "sandbox.id": this.name }, async () => {
+      const startTime = Date.now();
       try {
-        await this.hooks.beforeStop(this);
-      } catch (err) {
-        console.error(
-          "[VercelSandbox] beforeStop hook failed:",
-          err instanceof Error ? err.message : err,
-        );
-      }
-    }
+        this.stopped = true;
+        if (this.timeoutTimer) {
+          clearTimeout(this.timeoutTimer);
+          this.timeoutTimer = undefined;
+        }
 
-    await this.sdk.stop();
+        if (this.hooks?.beforeStop) {
+          try {
+            await this.hooks.beforeStop(this);
+          } catch (err) {
+            console.error(
+              "[VercelSandbox] beforeStop hook failed:",
+              err instanceof Error ? err.message : err,
+            );
+          }
+        }
+
+        await this.sdk.stop();
+        countMetric("sandbox.stop.completed");
+      } finally {
+        recordDuration("sandbox.stop.duration", Date.now() - startTime);
+      }
+    });
   }
 }

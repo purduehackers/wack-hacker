@@ -1,7 +1,8 @@
-import { log } from "evlog";
 import { sleep } from "workflow";
 
+import { createWideLogger } from "@/lib/logging/wide";
 import { countMetric } from "@/lib/metrics";
+import { withSpan } from "@/lib/otel/tracing";
 import { hibernateSession, readSession, writeSession } from "@/lib/sandbox/session";
 
 /**
@@ -27,56 +28,109 @@ interface WakeDecision {
 
 async function decideWake(threadKey: string): Promise<WakeDecision> {
   "use step";
-  const meta = await readSession(threadKey);
-  if (!meta) return { action: "exit", reason: "session-gone" };
-  if (meta.hibernated) return { action: "exit", reason: "already-hibernated" };
+  return withSpan(
+    "sandbox.lifecycle.decide_wake",
+    { "sandbox.thread_key": threadKey },
+    async () => {
+      const logger = createWideLogger({
+        op: "sandbox.lifecycle.decide_wake",
+        sandbox: { thread_key: threadKey },
+      });
+      const meta = await readSession(threadKey);
+      if (!meta) {
+        logger.emit({ action: "exit", reason: "session-gone" });
+        return { action: "exit", reason: "session-gone" };
+      }
+      if (meta.hibernated) {
+        logger.emit({ action: "exit", reason: "already-hibernated" });
+        return { action: "exit", reason: "already-hibernated" };
+      }
 
-  const wakeAt = meta.expiresAt - HIBERNATION_LEAD_MS;
-  const now = Date.now();
-  if (wakeAt <= now) {
-    return { action: "sleep", wakeAt: now + MIN_SLEEP_MS, reason: "imminent" };
-  }
-  return {
-    action: "sleep",
-    wakeAt: Math.min(wakeAt, now + MAX_SLEEP_MS),
-    reason: "scheduled",
-  };
+      const wakeAt = meta.expiresAt - HIBERNATION_LEAD_MS;
+      const now = Date.now();
+      if (wakeAt <= now) {
+        logger.emit({
+          action: "sleep",
+          reason: "imminent",
+          wake_at: new Date(now + MIN_SLEEP_MS).toISOString(),
+        });
+        return { action: "sleep", wakeAt: now + MIN_SLEEP_MS, reason: "imminent" };
+      }
+      const clampedWake = Math.min(wakeAt, now + MAX_SLEEP_MS);
+      logger.emit({
+        action: "sleep",
+        reason: "scheduled",
+        wake_at: new Date(clampedWake).toISOString(),
+        expires_at: new Date(meta.expiresAt).toISOString(),
+      });
+      return { action: "sleep", wakeAt: clampedWake, reason: "scheduled" };
+    },
+  );
 }
 
 async function performHibernation(
   threadKey: string,
 ): Promise<"hibernated" | "missing" | "still-active"> {
   "use step";
-  // Re-read — the expiresAt might have been bumped while we slept.
-  const meta = await readSession(threadKey);
-  if (!meta) return "missing";
-  if (meta.hibernated) return "missing";
+  return withSpan("sandbox.lifecycle.hibernate", { "sandbox.thread_key": threadKey }, async () => {
+    const logger = createWideLogger({
+      op: "sandbox.lifecycle.hibernate",
+      sandbox: { thread_key: threadKey },
+    });
+    // Re-read — the expiresAt might have been bumped while we slept.
+    const meta = await readSession(threadKey);
+    if (!meta) {
+      logger.emit({ outcome: "missing", reason: "no-session" });
+      return "missing";
+    }
+    if (meta.hibernated) {
+      logger.emit({ outcome: "missing", reason: "already-hibernated" });
+      return "missing";
+    }
 
-  // Give the conversation one more buffer: if the deadline moved further out
-  // than the hibernation lead, the user/chat is still engaged and we should
-  // loop back to sleep instead of hibernating.
-  if (meta.expiresAt - Date.now() > HIBERNATION_LEAD_MS * 2) {
-    return "still-active";
-  }
+    // Give the conversation one more buffer: if the deadline moved further out
+    // than the hibernation lead, the user/chat is still engaged and we should
+    // loop back to sleep instead of hibernating.
+    if (meta.expiresAt - Date.now() > HIBERNATION_LEAD_MS * 2) {
+      logger.emit({ outcome: "still-active", expires_at: new Date(meta.expiresAt).toISOString() });
+      return "still-active";
+    }
 
-  const result = await hibernateSession(threadKey);
-  if (result === "hibernated") {
-    countMetric("sandbox.lifecycle.hibernated");
-    return "hibernated";
-  }
-  countMetric("sandbox.lifecycle.hibernate_skipped", { reason: result });
-  return "missing";
+    const result = await hibernateSession(threadKey);
+    if (result === "hibernated") {
+      countMetric("sandbox.lifecycle.hibernated");
+      logger.emit({ outcome: "hibernated", sandbox_id: meta.sandboxId });
+      return "hibernated";
+    }
+    countMetric("sandbox.lifecycle.hibernate_skipped", { reason: result });
+    logger.emit({ outcome: "missing", reason: result });
+    return "missing";
+  });
 }
 
 async function markLifecycleOwned(threadKey: string, runId: string): Promise<boolean> {
   "use step";
-  const meta = await readSession(threadKey);
-  if (!meta) return false;
-  // Mark this workflow as the owner; the session-lifecycle run id lets a new
-  // invocation take over if the previous one was lost.
-  const claimed = { ...meta, lifecycleRunId: runId };
-  await writeSession(threadKey, claimed);
-  return true;
+  return withSpan(
+    "sandbox.lifecycle.mark_owned",
+    { "sandbox.thread_key": threadKey, "sandbox.lifecycle_run_id": runId },
+    async () => {
+      const logger = createWideLogger({
+        op: "sandbox.lifecycle.mark_owned",
+        sandbox: { thread_key: threadKey, lifecycle_run_id: runId },
+      });
+      const meta = await readSession(threadKey);
+      if (!meta) {
+        logger.emit({ outcome: "no-session" });
+        return false;
+      }
+      // Mark this workflow as the owner; the session-lifecycle run id lets a new
+      // invocation take over if the previous one was lost.
+      const claimed = { ...meta, lifecycleRunId: runId };
+      await writeSession(threadKey, claimed);
+      logger.emit({ outcome: "ok", sandbox_id: meta.sandboxId });
+      return true;
+    },
+  );
 }
 
 /**
@@ -90,10 +144,15 @@ async function markLifecycleOwned(threadKey: string, runId: string): Promise<boo
 export async function sandboxLifecycleWorkflow(threadKey: string, runId: string) {
   "use workflow";
 
-  log.info("sandbox-lifecycle", `Started for thread ${threadKey} (run ${runId})`);
+  const workflowLogger = createWideLogger({
+    op: "sandbox.lifecycle",
+    sandbox: { thread_key: threadKey, lifecycle_run_id: runId },
+  });
+  workflowLogger.info("lifecycle started");
+
   const owned = await markLifecycleOwned(threadKey, runId);
   if (!owned) {
-    log.info("sandbox-lifecycle", `No session; exiting (thread ${threadKey})`);
+    workflowLogger.emit({ outcome: "exit", reason: "no-session" });
     return;
   }
 
@@ -102,10 +161,11 @@ export async function sandboxLifecycleWorkflow(threadKey: string, runId: string)
   for (let iteration = 0; iteration < 24; iteration += 1) {
     const decision = await decideWake(threadKey);
     if (decision.action === "exit") {
-      log.info(
-        "sandbox-lifecycle",
-        `Exiting thread=${threadKey} reason=${decision.reason ?? "unknown"}`,
-      );
+      workflowLogger.emit({
+        outcome: "exit",
+        reason: decision.reason ?? "unknown",
+        iterations: iteration,
+      });
       return;
     }
 
@@ -117,11 +177,12 @@ export async function sandboxLifecycleWorkflow(threadKey: string, runId: string)
 
     const result = await performHibernation(threadKey);
     if (result === "hibernated" || result === "missing") {
+      workflowLogger.emit({ outcome: result, iterations: iteration + 1 });
       return;
     }
     // "still-active" — loop back and re-compute wake time against the new deadline.
   }
 
-  log.warn("sandbox-lifecycle", `Max iterations hit for ${threadKey}; exiting`);
   countMetric("sandbox.lifecycle.max_iterations");
+  workflowLogger.emit({ outcome: "exit", reason: "max-iterations" });
 }

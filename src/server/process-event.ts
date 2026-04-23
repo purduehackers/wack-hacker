@@ -1,11 +1,11 @@
 import { API } from "@discordjs/core/http-only";
 import { REST } from "@discordjs/rest";
-import { log } from "evlog";
 
 import type { Packet } from "@/lib/protocol/types";
 
 import { ConversationStore } from "@/bot/store";
 import { env } from "@/env";
+import { createWideLogger } from "@/lib/logging/wide";
 import { countMetric, recordDuration } from "@/lib/metrics";
 
 import { router } from "./routes/handlers";
@@ -35,9 +35,14 @@ function getMessageChannelId(packet: Packet): string | null {
 }
 
 export async function processEvent(packet: Packet, store: ConversationStore): Promise<void> {
+  const logger = createWideLogger({
+    op: "event.process",
+    event: { type: packet.type },
+  });
+
   if (!(await store.dedup(getDedupKey(packet)))) {
-    log.debug("events", `Dedup hit, skipping ${packet.type}`);
     countMetric("event.dedup_hit", { type: packet.type });
+    logger.emit({ outcome: "dedup_hit" });
     return;
   }
 
@@ -49,12 +54,14 @@ export async function processEvent(packet: Packet, store: ConversationStore): Pr
 
   const startTime = Date.now();
   const lockChannel = getMessageChannelId(packet);
+  if (lockChannel) logger.set({ lock: { channel_id: lockChannel } });
+
   try {
     if (lockChannel) {
       const token = await store.acquireLock(lockChannel);
       if (!token) {
-        log.warn("events", `Lock held for ${lockChannel}, dropping ${packet.type}`);
         countMetric("event.lock_contention", { type: packet.type });
+        logger.emit({ outcome: "lock_contention", duration_ms: Date.now() - startTime });
         return;
       }
       try {
@@ -66,8 +73,11 @@ export async function processEvent(packet: Packet, store: ConversationStore): Pr
       await router.dispatch(packet, ctx);
     }
     countMetric("event.processed", { type: packet.type });
+    logger.emit({ outcome: "ok", duration_ms: Date.now() - startTime });
   } catch (err) {
     countMetric("event.error", { type: packet.type });
+    logger.error(err as Error);
+    logger.emit({ outcome: "error", duration_ms: Date.now() - startTime });
     throw err;
   } finally {
     recordDuration("event.process_duration", Date.now() - startTime, { type: packet.type });
