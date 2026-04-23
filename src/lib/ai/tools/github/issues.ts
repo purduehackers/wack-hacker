@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { env } from "../../../../env.ts";
 import { approval } from "../../approvals/index.ts";
+import { paginationInputShape } from "../_shared/constants.ts";
 import { octokit } from "./client.ts";
 
 /** Create a new issue in a repository. */
@@ -154,8 +155,7 @@ export const list_issue_comments = tool({
   inputSchema: z.object({
     repo: z.string().describe("Repository name"),
     issue_number: z.number().describe("Issue number"),
-    per_page: z.number().max(100).optional(),
-    page: z.number().optional(),
+    ...paginationInputShape,
   }),
   execute: async ({ repo, issue_number, per_page, page }) => {
     const { data } = await octokit.rest.issues.listComments({

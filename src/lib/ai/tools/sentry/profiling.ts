@@ -2,6 +2,7 @@ import { queryExploreEventsInTableFormat, unwrapResult } from "@sentry/api";
 import { tool } from "ai";
 import { z } from "zod";
 
+import { perPageField } from "../_shared/constants.ts";
 import { escapeQuery, sentryGet, sentryOpts, sentryOrg } from "./client.ts";
 
 /** Get flamegraph profiling data for a transaction. */
@@ -37,7 +38,7 @@ export const list_profiled_functions = tool({
       .enum(["p75()", "p95()", "p99()", "count()", "avg()"])
       .optional()
       .describe("Sort by aggregation. Defaults to 'p75()'."),
-    per_page: z.number().max(100).optional(),
+    per_page: perPageField,
     stat_period: z
       .string()
       .optional()

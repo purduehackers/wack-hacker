@@ -1,4 +1,4 @@
-import type { RedisLike } from "@/bot/types";
+import type { RedisClient } from "@/lib/redis/client";
 
 /**
  * Sandbox abstraction used by the coding subagent.
@@ -228,7 +228,7 @@ export interface GetOrCreateSessionParams {
   baseBranch?: string;
   baseSnapshotId?: string;
   timeoutMs?: number;
-  redis?: RedisLike;
+  redis?: RedisClient;
   /** Injection seam — tests pass a provider backed by `InMemorySandbox`. */
   provider?: SandboxProvider;
   /** Injection seam — tests can no-op the lifecycle workflow start. */
@@ -246,13 +246,13 @@ export interface SandboxProvider {
 }
 
 export interface ReleaseSessionOptions {
-  redis?: RedisLike;
+  redis?: RedisClient;
   githubToken?: string;
   provider?: SandboxProvider;
 }
 
 export interface HibernateSessionOptions {
-  redis?: RedisLike;
+  redis?: RedisClient;
   githubToken?: string;
   provider?: SandboxProvider;
 }

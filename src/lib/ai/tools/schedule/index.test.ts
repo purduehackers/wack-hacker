@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  createRichMemoryRedis,
+  createMemoryRedis,
   discordRESTClass,
   linearClientClass,
   messagePacket,
@@ -19,7 +19,7 @@ const hoisted = vi.hoisted(() => ({
 // `tasks/registry.ts` memoizes the redis instance from `Redis.fromEnv()` on
 // first use (`redis ??= ...`), so we keep the same fixture instance across
 // every test and rely on `reset()` in beforeEach to wipe state.
-const redis = createRichMemoryRedis();
+const redis = createMemoryRedis();
 
 vi.mock("workflow/api", () => ({
   start: hoisted.start,

@@ -1,6 +1,6 @@
-import { Redis } from "@upstash/redis";
+import type { RedisClient } from "@/lib/redis/client";
 
-import type { RedisLike } from "@/bot/types";
+import { createRedis } from "@/lib/redis/client";
 
 import type { ApprovalState, ApprovalStoreLike, WaitForOptions } from "./types.ts";
 
@@ -23,11 +23,7 @@ type DecisionPatch = Pick<ApprovalState, "status" | "decidedByUserId" | "decided
  * before the winner has finished writing the primary row back.
  */
 export class ApprovalStore implements ApprovalStoreLike {
-  private redis: RedisLike;
-
-  constructor(redis?: RedisLike) {
-    this.redis = redis ?? Redis.fromEnv();
-  }
+  constructor(private redis: RedisClient = createRedis()) {}
 
   private key(id: string): string {
     return `${KEY_PREFIX}${id}`;

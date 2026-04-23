@@ -1,5 +1,3 @@
-import { API } from "@discordjs/core/http-only";
-import { REST } from "@discordjs/rest";
 import { createHook, getWorkflowMetadata } from "workflow";
 
 import type { ChatMessage, SerializedAgentContext, TurnUsage } from "@/lib/ai/types";
@@ -9,8 +7,10 @@ import { ConversationStore } from "@/bot/store";
 import { buildContextSnapshot } from "@/lib/ai/snapshot";
 import { streamTurn } from "@/lib/ai/streaming";
 import { addTurnUsage, emptyTurnUsage } from "@/lib/ai/turn-usage";
+import { createDiscordAPI } from "@/lib/discord/client";
 import { createWideLogger } from "@/lib/logging/wide";
 import { countMetric, recordDuration } from "@/lib/metrics";
+import { runInstrumented } from "@/lib/otel/instrumented";
 import { withSpanFromParent } from "@/lib/otel/tracing";
 import { releaseSession } from "@/lib/sandbox/session";
 
@@ -58,37 +58,36 @@ async function runTurn(args: RunTurnArgs) {
     traceparent,
     placeholderMessageId,
   } = args;
-  return withSpanFromParent(
-    traceparent,
-    "workflow.chat.run_turn",
-    {
-      "chat.id": workflowRunId,
-      "chat.channel_id": channelId,
-      "chat.turn_index": turnIndex,
-      "chat.user_id": serializedContext.userId,
-    },
-    async () => {
-      const logger = createWideLogger({
+  const startTime = Date.now();
+  try {
+    return await runInstrumented(
+      {
         op: "workflow.chat.run_turn",
-        chat: {
-          id: workflowRunId,
-          channel_id: channelId,
-          thread_id: serializedContext.thread?.id,
-          user_id: serializedContext.userId,
-          turn_index: turnIndex,
+        traceparent,
+        spanAttrs: {
+          "chat.id": workflowRunId,
+          "chat.channel_id": channelId,
+          "chat.turn_index": turnIndex,
+          "chat.user_id": serializedContext.userId,
         },
-      });
-      const startTime = Date.now();
-      const discord = new API(new REST({ version: "10" }).setToken(process.env.DISCORD_BOT_TOKEN!));
-      try {
+        loggerContext: {
+          chat: {
+            id: workflowRunId,
+            channel_id: channelId,
+            thread_id: serializedContext.thread?.id,
+            user_id: serializedContext.userId,
+            turn_index: turnIndex,
+          },
+        },
+      },
+      async (logger) => {
+        const discord = createDiscordAPI();
         const result = await streamTurn(discord, channelId, messages, serializedContext, {
           workflowRunId,
           turnIndex,
           placeholderMessageId,
         });
-        logger.emit({
-          outcome: "ok",
-          duration_ms: Date.now() - startTime,
+        logger.set({
           turn: turnIndex === 1 ? "first" : "followup",
           tokens: result.usage.totalTokens,
           input_tokens: result.usage.inputTokens,
@@ -102,23 +101,13 @@ async function runTurn(args: RunTurnArgs) {
           discord_message_id: result.discordMessageId,
         });
         return result;
-      } catch (err) {
-        const error = err as Error;
-        logger.error(error);
-        logger.emit({
-          outcome: "error",
-          duration_ms: Date.now() - startTime,
-          error_class: error.name,
-          error_message: error.message,
-        });
-        throw err;
-      } finally {
-        recordDuration("workflow.chat.run_turn_duration", Date.now() - startTime, {
-          turn: turnIndex === 1 ? "first" : "followup",
-        });
-      }
-    },
-  );
+      },
+    );
+  } finally {
+    recordDuration("workflow.chat.run_turn_duration", Date.now() - startTime, {
+      turn: turnIndex === 1 ? "first" : "followup",
+    });
+  }
 }
 
 async function persistSnapshot(
@@ -133,50 +122,42 @@ async function persistSnapshot(
   traceparent: string | undefined,
 ) {
   "use step";
-  return withSpanFromParent(
-    traceparent,
-    "workflow.chat.persist_snapshot",
-    {
-      "chat.channel_id": channelId,
-      ...(threadId ? { "chat.thread_id": threadId } : {}),
-      "chat.user_id": args.context.userId,
-      "chat.turn_count": args.turnCount,
-    },
-    async () => {
-      const logger = createWideLogger({
+  const startTime = Date.now();
+  try {
+    // Build the snapshot inside the step. buildContextSnapshot materializes the
+    // full orchestrator tool set (AI SDK `tool()` wrappers, Zod → JSON Schema
+    // conversion), which must not run in the workflow sandbox. Best-effort: a
+    // Redis blip should not abort the chat workflow, so we swallow the rethrow.
+    await runInstrumented(
+      {
         op: "workflow.chat.persist_snapshot",
-        chat: {
-          channel_id: channelId,
-          thread_id: threadId,
-          user_id: args.context.userId,
-          turn_count: args.turnCount,
-          total_tokens: args.totalUsage.totalTokens,
+        traceparent,
+        spanAttrs: {
+          "chat.channel_id": channelId,
+          ...(threadId ? { "chat.thread_id": threadId } : {}),
+          "chat.user_id": args.context.userId,
+          "chat.turn_count": args.turnCount,
         },
-      });
-      const startTime = Date.now();
-      // Build the snapshot inside the step. buildContextSnapshot materializes the
-      // full orchestrator tool set (AI SDK `tool()` wrappers, Zod → JSON Schema
-      // conversion), which must not run in the workflow sandbox. Best-effort: a
-      // Redis blip should not abort the chat workflow.
-      try {
+        loggerContext: {
+          chat: {
+            channel_id: channelId,
+            thread_id: threadId,
+            user_id: args.context.userId,
+            turn_count: args.turnCount,
+            total_tokens: args.totalUsage.totalTokens,
+          },
+        },
+      },
+      async () => {
         const snapshot = buildContextSnapshot(args);
         await new ContextSnapshotStore().set(channelId, threadId, snapshot);
-        logger.emit({ outcome: "ok", duration_ms: Date.now() - startTime });
-      } catch (err) {
-        countMetric("workflow.chat.snapshot_error");
-        const error = err as Error;
-        logger.error(error);
-        logger.emit({
-          outcome: "error",
-          duration_ms: Date.now() - startTime,
-          error_class: error.name,
-          error_message: error.message,
-        });
-      } finally {
-        recordDuration("workflow.chat.persist_snapshot_duration", Date.now() - startTime);
-      }
-    },
-  );
+      },
+    );
+  } catch {
+    countMetric("workflow.chat.snapshot_error");
+  } finally {
+    recordDuration("workflow.chat.persist_snapshot_duration", Date.now() - startTime);
+  }
 }
 
 async function cleanupConversation(args: {

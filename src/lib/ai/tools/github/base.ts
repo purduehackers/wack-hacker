@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { env } from "../../../../env.ts";
+import { paginationInputShape } from "../_shared/constants.ts";
 import { octokit } from "./client.ts";
 
 /** List repositories in the purduehackers organization with optional filters. */
@@ -11,8 +12,7 @@ export const list_repositories = tool({
   inputSchema: z.object({
     type: z.enum(["all", "public", "private", "forks", "sources", "member"]).optional(),
     sort: z.enum(["created", "updated", "pushed", "full_name"]).optional(),
-    per_page: z.number().max(100).optional(),
-    page: z.number().optional(),
+    ...paginationInputShape,
   }),
   execute: async ({ type, sort, per_page, page }) => {
     const { data } = await octokit.rest.repos.listForOrg({
@@ -151,8 +151,7 @@ export const search_issues = tool({
       .describe("Search query with GitHub qualifiers (e.g. 'bug is:open', 'is:pr is:merged')"),
     sort: z.enum(["created", "updated", "comments"]).optional(),
     order: z.enum(["asc", "desc"]).optional(),
-    per_page: z.number().max(100).optional(),
-    page: z.number().optional(),
+    ...paginationInputShape,
   }),
   execute: async ({ query, sort, order, per_page, page }) => {
     const { data } = await octokit.rest.search.issuesAndPullRequests({

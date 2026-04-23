@@ -1,4 +1,4 @@
-import type { RedisLike } from "@/bot/types";
+import type { RedisClient } from "@/lib/redis/client";
 
 import type {
   GetOrCreateSessionParams,
@@ -43,7 +43,7 @@ function generateBranchName(repo: string): string {
 /** Exposed so the lifecycle workflow can fetch the current metadata. */
 export async function readSession(
   threadKey: string,
-  redis?: RedisLike,
+  redis?: RedisClient,
 ): Promise<SandboxSessionMetadata | null> {
   return resolveRedis(redis).get<SandboxSessionMetadata>(redisKey(threadKey));
 }
@@ -52,7 +52,7 @@ export async function readSession(
 export async function writeSession(
   threadKey: string,
   metadata: SandboxSessionMetadata,
-  redis?: RedisLike,
+  redis?: RedisClient,
 ): Promise<void> {
   const ttl = metadata.hibernated ? HIBERNATED_TTL_SECONDS : TTL_SECONDS;
   await resolveRedis(redis).set(redisKey(threadKey), metadata, { ex: ttl });
@@ -130,7 +130,7 @@ export async function getOrCreateSession(
 async function tryLiveReuse(
   cached: SandboxSessionMetadata | null,
   params: GetOrCreateSessionParams,
-  redis: RedisLike,
+  redis: RedisClient,
   provider: SandboxProvider,
 ): Promise<SandboxSession | null> {
   if (!cached) return null;
@@ -165,7 +165,7 @@ async function tryLiveReuse(
 async function discardStaleSession(
   cached: SandboxSessionMetadata,
   params: GetOrCreateSessionParams,
-  redis: RedisLike,
+  redis: RedisClient,
   provider: SandboxProvider,
 ): Promise<void> {
   const logger = createWideLogger({
@@ -196,7 +196,7 @@ async function discardStaleSession(
 
 async function provisionFreshSession(
   params: GetOrCreateSessionParams,
-  redis: RedisLike,
+  redis: RedisClient,
   provider: SandboxProvider,
 ): Promise<SandboxSession> {
   const key = redisKey(params.threadKey);

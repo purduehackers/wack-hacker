@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-import { createRichMemoryRedis } from "@/lib/test/fixtures";
+import { createMemoryRedis } from "@/lib/test/fixtures";
 
 import type { TaskMeta } from "./types";
 
 // Built once at module scope — `registry.ts` memoizes the redis instance it
 // gets back from `Redis.fromEnv`, so reassigning between tests would be
 // ignored. Reset the data in beforeEach instead.
-const redis = createRichMemoryRedis();
+const redis = createMemoryRedis();
 
 vi.mock("@upstash/redis", () => ({
   Redis: { fromEnv: () => redis },

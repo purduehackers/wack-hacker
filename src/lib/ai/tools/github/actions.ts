@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { env } from "../../../../env.ts";
 import { approval } from "../../approvals/index.ts";
+import { paginationInputShape } from "../_shared/constants.ts";
 import { octokit } from "./client.ts";
 
 /** List workflow definitions in a repository. */
@@ -10,8 +11,7 @@ export const list_workflows = tool({
   description: `List CI/CD workflows defined in a repository's .github/workflows directory. Returns each workflow's ID, name, file path, state, and URL.`,
   inputSchema: z.object({
     repo: z.string().describe("Repository name"),
-    per_page: z.number().max(100).optional(),
-    page: z.number().optional(),
+    ...paginationInputShape,
   }),
   execute: async ({ repo, per_page, page }) => {
     const { data } = await octokit.rest.actions.listRepoWorkflows({
@@ -58,8 +58,7 @@ export const list_workflow_runs = tool({
         "pending",
       ])
       .optional(),
-    per_page: z.number().max(100).optional(),
-    page: z.number().optional(),
+    ...paginationInputShape,
   }),
   execute: async ({ repo, workflow_id, branch, status, per_page, page }) => {
     if (workflow_id) {
@@ -211,8 +210,7 @@ export const list_workflow_jobs = tool({
     repo: z.string().describe("Repository name"),
     run_id: z.number().describe("Workflow run ID"),
     filter: z.enum(["latest", "all"]).optional(),
-    per_page: z.number().max(100).optional(),
-    page: z.number().optional(),
+    ...paginationInputShape,
   }),
   execute: async ({ repo, run_id, filter, per_page, page }) => {
     const { data } = await octokit.rest.actions.listJobsForWorkflowRun({

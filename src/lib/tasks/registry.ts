@@ -1,6 +1,6 @@
-import { Redis } from "@upstash/redis";
-
 import type { TaskMeta } from "./types";
+
+import { createRedis } from "../redis/client.ts";
 
 function taskKey(id: string) {
   return `task:${id}`;
@@ -12,13 +12,8 @@ function userKey(userId: string) {
   return `tasks:user:${userId}`;
 }
 
-let redis: Redis;
-function getRedis() {
-  return (redis ??= Redis.fromEnv());
-}
-
 export async function saveTask(meta: TaskMeta): Promise<void> {
-  const r = getRedis();
+  const r = createRedis();
   await Promise.all([
     r.set(taskKey(meta.id), meta),
     r.sadd(ALL_KEY, meta.id),
@@ -27,11 +22,11 @@ export async function saveTask(meta: TaskMeta): Promise<void> {
 }
 
 export async function getTask(id: string): Promise<TaskMeta | null> {
-  return getRedis().get<TaskMeta>(taskKey(id));
+  return createRedis().get<TaskMeta>(taskKey(id));
 }
 
 export async function listTasks(opts?: { userId?: string }): Promise<TaskMeta[]> {
-  const r = getRedis();
+  const r = createRedis();
   const ids = opts?.userId
     ? await r.smembers<string[]>(userKey(opts.userId))
     : await r.smembers<string[]>(ALL_KEY);
@@ -46,7 +41,7 @@ export async function listTasks(opts?: { userId?: string }): Promise<TaskMeta[]>
 }
 
 export async function removeTask(id: string): Promise<void> {
-  const r = getRedis();
+  const r = createRedis();
   const meta = await getTask(id);
   if (!meta) return;
 

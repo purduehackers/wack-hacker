@@ -3,6 +3,7 @@ import type { SearchParameters } from "@notionhq/client/build/src/api-endpoints"
 import { tool } from "ai";
 import { z } from "zod";
 
+import { cursorPaginationInputShape } from "../_shared/constants.ts";
 import { notion, richTextToPlain } from "./client.ts";
 
 /** Extract a title string from a search result (page or database). */
@@ -26,8 +27,7 @@ export const search_notion = tool({
       .enum(["page", "data_source"])
       .optional()
       .describe("Filter by object type (page or data_source)"),
-    page_size: z.number().max(100).optional(),
-    start_cursor: z.string().optional(),
+    ...cursorPaginationInputShape,
   }),
   execute: async ({ query, filter, page_size, start_cursor }) => {
     const params: SearchParameters = {
@@ -127,8 +127,7 @@ export const retrieve_bot_user = tool({
 export const list_users = tool({
   description: `List workspace users. Returns name, email, type (person or bot), and avatar URL. Use to resolve user names to IDs for people properties.`,
   inputSchema: z.object({
-    start_cursor: z.string().optional(),
-    page_size: z.number().max(100).optional(),
+    ...cursorPaginationInputShape,
   }),
   execute: async ({ start_cursor, page_size }) => {
     const { results, has_more, next_cursor } = await notion.users.list({

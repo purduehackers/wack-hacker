@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { env } from "../../../../env.ts";
 import { approval } from "../../approvals/index.ts";
+import { paginationInputShape } from "../_shared/constants.ts";
 import { octokit } from "./client.ts";
 
 /** List deployments for a repository. */
@@ -12,8 +13,7 @@ export const list_deployments = tool({
     repo: z.string().describe("Repository name"),
     environment: z.string().optional().describe("Filter by environment"),
     ref: z.string().optional().describe("Filter by ref"),
-    per_page: z.number().max(100).optional(),
-    page: z.number().optional(),
+    ...paginationInputShape,
   }),
   execute: async ({ repo, environment, ref, per_page, page }) => {
     const { data } = await octokit.rest.repos.listDeployments({
@@ -130,8 +130,7 @@ export const list_pages_builds = tool({
   description: `List GitHub Pages builds for a repository. Returns each build's status, error info, timestamps, and duration. Useful for debugging Pages deployment issues.`,
   inputSchema: z.object({
     repo: z.string().describe("Repository name"),
-    per_page: z.number().max(100).optional(),
-    page: z.number().optional(),
+    ...paginationInputShape,
   }),
   execute: async ({ repo, per_page, page }) => {
     const { data } = await octokit.rest.repos.listPagesBuilds({

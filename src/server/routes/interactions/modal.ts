@@ -4,11 +4,11 @@ import type { DiscordInteraction } from "@/lib/protocol/types";
 import * as modalHandlers from "@/bot/handlers/modals";
 import { createWideLogger } from "@/lib/logging/wide";
 import { countMetric, recordDuration } from "@/lib/metrics";
-import { withSpan } from "@/lib/otel/tracing";
+import { runInstrumented } from "@/lib/otel/instrumented";
 
 import type { DispatcherResult } from "./types.ts";
 
-import { buildDiscord, describeError, ephemeralError } from "./shared.ts";
+import { buildDiscord, ephemeralError } from "./shared.ts";
 
 const modalHandlerList = Object.values(modalHandlers).filter(
   (v) => !!v && typeof v === "object" && "prefix" in v,
@@ -30,38 +30,34 @@ export async function handleModalSubmit(
     return ephemeralError("This form is no longer supported.");
   }
 
-  return withSpan("interaction.modal", { "modal.prefix": prefix }, async () => {
-    const logger = createWideLogger({
-      op: "interaction.modal",
-      modal: { prefix, custom_id: customId },
-      user: { id: interaction.member?.user?.id ?? interaction.user?.id },
-    });
-    const startTime = Date.now();
-    countMetric("interaction.modal", { prefix });
-
-    const discord = buildDiscord();
-    try {
-      const result = await handler.handle({
-        interaction,
-        discord,
-        customId,
-        fields: extractModalFields(interaction),
-      });
-      logger.emit({ outcome: "ok", duration_ms: Date.now() - startTime });
-      return result;
-    } catch (err: unknown) {
-      countMetric("interaction.modal_error", { prefix });
-      logger.error(err as Error);
-      logger.emit({
-        outcome: "error",
-        duration_ms: Date.now() - startTime,
-        error_summary: describeError(err),
-      });
-      return ephemeralError("Something went wrong processing the form.");
-    } finally {
-      recordDuration("interaction.modal_duration", Date.now() - startTime, { prefix });
-    }
-  });
+  countMetric("interaction.modal", { prefix });
+  const startTime = Date.now();
+  try {
+    return await runInstrumented(
+      {
+        op: "interaction.modal",
+        spanAttrs: { "modal.prefix": prefix },
+        loggerContext: {
+          modal: { prefix, custom_id: customId },
+          user: { id: interaction.member?.user?.id ?? interaction.user?.id },
+        },
+      },
+      async () => {
+        const discord = buildDiscord();
+        return handler.handle({
+          interaction,
+          discord,
+          customId,
+          fields: extractModalFields(interaction),
+        });
+      },
+    );
+  } catch {
+    countMetric("interaction.modal_error", { prefix });
+    return ephemeralError("Something went wrong processing the form.");
+  } finally {
+    recordDuration("interaction.modal_duration", Date.now() - startTime, { prefix });
+  }
 }
 
 function extractModalFields(interaction: DiscordInteraction): Map<string, string> {

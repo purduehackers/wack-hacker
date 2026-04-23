@@ -3,14 +3,14 @@ import { z } from "zod";
 
 import { env } from "../../../../env.ts";
 import { approval } from "../../approvals/index.ts";
+import { paginationInputShape, perPageField } from "../_shared/constants.ts";
 import { octokit } from "./client.ts";
 
 export const list_tags = tool({
   description: "List tags for a repository. Returns tag name, commit SHA, and commit URL.",
   inputSchema: z.object({
     repo: z.string().describe("Repository name"),
-    per_page: z.number().max(100).optional(),
-    page: z.number().optional(),
+    ...paginationInputShape,
   }),
   execute: async ({ repo, per_page, page }) => {
     const { data } = await octokit.rest.repos.listTags({
@@ -35,7 +35,7 @@ export const list_refs = tool({
   inputSchema: z.object({
     repo: z.string().describe("Repository name"),
     namespace: z.enum(["heads", "tags"]).describe("heads for branches, tags for tags"),
-    per_page: z.number().max(100).optional(),
+    per_page: perPageField,
   }),
   execute: async ({ repo, namespace, per_page }) => {
     const { data } = await octokit.rest.git.listMatchingRefs({

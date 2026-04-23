@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { env } from "../../../../env.ts";
 import { approval } from "../../approvals/index.ts";
+import { paginationInputShape } from "../_shared/constants.ts";
 import { octokit } from "./client.ts";
 
 /** Create a new pull request. */
@@ -164,8 +165,7 @@ export const list_pr_reviews = tool({
   inputSchema: z.object({
     repo: z.string().describe("Repository name"),
     pull_number: z.number().describe("PR number"),
-    per_page: z.number().max(100).optional(),
-    page: z.number().optional(),
+    ...paginationInputShape,
   }),
   execute: async ({ repo, pull_number, per_page, page }) => {
     const { data } = await octokit.rest.pulls.listReviews({
@@ -219,8 +219,7 @@ export const list_pr_files = tool({
   inputSchema: z.object({
     repo: z.string().describe("Repository name"),
     pull_number: z.number().describe("PR number"),
-    per_page: z.number().max(100).optional(),
-    page: z.number().optional(),
+    ...paginationInputShape,
   }),
   execute: async ({ repo, pull_number, per_page, page }) => {
     const { data } = await octokit.rest.pulls.listFiles({
@@ -249,8 +248,7 @@ export const list_pr_comments = tool({
   inputSchema: z.object({
     repo: z.string().describe("Repository name"),
     pull_number: z.number().describe("PR number"),
-    per_page: z.number().max(100).optional(),
-    page: z.number().optional(),
+    ...paginationInputShape,
   }),
   execute: async ({ repo, pull_number, per_page, page }) => {
     const { data } = await octokit.rest.pulls.listReviewComments({

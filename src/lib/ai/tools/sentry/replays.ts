@@ -2,6 +2,7 @@ import { listAnOrganization_sReplays, retrieveAReplayInstance, unwrapResult } fr
 import { tool } from "ai";
 import { z } from "zod";
 
+import { perPageField } from "../_shared/constants.ts";
 import { sentryOpts, sentryOrg } from "./client.ts";
 
 /** List session replays. */
@@ -17,7 +18,7 @@ export const list_replays = tool({
     sort: z
       .enum(["started_at", "-started_at", "duration", "-duration", "count_errors", "-count_errors"])
       .optional(),
-    per_page: z.number().max(100).optional(),
+    per_page: perPageField,
     stat_period: z.string().optional().describe("Time range (e.g. '24h', '7d'). Defaults to '7d'."),
   }),
   execute: async ({ project_slug, query, sort, per_page, stat_period }) => {

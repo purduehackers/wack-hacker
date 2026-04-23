@@ -1,5 +1,5 @@
 export { baseApprovalState, buttonInteraction } from "./approvals";
-export { createMemoryRedis, createRichMemoryRedis, memoryStore } from "./redis";
+export { createMemoryRedis, memoryStore } from "./redis";
 export {
   messagePacket,
   reactionPacket,

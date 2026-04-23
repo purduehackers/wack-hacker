@@ -4,14 +4,14 @@ import { z } from "zod";
 import { env } from "../../../../env.ts";
 import { approval } from "../../approvals/index.ts";
 import { admin } from "../../skills/index.ts";
+import { paginationInputShape } from "../_shared/constants.ts";
 import { octokit } from "./client.ts";
 
 export const list_org_members = tool({
   description: `List members of the purduehackers organization. Optionally filter by role (all, admin, member). Returns login, ID, avatar URL, and profile URL.`,
   inputSchema: z.object({
     role: z.enum(["all", "admin", "member"]).optional(),
-    per_page: z.number().max(100).optional(),
-    page: z.number().optional(),
+    ...paginationInputShape,
   }),
   execute: async ({ role, per_page, page }) => {
     const { data } = await octokit.rest.orgs.listMembers({
@@ -52,8 +52,7 @@ export const get_org_member = tool({
 export const list_teams = tool({
   description: `List teams in the purduehackers organization. Returns ID, name, slug, description, privacy, and URL.`,
   inputSchema: z.object({
-    per_page: z.number().max(100).optional(),
-    page: z.number().optional(),
+    ...paginationInputShape,
   }),
   execute: async ({ per_page, page }) => {
     const { data } = await octokit.rest.teams.list({
@@ -100,8 +99,7 @@ export const list_team_members = tool({
   inputSchema: z.object({
     team_slug: z.string().describe("Team slug"),
     role: z.enum(["all", "member", "maintainer"]).optional(),
-    per_page: z.number().max(100).optional(),
-    page: z.number().optional(),
+    ...paginationInputShape,
   }),
   execute: async ({ team_slug, role, per_page, page }) => {
     const { data } = await octokit.rest.teams.listMembersInOrg({
@@ -119,8 +117,7 @@ export const list_repo_webhooks = tool({
   description: `List webhooks configured for a repository. Returns ID, active status, subscribed events, and config URL.`,
   inputSchema: z.object({
     repo: z.string().describe("Repository name"),
-    per_page: z.number().max(100).optional(),
-    page: z.number().optional(),
+    ...paginationInputShape,
   }),
   execute: async ({ repo, per_page, page }) => {
     const { data } = await octokit.rest.repos.listWebhooks({
@@ -300,8 +297,7 @@ export const delete_webhook = approval(
 export const list_org_webhooks = tool({
   description: `List webhooks configured for the purduehackers organization. Returns ID, active status, subscribed events, and config URL.`,
   inputSchema: z.object({
-    per_page: z.number().max(100).optional(),
-    page: z.number().optional(),
+    ...paginationInputShape,
   }),
   execute: async ({ per_page, page }) => {
     const { data } = await octokit.rest.orgs.listWebhooks({

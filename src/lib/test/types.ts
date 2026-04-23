@@ -57,22 +57,6 @@ export interface FakeSlashCommandCtxOptions {
   noMember?: boolean;
 }
 
-export interface RichMemoryRedisPipeline {
-  get(key: string): RichMemoryRedisPipeline;
-  exec<T>(): Promise<T>;
-}
-
-export interface RichMemoryRedis {
-  get<T>(key: string): Promise<T | null>;
-  set(key: string, value: unknown): Promise<"OK">;
-  del(key: string): Promise<number>;
-  sadd(key: string, ...members: string[]): Promise<number>;
-  smembers<T>(key: string): Promise<T>;
-  srem(key: string, ...members: string[]): Promise<number>;
-  pipeline(): RichMemoryRedisPipeline;
-  reset(): void;
-}
-
 // ─── sandbox test fixtures ────────────────────────────────────────────────
 
 export type ExecHandler = (

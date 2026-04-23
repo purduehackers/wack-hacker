@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  createRichMemoryRedis,
+  createMemoryRedis,
   discordRESTClass,
   installMockProvider,
   linearClientClass,
@@ -12,9 +12,9 @@ import {
   uninstallMockProvider,
 } from "@/lib/test/fixtures";
 
-// Shared mock Discord API — task.ts constructs `new API(new REST(...).setToken(...))`
-// at runtime, so we mock the API class and expose outgoing `createMessage`
-// calls through a module-scoped spy.
+// Shared mock Discord API — task.ts calls `createDiscordAPI()` which constructs
+// `new API(new REST(...).setToken(...))` at runtime, so we mock the API class
+// and expose outgoing `createMessage` calls through a module-scoped spy.
 const hoisted = vi.hoisted(() => ({
   createMessage: vi.fn(async (_ch: string, body: { content: string }) => ({
     id: "msg-1",
@@ -30,7 +30,7 @@ const hoisted = vi.hoisted(() => ({
 // `tasks/registry.ts` memoizes the redis instance from `Redis.fromEnv()` on
 // first use (`redis ??= ...`), so we keep the same fixture instance across
 // every test and rely on `reset()` in beforeEach to wipe state.
-const redis = createRichMemoryRedis();
+const redis = createMemoryRedis();
 
 vi.mock("@discordjs/core/http-only", () => ({
   API: class MockAPI {

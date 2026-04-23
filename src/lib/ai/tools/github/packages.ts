@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { env } from "../../../../env.ts";
 import { approval } from "../../approvals/index.ts";
+import { paginationInputShape } from "../_shared/constants.ts";
 import { octokit } from "./client.ts";
 
 const packageTypeSchema = z.enum(["npm", "maven", "rubygems", "docker", "nuget", "container"]);
@@ -12,8 +13,7 @@ export const list_packages = tool({
   description: `List packages in the purduehackers organization filtered by package type (npm, docker, container, etc.). Returns each package's ID, name, type, visibility, URL, and timestamps.`,
   inputSchema: z.object({
     package_type: packageTypeSchema.describe("Package type"),
-    per_page: z.number().max(100).optional(),
-    page: z.number().optional(),
+    ...paginationInputShape,
   }),
   execute: async ({ package_type, per_page, page }) => {
     const { data } = await octokit.rest.packages.listPackagesForOrganization({
@@ -67,8 +67,7 @@ export const list_package_versions = tool({
   inputSchema: z.object({
     package_type: packageTypeSchema,
     package_name: z.string().describe("Package name"),
-    per_page: z.number().max(100).optional(),
-    page: z.number().optional(),
+    ...paginationInputShape,
   }),
   execute: async ({ package_type, package_name, per_page, page }) => {
     const { data } = await octokit.rest.packages.getAllPackageVersionsForPackageOwnedByOrg({

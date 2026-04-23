@@ -4,6 +4,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { approval } from "../../approvals/index.ts";
+import { cursorPaginationInputShape } from "../_shared/constants.ts";
 import { notion } from "./client.ts";
 import { COMPANIES_DATA_SOURCE_ID } from "./constants.ts";
 
@@ -33,8 +34,7 @@ export const list_companies = tool({
         }),
       )
       .optional(),
-    page_size: z.number().max(100).optional(),
-    start_cursor: z.string().optional(),
+    ...cursorPaginationInputShape,
   }),
   execute: async ({ filter, sorts, page_size, start_cursor }) => {
     const params = {

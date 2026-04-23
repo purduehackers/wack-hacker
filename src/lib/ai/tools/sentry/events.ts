@@ -8,6 +8,7 @@ import {
 import { tool } from "ai";
 import { z } from "zod";
 
+import { perPageField } from "../_shared/constants.ts";
 import { sentryOpts, sentryOrg } from "./client.ts";
 
 /** List events (occurrences) for a Sentry issue. */
@@ -112,7 +113,7 @@ export const list_project_events = tool({
   inputSchema: z.object({
     project_slug: z.string().describe("Project slug"),
     query: z.string().optional().describe("Search query to filter events"),
-    per_page: z.number().max(100).optional(),
+    per_page: perPageField,
     cursor: z.string().optional().describe("Pagination cursor"),
   }),
   execute: async ({ project_slug, cursor }) => {

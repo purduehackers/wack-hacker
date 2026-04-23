@@ -9,6 +9,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { approval } from "../../approvals/index.ts";
+import { cursorPaginationInputShape } from "../_shared/constants.ts";
 import { notion } from "./client.ts";
 
 function parseIcon(icon: string | undefined) {
@@ -88,8 +89,7 @@ export const retrieve_page_property = tool({
   inputSchema: z.object({
     page_id: z.string().describe("Page UUID"),
     property_id: z.string().describe("Property ID (from retrieve_page results)"),
-    start_cursor: z.string().optional(),
-    page_size: z.number().max(100).optional(),
+    ...cursorPaginationInputShape,
   }),
   execute: async ({ page_id, property_id, start_cursor, page_size }) => {
     const result = await notion.pages.properties.retrieve({

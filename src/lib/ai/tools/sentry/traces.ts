@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { perPageField } from "../_shared/constants.ts";
 import { sentryGet, sentryOrg } from "./client.ts";
 
 /** Get a full distributed trace by trace ID. */
@@ -28,7 +29,7 @@ export const list_traces = tool({
     project_slug: z.string().describe("Project slug"),
     query: z.string().optional().describe("Filter query (e.g. 'transaction:GET /api/users')"),
     sort: z.string().optional().describe("Sort field (e.g. '-timestamp', '-duration')"),
-    per_page: z.number().max(100).optional(),
+    per_page: perPageField,
     stat_period: z
       .string()
       .optional()

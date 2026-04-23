@@ -4,6 +4,7 @@ import { z } from "zod";
 import { env } from "../../../../env.ts";
 import { approval } from "../../approvals/index.ts";
 import { admin } from "../../skills/index.ts";
+import { perPageField } from "../_shared/constants.ts";
 import { octokit } from "./client.ts";
 
 export const list_collaborators = tool({
@@ -12,7 +13,7 @@ export const list_collaborators = tool({
   inputSchema: z.object({
     repo: z.string().describe("Repository name"),
     affiliation: z.enum(["outside", "direct", "all"]).optional(),
-    per_page: z.number().max(100).optional(),
+    per_page: perPageField,
   }),
   execute: async ({ repo, affiliation, per_page }) => {
     const { data } = await octokit.rest.repos.listCollaborators({
@@ -85,7 +86,7 @@ export const list_repo_invitations = admin(
       "List pending collaborator invitations for a repository. Returns inviter, invitee, permission, and URL.",
     inputSchema: z.object({
       repo: z.string().describe("Repository name"),
-      per_page: z.number().max(100).optional(),
+      per_page: perPageField,
     }),
     execute: async ({ repo, per_page }) => {
       const { data } = await octokit.rest.repos.listInvitations({

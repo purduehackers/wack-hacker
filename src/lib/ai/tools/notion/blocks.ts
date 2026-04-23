@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { approval } from "../../approvals/index.ts";
+import { cursorPaginationInputShape } from "../_shared/constants.ts";
 import { notion } from "./client.ts";
 
 export const retrieve_block = tool({
@@ -58,8 +59,7 @@ export const list_block_children = tool({
     "List a block's child blocks (for a page or container block). Paginated. Returns each child's ID, type, and summary content.",
   inputSchema: z.object({
     block_id: z.string().describe("Parent block or page UUID"),
-    start_cursor: z.string().optional(),
-    page_size: z.number().max(100).optional(),
+    ...cursorPaginationInputShape,
   }),
   execute: async ({ block_id, start_cursor, page_size }) => {
     const { results, has_more, next_cursor } = await notion.blocks.children.list({
