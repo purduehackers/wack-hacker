@@ -11,7 +11,7 @@ import { streamTurn } from "@/lib/ai/streaming";
 import { addTurnUsage, emptyTurnUsage } from "@/lib/ai/turn-usage";
 import { createWideLogger } from "@/lib/logging/wide";
 import { countMetric, recordDuration } from "@/lib/metrics";
-import { withSpan } from "@/lib/otel/tracing";
+import { withSpanFromParent } from "@/lib/otel/tracing";
 import { releaseSession } from "@/lib/sandbox/session";
 
 import type { ChatHookEvent, ChatPayload } from "./types";
@@ -32,15 +32,20 @@ function capHistory(messages: ChatMessage[]): void {
   messages.splice(0, excess + (excess % 2));
 }
 
-async function runTurn(
-  channelId: string,
-  messages: ChatMessage[],
-  serializedContext: SerializedAgentContext,
-  workflowRunId: string,
-  turnIndex: number,
-) {
+interface RunTurnArgs {
+  channelId: string;
+  messages: ChatMessage[];
+  serializedContext: SerializedAgentContext;
+  workflowRunId: string;
+  turnIndex: number;
+  traceparent: string | undefined;
+}
+
+async function runTurn(args: RunTurnArgs) {
   "use step";
-  return withSpan(
+  const { channelId, messages, serializedContext, workflowRunId, turnIndex, traceparent } = args;
+  return withSpanFromParent(
+    traceparent,
     "workflow.chat.run_turn",
     {
       "chat.id": workflowRunId,
@@ -98,9 +103,11 @@ async function persistSnapshot(
     totalUsage: TurnUsage;
     turnCount: number;
   },
+  traceparent: string | undefined,
 ) {
   "use step";
-  return withSpan(
+  return withSpanFromParent(
+    traceparent,
     "workflow.chat.persist_snapshot",
     {
       "chat.channel_id": channelId,
@@ -137,9 +144,14 @@ async function persistSnapshot(
   );
 }
 
-async function cleanupConversation(channelId: string, threadId: string | undefined) {
+async function cleanupConversation(
+  channelId: string,
+  threadId: string | undefined,
+  traceparent: string | undefined,
+) {
   "use step";
-  return withSpan(
+  return withSpanFromParent(
+    traceparent,
     "workflow.chat.cleanup",
     {
       "chat.channel_id": channelId,
@@ -183,11 +195,41 @@ async function cleanupConversation(channelId: string, threadId: string | undefin
   );
 }
 
-export async function chatWorkflow(payload: ChatPayload) {
-  "use workflow";
-
+async function runFirstTurn(args: {
+  payload: ChatPayload;
+  workflowRunId: string;
+  traceparent: string | undefined;
+}): Promise<{ messages: ChatMessage[]; totalUsage: TurnUsage }> {
+  const { payload, workflowRunId, traceparent } = args;
   const { channelId, threadId, content, context } = payload;
-  const { workflowRunId } = getWorkflowMetadata();
+  const messages: ChatMessage[] = [{ role: "user", content }];
+  const first = await runTurn({
+    channelId,
+    messages,
+    serializedContext: context,
+    workflowRunId,
+    turnIndex: 1,
+    traceparent,
+  });
+  messages.push({ role: "assistant", content: first.text });
+  capHistory(messages);
+  const totalUsage = addTurnUsage(emptyTurnUsage(), first.usage);
+  await persistSnapshot(
+    channelId,
+    threadId,
+    { context, messages, totalUsage, turnCount: 1 },
+    traceparent,
+  );
+  return { messages, totalUsage };
+}
+
+/**
+ * Run the chat workflow body. Extracted from `chatWorkflow` so the outer
+ * function can stay a thin span wrapper. Assumes it's invoked inside a
+ * `workflow.chat` span whose trace id was joined to the initiating mention.
+ */
+async function runChatWorkflow(payload: ChatPayload, workflowRunId: string): Promise<void> {
+  const { channelId, threadId, context, traceparent } = payload;
 
   const workflowLogger = createWideLogger({
     op: "workflow.chat",
@@ -209,15 +251,20 @@ export async function chatWorkflow(payload: ChatPayload) {
   const stableRecentMessages = context.recentMessages;
   const stableReferencedContext = context.referencedContext;
 
-  const workflowStart = Date.now();
-  const messages: ChatMessage[] = [{ role: "user", content }];
-  const first = await runTurn(channelId, messages, context, workflowRunId, 1);
-  messages.push({ role: "assistant", content: first.text });
-  capHistory(messages);
+  // Tracks the trace each turn's step spans join. Starts at the initial
+  // mention's traceparent and updates on every hook event so followup turns
+  // join their own mention's trace. Steps run in separate executions that do
+  // not inherit OTEL context, so we pass this through explicitly.
+  let currentTraceparent = traceparent;
 
+  const workflowStart = Date.now();
+  const { messages, totalUsage: initialUsage } = await runFirstTurn({
+    payload,
+    workflowRunId,
+    traceparent: currentTraceparent,
+  });
   let turnCount = 1;
-  let totalUsage = addTurnUsage(emptyTurnUsage(), first.usage);
-  await persistSnapshot(channelId, threadId, { context, messages, totalUsage, turnCount });
+  let totalUsage = initialUsage;
 
   using hook = createHook<ChatHookEvent>({ token: workflowRunId });
 
@@ -234,6 +281,8 @@ export async function chatWorkflow(payload: ChatPayload) {
 
     countMetric("workflow.chat.followup");
 
+    if (event.traceparent) currentTraceparent = event.traceparent;
+
     // Merge the fresh per-turn identity from the event with the stable
     // location + lead-in pinned at workflow start.
     const turnContext: SerializedAgentContext = {
@@ -245,20 +294,27 @@ export async function chatWorkflow(payload: ChatPayload) {
     };
 
     messages.push({ role: "user", content: event.content });
-    const turn = await runTurn(channelId, messages, turnContext, workflowRunId, turnCount + 1);
+    const turn = await runTurn({
+      channelId,
+      messages,
+      serializedContext: turnContext,
+      workflowRunId,
+      turnIndex: turnCount + 1,
+      traceparent: currentTraceparent,
+    });
     messages.push({ role: "assistant", content: turn.text });
     capHistory(messages);
     turnCount += 1;
     totalUsage = addTurnUsage(totalUsage, turn.usage);
-    await persistSnapshot(channelId, threadId, {
-      context: turnContext,
-      messages,
-      totalUsage,
-      turnCount,
-    });
+    await persistSnapshot(
+      channelId,
+      threadId,
+      { context: turnContext, messages, totalUsage, turnCount },
+      currentTraceparent,
+    );
   }
 
-  await cleanupConversation(channelId, threadId);
+  await cleanupConversation(channelId, threadId, currentTraceparent);
   workflowLogger.emit({
     outcome: "ok",
     duration_ms: Date.now() - workflowStart,
@@ -267,4 +323,22 @@ export async function chatWorkflow(payload: ChatPayload) {
     total_tokens: totalUsage.totalTokens,
     tool_calls: totalUsage.toolCallCount,
   });
+}
+
+export async function chatWorkflow(payload: ChatPayload) {
+  "use workflow";
+
+  const { workflowRunId } = getWorkflowMetadata();
+
+  return withSpanFromParent(
+    payload.traceparent,
+    "workflow.chat",
+    {
+      "chat.id": workflowRunId,
+      "chat.channel_id": payload.channelId,
+      ...(payload.threadId ? { "chat.thread_id": payload.threadId } : {}),
+      "chat.user_id": payload.context.userId,
+    },
+    () => runChatWorkflow(payload, workflowRunId),
+  );
 }

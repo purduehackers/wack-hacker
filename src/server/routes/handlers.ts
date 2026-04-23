@@ -10,7 +10,7 @@ import { EventRouter } from "@/bot/router";
 import { AgentContext } from "@/lib/ai/context";
 import { createWideLogger } from "@/lib/logging/wide";
 import { countMetric } from "@/lib/metrics";
-import { withSpan } from "@/lib/otel/tracing";
+import { captureTraceparent, withSpan } from "@/lib/otel/tracing";
 
 export const router = new EventRouter();
 
@@ -50,6 +50,7 @@ router.onMessage(async (packet, ctx) => {
           type: "message",
           content: packet.data.content,
           context: turnContext,
+          traceparent: captureTraceparent(),
         };
         await resumeHook(existing.workflowRunId, event);
         await ctx.store.touch(channelId);
