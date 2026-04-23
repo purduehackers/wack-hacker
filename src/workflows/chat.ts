@@ -39,11 +39,25 @@ interface RunTurnArgs {
   workflowRunId: string;
   turnIndex: number;
   traceparent: string | undefined;
+  /**
+   * Pre-created "> Thinking..." message id from the mention handler. Set only
+   * on the first turn of a fresh workflow so the renderer adopts it instead
+   * of posting a new placeholder.
+   */
+  placeholderMessageId?: string;
 }
 
 async function runTurn(args: RunTurnArgs) {
   "use step";
-  const { channelId, messages, serializedContext, workflowRunId, turnIndex, traceparent } = args;
+  const {
+    channelId,
+    messages,
+    serializedContext,
+    workflowRunId,
+    turnIndex,
+    traceparent,
+    placeholderMessageId,
+  } = args;
   return withSpanFromParent(
     traceparent,
     "workflow.chat.run_turn",
@@ -70,6 +84,7 @@ async function runTurn(args: RunTurnArgs) {
         const result = await streamTurn(discord, channelId, messages, serializedContext, {
           workflowRunId,
           turnIndex,
+          placeholderMessageId,
         });
         logger.emit({
           outcome: "ok",
@@ -257,7 +272,7 @@ async function runFirstTurn(args: {
   traceparent: string | undefined;
 }): Promise<{ messages: ChatMessage[]; totalUsage: TurnUsage }> {
   const { payload, workflowRunId, traceparent } = args;
-  const { channelId, threadId, content, context } = payload;
+  const { channelId, threadId, content, context, placeholderMessageId } = payload;
   const messages: ChatMessage[] = [{ role: "user", content }];
   const first = await runTurn({
     channelId,
@@ -266,6 +281,7 @@ async function runFirstTurn(args: {
     workflowRunId,
     turnIndex: 1,
     traceparent,
+    placeholderMessageId,
   });
   messages.push({ role: "assistant", content: first.text });
   capHistory(messages);

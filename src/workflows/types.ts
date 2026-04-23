@@ -13,6 +13,16 @@ export interface ChatPayload {
    * body + steps) lives in the same trace as the originating mention.
    */
   traceparent?: string;
+  /**
+   * Discord message id for a "> Thinking..." placeholder the mention handler
+   * pre-created before enqueuing the workflow. When set, the first turn's
+   * renderer adopts it instead of posting a new placeholder — pulls the
+   * placeholder visibility ahead of workflow cold-start + the first step
+   * boundary. Undefined when the handler couldn't pre-create one (e.g. the
+   * Discord API call failed); the renderer then creates the placeholder
+   * itself as a fallback.
+   */
+  placeholderMessageId?: string;
 }
 
 export type ChatHookEvent =

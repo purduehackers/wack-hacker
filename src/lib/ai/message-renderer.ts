@@ -30,14 +30,29 @@ export class MessageRenderer {
     return this.text;
   }
 
-  /** Create initial placeholder message. */
-  async init(): Promise<void> {
-    const msg = await this.discord.channels.createMessage(this.channelId, {
-      content: "> Thinking...",
-    });
-    this.messageId = msg.id;
+  /**
+   * Adopt or create the initial placeholder message.
+   *
+   * When `existingMessageId` is provided, the renderer takes over an already
+   * posted "> Thinking..." message — the mention handler pre-creates one so
+   * the placeholder appears before workflow cold-start. Otherwise the
+   * renderer creates the placeholder itself.
+   *
+   * `lastEdit` is seeded at 0 (not `Date.now()`) so the first real-content
+   * `flush()` after init bypasses the 1.5s rate limit — users see the first
+   * streamed chunk as soon as it arrives instead of waiting for the throttle.
+   */
+  async init(opts?: { existingMessageId?: string }): Promise<void> {
+    if (opts?.existingMessageId) {
+      this.messageId = opts.existingMessageId;
+    } else {
+      const msg = await this.discord.channels.createMessage(this.channelId, {
+        content: "> Thinking...",
+      });
+      this.messageId = msg.id;
+    }
     this.lastRendered = "> Thinking...";
-    this.lastEdit = Date.now();
+    this.lastEdit = 0;
   }
 
   /** Append streamed text. Clears activity/preview since text is arriving. */

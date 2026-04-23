@@ -198,6 +198,33 @@ describe("MessageRenderer instance", () => {
     expect(sends[0]).toEqual(["ch-1", { content: "> Thinking..." }]);
   });
 
+  it("init adopts an existing message id without creating one", async () => {
+    const discord = createMockAPI();
+    const renderer = new MessageRenderer(asAPI(discord), "ch-1");
+    await renderer.init({ existingMessageId: "pre-posted-1" });
+
+    // No new placeholder — the renderer adopts the pre-posted message.
+    expect(discord.callsTo("channels.createMessage")).toHaveLength(0);
+
+    // Subsequent flush edits target the pre-posted message id.
+    await renderer.appendText("Hello!");
+    const edits = discord.callsTo("channels.editMessage");
+    expect(edits.length).toBeGreaterThanOrEqual(1);
+    expect(edits[edits.length - 1][1]).toBe("pre-posted-1");
+  });
+
+  it("init seeds lastEdit at 0 so the first flush goes through immediately", async () => {
+    // No Date.now mock — if `lastEdit` were seeded with `Date.now()`, the
+    // first flush would be throttled for 1500ms. Seeding at 0 lets the first
+    // delta edit the placeholder right away.
+    const discord = createMockAPI();
+    const renderer = new MessageRenderer(asAPI(discord), "ch-1");
+    await renderer.init();
+    await renderer.appendText("Hi!");
+
+    expect(discord.callsTo("channels.editMessage")).toHaveLength(1);
+  });
+
   it("appendText accumulates text", async () => {
     const discord = createMockAPI();
     const renderer = new MessageRenderer(asAPI(discord), "ch-1");

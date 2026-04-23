@@ -120,7 +120,13 @@ async function runStreamTurn(args: {
   chatAttrs: ReturnType<typeof buildChatAttributes> | undefined;
 }): Promise<StreamTurnResult> {
   const { discord, channelId, messages, serializedContext, options, chatAttrs } = args;
-  const { taskId, createAgent = createOrchestrator, workflowRunId, turnIndex } = options;
+  const {
+    taskId,
+    createAgent = createOrchestrator,
+    workflowRunId,
+    turnIndex,
+    placeholderMessageId,
+  } = options;
   const agentCtx = AgentContext.fromJSON(serializedContext);
   const tracker = new TurnUsageTracker();
   // The `OrchestratorFactory` return type is a structural subset of the real
@@ -142,7 +148,7 @@ async function runStreamTurn(args: {
     ...(taskId ? { task: { id: taskId } } : {}),
   });
 
-  await renderer.init();
+  await renderer.init({ existingMessageId: placeholderMessageId });
 
   const priorMessages = messages.slice(0, -1).map((m) => ({ role: m.role, content: m.content }));
   const current = messages[messages.length - 1];

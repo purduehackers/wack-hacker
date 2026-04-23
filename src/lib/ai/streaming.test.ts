@@ -178,6 +178,28 @@ describe("streamTurn: basic text rendering", () => {
     expect(body.content).toMatch(/-# .+s · 150 tokens/);
   });
 
+  it("adopts placeholderMessageId instead of posting a new placeholder", async () => {
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+      placeholderMessageId: "pre-posted-1",
+      createAgent: fakeOrchestrator(["Hello!"]),
+    });
+
+    // The renderer edits the pre-posted placeholder during streaming and on
+    // finalize; it never calls createMessage for the placeholder. (A
+    // createMessage could still happen as an overflow chunk, but not for the
+    // placeholder — and this turn's response is short enough that it won't.)
+    const sends = discord.callsTo("channels.createMessage");
+    expect(sends).toHaveLength(0);
+
+    const edits = discord.callsTo("channels.editMessage");
+    expect(edits.length).toBeGreaterThanOrEqual(1);
+    expect(edits[edits.length - 1][1]).toBe("pre-posted-1");
+    expect(result.discordMessageId).toBe("pre-posted-1");
+  });
+
   it("includes task ID in footer when taskId is provided", async () => {
     const discord = createMockAPI();
     const ctx = AgentContext.fromPacket(messagePacket("hello"));

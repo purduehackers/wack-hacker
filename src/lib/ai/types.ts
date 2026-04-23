@@ -274,4 +274,11 @@ export interface StreamTurnOptions {
   workflowRunId?: string;
   /** Turn number within the conversation (1 = first turn). */
   turnIndex?: number;
+  /**
+   * Pre-created "> Thinking..." placeholder id. When provided, the renderer
+   * edits this message instead of posting a new one. Used on the first turn
+   * of a fresh workflow — the mention handler posts the placeholder before
+   * enqueuing the workflow so it's visible ahead of workflow cold-start.
+   */
+  placeholderMessageId?: string;
 }
