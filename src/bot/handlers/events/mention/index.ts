@@ -206,14 +206,27 @@ async function startFreshWorkflow(args: {
 }): Promise<void> {
   const { packet, ctx, content, routing, logger, startTime } = args;
   const { data } = packet;
-  const { conversationChannelId, conversationThreadId, createdThread } =
-    await ensureConversationThread({ ctx, packet, routing, content, logger });
+  // Thread creation and lead-in fetch are independent — they only converge
+  // when we build turnContext below. Parallelizing saves one Discord RTT on
+  // the fresh-workflow path (min of the two, typically 50–200ms).
+  const [threadResult, leadIn] = await Promise.all([
+    ensureConversationThread({ ctx, packet, routing, content, logger }),
+    fetchLeadInMessages(ctx.discord, routing.sourceChannelId, data),
+  ]);
+  const { conversationChannelId, conversationThreadId, createdThread } = threadResult;
+  const { recentMessages, referencedContext } = leadIn;
 
-  const { recentMessages, referencedContext } = await fetchLeadInMessages(
-    ctx.discord,
-    routing.sourceChannelId,
-    data,
-  );
+  // Pre-create the "> Thinking..." placeholder so it's visible before workflow
+  // cold-start and the first step boundary. Best-effort: on failure, leave
+  // placeholderMessageId undefined and the workflow's renderer will create
+  // one itself as a fallback.
+  const placeholder = await ctx.discord.channels
+    .createMessage(conversationChannelId, { content: "> Thinking..." })
+    .catch((err) => {
+      countMetric("chat.placeholder.create_failed");
+      logger.warn("placeholder create failed", { reason: String(err) });
+      return undefined;
+    });
 
   const turnContext = AgentContext.fromPacket(packet, {
     threadOverride: createdThread,
@@ -228,6 +241,7 @@ async function startFreshWorkflow(args: {
       content,
       context: turnContext,
       traceparent: captureTraceparent(),
+      placeholderMessageId: placeholder?.id,
     },
   ]);
 
