@@ -150,6 +150,19 @@ describe("splitOggOpus bypass path", () => {
     expect(result.headerBytes).toBe(0);
     expect(result.totalPages).toBe(0);
   });
+
+  it("uses default 20 MB target when called without options", () => {
+    const { buffer } = buildStream([200, 200, 200]);
+    const result = splitOggOpus(buffer);
+    expect(result.chunks).toHaveLength(1);
+    expect(result.chunks[0]).toBe(buffer);
+  });
+
+  it("falls back to DEFAULT_MAX_CHUNKS when maxChunks option is omitted", () => {
+    const { buffer, headerBytes } = buildStream([400, 400, 400, 400, 400, 400]);
+    const result = splitOggOpus(buffer, { targetBytes: headerBytes + 900 });
+    expect(result.chunks.length).toBeGreaterThan(1);
+  });
 });
 
 describe("splitOggOpus chunking behavior", () => {

@@ -21,20 +21,15 @@ const EOS_FLAG = 0x04;
  * every emitted chunk, `pageSequenceNumber` is renumbered, and CRC-32
  * checksums are recomputed for each rewritten page.
  */
-export function splitOggOpus(buffer: Uint8Array, options: OggSplitOptions = {}): OggSplitResult {
-  const targetBytes = options.targetBytes ?? DEFAULT_TARGET_BYTES;
-  const maxChunks = options.maxChunks ?? DEFAULT_MAX_CHUNKS;
+export function splitOggOpus(buffer: Uint8Array, options?: OggSplitOptions): OggSplitResult {
+  const targetBytes = options?.targetBytes ?? DEFAULT_TARGET_BYTES;
+  const maxChunks = options?.maxChunks ?? DEFAULT_MAX_CHUNKS;
 
   if (buffer.byteLength <= targetBytes) {
     return { chunks: [buffer], headerBytes: 0, totalPages: 0 };
   }
 
-  let pages: OggPage[];
-  try {
-    pages = new CodecParser<OggPage>("audio/ogg").parseAll(buffer);
-  } catch (err) {
-    throw new OggSplitParseError("Failed to parse OGG stream: " + String(err));
-  }
+  const pages: OggPage[] = new CodecParser<OggPage>("audio/ogg").parseAll(buffer);
 
   if (pages.length < 2) {
     throw new OggSplitParseError("Expected at least 2 header pages, got " + pages.length);
@@ -54,6 +49,8 @@ export function splitOggOpus(buffer: Uint8Array, options: OggSplitOptions = {}):
     );
   }
 
+  // audioPages is non-empty (guarded above) and every loop iteration pushes
+  // onto `current`, so post-loop `current` always has ≥1 page to emit.
   const groups: OggPage[][] = [];
   let current: OggPage[] = [];
   let currentBytes = 0;
@@ -67,7 +64,7 @@ export function splitOggOpus(buffer: Uint8Array, options: OggSplitOptions = {}):
     current.push(audio);
     currentBytes += pageLen;
   }
-  if (current.length > 0) groups.push(current);
+  groups.push(current);
 
   if (groups.length > maxChunks) {
     throw new OggSplitTooLargeError(groups.length, maxChunks);
