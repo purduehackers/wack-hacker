@@ -50,7 +50,7 @@ describe("MessageRenderer.formatFooter", () => {
     ).toBe("-# 0.5s");
   });
 
-  it("appends the trace id when provided", () => {
+  it("puts the trace id first when provided", () => {
     expect(
       MessageRenderer.formatFooter({
         elapsedMs: 500,
@@ -59,7 +59,7 @@ describe("MessageRenderer.formatFooter", () => {
         stepCount: 1,
         traceId: "abc123def456",
       }),
-    ).toBe("-# 0.5s · 100 tokens · Trace: `abc123def456`");
+    ).toBe("-# `abc123def456` · 0.5s · 100 tokens");
   });
 });
 
