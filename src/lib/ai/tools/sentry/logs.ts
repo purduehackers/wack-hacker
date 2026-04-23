@@ -6,6 +6,7 @@ import {
 import { tool } from "ai";
 import { z } from "zod";
 
+import { perPageField } from "../_shared/constants.ts";
 import { sentryOpts, sentryOrg } from "./client.ts";
 
 /** Search structured logs. */
@@ -20,7 +21,7 @@ export const search_logs = tool({
       .optional()
       .describe("Fields to return (e.g. ['message', 'level', 'timestamp', 'trace_id'])"),
     sort: z.string().optional().describe("Sort field (e.g. '-timestamp')"),
-    per_page: z.number().max(100).optional(),
+    per_page: perPageField,
     stat_period: z
       .string()
       .optional()

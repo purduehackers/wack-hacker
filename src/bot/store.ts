@@ -1,10 +1,12 @@
-import { Redis } from "@upstash/redis";
+import type { RedisClient } from "@/lib/redis/client";
 
 import { withSpan } from "@/lib/otel/tracing";
+import { createRedis } from "@/lib/redis/client";
 
-import type { ConversationState, RedisLike } from "./types";
+import type { ConversationState } from "./types";
 
-export type { ConversationState, RedisLike } from "./types";
+export type { ConversationState } from "./types";
+export type { RedisClient } from "@/lib/redis/client";
 
 const TTL = 60 * 60;
 const DEDUP_TTL_MS = 5 * 60 * 1000;
@@ -18,11 +20,7 @@ else
 end`;
 
 export class ConversationStore {
-  private redis: RedisLike;
-
-  constructor(redis?: RedisLike) {
-    this.redis = redis ?? Redis.fromEnv();
-  }
+  constructor(private redis: RedisClient = createRedis()) {}
 
   private key(channelId: string, threadId?: string): string {
     return `conversation:${threadId ?? channelId}`;

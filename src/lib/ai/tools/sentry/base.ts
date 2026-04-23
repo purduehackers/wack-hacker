@@ -8,6 +8,7 @@ import {
 import { tool } from "ai";
 import { z } from "zod";
 
+import { perPageField } from "../_shared/constants.ts";
 import { sentryOpts, sentryOrg } from "./client.ts";
 
 /** List all projects in the Sentry organization. */
@@ -62,7 +63,7 @@ export const search_issues = tool({
     query: z.string().optional().describe("Sentry search query (e.g. 'is:unresolved level:error')"),
     project_slug: z.string().optional().describe("Filter by project slug"),
     sort: z.enum(["date", "new", "freq", "priority"]).optional(),
-    per_page: z.number().max(100).optional(),
+    per_page: perPageField,
     cursor: z.string().optional().describe("Pagination cursor from previous response"),
   }),
   execute: async ({ query, project_slug, sort, per_page, cursor }) => {

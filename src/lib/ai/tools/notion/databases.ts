@@ -8,6 +8,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { approval } from "../../approvals/index.ts";
+import { cursorPaginationInputShape } from "../_shared/constants.ts";
 import { notion, richTextToPlain } from "./client.ts";
 
 export const query_database = tool({
@@ -27,8 +28,7 @@ export const query_database = tool({
         }),
       )
       .optional(),
-    page_size: z.number().max(100).optional(),
-    start_cursor: z.string().optional(),
+    ...cursorPaginationInputShape,
   }),
   execute: async ({ database_id, filter, sorts, page_size, start_cursor }) => {
     const params = {

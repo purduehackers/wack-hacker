@@ -1,10 +1,8 @@
-import { API } from "@discordjs/core/http-only";
-import { REST } from "@discordjs/rest";
-
 import type { Packet } from "@/lib/protocol/types";
 
 import { ConversationStore } from "@/bot/store";
 import { env } from "@/env";
+import { createDiscordAPI } from "@/lib/discord/client";
 import { createWideLogger } from "@/lib/logging/wide";
 import { countMetric, recordDuration } from "@/lib/metrics";
 
@@ -47,7 +45,7 @@ export async function processEvent(packet: Packet, store: ConversationStore): Pr
   }
 
   const ctx = {
-    discord: new API(new REST({ version: "10" }).setToken(env.DISCORD_BOT_TOKEN)),
+    discord: createDiscordAPI(),
     store,
     botUserId: env.DISCORD_BOT_CLIENT_ID,
   };

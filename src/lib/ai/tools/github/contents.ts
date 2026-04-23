@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { env } from "../../../../env.ts";
 import { approval } from "../../approvals/index.ts";
+import { paginationInputShape } from "../_shared/constants.ts";
 import { octokit } from "./client.ts";
 
 /** Get the content of a file or list a directory in a repository. */
@@ -141,8 +142,7 @@ export const list_commits = tool({
     path: z.string().optional().describe("Filter to commits affecting this path"),
     since: z.string().optional().describe("ISO 8601 date to filter from"),
     until: z.string().optional().describe("ISO 8601 date to filter to"),
-    per_page: z.number().max(100).optional(),
-    page: z.number().optional(),
+    ...paginationInputShape,
   }),
   execute: async ({ repo, ...opts }) => {
     const { data } = await octokit.rest.repos.listCommits({

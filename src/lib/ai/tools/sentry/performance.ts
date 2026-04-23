@@ -2,6 +2,7 @@ import { queryExploreEventsInTableFormat, unwrapResult } from "@sentry/api";
 import { tool } from "ai";
 import { z } from "zod";
 
+import { perPageField } from "../_shared/constants.ts";
 import { escapeQuery, sentryGet, sentryOpts, sentryOrg } from "./client.ts";
 
 /** List transactions with performance metrics using the Discover API. */
@@ -15,7 +16,7 @@ export const list_transactions = tool({
       .describe("Fields to query (e.g. ['transaction', 'count()', 'p95(transaction.duration)'])"),
     query: z.string().optional().describe("Filter query (e.g. 'transaction.op:http.server')"),
     sort: z.string().optional().describe("Sort field with optional '-' prefix for descending"),
-    per_page: z.number().max(100).optional(),
+    per_page: perPageField,
     stat_period: z
       .string()
       .optional()
@@ -81,7 +82,7 @@ export const list_spans = tool({
       .optional()
       .describe("Filter query (e.g. 'span.op:db span.description:*users*')"),
     sort: z.string().optional().describe("Sort field"),
-    per_page: z.number().max(100).optional(),
+    per_page: perPageField,
     stat_period: z.string().optional().describe("Time range (e.g. '24h', '7d')"),
   }),
   execute: async ({ project_slug, fields, query, sort, per_page, stat_period }) => {

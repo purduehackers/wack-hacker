@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { env } from "../../../../env.ts";
 import { approval } from "../../approvals/index.ts";
+import { paginationInputShape } from "../_shared/constants.ts";
 import { octokit } from "./client.ts";
 
 export const list_environments = tool({
@@ -10,8 +11,7 @@ export const list_environments = tool({
     "List deployment environments for a repository. Returns name, URL, protection rules, and timestamps.",
   inputSchema: z.object({
     repo: z.string().describe("Repository name"),
-    per_page: z.number().max(100).optional(),
-    page: z.number().optional(),
+    ...paginationInputShape,
   }),
   execute: async ({ repo, per_page, page }) => {
     const { data } = await octokit.rest.repos.getAllEnvironments({

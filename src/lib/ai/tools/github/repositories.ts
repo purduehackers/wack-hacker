@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { env } from "../../../../env.ts";
 import { approval } from "../../approvals/index.ts";
+import { paginationInputShape } from "../_shared/constants.ts";
 import { octokit } from "./client.ts";
 
 export const create_repository = tool({
@@ -131,8 +132,7 @@ export const list_branches = tool({
   inputSchema: z.object({
     repo: z.string().describe("Repository name"),
     protected: z.boolean().optional().describe("Filter to protected branches only"),
-    per_page: z.number().max(100).optional(),
-    page: z.number().optional(),
+    ...paginationInputShape,
   }),
   execute: async ({ repo, ...opts }) => {
     const { data } = await octokit.rest.repos.listBranches({

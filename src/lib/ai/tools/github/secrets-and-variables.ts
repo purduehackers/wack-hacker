@@ -7,6 +7,7 @@ import { z } from "zod";
 
 import { env } from "../../../../env.ts";
 import { approval } from "../../approvals/index.ts";
+import { paginationInputShape } from "../_shared/constants.ts";
 import { octokit } from "./client.ts";
 
 // NaCl "expand 32-byte k" sigma constant
@@ -62,8 +63,7 @@ export const list_repo_secrets = tool({
   description: `List Actions secrets for a repository. Returns secret names and timestamps only — values are never readable.`,
   inputSchema: z.object({
     repo: z.string().describe("Repository name"),
-    per_page: z.number().max(100).optional(),
-    page: z.number().optional(),
+    ...paginationInputShape,
   }),
   execute: async ({ repo, per_page, page }) => {
     const { data } = await octokit.rest.actions.listRepoSecrets({
@@ -133,8 +133,7 @@ export const list_repo_variables = tool({
   description: `List Actions variables for a repository. Unlike secrets, variable values are readable.`,
   inputSchema: z.object({
     repo: z.string().describe("Repository name"),
-    per_page: z.number().max(100).optional(),
-    page: z.number().optional(),
+    ...paginationInputShape,
   }),
   execute: async ({ repo, per_page, page }) => {
     const { data } = await octokit.rest.actions.listRepoVariables({
@@ -209,8 +208,7 @@ export const delete_repo_variable = approval(
 export const list_org_secrets = tool({
   description: `List Actions secrets for the purduehackers organization. Returns names, timestamps, and visibility scope. Values are never readable.`,
   inputSchema: z.object({
-    per_page: z.number().max(100).optional(),
-    page: z.number().optional(),
+    ...paginationInputShape,
   }),
   execute: async ({ per_page, page }) => {
     const { data } = await octokit.rest.actions.listOrgSecrets({
@@ -281,8 +279,7 @@ export const delete_org_secret = approval(
 export const list_org_variables = tool({
   description: `List Actions variables for the purduehackers organization. Returns name, value, timestamps, and visibility scope.`,
   inputSchema: z.object({
-    per_page: z.number().max(100).optional(),
-    page: z.number().optional(),
+    ...paginationInputShape,
   }),
   execute: async ({ per_page, page }) => {
     const { data } = await octokit.rest.actions.listOrgVariables({

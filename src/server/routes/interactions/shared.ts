@@ -1,9 +1,8 @@
-import { API } from "@discordjs/core/http-only";
-import { REST } from "@discordjs/rest";
+import type { API } from "@discordjs/core/http-only";
 
 import type { InteractionResponsePayload } from "@/bot/commands/types";
 
-import { env } from "@/env";
+import { createDiscordAPI } from "@/lib/discord/client";
 import { InteractionResponseType } from "@/lib/protocol/constants";
 
 import { EPHEMERAL_FLAG } from "./constants.ts";
@@ -13,7 +12,7 @@ export function describeError(err: unknown): string {
 }
 
 export function buildDiscord(): API {
-  return new API(new REST({ version: "10" }).setToken(env.DISCORD_BOT_TOKEN));
+  return createDiscordAPI();
 }
 
 export function ephemeralError(content: string): InteractionResponsePayload {

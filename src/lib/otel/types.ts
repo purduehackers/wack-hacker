@@ -1,3 +1,5 @@
+import type { Attributes } from "@opentelemetry/api";
+
 /**
  * Attributes we stamp onto every span emitted inside a chat workflow or any
  * handler that can be correlated to a chat. Deliberately excludes username
@@ -18,4 +20,19 @@ export interface ChatAttributes {
   "chat.user_id": string;
   "chat.turn_index"?: number;
   [key: string]: string | number | undefined;
+}
+
+export interface InstrumentedArgs {
+  /** Span name + logger `op` field. */
+  op: string;
+  /** Extra span attributes (merged into OTEL span). */
+  spanAttrs?: Attributes;
+  /** Extra wide-event context (merged into `createWideLogger` context). */
+  loggerContext?: Record<string, unknown>;
+  /**
+   * W3C traceparent. When set, opens the span as a child of that context via
+   * `withSpanFromParent` — use for cross-process continuity (workflow steps,
+   * hook handlers started outside an active span).
+   */
+  traceparent?: string;
 }

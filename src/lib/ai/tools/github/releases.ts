@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { env } from "../../../../env.ts";
 import { approval } from "../../approvals/index.ts";
+import { paginationInputShape, perPageField } from "../_shared/constants.ts";
 import { octokit } from "./client.ts";
 
 export const list_releases = tool({
@@ -10,8 +11,7 @@ export const list_releases = tool({
     "List releases for a repository, newest first. Returns tag name, title, draft/prerelease flags, created/published timestamps, and URL.",
   inputSchema: z.object({
     repo: z.string().describe("Repository name"),
-    per_page: z.number().max(100).optional(),
-    page: z.number().optional(),
+    ...paginationInputShape,
   }),
   execute: async ({ repo, per_page, page }) => {
     const { data } = await octokit.rest.repos.listReleases({
@@ -152,7 +152,7 @@ export const list_release_assets = tool({
   inputSchema: z.object({
     repo: z.string().describe("Repository name"),
     release_id: z.number().describe("Release ID"),
-    per_page: z.number().max(100).optional(),
+    per_page: perPageField,
   }),
   execute: async ({ repo, release_id, per_page }) => {
     const { data } = await octokit.rest.repos.listReleaseAssets({

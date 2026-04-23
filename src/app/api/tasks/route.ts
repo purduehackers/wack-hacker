@@ -1,10 +1,7 @@
-import { API } from "@discordjs/core/http-only";
-import { REST } from "@discordjs/rest";
-
 import type { TaskEnvelope, TaskHandler } from "@/lib/tasks/queue/types";
 
 import { ConversationStore } from "@/bot/store";
-import { env } from "@/env";
+import { createDiscordAPI } from "@/lib/discord/client";
 import { createWideLogger } from "@/lib/logging/wide";
 import { countMetric, recordDuration } from "@/lib/metrics";
 import { withSpan } from "@/lib/otel/tracing";
@@ -61,7 +58,7 @@ export const POST = handleCallback<TaskEnvelope>(
             throw err;
           }
 
-          const discord = new API(new REST({ version: "10" }).setToken(env.DISCORD_BOT_TOKEN));
+          const discord = createDiscordAPI();
           await handler.handle(parsed.data, discord);
 
           if (envelope.recurring) {

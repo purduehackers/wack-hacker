@@ -17,14 +17,6 @@ export interface ConversationState {
   startedAt: string;
 }
 
-export interface RedisLike {
-  get<T>(key: string): Promise<T | null>;
-  set(key: string, value: unknown, opts?: Record<string, unknown>): Promise<unknown>;
-  del(key: string): Promise<unknown>;
-  expire(key: string, seconds: number): Promise<unknown>;
-  eval(script: string, keys: string[], args: string[]): Promise<unknown>;
-}
-
 /**
  * Serialized tool definition captured at snapshot time. Mirrors the tool-surface
  * shape the orchestrator exposes to the AI SDK (name, description, JSON-schema

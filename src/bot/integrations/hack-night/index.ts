@@ -1,6 +1,6 @@
-import { Redis } from "@upstash/redis";
+import type { RedisClient } from "@/lib/redis/client";
 
-import type { RedisLike } from "@/bot/types";
+import { createRedis } from "@/lib/redis/client";
 
 const THREAD_SLUG_TTL_SECONDS = 7 * 24 * 60 * 60;
 
@@ -12,11 +12,7 @@ export function generateEventSlug(date: Date): string {
 }
 
 export class HackNightThreadStore {
-  private redis: RedisLike;
-
-  constructor(redis?: RedisLike) {
-    this.redis = redis ?? Redis.fromEnv();
-  }
+  constructor(private redis: RedisClient = createRedis()) {}
 
   private key(threadId: string): string {
     return `hack-night-thread:${threadId}`;

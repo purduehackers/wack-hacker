@@ -1,17 +1,15 @@
-import { Redis } from "@upstash/redis";
+import type { RedisClient } from "@/lib/redis/client";
 
-import type { ContextSnapshot, RedisLike } from "./types";
+import { createRedis } from "@/lib/redis/client";
+
+import type { ContextSnapshot } from "./types";
 
 export type { ContextSnapshot, ToolDefSnapshot } from "./types";
 
 const TTL = 60 * 60;
 
 export class ContextSnapshotStore {
-  private redis: RedisLike;
-
-  constructor(redis?: RedisLike) {
-    this.redis = redis ?? Redis.fromEnv();
-  }
+  constructor(private redis: RedisClient = createRedis()) {}
 
   private key(channelId: string, threadId?: string): string {
     return `context-snapshot:${threadId ?? channelId}`;

@@ -2,7 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { hcbGet, hcbOrgSlug, hcbPaginate, hcbTxnUrl, paginationQuery } from "./client.ts";
-import { isoDate, paginationInputShape } from "./constants.ts";
+import { paginationInputShape } from "./constants.ts";
 
 interface HcbReceiptsSummary {
   count?: number;
@@ -74,8 +74,8 @@ export const find_transactions = tool({
       .optional()
       .describe("Inclusive lower bound on amount_cents (signed — negatives are outflows)"),
     max_amount_cents: z.number().int().optional().describe("Inclusive upper bound on amount_cents"),
-    since: isoDate.optional().describe("ISO date (YYYY-MM-DD) — on/after this date"),
-    until: isoDate.optional().describe("ISO date (YYYY-MM-DD) — on/before this date"),
+    since: z.iso.date().optional().describe("ISO date (YYYY-MM-DD) — on/after this date"),
+    until: z.iso.date().optional().describe("ISO date (YYYY-MM-DD) — on/before this date"),
     pending: z
       .enum(["any", "only", "exclude"])
       .optional()
