@@ -18,12 +18,12 @@ import { isTextChannel } from "@/lib/protocol/utils";
 import { send } from "@/lib/tasks/queue/client";
 import { DISCORD_EVENT_TOPIC } from "@/lib/tasks/queue/constants";
 
+import { HANDOFF_WAIT_MS, READY_TIMEOUT_MS } from "./constants";
+
 const HOLD_MS = 10 * 60 * 1000;
 const LEADER_KEY = "gateway:leader";
 const LEASE_TTL_MS = 15_000;
 const POLL_INTERVAL_MS = 5_000;
-const HANDOFF_WAIT_MS = 8_000;
-const READY_TIMEOUT_MS = 30_000;
 
 // Atomic compare-and-delete: only removes the lease if we still own it.
 // Without this, a get-then-del race could delete a new leader's key after

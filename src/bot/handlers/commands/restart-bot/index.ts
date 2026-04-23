@@ -4,9 +4,10 @@ import { log } from "evlog";
 import { defineCommand } from "@/bot/commands/define";
 import { isOrganizer, respond } from "@/bot/commands/helpers";
 import { env } from "@/env";
+import { HANDOFF_WAIT_MS, READY_TIMEOUT_MS } from "@/server/routes/gateway/constants";
 
 const FAILURE_MSG = "Failed to restart the bot. Try again later.";
-const GATEWAY_TIMEOUT_MS = 10_000;
+const GATEWAY_TIMEOUT_MS = HANDOFF_WAIT_MS + READY_TIMEOUT_MS + 5_000;
 
 function gatewayUrl(): string {
   const host = env.VERCEL_PROJECT_PRODUCTION_URL ?? env.VERCEL_URL;
