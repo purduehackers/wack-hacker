@@ -95,19 +95,12 @@ export class MessageRenderer {
   // Static utilities
   // ---------------------------------------------------------------------------
 
-  static formatFooter({
-    elapsedMs,
-    totalTokens,
-    toolCallCount,
-    stepCount,
-    traceId,
-  }: FooterMeta): string {
+  static formatFooter({ elapsedMs, totalTokens, toolCallCount, traceId }: FooterMeta): string {
     const parts = [`${(elapsedMs / 1000).toFixed(1)}s`];
 
     if (totalTokens != null) parts.push(`${totalTokens.toLocaleString("en-US")} tokens`);
     if (toolCallCount === 1) parts.push("1 tool call");
     else if (toolCallCount > 1) parts.push(`${toolCallCount} tool calls`);
-    if (stepCount > 1) parts.push(`${stepCount} steps`);
     if (traceId) parts.push(`Trace: \`${traceId}\``);
 
     return `-# ${parts.join(" · ")}`;

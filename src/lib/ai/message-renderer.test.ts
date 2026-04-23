@@ -6,7 +6,7 @@ import { createMockAPI, asAPI } from "../test/fixtures/index.ts";
 import { MessageRenderer } from "./message-renderer.ts";
 
 describe("MessageRenderer.formatFooter", () => {
-  it("shows all metadata when present", () => {
+  it("shows elapsed, tokens, and tool calls", () => {
     expect(
       MessageRenderer.formatFooter({
         elapsedMs: 3200,
@@ -14,7 +14,7 @@ describe("MessageRenderer.formatFooter", () => {
         toolCallCount: 4,
         stepCount: 3,
       }),
-    ).toBe("-# 3.2s · 1,423 tokens · 4 tool calls · 3 steps");
+    ).toBe("-# 3.2s · 1,423 tokens · 4 tool calls");
   });
 
   it("omits tool calls when zero", () => {
@@ -28,17 +28,6 @@ describe("MessageRenderer.formatFooter", () => {
     ).toBe("-# 1.0s · 500 tokens");
   });
 
-  it("omits steps when only 1", () => {
-    expect(
-      MessageRenderer.formatFooter({
-        elapsedMs: 2500,
-        totalTokens: 800,
-        toolCallCount: 2,
-        stepCount: 1,
-      }),
-    ).toBe("-# 2.5s · 800 tokens · 2 tool calls");
-  });
-
   it("uses singular for 1 tool call", () => {
     expect(
       MessageRenderer.formatFooter({
@@ -47,7 +36,7 @@ describe("MessageRenderer.formatFooter", () => {
         toolCallCount: 1,
         stepCount: 2,
       }),
-    ).toBe("-# 1.0s · 100 tokens · 1 tool call · 2 steps");
+    ).toBe("-# 1.0s · 100 tokens · 1 tool call");
   });
 
   it("omits tokens when undefined", () => {
@@ -59,6 +48,18 @@ describe("MessageRenderer.formatFooter", () => {
         stepCount: 1,
       }),
     ).toBe("-# 0.5s");
+  });
+
+  it("appends the trace id when provided", () => {
+    expect(
+      MessageRenderer.formatFooter({
+        elapsedMs: 500,
+        totalTokens: 100,
+        toolCallCount: 0,
+        stepCount: 1,
+        traceId: "abc123def456",
+      }),
+    ).toBe("-# 0.5s · 100 tokens · Trace: `abc123def456`");
   });
 });
 
