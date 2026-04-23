@@ -64,6 +64,7 @@ const baseBreakdown: ContextBreakdown = {
     subagentTokens: 0,
     toolCallCount: 32,
     stepCount: 41,
+    toolNames: [],
   },
   turnCount: 14,
   messageCount: 38,

@@ -6,20 +6,32 @@ import { isTextUIPart, type UIMessage } from "ai";
 import { createWideLogger } from "@/lib/logging/wide";
 import { countMetric, recordDistribution, recordDuration } from "@/lib/metrics";
 import { buildChatAttributes } from "@/lib/otel/chat-attributes";
-import { withSpan } from "@/lib/otel/tracing";
+import { setActiveSpanAttributes, withSpan } from "@/lib/otel/tracing";
 
 import type {
   Attachment,
   ChatMessage,
   SerializedAgentContext,
   StreamTurnOptions,
-  TurnUsage,
+  StreamTurnResult,
 } from "./types.ts";
 
+import { ORCHESTRATOR_MODEL } from "./constants.ts";
 import { AgentContext } from "./context.ts";
 import { MessageRenderer } from "./message-renderer.ts";
 import { createOrchestrator } from "./orchestrator.ts";
 import { TurnUsageTracker } from "./turn-usage.ts";
+
+/**
+ * Split an AI-gateway model slug (e.g. `"anthropic/claude-sonnet-4.6"`) into
+ * provider + model parts for separate span attributes. Falls back to the
+ * whole slug as the model name when no provider prefix is present.
+ */
+export function parseModelSlug(slug: string): { provider: string | undefined; model: string } {
+  const slash = slug.indexOf("/");
+  if (slash <= 0) return { provider: undefined, model: slug };
+  return { provider: slug.slice(0, slash), model: slug.slice(slash + 1) };
+}
 
 export type { OrchestratorAgent, OrchestratorFactory, StreamTurnOptions } from "./types.ts";
 export { MessageRenderer } from "./message-renderer.ts";
@@ -78,11 +90,12 @@ export async function streamTurn(
   messages: ChatMessage[],
   serializedContext: SerializedAgentContext,
   options: StreamTurnOptions = {},
-): Promise<{ text: string; usage: TurnUsage }> {
+): Promise<StreamTurnResult> {
   const { taskId, workflowRunId, turnIndex } = options;
   const chatAttrs = workflowRunId
     ? buildChatAttributes({ workflowRunId, context: serializedContext, turnIndex })
     : undefined;
+  const { provider, model } = parseModelSlug(ORCHESTRATOR_MODEL);
   return withSpan(
     "chat.turn",
     {
@@ -90,6 +103,8 @@ export async function streamTurn(
       "chat.channel_id": serializedContext.channel.id,
       "chat.user_id": serializedContext.userId,
       "chat.message_count": messages.length,
+      "ai.model": model,
+      ...(provider ? { "ai.provider": provider } : {}),
       ...(taskId ? { "task.id": taskId } : {}),
     },
     () => runStreamTurn({ discord, channelId, messages, serializedContext, options, chatAttrs }),
@@ -103,7 +118,7 @@ async function runStreamTurn(args: {
   serializedContext: SerializedAgentContext;
   options: StreamTurnOptions;
   chatAttrs: ReturnType<typeof buildChatAttributes> | undefined;
-}): Promise<{ text: string; usage: TurnUsage }> {
+}): Promise<StreamTurnResult> {
   const { discord, channelId, messages, serializedContext, options, chatAttrs } = args;
   const { taskId, createAgent = createOrchestrator, workflowRunId, turnIndex } = options;
   const agentCtx = AgentContext.fromJSON(serializedContext);
@@ -140,7 +155,7 @@ async function runStreamTurn(args: {
 
   const elapsedMs = Date.now() - startTime;
   const traceId = trace.getActiveSpan()?.spanContext().traceId;
-  const metadataError = await finalizeTurn({
+  const { metadataError, finalized } = await finalizeTurn({
     result,
     tracker,
     renderer,
@@ -152,16 +167,42 @@ async function runStreamTurn(args: {
   countMetric("ai.turn.completed");
   recordDuration("ai.turn.duration", elapsedMs);
 
+  const usage = tracker.toTurnUsage();
+
+  // Mirror the per-turn totals onto the active chat.turn span so operators can
+  // query the trace directly without joining against wide events.
+  setActiveSpanAttributes({
+    "ai.input_tokens": usage.inputTokens,
+    "ai.output_tokens": usage.outputTokens,
+    "ai.subagent_tokens": usage.subagentTokens,
+    "ai.total_tokens": usage.totalTokens,
+    "ai.tool_calls": usage.toolCallCount,
+    "ai.steps": usage.stepCount,
+    ...(usage.toolNames.length > 0 ? { "ai.tool_names": usage.toolNames } : {}),
+    "chat.discord_message_id": finalized.messageId,
+  });
+
   logger.emit({
     outcome: metadataError ? "partial" : "ok",
     duration_ms: elapsedMs,
     text_length: renderer.content.length,
-    tokens: tracker.totalTokens,
-    tool_calls: tracker.totalToolCalls,
-    steps: tracker.totalSteps,
+    tokens: usage.totalTokens,
+    input_tokens: usage.inputTokens,
+    output_tokens: usage.outputTokens,
+    subagent_tokens: usage.subagentTokens,
+    tool_calls: usage.toolCallCount,
+    tool_names: usage.toolNames,
+    steps: usage.stepCount,
+    model: ORCHESTRATOR_MODEL,
+    discord_message_id: finalized.messageId,
   });
 
-  return { text: renderer.content, usage: tracker.toTurnUsage() };
+  return {
+    text: renderer.content,
+    usage,
+    discordMessageId: finalized.messageId,
+    model: ORCHESTRATOR_MODEL,
+  };
 }
 
 async function renderStream(
@@ -205,6 +246,11 @@ async function renderStream(
   }
 }
 
+interface FinalizeResult {
+  metadataError: unknown;
+  finalized: { messageId: string; overflowIds: string[] };
+}
+
 async function finalizeTurn(args: {
   result: { totalUsage: PromiseLike<unknown>; steps: PromiseLike<unknown> };
   tracker: TurnUsageTracker;
@@ -212,7 +258,7 @@ async function finalizeTurn(args: {
   elapsedMs: number;
   logger: ReturnType<typeof createWideLogger>;
   traceId: string | undefined;
-}): Promise<unknown> {
+}): Promise<FinalizeResult> {
   const { result, tracker, renderer, elapsedMs, logger, traceId } = args;
   try {
     const [totalUsage, steps] = await Promise.all([result.totalUsage, result.steps]);
@@ -221,7 +267,7 @@ async function finalizeTurn(args: {
       steps: steps as readonly { toolCalls: readonly unknown[] }[],
     });
 
-    await renderer.finalize({
+    const finalized = await renderer.finalize({
       elapsedMs,
       totalTokens: tracker.totalTokens,
       toolCallCount: tracker.totalToolCalls,
@@ -232,17 +278,17 @@ async function finalizeTurn(args: {
     recordDistribution("ai.turn.tokens", tracker.totalTokens);
     recordDistribution("ai.turn.tool_calls", tracker.totalToolCalls);
     recordDistribution("ai.turn.steps", tracker.totalSteps);
-    return undefined;
+    return { metadataError: undefined, finalized };
   } catch (err) {
     countMetric("ai.turn.metadata_error");
     logger.warn("metadata collection failed", { reason: String(err) });
-    await renderer.finalize({
+    const finalized = await renderer.finalize({
       elapsedMs,
       totalTokens: undefined,
       toolCallCount: 0,
       stepCount: 0,
       traceId,
     });
-    return err;
+    return { metadataError: err, finalized };
   }
 }

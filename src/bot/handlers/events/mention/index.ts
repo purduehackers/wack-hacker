@@ -12,7 +12,7 @@ import { fetchRecentMessages, fetchReferencedMessageContext } from "@/bot/recent
 import { AgentContext } from "@/lib/ai/context";
 import { createWideLogger } from "@/lib/logging/wide";
 import { countMetric } from "@/lib/metrics";
-import { setActiveSpanAttributes, withSpan } from "@/lib/otel/tracing";
+import { captureTraceparent, setActiveSpanAttributes, withSpan } from "@/lib/otel/tracing";
 import { chatWorkflow } from "@/workflows/chat";
 
 type MessageData = MessageCreatePacketType["data"];
@@ -67,7 +67,12 @@ async function tryResumeExistingWorkflow(args: {
     // workflow start; turn-to-turn conversation memory comes from the
     // workflow's accumulated messages array instead.
     const turnContext = AgentContext.fromPacket(packet).toJSON();
-    const event: ChatHookEvent = { type: "message", content, context: turnContext };
+    const event: ChatHookEvent = {
+      type: "message",
+      content,
+      context: turnContext,
+      traceparent: captureTraceparent(),
+    };
     await resumeHook(existing.workflowRunId, event);
     await ctx.store.touch(routing.sourceChannelId, routing.lookupThreadId);
     countMetric("chat.workflow.resumed");
@@ -222,6 +227,7 @@ async function startFreshWorkflow(args: {
       threadId: conversationThreadId,
       content,
       context: turnContext,
+      traceparent: captureTraceparent(),
     },
   ]);
 
@@ -240,7 +246,6 @@ async function startFreshWorkflow(args: {
     duration_ms: Date.now() - startTime,
     chat: {
       id: run.runId,
-      workflow_run_id: run.runId,
       lead_in_count: recentMessages?.length ?? 0,
       referenced_count: referencedContext?.length ?? 0,
     },

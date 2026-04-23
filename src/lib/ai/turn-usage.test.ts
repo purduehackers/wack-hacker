@@ -12,25 +12,30 @@ describe("TurnUsageTracker", () => {
       subagentTokens: 0,
       toolCallCount: 0,
       stepCount: 0,
+      toolNames: [],
     });
   });
 
   it("accumulates subagent contributions across calls", () => {
     const t = new TurnUsageTracker();
-    t.addSubagent({ tokens: 100, toolCalls: 2 });
-    t.addSubagent({ tokens: 250, toolCalls: 3 });
+    t.addSubagent({ tokens: 100, toolCalls: 2, toolNames: ["search", "open"] });
+    t.addSubagent({ tokens: 250, toolCalls: 3, toolNames: ["get_issue"] });
     expect(t.toTurnUsage()).toMatchObject({
       subagentTokens: 350,
       toolCallCount: 5,
+      toolNames: ["search", "open", "get_issue"],
     });
   });
 
   it("merges orchestrator usage with subagent totals", () => {
     const t = new TurnUsageTracker();
-    t.addSubagent({ tokens: 200, toolCalls: 4 });
+    t.addSubagent({ tokens: 200, toolCalls: 4, toolNames: ["list_issues"] });
     t.recordOrchestrator({
       usage: { inputTokens: 800, outputTokens: 150, totalTokens: 950 },
-      steps: [{ toolCalls: [1, 2] }, { toolCalls: [3] }],
+      steps: [
+        { toolCalls: [{ toolName: "delegate_linear" }, { toolName: "current_time" }] },
+        { toolCalls: [{ toolName: "resolve_organizer" }] },
+      ],
     });
     const usage = t.toTurnUsage();
     expect(usage).toEqual({
@@ -40,24 +45,30 @@ describe("TurnUsageTracker", () => {
       subagentTokens: 200,
       toolCallCount: 7,
       stepCount: 2,
+      toolNames: ["delegate_linear", "current_time", "resolve_organizer", "list_issues"],
     });
   });
 
   it("exposes convenience accessors after recordOrchestrator", () => {
     const t = new TurnUsageTracker();
-    t.addSubagent({ tokens: 50, toolCalls: 1 });
+    t.addSubagent({ tokens: 50, toolCalls: 1, toolNames: ["a"] });
     t.recordOrchestrator({
       usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 },
-      steps: [{ toolCalls: [1, 2, 3] }],
+      steps: [
+        {
+          toolCalls: [{ toolName: "b" }, { toolName: "c" }, { toolName: "d" }],
+        },
+      ],
     });
     expect(t.totalTokens).toBe(200);
     expect(t.totalToolCalls).toBe(4);
     expect(t.totalSteps).toBe(1);
+    expect(t.totalToolNames).toEqual(["b", "c", "d", "a"]);
   });
 
   it("coerces undefined orchestrator tokens to zero", () => {
     const t = new TurnUsageTracker();
-    t.addSubagent({ tokens: 50, toolCalls: 1 });
+    t.addSubagent({ tokens: 50, toolCalls: 1, toolNames: [] });
     t.recordOrchestrator({
       usage: { inputTokens: undefined, outputTokens: undefined, totalTokens: undefined },
       steps: [],
@@ -68,6 +79,16 @@ describe("TurnUsageTracker", () => {
     expect(usage.outputTokens).toBe(0);
     expect(usage.toolCallCount).toBe(1);
     expect(usage.stepCount).toBe(0);
+    expect(usage.toolNames).toEqual([]);
+  });
+
+  it("skips tool calls that lack a string toolName", () => {
+    const t = new TurnUsageTracker();
+    t.recordOrchestrator({
+      usage: { totalTokens: 0 },
+      steps: [{ toolCalls: [{ toolName: "kept" }, {}, { toolName: 123 }] }],
+    });
+    expect(t.toTurnUsage().toolNames).toEqual(["kept"]);
   });
 });
 
@@ -80,6 +101,7 @@ describe("emptyTurnUsage", () => {
       subagentTokens: 0,
       toolCallCount: 0,
       stepCount: 0,
+      toolNames: [],
     });
   });
 });
@@ -93,6 +115,7 @@ describe("addTurnUsage", () => {
       subagentTokens: 20,
       toolCallCount: 2,
       stepCount: 3,
+      toolNames: ["a", "b"],
     };
     const b = {
       inputTokens: 200,
@@ -101,6 +124,7 @@ describe("addTurnUsage", () => {
       subagentTokens: 10,
       toolCallCount: 1,
       stepCount: 2,
+      toolNames: ["c"],
     };
     expect(addTurnUsage(a, b)).toEqual({
       inputTokens: 300,
@@ -109,6 +133,7 @@ describe("addTurnUsage", () => {
       subagentTokens: 30,
       toolCallCount: 3,
       stepCount: 5,
+      toolNames: ["a", "b", "c"],
     });
   });
 
@@ -120,6 +145,7 @@ describe("addTurnUsage", () => {
       subagentTokens: 2,
       toolCallCount: 1,
       stepCount: 1,
+      toolNames: ["x"],
     };
     expect(addTurnUsage(emptyTurnUsage(), b)).toEqual(b);
   });

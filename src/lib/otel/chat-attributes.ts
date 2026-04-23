@@ -20,6 +20,5 @@ export function buildChatAttributes(args: {
     ...(context.thread?.id ? { "chat.thread_id": context.thread.id } : {}),
     "chat.user_id": context.userId,
     ...(turnIndex !== undefined ? { "chat.turn_index": turnIndex } : {}),
-    "chat.workflow_run_id": workflowRunId,
   };
 }

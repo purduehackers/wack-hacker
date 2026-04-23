@@ -90,6 +90,13 @@ export interface TurnUsage {
   subagentTokens: number;
   toolCallCount: number;
   stepCount: number;
+  /**
+   * Names of tools called during this turn, in call order. Includes both
+   * orchestrator-level calls (delegation tools) and subagent-level calls
+   * (tools run inside delegated subagents). Surfaced on spans and wide events
+   * so operators can see *what* ran, not just *how many*.
+   */
+  toolNames: string[];
 }
 
 export interface ModelInfo {
@@ -225,6 +232,30 @@ export type OrchestratorFactory = (
   tracker: TurnUsageTracker,
   extraMetadata?: TelemetryMetadata,
 ) => OrchestratorAgent;
+
+/**
+ * Return shape of `streamTurn`. Carries the reply text + usage accounting
+ * needed by the workflow, plus observability hooks (`discordMessageId`,
+ * `model`) that let the run_turn step emit a complete wide event for each
+ * turn without re-computing them.
+ */
+export interface StreamTurnResult {
+  text: string;
+  usage: TurnUsage;
+  /**
+   * Primary Discord message id for the reply (either the edited placeholder
+   * or a fallback `createMessage`). Always a string because `streamTurn`
+   * runs `renderer.init()` before it can reach `finalize()`, and `finalize()`
+   * throws if that invariant is broken.
+   */
+  discordMessageId: string;
+  /**
+   * Full gateway model slug used by the orchestrator for this turn, e.g.
+   * `anthropic/claude-sonnet-4.6`. Included so the wide event records what
+   * actually ran, independent of whatever constant was read at build time.
+   */
+  model: string;
+}
 
 /**
  * Options bag for `streamTurn`. Split out so production callers don't need to

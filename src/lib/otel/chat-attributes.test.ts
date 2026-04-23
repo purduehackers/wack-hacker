@@ -19,7 +19,6 @@ describe("buildChatAttributes", () => {
       "chat.id": "run-1",
       "chat.channel_id": "c1",
       "chat.user_id": "u1",
-      "chat.workflow_run_id": "run-1",
     });
   });
 

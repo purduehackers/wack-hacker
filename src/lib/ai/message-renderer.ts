@@ -67,8 +67,23 @@ export class MessageRenderer {
     this.subagentPreview = "";
   }
 
-  /** Finalize: render footer, split across messages, send. */
-  async finalize(meta: FooterMeta): Promise<void> {
+  /**
+   * Finalize: render footer, split across messages, send. Returns the id of
+   * the primary (first) message the user sees — either the edited placeholder
+   * or the fallback new message — plus the ids of any overflow chunks that
+   * were sent as additional messages. These surface on the turn's wide event
+   * and span so operators can resolve a trace back to the Discord reply.
+   *
+   * Requires `init()` to have completed first; throws otherwise so callers
+   * don't accidentally skip the placeholder message and silently lose the
+   * primary reply id from observability.
+   */
+  async finalize(meta: FooterMeta): Promise<{ messageId: string; overflowIds: string[] }> {
+    if (this.messageId === null) {
+      throw new Error("MessageRenderer.finalize() called before init()");
+    }
+    let primaryId = this.messageId;
+
     let footer = MessageRenderer.formatFooter(meta);
     if (this.taskId) footer += `\n-# Task: ${this.taskId}`;
 
@@ -77,18 +92,27 @@ export class MessageRenderer {
 
     // Edit the original message with the first chunk
     try {
-      await this.discord.channels.editMessage(this.channelId, this.messageId!, {
+      await this.discord.channels.editMessage(this.channelId, primaryId, {
         content: chunks[0],
       });
     } catch (err) {
       log.warn("streaming", `Final edit failed, sending new message: ${String(err)}`);
-      await this.discord.channels.createMessage(this.channelId, { content: chunks[0] });
+      const fallback = await this.discord.channels.createMessage(this.channelId, {
+        content: chunks[0],
+      });
+      primaryId = fallback.id;
     }
 
     // Send additional messages for overflow chunks
+    const overflowIds: string[] = [];
     for (let i = 1; i < chunks.length; i++) {
-      await this.discord.channels.createMessage(this.channelId, { content: chunks[i] });
+      const msg = await this.discord.channels.createMessage(this.channelId, {
+        content: chunks[i],
+      });
+      overflowIds.push(msg.id);
     }
+
+    return { messageId: primaryId, overflowIds };
   }
 
   // ---------------------------------------------------------------------------

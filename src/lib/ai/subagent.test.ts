@@ -375,6 +375,15 @@ describe("recordSubagentMetrics", () => {
     expect(tracker.totalTokens).toBe(0);
     expect(tracker.totalToolCalls).toBe(0);
   });
+
+  it("collects tool names and skips entries without a string toolName", () => {
+    const tracker = new TurnUsageTracker();
+    recordSubagentMetrics(tracker, { name: "test" }, { totalTokens: 10 }, [
+      { toolCalls: [{ toolName: "search_entities" }, {}] },
+      { toolCalls: [{ toolName: "retrieve_entities" }] },
+    ]);
+    expect(tracker.toTurnUsage().toolNames).toEqual(["search_entities", "retrieve_entities"]);
+  });
 });
 
 describe("buildPrepareStep", () => {

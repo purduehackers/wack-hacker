@@ -79,6 +79,7 @@ const usage: TurnUsage = {
   subagentTokens: 0,
   toolCallCount: 1,
   stepCount: 1,
+  toolNames: [],
 };
 
 describe("buildContextSnapshot", () => {
