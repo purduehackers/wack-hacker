@@ -108,13 +108,22 @@ export const search_files = tool({
     const lowerQuery = query.toLowerCase();
     const matches: ReturnType<typeof summarizeFile>[] = [];
 
-    for (const proj of data.projects) {
-      if (matches.length >= limit) break;
-      const files = await figma.get<GetProjectFilesResponse>(`/v1/projects/${proj.id}/files`);
-      for (const f of files.files) {
-        if (matches.length >= limit) break;
-        if (f.name.toLowerCase().includes(lowerQuery)) {
-          matches.push(summarizeFile(f, proj.name));
+    const CONCURRENCY = 5;
+    for (let i = 0; i < data.projects.length && matches.length < limit; i += CONCURRENCY) {
+      const batch = data.projects.slice(i, i + CONCURRENCY);
+      const results = await Promise.all(
+        batch.map((p) =>
+          figma
+            .get<GetProjectFilesResponse>(`/v1/projects/${p.id}/files`)
+            .then((r) => ({ projectName: p.name, files: r.files })),
+        ),
+      );
+      for (const { projectName, files } of results) {
+        for (const f of files) {
+          if (matches.length >= limit) break;
+          if (f.name.toLowerCase().includes(lowerQuery)) {
+            matches.push(summarizeFile(f, projectName));
+          }
         }
       }
     }

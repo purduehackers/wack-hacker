@@ -64,15 +64,14 @@ export const remove_user_from_team = admin(
         const user = await linear.user(user_id);
         const memberships = await user.teamMemberships();
 
-        for (const m of memberships.nodes) {
-          const team = await m.team;
-          if (team && team.id === team_id) {
-            const payload = await linear.deleteTeamMembership(m.id);
-            return JSON.stringify({ success: payload.success });
-          }
+        const teams = await Promise.all(memberships.nodes.map(async (m) => m.team));
+        const idx = teams.findIndex((t) => t?.id === team_id);
+        if (idx === -1) {
+          return JSON.stringify({ error: "User is not a member of this team" });
         }
 
-        return JSON.stringify({ error: "User is not a member of this team" });
+        const payload = await linear.deleteTeamMembership(memberships.nodes[idx]!.id);
+        return JSON.stringify({ success: payload.success });
       },
     }),
   ),
