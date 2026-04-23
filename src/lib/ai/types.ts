@@ -68,6 +68,12 @@ export interface FooterMeta {
   totalTokens: number | undefined;
   toolCallCount: number;
   stepCount: number;
+  /**
+   * Full OTEL trace id for the turn (32-char hex). Rendered into the footer as
+   * `Trace: <id>` so operators can paste it into Sentry to pull up the full
+   * agent trace for a specific Discord reply.
+   */
+  traceId?: string;
 }
 
 /**

@@ -1,5 +1,6 @@
 import type { API } from "@discordjs/core/http-only";
 
+import { trace } from "@opentelemetry/api";
 import { isTextUIPart, type UIMessage } from "ai";
 
 import { createWideLogger } from "@/lib/logging/wide";
@@ -138,7 +139,15 @@ async function runStreamTurn(args: {
   await renderStream(result.fullStream, renderer);
 
   const elapsedMs = Date.now() - startTime;
-  const metadataError = await finalizeTurn({ result, tracker, renderer, elapsedMs, logger });
+  const traceId = trace.getActiveSpan()?.spanContext().traceId;
+  const metadataError = await finalizeTurn({
+    result,
+    tracker,
+    renderer,
+    elapsedMs,
+    logger,
+    traceId,
+  });
 
   countMetric("ai.turn.completed");
   recordDuration("ai.turn.duration", elapsedMs);
@@ -202,8 +211,9 @@ async function finalizeTurn(args: {
   renderer: MessageRenderer;
   elapsedMs: number;
   logger: ReturnType<typeof createWideLogger>;
+  traceId: string | undefined;
 }): Promise<unknown> {
-  const { result, tracker, renderer, elapsedMs, logger } = args;
+  const { result, tracker, renderer, elapsedMs, logger, traceId } = args;
   try {
     const [totalUsage, steps] = await Promise.all([result.totalUsage, result.steps]);
     tracker.recordOrchestrator({
@@ -216,6 +226,7 @@ async function finalizeTurn(args: {
       totalTokens: tracker.totalTokens,
       toolCallCount: tracker.totalToolCalls,
       stepCount: tracker.totalSteps,
+      traceId,
     });
 
     recordDistribution("ai.turn.tokens", tracker.totalTokens);
@@ -230,6 +241,7 @@ async function finalizeTurn(args: {
       totalTokens: undefined,
       toolCallCount: 0,
       stepCount: 0,
+      traceId,
     });
     return err;
   }
