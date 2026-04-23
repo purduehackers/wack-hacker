@@ -1,6 +1,15 @@
 import type { TurnUsage } from "./types.ts";
 
 /**
+ * Shape of an AI SDK tool call entry on a step's `toolCalls`. Every call
+ * carries a stable string name which we mirror into span attributes / wide
+ * events so operators can see what ran. Other fields are ignored here.
+ */
+interface ToolCallLike {
+  toolName?: string;
+}
+
+/**
  * Mutable accumulator for one orchestrator turn's worth of usage.
  *
  * Subagents call `addSubagent` to fold in their per-delegation totals as they
@@ -16,11 +25,14 @@ export class TurnUsageTracker {
   private orchestratorTotalTokens = 0;
   private orchestratorToolCalls = 0;
   private stepCount = 0;
+  private orchestratorToolNames: string[] = [];
+  private subagentToolNames: string[] = [];
 
   /** Add a subagent delegation's contribution. */
-  addSubagent(delta: { tokens: number; toolCalls: number }): void {
+  addSubagent(delta: { tokens: number; toolCalls: number; toolNames: readonly string[] }): void {
     this.subagentTokens += delta.tokens;
     this.subagentToolCalls += delta.toolCalls;
+    this.subagentToolNames.push(...delta.toolNames);
   }
 
   /**
@@ -37,6 +49,12 @@ export class TurnUsageTracker {
     this.orchestratorTotalTokens = args.usage.totalTokens ?? 0;
     this.orchestratorToolCalls = args.steps.reduce((sum, step) => sum + step.toolCalls.length, 0);
     this.stepCount = args.steps.length;
+    this.orchestratorToolNames = args.steps.flatMap((step) =>
+      step.toolCalls.flatMap((call) => {
+        const name = (call as ToolCallLike).toolName;
+        return typeof name === "string" ? [name] : [];
+      }),
+    );
   }
 
   /** Convenience accessor for the post-stream tool-call total (orchestrator + subagent). */
@@ -54,6 +72,11 @@ export class TurnUsageTracker {
     return this.orchestratorTotalTokens + this.subagentTokens;
   }
 
+  /** Combined orchestrator + subagent tool names in call order. */
+  get totalToolNames(): string[] {
+    return [...this.orchestratorToolNames, ...this.subagentToolNames];
+  }
+
   /** Snapshot in the shape persisted to the context-snapshot store. */
   toTurnUsage(): TurnUsage {
     return {
@@ -63,6 +86,7 @@ export class TurnUsageTracker {
       subagentTokens: this.subagentTokens,
       toolCallCount: this.totalToolCalls,
       stepCount: this.stepCount,
+      toolNames: this.totalToolNames,
     };
   }
 }
@@ -76,6 +100,7 @@ export function emptyTurnUsage(): TurnUsage {
     subagentTokens: 0,
     toolCallCount: 0,
     stepCount: 0,
+    toolNames: [],
   };
 }
 
@@ -89,5 +114,6 @@ export function addTurnUsage(total: TurnUsage, turn: TurnUsage): TurnUsage {
     subagentTokens: total.subagentTokens + turn.subagentTokens,
     toolCallCount: total.toolCallCount + turn.toolCallCount,
     stepCount: total.stepCount + turn.stepCount,
+    toolNames: [...total.toolNames, ...turn.toolNames],
   };
 }

@@ -76,14 +76,26 @@ async function runTurn(args: RunTurnArgs) {
           duration_ms: Date.now() - startTime,
           turn: turnIndex === 1 ? "first" : "followup",
           tokens: result.usage.totalTokens,
+          input_tokens: result.usage.inputTokens,
+          output_tokens: result.usage.outputTokens,
+          subagent_tokens: result.usage.subagentTokens,
           tool_calls: result.usage.toolCallCount,
+          tool_names: result.usage.toolNames,
           steps: result.usage.stepCount,
           text_length: result.text.length,
+          model: result.model,
+          discord_message_id: result.discordMessageId,
         });
         return result;
       } catch (err) {
-        logger.error(err as Error);
-        logger.emit({ outcome: "error", duration_ms: Date.now() - startTime });
+        const error = err as Error;
+        logger.error(error);
+        logger.emit({
+          outcome: "error",
+          duration_ms: Date.now() - startTime,
+          error_class: error.name,
+          error_message: error.message,
+        });
         throw err;
       } finally {
         recordDuration("workflow.chat.run_turn_duration", Date.now() - startTime, {
@@ -112,6 +124,7 @@ async function persistSnapshot(
     {
       "chat.channel_id": channelId,
       ...(threadId ? { "chat.thread_id": threadId } : {}),
+      "chat.user_id": args.context.userId,
       "chat.turn_count": args.turnCount,
     },
     async () => {
@@ -120,6 +133,7 @@ async function persistSnapshot(
         chat: {
           channel_id: channelId,
           thread_id: threadId,
+          user_id: args.context.userId,
           turn_count: args.turnCount,
           total_tokens: args.totalUsage.totalTokens,
         },
@@ -135,8 +149,14 @@ async function persistSnapshot(
         logger.emit({ outcome: "ok", duration_ms: Date.now() - startTime });
       } catch (err) {
         countMetric("workflow.chat.snapshot_error");
-        logger.error(err as Error);
-        logger.emit({ outcome: "error", duration_ms: Date.now() - startTime });
+        const error = err as Error;
+        logger.error(error);
+        logger.emit({
+          outcome: "error",
+          duration_ms: Date.now() - startTime,
+          error_class: error.name,
+          error_message: error.message,
+        });
       } finally {
         recordDuration("workflow.chat.persist_snapshot_duration", Date.now() - startTime);
       }
@@ -144,23 +164,26 @@ async function persistSnapshot(
   );
 }
 
-async function cleanupConversation(
-  channelId: string,
-  threadId: string | undefined,
-  traceparent: string | undefined,
-) {
+async function cleanupConversation(args: {
+  channelId: string;
+  threadId: string | undefined;
+  userId: string;
+  traceparent: string | undefined;
+}) {
   "use step";
+  const { channelId, threadId, userId, traceparent } = args;
   return withSpanFromParent(
     traceparent,
     "workflow.chat.cleanup",
     {
       "chat.channel_id": channelId,
       ...(threadId ? { "chat.thread_id": threadId } : {}),
+      "chat.user_id": userId,
     },
     async () => {
       const logger = createWideLogger({
         op: "workflow.chat.cleanup",
-        chat: { channel_id: channelId, thread_id: threadId },
+        chat: { channel_id: channelId, thread_id: threadId, user_id: userId },
       });
       const startTime = Date.now();
       const threadKey = threadId ?? channelId;
@@ -186,13 +209,46 @@ async function cleanupConversation(
       }
       recordDuration("workflow.chat.cleanup_duration", Date.now() - startTime);
       if (conversationResult.status === "rejected") {
-        logger.error(conversationResult.reason as Error);
-        logger.emit({ outcome: "error", duration_ms: Date.now() - startTime, cleanup });
+        const error = conversationResult.reason as Error;
+        logger.error(error);
+        logger.emit({
+          outcome: "error",
+          duration_ms: Date.now() - startTime,
+          cleanup,
+          error_class: error.name,
+          error_message: error.message,
+        });
         throw conversationResult.reason;
       }
       logger.emit({ outcome: "ok", duration_ms: Date.now() - startTime, cleanup });
     },
   );
+}
+
+/**
+ * Per-conversation state mutated across turns. Passed by reference so helpers
+ * can push messages / bump counts / swap traceparents without returning a
+ * rebuilt state object each call.
+ */
+interface ConversationState {
+  messages: ChatMessage[];
+  turnCount: number;
+  totalUsage: TurnUsage;
+  traceparent: string | undefined;
+}
+
+/**
+ * Slice of `SerializedAgentContext` that stays fixed once the workflow
+ * starts: the conversation's channel/thread and the lead-in messages that
+ * preceded the initial mention. Re-applied on every followup turn so the
+ * event's per-turn context (author, role, attachments) combines cleanly
+ * with the pinned location.
+ */
+interface StableScope {
+  channel: SerializedAgentContext["channel"];
+  thread: SerializedAgentContext["thread"];
+  recentMessages: SerializedAgentContext["recentMessages"];
+  referencedContext: SerializedAgentContext["referencedContext"];
 }
 
 async function runFirstTurn(args: {
@@ -223,6 +279,43 @@ async function runFirstTurn(args: {
   return { messages, totalUsage };
 }
 
+async function handleFollowupTurn(args: {
+  event: Extract<ChatHookEvent, { type: "message" }>;
+  state: ConversationState;
+  stable: StableScope;
+  channelId: string;
+  threadId: string | undefined;
+  workflowRunId: string;
+}): Promise<void> {
+  const { event, state, stable, channelId, threadId, workflowRunId } = args;
+  if (event.traceparent) state.traceparent = event.traceparent;
+  const turnContext: SerializedAgentContext = { ...event.context, ...stable };
+  state.messages.push({ role: "user", content: event.content });
+  const turn = await runTurn({
+    channelId,
+    messages: state.messages,
+    serializedContext: turnContext,
+    workflowRunId,
+    turnIndex: state.turnCount + 1,
+    traceparent: state.traceparent,
+  });
+  state.messages.push({ role: "assistant", content: turn.text });
+  capHistory(state.messages);
+  state.turnCount += 1;
+  state.totalUsage = addTurnUsage(state.totalUsage, turn.usage);
+  await persistSnapshot(
+    channelId,
+    threadId,
+    {
+      context: turnContext,
+      messages: state.messages,
+      totalUsage: state.totalUsage,
+      turnCount: state.turnCount,
+    },
+    state.traceparent,
+  );
+}
+
 /**
  * Run the chat workflow body. Extracted from `chatWorkflow` so the outer
  * function can stay a thin span wrapper. Assumes it's invoked inside a
@@ -244,27 +337,27 @@ async function runChatWorkflow(payload: ChatPayload, workflowRunId: string): Pro
   countMetric("workflow.chat.started");
 
   // Stable for the lifetime of this workflow — the conversation is pinned to
-  // one Discord channel/thread and the pre-conversation message lead-in does
-  // not change. Per-turn context takes these verbatim from the initial payload.
-  const stableChannel = context.channel;
-  const stableThread = context.thread;
-  const stableRecentMessages = context.recentMessages;
-  const stableReferencedContext = context.referencedContext;
-
-  // Tracks the trace each turn's step spans join. Starts at the initial
-  // mention's traceparent and updates on every hook event so followup turns
-  // join their own mention's trace. Steps run in separate executions that do
-  // not inherit OTEL context, so we pass this through explicitly.
-  let currentTraceparent = traceparent;
+  // one Discord channel/thread and the pre-conversation lead-in does not
+  // change. Per-turn context splats these verbatim from the initial payload.
+  const stable: StableScope = {
+    channel: context.channel,
+    thread: context.thread,
+    recentMessages: context.recentMessages,
+    referencedContext: context.referencedContext,
+  };
 
   const workflowStart = Date.now();
   const { messages, totalUsage: initialUsage } = await runFirstTurn({
     payload,
     workflowRunId,
-    traceparent: currentTraceparent,
+    traceparent,
   });
-  let turnCount = 1;
-  let totalUsage = initialUsage;
+  const state: ConversationState = {
+    messages,
+    turnCount: 1,
+    totalUsage: initialUsage,
+    traceparent,
+  };
 
   using hook = createHook<ChatHookEvent>({ token: workflowRunId });
 
@@ -278,50 +371,23 @@ async function runChatWorkflow(payload: ChatPayload, workflowRunId: string): Pro
       break;
     }
     if (!event.content) continue;
-
     countMetric("workflow.chat.followup");
-
-    if (event.traceparent) currentTraceparent = event.traceparent;
-
-    // Merge the fresh per-turn identity from the event with the stable
-    // location + lead-in pinned at workflow start.
-    const turnContext: SerializedAgentContext = {
-      ...event.context,
-      channel: stableChannel,
-      thread: stableThread,
-      recentMessages: stableRecentMessages,
-      referencedContext: stableReferencedContext,
-    };
-
-    messages.push({ role: "user", content: event.content });
-    const turn = await runTurn({
-      channelId,
-      messages,
-      serializedContext: turnContext,
-      workflowRunId,
-      turnIndex: turnCount + 1,
-      traceparent: currentTraceparent,
-    });
-    messages.push({ role: "assistant", content: turn.text });
-    capHistory(messages);
-    turnCount += 1;
-    totalUsage = addTurnUsage(totalUsage, turn.usage);
-    await persistSnapshot(
-      channelId,
-      threadId,
-      { context: turnContext, messages, totalUsage, turnCount },
-      currentTraceparent,
-    );
+    await handleFollowupTurn({ event, state, stable, channelId, threadId, workflowRunId });
   }
 
-  await cleanupConversation(channelId, threadId, currentTraceparent);
+  await cleanupConversation({
+    channelId,
+    threadId,
+    userId: context.userId,
+    traceparent: state.traceparent,
+  });
   workflowLogger.emit({
     outcome: "ok",
     duration_ms: Date.now() - workflowStart,
     ended_by: endedByUser ? "user" : "hook_close",
-    turn_count: turnCount,
-    total_tokens: totalUsage.totalTokens,
-    tool_calls: totalUsage.toolCallCount,
+    turn_count: state.turnCount,
+    total_tokens: state.totalUsage.totalTokens,
+    tool_calls: state.totalUsage.toolCallCount,
   });
 }
 

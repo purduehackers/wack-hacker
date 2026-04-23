@@ -43,6 +43,7 @@ const baseSnap: ContextSnapshot = {
     subagentTokens: 0,
     toolCallCount: 1,
     stepCount: 2,
+    toolNames: [],
   },
   turnCount: 1,
   updatedAt: "2026-04-15T12:00:00.000Z",

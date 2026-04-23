@@ -17,6 +17,5 @@ export interface ChatAttributes {
   "chat.thread_id"?: string;
   "chat.user_id": string;
   "chat.turn_index"?: number;
-  "chat.workflow_run_id": string;
   [key: string]: string | number | undefined;
 }

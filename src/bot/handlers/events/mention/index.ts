@@ -246,7 +246,6 @@ async function startFreshWorkflow(args: {
     duration_ms: Date.now() - startTime,
     chat: {
       id: run.runId,
-      workflow_run_id: run.runId,
       lead_in_count: recentMessages?.length ?? 0,
       referenced_count: referencedContext?.length ?? 0,
     },
