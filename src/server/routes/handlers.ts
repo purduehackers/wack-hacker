@@ -32,14 +32,13 @@ router.onMessage(async (packet, ctx) => {
     {
       "chat.id": existing.workflowRunId,
       "chat.channel_id": channelId,
-      "chat.workflow_run_id": existing.workflowRunId,
+      "chat.user_id": packet.data.author.id,
     },
     async () => {
       const logger = createWideLogger({
         op: "chat.resume_hook",
         chat: {
           id: existing.workflowRunId,
-          workflow_run_id: existing.workflowRunId,
           channel_id: channelId,
           user_id: packet.data.author.id,
         },

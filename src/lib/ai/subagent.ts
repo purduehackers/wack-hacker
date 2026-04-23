@@ -34,6 +34,9 @@ const DEFAULT_TASK_INPUT_SCHEMA = z.object({
   task: z.string().describe("The task to delegate, forwarded verbatim"),
 });
 
+/** Shape of the AI SDK `result.steps` output we actually consume for metrics. */
+type SubagentSteps = { toolCalls: { toolName?: string }[] }[];
+
 /**
  * Create a delegation tool that spawns a focused domain subagent.
  *
@@ -56,11 +59,14 @@ export function recordSubagentMetrics(
   tracker: TurnUsageTracker,
   spec: Pick<SubagentSpec, "name">,
   usage: { totalTokens?: number },
-  steps: { toolCalls: unknown[] }[],
+  steps: SubagentSteps,
 ): void {
   const tokens = usage.totalTokens ?? 0;
   const toolCalls = steps.reduce((sum, s) => sum + s.toolCalls.length, 0);
-  tracker.addSubagent({ tokens, toolCalls });
+  const toolNames = steps.flatMap((s) =>
+    s.toolCalls.flatMap((call) => (typeof call.toolName === "string" ? [call.toolName] : [])),
+  );
+  tracker.addSubagent({ tokens, toolCalls, toolNames });
   countMetric("ai.subagent.completed", { domain: spec.name });
   recordDistribution("ai.subagent.tokens", tokens, { domain: spec.name });
   recordDistribution("ai.subagent.tool_calls", toolCalls, { domain: spec.name });
@@ -71,6 +77,7 @@ export function recordSubagentMetrics(
     outcome: "ok",
     tokens,
     tool_calls: toolCalls,
+    tool_names: toolNames,
     steps: steps.length,
   });
 }
@@ -172,7 +179,7 @@ export function createDelegationTool(
       }
 
       const [usage, steps] = await Promise.all([result.totalUsage, result.steps]);
-      recordSubagentMetrics(tracker, spec, usage, steps as { toolCalls: unknown[] }[]);
+      recordSubagentMetrics(tracker, spec, usage, steps as SubagentSteps);
 
       if (spec.postFinish) {
         for await (const message of spec.postFinish({
