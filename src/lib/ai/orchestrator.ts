@@ -10,6 +10,7 @@ import { buildDelegationTools } from "./delegates.ts";
 import { documentation } from "./tools/docs/index.ts";
 import { resolve_organizer } from "./tools/roster/index.ts";
 import { createScheduleTask, list_scheduled_tasks, cancel_task } from "./tools/schedule/index.ts";
+import { web_search, web_get_contents } from "./tools/web/index.ts";
 
 export { ORCHESTRATOR_MODEL, SYSTEM_PROMPT } from "./constants.ts";
 
@@ -31,6 +32,8 @@ export function getOrchestratorTools(
   const tools: ToolSet = {
     documentation,
     resolve_organizer,
+    web_search,
+    web_get_contents,
     schedule_task: createScheduleTask(context),
     list_scheduled_tasks,
     cancel_task,

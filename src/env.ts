@@ -33,6 +33,7 @@ export const env = createEnv({
     SENTRY_DSN: z.string().optional(),
     HCB_ORG_SLUG: z.string(),
     SERPAPI_API_KEY: z.string(),
+    EXA_API_KEY: z.string(),
     RESEND_API_KEY: z.string(),
     RESEND_WEBHOOK_SECRET: z.string(),
     HUNTER_API_KEY: z.string(),

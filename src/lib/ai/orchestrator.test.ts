@@ -44,6 +44,8 @@ const BASE_TOOLS = [
   "list_scheduled_tasks",
   "resolve_organizer",
   "schedule_task",
+  "web_get_contents",
+  "web_search",
 ];
 
 describe("createOrchestrator", () => {
