@@ -19,7 +19,8 @@ const HACK_NIGHT_MESSAGES = [
 
 export const hackNightCreate = defineCron({
   name: "hack-night-create",
-  schedule: "0 20 * * 5",
+  // 8 PM Eastern (EDT, UTC-4) = 00:00 UTC Saturday
+  schedule: "0 0 * * 6",
   async handle(discord) {
     const channelId = DISCORD_IDS.channels.HACK_NIGHT;
     const message = HACK_NIGHT_MESSAGES[Math.floor(Math.random() * HACK_NIGHT_MESSAGES.length)];
