@@ -37,6 +37,7 @@ export const env = createEnv({
     RESEND_WEBHOOK_SECRET: z.string(),
     HUNTER_API_KEY: z.string(),
     PAYLOAD_CMS_API_KEY: z.string(),
+    EXA_API_KEY: z.string(),
     // Genuinely optional: when set, sandbox sessions boot from this prebuilt
     // snapshot (ripgrep + gh preinstalled) and skip ~20-30s of dnf install. The
     // app runs fine without it. Create one via scripts/create-sandbox-snapshot.ts.
