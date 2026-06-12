@@ -1,0 +1,23 @@
+src/lib/ai/streaming.ts
+  s_f83e2dc382454b::t_0a898592b2de0f 61-64,66-71
+  s_f83e2dc382454b::t_b5b1a75f782016 383
+docs/observability.md
+  s_f83e2dc382454b::t_ed0099f8ca11bb 77-78,91-97,132-135,137-142
+  s_f83e2dc382454b::t_5b335aabe7f31d 86-89
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "35307409b8ff21e41cfb32efd5ad8afeb3f17ecd",
+  "prompts": {},
+  "sessions": {
+    "s_f83e2dc382454b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "afdbd6c2-fb0a-44e6-b545-ebe0b007ac94",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
