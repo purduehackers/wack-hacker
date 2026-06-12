@@ -1,0 +1,49 @@
+src/lib/tasks/db.ts
+  s_3ca78ed2011f24::t_06768d4c3ea3c2 54-73
+  s_3ca78ed2011f24::t_6434077cdf5be7 1
+src/lib/tasks/queue/handlers/scheduled-task-fire.test.ts
+  s_3ca78ed2011f24::t_f2a88c0982d43b 306-313,316-324
+  s_3ca78ed2011f24::t_3bb75bc7eb1d93 250-283,286-287,314-315,327,342-344,354
+  s_3ca78ed2011f24::t_bd37af8b6e6f83 1
+  s_3ca78ed2011f24::t_1e6bfe92b9ca1b 284-285,288-305,325-326,328-341,345-353,355-361
+src/lib/tasks/queue/handlers/scheduled-task-fire.ts
+  s_3ca78ed2011f24::t_3089f1ba79468d 158-159
+  s_3ca78ed2011f24::t_ba62aeb6ea6ffe 118-148,150-157,160-162
+  s_3ca78ed2011f24::t_d64b7fe3a1e5de 149
+  s_3ca78ed2011f24::t_b7b9a359700d84 233-245
+  s_3ca78ed2011f24::t_fa6363721fa9bc 75
+  s_3ca78ed2011f24::t_35eb5c95a79e12 3
+src/bot/handlers/crons/scheduled-task-sweep/index.ts
+  s_3ca78ed2011f24::t_045d38ed853dcc 50-51
+  s_3ca78ed2011f24::t_8e64a03b0f0dd7 1-49,52-68
+src/bot/handlers/crons/index.ts
+  s_3ca78ed2011f24::t_421095b6b4f0e2 4
+src/app/api/tasks/route.ts
+  s_3ca78ed2011f24::t_dad3421886100c 10
+src/bot/handlers/crons/scheduled-task-sweep/index.test.ts
+  s_3ca78ed2011f24::t_e308061c495ae3 76-79
+  s_3ca78ed2011f24::t_e3d4f44fe1be55 1-7,10-14,17-18,21-53,57-59,62-64,66-75,81-94,97-112,115-122,124-125,128-131
+docs/workflows/scheduling.md
+  s_3ca78ed2011f24::t_b63767b2d938e1 45
+  s_3ca78ed2011f24::t_6b4dd6ae146195 18,20
+  s_3ca78ed2011f24::t_d6b74eecd325c5 57-58
+src/lib/tasks/db.test.ts
+  s_3ca78ed2011f24::t_78bade7cdeb39a 193-226
+  s_3ca78ed2011f24::t_efbd0a42c9585d 25-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "70129fa4e1f071e070a6ab59ff49cbcce853892c",
+  "prompts": {},
+  "sessions": {
+    "s_3ca78ed2011f24": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "124a68ff-f8c9-4309-b110-2b491f1386b5",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
