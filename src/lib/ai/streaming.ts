@@ -58,21 +58,17 @@ export function bucketUserId(userId: string): string {
 
 /**
  * Orchestrator cost at `ORCHESTRATOR_MODEL` rates plus each subagent
- * delegation at its own model's rates. Undefined when the orchestrator model
- * is missing from the price table — the caller counts `ai.cost.unknown_model`
- * instead of emitting a misleadingly partial figure. Unknown subagent models
- * were already counted at `recordSubagentMetrics` time and contribute 0 here.
+ * delegation at its own model's rates. Models missing from the price table
+ * contribute 0 — they were already counted via `ai.cost.unknown_model` at
+ * `recordSubagentMetrics` time, and pricing.test.ts pins the orchestrator
+ * model into the table so its lookup cannot miss.
  */
-function computeTurnCostUsd(tracker: TurnUsageTracker): number | undefined {
-  const orchestratorCost = estimateCostUsd({
-    model: ORCHESTRATOR_MODEL,
-    ...tracker.orchestratorUsage,
-  });
-  if (orchestratorCost === undefined) return undefined;
-  return tracker.subagentUsage.reduce(
-    (sum, record) => sum + (estimateCostUsd(record) ?? 0),
-    orchestratorCost,
-  );
+function computeTurnCostUsd(tracker: TurnUsageTracker): number {
+  const records = [
+    { model: ORCHESTRATOR_MODEL, ...tracker.orchestratorUsage },
+    ...tracker.subagentUsage,
+  ];
+  return records.reduce((sum, record) => sum + (estimateCostUsd(record) ?? 0), 0);
 }
 
 export type { OrchestratorAgent, OrchestratorFactory, StreamTurnOptions } from "./types.ts";
@@ -384,11 +380,7 @@ async function finalizeTurn(args: {
     recordDistribution("ai.turn.tool_calls", tracker.totalToolCalls, metricAttrs);
     recordDistribution("ai.turn.steps", tracker.totalSteps, metricAttrs);
     const costUsd = computeTurnCostUsd(tracker);
-    if (costUsd === undefined) {
-      countMetric("ai.cost.unknown_model", { model: ORCHESTRATOR_MODEL });
-    } else {
-      recordDistribution("ai.turn.cost_usd", costUsd, metricAttrs);
-    }
+    recordDistribution("ai.turn.cost_usd", costUsd, metricAttrs);
     return { metadataError: undefined, finalized, costUsd };
   } catch (err) {
     countMetric("ai.turn.metadata_error");

@@ -74,8 +74,8 @@ wide events in **Explore → Logs**, e.g. ops like `ai.turn`, `gateway.relay`,
   explicit now.
 
 **Alerts cannot be created from code.** In Sentry: **Insights → Crons** →
-select the monitor → **Alerts → Create Alert**, condition *missed check-in*
-(also add *failed check-in* for `discord-gateway`). Do this once per slug
+select the monitor → **Alerts → Create Alert**, condition _missed check-in_
+(also add _failed check-in_ for `discord-gateway`). Do this once per slug
 after the first deploy registers them.
 
 ## Cost attribution
@@ -83,17 +83,18 @@ after the first deploy registers them.
 A static price table (`src/lib/ai/pricing.ts`, USD per MTok, input/output/
 cache-read rates per gateway model slug) feeds `estimateCostUsd`. The AI SDK's
 `inputTokens` includes cache reads, so cached tokens are subtracted and
-re-priced at the cache-read rate. Unknown model slugs emit
-`ai.cost.unknown_model` (count, attrs `{model, domain?}`) instead of a wrong
-number — **extend the table when adding a model**.
+re-priced at the cache-read rate. Unknown subagent model slugs emit
+`ai.cost.unknown_model` (count, attrs `{model, domain}`) and contribute 0 to
+the turn total instead of a wrong number — **extend the table when adding a
+model** (pricing.test.ts pins every slug the repo runs).
 
-| Metric | Type | Attributes |
-| --- | --- | --- |
-| `ai.turn.cost_usd` | distribution | `model`, `user` (hashed bucket) |
-| `ai.subagent.cost_usd` | distribution | `domain`, `model` |
-| `ai.turn.tokens` / `.tool_calls` / `.steps` | distribution | `model`, `user` |
-| `ai.subagent.tokens` / `.input_tokens` / `.output_tokens` / `.cached_input_tokens` / `.tool_calls` | distribution | `domain`, `model` |
-| `ai.subagent.completed` | count | `domain`, `model` |
+| Metric                                                                                             | Type         | Attributes                      |
+| -------------------------------------------------------------------------------------------------- | ------------ | ------------------------------- |
+| `ai.turn.cost_usd`                                                                                 | distribution | `model`, `user` (hashed bucket) |
+| `ai.subagent.cost_usd`                                                                             | distribution | `domain`, `model`               |
+| `ai.turn.tokens` / `.tool_calls` / `.steps`                                                        | distribution | `model`, `user`                 |
+| `ai.subagent.tokens` / `.input_tokens` / `.output_tokens` / `.cached_input_tokens` / `.tool_calls` | distribution | `domain`, `model`               |
+| `ai.subagent.completed`                                                                            | count        | `domain`, `model`               |
 
 The `user` attribute is a stable 16-way hash bucket (`u00`–`u15`,
 `bucketUserId` in `src/lib/ai/streaming.ts`) — **never put raw user ids in
@@ -128,17 +129,17 @@ Closing the loop from a reaction on a bot reply back to the exact turn:
 All metric queries live in **Explore → Metrics** (trace-metrics); log queries
 in **Explore → Logs**; trace queries in **Explore → Traces**.
 
-| Dashboard | Query |
-| --- | --- |
-| Cost / day by model & domain | `ai.turn.cost_usd` summed, grouped by `model`; `ai.subagent.cost_usd` grouped by `domain`, `model` |
-| Cache hit ratio | `ai.subagent.cached_input_tokens` ÷ `ai.subagent.input_tokens`, by `domain` (also `ai.cached_input_tokens` vs `ai.input_tokens` on `chat.turn` spans) |
+| Dashboard                         | Query                                                                                                                                                                             |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cost / day by model & domain      | `ai.turn.cost_usd` summed, grouped by `model`; `ai.subagent.cost_usd` grouped by `domain`, `model`                                                                                |
+| Cache hit ratio                   | `ai.subagent.cached_input_tokens` ÷ `ai.subagent.input_tokens`, by `domain` (also `ai.cached_input_tokens` vs `ai.input_tokens` on `chat.turn` spans)                             |
 | Subagent activity & failure proxy | `ai.subagent.completed` by `domain`, `model`; failures appear as issues from the `ai.subagent` wide-event path (dedicated failure metrics land with the subagent-resilience plan) |
-| Step-cap exhaustion | `ai.subagent.completed` filtered where `ai.turn.steps` ≈ the spec's `stopSteps`; spikes mean truncated work |
-| Queue dead-letters | Issues tagged `queue.terminal:true`, grouped by fingerprint (= packet type); rate via `discord.event.callback_error` by `type` |
-| Cron health | Crons page (slugs above); plus `cron.completed` / `cron.error` by `name` and `cron.duration` |
-| Gateway blackouts | `gateway.listener.hold_duration` gaps, `gateway.leader.lost`, `gateway.listener.login_failed`; monitor `discord-gateway` missed check-ins are the alert |
-| Feedback | `ai.feedback` by `positive`, `emoji`; drill into a reaction via its wide event's `trace_id` |
-| Approval latency / timeout rate | no metrics yet — lands with the approvals-hardening plan; today approvals are visible only in `chat.turn` traces |
+| Step-cap exhaustion               | `ai.subagent.completed` filtered where `ai.turn.steps` ≈ the spec's `stopSteps`; spikes mean truncated work                                                                       |
+| Queue dead-letters                | Issues tagged `queue.terminal:true`, grouped by fingerprint (= packet type); rate via `discord.event.callback_error` by `type`                                                    |
+| Cron health                       | Crons page (slugs above); plus `cron.completed` / `cron.error` by `name` and `cron.duration`                                                                                      |
+| Gateway blackouts                 | `gateway.listener.hold_duration` gaps, `gateway.leader.lost`, `gateway.listener.login_failed`; monitor `discord-gateway` missed check-ins are the alert                           |
+| Feedback                          | `ai.feedback` by `positive`, `emoji`; drill into a reaction via its wide event's `trace_id`                                                                                       |
+| Approval latency / timeout rate   | no metrics yet — lands with the approvals-hardening plan; today approvals are visible only in `chat.turn` traces                                                                  |
 
 ## Alerts to configure (Sentry UI, one-time)
 
