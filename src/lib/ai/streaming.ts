@@ -3,6 +3,9 @@ import type { API } from "@discordjs/core/http-only";
 import { trace } from "@opentelemetry/api";
 import { isTextUIPart, type UIMessage } from "ai";
 
+import type { TurnMessageRecord } from "@/bot/types";
+
+import { TurnMessageStore } from "@/bot/turn-message-store";
 import { createWideLogger } from "@/lib/logging/wide";
 import { countMetric, recordDistribution, recordDuration } from "@/lib/metrics";
 import { buildChatAttributes } from "@/lib/otel/chat-attributes";
@@ -14,12 +17,15 @@ import type {
   SerializedAgentContext,
   StreamTurnOptions,
   StreamTurnResult,
+  TurnUsage,
+  UsageLike,
 } from "./types.ts";
 
 import { ORCHESTRATOR_MODEL } from "./constants.ts";
 import { AgentContext } from "./context.ts";
 import { MessageRenderer } from "./message-renderer.ts";
 import { createOrchestrator } from "./orchestrator.ts";
+import { estimateCostUsd } from "./pricing.ts";
 import { TurnUsageTracker } from "./turn-usage.ts";
 
 /**
@@ -31,6 +37,42 @@ export function parseModelSlug(slug: string): { provider: string | undefined; mo
   const slash = slug.indexOf("/");
   if (slash <= 0) return { provider: undefined, model: slug };
   return { provider: slug.slice(0, slash), model: slug.slice(slash + 1) };
+}
+
+const USER_BUCKET_COUNT = 16;
+
+/**
+ * Deterministically fold a Discord user id into one of 16 stable buckets
+ * (`"u00"`–`"u15"`) for metric attributes. Raw user ids are forbidden there
+ * (unbounded cardinality); a bucket is enough to spot one user dominating
+ * token spend without identifying them. FNV-1a 32-bit over UTF-16 code units.
+ */
+export function bucketUserId(userId: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < userId.length; i++) {
+    hash ^= userId.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return `u${(hash % USER_BUCKET_COUNT).toString().padStart(2, "0")}`;
+}
+
+/**
+ * Orchestrator cost at `ORCHESTRATOR_MODEL` rates plus each subagent
+ * delegation at its own model's rates. Undefined when the orchestrator model
+ * is missing from the price table — the caller counts `ai.cost.unknown_model`
+ * instead of emitting a misleadingly partial figure. Unknown subagent models
+ * were already counted at `recordSubagentMetrics` time and contribute 0 here.
+ */
+function computeTurnCostUsd(tracker: TurnUsageTracker): number | undefined {
+  const orchestratorCost = estimateCostUsd({
+    model: ORCHESTRATOR_MODEL,
+    ...tracker.orchestratorUsage,
+  });
+  if (orchestratorCost === undefined) return undefined;
+  return tracker.subagentUsage.reduce(
+    (sum, record) => sum + (estimateCostUsd(record) ?? 0),
+    orchestratorCost,
+  );
 }
 
 export type { OrchestratorAgent, OrchestratorFactory, StreamTurnOptions } from "./types.ts";
@@ -126,6 +168,7 @@ async function runStreamTurn(args: {
     workflowRunId,
     turnIndex,
     placeholderMessageId,
+    turnMessageStore,
   } = options;
   const agentCtx = AgentContext.fromJSON(serializedContext);
   const tracker = new TurnUsageTracker();
@@ -161,46 +204,41 @@ async function runStreamTurn(args: {
 
   const elapsedMs = Date.now() - startTime;
   const traceId = trace.getActiveSpan()?.spanContext().traceId;
-  const { metadataError, finalized } = await finalizeTurn({
+  const { metadataError, finalized, costUsd } = await finalizeTurn({
     result,
     tracker,
     renderer,
     elapsedMs,
     logger,
     traceId,
+    userBucket: bucketUserId(serializedContext.userId),
+  });
+
+  await indexTurnMessages({
+    store: turnMessageStore,
+    messageIds: [finalized.messageId, ...finalized.overflowIds],
+    record: {
+      chatId: workflowRunId,
+      traceId,
+      domains: [...new Set(tracker.subagentUsage.map((s) => s.domain))],
+      channelId,
+      userId: serializedContext.userId,
+    },
   });
 
   countMetric("ai.turn.completed");
   recordDuration("ai.turn.duration", elapsedMs);
 
   const usage = tracker.toTurnUsage();
-
-  // Mirror the per-turn totals onto the active chat.turn span so operators can
-  // query the trace directly without joining against wide events.
-  setActiveSpanAttributes({
-    "ai.input_tokens": usage.inputTokens,
-    "ai.output_tokens": usage.outputTokens,
-    "ai.subagent_tokens": usage.subagentTokens,
-    "ai.total_tokens": usage.totalTokens,
-    "ai.tool_calls": usage.toolCallCount,
-    "ai.steps": usage.stepCount,
-    ...(usage.toolNames.length > 0 ? { "ai.tool_names": usage.toolNames } : {}),
-    "chat.discord_message_id": finalized.messageId,
-  });
-
-  logger.emit({
-    outcome: metadataError ? "partial" : "ok",
-    duration_ms: elapsedMs,
-    text_length: renderer.content.length,
-    tokens: usage.totalTokens,
-    input_tokens: usage.inputTokens,
-    output_tokens: usage.outputTokens,
-    subagent_tokens: usage.subagentTokens,
-    tool_calls: usage.toolCallCount,
-    tool_names: usage.toolNames,
-    steps: usage.stepCount,
-    model: ORCHESTRATOR_MODEL,
-    discord_message_id: finalized.messageId,
+  emitTurnTelemetry({
+    usage,
+    cachedInputTokens: tracker.totalCachedInputTokens,
+    costUsd,
+    metadataError,
+    elapsedMs,
+    textLength: renderer.content.length,
+    logger,
+    messageId: finalized.messageId,
   });
 
   return {
@@ -209,6 +247,62 @@ async function runStreamTurn(args: {
     discordMessageId: finalized.messageId,
     model: ORCHESTRATOR_MODEL,
   };
+}
+
+/**
+ * Mirror the per-turn totals onto the active chat.turn span (so operators can
+ * query the trace directly without joining against wide events) and emit the
+ * turn's terminal wide event.
+ */
+function emitTurnTelemetry(args: {
+  usage: TurnUsage;
+  cachedInputTokens: number;
+  costUsd: number | undefined;
+  metadataError: unknown;
+  elapsedMs: number;
+  textLength: number;
+  logger: ReturnType<typeof createWideLogger>;
+  messageId: string;
+}): void {
+  const {
+    usage,
+    cachedInputTokens,
+    costUsd,
+    metadataError,
+    elapsedMs,
+    textLength,
+    logger,
+    messageId,
+  } = args;
+  setActiveSpanAttributes({
+    "ai.input_tokens": usage.inputTokens,
+    "ai.output_tokens": usage.outputTokens,
+    "ai.cached_input_tokens": cachedInputTokens,
+    "ai.subagent_tokens": usage.subagentTokens,
+    "ai.total_tokens": usage.totalTokens,
+    "ai.tool_calls": usage.toolCallCount,
+    "ai.steps": usage.stepCount,
+    ...(usage.toolNames.length > 0 ? { "ai.tool_names": usage.toolNames } : {}),
+    ...(costUsd !== undefined ? { "ai.cost_usd": costUsd } : {}),
+    "chat.discord_message_id": messageId,
+  });
+
+  logger.emit({
+    outcome: metadataError ? "partial" : "ok",
+    duration_ms: elapsedMs,
+    text_length: textLength,
+    tokens: usage.totalTokens,
+    input_tokens: usage.inputTokens,
+    output_tokens: usage.outputTokens,
+    cached_input_tokens: cachedInputTokens,
+    subagent_tokens: usage.subagentTokens,
+    ...(costUsd !== undefined ? { cost_usd: costUsd } : {}),
+    tool_calls: usage.toolCallCount,
+    tool_names: usage.toolNames,
+    steps: usage.stepCount,
+    model: ORCHESTRATOR_MODEL,
+    discord_message_id: messageId,
+  });
 }
 
 async function renderStream(
@@ -255,6 +349,8 @@ async function renderStream(
 interface FinalizeResult {
   metadataError: unknown;
   finalized: { messageId: string; overflowIds: string[] };
+  /** Estimated USD cost for the whole turn; undefined when usage collection failed. */
+  costUsd: number | undefined;
 }
 
 async function finalizeTurn(args: {
@@ -264,12 +360,13 @@ async function finalizeTurn(args: {
   elapsedMs: number;
   logger: ReturnType<typeof createWideLogger>;
   traceId: string | undefined;
+  userBucket: string;
 }): Promise<FinalizeResult> {
-  const { result, tracker, renderer, elapsedMs, logger, traceId } = args;
+  const { result, tracker, renderer, elapsedMs, logger, traceId, userBucket } = args;
   try {
     const [totalUsage, steps] = await Promise.all([result.totalUsage, result.steps]);
     tracker.recordOrchestrator({
-      usage: totalUsage as { inputTokens?: number; outputTokens?: number; totalTokens?: number },
+      usage: totalUsage as UsageLike,
       steps: steps as readonly { toolCalls: readonly unknown[] }[],
     });
 
@@ -281,10 +378,18 @@ async function finalizeTurn(args: {
       traceId,
     });
 
-    recordDistribution("ai.turn.tokens", tracker.totalTokens);
-    recordDistribution("ai.turn.tool_calls", tracker.totalToolCalls);
-    recordDistribution("ai.turn.steps", tracker.totalSteps);
-    return { metadataError: undefined, finalized };
+    // Full model slug + hashed user bucket — never the raw user id (cardinality).
+    const metricAttrs = { model: ORCHESTRATOR_MODEL, user: userBucket };
+    recordDistribution("ai.turn.tokens", tracker.totalTokens, metricAttrs);
+    recordDistribution("ai.turn.tool_calls", tracker.totalToolCalls, metricAttrs);
+    recordDistribution("ai.turn.steps", tracker.totalSteps, metricAttrs);
+    const costUsd = computeTurnCostUsd(tracker);
+    if (costUsd === undefined) {
+      countMetric("ai.cost.unknown_model", { model: ORCHESTRATOR_MODEL });
+    } else {
+      recordDistribution("ai.turn.cost_usd", costUsd, metricAttrs);
+    }
+    return { metadataError: undefined, finalized, costUsd };
   } catch (err) {
     countMetric("ai.turn.metadata_error");
     logger.warn("metadata collection failed", { reason: String(err) });
@@ -295,6 +400,25 @@ async function finalizeTurn(args: {
       stepCount: 0,
       traceId,
     });
-    return { metadataError: err, finalized };
+    return { metadataError: err, finalized, costUsd: undefined };
+  }
+}
+
+/**
+ * Persist the message-id → turn join consumed by the feedback reaction
+ * handler — the primary reply and every overflow chunk map to the same turn.
+ * Non-fatal by design: the reply has already been delivered, so an index
+ * failure must not fail the turn — count it and continue.
+ */
+async function indexTurnMessages(args: {
+  store: TurnMessageStore | undefined;
+  messageIds: string[];
+  record: TurnMessageRecord;
+}): Promise<void> {
+  try {
+    const store = args.store ?? new TurnMessageStore();
+    await Promise.all(args.messageIds.map((id) => store.set(id, args.record)));
+  } catch {
+    countMetric("ai.feedback.index_error");
   }
 }

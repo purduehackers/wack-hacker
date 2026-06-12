@@ -13,7 +13,4 @@ export default withSentryConfig(withWorkflow(nextConfig), {
   authToken: process.env.SENTRY_AUTH_TOKEN,
   silent: !process.env.CI,
   widenClientFileUpload: true,
-  webpack: {
-    automaticVercelMonitors: true,
-  },
 });

@@ -1,4 +1,14 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  ROOT_CONTEXT,
+  context as otelContext,
+  propagation,
+  trace,
+  type Context,
+  type ContextManager,
+  type TextMapPropagator,
+} from "@opentelemetry/api";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ScheduledTaskRow } from "@/lib/tasks/types";
 
@@ -100,6 +110,18 @@ describe("scheduled-task-fire: validation + short-circuits", () => {
       scheduledTaskFire.schema.safeParse({ taskId: "x", targetIso: "2026-01-01T00:00Z" }).success,
     ).toBe(true);
     expect(scheduledTaskFire.schema.safeParse({ taskId: 5 }).success).toBe(false);
+  });
+
+  it("accepts an optional string traceparent and rejects non-string values", () => {
+    const base = { taskId: "x", targetIso: "2026-01-01T00:00Z" };
+    expect(
+      scheduledTaskFire.schema.safeParse({
+        ...base,
+        traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+      }).success,
+    ).toBe(true);
+    expect(scheduledTaskFire.schema.safeParse(base).success).toBe(true);
+    expect(scheduledTaskFire.schema.safeParse({ ...base, traceparent: 42 }).success).toBe(false);
   });
 
   it("no-ops when the row is missing", async () => {
@@ -379,5 +401,124 @@ describe("scheduled-task-fire: agent action", () => {
       ...discord.callsTo("channels.editMessage").map((c) => c[2] as { content: string }),
     ];
     expect(bodies.some((b) => b.content.includes("-# Task: task-1"))).toBe(true);
+  });
+});
+
+// --- trace propagation -------------------------------------------------------
+// Real @opentelemetry/api with a test ALS context manager + W3C-shaped
+// propagator registered: the NoopTracer reuses a valid parent span context
+// from the active context, so the trace id observed inside the handler is
+// the behavioral proof that `traceparent` was (or was not) joined.
+
+const PARENT_TRACE_ID = "4bf92f3577b34da6a3ce929d0e0e4736";
+const PARENT_TRACEPARENT = `00-${PARENT_TRACE_ID}-00f067aa0ba902b7-01`;
+const TRACEPARENT_RE = /^00-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$/;
+
+const contextStorage = new AsyncLocalStorage<Context>();
+const alsContextManager: ContextManager = {
+  active: () => contextStorage.getStore() ?? ROOT_CONTEXT,
+  with: (ctx, fn, thisArg, ...args) => contextStorage.run(ctx, () => fn.call(thisArg, ...args)),
+  bind: (_ctx, target) => target,
+  enable() {
+    return this;
+  },
+  disable() {
+    return this;
+  },
+};
+
+const w3cExtractPropagator: TextMapPropagator = {
+  inject: () => {},
+  extract(ctx, carrier, getter) {
+    const header = getter.get(carrier, "traceparent");
+    const value = Array.isArray(header) ? (header[0] ?? "") : (header ?? "");
+    const match = TRACEPARENT_RE.exec(value);
+    if (!match) return ctx;
+    return trace.setSpanContext(ctx, {
+      traceId: match[1],
+      spanId: match[2],
+      traceFlags: parseInt(match[3], 16),
+      isRemote: true,
+    });
+  },
+  fields: () => ["traceparent"],
+};
+
+describe("scheduled-task-fire: trace propagation", () => {
+  beforeAll(() => {
+    otelContext.setGlobalContextManager(alsContextManager);
+    propagation.setGlobalPropagator(w3cExtractPropagator);
+  });
+
+  afterAll(() => {
+    otelContext.disable();
+    propagation.disable();
+  });
+
+  function observeTraceIdViaRowLookup(): { traceId: () => string | undefined } {
+    let observed: string | undefined;
+    // First thing `runFire` does inside the span is the row lookup — capture
+    // the active trace id there, return null so the rest short-circuits.
+    hoisted.getScheduledTask.mockImplementationOnce(async () => {
+      observed = trace.getActiveSpan()?.spanContext().traceId;
+      return null;
+    });
+    return { traceId: () => observed };
+  }
+
+  it("runs the handler under the parent trace when the payload carries traceparent", async () => {
+    const observed = observeTraceIdViaRowLookup();
+    await scheduledTaskFire.handle(
+      {
+        taskId: "task-1",
+        targetIso: "2026-04-23T13:00:00.000Z",
+        traceparent: PARENT_TRACEPARENT,
+      },
+      asAPI(createMockAPI()),
+    );
+    expect(observed.traceId()).toBe(PARENT_TRACE_ID);
+  });
+
+  it("opens a fresh root span when the payload has no traceparent", async () => {
+    const observed = observeTraceIdViaRowLookup();
+    await scheduledTaskFire.handle(
+      { taskId: "task-1", targetIso: "2026-04-23T13:00:00.000Z" },
+      asAPI(createMockAPI()),
+    );
+    expect(observed.traceId()).toBeDefined();
+    expect(observed.traceId()).not.toBe(PARENT_TRACE_ID);
+  });
+
+  it("does not propagate traceparent through a checkpoint-hop re-enqueue", async () => {
+    const targetIso = "2026-05-03T13:00:00.000Z";
+    vi.setSystemTime(new Date("2026-04-29T13:00:00.000Z"));
+    hoisted.getScheduledTask.mockResolvedValueOnce(makeRow({ nextRunAt: targetIso }));
+
+    await scheduledTaskFire.handle(
+      { taskId: "task-1", targetIso, traceparent: PARENT_TRACEPARENT },
+      asAPI(createMockAPI()),
+    );
+
+    expect(hoisted.sendScheduledFire).toHaveBeenCalledTimes(1);
+    expect(hoisted.sendScheduledFire.mock.calls[0]).toHaveLength(3);
+  });
+
+  it("does not propagate traceparent through a recurring re-enqueue", async () => {
+    hoisted.getScheduledTask.mockResolvedValueOnce(
+      makeRow({
+        scheduleType: ScheduleType.Recurring,
+        runAt: null,
+        cron: "0 9 * * *",
+        timezone: null,
+      }),
+    );
+
+    await scheduledTaskFire.handle(
+      { taskId: "task-1", targetIso: "2026-04-23T13:00:00.000Z", traceparent: PARENT_TRACEPARENT },
+      asAPI(createMockAPI()),
+    );
+
+    expect(hoisted.sendScheduledFire).toHaveBeenCalledTimes(1);
+    expect(hoisted.sendScheduledFire.mock.calls[0]).toHaveLength(3);
   });
 });

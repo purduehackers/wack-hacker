@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { Hono } from "hono";
 
 import type { CronHandler } from "@/bot/crons/types";
@@ -32,16 +33,23 @@ route.get("/crons/:name", async (c) => {
 
   const startTime = Date.now();
   try {
-    await runInstrumented(
-      {
-        op: "cron.execute",
-        spanAttrs: { "cron.name": name },
-        loggerContext: { cron: { name } },
-      },
-      async () => {
-        await cron.handle(createDiscordAPI());
-        countMetric("cron.completed", { name });
-      },
+    // One withMonitor at the dispatch chokepoint covers every registered
+    // cron handler; the monitor slug is the cron name.
+    await Sentry.withMonitor(
+      name,
+      () =>
+        runInstrumented(
+          {
+            op: "cron.execute",
+            spanAttrs: { "cron.name": name },
+            loggerContext: { cron: { name } },
+          },
+          async () => {
+            await cron.handle(createDiscordAPI());
+            countMetric("cron.completed", { name });
+          },
+        ),
+      { schedule: { type: "crontab", value: cron.schedule } },
     );
     return c.json({ ok: true, cron: name });
   } catch (err) {

@@ -127,6 +127,53 @@ describe("PacketCodec - mentions defaulting", () => {
   });
 });
 
+describe("PacketCodec - traceparent propagation", () => {
+  const TRACEPARENT = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01";
+
+  it("roundtrips traceparent on every packet variant", () => {
+    const variants = [
+      messagePacket("hello"),
+      reactionPacket("👋"),
+      reactionPacket("👋", "GATEWAY_MESSAGE_REACTION_REMOVE"),
+      deletePacket(),
+      voiceStatePacket(),
+      threadCreatePacket(),
+    ];
+    for (const packet of variants) {
+      const decoded = PacketCodec.decode(
+        PacketCodec.encode({ ...packet, traceparent: TRACEPARENT }),
+      );
+      expect(decoded.traceparent).toBe(TRACEPARENT);
+      expect(decoded.timestamp).toBeInstanceOf(Date);
+    }
+  });
+
+  it("roundtrips traceparent on a message update packet", () => {
+    const raw = JSON.stringify({
+      type: "GATEWAY_MESSAGE_UPDATE",
+      timestamp: new Date("2024-01-01"),
+      traceparent: TRACEPARENT,
+      data: { id: "msg-1", channelId: "ch-1", guildId: "guild-1" },
+    });
+    const decoded = PacketCodec.decode(raw);
+    expect(decoded.traceparent).toBe(TRACEPARENT);
+  });
+
+  it("still parses legacy payloads without traceparent", () => {
+    const decoded = PacketCodec.decode(PacketCodec.encode(messagePacket("hello")));
+    expect(decoded.traceparent).toBeUndefined();
+    expect(decoded.timestamp).toBeInstanceOf(Date);
+  });
+
+  it("revives timestamp on packets that carry a traceparent", () => {
+    const decoded = PacketCodec.decode(
+      PacketCodec.encode({ ...messagePacket("hello"), traceparent: TRACEPARENT }),
+    );
+    expect(decoded.timestamp).toBeInstanceOf(Date);
+    expect(decoded.timestamp.toISOString()).toBe("2024-01-01T00:00:00.000Z");
+  });
+});
+
 describe("PacketSchema validation", () => {
   it("rejects unknown type", () => {
     expect(

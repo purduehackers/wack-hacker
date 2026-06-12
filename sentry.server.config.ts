@@ -6,14 +6,43 @@ Sentry.init({
     process.env.SENTRY_DSN ??
     "https://23174d7cbef96f2fd9276db93bd566cf@o4510744753405952.ingest.us.sentry.io/4511219848904704",
 
-  tracesSampleRate: process.env.NODE_ENV === "development" ? 1.0 : 0.1,
+  tracesSampler: ({ name, parentSampled }) => {
+    if (process.env.NODE_ENV === "development") return 1.0;
+    // Propagated traces follow the parent's decision so a distributed trace
+    // (gateway → queue → workflow → agent) is never partially sampled.
+    if (typeof parentSampled === "boolean") return parentSampled;
+    // The keepalive cron pings this route every 9 minutes (~160 no-value
+    // invocations/day); real event traces root at gateway.relay instead.
+    if (name.includes("/api/discord/gateway")) return 0.01;
+    // Cron executions root at the HTTP request span (`cron.execute` is its
+    // child and inherits via parentSampled), so the route is what must be
+    // fully sampled — ~25 low-volume invocations/day.
+    if (name.includes("/api/crons/")) return 1.0;
+    const fullySampledRoots = [
+      "gateway.relay",
+      "discord.event",
+      "chat.",
+      "workflow",
+      "scheduled_task.fire",
+      "cron.execute",
+    ];
+    if (fullySampledRoots.some((root) => name.startsWith(root))) return 1.0;
+    return 0.1;
+  },
 
   sendDefaultPii: true,
   includeLocalVariables: true,
   enableLogs: true,
 
   integrations: [
-    Sentry.vercelAIIntegration({ recordInputs: true, recordOutputs: true }),
+    // `force: true` because the `ai` package is bundled by Next, so the
+    // integration's CJS require-hook never observes it and would otherwise
+    // skip registering its ai.* → gen_ai.* span processors.
+    Sentry.vercelAIIntegration({ force: true, recordInputs: true, recordOutputs: true }),
+    // evlog wide events are JSON lines on stdout; this turns them into
+    // Sentry Logs (requires enableLogs), joined to traces by the trace.id
+    // that createWideLogger injects.
+    Sentry.consoleLoggingIntegration({ levels: ["log", "info", "warn", "error"] }),
     Sentry.anrIntegration({ captureStackTrace: true, anrThreshold: 5000 }),
   ],
 });

@@ -1,4 +1,5 @@
 import { trace } from "@opentelemetry/api";
+import * as Sentry from "@sentry/nextjs";
 import { createLogger, type RequestLogger } from "evlog";
 
 type WideContext = Record<string, unknown>;
@@ -7,7 +8,15 @@ type WideContext = Record<string, unknown>;
  * Create a scoped wide-event logger for one unit of work. Wraps `evlog`'s
  * `createLogger` so:
  *   - The emitted event automatically includes the current OTEL trace id
- *     (`trace.id`), which Sentry uses to join a log line to a trace.
+ *     (`trace.id`). evlog writes the event as JSON to stdout, where
+ *     `Sentry.consoleLoggingIntegration` (sentry.server.config.ts) captures
+ *     it into Sentry Logs; the injected trace.id joins the log line to its
+ *     trace there.
+ *   - `.error()` forwards the error to `Sentry.captureException` before
+ *     delegating to evlog, so every call site gets a Sentry issue while the
+ *     wide event still accumulates the parsed error fields. This is the one
+ *     error-reporting path for the codebase — do not add bare
+ *     `captureException` calls next to `logger.error`, that double-reports.
  *   - Base context (op, chat, user, workflow ids, …) is set once up front and
  *     flows through `.set()`, `.info()`, `.warn()`, `.error()`, and `.emit()`.
  *
@@ -41,6 +50,11 @@ export function createWideLogger(context: WideContext = {}): RequestLogger {
       ...(traceId ? { trace: { id: traceId } } : {}),
       ...overrides,
     });
+  };
+  const originalError = logger.error.bind(logger);
+  logger.error = (error, errorContext) => {
+    Sentry.captureException(error);
+    originalError(error, errorContext);
   };
   return logger;
 }

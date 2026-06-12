@@ -4,6 +4,7 @@ import type { ChatMessage } from "./types.ts";
 
 import {
   asAPI,
+  createMemoryRedis,
   createMockAPI,
   discordRESTClass,
   installMockProvider,
@@ -28,9 +29,22 @@ vi.mock("resend", () => ({ Resend: resendClass() }));
 vi.mock("@vercel/edge-config", () => ({
   createClient: vi.fn(() => ({ getAll: vi.fn().mockResolvedValue({}) })),
 }));
+vi.mock("@sentry/nextjs", () => ({
+  metrics: { count: vi.fn(), distribution: vi.fn() },
+  captureException: vi.fn(),
+}));
+// The default turn-message index path builds a Redis client from env vars;
+// back it with the in-memory fake so finalize-time persistence never needs
+// real credentials in tests.
+vi.mock("@upstash/redis", () => ({
+  Redis: { fromEnv: () => createMemoryRedis() },
+}));
 
+const Sentry = await import("@sentry/nextjs");
+const { TurnMessageStore } = await import("@/bot/turn-message-store");
 const { AgentContext } = await import("./context.ts");
-const { buildUserMessage, parseModelSlug, streamTurn } = await import("./streaming.ts");
+const { bucketUserId, buildUserMessage, parseModelSlug, streamTurn } =
+  await import("./streaming.ts");
 type OrchestratorFactory = import("./streaming.ts").OrchestratorFactory;
 
 type StreamEvent = Record<string, unknown>;
@@ -610,6 +624,127 @@ describe("streamTurn: stream-event edge cases", () => {
       }),
     });
     expect(result.text).toBe("Final.");
+  });
+});
+
+describe("bucketUserId", () => {
+  it("is deterministic for the same id", () => {
+    expect(bucketUserId("207129618375179508")).toBe(bucketUserId("207129618375179508"));
+  });
+
+  it("always yields a bucket in u00–u15", () => {
+    for (let i = 0; i < 200; i++) {
+      expect(bucketUserId(String(900000000000000000n + BigInt(i) * 7919n))).toMatch(
+        /^u(0\d|1[0-5])$/,
+      );
+    }
+  });
+
+  it("spreads distinct ids across multiple buckets", () => {
+    const buckets = new Set(
+      Array.from({ length: 100 }, (_, i) => bucketUserId(`user-${i * 104_729}`)),
+    );
+    expect(buckets.size).toBeGreaterThan(1);
+  });
+});
+
+describe("streamTurn: cost + metric attributes", () => {
+  it("attributes turn distributions with model + user bucket and records ai.turn.cost_usd", async () => {
+    vi.mocked(Sentry.metrics.distribution).mockClear();
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+
+    await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+      createAgent: fakeOrchestrator(["Done."], {
+        totalUsage: Promise.resolve({
+          inputTokens: 1_000_000,
+          outputTokens: 100_000,
+          totalTokens: 1_100_000,
+          cachedInputTokens: 500_000,
+        }),
+      }),
+    });
+
+    const calls = vi.mocked(Sentry.metrics.distribution).mock.calls;
+    const tokens = calls.find(([name]) => name === "ai.turn.tokens");
+    expect(tokens?.[1]).toBe(1_100_000);
+    const attrs = tokens?.[2]?.attributes as Record<string, string> | undefined;
+    expect(attrs?.model).toBe("anthropic/claude-sonnet-4.6");
+    expect(attrs?.user).toMatch(/^u(0\d|1[0-5])$/);
+
+    const cost = calls.find(([name]) => name === "ai.turn.cost_usd");
+    // Sonnet 4.6: 500k uncached * $3/M + 500k cached * $0.30/M + 100k out * $15/M.
+    expect(cost?.[1]).toBeCloseTo(1.5 + 0.15 + 1.5, 10);
+    expect(cost?.[2]?.attributes).toEqual(attrs);
+
+    const steps = calls.find(([name]) => name === "ai.turn.steps");
+    expect(steps?.[2]?.attributes).toEqual(attrs);
+  });
+});
+
+describe("streamTurn: feedback message index", () => {
+  /** Minimal subagent usage record for seeding the tracker with a domain. */
+  const subagentRecord = (domain: string) => ({
+    domain,
+    model: "anthropic/claude-haiku-4.5",
+    tokens: 10,
+    inputTokens: 5,
+    outputTokens: 5,
+    cachedInputTokens: 0,
+    toolCalls: 1,
+    toolNames: ["search"],
+  });
+
+  it("persists the message → turn join for primary and overflow ids", async () => {
+    const store = new TurnMessageStore(createMemoryRedis());
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    // 3000 chars of text forces one overflow message at finalize.
+    const base = fakeOrchestrator(["a".repeat(3000)]);
+    const createAgent: OrchestratorFactory = (agentCtx, tracker, meta) => {
+      for (const domain of ["linear", "notion", "linear"]) {
+        tracker.addSubagent(subagentRecord(domain));
+      }
+      return base(agentCtx, tracker, meta);
+    };
+
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+      createAgent,
+      workflowRunId: "wf-run-1",
+      turnMessageStore: store,
+    });
+
+    const record = await store.get(result.discordMessageId);
+    expect(record).toMatchObject({
+      chatId: "wf-run-1",
+      channelId: "ch-1",
+      userId: "user-1",
+      domains: ["linear", "notion"],
+    });
+
+    // The placeholder is msg-1 and the mock API hands out sequential ids, so
+    // the finalize-time overflow chunk is msg-2; it must resolve to the same turn.
+    expect(await store.get("msg-2")).toEqual(record);
+  });
+
+  it("does not fail the turn when the index write fails", async () => {
+    vi.mocked(Sentry.metrics.count).mockClear();
+    const redis = createMemoryRedis();
+    redis.set = async () => {
+      throw new Error("redis down");
+    };
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+      createAgent: fakeOrchestrator(["Done."]),
+      turnMessageStore: new TurnMessageStore(redis),
+    });
+
+    expect(result.text).toBe("Done.");
+    const counted = vi.mocked(Sentry.metrics.count).mock.calls.map(([name]) => name);
+    expect(counted).toContain("ai.feedback.index_error");
+    expect(counted).toContain("ai.turn.completed");
   });
 });
 

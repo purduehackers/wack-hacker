@@ -15,18 +15,19 @@ import { createWideLogger } from "@/lib/logging/wide";
 import { countMetric, recordDistribution } from "@/lib/metrics";
 
 import type { AgentContext } from "./context.ts";
-import type { SubagentSpec, TelemetryMetadata } from "./types.ts";
+import type { SubagentSpec, TelemetryMetadata, UsageLike } from "./types.ts";
 
 import { wrapApprovalTools } from "./approvals/index.ts";
 import { addCacheControl } from "./cache-control.ts";
 import { SUBAGENT_MODEL, SUBAGENT_PREAMBLE, UserRole } from "./constants.ts";
+import { estimateCostUsd } from "./pricing.ts";
 import {
   SkillRegistry,
   createLoadSkillTool,
   computeActiveTools,
   filterAdmin,
 } from "./skills/index.ts";
-import { TurnUsageTracker } from "./turn-usage.ts";
+import { TurnUsageTracker, extractCachedInputTokens } from "./turn-usage.ts";
 
 export type { SubagentSpec } from "./types.ts";
 
@@ -52,30 +53,61 @@ type SubagentSteps = { toolCalls: { toolName?: string }[] }[];
  */
 /**
  * Push subagent usage into the TurnUsageTracker and emit Sentry metrics.
- * Exported so we can unit-test the `?? 0` fallback for missing totalTokens
- * without driving a full mocked ToolLoopAgent.
+ * Takes the resolved model slug + the full AI SDK usage object so the
+ * distributions carry `{domain, model}` attributes and input/output/cached
+ * splits — `cachedInputTokens` here is the verification metric for prompt
+ * caching, and the splits feed per-model cost attribution at turn end.
+ * Exported so we can unit-test the `?? 0` fallbacks without driving a full
+ * mocked ToolLoopAgent.
  */
 export function recordSubagentMetrics(
   tracker: TurnUsageTracker,
   spec: Pick<SubagentSpec, "name">,
-  usage: { totalTokens?: number },
+  model: string,
+  usage: UsageLike,
   steps: SubagentSteps,
 ): void {
   const tokens = usage.totalTokens ?? 0;
+  const inputTokens = usage.inputTokens ?? 0;
+  const outputTokens = usage.outputTokens ?? 0;
+  const cachedInputTokens = extractCachedInputTokens(usage);
   const toolCalls = steps.reduce((sum, s) => sum + s.toolCalls.length, 0);
   const toolNames = steps.flatMap((s) =>
     s.toolCalls.flatMap((call) => (typeof call.toolName === "string" ? [call.toolName] : [])),
   );
-  tracker.addSubagent({ tokens, toolCalls, toolNames });
-  countMetric("ai.subagent.completed", { domain: spec.name });
-  recordDistribution("ai.subagent.tokens", tokens, { domain: spec.name });
-  recordDistribution("ai.subagent.tool_calls", toolCalls, { domain: spec.name });
+  tracker.addSubagent({
+    domain: spec.name,
+    model,
+    tokens,
+    inputTokens,
+    outputTokens,
+    cachedInputTokens,
+    toolCalls,
+    toolNames,
+  });
+  const attrs = { domain: spec.name, model };
+  countMetric("ai.subagent.completed", attrs);
+  recordDistribution("ai.subagent.tokens", tokens, attrs);
+  recordDistribution("ai.subagent.input_tokens", inputTokens, attrs);
+  recordDistribution("ai.subagent.output_tokens", outputTokens, attrs);
+  recordDistribution("ai.subagent.cached_input_tokens", cachedInputTokens, attrs);
+  recordDistribution("ai.subagent.tool_calls", toolCalls, attrs);
+  const costUsd = estimateCostUsd({ model, inputTokens, outputTokens, cachedInputTokens });
+  if (costUsd === undefined) {
+    countMetric("ai.cost.unknown_model", { model, domain: spec.name });
+  } else {
+    recordDistribution("ai.subagent.cost_usd", costUsd, attrs);
+  }
   createWideLogger({
     op: "ai.subagent",
-    subagent: { domain: spec.name },
+    subagent: { domain: spec.name, model },
   }).emit({
     outcome: "ok",
     tokens,
+    input_tokens: inputTokens,
+    output_tokens: outputTokens,
+    cached_input_tokens: cachedInputTokens,
+    ...(costUsd !== undefined ? { cost_usd: costUsd } : {}),
     tool_calls: toolCalls,
     tool_names: toolNames,
     steps: steps.length,
@@ -179,7 +211,7 @@ export function createDelegationTool(
       }
 
       const [usage, steps] = await Promise.all([result.totalUsage, result.steps]);
-      recordSubagentMetrics(tracker, spec, usage, steps as SubagentSteps);
+      recordSubagentMetrics(tracker, spec, resolvedModel, usage, steps as SubagentSteps);
 
       if (spec.postFinish) {
         for await (const message of spec.postFinish({

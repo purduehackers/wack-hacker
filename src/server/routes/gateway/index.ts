@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { Redis } from "@upstash/redis";
 import { waitUntil } from "@vercel/functions";
 import { getVercelOidcTokenSync } from "@vercel/functions/oidc";
@@ -12,7 +13,7 @@ import type { Packet } from "@/lib/protocol/types";
 import { env } from "@/env";
 import { createWideLogger } from "@/lib/logging/wide";
 import { countMetric, recordDuration } from "@/lib/metrics";
-import { withSpan } from "@/lib/otel/tracing";
+import { captureTraceparent, withDetachedRootSpan } from "@/lib/otel/tracing";
 import { PacketCodec } from "@/lib/protocol/packets";
 import { isTextChannel } from "@/lib/protocol/utils";
 import { send } from "@/lib/tasks/queue/client";
@@ -38,14 +39,17 @@ end`;
 const ulid = monotonicFactory();
 
 async function relay(packet: Packet, oidcToken: string): Promise<void> {
-  return withSpan("gateway.relay", { "packet.type": packet.type }, async () => {
+  return withDetachedRootSpan("gateway.relay", { "packet.type": packet.type }, async () => {
     const logger = createWideLogger({
       op: "gateway.relay",
       event: { type: packet.type },
     });
     const startTime = Date.now();
     try {
-      await send(DISCORD_EVENT_TOPIC, PacketCodec.encode(packet), { oidcToken });
+      const traceparent = captureTraceparent();
+      await send(DISCORD_EVENT_TOPIC, PacketCodec.encode({ ...packet, traceparent }), {
+        oidcToken,
+      });
       countMetric("gateway.packet.relayed", { type: packet.type });
       logger.emit({ outcome: "ok", duration_ms: Date.now() - startTime });
     } catch (err) {
@@ -409,7 +413,11 @@ route.get("/gateway", async (c) => {
 
   let hold: Promise<void>;
   try {
-    ({ hold } = await startGatewayListener(client));
+    // The bot's single ingestion point: a missed check-in here means the bot
+    // is deaf. The crontab mirrors the keepalive schedule in vercel.ts.
+    ({ hold } = await Sentry.withMonitor("discord-gateway", () => startGatewayListener(client), {
+      schedule: { type: "crontab", value: "*/9 * * * *" },
+    }));
   } catch {
     return c.json({ error: "gateway failed to become ready" }, 500);
   }

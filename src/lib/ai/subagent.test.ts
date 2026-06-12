@@ -2,7 +2,16 @@ import type { UIMessage } from "ai";
 import type { ModelMessage, StepResult, ToolSet } from "ai";
 import type { MockLanguageModelV3 } from "ai/test";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// Third-party SDK mock at the package boundary so recordSubagentMetrics's
+// Sentry metric calls (via lib/metrics + lib/logging/wide) are observable.
+vi.mock("@sentry/nextjs", () => ({
+  metrics: { count: vi.fn(), distribution: vi.fn() },
+  captureException: vi.fn(),
+}));
+
+import * as Sentry from "@sentry/nextjs";
 
 import { UserRole } from "@/lib/ai/constants";
 import {
@@ -359,9 +368,11 @@ describe("createDelegationTool — toModelOutput()", () => {
 });
 
 describe("recordSubagentMetrics", () => {
+  const model = "openai/gpt-5.4-mini";
+
   it("records the model's totalTokens when present", () => {
     const tracker = new TurnUsageTracker();
-    recordSubagentMetrics(tracker, { name: "test" }, { totalTokens: 42 }, [
+    recordSubagentMetrics(tracker, { name: "test" }, model, { totalTokens: 42 }, [
       { toolCalls: [{}, {}] },
       { toolCalls: [{}] },
     ]);
@@ -369,20 +380,137 @@ describe("recordSubagentMetrics", () => {
     expect(tracker.totalToolCalls).toBe(3);
   });
 
-  it("falls back to 0 when totalTokens is undefined", () => {
+  it("falls back to 0 when usage fields are undefined", () => {
     const tracker = new TurnUsageTracker();
-    recordSubagentMetrics(tracker, { name: "test" }, {}, []);
+    recordSubagentMetrics(tracker, { name: "test" }, model, {}, []);
     expect(tracker.totalTokens).toBe(0);
     expect(tracker.totalToolCalls).toBe(0);
+    expect(tracker.subagentUsage).toEqual([
+      {
+        domain: "test",
+        model,
+        tokens: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        cachedInputTokens: 0,
+        toolCalls: 0,
+        toolNames: [],
+      },
+    ]);
   });
 
   it("collects tool names and skips entries without a string toolName", () => {
     const tracker = new TurnUsageTracker();
-    recordSubagentMetrics(tracker, { name: "test" }, { totalTokens: 10 }, [
+    recordSubagentMetrics(tracker, { name: "test" }, model, { totalTokens: 10 }, [
       { toolCalls: [{ toolName: "search_entities" }, {}] },
       { toolCalls: [{ toolName: "retrieve_entities" }] },
     ]);
     expect(tracker.toTurnUsage().toolNames).toEqual(["search_entities", "retrieve_entities"]);
+  });
+
+  it("pushes the model + token splits into the tracker's subagent record", () => {
+    const tracker = new TurnUsageTracker();
+    recordSubagentMetrics(
+      tracker,
+      { name: "code" },
+      "anthropic/claude-opus-4.7",
+      { totalTokens: 100, inputTokens: 70, outputTokens: 30, cachedInputTokens: 40 },
+      [{ toolCalls: [{ toolName: "run_command" }] }],
+    );
+    expect(tracker.subagentUsage).toEqual([
+      {
+        domain: "code",
+        model: "anthropic/claude-opus-4.7",
+        tokens: 100,
+        inputTokens: 70,
+        outputTokens: 30,
+        cachedInputTokens: 40,
+        toolCalls: 1,
+        toolNames: ["run_command"],
+      },
+    ]);
+    expect(tracker.totalCachedInputTokens).toBe(40);
+  });
+
+  it("prefers inputTokenDetails.cacheReadTokens over the deprecated alias", () => {
+    const tracker = new TurnUsageTracker();
+    recordSubagentMetrics(
+      tracker,
+      { name: "test" },
+      model,
+      { inputTokens: 100, cachedInputTokens: 1, inputTokenDetails: { cacheReadTokens: 80 } },
+      [],
+    );
+    expect(tracker.subagentUsage[0]?.cachedInputTokens).toBe(80);
+  });
+});
+
+describe("recordSubagentMetrics — Sentry metrics", () => {
+  const model = "openai/gpt-5.4-mini";
+
+  beforeEach(() => {
+    vi.mocked(Sentry.metrics.count).mockClear();
+    vi.mocked(Sentry.metrics.distribution).mockClear();
+  });
+
+  it("tags every subagent distribution with {domain, model}", () => {
+    recordSubagentMetrics(
+      new TurnUsageTracker(),
+      { name: "test" },
+      model,
+      { totalTokens: 5, inputTokens: 3, outputTokens: 2 },
+      [],
+    );
+    const calls = vi.mocked(Sentry.metrics.distribution).mock.calls;
+    expect(calls.map(([name]) => name)).toEqual(
+      expect.arrayContaining([
+        "ai.subagent.tokens",
+        "ai.subagent.input_tokens",
+        "ai.subagent.output_tokens",
+        "ai.subagent.cached_input_tokens",
+        "ai.subagent.tool_calls",
+        "ai.subagent.cost_usd",
+      ]),
+    );
+    for (const [, , options] of calls) {
+      expect(options?.attributes).toEqual({ domain: "test", model });
+    }
+  });
+
+  it("records ai.subagent.cost_usd for a known model", () => {
+    recordSubagentMetrics(
+      new TurnUsageTracker(),
+      { name: "test" },
+      model,
+      { totalTokens: 2_000_000, inputTokens: 1_000_000, outputTokens: 1_000_000 },
+      [],
+    );
+    const cost = vi
+      .mocked(Sentry.metrics.distribution)
+      .mock.calls.find(([name]) => name === "ai.subagent.cost_usd");
+    // gpt-5.4-mini: $0.25/M input + $2/M output.
+    expect(cost?.[1]).toBeCloseTo(2.25, 10);
+    const unknown = vi
+      .mocked(Sentry.metrics.count)
+      .mock.calls.filter(([name]) => name === "ai.cost.unknown_model");
+    expect(unknown).toHaveLength(0);
+  });
+
+  it("counts ai.cost.unknown_model and skips the cost distribution for unknown models", () => {
+    recordSubagentMetrics(
+      new TurnUsageTracker(),
+      { name: "test" },
+      "acme/unpriced-1",
+      { totalTokens: 10 },
+      [],
+    );
+    const cost = vi
+      .mocked(Sentry.metrics.distribution)
+      .mock.calls.filter(([name]) => name === "ai.subagent.cost_usd");
+    expect(cost).toHaveLength(0);
+    expect(Sentry.metrics.count).toHaveBeenCalledWith("ai.cost.unknown_model", 1, {
+      attributes: { model: "acme/unpriced-1", domain: "test" },
+    });
   });
 });
 

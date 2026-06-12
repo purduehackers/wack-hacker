@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { propagation, type TextMapPropagator } from "@opentelemetry/api";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ScheduledTaskRow } from "@/lib/tasks/types";
 
@@ -175,6 +176,53 @@ describe("schedule_task: successful scheduling", () => {
       ),
     ).rejects.toThrow("queue down");
     expect(hoisted.saveScheduledTask).not.toHaveBeenCalled();
+  });
+});
+
+describe("schedule_task: trace propagation", () => {
+  const TEST_TRACEPARENT = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+  // Real `captureTraceparent()` runs; only the third-party propagation API is
+  // swapped at the package boundary so it has something to capture.
+  const injectingPropagator: TextMapPropagator = {
+    inject: (_unused, carrier, setter) => setter.set(carrier, "traceparent", TEST_TRACEPARENT),
+    extract: (incoming) => incoming,
+    fields: () => ["traceparent"],
+  };
+
+  afterEach(() => {
+    propagation.disable();
+  });
+
+  async function scheduleOnce(): Promise<void> {
+    const schedule_task = createScheduleTask(contextWithRoles());
+    const result = await schedule_task.execute!(
+      {
+        description: "Traced task",
+        action_type: "message",
+        channel_id: "ch-1",
+        content: "hi",
+        schedule_type: ScheduleType.Once,
+        run_at: futureISO(),
+        user_id: "user-1",
+      },
+      toolOpts,
+    );
+    expect(result).toContain("Scheduled");
+  }
+
+  it("passes the captured traceparent to sendScheduledFire at creation", async () => {
+    propagation.setGlobalPropagator(injectingPropagator);
+    await scheduleOnce();
+
+    expect(hoisted.sendScheduledFire).toHaveBeenCalledTimes(1);
+    expect(hoisted.sendScheduledFire.mock.calls[0][3]).toBe(TEST_TRACEPARENT);
+  });
+
+  it("passes undefined when there is no active trace to capture", async () => {
+    await scheduleOnce();
+
+    expect(hoisted.sendScheduledFire).toHaveBeenCalledTimes(1);
+    expect(hoisted.sendScheduledFire.mock.calls[0][3]).toBeUndefined();
   });
 });
 

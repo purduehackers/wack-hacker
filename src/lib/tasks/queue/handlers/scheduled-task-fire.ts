@@ -9,7 +9,7 @@ import { MessageRenderer } from "@/lib/ai/message-renderer.ts";
 import { streamTurn } from "@/lib/ai/streaming.ts";
 import { createWideLogger } from "@/lib/logging/wide";
 import { countMetric, recordDistribution } from "@/lib/metrics";
-import { withSpan } from "@/lib/otel/tracing";
+import { withSpanFromParent } from "@/lib/otel/tracing";
 import { DEFAULT_TIMEZONE } from "@/lib/tasks/constants";
 import { nextOccurrence } from "@/lib/tasks/cron";
 import { claimFire, getScheduledTask, updateScheduledTask } from "@/lib/tasks/db";
@@ -29,9 +29,11 @@ export const scheduledTaskFire = defineTask({
   schema: z.object({
     taskId: z.string(),
     targetIso: z.string(),
+    traceparent: z.string().optional(),
   }),
-  async handle({ taskId, targetIso }, discord) {
-    return withSpan(
+  async handle({ taskId, targetIso, traceparent }, discord) {
+    return withSpanFromParent(
+      traceparent,
       "scheduled_task.fire",
       { "task.id": taskId, "task.target_iso": targetIso },
       () => runFire({ taskId, targetIso }, discord),
@@ -121,6 +123,8 @@ async function rehydrateCheckpoint(
   logger: Logger,
 ): Promise<void> {
   const remainingSec = Math.floor((targetMs - Date.now()) / 1000);
+  // No traceparent: re-propagating here would chain every checkpoint hop
+  // into one unbounded trace (see ScheduledTaskFirePayload.traceparent).
   const { messageId } = await sendScheduledFire(taskId, new Date(targetMs), remainingSec);
   await updateScheduledTask(taskId, { queueMessageId: messageId });
   countMetric("scheduled_task.checkpoint_hop", { schedule_type: scheduleType });
@@ -184,6 +188,8 @@ async function finalizeFire(
   }
 
   const delaySec = Math.max(0, Math.floor((next.getTime() - Date.now()) / 1000));
+  // No traceparent: a recurring task re-propagating its own trace would
+  // accumulate one trace spanning weeks (see ScheduledTaskFirePayload).
   const { messageId } = await sendScheduledFire(task.id, next, delaySec);
   await updateScheduledTask(task.id, {
     nextRunAt: next.toISOString(),

@@ -30,6 +30,25 @@ export interface ToolDefSnapshot {
 }
 
 /**
+ * Join from a Discord message id back to the exact turn/trajectory that
+ * produced it. The turn's trace id is already printed in the bot message
+ * footer and `chat.discord_message_id` is already a span attribute — this
+ * record is the reverse lookup, written at finalize time and consumed by the
+ * feedback reaction handler.
+ */
+export interface TurnMessageRecord {
+  /** Chat workflow run id (`chat.id` on spans/wide events); absent outside chat workflows. */
+  chatId?: string;
+  /** OTEL trace id for the turn — the same id rendered in the reply footer. */
+  traceId?: string;
+  /** Subagent domains that ran during the turn, deduplicated. */
+  domains: string[];
+  channelId: string;
+  /** Discord user id of the person whose message triggered the turn. */
+  userId: string;
+}
+
+/**
  * Per-turn snapshot of everything the orchestrator receives. Written by the
  * chat workflow after each turn completes; read by the /Inspect Context message
  * command. Stored under a separate Redis key from `ConversationState` to keep

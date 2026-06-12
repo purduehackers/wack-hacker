@@ -1,4 +1,4 @@
-import type { TurnUsage } from "./types.ts";
+import type { SubagentUsage, TurnUsage, UsageLike } from "./types.ts";
 
 /**
  * Shape of an AI SDK tool call entry on a step's `toolCalls`. Every call
@@ -10,29 +10,37 @@ interface ToolCallLike {
 }
 
 /**
+ * Cache-read token count from an AI SDK usage object. Prefers the
+ * non-deprecated `inputTokenDetails.cacheReadTokens`, falls back to the
+ * deprecated top-level alias, and coerces missing values to 0.
+ */
+export function extractCachedInputTokens(usage: UsageLike): number {
+  return usage.inputTokenDetails?.cacheReadTokens ?? usage.cachedInputTokens ?? 0;
+}
+
+/**
  * Mutable accumulator for one orchestrator turn's worth of usage.
  *
- * Subagents call `addSubagent` to fold in their per-delegation totals as they
- * complete; the streaming layer calls `recordOrchestrator` once with the
- * orchestrator's terminal usage + step trace. `toTurnUsage` produces the
- * persisted `TurnUsage` shape (subagent totals + orchestrator totals merged).
+ * Subagents call `addSubagent` to fold in their per-delegation usage records
+ * as they complete; the streaming layer calls `recordOrchestrator` once with
+ * the orchestrator's terminal usage + step trace. `toTurnUsage` produces the
+ * persisted `TurnUsage` shape (subagent totals + orchestrator totals merged),
+ * while `subagentUsage`/`orchestratorUsage` expose the per-model splits the
+ * cost-attribution metrics are computed from at turn end.
  */
 export class TurnUsageTracker {
-  private subagentTokens = 0;
-  private subagentToolCalls = 0;
+  private subagents: SubagentUsage[] = [];
   private orchestratorInputTokens = 0;
   private orchestratorOutputTokens = 0;
   private orchestratorTotalTokens = 0;
+  private orchestratorCachedInputTokens = 0;
   private orchestratorToolCalls = 0;
   private stepCount = 0;
   private orchestratorToolNames: string[] = [];
-  private subagentToolNames: string[] = [];
 
-  /** Add a subagent delegation's contribution. */
-  addSubagent(delta: { tokens: number; toolCalls: number; toolNames: readonly string[] }): void {
-    this.subagentTokens += delta.tokens;
-    this.subagentToolCalls += delta.toolCalls;
-    this.subagentToolNames.push(...delta.toolNames);
+  /** Add a subagent delegation's usage record. */
+  addSubagent(record: SubagentUsage): void {
+    this.subagents.push(record);
   }
 
   /**
@@ -41,12 +49,13 @@ export class TurnUsageTracker {
    * internal TurnUsage contract stays numeric.
    */
   recordOrchestrator(args: {
-    usage: { inputTokens?: number; outputTokens?: number; totalTokens?: number };
+    usage: UsageLike;
     steps: ReadonlyArray<{ toolCalls: ReadonlyArray<unknown> }>;
   }): void {
     this.orchestratorInputTokens = args.usage.inputTokens ?? 0;
     this.orchestratorOutputTokens = args.usage.outputTokens ?? 0;
     this.orchestratorTotalTokens = args.usage.totalTokens ?? 0;
+    this.orchestratorCachedInputTokens = extractCachedInputTokens(args.usage);
     this.orchestratorToolCalls = args.steps.reduce((sum, step) => sum + step.toolCalls.length, 0);
     this.stepCount = args.steps.length;
     this.orchestratorToolNames = args.steps.flatMap((step) =>
@@ -57,9 +66,41 @@ export class TurnUsageTracker {
     );
   }
 
+  private get subagentTokens(): number {
+    return this.subagents.reduce((sum, s) => sum + s.tokens, 0);
+  }
+
+  /** Per-delegation usage records (model + token splits), in completion order. */
+  get subagentUsage(): readonly SubagentUsage[] {
+    return this.subagents;
+  }
+
+  /** Orchestrator terminal usage splits, for pricing at the orchestrator model's rates. */
+  get orchestratorUsage(): {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    cachedInputTokens: number;
+  } {
+    return {
+      inputTokens: this.orchestratorInputTokens,
+      outputTokens: this.orchestratorOutputTokens,
+      totalTokens: this.orchestratorTotalTokens,
+      cachedInputTokens: this.orchestratorCachedInputTokens,
+    };
+  }
+
+  /** Cache reads across orchestrator + subagents — the verification metric for prompt caching. */
+  get totalCachedInputTokens(): number {
+    return (
+      this.orchestratorCachedInputTokens +
+      this.subagents.reduce((sum, s) => sum + s.cachedInputTokens, 0)
+    );
+  }
+
   /** Convenience accessor for the post-stream tool-call total (orchestrator + subagent). */
   get totalToolCalls(): number {
-    return this.orchestratorToolCalls + this.subagentToolCalls;
+    return this.orchestratorToolCalls + this.subagents.reduce((sum, s) => sum + s.toolCalls, 0);
   }
 
   /** Convenience accessor for the post-stream step count. */
@@ -74,7 +115,7 @@ export class TurnUsageTracker {
 
   /** Combined orchestrator + subagent tool names in call order. */
   get totalToolNames(): string[] {
-    return [...this.orchestratorToolNames, ...this.subagentToolNames];
+    return [...this.orchestratorToolNames, ...this.subagents.flatMap((s) => s.toolNames)];
   }
 
   /** Snapshot in the shape persisted to the context-snapshot store. */

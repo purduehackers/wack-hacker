@@ -1,6 +1,8 @@
 import type { ToolSet, UIMessage } from "ai";
 import type { z } from "zod";
 
+import type { TurnMessageStore } from "@/bot/turn-message-store";
+
 import type { AgentContext } from "./context.ts";
 import type { SkillBundle } from "./skills/types.ts";
 import type { TurnUsageTracker } from "./turn-usage.ts";
@@ -112,6 +114,41 @@ export interface TurnUsage {
    * so operators can see *what* ran, not just *how many*.
    */
   toolNames: string[];
+}
+
+/**
+ * Structural subset of the AI SDK v5 `LanguageModelUsage` we consume for
+ * accounting. `cachedInputTokens` is the SDK's deprecated alias for
+ * `inputTokenDetails.cacheReadTokens`; both are accepted so callers can hand
+ * over the usage object as-is.
+ */
+export interface UsageLike {
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  cachedInputTokens?: number;
+  inputTokenDetails?: { cacheReadTokens?: number };
+}
+
+/**
+ * One subagent delegation's usage record, accumulated in `TurnUsageTracker`.
+ * Carries the resolved model slug plus input/output/cached token splits so
+ * per-model cost can be computed at turn end (each delegation priced at its
+ * own model's rates — Opus and gpt-mini differ by orders of magnitude).
+ */
+export interface SubagentUsage {
+  /** Subagent domain name (the spec's telemetry identifier). */
+  domain: string;
+  /** Resolved gateway model slug the delegation actually ran on. */
+  model: string;
+  /** Total tokens (input + output), the AI SDK's `totalTokens`. */
+  tokens: number;
+  inputTokens: number;
+  outputTokens: number;
+  /** Cache-read input tokens — subset of `inputTokens`, priced at the cache-read rate. */
+  cachedInputTokens: number;
+  toolCalls: number;
+  toolNames: readonly string[];
 }
 
 export interface ModelInfo {
@@ -231,10 +268,11 @@ export interface OrchestratorAgent {
 /**
  * Telemetry metadata passed through to every AI SDK `experimental_telemetry.metadata`
  * call in an orchestrator + its subagents. Flat key/value pairs; the AI SDK
- * flattens these into `ai.telemetry.metadata.<key>` span attributes so Axiom
- * can query by `chat.id` across the whole conversation. Undefined values are
- * tolerated so callers can build metadata from optional fields without first
- * filtering them out.
+ * flattens these into `ai.telemetry.metadata.<key>` span attributes, which
+ * land in Sentry (AI Agents Insights / trace explorer) where a whole
+ * conversation can be queried by `chat.id`. Undefined values are tolerated so
+ * callers can build metadata from optional fields without first filtering
+ * them out.
  */
 export type TelemetryMetadata = Record<string, string | number | undefined>;
 
@@ -284,7 +322,7 @@ export interface StreamTurnOptions {
   /**
    * Workflow run id for the containing chat workflow. Used to populate
    * `chat.*` attributes on the turn span + every AI SDK span so a whole
-   * conversation is one Axiom query (`chat.id == <workflowRunId>`).
+   * conversation is one Sentry trace-explorer query (`chat.id == <workflowRunId>`).
    */
   workflowRunId?: string;
   /** Turn number within the conversation (1 = first turn). */
@@ -296,4 +334,11 @@ export interface StreamTurnOptions {
    * enqueuing the workflow so it's visible ahead of workflow cold-start.
    */
   placeholderMessageId?: string;
+  /**
+   * Dependency-injected message → turn index written at finalize time so the
+   * feedback reaction handler can resolve reactions on bot replies back to
+   * the turn that produced them. Defaults to the Redis-backed store; tests
+   * inject one built on an in-memory redis fake.
+   */
+  turnMessageStore?: TurnMessageStore;
 }

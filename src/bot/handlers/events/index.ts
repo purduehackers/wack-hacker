@@ -7,3 +7,4 @@ export * from "./ship-scraper";
 export * from "./ship-scraper/delete";
 export * from "./hack-night-upload";
 export * from "./hack-night-reaction";
+export * from "./feedback";

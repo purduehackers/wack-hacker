@@ -96,33 +96,43 @@ const MessageDeleteData = z.object({
 
 // ── Packets ──
 
+// W3C trace context captured at relay time so the queue consumer can join the
+// publisher's trace. Optional both directions for rollout safety: old
+// in-flight messages decode without it, and old consumers strip it.
+const PacketTraceparent = z.string().optional();
+
 export const MessageCreatePacket = z.object({
   type: z.literal("GATEWAY_MESSAGE_CREATE"),
   timestamp: PacketTimestamp,
+  traceparent: PacketTraceparent,
   data: MessageCreateData,
 });
 
 export const MessageReactionAddPacket = z.object({
   type: z.literal("GATEWAY_MESSAGE_REACTION_ADD"),
   timestamp: PacketTimestamp,
+  traceparent: PacketTraceparent,
   data: ReactionData,
 });
 
 export const MessageReactionRemovePacket = z.object({
   type: z.literal("GATEWAY_MESSAGE_REACTION_REMOVE"),
   timestamp: PacketTimestamp,
+  traceparent: PacketTraceparent,
   data: ReactionData,
 });
 
 export const MessageDeletePacket = z.object({
   type: z.literal("GATEWAY_MESSAGE_DELETE"),
   timestamp: PacketTimestamp,
+  traceparent: PacketTraceparent,
   data: MessageDeleteData,
 });
 
 export const MessageUpdatePacket = z.object({
   type: z.literal("GATEWAY_MESSAGE_UPDATE"),
   timestamp: PacketTimestamp,
+  traceparent: PacketTraceparent,
   data: MessageData.partial().extend({
     id: z.string(),
     channelId: z.string(),
@@ -144,6 +154,7 @@ const VoiceStateData = z.object({
 export const VoiceStateUpdatePacket = z.object({
   type: z.literal("GATEWAY_VOICE_STATE_UPDATE"),
   timestamp: PacketTimestamp,
+  traceparent: PacketTraceparent,
   data: VoiceStateData,
 });
 
@@ -160,6 +171,7 @@ const ThreadCreateData = z.object({
 export const ThreadCreatePacket = z.object({
   type: z.literal("GATEWAY_THREAD_CREATE"),
   timestamp: PacketTimestamp,
+  traceparent: PacketTraceparent,
   data: ThreadCreateData,
 });
 
