@@ -102,6 +102,28 @@ describe("createOrchestrator", () => {
     );
   });
 
+  it("marks the last tool and last message with an anthropic cache breakpoint", async () => {
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    await drain(ctx);
+
+    const call = model.doStreamCalls[0]!;
+    const tools = (call.tools ?? []) as { providerOptions?: Record<string, unknown> }[];
+    expect(tools.length).toBeGreaterThan(0);
+    expect(tools.at(-1)!.providerOptions).toMatchObject({
+      anthropic: { cacheControl: { type: "ephemeral" } },
+    });
+    // Only the last tool carries a breakpoint — Anthropic allows at most 4
+    // per request and the trailing message takes another.
+    for (const t of tools.slice(0, -1)) {
+      expect(t.providerOptions?.anthropic).toBeUndefined();
+    }
+
+    const lastMessage = call.prompt.at(-1)! as { providerOptions?: Record<string, unknown> };
+    expect(lastMessage.providerOptions).toMatchObject({
+      anthropic: { cacheControl: { type: "ephemeral" } },
+    });
+  });
+
   it("injects execution context into system prompt via buildInstructions", async () => {
     const ctx = AgentContext.fromPacket(
       messagePacket("hello", { author: { id: "u1", username: "alice" } }),

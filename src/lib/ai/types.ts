@@ -114,6 +114,20 @@ export interface TurnUsage {
   toolNames: string[];
 }
 
+/**
+ * Structural subset of the AI SDK's `LanguageModelUsage` that the turn
+ * tracker consumes. `cachedInputTokens` is the SDK's deprecated alias for
+ * `inputTokenDetails.cacheReadTokens`; both are read so the tracker survives
+ * either shape.
+ */
+export interface OrchestratorUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  cachedInputTokens?: number;
+  inputTokenDetails?: { cacheReadTokens?: number; cacheWriteTokens?: number };
+}
+
 export interface ModelInfo {
   id: string;
   provider: string;
