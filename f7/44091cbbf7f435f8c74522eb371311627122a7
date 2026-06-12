@@ -1,0 +1,19 @@
+.github/workflows/pullfrog.yml
+  s_1d7c46430d8514::t_f7e489556e2ec1 37,44,51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "f744091cbbf7f435f8c74522eb371311627122a7",
+  "prompts": {},
+  "sessions": {
+    "s_1d7c46430d8514": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "46492d35-d480-4e29-9b7c-cce9a445e37d",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
