@@ -1,0 +1,142 @@
+src/lib/tasks/queue/schedule-fire.test.ts
+  s_f83e2dc382454b::t_8dd8a0e6f53d30 62-82
+src/lib/protocol/packets.ts
+  s_f83e2dc382454b::t_39ed3da5380b98 99-103,107,114,121,128,135
+  s_f83e2dc382454b::t_13081b6ed1c965 157
+  s_f83e2dc382454b::t_966eb18a245279 174
+src/lib/ai/tools/schedule/index.test.ts
+  s_f83e2dc382454b::t_ddd23417ff6f1a 1-2
+  s_f83e2dc382454b::t_7f660c00507b79 182-186,189-228
+  s_f83e2dc382454b::t_f611cd7a4ae1a7 187-188
+src/bot/turn-message-store.test.ts
+  s_f83e2dc382454b::t_4b52e9985e4ec8 1-67
+src/lib/ai/subagent.test.ts
+  s_f83e2dc382454b::t_0bfa05dfb54fb8 5-14
+  s_f83e2dc382454b::t_bb27694776a36d 371-372,375,383,385,388-399,404,410-445,455-513
+  s_f83e2dc382454b::t_050e561bf99f2e 446-454
+src/lib/ai/types.ts
+  s_f83e2dc382454b::t_0420f212df46ea 4-5
+  s_f83e2dc382454b::t_4bf0c45ba2d4c2 325
+  s_f83e2dc382454b::t_015df6402ec33b 119,134-153
+  s_f83e2dc382454b::t_174b22c4e22d01 337-343
+  s_f83e2dc382454b::t_b28e02b80d7820 120-133
+src/lib/tasks/queue/handlers/scheduled-task-fire.test.ts
+  s_f83e2dc382454b::t_c7b183691bc219 406-433,436-524
+  s_f83e2dc382454b::t_1d5b85b926ff1a 10
+  s_f83e2dc382454b::t_cf6fa660849034 1-9,11
+  s_f83e2dc382454b::t_6be3f29b9c63ac 434-435
+  s_f83e2dc382454b::t_07961dd0d52188 115-126
+src/lib/tasks/queue/schedule-fire.ts
+  s_f83e2dc382454b::t_7747ccb3ff2752 30,33-34,37
+src/bot/handlers/events/feedback/index.ts
+  s_f83e2dc382454b::t_4f87abe405c1ea 6,8
+  s_f83e2dc382454b::t_bf8ec7730aefff 1-5,7,9-50
+docs/README.md
+  s_f83e2dc382454b::t_9f8095ab89ebe4 15
+src/bot/handlers/events/index.ts
+  s_f83e2dc382454b::t_b3ff4a6b63c166 10
+src/lib/ai/pricing.test.ts
+  s_f83e2dc382454b::t_b2025870b13297 75-76
+  s_f83e2dc382454b::t_679699f645bdad 1-74,77-78
+src/lib/tasks/types.ts
+  s_f83e2dc382454b::t_452200887bd8bc 56-63
+src/lib/ai/subagent.ts
+  s_f83e2dc382454b::t_32cd79de8c9c02 23
+  s_f83e2dc382454b::t_bd4fe7fb8ad928 18
+  s_f83e2dc382454b::t_a6f21429d16c73 30
+  s_f83e2dc382454b::t_027f194e3a0635 56-61,66-67,71-73,78-100,103,107-110
+  s_f83e2dc382454b::t_7c8f3922f04737 214
+src/lib/ai/pricing.ts
+  s_f83e2dc382454b::t_48b5f4d1d8ffcc 1-48
+src/lib/protocol/packets.test.ts
+  s_f83e2dc382454b::t_1d5b85b926ff1a 143-145
+  s_f83e2dc382454b::t_600766e3f28fff 130-142,146-176
+src/app/api/discord/events/route.ts
+  s_f83e2dc382454b::t_e43c3a65950573 37-44
+  s_f83e2dc382454b::t_bbe752c503971d 1-2,6,16-17
+src/lib/otel/tracing.test.ts
+  s_f83e2dc382454b::t_4f7573ab6c39f8 3-68,75,78
+  s_f83e2dc382454b::t_6a76def31db282 90
+  s_f83e2dc382454b::t_11cfda3c28ba46 188-193,198-252
+  s_f83e2dc382454b::t_9a99f984c1209e 194-197
+src/lib/logging/wide.test.ts
+  s_f83e2dc382454b::t_a86b0de57b56f5 3,5,14,27-32,59-88
+src/bot/turn-message-store.ts
+  s_f83e2dc382454b::t_1e77ee588062d9 1-32
+src/lib/ai/turn-usage.ts
+  s_f83e2dc382454b::t_e612eb20915d76 12-20,24-29,32,36,41-43,52,58,69-97,118
+  s_f83e2dc382454b::t_27a9a4b12c9386 1
+  s_f83e2dc382454b::t_1d5b85b926ff1a 103
+docs/observability.md
+  s_f83e2dc382454b::t_f7277f49ca8924 1-140,142-150
+  s_f83e2dc382454b::t_f5c70c28ae6a86 141
+src/bot/types.ts
+  s_f83e2dc382454b::t_475e5fcb5d3cea 33-50
+src/lib/otel/tracing.ts
+  s_f83e2dc382454b::t_a675948d51d41c 43-59
+sentry.server.config.ts
+  s_f83e2dc382454b::t_191d5b8aff7398 9-16,21-31,38-45
+  s_f83e2dc382454b::t_709cd4db79e9d1 17-20
+src/lib/ai/turn-usage.test.ts
+  s_f83e2dc382454b::t_08e446285858a1 120-172
+  s_f83e2dc382454b::t_bc359141a31df4 3-25,39-40,45-46,56,78,95,107,173-189
+src/lib/ai/streaming.test.ts
+  s_f83e2dc382454b::t_4fe2de7fb3db8a 7
+  s_f83e2dc382454b::t_64f4e3e44eaeea 36-41,44
+  s_f83e2dc382454b::t_1d5b85b926ff1a 46-47
+  s_f83e2dc382454b::t_b6b61dab6716f6 645
+  s_f83e2dc382454b::t_5de21b3e212217 685-750
+  s_f83e2dc382454b::t_98c4a986d90e5a 630-644,646-684
+  s_f83e2dc382454b::t_6b3c19babfdda5 32-35,43
+src/lib/tasks/queue/handlers/scheduled-task-fire.ts
+  s_f83e2dc382454b::t_7094ee63d0f28a 32,34-36
+  s_f83e2dc382454b::t_7305b1354d487b 191-192
+  s_f83e2dc382454b::t_84c3f37e701dcd 12
+  s_f83e2dc382454b::t_42d89dcb2fd6be 126-127
+src/lib/ai/streaming.ts
+  s_f83e2dc382454b::t_e75b988b7a8c42 352-353,363,365,369,381-392,403
+  s_f83e2dc382454b::t_8bc6f8659bf08d 20-21
+  s_f83e2dc382454b::t_0958fce9e601da 28,42-75
+  s_f83e2dc382454b::t_9fa9496a9a6335 217-226
+  s_f83e2dc382454b::t_98bf37777cb909 171
+  s_f83e2dc382454b::t_07b084c16387cd 267-276
+  s_f83e2dc382454b::t_f3597203641c3d 406-422
+  s_f83e2dc382454b::t_92e622cfd5779f 286,299
+  s_f83e2dc382454b::t_0877860ea658f1 287
+  s_f83e2dc382454b::t_48312025cc49f1 233-250,252-266,280,293,297
+  s_f83e2dc382454b::t_7330aec05a0697 304
+  s_f83e2dc382454b::t_7e629824c593f9 207,214
+  s_f83e2dc382454b::t_c40ce36fc7bdfc 6-8
+src/bot/handlers/events/feedback/index.test.ts
+  s_f83e2dc382454b::t_68b941e509cd23 1-114
+src/server/routes/crons.ts
+  s_f83e2dc382454b::t_6938827de28ce3 1
+  s_f83e2dc382454b::t_28a621712cf39f 36-37
+  s_f83e2dc382454b::t_ae16dfb835df09 38-52
+src/lib/logging/wide.ts
+  s_f83e2dc382454b::t_c6637546c1b548 2,11-19
+  s_f83e2dc382454b::t_b7e5422e4a81da 54-58
+src/server/routes/gateway/index.ts
+  s_f83e2dc382454b::t_ee24ce6f350049 42,49-52
+  s_f83e2dc382454b::t_dfb3a114d0b8ce 1,16
+  s_f83e2dc382454b::t_1973bc680094af 416-420
+src/lib/ai/tools/schedule/index.ts
+  s_f83e2dc382454b::t_e80a8d4cc46f6d 7
+  s_f83e2dc382454b::t_dec6269b6737b4 146-148
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "85ff74049b1986db90b0a5b2bd6a26d798368ab9",
+  "prompts": {},
+  "sessions": {
+    "s_f83e2dc382454b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "afdbd6c2-fb0a-44e6-b545-ebe0b007ac94",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
