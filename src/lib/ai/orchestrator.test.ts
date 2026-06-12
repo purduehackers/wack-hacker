@@ -2,7 +2,9 @@ import type { MockLanguageModelV3 } from "ai/test";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { UserRole } from "@/lib/ai/constants";
 import {
+  contextForRole,
   discordRESTClass,
   installMockProvider,
   linearClientClass,
@@ -36,7 +38,8 @@ vi.mock("@vercel/sandbox", () => ({
   Sandbox: class MockSandbox {},
 }));
 
-const { createOrchestrator } = await import("./orchestrator.ts");
+const { buildSystemPrompt, createOrchestrator, getOrchestratorTools } =
+  await import("./orchestrator.ts");
 
 const BASE_TOOLS = [
   "cancel_task",
@@ -116,5 +119,70 @@ describe("createOrchestrator", () => {
     expect(systemContent).toContain('username: "alice"');
     expect(systemContent).toContain("Purdue Hackers");
     expect(systemContent).not.toContain("{{DATE}}");
+    expect(systemContent).not.toContain("{{DELEGATES}}");
+  });
+});
+
+describe("buildSystemPrompt", () => {
+  function delegatesInPrompt(prompt: string): string[] {
+    return [...new Set(prompt.match(/delegate_[a-z0-9_]+/g) ?? [])].sort();
+  }
+
+  function delegatesInToolSet(role: UserRole): string[] {
+    const tools = getOrchestratorTools(contextForRole(role), new TurnUsageTracker());
+    return Object.keys(tools)
+      .filter((name) => name.startsWith("delegate_"))
+      .sort();
+  }
+
+  // Drift guard: the prompt's delegate docs are generated from the same
+  // registry as the delegation tools, so every delegate name the model reads
+  // about must exist in its ToolSet — and vice versa.
+  it("mentions exactly the organizer's delegate tools", () => {
+    const prompt = buildSystemPrompt(contextForRole(UserRole.Organizer));
+    expect(delegatesInPrompt(prompt)).toEqual(delegatesInToolSet(UserRole.Organizer));
+  });
+
+  it("mentions exactly the admin's delegate tools (including delegate_code)", () => {
+    const prompt = buildSystemPrompt(contextForRole(UserRole.Admin));
+    const mentioned = delegatesInPrompt(prompt);
+    expect(mentioned).toContain("delegate_code");
+    expect(mentioned).toEqual(delegatesInToolSet(UserRole.Admin));
+  });
+
+  it("documents each delegate with its routing criteria", () => {
+    const prompt = buildSystemPrompt(contextForRole(UserRole.Organizer));
+    for (const name of delegatesInToolSet(UserRole.Organizer)) {
+      expect(prompt).toMatch(new RegExp(`\\*\\*${name}\\*\\* — use when: .+`));
+    }
+  });
+
+  // Base tools stay hand-written in SYSTEM_PROMPT, so cross-check every
+  // **bold** tool mention (base and delegate, including "a / b / c" bullets)
+  // against the actual ToolSet — stale prose about a renamed tool fails here.
+  it("documents only tools that exist in the role's ToolSet (base + delegates)", () => {
+    for (const role of [UserRole.Organizer, UserRole.Admin]) {
+      const prompt = buildSystemPrompt(contextForRole(role));
+      const tools = getOrchestratorTools(contextForRole(role), new TurnUsageTracker());
+      const mentioned = [...prompt.matchAll(/\*\*([a-z0-9_ /]+)\*\*/g)]
+        .flatMap((m) => m[1].split(" / "))
+        .map((name) => name.trim());
+      expect(mentioned.length).toBeGreaterThan(0);
+      for (const name of mentioned) {
+        expect(tools, `prompt documents nonexistent tool ${name} for ${role}`).toHaveProperty(name);
+      }
+    }
+  });
+
+  it("renders no delegation docs for public users", () => {
+    const prompt = buildSystemPrompt(contextForRole(UserRole.Public));
+    expect(prompt).not.toContain("delegate_");
+    expect(prompt).not.toContain("{{DELEGATES}}");
+  });
+
+  it("leaves no unsubstituted placeholder for any role", () => {
+    for (const role of [UserRole.Public, UserRole.Organizer, UserRole.Admin]) {
+      expect(buildSystemPrompt(contextForRole(role))).not.toContain("{{DELEGATES}}");
+    }
   });
 });

@@ -6,7 +6,7 @@ Progressive disclosure is the mechanism that lets a subagent start with a small 
 
 Once a delegation tool fires, the subagent looks like this:
 
-1. **Initial state**: `activeTools = [...baseToolNames, "loadSkill"]`. The `baseToolNames` are configured per-domain in `delegates.ts` and are typically the discovery/search tools — for Linear, that's `search_entities`, `retrieve_entities`, `suggest_property_values`, `aggregate_issues`. `loadSkill` is always appended automatically.
+1. **Initial state**: `activeTools = [...baseToolNames, "loadSkill"]`. The `baseToolNames` come from the `baseTools` frontmatter in the domain's top-level `SKILL.md` (compiled into the generated `DOMAINS` registry) and are typically the discovery/search tools — for Linear, that's `search_entities`, `retrieve_entities`, `suggest_property_values`, `aggregate_issues`. `loadSkill` is always appended automatically.
 2. **Step N**: model calls `loadSkill("<name>")`.
 3. **`loader.ts`** (`createLoadSkillTool`) returns the skill body wrapped in XML:
 
