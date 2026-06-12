@@ -1,0 +1,26 @@
+src/lib/ai/streaming.test.ts
+  s_d27df44b7ac328::t_80890542264964 851-865
+  s_d27df44b7ac328::t_5278a61e836b93 819-850,866-894
+src/lib/ai/snapshot.test.ts
+  s_d27df44b7ac328::t_5278a61e836b93 168-180
+src/lib/ai/orchestrator.ts
+  s_d27df44b7ac328::t_c3a66f955fb80f 48,54
+src/lib/ai/orchestrator.test.ts
+  s_d27df44b7ac328::t_cbbebf3daa1401 77-91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "f62ec107d07cc456fba7ff66ca282fc1b372784b",
+  "prompts": {},
+  "sessions": {
+    "s_d27df44b7ac328": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9f2172a4-c814-4433-969c-6d93c4563a7f",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
