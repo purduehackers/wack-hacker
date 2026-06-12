@@ -165,6 +165,19 @@ describe("buildContextSnapshot", () => {
     expect(snap.turnCount).toBe(7);
   });
 
+  it("carries through a stored updatedAt instead of stamping a new one", () => {
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    const snap = buildContextSnapshot({
+      context: ctx.toJSON(),
+      messages: [],
+      totalUsage: usage,
+      turnCount: 1,
+      updatedAt: "2026-06-11T00:00:00.000Z",
+      getTools: syntheticTools,
+    });
+    expect(snap.updatedAt).toBe("2026-06-11T00:00:00.000Z");
+  });
+
   it("stamps updatedAt with an ISO timestamp", () => {
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
     const snap = buildContextSnapshot({

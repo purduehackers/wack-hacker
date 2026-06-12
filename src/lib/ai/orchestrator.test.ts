@@ -74,6 +74,21 @@ describe("createOrchestrator", () => {
       .sort();
   }
 
+  it("streams with an explicit model override", async () => {
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    const agent = createOrchestrator(
+      ctx,
+      new TurnUsageTracker(),
+      undefined,
+      "anthropic/claude-haiku-4.5",
+    );
+    const result = await agent.stream({ prompt: "say hi" });
+    const reader = result.toUIMessageStream().getReader();
+    while (!(await reader.read()).done);
+
+    expect(model.doStreamCalls.length).toBeGreaterThan(0);
+  });
+
   it("gives public users only base tools (all delegate skills require organizer+)", async () => {
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
     await drain(ctx);

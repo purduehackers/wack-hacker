@@ -816,3 +816,79 @@ describe("streamTurn: post-stream finalize failures", () => {
     ).rejects.toBeInstanceOf(FatalError);
   });
 });
+
+describe("streamTurn: malformed error parts", () => {
+  it("handles tool-error without a toolName (no failed status line, stream completes)", async () => {
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+      createAgent: fakeOrchestrator(["Recovered."], {
+        extraEvents: [{ type: "tool-error", toolCallId: "c1" }],
+      }),
+    });
+
+    expect(result.text).toBe("Recovered.");
+    const edits = discord.callsTo("channels.editMessage");
+    const editBodies = edits.map((e) => (e[2] as { content: string }).content);
+    expect(editBodies.some((c) => c.includes("failed."))).toBe(false);
+  });
+
+  it("synthesizes an error when a terminal error part carries no payload", async () => {
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    await expect(
+      streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+        createAgent: fakeOrchestrator([], {
+          extraEvents: [
+            { type: "tool-input-start", toolName: "delegate_linear" },
+            { type: "error" },
+          ],
+        }),
+      }),
+    ).rejects.toThrow("stream emitted an error part");
+  });
+
+  it("classifies non-Error thrown values (string error part payloads)", async () => {
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    await expect(
+      streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+        createAgent: fakeOrchestrator([], {
+          extraEvents: [
+            { type: "tool-input-start", toolName: "delegate_linear" },
+            { type: "error", error: "plain string failure" },
+          ],
+        }),
+      }),
+    ).rejects.toThrow("plain string failure");
+  });
+
+  it("renders a preliminary preview even when the tool-result has no toolCallId", async () => {
+    const realNow = Date.now;
+    let now = realNow.call(Date);
+    vi.spyOn(Date, "now").mockImplementation(() => {
+      now += 2000;
+      return now;
+    });
+
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+      createAgent: fakeOrchestrator(["Done."], {
+        extraEvents: [
+          {
+            type: "tool-result",
+            preliminary: true,
+            output: { parts: [{ type: "text", text: "Working on it" }] },
+          },
+        ],
+      }),
+    });
+
+    const edits = discord.callsTo("channels.editMessage");
+    const editBodies = edits.map((e) => (e[2] as { content: string }).content);
+    expect(editBodies.some((c) => c.includes("> Working on it"))).toBe(true);
+
+    vi.restoreAllMocks();
+  });
+});
