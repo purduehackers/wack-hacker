@@ -33,6 +33,8 @@ function describeSchema(schema: unknown): unknown {
  * Build a snapshot of the exact context the orchestrator assembled for this
  * turn. Uses the same code paths the orchestrator runs with (getOrchestratorTools,
  * AgentContext.buildInstructions) so the snapshot is the orchestrator's view.
+ * Called at /inspect-context read time — the workflow persists only the cheap
+ * dynamic slice (`StoredContextSnapshot`) and this derives the rest on demand.
  *
  * `totalUsage` is the conversation-wide cumulative spend; the workflow accumulates
  * each turn's usage into a running total before calling this. `getTools` is the
@@ -43,6 +45,8 @@ export function buildContextSnapshot(args: {
   messages: ChatMessage[];
   totalUsage: TurnUsage;
   turnCount: number;
+  /** Persisted-at timestamp carried over from the stored slice; defaults to now. */
+  updatedAt?: string;
   getTools?: typeof getOrchestratorTools;
 }): ContextSnapshot {
   const { context, messages, totalUsage, turnCount, getTools = getOrchestratorTools } = args;
@@ -69,6 +73,6 @@ export function buildContextSnapshot(args: {
     messages,
     totalUsage,
     turnCount,
-    updatedAt: new Date().toISOString(),
+    updatedAt: args.updatedAt ?? new Date().toISOString(),
   };
 }

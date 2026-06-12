@@ -19,29 +19,40 @@ The 1.5-second debounce keeps Discord rate-limits happy while still feeling live
 2. Calls `createOrchestrator(agentCtx)`.
 3. Sends an initial Discord message: `> Thinking...`. Holds onto its message ID.
 4. Splits `messages` into prior turns and the current user input, then calls `agent.stream({ messages: [...priorTurns, currentUserMessage] })`. The current user message goes through `buildUserMessage(content, agentCtx.attachments)`, which inlines image/file attachments as multimodal content parts so the model can see them directly. Consumes the `fullStream`.
-5. Maintains a small render state: `{ text, activity, subagentPreview }`.
+5. Maintains render state in `MessageRenderer`: `{ text, activity, subagentPreviews }` — previews are a `Map` keyed by `toolCallId`, because the orchestrator runs parallel delegations under `Promise.all` and concurrent previews must not clobber each other.
 6. Handles each stream event:
-   - **`text-delta`** — append `event.text` to `state.text`, clear `activity` and `subagentPreview`.
-   - **`tool-input-start`** — set `activity` to `` `Calling \`${event.toolName}\`...` ``, clear the subagent preview.
-   - **`tool-result`** (preliminary, from a subagent) — extract a short text via `previewSubagentText(output as UIMessage)` and update `state.subagentPreview`.
-   - **`tool-result`** (final) — clear `activity` and `subagentPreview`.
-7. After each event, `flush(force = false)` runs: if at least `EDIT_INTERVAL_MS` has passed since the last edit AND the newly-`render(state)`ed content differs from the last rendered content, it calls `discord.channels.editMessage` with the new body.
-8. When the stream ends, it does a final edit with `truncate(state.text || "I didn't have anything to say.")`. If the edit fails (e.g. Discord 404 on a deleted message), it falls back to sending a new message.
-9. Returns `{ text }`.
+   - **`text-delta`** — append `event.text` to the text, clear `activity` and all previews.
+   - **`tool-input-start`** — set `activity` to `` `Calling \`${event.toolName}\`...` `` (existing previews stay — a sibling delegation may still be streaming).
+   - **`tool-result`** (preliminary, from a subagent) — extract a short text via `previewSubagentText(output as UIMessage)` and update that `toolCallId`'s preview.
+   - **`tool-result`** (final) — clear `activity` and that call's preview.
+   - **`tool-error`** — clear that call's activity/preview and show a transient `` `toolName` failed. `` status line.
+   - **`error`** (terminal) — recorded and surfaced as a turn failure after the stream ends (the AI SDK emits an error part instead of throwing, so without this the turn would finish looking normal with no text).
+7. After each event, `flush()` runs: if at least `EDIT_INTERVAL_MS` has passed since the last edit AND the newly-rendered content differs from the last rendered content, it calls `discord.channels.editMessage` with the new body.
+8. When the stream ends, it does a final edit with the accumulated text (or `"I didn't have anything to say."`). If the edit fails (e.g. Discord 404 on a deleted message), it falls back to sending a new message.
+9. Returns `{ text, usage, discordMessageId, model }` — `model` is the slug that actually ran, which matters after a fallback.
+
+## Model fallback
+
+The stream runs through `streamWithFallback`: on a terminal provider error it retries once per entry in `ORCHESTRATOR_FALLBACK_MODELS` (currently `claude-haiku-4.5`) — **but only while no tool has run**. Tool executions are external side effects (GitHub/Linear/Discord writes); replaying the turn after one would duplicate them. On retry the renderer is `reset()` so the fallback streams from scratch.
+
+## Failure classification
+
+Any failure once the stream is live — a terminal `error` part, a stream exception after the fallback is exhausted, or a `finalizeTurn` failure (which runs after tools executed) — goes through `failTurn`: the user sees `Something went wrong — try again. Trace: \`<id>\``, the `ai.turn`wide event emits`outcome: "error"`, and a WDK `FatalError` is thrown so the workflow step never replays the side-effectful turn (`runTurn` converts it to a sentinel and keeps listening). Errors _before_ the stream starts (e.g. the placeholder post failing) stay plain and get WDK's default step retries. See [Workflows § chat](../workflows/chat.md#turn-failures).
 
 ## The render function
 
 ```ts
-function render(state: { text; activity; subagentPreview }): string {
+function render(): string {
   const parts = [];
-  if (state.activity) parts.push(`-# ${state.activity}`);
-  if (state.subagentPreview) parts.push(`> ${preview.replaceAll("\n", "\n> ")}`);
-  if (state.text) parts.push(state.text);
+  if (activity) parts.push(`-# ${activity}`);
+  for (const preview of subagentPreviews.values())
+    parts.push(`> ${preview.replaceAll("\n", "\n> ")}`);
+  if (text) parts.push(text);
   return truncate(parts.join("\n\n") || "> Thinking...");
 }
 ```
 
-The activity line uses Discord's `-# ` subtle text syntax. The subagent preview uses blockquotes. The main text is whatever the orchestrator has emitted so far.
+The activity line uses Discord's `-# ` subtle text syntax. Each in-flight subagent preview renders as its own blockquote. The main text is whatever the orchestrator has emitted so far.
 
 Activity lines and subagent previews are deliberately ephemeral — they appear only while a tool is running and disappear when the next text delta arrives.
 

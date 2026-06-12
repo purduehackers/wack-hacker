@@ -31,6 +31,7 @@ vi.mock("@vercel/edge-config", () => ({
 
 const { AgentContext } = await import("./context.ts");
 const { buildUserMessage, parseModelSlug, streamTurn } = await import("./streaming.ts");
+const { FatalError } = await import("workflow");
 type OrchestratorFactory = import("./streaming.ts").OrchestratorFactory;
 
 type StreamEvent = Record<string, unknown>;
@@ -633,5 +634,185 @@ describe("streamTurn: default orchestrator factory", () => {
 
     expect(result.text).toBe("hi there.");
     expect(discord.callsTo("channels.createMessage").length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("streamTurn: error stream parts", () => {
+  it("clears activity and shows a failed status line on tool-error", async () => {
+    const realNow = Date.now;
+    let now = realNow.call(Date);
+    vi.spyOn(Date, "now").mockImplementation(() => {
+      now += 2000;
+      return now;
+    });
+
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+      createAgent: fakeOrchestrator(["Recovered without the tool."], {
+        extraEvents: [
+          { type: "tool-input-start", toolName: "delegate_linear" },
+          { type: "tool-error", toolCallId: "c1", toolName: "delegate_linear" },
+        ],
+      }),
+    });
+
+    const edits = discord.callsTo("channels.editMessage");
+    const editBodies = edits.map((e) => (e[2] as { content: string }).content);
+    expect(editBodies.some((c) => c.includes("`delegate_linear` failed."))).toBe(true);
+    // The stale "Calling..." line must not survive into the final message.
+    expect(editBodies.at(-1)).not.toContain("Calling `delegate_linear`");
+
+    vi.restoreAllMocks();
+  });
+
+  it("renders concurrent subagent previews independently per toolCallId", async () => {
+    const realNow = Date.now;
+    let now = realNow.call(Date);
+    vi.spyOn(Date, "now").mockImplementation(() => {
+      now += 2000;
+      return now;
+    });
+
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+      createAgent: fakeOrchestrator(["Both done."], {
+        extraEvents: [
+          { type: "tool-input-start", toolName: "delegate_linear" },
+          { type: "tool-input-start", toolName: "delegate_github" },
+          {
+            type: "tool-result",
+            toolCallId: "c1",
+            preliminary: true,
+            output: { parts: [{ type: "text", text: "Linear progress" }] },
+          },
+          {
+            type: "tool-result",
+            toolCallId: "c2",
+            preliminary: true,
+            output: { parts: [{ type: "text", text: "GitHub progress" }] },
+          },
+        ],
+      }),
+    });
+
+    const edits = discord.callsTo("channels.editMessage");
+    const editBodies = edits.map((e) => (e[2] as { content: string }).content);
+    expect(
+      editBodies.some((c) => c.includes("> Linear progress") && c.includes("> GitHub progress")),
+    ).toBe(true);
+
+    vi.restoreAllMocks();
+  });
+
+  it("fails the turn with FatalError and posts a failure notice on terminal error", async () => {
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    const turn = streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+      createAgent: fakeOrchestrator([], {
+        extraEvents: [
+          { type: "tool-input-start", toolName: "delegate_linear" },
+          { type: "error", error: new Error("provider exploded") },
+        ],
+      }),
+    });
+
+    await expect(turn).rejects.toBeInstanceOf(FatalError);
+
+    const edits = discord.callsTo("channels.editMessage");
+    const editBodies = edits.map((e) => (e[2] as { content: string }).content);
+    expect(editBodies.some((c) => c.includes("Something went wrong — try again."))).toBe(true);
+  });
+});
+
+describe("streamTurn: model fallback", () => {
+  /** Agent whose stream ends with a terminal error part before any tool runs. */
+  const dyingAgent = {
+    stream: () =>
+      Promise.resolve({
+        fullStream: (async function* () {
+          yield { type: "error", error: new Error("overloaded") };
+        })(),
+        totalUsage: Promise.resolve({ inputTokens: 0, outputTokens: 0, totalTokens: 0 }),
+        steps: Promise.resolve([]),
+      }),
+  };
+
+  it("retries once on the fallback model when the stream dies before tools", async () => {
+    const modelsRequested: (string | undefined)[] = [];
+    const good = fakeOrchestrator(["Recovered on fallback."]);
+    const factory: OrchestratorFactory = (ctx, tracker, meta, model) => {
+      modelsRequested.push(model);
+      if (modelsRequested.length === 1) {
+        return dyingAgent as unknown as ReturnType<OrchestratorFactory>;
+      }
+      return good(ctx, tracker, meta, model);
+    };
+
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+      createAgent: factory,
+    });
+
+    expect(modelsRequested).toEqual(["anthropic/claude-sonnet-4.6", "anthropic/claude-haiku-4.5"]);
+    expect(result.model).toBe("anthropic/claude-haiku-4.5");
+    expect(result.text).toBe("Recovered on fallback.");
+  });
+
+  it("does not retry once a tool has run — side effects make replays unsafe", async () => {
+    let factoryCalls = 0;
+    const factory: OrchestratorFactory = () => {
+      factoryCalls += 1;
+      return {
+        stream: () =>
+          Promise.resolve({
+            fullStream: (async function* () {
+              yield { type: "tool-input-start", toolName: "delegate_github" };
+              yield { type: "error", error: new Error("died mid-turn") };
+            })(),
+            totalUsage: Promise.resolve({}),
+            steps: Promise.resolve([]),
+          }),
+      } as unknown as ReturnType<OrchestratorFactory>;
+    };
+
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    await expect(
+      streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+        createAgent: factory,
+      }),
+    ).rejects.toBeInstanceOf(FatalError);
+
+    expect(factoryCalls).toBe(1);
+  });
+});
+
+describe("streamTurn: post-stream finalize failures", () => {
+  it("classifies finalize failures as FatalError so the workflow step never replays the turn", async () => {
+    const discord = createMockAPI();
+    const originalCreate = discord.channels.createMessage;
+    let createCalls = 0;
+    // First createMessage is the renderer's placeholder init and must succeed;
+    // everything after simulates a sustained Discord outage at end-of-turn.
+    discord.channels.createMessage = async (...args: unknown[]) => {
+      createCalls++;
+      if (createCalls === 1) {
+        return (originalCreate as (...a: unknown[]) => Promise<unknown>)(...args);
+      }
+      throw new Error("discord down");
+    };
+    discord.channels.editMessage = async () => {
+      throw new Error("discord down");
+    };
+
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    await expect(
+      streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+        createAgent: fakeOrchestrator(["The stream itself succeeded."]),
+      }),
+    ).rejects.toBeInstanceOf(FatalError);
   });
 });

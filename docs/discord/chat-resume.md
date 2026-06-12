@@ -26,6 +26,15 @@ Both the mention handler and the message handler can resume an existing `chatWor
 
 This path **only resumes** — it never starts a new workflow. Starts are always triggered by a mention.
 
+## Ending a conversation with ✅
+
+`src/bot/handlers/events/conversation-done/index.ts` (`conversationDone`):
+
+1. Fires on a ✅ reaction. Ignores the bot's own reactions (it adds ✅ itself in the hack-night flow).
+2. Looks up the active `ConversationState` for the reaction's channel. If none, returns.
+3. Fetches the reacted message and requires it to be **bot-authored** — a stray ✅ on someone's message in the thread shouldn't kill the conversation.
+4. Calls `resumeHook(workflowRunId, { type: "done" })`, ending the workflow gracefully (cleanup + terminal telemetry) instead of waiting out the 55-minute idle timer. If `resumeHook` throws, the run already ended — the stale key is deleted so the next mention starts fresh.
+
 ## Why mentions are "double-routed"
 
 Because a mention message also satisfies `onMessage`, both mention and message handlers would normally fire for the same packet. The `EventRouter` runs `onMention` handlers first (see [EventRouter](./event-router.md)), but the mention handler calls `resumeHook` with the **stripped** content; if the message handler then ran as well, it would forward the **un-stripped** content into the conversation and cause a duplicate turn.

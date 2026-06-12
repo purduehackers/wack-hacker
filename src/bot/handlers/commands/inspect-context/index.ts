@@ -5,6 +5,7 @@ import { isOrganizer, respond } from "@/bot/commands/helpers";
 import { ContextSnapshotStore } from "@/bot/context-snapshot";
 import { ConversationStore } from "@/bot/store";
 import { breakdownFromSnapshot } from "@/lib/ai/inspect-context";
+import { buildContextSnapshot } from "@/lib/ai/snapshot";
 
 import { renderContextReport } from "./render";
 
@@ -34,8 +35,8 @@ export const inspectContext = defineCommand({
       return;
     }
 
-    const snap = await new ContextSnapshotStore().get(channelId);
-    if (!snap) {
+    const stored = await new ContextSnapshotStore().get(channelId);
+    if (!stored) {
       await respond(
         ctx,
         "Conversation exists but no snapshot is available yet. Wait for the next turn to complete, then try again.",
@@ -43,7 +44,9 @@ export const inspectContext = defineCommand({
       return;
     }
 
-    const breakdown = await breakdownFromSnapshot(snap);
+    // The workflow persists only the dynamic slice; derive the system prompt
+    // and tool schemas here, with the same code paths the orchestrator uses.
+    const breakdown = await breakdownFromSnapshot(buildContextSnapshot(stored));
     const messages = renderContextReport(breakdown);
     const [firstMessage, ...followUpMessages] = messages;
     await respond(ctx, firstMessage);

@@ -2,9 +2,9 @@ import type { RedisClient } from "@/lib/redis/client";
 
 import { createRedis } from "@/lib/redis/client";
 
-import type { ContextSnapshot } from "./types";
+import type { StoredContextSnapshot } from "./types";
 
-export type { ContextSnapshot, ToolDefSnapshot } from "./types";
+export type { ContextSnapshot, StoredContextSnapshot, ToolDefSnapshot } from "./types";
 
 const TTL = 60 * 60;
 
@@ -15,14 +15,14 @@ export class ContextSnapshotStore {
     return `context-snapshot:${threadId ?? channelId}`;
   }
 
-  async get(channelId: string, threadId?: string): Promise<ContextSnapshot | null> {
-    return this.redis.get<ContextSnapshot>(this.key(channelId, threadId));
+  async get(channelId: string, threadId?: string): Promise<StoredContextSnapshot | null> {
+    return this.redis.get<StoredContextSnapshot>(this.key(channelId, threadId));
   }
 
   async set(
     channelId: string,
     threadId: string | undefined,
-    snapshot: ContextSnapshot,
+    snapshot: StoredContextSnapshot,
   ): Promise<void> {
     await this.redis.set(this.key(channelId, threadId), snapshot, { ex: TTL });
   }

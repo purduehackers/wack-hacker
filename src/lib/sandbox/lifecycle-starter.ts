@@ -1,6 +1,8 @@
 import { log } from "evlog";
 import { start } from "workflow/api";
 
+import { countMetric } from "@/lib/metrics";
+
 import { sandboxLifecycleWorkflow } from "../../workflows/sandbox-lifecycle.ts";
 
 /**
@@ -14,6 +16,9 @@ export async function startSandboxLifecycle(threadKey: string): Promise<void> {
     const run = await start(sandboxLifecycleWorkflow, [threadKey, crypto.randomUUID()]);
     log.info("sandbox", `Lifecycle workflow started: ${run.runId} (${threadKey})`);
   } catch (err) {
+    // A sandbox without a watcher never hibernates — it dies at its hard
+    // timeout. Metered so the silent-failure rate is visible.
+    countMetric("sandbox.lifecycle.start_failed");
     log.warn("sandbox", `Lifecycle workflow start failed (${threadKey}): ${String(err)}`);
   }
 }
