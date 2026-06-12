@@ -1,0 +1,25 @@
+src/lib/ai/policy/audit.test.ts
+  s_0dd6d7f4e6643b::t_ce53bdb651bd3a 93-103,126-128
+src/lib/ai/policy/budget.test.ts
+  s_0dd6d7f4e6643b::t_ce53bdb651bd3a 1,5-10,88-95
+src/lib/ai/policy/access.test.ts
+  s_0dd6d7f4e6643b::t_ce53bdb651bd3a 1-27
+src/lib/ai/policy/apply.test.ts
+  s_0dd6d7f4e6643b::t_ce53bdb651bd3a 240-255,272-287
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "5249231163a015ded6bfd62f8b5d933ff7594034",
+  "prompts": {},
+  "sessions": {
+    "s_0dd6d7f4e6643b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9061d1c1-8b36-4d0a-938e-68dfb7766d64",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
