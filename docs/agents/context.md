@@ -117,3 +117,18 @@ date: "Wednesday, April 15, 2026"
 ````
 
 The `recent_*_messages` block is the **lead-in only** — conversation turns between the user and the bot are delivered separately as `messages: [{role, content}, ...]` on the `agent.stream()` call, not as scraped text inside the system prompt.
+
+## Subagent context block
+
+```ts
+subagentContextBlock(): string
+```
+
+The compact (~60-token) sibling of the orchestrator block, appended to every delegation subagent's instructions by `createDelegationTool`. The orchestrator forwards task wording verbatim, so phrases like "assign to me" or "due Friday" reach the subagent unresolved — this block carries the requesting user (nickname + Discord id), channel, date, current instant, and timezone needed to resolve them without extra discovery calls:
+
+```xml
+<execution_context>
+requesting_user: "Rayhan" (discord id 123456789)
+channel: "#bot-testing"   date: Wednesday, April 15, 2026   now: 2026-04-15T17:03:00.000Z   tz: America/New_York
+</execution_context>
+```

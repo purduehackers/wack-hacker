@@ -66,6 +66,71 @@ export function streamingTextModel(text: string) {
   });
 }
 
+/** One model step that calls `toolName` and finishes with reason `tool-calls`. */
+function toolCallStepStream(toolName: string, call: number, narration?: string) {
+  const narrationChunks: LanguageModelV3StreamPart[] = narration
+    ? [
+        { type: "text-start", id: `t${call}` },
+        { type: "text-delta", id: `t${call}`, delta: narration },
+        { type: "text-end", id: `t${call}` },
+      ]
+    : [];
+  const chunks: LanguageModelV3StreamPart[] = [
+    { type: "stream-start", warnings: [] },
+    ...narrationChunks,
+    { type: "tool-call", toolCallId: `call-${call}`, toolName, input: "{}" },
+    {
+      type: "finish",
+      finishReason: { unified: "tool-calls", raw: undefined },
+      usage: {
+        inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
+        outputTokens: { total: 1, text: 1, reasoning: 0 },
+      },
+    },
+  ];
+  return {
+    stream: simulateReadableStream<LanguageModelV3StreamPart>({
+      initialDelayInMs: null,
+      chunkDelayInMs: null,
+      chunks,
+    }),
+  };
+}
+
+/**
+ * Build a `MockLanguageModelV3` that issues one call to `toolName` per step
+ * and never finishes with text — every step finishes with reason
+ * `tool-calls`, so a `ToolLoopAgent` run only ends when its `stopWhen` cap
+ * cuts the loop. Used to exercise step-cap exhaustion paths. Pass `narration`
+ * to also emit assistant text before each tool call (mid-task narration).
+ */
+export function toolLoopingModel(toolName: string, options?: { narration?: string }) {
+  let call = 0;
+  return new MockLanguageModelV3({
+    doStream: async () => {
+      call += 1;
+      return toolCallStepStream(toolName, call, options?.narration);
+    },
+  });
+}
+
+/**
+ * Build a `MockLanguageModelV3` whose first step completes normally with a
+ * tool call and whose second `doStream` call throws. Exercises the SDK's
+ * mid-run crash path, where errors surface as stream `error` chunks instead
+ * of rejected promises once a step has completed.
+ */
+export function toolThenErrorModel(toolName: string, errorMessage = "provider exploded") {
+  let call = 0;
+  return new MockLanguageModelV3({
+    doStream: async () => {
+      call += 1;
+      if (call > 1) throw new Error(errorMessage);
+      return toolCallStepStream(toolName, call);
+    },
+  });
+}
+
 /**
  * Override the AI SDK's default provider so string model IDs resolve to the
  * supplied mock. AI SDK checks `globalThis.AI_SDK_DEFAULT_PROVIDER` before

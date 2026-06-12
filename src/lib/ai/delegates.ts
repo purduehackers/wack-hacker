@@ -2,7 +2,7 @@ import type { ToolSet } from "ai";
 
 import type { AgentContext } from "./context.ts";
 import type { TurnUsageTracker } from "./turn-usage.ts";
-import type { SubagentSpec, TelemetryMetadata } from "./types.ts";
+import type { SubagentPromptConfig, SubagentSpecBase, TelemetryMetadata } from "./types.ts";
 
 import { SKILL_MANIFEST as CMS_SUBSKILLS } from "./skills/generated/domains/cms.ts";
 import { SKILL_MANIFEST as CODE_SUBSKILLS } from "./skills/generated/domains/code.ts";
@@ -24,6 +24,7 @@ import {
   buildCodeExperimentalContext,
   codeDelegationInputSchema,
   codePostFinish,
+  getCodeDelegationPrompt,
 } from "./tools/code/delegation.ts";
 import * as codeTools from "./tools/code/index.ts";
 import * as discordTools from "./tools/discord/index.ts";
@@ -143,14 +144,20 @@ const DOMAINS = {
 /**
  * Per-domain overrides layered into the `SubagentSpec` before creating the
  * delegation tool. Today only `code` needs non-default values — stronger
- * model, more steps, custom input schema, sandbox context builder, and the
- * post-finish commit/push/PR step. Other domains use the defaults.
+ * model, more steps, custom input schema + prompt extractor, sandbox context
+ * builder, and the post-finish commit/push/PR step. Other domains use the
+ * defaults. The base fields are `Partial`, but `SubagentPromptConfig` is
+ * kept whole so an override can't introduce a custom `inputSchema` without
+ * its paired `getPrompt`.
  */
-const DOMAIN_SPEC_OVERRIDES: Partial<Record<keyof typeof DOMAINS, Partial<SubagentSpec>>> = {
+const DOMAIN_SPEC_OVERRIDES: Partial<
+  Record<keyof typeof DOMAINS, Partial<SubagentSpecBase> & SubagentPromptConfig>
+> = {
   code: {
     model: "anthropic/claude-opus-4.7",
     stopSteps: 60,
     inputSchema: codeDelegationInputSchema,
+    getPrompt: getCodeDelegationPrompt,
     buildExperimentalContext: buildCodeExperimentalContext,
     postFinish: codePostFinish,
   },

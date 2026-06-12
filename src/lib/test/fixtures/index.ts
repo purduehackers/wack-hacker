@@ -24,6 +24,8 @@ export {
   contextForRole,
   noopTool,
   streamingTextModel,
+  toolLoopingModel,
+  toolThenErrorModel,
   installMockProvider,
   uninstallMockProvider,
   stepResult,

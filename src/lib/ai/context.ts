@@ -179,7 +179,7 @@ export class AgentContext {
    */
   contextBlock(): string {
     const thread = this.thread
-      ? `\nthread:\n  name: ${JSON.stringify(this.thread.name)}\n  id: "${this.thread.id}"\n  parent_channel: "#${this.thread.parentChannel.name}"`
+      ? `\nthread:\n  name: ${JSON.stringify(this.thread.name)}\n  id: "${this.thread.id}"\n  parent_channel: ${JSON.stringify(`#${this.thread.parentChannel.name}`)}`
       : "";
 
     // Tag the lead-in block based on where its messages actually came from,
@@ -203,14 +203,28 @@ export class AgentContext {
     return `<execution_context>
 \`\`\`yaml
 user:
-  username: "${this.username}"
+  username: ${JSON.stringify(this.username)}
   nickname: ${JSON.stringify(this.nickname)}
   id: "${this.userId}"
 channel:
-  name: "#${this.channel.name}"
+  name: ${JSON.stringify(`#${this.channel.name}`)}
   id: "${this.channel.id}"${thread}
 date: "${this.date}"
 \`\`\`
 </execution_context>${recentMsgs}${refMsgs}`;
+  }
+
+  /**
+   * Compact execution-context block (~60 tokens) appended to every delegation
+   * subagent's instructions. The orchestrator forwards task wording verbatim,
+   * so phrases like "assign to me" or "due Friday" reach the subagent
+   * unresolved — this block carries the identity/time facts needed to resolve
+   * them without extra discovery calls.
+   */
+  subagentContextBlock(): string {
+    return `<execution_context>
+requesting_user: ${JSON.stringify(this.nickname)} (discord id ${this.userId})
+channel: ${JSON.stringify(`#${this.channel.name}`)}   date: ${this.date}   now: ${this.nowISO}   tz: ${this.timezone}
+</execution_context>`;
   }
 }
