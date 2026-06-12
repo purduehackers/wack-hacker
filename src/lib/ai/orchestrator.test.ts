@@ -167,7 +167,9 @@ describe("buildSystemPrompt", () => {
       const mentioned = [...prompt.matchAll(/\*\*([a-z0-9_ /]+)\*\*/g)]
         .flatMap((m) => m[1].split(" / "))
         .map((name) => name.trim());
-      expect(mentioned.length).toBeGreaterThan(0);
+      // web_search once shipped documented-but-unregistered (#127) — keep it
+      // pinned so the extraction regex can't silently rot either.
+      expect(mentioned).toContain("web_search");
       for (const name of mentioned) {
         expect(tools, `prompt documents nonexistent tool ${name} for ${role}`).toHaveProperty(name);
       }
