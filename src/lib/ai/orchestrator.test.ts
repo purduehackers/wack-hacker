@@ -117,20 +117,6 @@ describe("createOrchestrator", () => {
     expect(getToolNames()).toContain("list_audit_log");
   });
 
-  it("only documents registered tools in the system prompt <tools> section", () => {
-    // Admin context: every delegate tool named in the prompt is role-gated
-    // (delegate_code is admin-only), so a public surface would false-fail.
-    const tools = getOrchestratorTools(contextForRole(UserRole.Admin), new TurnUsageTracker());
-
-    const section = SYSTEM_PROMPT.match(/<tools>([\s\S]*?)<\/tools>/)?.[1] ?? "";
-    const documented = [...section.matchAll(/^- \*\*([^*]+)\*\*/gm)].flatMap((m) =>
-      m[1]!.split("/").map((name) => name.trim()),
-    );
-
-    expect(documented).toContain("web_search");
-    expect(Object.keys(tools)).toEqual(expect.arrayContaining(documented));
-  });
-
   it("injects execution context into system prompt via buildInstructions", async () => {
     const ctx = AgentContext.fromPacket(
       messagePacket("hello", { author: { id: "u1", username: "alice" } }),
@@ -145,5 +131,21 @@ describe("createOrchestrator", () => {
     expect(systemContent).toContain('username: "alice"');
     expect(systemContent).toContain("Purdue Hackers");
     expect(systemContent).not.toContain("{{DATE}}");
+  });
+});
+
+describe("SYSTEM_PROMPT <tools> section", () => {
+  it("only documents registered tools", () => {
+    // Admin context: every delegate tool named in the prompt is role-gated
+    // (delegate_code is admin-only), so a public surface would false-fail.
+    const tools = getOrchestratorTools(contextForRole(UserRole.Admin), new TurnUsageTracker());
+
+    const section = SYSTEM_PROMPT.match(/<tools>([\s\S]*?)<\/tools>/)?.[1] ?? "";
+    const documented = [...section.matchAll(/^- \*\*([^*]+)\*\*/gm)].flatMap((m) =>
+      m[1]!.split("/").map((name) => name.trim()),
+    );
+
+    expect(documented).toContain("web_search");
+    expect(Object.keys(tools)).toEqual(expect.arrayContaining(documented));
   });
 });
