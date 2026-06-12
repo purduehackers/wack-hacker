@@ -1,0 +1,19 @@
+src/lib/ai/orchestrator.test.ts
+  s_17b0ec10d5c5f1::t_74793a4737de5f 170-172
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "1a60d174d7a60847b17d392cee7da8da74834176",
+  "prompts": {},
+  "sessions": {
+    "s_17b0ec10d5c5f1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "11d5b927-140e-4edd-b86c-90da34374f05",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
