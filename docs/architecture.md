@@ -158,7 +158,8 @@ src/
       orchestrator.ts   top-level agent
       subagent.ts       focused per-domain agent
       delegates.ts      role-filtered delegation tools + DOMAIN_SPEC_OVERRIDES
-      approvals/        approval() wrapper, runtime, store, Discord button flow
+      approvals/        approval runtime, store, Discord button flow
+      policy/           access() descriptor, decide(), applyPolicy, audit log, budgets
       skills/           per-domain SKILL.md trees + registry
       tools/            per-domain tool implementations
     sandbox/    Vercel Sandbox wrapper + credential brokering for delegate_code

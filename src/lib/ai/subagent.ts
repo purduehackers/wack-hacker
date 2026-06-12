@@ -17,15 +17,10 @@ import { countMetric, recordDistribution } from "@/lib/metrics";
 import type { AgentContext } from "./context.ts";
 import type { SubagentSpec, TelemetryMetadata } from "./types.ts";
 
-import { wrapApprovalTools } from "./approvals/index.ts";
 import { addCacheControl } from "./cache-control.ts";
-import { SUBAGENT_MODEL, SUBAGENT_PREAMBLE, UserRole } from "./constants.ts";
-import {
-  SkillRegistry,
-  createLoadSkillTool,
-  computeActiveTools,
-  filterAdmin,
-} from "./skills/index.ts";
+import { SUBAGENT_MODEL, SUBAGENT_PREAMBLE, type UserRole } from "./constants.ts";
+import { applyPolicy, readBudgetState } from "./policy/index.ts";
+import { SkillRegistry, createLoadSkillTool, computeActiveTools } from "./skills/index.ts";
 import { TurnUsageTracker } from "./turn-usage.ts";
 
 export type { SubagentSpec } from "./types.ts";
@@ -126,10 +121,11 @@ export function createDelegationTool(
       )}`;
 
       const allTools: ToolSet = { ...spec.tools, loadSkill };
-      const roleFiltered = role === UserRole.Admin ? allTools : filterAdmin(allTools);
-      const tools = wrapApprovalTools(roleFiltered, {
+      const budget = await readBudgetState({ userId: context.userId, role });
+      const tools = applyPolicy(allTools, {
         context,
         delegateName: spec.name,
+        budget,
       });
       const baseToolNames = [...spec.baseToolNames, "loadSkill"];
       type ToolKey = keyof typeof tools;

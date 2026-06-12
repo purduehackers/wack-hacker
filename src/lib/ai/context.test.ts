@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 
+import { DISCORD_IDS } from "../protocol/constants.ts";
 import { messagePacket } from "../test/fixtures/index.ts";
-import { AgentContext } from "./context.ts";
+import { AgentContext, roleFromMemberRoles } from "./context.ts";
 
 describe("AgentContext.fromPacket", () => {
   it("extracts user identity", () => {
@@ -296,5 +297,51 @@ describe("AgentContext.buildInstructions", () => {
     });
     const result = ctx.buildInstructions("Base.");
     expect(result).toContain("<recent_thread_messages>");
+  });
+});
+
+describe("AgentContext.source", () => {
+  const base = {
+    userId: "u",
+    username: "u",
+    nickname: "u",
+    channel: { id: "c", name: "c" },
+    date: "today",
+  };
+
+  it("defaults to 'chat' when the serialized field is absent (legacy contexts)", () => {
+    expect(AgentContext.fromJSON(base).source).toBe("chat");
+  });
+
+  it("round-trips 'scheduled' through toJSON/fromJSON", () => {
+    const ctx = AgentContext.fromJSON({ ...base, source: "scheduled" });
+    expect(ctx.source).toBe("scheduled");
+    expect(AgentContext.fromJSON(ctx.toJSON()).source).toBe("scheduled");
+  });
+
+  it("is 'chat' for packet-built contexts", () => {
+    expect(AgentContext.fromPacket(messagePacket("hello")).source).toBe("chat");
+  });
+});
+
+describe("roleFromMemberRoles", () => {
+  it("maps the admin role id to admin", () => {
+    expect(roleFromMemberRoles([DISCORD_IDS.roles.ADMIN])).toBe("admin");
+  });
+
+  it("prefers admin when both admin and organizer ids are present", () => {
+    expect(roleFromMemberRoles([DISCORD_IDS.roles.ORGANIZER, DISCORD_IDS.roles.ADMIN])).toBe(
+      "admin",
+    );
+  });
+
+  it("maps the organizer role id to organizer", () => {
+    expect(roleFromMemberRoles([DISCORD_IDS.roles.ORGANIZER])).toBe("organizer");
+  });
+
+  it("maps unknown roles, empty lists, and undefined to public", () => {
+    expect(roleFromMemberRoles(["999"])).toBe("public");
+    expect(roleFromMemberRoles([])).toBe("public");
+    expect(roleFromMemberRoles(undefined)).toBe("public");
   });
 });

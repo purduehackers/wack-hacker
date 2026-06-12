@@ -8,5 +8,5 @@ import type { Redis } from "@upstash/redis";
  */
 export type RedisClient = Pick<
   Redis,
-  "get" | "set" | "del" | "expire" | "eval" | "sadd" | "smembers" | "srem" | "pipeline"
+  "get" | "set" | "del" | "expire" | "eval" | "incrby" | "sadd" | "smembers" | "srem" | "pipeline"
 >;

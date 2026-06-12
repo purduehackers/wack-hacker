@@ -1,12 +1,14 @@
 import { ToolLoopAgent, type ToolSet } from "ai";
 
+import type { BudgetState } from "./policy/index.ts";
 import type { TurnUsageTracker } from "./turn-usage.ts";
 import type { TelemetryMetadata } from "./types.ts";
 
-import { wrapApprovalTools } from "./approvals/index.ts";
 import { ORCHESTRATOR_MODEL, SYSTEM_PROMPT } from "./constants.ts";
 import { AgentContext } from "./context.ts";
 import { buildDelegationTools } from "./delegates.ts";
+import { applyPolicy } from "./policy/index.ts";
+import { list_audit_log } from "./tools/audit/index.ts";
 import { documentation } from "./tools/docs/index.ts";
 import { resolve_organizer } from "./tools/roster/index.ts";
 import { createScheduleTask, list_scheduled_tasks, cancel_task } from "./tools/schedule/index.ts";
@@ -28,6 +30,7 @@ export function getOrchestratorTools(
   context: AgentContext,
   tracker: TurnUsageTracker,
   extraMetadata?: TelemetryMetadata,
+  budget?: BudgetState | null,
 ): ToolSet {
   const tools: ToolSet = {
     documentation,
@@ -35,19 +38,21 @@ export function getOrchestratorTools(
     schedule_task: createScheduleTask(context),
     list_scheduled_tasks,
     cancel_task,
+    list_audit_log,
     web_search,
     ...buildDelegationTools(context, tracker, extraMetadata),
   };
-  return wrapApprovalTools(tools, { context });
+  return applyPolicy(tools, { context, budget });
 }
 
 export function createOrchestrator(
   context: AgentContext,
   tracker: TurnUsageTracker,
   extraMetadata?: TelemetryMetadata,
+  budget?: BudgetState | null,
 ) {
   const instructions = context.buildInstructions(SYSTEM_PROMPT);
-  const tools = getOrchestratorTools(context, tracker, extraMetadata);
+  const tools = getOrchestratorTools(context, tracker, extraMetadata, budget);
 
   return new ToolLoopAgent({
     model: ORCHESTRATOR_MODEL,

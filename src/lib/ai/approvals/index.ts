@@ -20,7 +20,7 @@ export function hasApprovalMarker(t: unknown): boolean {
   return getApprovalOptions(t) !== null;
 }
 
-export { wrapApprovalTools } from "./runtime.ts";
+export { wrapApprovalTools, wrapToolWithApproval } from "./runtime.ts";
 export { ApprovalStore } from "./store.ts";
 export {
   buildApprovalComponents,
@@ -29,7 +29,9 @@ export {
   formatToolCall,
 } from "./helpers.ts";
 export type {
+  ApprovalConfirmMode,
   ApprovalOptions,
+  ApprovalPolicy,
   ApprovalState,
   ApprovalStoreLike,
   BuildApprovalEmbedArgs,

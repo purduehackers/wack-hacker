@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { approval } from "../../approvals/index.ts";
+import { access } from "../../policy/index.ts";
 import { cmsAdminUrl, paginationQuery, payload, wrapPayloadError } from "./client.ts";
 import { paginationInputShape } from "./constants.ts";
 
@@ -35,105 +35,118 @@ function projectRsvp(r: PayloadRsvp) {
   };
 }
 
-export const list_rsvps = tool({
-  description:
-    "List RSVPs across events. Optionally filter by event_id, email, or unsubscribed flag. Useful for attendance reports and unsubscribe audits.",
-  inputSchema: z.object({
-    ...paginationInputShape,
-    event_id: z.union([z.string(), z.number()]).optional(),
-    email: z.email().optional(),
-    unsubscribed: z.boolean().optional().describe("Filter by unsubscribed status (true/false)"),
+export const list_rsvps = access(
+  { risk: "read" },
+  tool({
+    description:
+      "List RSVPs across events. Optionally filter by event_id, email, or unsubscribed flag. Useful for attendance reports and unsubscribe audits.",
+    inputSchema: z.object({
+      ...paginationInputShape,
+      event_id: z.union([z.string(), z.number()]).optional(),
+      email: z.email().optional(),
+      unsubscribed: z.boolean().optional().describe("Filter by unsubscribed status (true/false)"),
+    }),
+    execute: async ({ event_id, email, unsubscribed, ...input }) => {
+      try {
+        const where = {
+          ...(event_id !== undefined && { event: { equals: event_id } }),
+          ...(email !== undefined && { email: { equals: email } }),
+          ...(unsubscribed !== undefined && { unsubscribed: { equals: unsubscribed } }),
+        };
+        const res = await payload.find({
+          collection: COLLECTION,
+          ...paginationQuery(input),
+          ...(Object.keys(where).length > 0 ? { where } : {}),
+        });
+        return JSON.stringify({
+          total_docs: res.totalDocs,
+          total_pages: res.totalPages,
+          page: res.page,
+          docs: (res.docs as PayloadRsvp[]).map(projectRsvp),
+        });
+      } catch (err) {
+        throw wrapPayloadError(err);
+      }
+    },
   }),
-  execute: async ({ event_id, email, unsubscribed, ...input }) => {
-    try {
-      const where = {
-        ...(event_id !== undefined && { event: { equals: event_id } }),
-        ...(email !== undefined && { email: { equals: email } }),
-        ...(unsubscribed !== undefined && { unsubscribed: { equals: unsubscribed } }),
-      };
-      const res = await payload.find({
-        collection: COLLECTION,
-        ...paginationQuery(input),
-        ...(Object.keys(where).length > 0 ? { where } : {}),
-      });
-      return JSON.stringify({
-        total_docs: res.totalDocs,
-        total_pages: res.totalPages,
-        page: res.page,
-        docs: (res.docs as PayloadRsvp[]).map(projectRsvp),
-      });
-    } catch (err) {
-      throw wrapPayloadError(err);
-    }
-  },
-});
+);
 
-export const get_rsvp = tool({
-  description: "Fetch a single RSVP by ID.",
-  inputSchema: z.object({ id: z.union([z.string(), z.number()]) }),
-  execute: async ({ id }) => {
-    try {
-      const doc = (await payload.findByID({ collection: COLLECTION, id })) as PayloadRsvp;
-      return JSON.stringify(projectRsvp(doc));
-    } catch (err) {
-      throw wrapPayloadError(err);
-    }
-  },
-});
-
-export const create_rsvp = tool({
-  description: "Create an RSVP for an event on behalf of a user.",
-  inputSchema: z.object({
-    event_id: z.union([z.string(), z.number()]),
-    email: z.email(),
-    name: z.string(),
-    unsubscribed: z.boolean().optional(),
+export const get_rsvp = access(
+  { risk: "read" },
+  tool({
+    description: "Fetch a single RSVP by ID.",
+    inputSchema: z.object({ id: z.union([z.string(), z.number()]) }),
+    execute: async ({ id }) => {
+      try {
+        const doc = (await payload.findByID({ collection: COLLECTION, id })) as PayloadRsvp;
+        return JSON.stringify(projectRsvp(doc));
+      } catch (err) {
+        throw wrapPayloadError(err);
+      }
+    },
   }),
-  execute: async ({ event_id, email, name, unsubscribed }) => {
-    try {
-      const doc = (await payload.create({
-        collection: COLLECTION,
-        data: {
-          event: event_id,
-          email,
-          name,
-          unsubscribed: unsubscribed ?? false,
-        },
-      })) as PayloadRsvp;
-      return JSON.stringify(projectRsvp(doc));
-    } catch (err) {
-      throw wrapPayloadError(err);
-    }
-  },
-});
+);
 
-export const update_rsvp = tool({
-  description:
-    "Update an RSVP. Commonly used to toggle `unsubscribed: true` when someone asks off the list.",
-  inputSchema: z.object({
-    id: z.union([z.string(), z.number()]),
-    email: z.email().optional(),
-    name: z.string().optional(),
-    unsubscribed: z.boolean().optional(),
-    event_id: z.union([z.string(), z.number()]).optional(),
+export const create_rsvp = access(
+  { risk: "write" },
+  tool({
+    description: "Create an RSVP for an event on behalf of a user.",
+    inputSchema: z.object({
+      event_id: z.union([z.string(), z.number()]),
+      email: z.email(),
+      name: z.string(),
+      unsubscribed: z.boolean().optional(),
+    }),
+    execute: async ({ event_id, email, name, unsubscribed }) => {
+      try {
+        const doc = (await payload.create({
+          collection: COLLECTION,
+          data: {
+            event: event_id,
+            email,
+            name,
+            unsubscribed: unsubscribed ?? false,
+          },
+        })) as PayloadRsvp;
+        return JSON.stringify(projectRsvp(doc));
+      } catch (err) {
+        throw wrapPayloadError(err);
+      }
+    },
   }),
-  execute: async ({ id, event_id, ...rest }) => {
-    try {
-      const data: Record<string, unknown> = { ...rest };
-      if (event_id !== undefined) data.event = event_id;
-      const doc = (await payload.update({
-        collection: COLLECTION,
-        id,
-        data,
-      })) as PayloadRsvp;
-      return JSON.stringify(projectRsvp(doc));
-    } catch (err) {
-      throw wrapPayloadError(err);
-    }
-  },
-});
+);
 
-export const delete_rsvp = approval(
+export const update_rsvp = access(
+  { risk: "write" },
+  tool({
+    description:
+      "Update an RSVP. Commonly used to toggle `unsubscribed: true` when someone asks off the list.",
+    inputSchema: z.object({
+      id: z.union([z.string(), z.number()]),
+      email: z.email().optional(),
+      name: z.string().optional(),
+      unsubscribed: z.boolean().optional(),
+      event_id: z.union([z.string(), z.number()]).optional(),
+    }),
+    execute: async ({ id, event_id, ...rest }) => {
+      try {
+        const data: Record<string, unknown> = { ...rest };
+        if (event_id !== undefined) data.event = event_id;
+        const doc = (await payload.update({
+          collection: COLLECTION,
+          id,
+          data,
+        })) as PayloadRsvp;
+        return JSON.stringify(projectRsvp(doc));
+      } catch (err) {
+        throw wrapPayloadError(err);
+      }
+    },
+  }),
+);
+
+export const delete_rsvp = access(
+  { risk: "destructive" },
   tool({
     description:
       "Delete an RSVP permanently. Prefer `update_rsvp({ unsubscribed: true })` when the user just wants to opt out — deletion loses the audit trail.",

@@ -3,15 +3,15 @@ import { Routes } from "discord-api-types/v10";
 import { z } from "zod";
 
 import { DISCORD_GUILD_ID } from "../../../protocol/constants.ts";
-import { approval } from "../../approvals/index.ts";
-import { admin } from "../../skills/index.ts";
+import { access } from "../../policy/index.ts";
 import { discord } from "./client.ts";
 
 // ---------------------------------------------------------------------------
 // Tools
 // ---------------------------------------------------------------------------
 
-export const list_invites = admin(
+export const list_invites = access(
+  { risk: "read", minRole: "admin" },
   tool({
     description:
       "List all active server invites with their codes, channels, creators, usage counts, and expiry dates.",
@@ -34,7 +34,8 @@ export const list_invites = admin(
   }),
 );
 
-export const create_invite = admin(
+export const create_invite = access(
+  { risk: "destructive", minRole: "admin" },
   tool({
     description:
       "Create a new server invite for a specific channel. Returns the invite code and URL.",
@@ -80,21 +81,20 @@ export const create_invite = admin(
   }),
 );
 
-export const delete_invite = admin(
-  approval(
-    tool({
-      description:
-        "Revoke an active invite by its code. Use list_invites first to find available codes.",
-      inputSchema: z.object({
-        code: z.string().describe("Invite code to delete (e.g. 'abc123' from discord.gg/abc123)"),
-        reason: z.string().optional().describe("Audit log reason"),
-      }),
-      execute: async ({ code, reason }) => {
-        await discord.delete(Routes.invite(code), {
-          reason: reason ?? undefined,
-        });
-        return JSON.stringify({ success: true, deleted: code });
-      },
+export const delete_invite = access(
+  { risk: "destructive", minRole: "admin" },
+  tool({
+    description:
+      "Revoke an active invite by its code. Use list_invites first to find available codes.",
+    inputSchema: z.object({
+      code: z.string().describe("Invite code to delete (e.g. 'abc123' from discord.gg/abc123)"),
+      reason: z.string().optional().describe("Audit log reason"),
     }),
-  ),
+    execute: async ({ code, reason }) => {
+      await discord.delete(Routes.invite(code), {
+        reason: reason ?? undefined,
+      });
+      return JSON.stringify({ success: true, deleted: code });
+    },
+  }),
 );

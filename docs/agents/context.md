@@ -61,7 +61,7 @@ Splitting them gives each piece one clear job:
 | `memberRoles?`                   | fresh          | Discord role IDs for the current sender                                |
 | `recentMessages?`                | stable         | Last ~15 channel/thread messages before the workflow started           |
 
-`role: UserRole` is a **getter** (not a stored field) that resolves at access time by checking `memberRoles` against the `ROLE_IDS` constant defined inside `context.ts`: admin first, then organizer, falling back to public. Because `memberRoles` is fresh per turn, `role` correctly reflects the current sender — a follow-up from a different user is evaluated against their own roles, not the original author's. See [Role-based access](./roles.md).
+`role: UserRole` is a **getter** (not a stored field) that resolves at access time via `roleFromMemberRoles()`, checking `memberRoles` against `DISCORD_IDS.roles`: admin first, then organizer, falling back to public. Because `memberRoles` is fresh per turn, `role` correctly reflects the current sender — a follow-up from a different user is evaluated against their own roles, not the original author's. See [Role-based access](./roles.md).
 
 ## Construction
 

@@ -7,6 +7,7 @@ import type {
 import { tool } from "ai";
 import { z } from "zod";
 
+import { access } from "../../policy/index.ts";
 import { figma, figmaFileUrl } from "./client.ts";
 
 // ---------------------------------------------------------------------------
@@ -28,106 +29,121 @@ function summarizeFile(f: GetProjectFilesResponse["files"][number], projectName?
 // Tools
 // ---------------------------------------------------------------------------
 
-export const get_file = tool({
-  description:
-    "Get a Figma file's metadata and document structure. Use depth to control how deep the node tree goes (default 1 = pages only). Large files can be enormous — start shallow.",
-  inputSchema: z.object({
-    file_key: z.string().describe("The file key (from the Figma URL)"),
-    depth: z
-      .number()
-      .min(1)
-      .max(4)
-      .default(1)
-      .describe("How deep to traverse the node tree (1 = pages only, max 4)"),
+export const get_file = access(
+  { risk: "read" },
+  tool({
+    description:
+      "Get a Figma file's metadata and document structure. Use depth to control how deep the node tree goes (default 1 = pages only). Large files can be enormous — start shallow.",
+    inputSchema: z.object({
+      file_key: z.string().describe("The file key (from the Figma URL)"),
+      depth: z
+        .number()
+        .min(1)
+        .max(4)
+        .default(1)
+        .describe("How deep to traverse the node tree (1 = pages only, max 4)"),
+    }),
+    execute: async ({ file_key, depth }) => {
+      const file = await figma.get<GetFileResponse>(`/v1/files/${file_key}?depth=${depth}`);
+      return JSON.stringify({
+        name: file.name,
+        lastModified: file.lastModified,
+        version: file.version,
+        url: figmaFileUrl(file_key),
+        document: file.document,
+        editorType: file.editorType,
+      });
+    },
   }),
-  execute: async ({ file_key, depth }) => {
-    const file = await figma.get<GetFileResponse>(`/v1/files/${file_key}?depth=${depth}`);
-    return JSON.stringify({
-      name: file.name,
-      lastModified: file.lastModified,
-      version: file.version,
-      url: figmaFileUrl(file_key),
-      document: file.document,
-      editorType: file.editorType,
-    });
-  },
-});
+);
 
-export const list_projects = tool({
-  description: "List all projects in the team. Returns project IDs and names.",
-  inputSchema: z.object({}),
-  execute: async () => {
-    const data = await figma.get<GetTeamProjectsResponse>(`/v1/teams/${figma.teamId}/projects`);
-    return JSON.stringify(
-      data.projects.map((p) => ({
-        id: p.id,
-        name: p.name,
-      })),
-    );
-  },
-});
-
-export const list_project_files = tool({
-  description:
-    "List files in a specific project. Returns file keys, names, last modified times, and thumbnail URLs.",
-  inputSchema: z.object({
-    project_id: z.string().describe("The project ID"),
-  }),
-  execute: async ({ project_id }) => {
-    const data = await figma.get<GetProjectFilesResponse>(`/v1/projects/${project_id}/files`);
-    return JSON.stringify(data.files.map((f) => summarizeFile(f)));
-  },
-});
-
-export const get_me = tool({
-  description:
-    "Get details about the Figma user backing the access token — email, ID, and display name. Useful for confirming which identity the bot is acting as.",
-  inputSchema: z.object({}),
-  execute: async () => {
-    const me = await figma.get<{ id: string; email: string; handle: string; img_url?: string }>(
-      "/v1/me",
-    );
-    return JSON.stringify({
-      id: me.id,
-      email: me.email,
-      handle: me.handle,
-      avatar: me.img_url,
-    });
-  },
-});
-
-export const search_files = tool({
-  description:
-    "Search for files by name across all team projects. Fetches all projects and their files, then filters by query. May be slow for large teams.",
-  inputSchema: z.object({
-    query: z.string().describe("Search query to match against file names (case-insensitive)"),
-    limit: z.number().max(50).default(10).describe("Max results to return"),
-  }),
-  execute: async ({ query, limit }) => {
-    const data = await figma.get<GetTeamProjectsResponse>(`/v1/teams/${figma.teamId}/projects`);
-    const lowerQuery = query.toLowerCase();
-    const matches: ReturnType<typeof summarizeFile>[] = [];
-
-    const CONCURRENCY = 5;
-    for (let i = 0; i < data.projects.length && matches.length < limit; i += CONCURRENCY) {
-      const batch = data.projects.slice(i, i + CONCURRENCY);
-      const results = await Promise.all(
-        batch.map((p) =>
-          figma
-            .get<GetProjectFilesResponse>(`/v1/projects/${p.id}/files`)
-            .then((r) => ({ projectName: p.name, files: r.files })),
-        ),
+export const list_projects = access(
+  { risk: "read" },
+  tool({
+    description: "List all projects in the team. Returns project IDs and names.",
+    inputSchema: z.object({}),
+    execute: async () => {
+      const data = await figma.get<GetTeamProjectsResponse>(`/v1/teams/${figma.teamId}/projects`);
+      return JSON.stringify(
+        data.projects.map((p) => ({
+          id: p.id,
+          name: p.name,
+        })),
       );
-      for (const { projectName, files } of results) {
-        for (const f of files) {
-          if (matches.length >= limit) break;
-          if (f.name.toLowerCase().includes(lowerQuery)) {
-            matches.push(summarizeFile(f, projectName));
+    },
+  }),
+);
+
+export const list_project_files = access(
+  { risk: "read" },
+  tool({
+    description:
+      "List files in a specific project. Returns file keys, names, last modified times, and thumbnail URLs.",
+    inputSchema: z.object({
+      project_id: z.string().describe("The project ID"),
+    }),
+    execute: async ({ project_id }) => {
+      const data = await figma.get<GetProjectFilesResponse>(`/v1/projects/${project_id}/files`);
+      return JSON.stringify(data.files.map((f) => summarizeFile(f)));
+    },
+  }),
+);
+
+export const get_me = access(
+  { risk: "read" },
+  tool({
+    description:
+      "Get details about the Figma user backing the access token — email, ID, and display name. Useful for confirming which identity the bot is acting as.",
+    inputSchema: z.object({}),
+    execute: async () => {
+      const me = await figma.get<{ id: string; email: string; handle: string; img_url?: string }>(
+        "/v1/me",
+      );
+      return JSON.stringify({
+        id: me.id,
+        email: me.email,
+        handle: me.handle,
+        avatar: me.img_url,
+      });
+    },
+  }),
+);
+
+export const search_files = access(
+  { risk: "read" },
+  tool({
+    description:
+      "Search for files by name across all team projects. Fetches all projects and their files, then filters by query. May be slow for large teams.",
+    inputSchema: z.object({
+      query: z.string().describe("Search query to match against file names (case-insensitive)"),
+      limit: z.number().max(50).default(10).describe("Max results to return"),
+    }),
+    execute: async ({ query, limit }) => {
+      const data = await figma.get<GetTeamProjectsResponse>(`/v1/teams/${figma.teamId}/projects`);
+      const lowerQuery = query.toLowerCase();
+      const matches: ReturnType<typeof summarizeFile>[] = [];
+
+      const CONCURRENCY = 5;
+      for (let i = 0; i < data.projects.length && matches.length < limit; i += CONCURRENCY) {
+        const batch = data.projects.slice(i, i + CONCURRENCY);
+        const results = await Promise.all(
+          batch.map((p) =>
+            figma
+              .get<GetProjectFilesResponse>(`/v1/projects/${p.id}/files`)
+              .then((r) => ({ projectName: p.name, files: r.files })),
+          ),
+        );
+        for (const { projectName, files } of results) {
+          for (const f of files) {
+            if (matches.length >= limit) break;
+            if (f.name.toLowerCase().includes(lowerQuery)) {
+              matches.push(summarizeFile(f, projectName));
+            }
           }
         }
       }
-    }
 
-    return JSON.stringify(matches);
-  },
-});
+      return JSON.stringify(matches);
+    },
+  }),
+);

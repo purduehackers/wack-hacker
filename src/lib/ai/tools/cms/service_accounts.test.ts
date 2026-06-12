@@ -2,8 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { payloadSDKClass, toolOpts } from "@/lib/test/fixtures";
 
-import { hasApprovalMarker } from "../../approvals/index.ts";
-import { filterAdmin } from "../../skills/index.ts";
+import { getAccessSpec } from "../../policy/index.ts";
 
 const mocks = vi.hoisted(() => ({
   find: vi.fn(),
@@ -35,19 +34,16 @@ beforeEach(() => {
 });
 
 describe("organizer visibility", () => {
-  it("read/create/update tools remain visible after filterAdmin (organizer role)", () => {
+  it("read/create/update tools stay below the admin tier (organizer-visible)", () => {
     const tools = {
       list_service_accounts,
       get_service_account,
       create_service_account,
       update_service_account,
     };
-    expect(Object.keys(filterAdmin(tools)).sort()).toEqual([
-      "create_service_account",
-      "get_service_account",
-      "list_service_accounts",
-      "update_service_account",
-    ]);
+    for (const [name, t] of Object.entries(tools)) {
+      expect(getAccessSpec(t)?.minRole, name).not.toBe("admin");
+    }
   });
 });
 
@@ -115,11 +111,11 @@ describe("update_service_account", () => {
 });
 
 describe("delete_service_account", () => {
-  it("is approval-gated", () => {
-    expect(hasApprovalMarker(delete_service_account)).toBe(true);
+  it("is declared destructive (self-approval by default)", () => {
+    expect(getAccessSpec(delete_service_account)?.risk).toBe("destructive");
   });
 
-  it("remains visible to organizer (no admin marker)", () => {
-    expect(filterAdmin({ delete_service_account })).toEqual({ delete_service_account });
+  it("remains visible to organizer (no admin minRole)", () => {
+    expect(getAccessSpec(delete_service_account)?.minRole).not.toBe("admin");
   });
 });

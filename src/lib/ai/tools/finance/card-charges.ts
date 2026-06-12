@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
+import { access } from "../../policy/index.ts";
 import { hcbGet, hcbOrgSlug, hcbPaginate, hcbTxnUrl, paginationQuery } from "./client.ts";
 import { paginationInputShape } from "./constants.ts";
 
@@ -34,37 +35,40 @@ function projectCharge(c: HcbCardCharge) {
 }
 
 /** List HCB card charges, optionally filtered by user. */
-export const list_card_charges = tool({
-  description:
-    "List HCB card charges — merchant, user, amount_cents, and receipts summary {count, missing}. Supports an optional user filter (substring match on cardholder name or email) for microgrant recipient spend tracking.",
-  inputSchema: z.object({
-    user: z
-      .string()
-      .optional()
-      .describe("Substring match (case-insensitive) against cardholder name or email"),
-    ...paginationInputShape,
+export const list_card_charges = access(
+  { risk: "read" },
+  tool({
+    description:
+      "List HCB card charges — merchant, user, amount_cents, and receipts summary {count, missing}. Supports an optional user filter (substring match on cardholder name or email) for microgrant recipient spend tracking.",
+    inputSchema: z.object({
+      user: z
+        .string()
+        .optional()
+        .describe("Substring match (case-insensitive) against cardholder name or email"),
+      ...paginationInputShape,
+    }),
+    execute: async ({ user, ...pagination }) => {
+      const path = `/organizations/${hcbOrgSlug()}/card_charges`;
+      if (user) {
+        const all = await hcbPaginate<HcbCardCharge>(
+          path,
+          {},
+          {
+            maxItems: 500,
+            maxPages: 10,
+            perPage: 100,
+          },
+        );
+        const needle = user.toLowerCase();
+        const matches = all.filter(
+          (c) =>
+            (c.user?.name ?? "").toLowerCase().includes(needle) ||
+            (c.user?.email ?? "").toLowerCase().includes(needle),
+        );
+        return JSON.stringify(matches.map(projectCharge));
+      }
+      const data = await hcbGet<HcbCardCharge[]>(path, paginationQuery(pagination));
+      return JSON.stringify(data.map(projectCharge));
+    },
   }),
-  execute: async ({ user, ...pagination }) => {
-    const path = `/organizations/${hcbOrgSlug()}/card_charges`;
-    if (user) {
-      const all = await hcbPaginate<HcbCardCharge>(
-        path,
-        {},
-        {
-          maxItems: 500,
-          maxPages: 10,
-          perPage: 100,
-        },
-      );
-      const needle = user.toLowerCase();
-      const matches = all.filter(
-        (c) =>
-          (c.user?.name ?? "").toLowerCase().includes(needle) ||
-          (c.user?.email ?? "").toLowerCase().includes(needle),
-      );
-      return JSON.stringify(matches.map(projectCharge));
-    }
-    const data = await hcbGet<HcbCardCharge[]>(path, paginationQuery(pagination));
-    return JSON.stringify(data.map(projectCharge));
-  },
-});
+);

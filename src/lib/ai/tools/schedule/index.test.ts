@@ -26,7 +26,7 @@ vi.mock("@/lib/tasks/db", () => ({
 }));
 
 const { AgentContext } = await import("../../context.ts");
-const { hasApprovalMarker } = await import("../../approvals/index.ts");
+const { getAccessSpec } = await import("../../policy/index.ts");
 const { createScheduleTask, list_scheduled_tasks, cancel_task } = await import("./index.ts");
 
 type AgentContextInstance = Awaited<ReturnType<typeof AgentContext.fromPacket>>;
@@ -73,15 +73,15 @@ beforeEach(() => {
 
 describe("schedule_task: approval markers", () => {
   it("marks schedule_task with approval()", () => {
-    expect(hasApprovalMarker(createScheduleTask(contextWithRoles()))).toBe(true);
+    expect(getAccessSpec(createScheduleTask(contextWithRoles()))?.confirm).toBe("self");
   });
 
   it("marks cancel_task with approval()", () => {
-    expect(hasApprovalMarker(cancel_task)).toBe(true);
+    expect(getAccessSpec(cancel_task)?.risk).toBe("destructive");
   });
 
   it("does not mark list_scheduled_tasks (read-only)", () => {
-    expect(hasApprovalMarker(list_scheduled_tasks)).toBe(false);
+    expect(getAccessSpec(list_scheduled_tasks)?.risk).toBe("read");
   });
 });
 

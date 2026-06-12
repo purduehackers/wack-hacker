@@ -2,143 +2,161 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { env } from "../../../../env.ts";
-import { approval } from "../../approvals/index.ts";
-import { admin } from "../../skills/index.ts";
+import { access } from "../../policy/index.ts";
 import { paginationInputShape } from "../_shared/constants.ts";
 import { octokit } from "./client.ts";
 
-export const list_org_members = tool({
-  description: `List members of the purduehackers organization. Optionally filter by role (all, admin, member). Returns login, ID, avatar URL, and profile URL.`,
-  inputSchema: z.object({
-    role: z.enum(["all", "admin", "member"]).optional(),
-    ...paginationInputShape,
+export const list_org_members = access(
+  { risk: "read" },
+  tool({
+    description: `List members of the purduehackers organization. Optionally filter by role (all, admin, member). Returns login, ID, avatar URL, and profile URL.`,
+    inputSchema: z.object({
+      role: z.enum(["all", "admin", "member"]).optional(),
+      ...paginationInputShape,
+    }),
+    execute: async ({ role, per_page, page }) => {
+      const { data } = await octokit.rest.orgs.listMembers({
+        org: env.GITHUB_ORG,
+        role: role ?? "all",
+        per_page: per_page ?? 30,
+        page: page ?? 1,
+      });
+      return JSON.stringify(
+        data.map((m) => ({
+          login: m.login,
+          id: m.id,
+          avatar_url: m.avatar_url,
+          html_url: m.html_url,
+        })),
+      );
+    },
   }),
-  execute: async ({ role, per_page, page }) => {
-    const { data } = await octokit.rest.orgs.listMembers({
-      org: env.GITHUB_ORG,
-      role: role ?? "all",
-      per_page: per_page ?? 30,
-      page: page ?? 1,
-    });
-    return JSON.stringify(
-      data.map((m) => ({
-        login: m.login,
-        id: m.id,
-        avatar_url: m.avatar_url,
-        html_url: m.html_url,
-      })),
-    );
-  },
-});
+);
 
-export const get_org_member = tool({
-  description: `Get organization membership details for a GitHub user. Returns role (admin or member) and state (active or pending).`,
-  inputSchema: z.object({
-    username: z.string().describe("GitHub username"),
+export const get_org_member = access(
+  { risk: "read" },
+  tool({
+    description: `Get organization membership details for a GitHub user. Returns role (admin or member) and state (active or pending).`,
+    inputSchema: z.object({
+      username: z.string().describe("GitHub username"),
+    }),
+    execute: async ({ username }) => {
+      const { data } = await octokit.rest.orgs.getMembershipForUser({
+        org: env.GITHUB_ORG,
+        username,
+      });
+      return JSON.stringify({
+        user: data.user?.login,
+        role: data.role,
+        state: data.state,
+      });
+    },
   }),
-  execute: async ({ username }) => {
-    const { data } = await octokit.rest.orgs.getMembershipForUser({
-      org: env.GITHUB_ORG,
-      username,
-    });
-    return JSON.stringify({
-      user: data.user?.login,
-      role: data.role,
-      state: data.state,
-    });
-  },
-});
+);
 
-export const list_teams = tool({
-  description: `List teams in the purduehackers organization. Returns ID, name, slug, description, privacy, and URL.`,
-  inputSchema: z.object({
-    ...paginationInputShape,
+export const list_teams = access(
+  { risk: "read" },
+  tool({
+    description: `List teams in the purduehackers organization. Returns ID, name, slug, description, privacy, and URL.`,
+    inputSchema: z.object({
+      ...paginationInputShape,
+    }),
+    execute: async ({ per_page, page }) => {
+      const { data } = await octokit.rest.teams.list({
+        org: env.GITHUB_ORG,
+        per_page: per_page ?? 30,
+        page: page ?? 1,
+      });
+      return JSON.stringify(
+        data.map((t) => ({
+          id: t.id,
+          name: t.name,
+          slug: t.slug,
+          description: t.description,
+          privacy: t.privacy,
+          html_url: t.html_url,
+        })),
+      );
+    },
   }),
-  execute: async ({ per_page, page }) => {
-    const { data } = await octokit.rest.teams.list({
-      org: env.GITHUB_ORG,
-      per_page: per_page ?? 30,
-      page: page ?? 1,
-    });
-    return JSON.stringify(
-      data.map((t) => ({
-        id: t.id,
-        name: t.name,
-        slug: t.slug,
-        description: t.description,
-        privacy: t.privacy,
-        html_url: t.html_url,
-      })),
-    );
-  },
-});
+);
 
-export const get_team = tool({
-  description: `Get details for a team by slug. Returns ID, name, description, privacy, and URL.`,
-  inputSchema: z.object({
-    team_slug: z.string().describe("Team slug (e.g. 'engineering')"),
+export const get_team = access(
+  { risk: "read" },
+  tool({
+    description: `Get details for a team by slug. Returns ID, name, description, privacy, and URL.`,
+    inputSchema: z.object({
+      team_slug: z.string().describe("Team slug (e.g. 'engineering')"),
+    }),
+    execute: async ({ team_slug }) => {
+      const { data } = await octokit.rest.teams.getByName({
+        org: env.GITHUB_ORG,
+        team_slug,
+      });
+      return JSON.stringify({
+        id: data.id,
+        name: data.name,
+        slug: data.slug,
+        description: data.description,
+        privacy: data.privacy,
+        html_url: data.html_url,
+      });
+    },
   }),
-  execute: async ({ team_slug }) => {
-    const { data } = await octokit.rest.teams.getByName({
-      org: env.GITHUB_ORG,
-      team_slug,
-    });
-    return JSON.stringify({
-      id: data.id,
-      name: data.name,
-      slug: data.slug,
-      description: data.description,
-      privacy: data.privacy,
-      html_url: data.html_url,
-    });
-  },
-});
+);
 
-export const list_team_members = tool({
-  description: `List members of a team. Optionally filter by role (all, member, maintainer). Returns login, ID, and profile URL.`,
-  inputSchema: z.object({
-    team_slug: z.string().describe("Team slug"),
-    role: z.enum(["all", "member", "maintainer"]).optional(),
-    ...paginationInputShape,
+export const list_team_members = access(
+  { risk: "read" },
+  tool({
+    description: `List members of a team. Optionally filter by role (all, member, maintainer). Returns login, ID, and profile URL.`,
+    inputSchema: z.object({
+      team_slug: z.string().describe("Team slug"),
+      role: z.enum(["all", "member", "maintainer"]).optional(),
+      ...paginationInputShape,
+    }),
+    execute: async ({ team_slug, role, per_page, page }) => {
+      const { data } = await octokit.rest.teams.listMembersInOrg({
+        org: env.GITHUB_ORG,
+        team_slug,
+        role: role ?? "all",
+        per_page: per_page ?? 30,
+        page: page ?? 1,
+      });
+      return JSON.stringify(data.map((m) => ({ login: m.login, id: m.id, html_url: m.html_url })));
+    },
   }),
-  execute: async ({ team_slug, role, per_page, page }) => {
-    const { data } = await octokit.rest.teams.listMembersInOrg({
-      org: env.GITHUB_ORG,
-      team_slug,
-      role: role ?? "all",
-      per_page: per_page ?? 30,
-      page: page ?? 1,
-    });
-    return JSON.stringify(data.map((m) => ({ login: m.login, id: m.id, html_url: m.html_url })));
-  },
-});
+);
 
-export const list_repo_webhooks = tool({
-  description: `List webhooks configured for a repository. Returns ID, active status, subscribed events, and config URL.`,
-  inputSchema: z.object({
-    repo: z.string().describe("Repository name"),
-    ...paginationInputShape,
+export const list_repo_webhooks = access(
+  { risk: "read" },
+  tool({
+    description: `List webhooks configured for a repository. Returns ID, active status, subscribed events, and config URL.`,
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name"),
+      ...paginationInputShape,
+    }),
+    execute: async ({ repo, per_page, page }) => {
+      const { data } = await octokit.rest.repos.listWebhooks({
+        owner: env.GITHUB_ORG,
+        repo,
+        per_page: per_page ?? 30,
+        page: page ?? 1,
+      });
+      return JSON.stringify(
+        data.map((w) => ({
+          id: w.id,
+          name: w.name,
+          active: w.active,
+          events: w.events,
+          config: { url: w.config.url, content_type: w.config.content_type },
+        })),
+      );
+    },
   }),
-  execute: async ({ repo, per_page, page }) => {
-    const { data } = await octokit.rest.repos.listWebhooks({
-      owner: env.GITHUB_ORG,
-      repo,
-      per_page: per_page ?? 30,
-      page: page ?? 1,
-    });
-    return JSON.stringify(
-      data.map((w) => ({
-        id: w.id,
-        name: w.name,
-        active: w.active,
-        events: w.events,
-        config: { url: w.config.url, content_type: w.config.content_type },
-      })),
-    );
-  },
-});
+);
 
-export const invite_org_member = admin(
+export const invite_org_member = access(
+  { risk: "destructive", minRole: "admin" },
   tool({
     description: `Invite a GitHub user to the purduehackers organization or update their role. Role can be "admin" or "member" (default).`,
     inputSchema: z.object({
@@ -160,25 +178,25 @@ export const invite_org_member = admin(
   }),
 );
 
-export const remove_org_member = admin(
-  approval(
-    tool({
-      description: `Remove a user from the purduehackers organization. This revokes all their access to org repos.`,
-      inputSchema: z.object({
-        username: z.string().describe("GitHub username to remove"),
-      }),
-      execute: async ({ username }) => {
-        await octokit.rest.orgs.removeMembershipForUser({
-          org: env.GITHUB_ORG,
-          username,
-        });
-        return JSON.stringify({ removed: true, username });
-      },
+export const remove_org_member = access(
+  { risk: "destructive", minRole: "admin" },
+  tool({
+    description: `Remove a user from the purduehackers organization. This revokes all their access to org repos.`,
+    inputSchema: z.object({
+      username: z.string().describe("GitHub username to remove"),
     }),
-  ),
+    execute: async ({ username }) => {
+      await octokit.rest.orgs.removeMembershipForUser({
+        org: env.GITHUB_ORG,
+        username,
+      });
+      return JSON.stringify({ removed: true, username });
+    },
+  }),
 );
 
-export const add_team_member = admin(
+export const add_team_member = access(
+  { risk: "destructive", minRole: "admin" },
   tool({
     description: `Add a user to a team or update their team role. Role can be "member" (default) or "maintainer".`,
     inputSchema: z.object({
@@ -198,85 +216,93 @@ export const add_team_member = admin(
   }),
 );
 
-export const remove_team_member = admin(
-  approval(
-    tool({
-      description: `Remove a user from a team. They keep org membership but lose team-specific repo access.`,
-      inputSchema: z.object({
-        team_slug: z.string().describe("Team slug"),
-        username: z.string().describe("GitHub username"),
-      }),
-      execute: async ({ team_slug, username }) => {
-        await octokit.rest.teams.removeMembershipForUserInOrg({
-          org: env.GITHUB_ORG,
-          team_slug,
-          username,
-        });
-        return JSON.stringify({ removed: true, team_slug, username });
-      },
+export const remove_team_member = access(
+  { risk: "destructive", minRole: "admin" },
+  tool({
+    description: `Remove a user from a team. They keep org membership but lose team-specific repo access.`,
+    inputSchema: z.object({
+      team_slug: z.string().describe("Team slug"),
+      username: z.string().describe("GitHub username"),
     }),
-  ),
+    execute: async ({ team_slug, username }) => {
+      await octokit.rest.teams.removeMembershipForUserInOrg({
+        org: env.GITHUB_ORG,
+        team_slug,
+        username,
+      });
+      return JSON.stringify({ removed: true, team_slug, username });
+    },
+  }),
 );
 
-export const create_webhook = tool({
-  description: `Create a webhook for a repository. Specify payload URL, events, and optional secret for signature verification.`,
-  inputSchema: z.object({
-    repo: z.string().describe("Repository name"),
-    url: z.string().describe("Webhook payload URL"),
-    content_type: z.enum(["json", "form"]).optional(),
-    secret: z.string().optional().describe("Webhook secret for signature verification"),
-    events: z.array(z.string()).describe("Events to subscribe to (e.g. ['push', 'pull_request'])"),
-    active: z.boolean().optional(),
+export const create_webhook = access(
+  { risk: "destructive" },
+  tool({
+    description: `Create a webhook for a repository. Specify payload URL, events, and optional secret for signature verification.`,
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name"),
+      url: z.string().describe("Webhook payload URL"),
+      content_type: z.enum(["json", "form"]).optional(),
+      secret: z.string().optional().describe("Webhook secret for signature verification"),
+      events: z
+        .array(z.string())
+        .describe("Events to subscribe to (e.g. ['push', 'pull_request'])"),
+      active: z.boolean().optional(),
+    }),
+    execute: async ({ repo, url, content_type, secret, events, active }) => {
+      const { data } = await octokit.rest.repos.createWebhook({
+        owner: env.GITHUB_ORG,
+        repo,
+        config: { url, content_type: content_type ?? "json", secret },
+        events,
+        active: active ?? true,
+      });
+      return JSON.stringify({
+        id: data.id,
+        active: data.active,
+        events: data.events,
+      });
+    },
   }),
-  execute: async ({ repo, url, content_type, secret, events, active }) => {
-    const { data } = await octokit.rest.repos.createWebhook({
-      owner: env.GITHUB_ORG,
-      repo,
-      config: { url, content_type: content_type ?? "json", secret },
-      events,
-      active: active ?? true,
-    });
-    return JSON.stringify({
-      id: data.id,
-      active: data.active,
-      events: data.events,
-    });
-  },
-});
+);
 
-export const update_webhook = tool({
-  description: `Update a repository webhook's URL, events, secret, or active status. Only provided fields are changed.`,
-  inputSchema: z.object({
-    repo: z.string().describe("Repository name"),
-    hook_id: z.number().describe("Webhook ID"),
-    url: z.string().optional(),
-    content_type: z.enum(["json", "form"]).optional(),
-    secret: z.string().optional(),
-    events: z.array(z.string()).optional(),
-    active: z.boolean().optional(),
+export const update_webhook = access(
+  { risk: "destructive" },
+  tool({
+    description: `Update a repository webhook's URL, events, secret, or active status. Only provided fields are changed.`,
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name"),
+      hook_id: z.number().describe("Webhook ID"),
+      url: z.string().optional(),
+      content_type: z.enum(["json", "form"]).optional(),
+      secret: z.string().optional(),
+      events: z.array(z.string()).optional(),
+      active: z.boolean().optional(),
+    }),
+    execute: async ({ repo, hook_id, url, content_type, secret, events, active }) => {
+      const config: Record<string, string> = {};
+      if (url) config.url = url;
+      if (content_type) config.content_type = content_type;
+      if (secret) config.secret = secret;
+      const { data } = await octokit.rest.repos.updateWebhook({
+        owner: env.GITHUB_ORG,
+        repo,
+        hook_id,
+        config: Object.keys(config).length > 0 ? config : undefined,
+        events,
+        active,
+      });
+      return JSON.stringify({
+        id: data.id,
+        active: data.active,
+        events: data.events,
+      });
+    },
   }),
-  execute: async ({ repo, hook_id, url, content_type, secret, events, active }) => {
-    const config: Record<string, string> = {};
-    if (url) config.url = url;
-    if (content_type) config.content_type = content_type;
-    if (secret) config.secret = secret;
-    const { data } = await octokit.rest.repos.updateWebhook({
-      owner: env.GITHUB_ORG,
-      repo,
-      hook_id,
-      config: Object.keys(config).length > 0 ? config : undefined,
-      events,
-      active,
-    });
-    return JSON.stringify({
-      id: data.id,
-      active: data.active,
-      events: data.events,
-    });
-  },
-});
+);
 
-export const delete_webhook = approval(
+export const delete_webhook = access(
+  { risk: "destructive" },
   tool({
     description: `Delete a repository webhook. Irreversible — the webhook stops receiving events immediately.`,
     inputSchema: z.object({
@@ -294,25 +320,28 @@ export const delete_webhook = approval(
   }),
 );
 
-export const list_org_webhooks = tool({
-  description: `List webhooks configured for the purduehackers organization. Returns ID, active status, subscribed events, and config URL.`,
-  inputSchema: z.object({
-    ...paginationInputShape,
+export const list_org_webhooks = access(
+  { risk: "read" },
+  tool({
+    description: `List webhooks configured for the purduehackers organization. Returns ID, active status, subscribed events, and config URL.`,
+    inputSchema: z.object({
+      ...paginationInputShape,
+    }),
+    execute: async ({ per_page, page }) => {
+      const { data } = await octokit.rest.orgs.listWebhooks({
+        org: env.GITHUB_ORG,
+        per_page: per_page ?? 30,
+        page: page ?? 1,
+      });
+      return JSON.stringify(
+        data.map((w) => ({
+          id: w.id,
+          name: w.name,
+          active: w.active,
+          events: w.events,
+          config: { url: w.config.url, content_type: w.config.content_type },
+        })),
+      );
+    },
   }),
-  execute: async ({ per_page, page }) => {
-    const { data } = await octokit.rest.orgs.listWebhooks({
-      org: env.GITHUB_ORG,
-      per_page: per_page ?? 30,
-      page: page ?? 1,
-    });
-    return JSON.stringify(
-      data.map((w) => ({
-        id: w.id,
-        name: w.name,
-        active: w.active,
-        events: w.events,
-        config: { url: w.config.url, content_type: w.config.content_type },
-      })),
-    );
-  },
-});
+);

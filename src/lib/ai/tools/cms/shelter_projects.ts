@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { approval } from "../../approvals/index.ts";
+import { access } from "../../policy/index.ts";
 import { cmsAdminUrl, paginationQuery, payload, wrapPayloadError } from "./client.ts";
 import { paginationInputShape } from "./constants.ts";
 
@@ -40,100 +40,113 @@ function projectShelter(s: PayloadShelterProject) {
   };
 }
 
-export const list_shelter_projects = tool({
-  description:
-    "List shelter wall project showcase entries. Each has name, last_division, last_owner, description, and a `visible` flag (true = shown publicly).",
-  inputSchema: z.object({
-    ...paginationInputShape,
-    visible_only: z.boolean().optional(),
+export const list_shelter_projects = access(
+  { risk: "read" },
+  tool({
+    description:
+      "List shelter wall project showcase entries. Each has name, last_division, last_owner, description, and a `visible` flag (true = shown publicly).",
+    inputSchema: z.object({
+      ...paginationInputShape,
+      visible_only: z.boolean().optional(),
+    }),
+    execute: async ({ visible_only, ...input }) => {
+      try {
+        const res = await payload.find({
+          collection: COLLECTION,
+          ...paginationQuery(input),
+          ...(visible_only ? { where: { visible: { equals: true } } } : {}),
+        });
+        return JSON.stringify({
+          total_docs: res.totalDocs,
+          total_pages: res.totalPages,
+          page: res.page,
+          docs: (res.docs as PayloadShelterProject[]).map(projectShelter),
+        });
+      } catch (err) {
+        throw wrapPayloadError(err);
+      }
+    },
   }),
-  execute: async ({ visible_only, ...input }) => {
-    try {
-      const res = await payload.find({
-        collection: COLLECTION,
-        ...paginationQuery(input),
-        ...(visible_only ? { where: { visible: { equals: true } } } : {}),
-      });
-      return JSON.stringify({
-        total_docs: res.totalDocs,
-        total_pages: res.totalPages,
-        page: res.page,
-        docs: (res.docs as PayloadShelterProject[]).map(projectShelter),
-      });
-    } catch (err) {
-      throw wrapPayloadError(err);
-    }
-  },
-});
+);
 
-export const get_shelter_project = tool({
-  description: "Fetch a single shelter project by ID.",
-  inputSchema: z.object({ id: z.union([z.string(), z.number()]) }),
-  execute: async ({ id }) => {
-    try {
-      const doc = (await payload.findByID({
-        collection: COLLECTION,
-        id,
-      })) as PayloadShelterProject;
-      return JSON.stringify(projectShelter(doc));
-    } catch (err) {
-      throw wrapPayloadError(err);
-    }
-  },
-});
-
-export const create_shelter_project = tool({
-  description:
-    "Create a new shelter project. `image_id` must point at an existing media asset (upload via `upload_media` first). Defaults to visible: false — flip with `publish_shelter_project` when ready.",
-  inputSchema: z.object({
-    name: z.string(),
-    last_division: z.string(),
-    last_owner: z.string(),
-    description: z.string(),
-    image_id: z.union([z.string(), z.number()]),
-    visible: z.boolean().optional(),
+export const get_shelter_project = access(
+  { risk: "read" },
+  tool({
+    description: "Fetch a single shelter project by ID.",
+    inputSchema: z.object({ id: z.union([z.string(), z.number()]) }),
+    execute: async ({ id }) => {
+      try {
+        const doc = (await payload.findByID({
+          collection: COLLECTION,
+          id,
+        })) as PayloadShelterProject;
+        return JSON.stringify(projectShelter(doc));
+      } catch (err) {
+        throw wrapPayloadError(err);
+      }
+    },
   }),
-  execute: async ({ image_id, visible, ...rest }) => {
-    try {
-      const doc = (await payload.create({
-        collection: COLLECTION,
-        data: { ...rest, image: image_id, visible: visible ?? false },
-      })) as PayloadShelterProject;
-      return JSON.stringify(projectShelter(doc));
-    } catch (err) {
-      throw wrapPayloadError(err);
-    }
-  },
-});
+);
 
-export const update_shelter_project = tool({
-  description: "Update a shelter project. Only fields you pass are changed.",
-  inputSchema: z.object({
-    id: z.union([z.string(), z.number()]),
-    name: z.string().optional(),
-    last_division: z.string().optional(),
-    last_owner: z.string().optional(),
-    description: z.string().optional(),
-    image_id: z.union([z.string(), z.number()]).optional(),
-    visible: z.boolean().optional(),
+export const create_shelter_project = access(
+  { risk: "write" },
+  tool({
+    description:
+      "Create a new shelter project. `image_id` must point at an existing media asset (upload via `upload_media` first). Defaults to visible: false — flip with `publish_shelter_project` when ready.",
+    inputSchema: z.object({
+      name: z.string(),
+      last_division: z.string(),
+      last_owner: z.string(),
+      description: z.string(),
+      image_id: z.union([z.string(), z.number()]),
+      visible: z.boolean().optional(),
+    }),
+    execute: async ({ image_id, visible, ...rest }) => {
+      try {
+        const doc = (await payload.create({
+          collection: COLLECTION,
+          data: { ...rest, image: image_id, visible: visible ?? false },
+        })) as PayloadShelterProject;
+        return JSON.stringify(projectShelter(doc));
+      } catch (err) {
+        throw wrapPayloadError(err);
+      }
+    },
   }),
-  execute: async ({ id, image_id, ...rest }) => {
-    try {
-      const data: Record<string, unknown> = { ...rest };
-      if (image_id !== undefined) data.image = image_id;
-      const doc = (await payload.update({
-        collection: COLLECTION,
-        id,
-        data,
-      })) as PayloadShelterProject;
-      return JSON.stringify(projectShelter(doc));
-    } catch (err) {
-      throw wrapPayloadError(err);
-    }
-  },
-});
+);
 
-export const delete_shelter_project = approval(
+export const update_shelter_project = access(
+  { risk: "write" },
+  tool({
+    description: "Update a shelter project. Only fields you pass are changed.",
+    inputSchema: z.object({
+      id: z.union([z.string(), z.number()]),
+      name: z.string().optional(),
+      last_division: z.string().optional(),
+      last_owner: z.string().optional(),
+      description: z.string().optional(),
+      image_id: z.union([z.string(), z.number()]).optional(),
+      visible: z.boolean().optional(),
+    }),
+    execute: async ({ id, image_id, ...rest }) => {
+      try {
+        const data: Record<string, unknown> = { ...rest };
+        if (image_id !== undefined) data.image = image_id;
+        const doc = (await payload.update({
+          collection: COLLECTION,
+          id,
+          data,
+        })) as PayloadShelterProject;
+        return JSON.stringify(projectShelter(doc));
+      } catch (err) {
+        throw wrapPayloadError(err);
+      }
+    },
+  }),
+);
+
+export const delete_shelter_project = access(
+  { risk: "destructive" },
   tool({
     description: "Delete a shelter project permanently.",
     inputSchema: z.object({ id: z.union([z.string(), z.number()]) }),
@@ -151,36 +164,42 @@ export const delete_shelter_project = approval(
   }),
 );
 
-export const publish_shelter_project = tool({
-  description: "Make a shelter project visible on the public showcase (visible: true).",
-  inputSchema: z.object({ id: z.union([z.string(), z.number()]) }),
-  execute: async ({ id }) => {
-    try {
-      const doc = (await payload.update({
-        collection: COLLECTION,
-        id,
-        data: { visible: true },
-      })) as PayloadShelterProject;
-      return JSON.stringify(projectShelter(doc));
-    } catch (err) {
-      throw wrapPayloadError(err);
-    }
-  },
-});
+export const publish_shelter_project = access(
+  { risk: "destructive" },
+  tool({
+    description: "Make a shelter project visible on the public showcase (visible: true).",
+    inputSchema: z.object({ id: z.union([z.string(), z.number()]) }),
+    execute: async ({ id }) => {
+      try {
+        const doc = (await payload.update({
+          collection: COLLECTION,
+          id,
+          data: { visible: true },
+        })) as PayloadShelterProject;
+        return JSON.stringify(projectShelter(doc));
+      } catch (err) {
+        throw wrapPayloadError(err);
+      }
+    },
+  }),
+);
 
-export const unpublish_shelter_project = tool({
-  description: "Hide a shelter project from the public showcase (visible: false).",
-  inputSchema: z.object({ id: z.union([z.string(), z.number()]) }),
-  execute: async ({ id }) => {
-    try {
-      const doc = (await payload.update({
-        collection: COLLECTION,
-        id,
-        data: { visible: false },
-      })) as PayloadShelterProject;
-      return JSON.stringify(projectShelter(doc));
-    } catch (err) {
-      throw wrapPayloadError(err);
-    }
-  },
-});
+export const unpublish_shelter_project = access(
+  { risk: "destructive" },
+  tool({
+    description: "Hide a shelter project from the public showcase (visible: false).",
+    inputSchema: z.object({ id: z.union([z.string(), z.number()]) }),
+    execute: async ({ id }) => {
+      try {
+        const doc = (await payload.update({
+          collection: COLLECTION,
+          id,
+          data: { visible: false },
+        })) as PayloadShelterProject;
+        return JSON.stringify(projectShelter(doc));
+      } catch (err) {
+        throw wrapPayloadError(err);
+      }
+    },
+  }),
+);

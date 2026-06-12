@@ -1,4 +1,5 @@
 import type { AgentContext } from "../context.ts";
+import type { AuditLogLike, ConfirmMode, RiskLevel } from "../policy/types.ts";
 
 /** Options bound to a tool via the `approval()` marker. */
 export interface ApprovalOptions {
@@ -7,6 +8,16 @@ export interface ApprovalOptions {
    * not supply one via `_reason`. Leave undefined to require the agent to
    * always justify each call at runtime.
    */
+  reason?: string;
+}
+
+/** Who must click Approve before the wrapped tool runs. */
+export type ApprovalConfirmMode = Exclude<ConfirmMode, "none">;
+
+/** Per-tool policy resolved by `applyPolicy` and handed to the wrapper. */
+export interface ApprovalPolicy {
+  confirmMode: ApprovalConfirmMode;
+  risk: RiskLevel;
   reason?: string;
 }
 
@@ -26,6 +37,11 @@ export interface ApprovalState {
   threadId?: string;
   messageId?: string;
   requesterUserId: string;
+  /**
+   * Who may decide. Absent on rows written before the policy layer existed —
+   * readers default to "self" (requester-only), the original behavior.
+   */
+  confirmMode?: ApprovalConfirmMode;
   decidedByUserId?: string;
   createdAt: string;
   decidedAt?: string;
@@ -49,6 +65,8 @@ export interface WrapApprovalOptions {
   delegateName?: string;
   timeoutMs?: number;
   store?: ApprovalStoreLike;
+  /** Durable audit writer. Omit to skip audit rows (legacy callers, tests). */
+  audit?: AuditLogLike;
 }
 
 /**
@@ -74,4 +92,6 @@ export interface BuildApprovalEmbedArgs {
   input: unknown;
   reason: string;
   timeoutMs: number;
+  /** Defaults to "self" — requester-only, the pre-policy behavior. */
+  confirmMode?: ApprovalConfirmMode;
 }

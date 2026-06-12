@@ -38,14 +38,10 @@ vi.mock("@vercel/sandbox", () => ({
 
 const { createOrchestrator } = await import("./orchestrator.ts");
 
-const BASE_TOOLS = [
-  "cancel_task",
-  "documentation",
-  "list_scheduled_tasks",
-  "resolve_organizer",
-  "schedule_task",
-  "web_search",
-];
+// Post-policy public surface: read tools with minRole "public". Write and
+// destructive tools (schedule_task, cancel_task) require organizer+.
+const PUBLIC_TOOLS = ["documentation", "list_scheduled_tasks", "resolve_organizer", "web_search"];
+const ORGANIZER_BASE_TOOLS = [...PUBLIC_TOOLS, "cancel_task", "schedule_task"];
 
 describe("createOrchestrator", () => {
   let model: MockLanguageModelV3;
@@ -74,11 +70,11 @@ describe("createOrchestrator", () => {
       .sort();
   }
 
-  it("gives public users only base tools (all delegate skills require organizer+)", async () => {
+  it("gives public users only public read tools (writes and delegates require organizer+)", async () => {
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
     await drain(ctx);
 
-    expect(getToolNames()).toEqual(BASE_TOOLS.sort());
+    expect(getToolNames()).toEqual([...PUBLIC_TOOLS].sort());
   });
 
   it("includes delegation tools for users with the organizer role", async () => {
@@ -90,7 +86,7 @@ describe("createOrchestrator", () => {
     const tools = getToolNames();
     expect(tools).toEqual(
       expect.arrayContaining([
-        ...BASE_TOOLS,
+        ...ORGANIZER_BASE_TOOLS,
         "delegate_discord",
         "delegate_figma",
         "delegate_github",
@@ -100,6 +96,22 @@ describe("createOrchestrator", () => {
         "delegate_sentry",
       ]),
     );
+  });
+
+  it("exposes the audit log tool to admins but not organizers", async () => {
+    const organizerCtx = AgentContext.fromPacket(
+      messagePacket("hello", { memberRoles: ["1012751663322382438"] }),
+    );
+    await drain(organizerCtx);
+    expect(getToolNames()).not.toContain("list_audit_log");
+
+    model = streamingTextModel("hi");
+    installMockProvider(model);
+    const adminCtx = AgentContext.fromPacket(
+      messagePacket("hello", { memberRoles: ["1344066433172373656"] }),
+    );
+    await drain(adminCtx);
+    expect(getToolNames()).toContain("list_audit_log");
   });
 
   it("injects execution context into system prompt via buildInstructions", async () => {

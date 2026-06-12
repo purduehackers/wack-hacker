@@ -2,37 +2,40 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { env } from "../../../../env.ts";
-import { approval } from "../../approvals/index.ts";
-import { admin } from "../../skills/index.ts";
+import { access } from "../../policy/index.ts";
 import { perPageField } from "../_shared/constants.ts";
 import { octokit } from "./client.ts";
 
-export const list_collaborators = tool({
-  description:
-    "List collaborators with direct access to a repository. Returns login, permissions, and role.",
-  inputSchema: z.object({
-    repo: z.string().describe("Repository name"),
-    affiliation: z.enum(["outside", "direct", "all"]).optional(),
-    per_page: perPageField,
+export const list_collaborators = access(
+  { risk: "read" },
+  tool({
+    description:
+      "List collaborators with direct access to a repository. Returns login, permissions, and role.",
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name"),
+      affiliation: z.enum(["outside", "direct", "all"]).optional(),
+      per_page: perPageField,
+    }),
+    execute: async ({ repo, affiliation, per_page }) => {
+      const { data } = await octokit.rest.repos.listCollaborators({
+        owner: env.GITHUB_ORG,
+        repo,
+        affiliation: affiliation ?? "all",
+        per_page: per_page ?? 30,
+      });
+      return JSON.stringify(
+        data.map((c) => ({
+          login: c.login,
+          permissions: c.permissions,
+          role_name: c.role_name,
+        })),
+      );
+    },
   }),
-  execute: async ({ repo, affiliation, per_page }) => {
-    const { data } = await octokit.rest.repos.listCollaborators({
-      owner: env.GITHUB_ORG,
-      repo,
-      affiliation: affiliation ?? "all",
-      per_page: per_page ?? 30,
-    });
-    return JSON.stringify(
-      data.map((c) => ({
-        login: c.login,
-        permissions: c.permissions,
-        role_name: c.role_name,
-      })),
-    );
-  },
-});
+);
 
-export const add_collaborator = admin(
+export const add_collaborator = access(
+  { risk: "destructive", minRole: "admin" },
   tool({
     description:
       "Add a user as a direct collaborator on a repository. Permission defaults to 'push' (write). Options: pull, triage, push, maintain, admin.",
@@ -60,27 +63,27 @@ export const add_collaborator = admin(
   }),
 );
 
-export const remove_collaborator = admin(
-  approval(
-    tool({
-      description: "Remove a collaborator from a repository. Revokes their direct access.",
-      inputSchema: z.object({
-        repo: z.string().describe("Repository name"),
-        username: z.string().describe("GitHub username to remove"),
-      }),
-      execute: async ({ repo, username }) => {
-        await octokit.rest.repos.removeCollaborator({
-          owner: env.GITHUB_ORG,
-          repo,
-          username,
-        });
-        return JSON.stringify({ removed: true, username });
-      },
+export const remove_collaborator = access(
+  { risk: "destructive", minRole: "admin" },
+  tool({
+    description: "Remove a collaborator from a repository. Revokes their direct access.",
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name"),
+      username: z.string().describe("GitHub username to remove"),
     }),
-  ),
+    execute: async ({ repo, username }) => {
+      await octokit.rest.repos.removeCollaborator({
+        owner: env.GITHUB_ORG,
+        repo,
+        username,
+      });
+      return JSON.stringify({ removed: true, username });
+    },
+  }),
 );
 
-export const list_repo_invitations = admin(
+export const list_repo_invitations = access(
+  { risk: "read", minRole: "admin" },
   tool({
     description:
       "List pending collaborator invitations for a repository. Returns inviter, invitee, permission, and URL.",
@@ -108,22 +111,21 @@ export const list_repo_invitations = admin(
   }),
 );
 
-export const cancel_repo_invitation = admin(
-  approval(
-    tool({
-      description: "Revoke a pending collaborator invitation by ID.",
-      inputSchema: z.object({
-        repo: z.string().describe("Repository name"),
-        invitation_id: z.number().describe("Invitation ID"),
-      }),
-      execute: async ({ repo, invitation_id }) => {
-        await octokit.rest.repos.deleteInvitation({
-          owner: env.GITHUB_ORG,
-          repo,
-          invitation_id,
-        });
-        return JSON.stringify({ revoked: true, invitation_id });
-      },
+export const cancel_repo_invitation = access(
+  { risk: "destructive", minRole: "admin" },
+  tool({
+    description: "Revoke a pending collaborator invitation by ID.",
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name"),
+      invitation_id: z.number().describe("Invitation ID"),
     }),
-  ),
+    execute: async ({ repo, invitation_id }) => {
+      await octokit.rest.repos.deleteInvitation({
+        owner: env.GITHUB_ORG,
+        repo,
+        invitation_id,
+      });
+      return JSON.stringify({ revoked: true, invitation_id });
+    },
+  }),
 );

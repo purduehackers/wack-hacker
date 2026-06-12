@@ -20,7 +20,11 @@ export function baseApprovalState(overrides: Partial<ApprovalState> = {}): Appro
 }
 
 /** Build a minimal `MessageComponent` button-click interaction for handler tests. */
-export function buttonInteraction(customId: string, clickerId: string): DiscordInteraction {
+export function buttonInteraction(
+  customId: string,
+  clickerId: string,
+  roles: string[] = [],
+): DiscordInteraction {
   return {
     id: "i-1",
     application_id: "app-1",
@@ -29,7 +33,7 @@ export function buttonInteraction(customId: string, clickerId: string): DiscordI
     version: 1,
     member: {
       user: { id: clickerId, username: "alice" },
-      roles: [],
+      roles,
     },
     data: { custom_id: customId, component_type: 2 },
   };

@@ -17,7 +17,7 @@ These are always present, regardless of role:
 
 - **`documentation`** — search and quote from [ask.purduehackers.com](https://ask.purduehackers.com).
 - **`resolve_organizer`** — authoritative name-to-platform-ID lookup for the Purdue Hackers organizer roster stored in Vercel Edge Config. Returns the caller's Discord/Linear/Notion/Sentry/GitHub/Figma IDs so the orchestrator can forward real IDs to delegates instead of free-text names. The `/identity` slash command is what writes into that roster. See `src/lib/protocol/organizers/` for the reader/writer.
-- **`schedule_task`**, **`list_scheduled_tasks`**, **`cancel_task`** — scheduling tools that publish to, read from, or cancel jobs in the `tasks` queue. `schedule_task` and `cancel_task` are wrapped with [`approval()`](./approvals.md) so the user confirms via Discord buttons. See [Workflows § scheduled tasks](../workflows/scheduling.md).
+- **`schedule_task`**, **`list_scheduled_tasks`**, **`cancel_task`** — scheduling tools that publish to, read from, or cancel jobs in the `tasks` queue. `schedule_task` and `cancel_task` declare confirm-gated [`access()`](./policy.md) descriptors so the user confirms via Discord buttons (see [Approvals](./approvals.md)). See [Workflows § scheduled tasks](../workflows/scheduling.md).
 
 ## Delegate tools
 
@@ -27,7 +27,7 @@ These are always present, regardless of role:
 2. If `mode: delegate`, wraps it in a delegation tool via `createDelegationTool(spec, role)` — see [Delegation & subagents](./subagents.md).
 3. Skips any domain whose skill's `minRole` exceeds the caller's `UserRole`.
 
-The resulting tools are keyed by `delegate_<domain>` and merged into the orchestrator's tool object. A public user might see no delegate tools at all; an organizer sees everything above `organizer`; an admin additionally sees admin-marked tools inside each subagent (see [Skills § admin gating](../skills/admin.md)).
+The resulting tools are keyed by `delegate_<domain>` and merged into the orchestrator's tool object, and the whole set then passes through [`applyPolicy`](./policy.md). A public user gets the public read surface and typically no delegate tools at all; an organizer sees everything above `organizer`; an admin additionally sees `minRole: "admin"` tools inside each subagent.
 
 ## System prompt
 

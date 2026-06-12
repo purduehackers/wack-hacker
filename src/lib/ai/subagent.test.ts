@@ -14,7 +14,8 @@ import {
   uninstallMockProvider,
 } from "@/lib/test/fixtures";
 
-import { admin, SkillRegistry } from "./skills/index.ts";
+import { access } from "./policy/index.ts";
+import { SkillRegistry } from "./skills/index.ts";
 import { buildPrepareStep, createDelegationTool, recordSubagentMetrics } from "./subagent.ts";
 import { TurnUsageTracker } from "./turn-usage.ts";
 
@@ -108,8 +109,8 @@ describe("createDelegationTool — execute() against MockLanguageModelV3", () =>
     expect(toolNames.sort()).toEqual(["loadSkill", "retrieve_entities", "search_entities"].sort());
   });
 
-  it("strips admin-marked tools for non-admin roles", async () => {
-    const adminTool = admin(noopTool("danger"));
+  it("strips tools above the subject's role (deny-by-absence)", async () => {
+    const adminTool = access({ risk: "read", minRole: "admin" }, noopTool("danger"));
     const publicTool = noopTool("ok");
     const spec = {
       description: baseSpec.description,

@@ -6,7 +6,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { env } from "../../../../env.ts";
-import { approval } from "../../approvals/index.ts";
+import { access } from "../../policy/index.ts";
 import { paginationInputShape } from "../_shared/constants.ts";
 import { octokit } from "./client.ts";
 
@@ -59,55 +59,62 @@ function encryptSecret(value: string, publicKeyBase64: string) {
 // Repository Secrets
 // ---------------------------------------------------------------------------
 
-export const list_repo_secrets = tool({
-  description: `List Actions secrets for a repository. Returns secret names and timestamps only — values are never readable.`,
-  inputSchema: z.object({
-    repo: z.string().describe("Repository name"),
-    ...paginationInputShape,
+export const list_repo_secrets = access(
+  { risk: "read" },
+  tool({
+    description: `List Actions secrets for a repository. Returns secret names and timestamps only — values are never readable.`,
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name"),
+      ...paginationInputShape,
+    }),
+    execute: async ({ repo, per_page, page }) => {
+      const { data } = await octokit.rest.actions.listRepoSecrets({
+        owner: env.GITHUB_ORG,
+        repo,
+        per_page: per_page ?? 30,
+        page: page ?? 1,
+      });
+      return JSON.stringify({
+        total_count: data.total_count,
+        secrets: data.secrets.map((s) => ({
+          name: s.name,
+          created_at: s.created_at,
+          updated_at: s.updated_at,
+        })),
+      });
+    },
   }),
-  execute: async ({ repo, per_page, page }) => {
-    const { data } = await octokit.rest.actions.listRepoSecrets({
-      owner: env.GITHUB_ORG,
-      repo,
-      per_page: per_page ?? 30,
-      page: page ?? 1,
-    });
-    return JSON.stringify({
-      total_count: data.total_count,
-      secrets: data.secrets.map((s) => ({
-        name: s.name,
-        created_at: s.created_at,
-        updated_at: s.updated_at,
-      })),
-    });
-  },
-});
+);
 
-export const create_or_update_repo_secret = tool({
-  description: `Create or update an Actions secret for a repository. The value is encrypted before storage.`,
-  inputSchema: z.object({
-    repo: z.string().describe("Repository name"),
-    secret_name: z.string().describe("Secret name"),
-    value: z.string().describe("Secret value (will be encrypted)"),
+export const create_or_update_repo_secret = access(
+  { risk: "destructive" },
+  tool({
+    description: `Create or update an Actions secret for a repository. The value is encrypted before storage.`,
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name"),
+      secret_name: z.string().describe("Secret name"),
+      value: z.string().describe("Secret value (will be encrypted)"),
+    }),
+    execute: async ({ repo, secret_name, value }) => {
+      const { data: keyData } = await octokit.rest.actions.getRepoPublicKey({
+        owner: env.GITHUB_ORG,
+        repo,
+      });
+      const encrypted = encryptSecret(value, keyData.key);
+      await octokit.rest.actions.createOrUpdateRepoSecret({
+        owner: env.GITHUB_ORG,
+        repo,
+        secret_name,
+        encrypted_value: encrypted,
+        key_id: keyData.key_id,
+      });
+      return JSON.stringify({ created_or_updated: true, secret_name });
+    },
   }),
-  execute: async ({ repo, secret_name, value }) => {
-    const { data: keyData } = await octokit.rest.actions.getRepoPublicKey({
-      owner: env.GITHUB_ORG,
-      repo,
-    });
-    const encrypted = encryptSecret(value, keyData.key);
-    await octokit.rest.actions.createOrUpdateRepoSecret({
-      owner: env.GITHUB_ORG,
-      repo,
-      secret_name,
-      encrypted_value: encrypted,
-      key_id: keyData.key_id,
-    });
-    return JSON.stringify({ created_or_updated: true, secret_name });
-  },
-});
+);
 
-export const delete_repo_secret = approval(
+export const delete_repo_secret = access(
+  { risk: "destructive" },
   tool({
     description: `Delete an Actions secret from a repository.`,
     inputSchema: z.object({
@@ -129,61 +136,68 @@ export const delete_repo_secret = approval(
 // Repository Variables
 // ---------------------------------------------------------------------------
 
-export const list_repo_variables = tool({
-  description: `List Actions variables for a repository. Unlike secrets, variable values are readable.`,
-  inputSchema: z.object({
-    repo: z.string().describe("Repository name"),
-    ...paginationInputShape,
-  }),
-  execute: async ({ repo, per_page, page }) => {
-    const { data } = await octokit.rest.actions.listRepoVariables({
-      owner: env.GITHUB_ORG,
-      repo,
-      per_page: per_page ?? 30,
-      page: page ?? 1,
-    });
-    return JSON.stringify({
-      total_count: data.total_count,
-      variables: data.variables.map((v) => ({
-        name: v.name,
-        value: v.value,
-        created_at: v.created_at,
-        updated_at: v.updated_at,
-      })),
-    });
-  },
-});
-
-export const create_or_update_repo_variable = tool({
-  description: `Create or update an Actions variable for a repository. Updates if it exists, creates if it doesn't.`,
-  inputSchema: z.object({
-    repo: z.string().describe("Repository name"),
-    name: z.string().describe("Variable name"),
-    value: z.string().describe("Variable value"),
-  }),
-  execute: async ({ repo, name, value }) => {
-    try {
-      await octokit.rest.actions.updateRepoVariable({
+export const list_repo_variables = access(
+  { risk: "read" },
+  tool({
+    description: `List Actions variables for a repository. Unlike secrets, variable values are readable.`,
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name"),
+      ...paginationInputShape,
+    }),
+    execute: async ({ repo, per_page, page }) => {
+      const { data } = await octokit.rest.actions.listRepoVariables({
         owner: env.GITHUB_ORG,
         repo,
-        name,
-        value,
+        per_page: per_page ?? 30,
+        page: page ?? 1,
       });
-    } catch (e: any) {
-      if (e.status === 404) {
-        await octokit.rest.actions.createRepoVariable({
+      return JSON.stringify({
+        total_count: data.total_count,
+        variables: data.variables.map((v) => ({
+          name: v.name,
+          value: v.value,
+          created_at: v.created_at,
+          updated_at: v.updated_at,
+        })),
+      });
+    },
+  }),
+);
+
+export const create_or_update_repo_variable = access(
+  { risk: "destructive" },
+  tool({
+    description: `Create or update an Actions variable for a repository. Updates if it exists, creates if it doesn't.`,
+    inputSchema: z.object({
+      repo: z.string().describe("Repository name"),
+      name: z.string().describe("Variable name"),
+      value: z.string().describe("Variable value"),
+    }),
+    execute: async ({ repo, name, value }) => {
+      try {
+        await octokit.rest.actions.updateRepoVariable({
           owner: env.GITHUB_ORG,
           repo,
           name,
           value,
         });
-      } else throw e;
-    }
-    return JSON.stringify({ created_or_updated: true, name });
-  },
-});
+      } catch (e: any) {
+        if (e.status === 404) {
+          await octokit.rest.actions.createRepoVariable({
+            owner: env.GITHUB_ORG,
+            repo,
+            name,
+            value,
+          });
+        } else throw e;
+      }
+      return JSON.stringify({ created_or_updated: true, name });
+    },
+  }),
+);
 
-export const delete_repo_variable = approval(
+export const delete_repo_variable = access(
+  { risk: "destructive" },
   tool({
     description: `Delete an Actions variable from a repository.`,
     inputSchema: z.object({
@@ -205,58 +219,65 @@ export const delete_repo_variable = approval(
 // Organization Secrets
 // ---------------------------------------------------------------------------
 
-export const list_org_secrets = tool({
-  description: `List Actions secrets for the purduehackers organization. Returns names, timestamps, and visibility scope. Values are never readable.`,
-  inputSchema: z.object({
-    ...paginationInputShape,
+export const list_org_secrets = access(
+  { risk: "read" },
+  tool({
+    description: `List Actions secrets for the purduehackers organization. Returns names, timestamps, and visibility scope. Values are never readable.`,
+    inputSchema: z.object({
+      ...paginationInputShape,
+    }),
+    execute: async ({ per_page, page }) => {
+      const { data } = await octokit.rest.actions.listOrgSecrets({
+        org: env.GITHUB_ORG,
+        per_page: per_page ?? 30,
+        page: page ?? 1,
+      });
+      return JSON.stringify({
+        total_count: data.total_count,
+        secrets: data.secrets.map((s) => ({
+          name: s.name,
+          created_at: s.created_at,
+          updated_at: s.updated_at,
+          visibility: s.visibility,
+        })),
+      });
+    },
   }),
-  execute: async ({ per_page, page }) => {
-    const { data } = await octokit.rest.actions.listOrgSecrets({
-      org: env.GITHUB_ORG,
-      per_page: per_page ?? 30,
-      page: page ?? 1,
-    });
-    return JSON.stringify({
-      total_count: data.total_count,
-      secrets: data.secrets.map((s) => ({
-        name: s.name,
-        created_at: s.created_at,
-        updated_at: s.updated_at,
-        visibility: s.visibility,
-      })),
-    });
-  },
-});
+);
 
-export const create_or_update_org_secret = tool({
-  description: `Create or update an Actions secret for the organization. Value is encrypted. Set visibility to control repo access ('all', 'private', or 'selected' with repo IDs).`,
-  inputSchema: z.object({
-    secret_name: z.string().describe("Secret name"),
-    value: z.string().describe("Secret value (will be encrypted)"),
-    visibility: z.enum(["all", "private", "selected"]).describe("Repository visibility scope"),
-    selected_repository_ids: z
-      .array(z.number())
-      .optional()
-      .describe("Repo IDs (required when visibility is 'selected')"),
+export const create_or_update_org_secret = access(
+  { risk: "destructive" },
+  tool({
+    description: `Create or update an Actions secret for the organization. Value is encrypted. Set visibility to control repo access ('all', 'private', or 'selected' with repo IDs).`,
+    inputSchema: z.object({
+      secret_name: z.string().describe("Secret name"),
+      value: z.string().describe("Secret value (will be encrypted)"),
+      visibility: z.enum(["all", "private", "selected"]).describe("Repository visibility scope"),
+      selected_repository_ids: z
+        .array(z.number())
+        .optional()
+        .describe("Repo IDs (required when visibility is 'selected')"),
+    }),
+    execute: async ({ secret_name, value, visibility, selected_repository_ids }) => {
+      const { data: keyData } = await octokit.rest.actions.getOrgPublicKey({
+        org: env.GITHUB_ORG,
+      });
+      const encrypted = encryptSecret(value, keyData.key);
+      await octokit.rest.actions.createOrUpdateOrgSecret({
+        org: env.GITHUB_ORG,
+        secret_name,
+        encrypted_value: encrypted,
+        key_id: keyData.key_id,
+        visibility,
+        selected_repository_ids,
+      });
+      return JSON.stringify({ created_or_updated: true, secret_name });
+    },
   }),
-  execute: async ({ secret_name, value, visibility, selected_repository_ids }) => {
-    const { data: keyData } = await octokit.rest.actions.getOrgPublicKey({
-      org: env.GITHUB_ORG,
-    });
-    const encrypted = encryptSecret(value, keyData.key);
-    await octokit.rest.actions.createOrUpdateOrgSecret({
-      org: env.GITHUB_ORG,
-      secret_name,
-      encrypted_value: encrypted,
-      key_id: keyData.key_id,
-      visibility,
-      selected_repository_ids,
-    });
-    return JSON.stringify({ created_or_updated: true, secret_name });
-  },
-});
+);
 
-export const delete_org_secret = approval(
+export const delete_org_secret = access(
+  { risk: "destructive" },
   tool({
     description: `Delete an Actions secret from the organization.`,
     inputSchema: z.object({
@@ -276,63 +297,70 @@ export const delete_org_secret = approval(
 // Organization Variables
 // ---------------------------------------------------------------------------
 
-export const list_org_variables = tool({
-  description: `List Actions variables for the purduehackers organization. Returns name, value, timestamps, and visibility scope.`,
-  inputSchema: z.object({
-    ...paginationInputShape,
-  }),
-  execute: async ({ per_page, page }) => {
-    const { data } = await octokit.rest.actions.listOrgVariables({
-      org: env.GITHUB_ORG,
-      per_page: per_page ?? 30,
-      page: page ?? 1,
-    });
-    return JSON.stringify({
-      total_count: data.total_count,
-      variables: data.variables.map((v) => ({
-        name: v.name,
-        value: v.value,
-        created_at: v.created_at,
-        updated_at: v.updated_at,
-        visibility: v.visibility,
-      })),
-    });
-  },
-});
-
-export const create_or_update_org_variable = tool({
-  description: `Create or update an Actions variable for the organization. Updates if it exists, creates if it doesn't. Set visibility to control repo access.`,
-  inputSchema: z.object({
-    name: z.string().describe("Variable name"),
-    value: z.string().describe("Variable value"),
-    visibility: z.enum(["all", "private", "selected"]).describe("Repository visibility scope"),
-    selected_repository_ids: z.array(z.number()).optional(),
-  }),
-  execute: async ({ name, value, visibility, selected_repository_ids }) => {
-    try {
-      await octokit.rest.actions.updateOrgVariable({
+export const list_org_variables = access(
+  { risk: "read" },
+  tool({
+    description: `List Actions variables for the purduehackers organization. Returns name, value, timestamps, and visibility scope.`,
+    inputSchema: z.object({
+      ...paginationInputShape,
+    }),
+    execute: async ({ per_page, page }) => {
+      const { data } = await octokit.rest.actions.listOrgVariables({
         org: env.GITHUB_ORG,
-        name,
-        value,
-        visibility,
-        selected_repository_ids,
+        per_page: per_page ?? 30,
+        page: page ?? 1,
       });
-    } catch (e: any) {
-      if (e.status === 404) {
-        await octokit.rest.actions.createOrgVariable({
+      return JSON.stringify({
+        total_count: data.total_count,
+        variables: data.variables.map((v) => ({
+          name: v.name,
+          value: v.value,
+          created_at: v.created_at,
+          updated_at: v.updated_at,
+          visibility: v.visibility,
+        })),
+      });
+    },
+  }),
+);
+
+export const create_or_update_org_variable = access(
+  { risk: "destructive" },
+  tool({
+    description: `Create or update an Actions variable for the organization. Updates if it exists, creates if it doesn't. Set visibility to control repo access.`,
+    inputSchema: z.object({
+      name: z.string().describe("Variable name"),
+      value: z.string().describe("Variable value"),
+      visibility: z.enum(["all", "private", "selected"]).describe("Repository visibility scope"),
+      selected_repository_ids: z.array(z.number()).optional(),
+    }),
+    execute: async ({ name, value, visibility, selected_repository_ids }) => {
+      try {
+        await octokit.rest.actions.updateOrgVariable({
           org: env.GITHUB_ORG,
           name,
           value,
           visibility,
           selected_repository_ids,
         });
-      } else throw e;
-    }
-    return JSON.stringify({ created_or_updated: true, name });
-  },
-});
+      } catch (e: any) {
+        if (e.status === 404) {
+          await octokit.rest.actions.createOrgVariable({
+            org: env.GITHUB_ORG,
+            name,
+            value,
+            visibility,
+            selected_repository_ids,
+          });
+        } else throw e;
+      }
+      return JSON.stringify({ created_or_updated: true, name });
+    },
+  }),
+);
 
-export const delete_org_variable = approval(
+export const delete_org_variable = access(
+  { risk: "destructive" },
   tool({
     description: `Delete an Actions variable from the organization.`,
     inputSchema: z.object({

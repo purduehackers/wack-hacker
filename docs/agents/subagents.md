@@ -22,15 +22,15 @@ This is what actually goes into the orchestrator's message history — the full 
 
 ## Subagent configuration
 
-| Field         | Value                                                                                                                                                 |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Model         | `SUBAGENT_MODEL` in `src/lib/ai/constants.ts`, currently `openai/gpt-5.4-mini`; a domain can override via `DOMAIN_SPEC_OVERRIDES` (see below)         |
-| Instructions  | `SUBAGENT_PREAMBLE` + the domain's `SKILL.md` body, with `{{SKILL_MENU}}` substituted                                                                 |
-| Tools         | All domain tools + `loadSkill`, then run through `filterAdmin(allTools)` when role is not admin, then `wrapApprovalTools` for any `approval()`-marked |
-| `activeTools` | Initially `[...spec.baseToolNames, "loadSkill"]` — discovery tools plus the always-present `loadSkill`                                                |
-| `prepareStep` | Re-computes `activeTools` every step by scanning previous `loadSkill` calls — see [Skills](../skills/disclosure.md)                                   |
-| `stopWhen`    | `stepCountIs(spec.stopSteps ?? 15)` — hard cap on tool calls per delegation, overridable per domain                                                   |
-| Telemetry     | `experimental_telemetry: { isEnabled: true, functionId: "subagent.<name>", metadata: { role, subagent } }`                                            |
+| Field         | Value                                                                                                                                                                                                    |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Model         | `SUBAGENT_MODEL` in `src/lib/ai/constants.ts`, currently `openai/gpt-5.4-mini`; a domain can override via `DOMAIN_SPEC_OVERRIDES` (see below)                                                            |
+| Instructions  | `SUBAGENT_PREAMBLE` + the domain's `SKILL.md` body, with `{{SKILL_MENU}}` substituted                                                                                                                    |
+| Tools         | All domain tools + `loadSkill`, then run through [`applyPolicy`](policy.md) — tools above the caller's role are omitted, confirm-gated tools get the Discord approval flow, destructive runs are audited |
+| `activeTools` | Initially `[...spec.baseToolNames, "loadSkill"]` — discovery tools plus the always-present `loadSkill`                                                                                                   |
+| `prepareStep` | Re-computes `activeTools` every step by scanning previous `loadSkill` calls — see [Skills](../skills/disclosure.md)                                                                                      |
+| `stopWhen`    | `stepCountIs(spec.stopSteps ?? 15)` — hard cap on tool calls per delegation, overridable per domain                                                                                                      |
+| Telemetry     | `experimental_telemetry: { isEnabled: true, functionId: "subagent.<name>", metadata: { role, subagent } }`                                                                                               |
 
 ## SubagentSpec
 

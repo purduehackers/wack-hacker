@@ -2,6 +2,7 @@ import type { ToolSet, UIMessage } from "ai";
 import type { z } from "zod";
 
 import type { AgentContext } from "./context.ts";
+import type { BudgetState } from "./policy/types.ts";
 import type { SkillBundle } from "./skills/types.ts";
 import type { TurnUsageTracker } from "./turn-usage.ts";
 
@@ -59,6 +60,12 @@ export interface SerializedAgentContext {
   timezone?: string;
   attachments?: Attachment[];
   memberRoles?: string[];
+  /**
+   * Where this turn originated. Scheduled fires set "scheduled" so policy
+   * decisions and audit rows can distinguish them from interactive chat.
+   * Optional on the wire; defaults to "chat".
+   */
+  source?: "chat" | "scheduled";
   recentMessages?: RecentMessage[];
   /**
    * True when `recentMessages` were fetched from the thread itself (i.e. the
@@ -246,6 +253,7 @@ export type OrchestratorFactory = (
   ctx: AgentContext,
   tracker: TurnUsageTracker,
   extraMetadata?: TelemetryMetadata,
+  budget?: BudgetState | null,
 ) => OrchestratorAgent;
 
 /**

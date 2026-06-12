@@ -20,6 +20,7 @@ import { ORCHESTRATOR_MODEL } from "./constants.ts";
 import { AgentContext } from "./context.ts";
 import { MessageRenderer } from "./message-renderer.ts";
 import { createOrchestrator } from "./orchestrator.ts";
+import { readBudgetState, recordTurnTokens } from "./policy/index.ts";
 import { TurnUsageTracker } from "./turn-usage.ts";
 
 /**
@@ -129,10 +130,13 @@ async function runStreamTurn(args: {
   } = options;
   const agentCtx = AgentContext.fromJSON(serializedContext);
   const tracker = new TurnUsageTracker();
+  const budget = await readBudgetState({ userId: agentCtx.userId, role: agentCtx.role });
   // The `OrchestratorFactory` return type is a structural subset of the real
   // ToolLoopAgent, so we cast back to the concrete agent type here to keep the
   // stream-event discriminated union typed.
-  const agent = createAgent(agentCtx, tracker, chatAttrs) as ReturnType<typeof createOrchestrator>;
+  const agent = createAgent(agentCtx, tracker, chatAttrs, budget) as ReturnType<
+    typeof createOrchestrator
+  >;
   const renderer = new MessageRenderer(discord, channelId, { taskId });
 
   const logger = createWideLogger({
@@ -174,33 +178,17 @@ async function runStreamTurn(args: {
   recordDuration("ai.turn.duration", elapsedMs);
 
   const usage = tracker.toTurnUsage();
+  // Fold this turn's tokens into the subject's daily budget counter for all
+  // roles — enforcement is role-gated in decide(), but the data is universal.
+  await recordTurnTokens(agentCtx.userId, usage.totalTokens);
 
-  // Mirror the per-turn totals onto the active chat.turn span so operators can
-  // query the trace directly without joining against wide events.
-  setActiveSpanAttributes({
-    "ai.input_tokens": usage.inputTokens,
-    "ai.output_tokens": usage.outputTokens,
-    "ai.subagent_tokens": usage.subagentTokens,
-    "ai.total_tokens": usage.totalTokens,
-    "ai.tool_calls": usage.toolCallCount,
-    "ai.steps": usage.stepCount,
-    ...(usage.toolNames.length > 0 ? { "ai.tool_names": usage.toolNames } : {}),
-    "chat.discord_message_id": finalized.messageId,
-  });
-
-  logger.emit({
-    outcome: metadataError ? "partial" : "ok",
-    duration_ms: elapsedMs,
-    text_length: renderer.content.length,
-    tokens: usage.totalTokens,
-    input_tokens: usage.inputTokens,
-    output_tokens: usage.outputTokens,
-    subagent_tokens: usage.subagentTokens,
-    tool_calls: usage.toolCallCount,
-    tool_names: usage.toolNames,
-    steps: usage.stepCount,
-    model: ORCHESTRATOR_MODEL,
-    discord_message_id: finalized.messageId,
+  emitTurnTelemetry({
+    usage,
+    messageId: finalized.messageId,
+    metadataError,
+    elapsedMs,
+    textLength: renderer.content.length,
+    logger,
   });
 
   return {
@@ -209,6 +197,47 @@ async function runStreamTurn(args: {
     discordMessageId: finalized.messageId,
     model: ORCHESTRATOR_MODEL,
   };
+}
+
+/**
+ * Mirror the per-turn totals onto the active chat.turn span (so operators can
+ * query the trace directly without joining against wide events) and emit the
+ * turn's terminal wide event.
+ */
+function emitTurnTelemetry(args: {
+  usage: ReturnType<TurnUsageTracker["toTurnUsage"]>;
+  messageId: string;
+  metadataError: unknown;
+  elapsedMs: number;
+  textLength: number;
+  logger: ReturnType<typeof createWideLogger>;
+}): void {
+  const { usage, messageId, metadataError, elapsedMs, textLength, logger } = args;
+  setActiveSpanAttributes({
+    "ai.input_tokens": usage.inputTokens,
+    "ai.output_tokens": usage.outputTokens,
+    "ai.subagent_tokens": usage.subagentTokens,
+    "ai.total_tokens": usage.totalTokens,
+    "ai.tool_calls": usage.toolCallCount,
+    "ai.steps": usage.stepCount,
+    ...(usage.toolNames.length > 0 ? { "ai.tool_names": usage.toolNames } : {}),
+    "chat.discord_message_id": messageId,
+  });
+
+  logger.emit({
+    outcome: metadataError ? "partial" : "ok",
+    duration_ms: elapsedMs,
+    text_length: textLength,
+    tokens: usage.totalTokens,
+    input_tokens: usage.inputTokens,
+    output_tokens: usage.outputTokens,
+    subagent_tokens: usage.subagentTokens,
+    tool_calls: usage.toolCallCount,
+    tool_names: usage.toolNames,
+    steps: usage.stepCount,
+    model: ORCHESTRATOR_MODEL,
+    discord_message_id: messageId,
+  });
 }
 
 async function renderStream(

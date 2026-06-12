@@ -3,10 +3,11 @@ import { Routes } from "discord-api-types/v10";
 import { z } from "zod";
 
 import { DISCORD_GUILD_ID } from "../../../protocol/constants.ts";
-import { admin } from "../../skills/index.ts";
+import { access } from "../../policy/index.ts";
 import { discord } from "./client.ts";
 
-export const update_guild = admin(
+export const update_guild = access(
+  { risk: "destructive", minRole: "admin" },
   tool({
     description:
       "Update core Discord server settings — name, description, icon, banner, afk channel, verification level, etc. Only provide the fields you want to change.",
@@ -53,47 +54,53 @@ export const update_guild = admin(
   }),
 );
 
-export const get_guild_preview = tool({
-  description:
-    "Get public preview info for the Discord server — approximate member count, online count, description, features, and splash image.",
-  inputSchema: z.object({}),
-  execute: async () => {
-    const preview = (await discord.get(Routes.guildPreview(DISCORD_GUILD_ID))) as {
-      id: string;
-      name: string;
-      description: string | null;
-      approximate_member_count: number;
-      approximate_presence_count: number;
-      features: string[];
-      splash: string | null;
-      discovery_splash: string | null;
-    };
-    return JSON.stringify({
-      id: preview.id,
-      name: preview.name,
-      description: preview.description,
-      memberCount: preview.approximate_member_count,
-      onlineCount: preview.approximate_presence_count,
-      features: preview.features,
-    });
-  },
-});
+export const get_guild_preview = access(
+  { risk: "read" },
+  tool({
+    description:
+      "Get public preview info for the Discord server — approximate member count, online count, description, features, and splash image.",
+    inputSchema: z.object({}),
+    execute: async () => {
+      const preview = (await discord.get(Routes.guildPreview(DISCORD_GUILD_ID))) as {
+        id: string;
+        name: string;
+        description: string | null;
+        approximate_member_count: number;
+        approximate_presence_count: number;
+        features: string[];
+        splash: string | null;
+        discovery_splash: string | null;
+      };
+      return JSON.stringify({
+        id: preview.id,
+        name: preview.name,
+        description: preview.description,
+        memberCount: preview.approximate_member_count,
+        onlineCount: preview.approximate_presence_count,
+        features: preview.features,
+      });
+    },
+  }),
+);
 
-export const get_vanity_url = tool({
-  description:
-    "Get the Discord server's vanity invite URL (e.g. discord.gg/purduehackers) if one is configured. Returns code and usage count.",
-  inputSchema: z.object({}),
-  execute: async () => {
-    const data = (await discord.get(Routes.guildVanityUrl(DISCORD_GUILD_ID))) as {
-      code: string | null;
-      uses: number;
-    };
-    if (!data.code) return JSON.stringify({ configured: false });
-    return JSON.stringify({
-      configured: true,
-      code: data.code,
-      url: `https://discord.gg/${data.code}`,
-      uses: data.uses,
-    });
-  },
-});
+export const get_vanity_url = access(
+  { risk: "read" },
+  tool({
+    description:
+      "Get the Discord server's vanity invite URL (e.g. discord.gg/purduehackers) if one is configured. Returns code and usage count.",
+    inputSchema: z.object({}),
+    execute: async () => {
+      const data = (await discord.get(Routes.guildVanityUrl(DISCORD_GUILD_ID))) as {
+        code: string | null;
+        uses: number;
+      };
+      if (!data.code) return JSON.stringify({ configured: false });
+      return JSON.stringify({
+        configured: true,
+        code: data.code,
+        url: `https://discord.gg/${data.code}`,
+        uses: data.uses,
+      });
+    },
+  }),
+);

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { payloadSDKClass, toolOpts } from "@/lib/test/fixtures";
 
-import { hasApprovalMarker } from "../../approvals/index.ts";
+import { getAccessSpec } from "../../policy/index.ts";
 
 const mocks = vi.hoisted(() => ({
   find: vi.fn(),
@@ -85,13 +85,13 @@ describe("update_email", () => {
 
 describe("delete_email", () => {
   it("is approval-gated", () => {
-    expect(hasApprovalMarker(delete_email)).toBe(true);
+    expect(getAccessSpec(delete_email)?.risk).toBe("destructive");
   });
 });
 
 describe("send_email", () => {
   it("is approval-gated", () => {
-    expect(hasApprovalMarker(send_email)).toBe(true);
+    expect(getAccessSpec(send_email)?.risk).toBe("destructive");
   });
 
   it("flips send: true", async () => {

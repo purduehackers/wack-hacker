@@ -15,18 +15,19 @@ No `SKILL.md` is needed for top-level tools — skills only exist inside subagen
 
 If your tool belongs to a specific service (Linear, GitHub, …) that already has a subagent, add it there — see [Skills § adding a sub-skill](../skills/adding.md#adding-a-sub-skill-to-an-existing-domain). Base tools are for the orchestrator's flat toolkit, not domain-specific functionality.
 
-## When to wrap in `admin()`
+## Declaring access
 
-If the tool is destructive or should only be callable by admins, wrap it:
+Every tool must declare an [`access()` descriptor](./policy.md) — the `access-coverage` test fails any export without one:
 
 ```ts
-import { admin } from "@/lib/ai/skills/admin";
+import { access } from "@/lib/ai/policy";
 
-export const dangerous_tool = admin(
+export const dangerous_tool = access(
+  { risk: "destructive", minRole: "admin" },
   tool({
     /* ... */
   }),
 );
 ```
 
-Note that the orchestrator's base tool object is **not** run through `filterAdmin` — that filter only applies inside subagents. If you want a base tool to be admin-gated, you'll need to conditionally add it to the `tools` object in `createOrchestrator` based on `context.role`, or move it into a delegate domain where `filterAdmin` does apply.
+`risk` is required (`"read"`, `"write"`, or `"destructive"`); `minRole` and `confirm` default by risk (read→public, write/destructive→organizer; destructive→self-confirmation via the Discord [approval flow](./approvals.md)). Base tools and subagent tools are gated identically — `getOrchestratorTools` runs the whole base ToolSet through `applyPolicy`, so admin-gating a base tool is just `minRole: "admin"` (see `list_audit_log` for a live example).

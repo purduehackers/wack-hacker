@@ -71,12 +71,16 @@ export function formatToolCall(
 export function buildApprovalEmbed(args: BuildApprovalEmbedArgs): APIEmbed {
   const callStr = formatToolCall(args.delegateName, args.toolName, args.input);
   const minutes = Math.max(1, Math.round(args.timeoutMs / 60_000));
+  const whoMayDecide =
+    args.confirmMode === "second-party"
+      ? "Requires another organizer's approval"
+      : "Only the requester can approve";
   return {
     color: COLOR_AMBER,
     author: { name: "🛂 Wack Hack · Permission Requested" },
     description: `\`\`\`py\n${callStr}\n\`\`\``,
     fields: [{ name: "Reason", value: args.reason || "(not provided)" }],
-    footer: { text: `Only the requester can approve · auto-denies in ${minutes}m` },
+    footer: { text: `${whoMayDecide} · auto-denies in ${minutes}m` },
     timestamp: new Date().toISOString(),
   };
 }
