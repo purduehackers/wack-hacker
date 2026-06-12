@@ -1,0 +1,111 @@
+src/bot/handlers/commands/inspect-context/index.ts
+  s_d27df44b7ac328::t_1cf0910b1e443a 8
+  s_d27df44b7ac328::t_f56d6af1fe6bf3 38-39,47-49
+src/lib/ai/types.ts
+  s_d27df44b7ac328::t_686813849814b4 226-227
+  s_d27df44b7ac328::t_9aacfed0f29871 224
+  s_d27df44b7ac328::t_603a87609057ee 249-254
+  s_d27df44b7ac328::t_fd4761d501d102 1
+src/bot/context-snapshot.ts
+  s_d27df44b7ac328::t_87be769d6f54e5 5,7,18-19,25
+vercel.ts
+  s_d27df44b7ac328::t_88c3eb19efee6f 36-45
+docs/discord/chat-resume.md
+  s_d27df44b7ac328::t_381bcfd1e09033 29-37
+src/bot/types.ts
+  s_d27df44b7ac328::t_ee0621ca3c3a1a 33-37,43,50-59
+src/bot/handlers/events/conversation-done/index.ts
+  s_d27df44b7ac328::t_ca406572668dd7 1-18,20-48
+  s_d27df44b7ac328::t_ba4c18394adbd3 19
+src/lib/sandbox/lifecycle-starter.ts
+  s_d27df44b7ac328::t_bb17526253c0e4 4-5,19-21
+src/lib/ai/message-renderer.test.ts
+  s_d27df44b7ac328::t_6ce053f64bf07f 343
+  s_d27df44b7ac328::t_81006626128803 1
+  s_d27df44b7ac328::t_c73d6688f007bc 497-593
+src/lib/ai/constants.ts
+  s_d27df44b7ac328::t_2fbde1424a1775 56-63
+src/lib/ai/snapshot.ts
+  s_d27df44b7ac328::t_03b6e868de4130 36-37,48-49
+  s_d27df44b7ac328::t_9854e13188d76d 76
+src/lib/ai/streaming.test.ts
+  s_d27df44b7ac328::t_55f400e6d52de1 639-791
+  s_d27df44b7ac328::t_76496699ad02f6 34
+  s_d27df44b7ac328::t_dca298de44b743 792-818
+src/lib/ai/orchestrator.ts
+  s_d27df44b7ac328::t_c4bc177439ccbd 48,54
+src/bot/handlers/events/index.ts
+  s_d27df44b7ac328::t_f46f0e7cb6a4ae 10
+docs/agents/streaming.md
+  s_d27df44b7ac328::t_af2d2ec4b3a574 22,24-39,45,47,50,55
+  s_d27df44b7ac328::t_1a686c3ef76d6b 40,48-49
+src/lib/ai/message-renderer.ts
+  s_d27df44b7ac328::t_893b55bc0058ea 63,67,71-74,80-88,92-116,118-120
+  s_d27df44b7ac328::t_6b9261919484bd 15-20
+  s_d27df44b7ac328::t_84e552176c209c 284-286
+src/lib/ai/streaming.ts
+  s_d27df44b7ac328::t_cb5b37cf5a4a43 255-284
+  s_d27df44b7ac328::t_b672e8bce65bc6 213,216-218,220-221
+  s_d27df44b7ac328::t_af957dccee79a5 15
+  s_d27df44b7ac328::t_dccf2f1d5df3eb 338-348,378,380-381,395,401,403-405,411
+  s_d27df44b7ac328::t_52bc9078959671 285-302,304-314,316-337
+  s_d27df44b7ac328::t_5526431c900993 303,315
+  s_d27df44b7ac328::t_fbfcdbf4cf2c68 175-185
+  s_d27df44b7ac328::t_e0592d6bbd1bee 158,160-168,172
+  s_d27df44b7ac328::t_b6b5f2931d8f6b 21
+  s_d27df44b7ac328::t_a53dbe6df0108d 243,251
+  s_d27df44b7ac328::t_d89089955a9062 349-374,383,399,402
+  s_d27df44b7ac328::t_ff8fffb13f8101 190,194-197,199,201-211,229,244,250
+  s_d27df44b7ac328::t_e95939715e6bea 156,159,169,171
+  s_d27df44b7ac328::t_2c0d4c4ddf3ec9 170
+  s_d27df44b7ac328::t_4c3f018adf54b8 5
+src/workflows/chat.ts
+  s_d27df44b7ac328::t_f963570ffc5f1f 574-582
+  s_d27df44b7ac328::t_acee7299279804 563-573,583-594
+  s_d27df44b7ac328::t_012aa1cfb4c529 1-2,4-9,26,29-39,46,48-50,59-83,85-99,104,109-110,120-159,163,168,201-204,206-208,225-235,243-251,253,255-260,262,270,274,279,287,291-296,299-302,304-307,311,379,386,390,392,394-396,398,400-405,407,410-412,414,540-542,546,550-551,562
+  s_d27df44b7ac328::t_83e9f3dbc10578 475-506
+  s_d27df44b7ac328::t_7451274b6e9bea 440-474
+  s_d27df44b7ac328::t_d4bd062b4e9457 548
+  s_d27df44b7ac328::t_6bec03c3bae315 552-560
+  s_d27df44b7ac328::t_eb019b6b964363 561
+  s_d27df44b7ac328::t_1a686c3ef76d6b 205
+  s_d27df44b7ac328::t_643a71aa7e8871 372-378,380-381,383-385,387-389,391,393,397,399,406,408-409,413,415-416,429-430,432,434-435
+  s_d27df44b7ac328::t_3cd4379760ecc7 297-298,303
+  s_d27df44b7ac328::t_6af25c8838eceb 40-45,47,51-58
+src/workflows/sandbox-lifecycle.ts
+  s_d27df44b7ac328::t_8c19bfd2927565 168
+  s_d27df44b7ac328::t_c88e9b934f32a6 192-194,196-201
+  s_d27df44b7ac328::t_c5215efacc9d3e 29,44-48
+src/bot/context-snapshot.test.ts
+  s_d27df44b7ac328::t_1a65a8b7413451 5,13,43
+docs/workflows/chat.md
+  s_d27df44b7ac328::t_0721070c1930bc 28-29,38,40-44,46-51,53-71,79,83,93
+  s_d27df44b7ac328::t_1a686c3ef76d6b 45,52
+docs/deployment/functions.md
+  s_d27df44b7ac328::t_1a686c3ef76d6b 7-13
+src/workflows/chat.test.ts
+  s_d27df44b7ac328::t_1a686c3ef76d6b 5,136-140,274-276,291-293
+  s_d27df44b7ac328::t_4186899150238d 82,85
+  s_d27df44b7ac328::t_e876011b1d9aeb 258,262,266,268
+  s_d27df44b7ac328::t_433c2d83dcb896 25,132-134,187-201
+  s_d27df44b7ac328::t_929a3805d325b6 20-23,130-131,135,141-146,226,234,241,260,265,281,297
+  s_d27df44b7ac328::t_32a0cc013ccfbc 1-4,6-19,24,26-81,83-84,86-129,147-186,202-225,227-233,235-240,242-257,259,261,263-264,267,269-273,277-280,282-290,294-296,298-302
+src/lib/sandbox/types.ts
+  s_d27df44b7ac328::t_40864f7679e770 212-217
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "d5088334d51130cf749360a8e7b90139e1e0475c",
+  "prompts": {},
+  "sessions": {
+    "s_d27df44b7ac328": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9f2172a4-c814-4433-969c-6d93c4563a7f",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
