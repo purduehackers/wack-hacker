@@ -1,0 +1,87 @@
+docs/agents/orchestrator.md
+  s_aaae8ac56d57d1::t_dc99eb64cf00ed 37-38
+  s_aaae8ac56d57d1::t_1f181e4754deb0 51
+  s_aaae8ac56d57d1::t_021ea941319292 52
+  s_aaae8ac56d57d1::t_02ff9cee52f0d9 12
+src/lib/ai/constants.ts
+  s_aaae8ac56d57d1::t_7facc678f999a6 79
+  s_aaae8ac56d57d1::t_c26ab8587829a1 48,50
+  s_aaae8ac56d57d1::t_ccd42614335cb8 23
+  s_aaae8ac56d57d1::t_6914de8ba0fc82 49
+  s_aaae8ac56d57d1::t_5d88df025d1e24 99
+  s_aaae8ac56d57d1::t_f4e71a65d2fea1 18-22,24
+  s_aaae8ac56d57d1::t_60014d5e48d92d 98
+src/lib/ai/turn-usage.ts
+  s_aaae8ac56d57d1::t_951870a86345a1 26-27
+  s_aaae8ac56d57d1::t_9a92d8155f4c49 46
+  s_aaae8ac56d57d1::t_44444ca427cd87 1
+  s_aaae8ac56d57d1::t_48de00f99c611e 52-58
+  s_aaae8ac56d57d1::t_6aa2f9680ad8f1 69-78
+src/lib/ai/orchestrator.ts
+  s_aaae8ac56d57d1::t_2a74517053cd11 51-60,66-71
+  s_aaae8ac56d57d1::t_5188c6c1305ff9 7
+src/lib/ai/approvals/runtime.test.ts
+  s_aaae8ac56d57d1::t_83846cfbb0a00c 5
+  s_aaae8ac56d57d1::t_1068a1107992ec 151-162,164-168
+  s_aaae8ac56d57d1::t_88b21ac0c84688 163
+src/lib/ai/types.ts
+  s_aaae8ac56d57d1::t_fe00ea70ca9cff 117-130
+src/lib/ai/orchestrator.test.ts
+  s_aaae8ac56d57d1::t_b5b73b00a1e70d 105-126
+src/workflows/chat.ts
+  s_aaae8ac56d57d1::t_aca124c317cfeb 318-328
+  s_aaae8ac56d57d1::t_0a0d7329566d9f 238-247,255-276
+  s_aaae8ac56d57d1::t_0a740ee43a6b58 253
+  s_aaae8ac56d57d1::t_a2ef686d8430fe 383-385
+  s_aaae8ac56d57d1::t_c5920776be9460 375-378,387-389
+src/lib/ai/approvals/runtime.ts
+  s_aaae8ac56d57d1::t_09e7af831919bb 33-37,43-44
+  s_aaae8ac56d57d1::t_ed95a3fe45b858 61-62
+  s_aaae8ac56d57d1::t_0e79083f0c128e 142
+docs/agents/context.md
+  s_aaae8ac56d57d1::t_86f63bdc7324e1 21-25
+  s_aaae8ac56d57d1::t_b98d977fb5ec54 60
+  s_aaae8ac56d57d1::t_021ea941319292 56-59,61-63
+src/bot/recent-messages.ts
+  s_aaae8ac56d57d1::t_c5c484da672861 10-18,25-26,37
+  s_aaae8ac56d57d1::t_a517281efa760d 19-24
+src/lib/ai/context.test.ts
+  s_aaae8ac56d57d1::t_29e8e1cca4fd90 105-107,109-110
+  s_aaae8ac56d57d1::t_220acbae938665 304-305
+  s_aaae8ac56d57d1::t_795b47c8b46ac0 155-156
+  s_aaae8ac56d57d1::t_801800151f62d3 306-354
+docs/agents/approvals.md
+  s_aaae8ac56d57d1::t_e9628c2316af70 40
+src/lib/ai/streaming.ts
+  s_aaae8ac56d57d1::t_318a79c322c633 207-208
+  s_aaae8ac56d57d1::t_65f5a96f50a011 224-225
+  s_aaae8ac56d57d1::t_93fe28fa53d0c2 293
+  s_aaae8ac56d57d1::t_cf51c318b1c45b 308-309
+  s_aaae8ac56d57d1::t_c9e64462aece40 14
+  s_aaae8ac56d57d1::t_b88187a4540714 178-202
+src/bot/recent-messages.test.ts
+  s_aaae8ac56d57d1::t_474d364594a4c4 43-59
+  s_aaae8ac56d57d1::t_8de6f231061d64 60-68
+src/lib/ai/context.ts
+  s_aaae8ac56d57d1::t_b51262ecb5580a 46
+  s_aaae8ac56d57d1::t_47b8e31b6e2fab 79
+  s_aaae8ac56d57d1::t_9f94684ceec138 224-227,231-234
+  s_aaae8ac56d57d1::t_1dc03c67a98e9c 23-45,47-54
+  s_aaae8ac56d57d1::t_d68858c7a2f17e 160
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "125829592a3e71e6dfd22d14b63db4f43eeee5e6",
+  "prompts": {},
+  "sessions": {
+    "s_aaae8ac56d57d1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0aeb5781-034b-4c83-8aeb-8bd037018ae9",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
