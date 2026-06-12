@@ -1,0 +1,639 @@
+src/lib/ai/tools/discord/guild.ts
+  s_0dd6d7f4e6643b::t_186698b59263d8 6,9-10,57-84,86-106
+docs/agents/subagents.md
+  s_0dd6d7f4e6643b::t_0f889ca778b6f7 29
+  s_0dd6d7f4e6643b::t_379edc1baa8e6f 25-28,30-33
+src/lib/ai/tools/vercel/security.ts
+  s_0dd6d7f4e6643b::t_4eddc6d5a8458e 4,12-28,30,32-47,49,51-52,76-95,97,99-118,120,124-134,136-146,148-149
+src/lib/ai/tools/github/reactions.ts
+  s_0dd6d7f4e6643b::t_f75cbbaada8733 54-56
+  s_0dd6d7f4e6643b::t_54962fe490873c 73,75-76
+  s_0dd6d7f4e6643b::t_5ece6edf2c5ed5 12-14
+  s_0dd6d7f4e6643b::t_c13efea9a58e57 5
+  s_0dd6d7f4e6643b::t_17463cc9c72e97 15-29,57-71
+src/lib/ai/tools/finance/donations.ts
+  s_0dd6d7f4e6643b::t_0c97fe83e61e73 4,36-50,53-64,66,69-108,110
+src/lib/ai/tools/linear/users.ts
+  s_0dd6d7f4e6643b::t_0a8cae12dd94ed 4,7-42,51-54,56-57,59,61-72,74,76-102,104,106-112,114-119,122-127,129-134,137-138,163-164,189-194,196-200
+src/lib/ai/tools/linear/issue-views.ts
+  s_0dd6d7f4e6643b::t_73e45d86d9ccb8 4,7-41,43
+src/lib/ai/orchestrator.ts
+  s_0dd6d7f4e6643b::t_26b4ae5acac04c 3,10-11
+  s_0dd6d7f4e6643b::t_d54724aa3b5a81 33,41,45,52,55
+src/lib/ai/tools/vercel/projects.ts
+  s_0dd6d7f4e6643b::t_4eddc6d5a8458e 4,27-49,51,53-67,69,71-72,86-87,98-99,110-124,128-144,146,148-164,166,168-197,199,201-223,225,227-228,248-274,276,278-293,295,297-298,316-331,333,335-355,357,361-382,384,386-387
+src/lib/ai/tools/sentry/base.ts
+  s_0dd6d7f4e6643b::t_66ba396085c7b6 11,16-40,43-61,63,66-109,111,114-150,152
+src/lib/ai/tools/sentry/members.ts
+  s_0dd6d7f4e6643b::t_f2f827322ccba8 18,22-51,53,56-85,87,90-114,116,119-136,138,141-168,170,173-174,194-195,219-224,226-237,241-242,265-271,273-285,289-290
+src/lib/ai/tools/github/repositories.ts
+  s_0dd6d7f4e6643b::t_37b7d54256ca34 200-204
+  s_0dd6d7f4e6643b::t_248f861b4d4f79 9-11
+  s_0dd6d7f4e6643b::t_17463cc9c72e97 12-38,45-73,142-157,164-198,205-234,238-241,243-244
+  s_0dd6d7f4e6643b::t_9fd58cd9899202 75,77-78
+  s_0dd6d7f4e6643b::t_299b76e230e3cb 5
+  s_0dd6d7f4e6643b::t_81f6b942924f24 139-141,159,161-163
+  s_0dd6d7f4e6643b::t_cc8738035338fc 246,248-249
+  s_0dd6d7f4e6643b::t_203eeab61932fc 40,42-44
+src/lib/ai/tools/notion/databases.ts
+  s_0dd6d7f4e6643b::t_711dd4b56638cb 10,14-56,58,60-78,80-86,88,90-107,109-115,117,119-120
+src/lib/ai/tools/shopping/search.ts
+  s_0dd6d7f4e6643b::t_0c97fe83e61e73 4,10-31,33
+src/lib/ai/tools/docs/index.ts
+  s_0dd6d7f4e6643b::t_c8fb65276ecdcd 5,10-26,28-30,32-36
+src/lib/ai/policy/constants.ts
+  s_0dd6d7f4e6643b::t_faceba571028f6 2-51
+  s_0dd6d7f4e6643b::t_809083b6534bad 1,52-60
+src/lib/ai/snapshot.test.ts
+  s_0dd6d7f4e6643b::t_d6d952a9ee1d77 237-239,246,249
+src/lib/ai/policy/audit.ts
+  s_0dd6d7f4e6643b::t_b715abe80f0f70 1-2,4-72
+  s_0dd6d7f4e6643b::t_17463cc9c72e97 3
+src/lib/ai/tools/github/environments.ts
+  s_0dd6d7f4e6643b::t_87f8ad342a903a 9-11
+  s_0dd6d7f4e6643b::t_87e93e0919abd2 67-69
+  s_0dd6d7f4e6643b::t_78924f17ed79aa 41-43,65
+  s_0dd6d7f4e6643b::t_693476fb45d327 5
+  s_0dd6d7f4e6643b::t_062c699f443dda 107
+  s_0dd6d7f4e6643b::t_17463cc9c72e97 12-37,44-63,70-105
+  s_0dd6d7f4e6643b::t_4a5da70acb8314 39
+  s_0dd6d7f4e6643b::t_ad58d4347abc2c 109-110
+src/lib/ai/tools/cms/media.test.ts
+  s_0dd6d7f4e6643b::t_a71ed55a69ee92 5,170
+src/lib/ai/tools/figma/variables.ts
+  s_0dd6d7f4e6643b::t_26239256415655 11,14-27,29,31-44,46,48-81,83
+src/lib/ai/tools/discord/events.ts
+  s_0dd6d7f4e6643b::t_0e1a6d0650feaf 6,49-60,62,64-85,87-95,97-107,109-111,113-120,122-166,168-170,172-181,183-184
+src/lib/ai/tools/cms/events.test.ts
+  s_0dd6d7f4e6643b::t_a71ed55a69ee92 5,135,170
+src/lib/ai/tools/finance/receipts.ts
+  s_0dd6d7f4e6643b::t_0c97fe83e61e73 4,25-52,54,57-75,77
+src/lib/ai/tools/vercel/deployments.ts
+  s_0dd6d7f4e6643b::t_17463cc9c72e97 43-55,57,59-85,87,89-99,101-119,121,123-124,136-137,156-160
+src/lib/ai/tools/sales/domains.ts
+  s_0dd6d7f4e6643b::t_46e9e7eb576b62 56-57,72-78,80-85
+  s_0dd6d7f4e6643b::t_e515615e10bd27 4,7-19,21-32,34,36-37
+src/lib/ai/tools/vercel/sandboxes.ts
+  s_0dd6d7f4e6643b::t_4eddc6d5a8458e 4,12-24,26-41,55-56,77-90,92-109,111-128,130-133,153-180,182-185
+src/lib/ai/tools/github/releases.ts
+  s_0dd6d7f4e6643b::t_bfd83966aec5c2 76,78-80
+  s_0dd6d7f4e6643b::t_17463cc9c72e97 12-37,44-74,81-108,115-140,166-189
+  s_0dd6d7f4e6643b::t_48e09c5165827e 163-165
+  s_0dd6d7f4e6643b::t_3addb32af283e5 5
+  s_0dd6d7f4e6643b::t_e069aebc2a2644 110,112-114
+  s_0dd6d7f4e6643b::t_8635cfaf4fa8a6 9-11
+  s_0dd6d7f4e6643b::t_bf7d64770b848d 191
+  s_0dd6d7f4e6643b::t_41e0453cd773de 39,41-43
+  s_0dd6d7f4e6643b::t_2baa128491d9c3 142,144-145
+src/lib/ai/tools/figma/webhooks.ts
+  s_0dd6d7f4e6643b::t_3cab7b2a7171a1 12,35-36,47-48,73-74,87-88,113-118,120-124
+src/lib/ai/tools/audit/index.ts
+  s_0dd6d7f4e6643b::t_796d0cd870cdb3 1-25,33-51
+  s_0dd6d7f4e6643b::t_17463cc9c72e97 26-32
+src/lib/ai/tools/figma/comments.ts
+  s_0dd6d7f4e6643b::t_f2b843b2ef8bbd 6,30-47,49,51-74,76,78-79,93-105,107,109
+  s_0dd6d7f4e6643b::t_7156603b6c89b5 110
+src/lib/ai/tools/vercel/integrations.ts
+  s_0dd6d7f4e6643b::t_17463cc9c72e97 47-76
+docs/agents/roles.md
+  s_0dd6d7f4e6643b::t_96d7e8e236dfb8 5,8-11,16-17,23,26-28,38,40,42,44,46
+src/lib/ai/orchestrator.test.ts
+  s_0dd6d7f4e6643b::t_17463cc9c72e97 43
+  s_0dd6d7f4e6643b::t_2fccd0a3ebc9a3 41-42,44,73,77,89,101-114
+src/lib/ai/subagent.test.ts
+  s_0dd6d7f4e6643b::t_a8e8b08edd48a6 17-18,112-113
+docs/skills/adding.md
+  s_0dd6d7f4e6643b::t_0f889ca778b6f7 9
+src/lib/db/schemas/action-audit.ts
+  s_0dd6d7f4e6643b::t_82677525f227c0 1-33
+src/lib/ai/tools/sales/schema.ts
+  s_0dd6d7f4e6643b::t_3e4f8b6916d1f4 4,15-34
+  s_0dd6d7f4e6643b::t_c8fb65276ecdcd 12-14,35
+src/lib/ai/tools/code/glob.ts
+  s_0dd6d7f4e6643b::t_0c97fe83e61e73 5,10-13,16-37,39-42,44-48,51-63,65-73
+src/lib/ai/tools/sentry/profiling.ts
+  s_0dd6d7f4e6643b::t_183b0dda2ae30d 5,10-30,32,35-69,71
+src/lib/ai/tools/linear/project-updates.ts
+  s_0dd6d7f4e6643b::t_70c7ccafa26f71 4,8-29,31,33-54,56,58-73,75
+src/lib/ai/tools/discord/threads.ts
+  s_0dd6d7f4e6643b::t_6c6af0768a54e1 6,38-68,70-71,74-77,79-136,138-186,188-191
+src/lib/ai/tools/cms/emails.test.ts
+  s_0dd6d7f4e6643b::t_a71ed55a69ee92 5,88,94
+src/lib/ai/tools/cms/shelter_projects.test.ts
+  s_0dd6d7f4e6643b::t_a71ed55a69ee92 5,117
+src/lib/ai/subagent.ts
+  s_0dd6d7f4e6643b::t_5f8c9a03f9bfca 124-125,128
+  s_0dd6d7f4e6643b::t_bb482bd2dea970 21-23
+src/lib/ai/tools/sentry/issue-management.ts
+  s_0dd6d7f4e6643b::t_de921fa8f783ba 11,15-60,62,65-70,72-83,87-88,124-150,152,155-182,184
+src/lib/redis/types.ts
+  s_0dd6d7f4e6643b::t_9ffc2e5a091f95 11
+src/lib/ai/tools/figma/base.ts
+  s_0dd6d7f4e6643b::t_db99e42cd0a847 10,32-56,58,60-73,75,77-88,90,92-100,102-141,146-149
+src/lib/ai/context.ts
+  s_0dd6d7f4e6643b::t_9862a3a2a6595c 46
+  s_0dd6d7f4e6643b::t_9d85b3eb36439b 72
+  s_0dd6d7f4e6643b::t_0920f68547d9f0 172
+  s_0dd6d7f4e6643b::t_c42c3fa8b4b779 64
+  s_0dd6d7f4e6643b::t_e61fb55012888a 23-34
+src/lib/ai/tools/figma/nodes.ts
+  s_0dd6d7f4e6643b::t_5c71ad3943e82a 10,13-31,33,35-59,61,63-74,76
+src/lib/ai/tools/discord/members.ts
+  s_0dd6d7f4e6643b::t_be562940844256 6,13-42,44-58,60-62,64,66
+src/lib/ai/tools/github/actions.ts
+  s_0dd6d7f4e6643b::t_fa91c731d2e17c 179-180
+  s_0dd6d7f4e6643b::t_c172b22a3ff0b3 10-12
+  s_0dd6d7f4e6643b::t_ddc4cbf95e03ee 116-117
+  s_0dd6d7f4e6643b::t_6c87a19dcace22 120-122
+  s_0dd6d7f4e6643b::t_dcdfebd6389518 219-221
+  s_0dd6d7f4e6643b::t_f5b866ad09bafd 279
+  s_0dd6d7f4e6643b::t_936744fd8a26d4 153-154
+  s_0dd6d7f4e6643b::t_fba961273d7a7c 37
+  s_0dd6d7f4e6643b::t_17463cc9c72e97 13-35,43-94,115,123-148,222-253,255-256,264-277
+  s_0dd6d7f4e6643b::t_aa74b647c0fdfa 261-263
+  s_0dd6d7f4e6643b::t_554920f09a99a6 150
+  s_0dd6d7f4e6643b::t_2b1e9057d69965 257-258
+  s_0dd6d7f4e6643b::t_a1c0a8e2c9f6d3 5
+  s_0dd6d7f4e6643b::t_82a9c7940a15dc 199-200
+  s_0dd6d7f4e6643b::t_b42caf585a95a8 40-42
+src/lib/ai/tools/discord/member-management.ts
+  s_0dd6d7f4e6643b::t_915e2112f6f418 6,9-22,24-31,34-35,51-52,82-89,91-97,100-112,114-122,125-132,134-141
+src/lib/ai/tools/code/bash.ts
+  s_0dd6d7f4e6643b::t_0c97fe83e61e73 5,33-36,54-79,81-90,93-108,110-133,136-142,146-165,167-170
+src/lib/tasks/queue/handlers/scheduled-task-fire.ts
+  s_0dd6d7f4e6643b::t_d35a920b963a3b 222,289-295,306,332
+  s_0dd6d7f4e6643b::t_24a2dc337580a6 241-251
+  s_0dd6d7f4e6643b::t_842f4fc54b62c3 297-298,300,304,318,322-331
+  s_0dd6d7f4e6643b::t_9050733bdfae87 7,9,14
+  s_0dd6d7f4e6643b::t_17463cc9c72e97 315-317
+  s_0dd6d7f4e6643b::t_1e9aca61f6c6f5 216-221,223,237-238,252-281,283-285,287-288,296,299,301-303,305,307-314,321,333-346
+  s_0dd6d7f4e6643b::t_a75d3e7f460618 282,286
+src/lib/ai/tools/sales/deals.ts
+  s_0dd6d7f4e6643b::t_30579c783c4813 10
+  s_0dd6d7f4e6643b::t_a5c5445332d705 25-56,58,60-70,72,74-94,96-102,104,106-120,122,124-147
+src/lib/ai/tools/figma/components.ts
+  s_0dd6d7f4e6643b::t_34311c2db4e501 160
+  s_0dd6d7f4e6643b::t_006e23e61be4cc 18,56-77,79-93,95-107,109-133,135-149,151,157-159,161-178,180-194,196-208,210
+src/lib/ai/tools/linear/project-views.ts
+  s_0dd6d7f4e6643b::t_9e73fc2bef4d90 4,7-26,28
+src/lib/ai/policy/access.ts
+  s_0dd6d7f4e6643b::t_d45a54ed391fab 1-36
+src/lib/ai/tools/cms/hack_night_sessions.test.ts
+  s_0dd6d7f4e6643b::t_a71ed55a69ee92 7,136
+docs/architecture.md
+  s_0dd6d7f4e6643b::t_0f889ca778b6f7 161-162
+src/lib/ai/tools/sales/audiences.ts
+  s_0dd6d7f4e6643b::t_63a41e2a32d87e 4,7-19,21-32,34,36-47,49,51-52
+  s_0dd6d7f4e6643b::t_5a516b6020b385 67-79,81,83-105,107,109-110
+src/lib/ai/tools/discord/membership.ts
+  s_0dd6d7f4e6643b::t_7f95686fa4d4fa 6,9-28,30-48,51-58,60-66
+src/lib/ai/tools/github/organization.ts
+  s_0dd6d7f4e6643b::t_e7edcb8546bbb8 5,9-11
+  s_0dd6d7f4e6643b::t_d1fdd00047c3f5 128,130-132
+  s_0dd6d7f4e6643b::t_321e79f420282e 181-183
+  s_0dd6d7f4e6643b::t_92036225cd18bd 238-240
+  s_0dd6d7f4e6643b::t_6b110d9b8fbdb6 106,108-110
+  s_0dd6d7f4e6643b::t_78d02406fa2c09 235
+  s_0dd6d7f4e6643b::t_933f73ed0510af 82,84-86
+  s_0dd6d7f4e6643b::t_59c83ece898711 198-199
+  s_0dd6d7f4e6643b::t_21d726a075d8c5 55,57-59
+  s_0dd6d7f4e6643b::t_9b40c41df39f3b 323-325
+  s_0dd6d7f4e6643b::t_17463cc9c72e97 12-32,39-53,60-80,87-104,111-126,133-154,184-186,188-194,222-225,227-234,241-265,272-300,326-345
+  s_0dd6d7f4e6643b::t_ae34224bbbd2b8 156,158-159
+  s_0dd6d7f4e6643b::t_d966628045c5c7 195
+  s_0dd6d7f4e6643b::t_711179c744c833 302,304-305
+  s_0dd6d7f4e6643b::t_0534e4377a9f02 219-221
+  s_0dd6d7f4e6643b::t_510f902bfbec10 347
+  s_0dd6d7f4e6643b::t_f9376b1a744d11 267,269-271
+  s_0dd6d7f4e6643b::t_423463b212f57b 34,36-38
+src/lib/ai/tools/figma/versions.ts
+  s_0dd6d7f4e6643b::t_5f7a74ecef09a9 6,9-25,27-42
+src/lib/ai/tools/sales/broadcasts.ts
+  s_0dd6d7f4e6643b::t_0e58d644a7de29 93-94
+  s_0dd6d7f4e6643b::t_ce0be9124b8615 4,7-19,21-32,34,36-67,69,71-72
+src/lib/ai/tools/code/grep.ts
+  s_0dd6d7f4e6643b::t_0c97fe83e61e73 4,9-12,15-41,43-46,48-52,55-63,65-73
+src/lib/ai/policy/apply.test.ts
+  s_0dd6d7f4e6643b::t_d97074d501df12 1-6,10-13,18-30,32-132,134-148,150-256,258-272
+  s_0dd6d7f4e6643b::t_b7af48e2f8d89d 31
+  s_0dd6d7f4e6643b::t_6523b34b7ace63 257
+  s_0dd6d7f4e6643b::t_a75d3e7f460618 133,149
+  s_0dd6d7f4e6643b::t_17463cc9c72e97 7-9,14-17
+src/lib/ai/policy/index.ts
+  s_0dd6d7f4e6643b::t_54720215031ff7 7-9,11-21
+  s_0dd6d7f4e6643b::t_b351dd7b25efa2 1,3-4
+  s_0dd6d7f4e6643b::t_b7af48e2f8d89d 2,5-6,10
+src/lib/ai/tools/discord/emojis.ts
+  s_0dd6d7f4e6643b::t_0c17090f5b03fb 6,28-37,39,41-60,62-63,65-67,69-75,77,79-95,97-110,112-113
+src/lib/ai/tools/linear/documents.ts
+  s_0dd6d7f4e6643b::t_c46897758afb2f 4,7-26,28,30-47,49
+src/lib/test/fixtures/approvals.ts
+  s_0dd6d7f4e6643b::t_47d0d7a02cae24 23-27,36
+docs/agents/adding-tools.md
+  s_0dd6d7f4e6643b::t_7634d1ea29fecd 18,20,23,25-26,33
+src/lib/ai/tools/linear/comments.ts
+  s_0dd6d7f4e6643b::t_afcc302a656ccc 4,7-20,22-34,36-37
+src/lib/ai/tools/linear/projects.ts
+  s_0dd6d7f4e6643b::t_d797e78b9f1da1 4,7-28,30,32-53,55,57-73,75,77-92,94,96-116,118-119,131-141,143-144,155-185
+src/lib/ai/policy/apply.ts
+  s_0dd6d7f4e6643b::t_b7af48e2f8d89d 5
+  s_0dd6d7f4e6643b::t_d35a920b963a3b 11
+  s_0dd6d7f4e6643b::t_8649c430b554ad 1-4,6-10,12-139
+src/lib/ai/tools/linear/membership.ts
+  s_0dd6d7f4e6643b::t_57bee758a78056 4,7-17,19-33,36-49,51-66
+src/lib/ai/policy/budget.ts
+  s_0dd6d7f4e6643b::t_b7af48e2f8d89d 10
+  s_0dd6d7f4e6643b::t_81dca41bccc477 11
+  s_0dd6d7f4e6643b::t_a75d3e7f460618 74-75
+  s_0dd6d7f4e6643b::t_59ef52e95efcf3 1-9,12-50,62-67,69-70,73,76-86,88-89,92,94-98
+  s_0dd6d7f4e6643b::t_3b2518f753404a 51-61,68,71-72,87,90-91,93
+src/lib/ai/tools/linear/base.ts
+  s_0dd6d7f4e6643b::t_17463cc9c72e97 31,36
+  s_0dd6d7f4e6643b::t_d86072a9c2450a 12-30,37-71,73-92,94-188,190,192-218,220-258,260,262-300,302,305-309
+  s_0dd6d7f4e6643b::t_73606b718b182c 4,7-11
+src/lib/ai/streaming.ts
+  s_0dd6d7f4e6643b::t_7136e41b7dcf42 133,137-139
+  s_0dd6d7f4e6643b::t_fc8881a67f7c4f 23
+  s_0dd6d7f4e6643b::t_4add23ecba9b4f 181-183
+  s_0dd6d7f4e6643b::t_048bfd1cc2f3a2 185-215,224,230,239
+src/lib/ai/tools/github/issues.ts
+  s_0dd6d7f4e6643b::t_614deaeb267acd 218
+  s_0dd6d7f4e6643b::t_566c14c0a68379 97-99
+  s_0dd6d7f4e6643b::t_20ad2e43cb63f0 311-313
+  s_0dd6d7f4e6643b::t_de2dbef9c169a2 221-223
+  s_0dd6d7f4e6643b::t_5ba9331f1e3363 114
+  s_0dd6d7f4e6643b::t_04a497ec6299d6 142-143
+  s_0dd6d7f4e6643b::t_f565bfadb5d767 5
+  s_0dd6d7f4e6643b::t_eff2ffa82277bf 68
+  s_0dd6d7f4e6643b::t_5893f3526a321a 36
+  s_0dd6d7f4e6643b::t_b80ecd3daa01fd 39-41
+  s_0dd6d7f4e6643b::t_b0cff2584d8b2a 263-265
+  s_0dd6d7f4e6643b::t_597d56d73dbdb2 71-72
+  s_0dd6d7f4e6643b::t_d47cc9b4c951de 117-119
+  s_0dd6d7f4e6643b::t_29e75ddd121cae 139
+  s_0dd6d7f4e6643b::t_609606e2ee9828 196
+  s_0dd6d7f4e6643b::t_2c8b2f3199ded0 10-12
+  s_0dd6d7f4e6643b::t_e6342e93e3c465 199-201
+  s_0dd6d7f4e6643b::t_ab96331a4a2f9a 167-169
+  s_0dd6d7f4e6643b::t_17463cc9c72e97 13-34,42-66,100-112,120-137,170-194,202-216,224-238,266-304,306,314-363,365
+  s_0dd6d7f4e6643b::t_33b78bb4f8f45d 243-244
+  s_0dd6d7f4e6643b::t_490868d3d6bf3e 240
+  s_0dd6d7f4e6643b::t_d09e8bd957c31c 307-308
+  s_0dd6d7f4e6643b::t_7b832fe4a6d588 366-367
+src/lib/ai/tools/sales/emails.ts
+  s_0dd6d7f4e6643b::t_1624dfc084e8a3 4,7-19,21,23-24
+docs/agents/context.md
+  s_0dd6d7f4e6643b::t_0f889ca778b6f7 64
+src/lib/ai/tools/discord/audit-log.ts
+  s_0dd6d7f4e6643b::t_3a047e5ae68e78 6,9-54,56
+src/lib/ai/tools/discord/messages.ts
+  s_0dd6d7f4e6643b::t_6c1c125f9ed973 5,12-13,34-35,50-62,64,66-67,82-99,101-124,126-129,147-148,165-179,181,183-184,208-209,223-264,266-269
+docs/agents/orchestrator.md
+  s_0dd6d7f4e6643b::t_0f889ca778b6f7 20,30
+src/lib/ai/tools/cms/emails.ts
+  s_0dd6d7f4e6643b::t_c093a4db0d79a3 4
+  s_0dd6d7f4e6643b::t_8034f91a4c5f3e 42
+src/lib/ai/tools/sentry/membership.ts
+  s_0dd6d7f4e6643b::t_7db8a157ab6fe9 5,8-27,29-51,54-60,62-73
+src/lib/ai/tools/finance/base.ts
+  s_0dd6d7f4e6643b::t_0c97fe83e61e73 4,24-47,50-67
+src/lib/ai/tools/sentry/performance.ts
+  s_0dd6d7f4e6643b::t_e11e6071651568 5,10-18,20-39,41,44-71,73,76-114,116
+  s_0dd6d7f4e6643b::t_24887352b87148 19
+src/lib/ai/tools/notion/comments.ts
+  s_0dd6d7f4e6643b::t_188999a7b4b2d0 6,10-23,25-32,34,36-46,52-84
+src/lib/ai/tools/discord/invites.ts
+  s_0dd6d7f4e6643b::t_8f8dcb5e296d81 6,13-14,37-38,84-91,93-99
+src/lib/ai/tools/notion/pages.ts
+  s_0dd6d7f4e6643b::t_b8781179e5cc71 11,26-56,58,60-81,83-89,91,93-110,112,114-124,126,128-129,149-179,181-185
+src/lib/db/index.ts
+  s_0dd6d7f4e6643b::t_f664c4fd50a829 5,11-17
+src/lib/ai/tools/linear/cycles.ts
+  s_0dd6d7f4e6643b::t_785d08ae88ec85 4,7-31,33-42,46,51-54,56-78,80,82-102,104,106-107
+src/lib/ai/tools/code/run_checks.ts
+  s_0dd6d7f4e6643b::t_0c97fe83e61e73 6,17-20,25-32,34-39,41-43,45-50,52-72,74,76-85
+src/lib/ai/tools/cms/ugrants.test.ts
+  s_0dd6d7f4e6643b::t_a71ed55a69ee92 5,144
+src/lib/ai/tools/discord/stickers.ts
+  s_0dd6d7f4e6643b::t_9eaab8fdc3a19c 6,31-40,42-58,60-64,66-73,75-90,92,94-95
+src/lib/ai/tools/sentry/replays.ts
+  s_0dd6d7f4e6643b::t_30c774accdfd92 5,10-65,67,70-88,90
+src/lib/ai/tools/finance/invoices.ts
+  s_0dd6d7f4e6643b::t_0c97fe83e61e73 4,36-50,53-64,66,69-85
+src/lib/ai/tools/linear/teams.ts
+  s_0dd6d7f4e6643b::t_5c65533b7ea3ed 4,7-28,30,32-33,57-68,70-74,76-79
+docs/agents/approvals.md
+  s_0dd6d7f4e6643b::t_df47da77fecea8 3,5,15-17,20,24-25,38-40,44,46,50,52-53,57,61,68,70,72
+  s_0dd6d7f4e6643b::t_379edc1baa8e6f 7-13,63-66
+src/lib/ai/tools/github/projects.ts
+  s_0dd6d7f4e6643b::t_17463cc9c72e97 12-30,32-33,41-47,55-72,75-76,86-89,97-113,115-128,131-132,158-180,188-197,202-205,213-229,234-237
+  s_0dd6d7f4e6643b::t_10e914d74cef6e 206-207,210-212
+  s_0dd6d7f4e6643b::t_fc3f98346efd2d 48-49,52-54
+  s_0dd6d7f4e6643b::t_9f848f7f6df74a 181-182,185-187
+  s_0dd6d7f4e6643b::t_fea50137a458f5 90-91,94-96
+  s_0dd6d7f4e6643b::t_602dcf76a4359d 238-239,242-243
+  s_0dd6d7f4e6643b::t_1085d927aa5cdd 5
+  s_0dd6d7f4e6643b::t_6edee8d619a872 9-11
+src/lib/ai/tools/discord/auto-moderation.ts
+  s_0dd6d7f4e6643b::t_9f9772b64560cf 6,35-48,50-62,64,66-98,100,102-128,130,132-133
+src/lib/ai/tools/sales/enrichment.ts
+  s_0dd6d7f4e6643b::t_1ffba595fb08e1 61-93,95-98,101-106,108-110,112-128,130
+  s_0dd6d7f4e6643b::t_7893ede8cd47bd 4
+src/lib/ai/tools/figma/dev-resources.ts
+  s_0dd6d7f4e6643b::t_51a488092ec11c 12,15-32,34,36-63,65,67-84,86,88-89
+src/lib/ai/tools/shopping/cart.ts
+  s_0dd6d7f4e6643b::t_0c97fe83e61e73 13,37-56,58,60-61,78-91,93,95-121,123,125-126
+src/lib/ai/approvals/helpers.ts
+  s_0dd6d7f4e6643b::t_6f130ddd55e656 74-77,83
+docs/agents/README.md
+  s_0dd6d7f4e6643b::t_0f889ca778b6f7 17-18,20
+src/lib/ai/tools/sentry/traces.ts
+  s_0dd6d7f4e6643b::t_968321253c650f 4,9-24,26,29-56,58
+src/lib/ai/context.test.ts
+  s_0dd6d7f4e6643b::t_1ad7a25a84976a 3,5,302-345
+src/lib/ai/policy/decide.ts
+  s_0dd6d7f4e6643b::t_a75d3e7f460618 60
+  s_0dd6d7f4e6643b::t_b7af48e2f8d89d 11
+  s_0dd6d7f4e6643b::t_fb151543e6dfe8 1-10,12-59,61-68
+src/lib/ai/tools/search/index.ts
+  s_0dd6d7f4e6643b::t_c8fb65276ecdcd 6,19-107,109-111,113-130
+src/lib/ai/tools/github/contents.ts
+  s_0dd6d7f4e6643b::t_4ae72395de708f 118-120
+  s_0dd6d7f4e6643b::t_c1e64112852121 148-150
+  s_0dd6d7f4e6643b::t_7dbafe7cfdf9fe 92-93
+  s_0dd6d7f4e6643b::t_e5466fce285049 10-12
+  s_0dd6d7f4e6643b::t_b8245cfcd4ce1c 55-56
+  s_0dd6d7f4e6643b::t_fad139ff567a86 218-220
+  s_0dd6d7f4e6643b::t_17463cc9c72e97 13-47,51,54,62-87,121-143,151-180,188-213,221-251
+  s_0dd6d7f4e6643b::t_c3e92589213f10 185-187
+  s_0dd6d7f4e6643b::t_eb6b21a96f18e3 59-61
+  s_0dd6d7f4e6643b::t_2fe5b2cf917b08 215
+  s_0dd6d7f4e6643b::t_92f2bcd945e968 253
+  s_0dd6d7f4e6643b::t_1b8f5796391c73 89
+  s_0dd6d7f4e6643b::t_9f40d19098b829 182
+  s_0dd6d7f4e6643b::t_926d6d51c453f4 145
+  s_0dd6d7f4e6643b::t_848f9450c5b864 5
+src/lib/ai/tools/linear/issues.ts
+  s_0dd6d7f4e6643b::t_1f965c79cb23df 4,8-33,35,37-61,63,65-66,78-79,91-101,103-123
+src/lib/ai/approvals/runtime.ts
+  s_0dd6d7f4e6643b::t_a8d2002a53d2f5 7-12
+  s_0dd6d7f4e6643b::t_70c17fa19db9f0 6,231-239,244,280-303
+  s_0dd6d7f4e6643b::t_14d3fecddd87cb 29-31,37-44
+  s_0dd6d7f4e6643b::t_7167a1cb807b56 245-279
+  s_0dd6d7f4e6643b::t_322f6fd5edf6d5 146-153,156,161,172,178-188,201,205,217-221,225-230
+  s_0dd6d7f4e6643b::t_d35a920b963a3b 328-329
+  s_0dd6d7f4e6643b::t_65adcae7af8243 207-209
+src/lib/ai/approvals/types.ts
+  s_0dd6d7f4e6643b::t_14e0bb5e82867e 14,16-20
+  s_0dd6d7f4e6643b::t_bd6025e7180b1e 40-44
+  s_0dd6d7f4e6643b::t_6523b34b7ace63 2
+  s_0dd6d7f4e6643b::t_efa21f0ea29e96 68-69
+  s_0dd6d7f4e6643b::t_0a777a6b5dbf50 95-96
+  s_0dd6d7f4e6643b::t_b7af48e2f8d89d 15
+drizzle/0002_tiny_norman_osborn.sql
+  s_0dd6d7f4e6643b::t_3e585f2e829e9a 1-19
+src/lib/ai/tools/code/list_dir.ts
+  s_0dd6d7f4e6643b::t_0c97fe83e61e73 4,7-10,13-26,28-43
+src/lib/ai/tools/code/todo_write.ts
+  s_0dd6d7f4e6643b::t_0c97fe83e61e73 4-5,12-15,20-37,39
+src/lib/ai/tools/schedule/index.ts
+  s_0dd6d7f4e6643b::t_73c6c37b5f6f02 15
+  s_0dd6d7f4e6643b::t_e9db0f017acc84 170-188,190
+  s_0dd6d7f4e6643b::t_41a1b11d584420 82-83
+  s_0dd6d7f4e6643b::t_c9840325cd47a6 192-193
+src/lib/ai/tools/code/read.ts
+  s_0dd6d7f4e6643b::t_0c97fe83e61e73 4,9-12,15-33,35-43,45-48,50-52,54-58,60-71
+src/lib/ai/tools/finance/transfers.ts
+  s_0dd6d7f4e6643b::t_0c97fe83e61e73 4,31-42,44,47-61
+src/lib/ai/tools/github/base.ts
+  s_0dd6d7f4e6643b::t_29a14e15bd4848 10-12
+  s_0dd6d7f4e6643b::t_d4d9eadb92606e 45
+  s_0dd6d7f4e6643b::t_17463cc9c72e97 13-43,51-83,91-110,112-114,116-119,121-130,133-134,136-144,146-150,158-190
+  s_0dd6d7f4e6643b::t_2d856b7290a7e4 5
+  s_0dd6d7f4e6643b::t_73d4789f674971 88-90
+  s_0dd6d7f4e6643b::t_e0e0c23a9439d4 48-50
+  s_0dd6d7f4e6643b::t_bb9d35b6e7959c 151-152
+  s_0dd6d7f4e6643b::t_c8633fefcbd105 155-157
+  s_0dd6d7f4e6643b::t_eaab4acdabe1ee 85
+  s_0dd6d7f4e6643b::t_4751646b7c9a8a 192
+docs/workflows/scheduling.md
+  s_0dd6d7f4e6643b::t_379edc1baa8e6f 23-24,26-27
+  s_0dd6d7f4e6643b::t_301670cbd3523c 35-38
+  s_0dd6d7f4e6643b::t_0f889ca778b6f7 25
+src/lib/ai/tools/notion/blocks.ts
+  s_0dd6d7f4e6643b::t_97f00b254350e8 4,8-19,21,23-42,44,46-47,64-89,91,93-122,124
+src/lib/ai/tools/sentry/releases.ts
+  s_0dd6d7f4e6643b::t_59c4c6a33252bf 13,17-49,51,54-71,73,76-100,102,105-122,124,127-155,157,160-185,187
+src/lib/ai/tools/roster/index.ts
+  s_0dd6d7f4e6643b::t_c8fb65276ecdcd 6-7,10-24,26-29,31-45
+src/lib/ai/tools/cms/rsvps.test.ts
+  s_0dd6d7f4e6643b::t_a71ed55a69ee92 5,87
+src/lib/ai/tools/linear/customer-requests.ts
+  s_0dd6d7f4e6643b::t_850dfd415b7f80 4,7-24,26,28-43,45,47-59
+src/lib/ai/tools/code/edit.ts
+  s_0dd6d7f4e6643b::t_0c97fe83e61e73 4,7-10,13-35,37-45,47-52,54-70,72-79,83,85-87
+src/lib/ai/tools/sentry/metrics.ts
+  s_0dd6d7f4e6643b::t_198c071790e0a7 4,8-21,23,26-62,64,67-81,83,86-101,103
+src/lib/ai/tools/discord/channels.ts
+  s_0dd6d7f4e6643b::t_bd871446dba678 6,46-81,83-112,114-118,120,122-199,201-212,214,216-239,241,243-244
+src/lib/ai/tools/sentry/logs.ts
+  s_0dd6d7f4e6643b::t_f7c9e801c05fae 9,14-53,55,58-89,91
+src/lib/ai/tools/github/collaborators.ts
+  s_0dd6d7f4e6643b::t_561b538c306be6 114-116
+  s_0dd6d7f4e6643b::t_26b7fdf6cfad83 66-68
+  s_0dd6d7f4e6643b::t_17463cc9c72e97 12-33,69-72,74-82,117-120,122-130
+  s_0dd6d7f4e6643b::t_c0b0b20da2e655 5
+  s_0dd6d7f4e6643b::t_828c7dec0e8da3 85-86
+  s_0dd6d7f4e6643b::t_55a928c16d7653 9-11
+  s_0dd6d7f4e6643b::t_f29d68b02e3a98 37-38
+src/lib/ai/tools/vercel/rollouts.ts
+  s_0dd6d7f4e6643b::t_17463cc9c72e97 121-127
+  s_0dd6d7f4e6643b::t_4eddc6d5a8458e 4,12-58,72-73,93-94,114-120,128-137,139-156,158-161,179-194,196-211,213-230,232
+src/lib/ai/tools/github/packages.ts
+  s_0dd6d7f4e6643b::t_9023bb4721474c 68,71-73
+  s_0dd6d7f4e6643b::t_58d4ee35164167 100,103-104
+  s_0dd6d7f4e6643b::t_17463cc9c72e97 15-38,46-66,74-98
+  s_0dd6d7f4e6643b::t_4c0e2ff8a55df5 5
+  s_0dd6d7f4e6643b::t_8ba9c6b8325178 12-14
+  s_0dd6d7f4e6643b::t_b68195e9b39ab2 40,43-45
+src/lib/ai/tools/github/tags-refs.ts
+  s_0dd6d7f4e6643b::t_5cf7679c28afab 102,104-106
+  s_0dd6d7f4e6643b::t_e3599b89488ac7 126,128-129
+  s_0dd6d7f4e6643b::t_3993ac0b1774b2 5
+  s_0dd6d7f4e6643b::t_1e3708f0c12fbd 9-11
+  s_0dd6d7f4e6643b::t_1ac20319ed40c5 33,35-37
+  s_0dd6d7f4e6643b::t_ceaaabed63570f 61,63-65
+  s_0dd6d7f4e6643b::t_0869405bed9474 80,82-84
+  s_0dd6d7f4e6643b::t_17463cc9c72e97 12-31,38-59,66-78,85-100,107-124
+src/lib/ai/tools/sentry/stats.ts
+  s_0dd6d7f4e6643b::t_51e970c12abc6c 9,13-51,53,56-91,93
+src/lib/ai/tools/discord/base.ts
+  s_0dd6d7f4e6643b::t_d3a79f64475fc2 6,44-68,70-135,137-158,160-166
+src/lib/ai/policy/audit.test.ts
+  s_0dd6d7f4e6643b::t_70c17fa19db9f0 64-76
+  s_0dd6d7f4e6643b::t_c09360a79f9480 1-63,77-121
+src/lib/ai/tools/sales/companies.ts
+  s_0dd6d7f4e6643b::t_8b82fdf32bf020 6
+  s_0dd6d7f4e6643b::t_22ee38cba3caf1 21-55,57,59-69,71,73-97,99,101-102
+  s_0dd6d7f4e6643b::t_a625e880e694f3 119-133,135,137-151,153,155-169,171,173-192,194
+src/lib/ai/tools/linear/labels.ts
+  s_0dd6d7f4e6643b::t_07234a0da941a1 4,7-33,35,37-54,56-77,79,81-96,98,100-101
+src/lib/ai/types.ts
+  s_0dd6d7f4e6643b::t_8fc857aa70affb 63-68
+  s_0dd6d7f4e6643b::t_8874b2e8ce9b7b 256
+  s_0dd6d7f4e6643b::t_1239ce83292fb0 5
+src/lib/ai/tools/github/secrets-and-variables.ts
+  s_0dd6d7f4e6643b::t_ecc59a8727f7be 196-197,199-200
+  s_0dd6d7f4e6643b::t_eb40bc23f52ad3 246,248-250
+  s_0dd6d7f4e6643b::t_27fb25d9c4d2a9 164-169
+  s_0dd6d7f4e6643b::t_c828140dea32fc 62-64
+  s_0dd6d7f4e6643b::t_a8aa5bdd3d8e8c 114,116-117
+  s_0dd6d7f4e6643b::t_004dc294d5d410 222-224
+  s_0dd6d7f4e6643b::t_f1cc699ed11301 324-329
+  s_0dd6d7f4e6643b::t_17463cc9c72e97 65-85,92-112,142-148,151-161,163,170-178,184-195,225-244,251-275,303-308,310-311,313-323,330-339,346-358
+  s_0dd6d7f4e6643b::t_c8516389f16089 9
+  s_0dd6d7f4e6643b::t_b2acc3d61886df 277,279-280
+  s_0dd6d7f4e6643b::t_ec01a8115bb049 302
+  s_0dd6d7f4e6643b::t_314b884da3144a 359-360,362-363
+  s_0dd6d7f4e6643b::t_5f84618f2d5c81 139-141
+  s_0dd6d7f4e6643b::t_c86e39a358685e 87,89-91
+src/lib/ai/tools/discord/webhooks.ts
+  s_0dd6d7f4e6643b::t_4d49f8d5525ca4 6,28-42,44-45,47,49-61,63-65,67-73,75-91,93-95,97-105,107-108
+src/lib/ai/tools/code/preview_url.ts
+  s_0dd6d7f4e6643b::t_0c97fe83e61e73 4,9-12,15-37,39
+src/lib/ai/tools/linear/reminders.ts
+  s_0dd6d7f4e6643b::t_ccc5c946b324be 4,7-21,23
+src/lib/ai/tools/discord/roles.ts
+  s_0dd6d7f4e6643b::t_8e4be3b4c5e24f 6,13-43,45-50,52-56,58-60,62-101,103-105,107-111,113-117,119-121,123-124,142-154,156,158-159
+src/lib/tasks/queue/handlers/scheduled-task-fire.test.ts
+  s_0dd6d7f4e6643b::t_c5ffa1ade81794 385-418,420-442,444-458,460-482
+  s_0dd6d7f4e6643b::t_20846bdd6adc9b 5,443
+  s_0dd6d7f4e6643b::t_17463cc9c72e97 419
+  s_0dd6d7f4e6643b::t_a75d3e7f460618 459
+src/lib/ai/policy/decide.test.ts
+  s_0dd6d7f4e6643b::t_f3f2ccfb3a87f9 1-5,8-77,80-113
+  s_0dd6d7f4e6643b::t_b7af48e2f8d89d 6-7
+  s_0dd6d7f4e6643b::t_a75d3e7f460618 78-79
+docs/skills/README.md
+  s_0dd6d7f4e6643b::t_0f889ca778b6f7 21,31
+src/lib/ai/tools/access-coverage.test.ts
+  s_0dd6d7f4e6643b::t_5ba7b8c0d0a68e 3,5-12,14-32,38
+  s_0dd6d7f4e6643b::t_a75d3e7f460618 107-109
+  s_0dd6d7f4e6643b::t_7ee5a5584feba4 1-2,4,13,39-106,110-172
+  s_0dd6d7f4e6643b::t_e07c6c40389aa6 33-37
+docs/skills/registry.md
+  s_0dd6d7f4e6643b::t_0f889ca778b6f7 30
+src/lib/ai/tools/github/pull-requests.ts
+  s_0dd6d7f4e6643b::t_be128c4efb8a09 148,151-152
+  s_0dd6d7f4e6643b::t_cd460dd5346f34 207,210-212
+  s_0dd6d7f4e6643b::t_53730c71665de1 300
+  s_0dd6d7f4e6643b::t_17463cc9c72e97 13-35,43-65,123-146,181-205,213-233,241-265,273-298
+  s_0dd6d7f4e6643b::t_66a517c839acd5 67,70-71
+  s_0dd6d7f4e6643b::t_4aae60c92e3333 178-180
+  s_0dd6d7f4e6643b::t_1ca7eaef7cb56d 98-99
+  s_0dd6d7f4e6643b::t_ba9c60a9ddd417 37,40-42
+  s_0dd6d7f4e6643b::t_8c75986a6883f7 120-122
+  s_0dd6d7f4e6643b::t_d34e14633212d6 235,238-240
+  s_0dd6d7f4e6643b::t_44d8051cccd3a6 267,270-272
+  s_0dd6d7f4e6643b::t_2ab1b10657aa07 5
+  s_0dd6d7f4e6643b::t_2990d40098e664 10-12
+docs/agents/policy.md
+  s_0dd6d7f4e6643b::t_379edc1baa8e6f 5-13,33-34,36-38,88
+  s_0dd6d7f4e6643b::t_8a0c64f4c6786a 1-4,14-32,35,39-87
+src/bot/components/tool-approval.test.ts
+  s_0dd6d7f4e6643b::t_f90fddb5509064 92-199
+  s_0dd6d7f4e6643b::t_3d415853165f4e 20-22
+src/lib/ai/tools/sales/outreach.ts
+  s_0dd6d7f4e6643b::t_78c36f2cc864b3 48-49
+  s_0dd6d7f4e6643b::t_511499cca87a35 86-123,125
+src/lib/ai/skills/loader.ts
+  s_0dd6d7f4e6643b::t_4a865dc645514c 7-8,17-34,42-44
+src/lib/ai/tools/vercel/team.ts
+  s_0dd6d7f4e6643b::t_4eddc6d5a8458e 4,12-23,25,29-42,50-65,67-68,83-84,100-115,117-135,149-166,168,172-194,196-199,212-225,227-242,244,248-276,289-303,305,309-321,323-335,337,341-357,359-376,378-381
+src/lib/ai/tools/sentry/monitors.ts
+  s_0dd6d7f4e6643b::t_97b89395c7aec1 12,16-49,51,54-72,74,77-97,99,102-147,149-157,159-176,179-184,186-197
+src/lib/ai/tools/finance/transactions.ts
+  s_0dd6d7f4e6643b::t_17463cc9c72e97 85-89
+  s_0dd6d7f4e6643b::t_0c97fe83e61e73 4,37-51,54-65,67,70-84,90-113,115
+src/lib/ai/tools/cms/users.test.ts
+  s_0dd6d7f4e6643b::t_7ac95a1648af2f 5,31,33-35
+  s_0dd6d7f4e6643b::t_a71ed55a69ee92 102-103
+src/lib/redis/fakes.ts
+  s_0dd6d7f4e6643b::t_1c9397bb668477 61-68
+src/lib/ai/tools/github/membership.ts
+  s_0dd6d7f4e6643b::t_84020d79b4b38b 5,8-10
+  s_0dd6d7f4e6643b::t_17463cc9c72e97 15
+  s_0dd6d7f4e6643b::t_167f194d2e20b3 11-14,17-29,32-38,40-47
+src/lib/ai/tools/linear/initiative-updates.ts
+  s_0dd6d7f4e6643b::t_25db147574de47 4,8-28,30,32-53,55,57-72,74
+src/lib/ai/approvals/index.ts
+  s_0dd6d7f4e6643b::t_641ddf0d63ea41 23,32,34
+src/lib/ai/policy/types.ts
+  s_0dd6d7f4e6643b::t_a75d3e7f460618 48-49
+  s_0dd6d7f4e6643b::t_81dca41bccc477 2
+  s_0dd6d7f4e6643b::t_a8cecff5bc9c5e 1,3,91-103
+  s_0dd6d7f4e6643b::t_c5d33aff115ec3 4,6
+  s_0dd6d7f4e6643b::t_0da9ddae2fda7d 5,7-47,50-90,104
+src/lib/ai/tools/sentry/alerts.ts
+  s_0dd6d7f4e6643b::t_57b4c749098800 14,18-47,49,52-72,74,77-124,126,129-154,156-179,182-188,190-202,206-233,236-254,256
+src/lib/ai/tools/linear/initiatives.ts
+  s_0dd6d7f4e6643b::t_0abb3742d1007d 4,7-25,27,29-47,49,51-69,71-84
+src/lib/ai/tools/sentry/events.ts
+  s_0dd6d7f4e6643b::t_dc5794a6a5f812 11,16-44,46,49-80,82,85-115,117,120-150,152
+src/lib/ai/tools/github/deployments.ts
+  s_0dd6d7f4e6643b::t_bee20603496735 77-79
+  s_0dd6d7f4e6643b::t_11f59d920f91e5 10-12
+  s_0dd6d7f4e6643b::t_ca5afbfa3c68c7 45-47
+  s_0dd6d7f4e6643b::t_e9a1eecf9bbb52 104-105
+  s_0dd6d7f4e6643b::t_6d77be31af18c2 108-110
+  s_0dd6d7f4e6643b::t_3f11b54cc96b15 167
+  s_0dd6d7f4e6643b::t_c12a9c9399e21e 137-138
+  s_0dd6d7f4e6643b::t_317b7318092513 5
+  s_0dd6d7f4e6643b::t_ea5491b701057d 42
+  s_0dd6d7f4e6643b::t_17463cc9c72e97 13-40,48-61,63-72,80-92,95-96,99-101,103,111-120,122-126,128-136,144-165
+  s_0dd6d7f4e6643b::t_c02ec822765815 74
+  s_0dd6d7f4e6643b::t_b54bd5ac95d27a 141-143
+src/lib/ai/tools/sentry/projects-management.ts
+  s_0dd6d7f4e6643b::t_cab8e2af745473 14,17-18,43-70,72,74-80,82-93,96-114,116,118-144,146,148-167,169,171-172
+src/lib/ai/tools/sales/contacts.ts
+  s_0dd6d7f4e6643b::t_22ecb3f03d3ae1 6
+  s_0dd6d7f4e6643b::t_b1ba2ce10f3f51 21-52,54,56-66,68,70-94,96,98-99
+  s_0dd6d7f4e6643b::t_cea0aba5d793e0 116-130,132,134-148,150,152-171,173
+src/lib/ai/tools/code/write.ts
+  s_0dd6d7f4e6643b::t_0c97fe83e61e73 5,8-11,14-34,36,38-39,41,44-51,55-57,59-61
+src/lib/ai/tools/finance/card-charges.ts
+  s_0dd6d7f4e6643b::t_0c97fe83e61e73 4,38-72,74
+src/lib/ai/tools/cms/service_accounts.test.ts
+  s_0dd6d7f4e6643b::t_7ac95a1648af2f 5,37,44-46,114-115,118-119
+src/lib/ai/tools/notion/base.ts
+  s_0dd6d7f4e6643b::t_243415070b8a4c 6,23-54,56,58-79,81,83-100,102,104-114,120-168
+src/lib/ai/tools/schedule/index.test.ts
+  s_0dd6d7f4e6643b::t_a71ed55a69ee92 29,76,80,84
+src/lib/ai/policy/budget.test.ts
+  s_0dd6d7f4e6643b::t_a75d3e7f460618 66-67
+  s_0dd6d7f4e6643b::t_17463cc9c72e97 72-74
+  s_0dd6d7f4e6643b::t_b7af48e2f8d89d 6-7
+  s_0dd6d7f4e6643b::t_4422b258a1d996 1-5,8-65,68-71,75-107
+src/bot/components/tool-approval.ts
+  s_0dd6d7f4e6643b::t_f8d2d7b76eddb5 82-109
+  s_0dd6d7f4e6643b::t_19d2173664ea4d 9-11
+  s_0dd6d7f4e6643b::t_a0ce67d6e9d6e8 57-59
+src/lib/ai/constants.ts
+  s_0dd6d7f4e6643b::t_a7fc6e9263f0ac 80
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "fde11f88ddea31f69663afd28dad1a21afb3bda3",
+  "prompts": {},
+  "sessions": {
+    "s_0dd6d7f4e6643b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9061d1c1-8b36-4d0a-938e-68dfb7766d64",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
