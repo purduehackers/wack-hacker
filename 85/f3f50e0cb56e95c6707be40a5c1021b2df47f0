@@ -1,0 +1,63 @@
+src/app/api/discord/events/route.ts
+  s_fd146d84077d2f::t_3a96e3d1dc3660 7-8
+  s_fd146d84077d2f::t_50bb26079f3054 9,30,33-45,56
+src/server/routes/interactions/component.test.ts
+  s_fd146d84077d2f::t_bbdc66d8de3907 7
+  s_fd146d84077d2f::t_a36e28cdc1b971 1-6,8-28
+docs/discord/inbound.md
+  s_fd146d84077d2f::t_a81bddc4558605 25,27-28,30
+  s_fd146d84077d2f::t_fbf6afcc16fbf9 12,14-19
+docs/discord/gateway.md
+  s_fd146d84077d2f::t_c8e486a1d62407 31,36,41
+  s_fd146d84077d2f::t_a57e3e22cb275c 50
+  s_fd146d84077d2f::t_0930f18da4d117 25-26
+src/server/routes/gateway/index.ts
+  s_fd146d84077d2f::t_c84e2854679cf0 273
+  s_fd146d84077d2f::t_1335a94658cf1a 268
+  s_fd146d84077d2f::t_9d1ffc1238075b 445-446
+  s_fd146d84077d2f::t_bb08bb3d863892 270-272
+  s_fd146d84077d2f::t_7a5f19518838cf 61-70
+  s_fd146d84077d2f::t_a519a6242fd204 203-207
+  s_fd146d84077d2f::t_96756a16d4e7cc 312-379
+  s_fd146d84077d2f::t_ec632a88f24fc3 202
+  s_fd146d84077d2f::t_826b9e70d22021 383-392
+  s_fd146d84077d2f::t_34b7fe960fefad 208-212,221-267,274-308
+src/server/routes/gateway/index.test.ts
+  s_fd146d84077d2f::t_5f3695ac304fbb 1-3,5-6,17,40-52,55-145
+  s_fd146d84077d2f::t_3ff661ebaec5c1 53-54
+  s_fd146d84077d2f::t_532ac24f75e344 4,7-16,18-39,146-147
+src/server/process-event.ts
+  s_fd146d84077d2f::t_0960c32f2c5ad8 1-3,13-29,55-57,59,65-66,88,91,96,101-116
+  s_fd146d84077d2f::t_6ca6fdce08ed02 12
+  s_fd146d84077d2f::t_f5752182ae0d89 58
+src/server/routes/interactions/component.ts
+  s_fd146d84077d2f::t_e8444062e481b4 7,14
+  s_fd146d84077d2f::t_6623c5b71d71c4 27-37,40-65
+src/server/process-event.test.ts
+  s_fd146d84077d2f::t_d0b2d1bee8545f 28
+  s_fd146d84077d2f::t_3b799a5d35482c 113
+  s_fd146d84077d2f::t_f674a78149fed2 26,29,31,34-36
+  s_fd146d84077d2f::t_bc04d1dc08d7cd 10-11
+  s_fd146d84077d2f::t_f062164870a55b 1-4,8-9,12-25,27,30,32-33,37-112,114-130
+  s_fd146d84077d2f::t_ce67f45756a29b 5-7
+docs/deployment/env.md
+  s_fd146d84077d2f::t_6e369184ee8e79 10
+src/server/errors.ts
+  s_fd146d84077d2f::t_3cb9c2bc47af28 1-7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "85f3f50e0cb56e95c6707be40a5c1021b2df47f0",
+  "prompts": {},
+  "sessions": {
+    "s_fd146d84077d2f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfcdbd30-825d-4c45-a366-075a2f55bfeb",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
