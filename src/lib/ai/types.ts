@@ -245,13 +245,12 @@ export type TelemetryMetadata = Record<string, string | number | undefined>;
 export type OrchestratorFactory = (
   ctx: AgentContext,
   tracker: TurnUsageTracker,
-  extraMetadata?: TelemetryMetadata,
+  extraMetadata: TelemetryMetadata | undefined,
   /**
-   * Gateway model slug override; defaults to `ORCHESTRATOR_MODEL`. Lets
-   * `streamTurn` retry the stream on a fallback model after a terminal
-   * provider error.
+   * Gateway model slug to run. `streamTurn` starts with `ORCHESTRATOR_MODEL`
+   * and retries on a fallback model after a terminal provider error.
    */
-  model?: string,
+  model: string,
 ) => OrchestratorAgent;
 
 /**

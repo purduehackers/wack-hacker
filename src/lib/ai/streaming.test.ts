@@ -30,7 +30,8 @@ vi.mock("@vercel/edge-config", () => ({
 }));
 
 const { AgentContext } = await import("./context.ts");
-const { buildUserMessage, parseModelSlug, streamTurn } = await import("./streaming.ts");
+const { buildUserMessage, parseModelSlug, streamTurn, turnFailureNotice } =
+  await import("./streaming.ts");
 const { FatalError } = await import("workflow");
 type OrchestratorFactory = import("./streaming.ts").OrchestratorFactory;
 
@@ -890,5 +891,33 @@ describe("streamTurn: malformed error parts", () => {
     expect(editBodies.some((c) => c.includes("> Working on it"))).toBe(true);
 
     vi.restoreAllMocks();
+  });
+});
+
+describe("turnFailureNotice", () => {
+  it("includes the trace id when one is active", () => {
+    expect(turnFailureNotice("abc123")).toBe("Something went wrong — try again. Trace: `abc123`");
+  });
+
+  it("omits the trace suffix when no trace id exists", () => {
+    expect(turnFailureNotice(undefined)).toBe("Something went wrong — try again.");
+  });
+});
+
+describe("streamTurn: text-delta edge cases", () => {
+  it("tolerates text-delta parts without text", async () => {
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+      createAgent: fakeOrchestrator([], {
+        extraEvents: [
+          { type: "text-delta", id: "t1", text: "hello" },
+          { type: "text-delta", id: "t1" },
+          { type: "text-delta", id: "t2" },
+        ],
+      }),
+    });
+
+    expect(result.text).toBe("hello\n\n");
   });
 });

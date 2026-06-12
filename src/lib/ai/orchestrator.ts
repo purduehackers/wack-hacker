@@ -44,14 +44,14 @@ export function getOrchestratorTools(
 export function createOrchestrator(
   context: AgentContext,
   tracker: TurnUsageTracker,
-  extraMetadata?: TelemetryMetadata,
-  model?: string,
+  extraMetadata: TelemetryMetadata | undefined,
+  model: string,
 ) {
   const instructions = context.buildInstructions(SYSTEM_PROMPT);
   const tools = getOrchestratorTools(context, tracker, extraMetadata);
 
   return new ToolLoopAgent({
-    model: model ?? ORCHESTRATOR_MODEL,
+    model,
     instructions,
     tools,
     experimental_telemetry: {

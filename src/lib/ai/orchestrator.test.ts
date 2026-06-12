@@ -36,7 +36,7 @@ vi.mock("@vercel/sandbox", () => ({
   Sandbox: class MockSandbox {},
 }));
 
-const { createOrchestrator } = await import("./orchestrator.ts");
+const { createOrchestrator, ORCHESTRATOR_MODEL } = await import("./orchestrator.ts");
 
 const BASE_TOOLS = [
   "cancel_task",
@@ -60,7 +60,7 @@ describe("createOrchestrator", () => {
   });
 
   async function drain(ctx: AgentContext) {
-    const agent = createOrchestrator(ctx, new TurnUsageTracker());
+    const agent = createOrchestrator(ctx, new TurnUsageTracker(), undefined, ORCHESTRATOR_MODEL);
     const result = await agent.stream({ prompt: "say hi" });
     const reader = result.toUIMessageStream().getReader();
     while (!(await reader.read()).done);

@@ -215,10 +215,11 @@ function emitTurnSuccess(args: {
   // Mirror the per-turn totals onto the active chat.turn span so operators can
   // query the trace directly without joining against wide events. Model
   // identity is rewritten too — a fallback retry means the span's initial
-  // ai.model attribute no longer reflects what actually ran.
+  // ai.model attribute no longer reflects what actually ran. OTEL drops
+  // undefined attribute values, so a provider-less slug needs no guard.
   setActiveSpanAttributes({
     "ai.model": model,
-    ...(provider ? { "ai.provider": provider } : {}),
+    "ai.provider": provider,
     "ai.input_tokens": usage.inputTokens,
     "ai.output_tokens": usage.outputTokens,
     "ai.subagent_tokens": usage.subagentTokens,
@@ -252,6 +253,13 @@ function emitTurnSuccess(args: {
   };
 }
 
+/** User-facing failure notice; the trace id lets users report a specific turn. */
+export function turnFailureNotice(traceId: string | undefined): string {
+  return traceId
+    ? `Something went wrong — try again. Trace: \`${traceId}\``
+    : "Something went wrong — try again.";
+}
+
 /**
  * Terminal failure path for a turn: show the user a failure notice (with the
  * trace id for correlation), emit the error wide event, and return the
@@ -268,11 +276,7 @@ async function failTurn(args: {
   const { err, renderer, logger, traceId, startTime } = args;
   const error = err as Error;
   countMetric("ai.turn.failed");
-  await renderer.renderFailure(
-    traceId
-      ? `Something went wrong — try again. Trace: \`${traceId}\``
-      : "Something went wrong — try again.",
-  );
+  await renderer.renderFailure(turnFailureNotice(traceId));
   logger.emit({
     outcome: "error",
     duration_ms: Date.now() - startTime,
