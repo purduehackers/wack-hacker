@@ -237,6 +237,22 @@ describe("applyPolicy — confirmation wrapping", () => {
   });
 });
 
+describe("applyPolicy — confirmation wrapping, approved execution failure", () => {
+  it("audits 'failed' and rethrows when the approved tool throws", async () => {
+    const spy = vi.fn(async (): Promise<string> => {
+      throw new Error("kaboom");
+    });
+    const t = tool({ description: "Explodes", inputSchema: z.object({}), execute: spy });
+    const tools = { nuke: access({ risk: "destructive" }, t) };
+    const { store } = fakeStore("approved", "user-1");
+    const { audit, entries } = fakeAudit();
+    const wrapped = applyPolicy(tools, { context: contextFor("organizer"), store, audit });
+
+    await expect(drain(wrapped.nuke!, { _reason: "because" })).rejects.toThrow("kaboom");
+    expect(entries.map((e) => e.decision)).toEqual(["requested", "approved", "failed"]);
+  });
+});
+
 describe("applyPolicy — destructive allow path (confirm: 'none')", () => {
   it("executes without a prompt but audits the execution", async () => {
     const { tool: t, spy } = makeTool();
@@ -251,6 +267,24 @@ describe("applyPolicy — destructive allow path (confirm: 'none')", () => {
     expect(out.at(-1)).toBe("did x");
     expect(entries.map((e) => e.decision)).toEqual(["executed"]);
     expect(entries[0]!.source).toBe("chat");
+  });
+
+  it("streams async-generator executes through the audit wrapper", async () => {
+    const t = tool({
+      description: "Streams",
+      inputSchema: z.object({}),
+      execute: async function* () {
+        yield "first";
+        yield "final";
+      },
+    });
+    const tools = { streamer: access({ risk: "destructive", confirm: "none" }, t) };
+    const { audit, entries } = fakeAudit();
+    const wrapped = applyPolicy(tools, { context: contextFor("organizer"), audit });
+
+    const out = await drain(wrapped.streamer!, {});
+    expect(out).toEqual(["first", "final"]);
+    expect(entries.map((e) => e.decision)).toEqual(["executed"]);
   });
 
   it("audits failures and rethrows", async () => {

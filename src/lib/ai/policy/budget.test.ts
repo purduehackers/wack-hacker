@@ -1,6 +1,12 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createMemoryRedis } from "@/lib/test/fixtures";
+
+// Mock the third-party Upstash client so the no-store default path (used when
+// UPSTASH env is present) gets an in-memory backend instead of the network.
+vi.mock("@upstash/redis", () => ({
+  Redis: { fromEnv: () => createMemoryRedis() },
+}));
 
 import { UserRole } from "../constants.ts";
 import { BudgetStore, readBudgetState, recordTurnTokens } from "./budget.ts";
@@ -78,6 +84,15 @@ describe("readBudgetState", () => {
     delete process.env.UPSTASH_REDIS_REST_URL;
     delete process.env.UPSTASH_REDIS_REST_TOKEN;
     expect(await readBudgetState({ userId: "u1", role: UserRole.Public })).toBeNull();
+  });
+
+  it("builds a default store when Redis env is configured", async () => {
+    process.env.UPSTASH_REDIS_REST_URL = "https://example.upstash.io";
+    process.env.UPSTASH_REDIS_REST_TOKEN = "token";
+    expect(await readBudgetState({ userId: "u1", role: UserRole.Public })).toEqual({
+      used: 0,
+      limit: PUBLIC_DAILY_TOKEN_LIMIT,
+    });
   });
 });
 

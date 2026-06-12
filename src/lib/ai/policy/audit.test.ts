@@ -90,6 +90,17 @@ describe("AuditLog.record", () => {
     expect(rows[1]!.decidedBy).toBe("u-2");
   });
 
+  it("stores explicit traceId and null-able optionals", async () => {
+    await new AuditLog().record(
+      entry({ delegate: undefined, reason: undefined, traceId: "abc123" }),
+    );
+
+    const rows = await getDb().select().from(actionAudit);
+    expect(rows[0]!.delegate).toBeNull();
+    expect(rows[0]!.reason).toBeNull();
+    expect(rows[0]!.traceId).toBe("abc123");
+  });
+
   it("never throws when the database is unusable", async () => {
     const actual = await vi.importActual<typeof import("@libsql/client")>("@libsql/client");
     // Fresh in-memory db with NO migrations — the insert fails on a missing
@@ -110,6 +121,11 @@ describe("hashInput / previewInput", () => {
     const preview = previewInput(long);
     expect(preview.length).toBe(300);
     expect(preview.endsWith("…")).toBe(true);
+  });
+
+  it("treats JSON-invisible values (functions) as null input", () => {
+    expect(hashInput(() => 1)).toBe(hashInput(null));
+    expect(previewInput(() => 1)).toBe("null");
   });
 
   it("handles unserializable input", () => {
