@@ -1,0 +1,142 @@
+docs/skills/disclosure.md
+  s_17b0ec10d5c5f1::t_60cf4b6e166d17 9
+src/lib/ai/skills/registry.test.ts
+  s_17b0ec10d5c5f1::t_24e476218cdb3f 47,52-55
+src/lib/ai/skills/cms/SKILL.md
+  s_17b0ec10d5c5f1::t_23283d8a20afc5 5
+  s_17b0ec10d5c5f1::t_0f0d9122b030e7 14,16
+src/lib/ai/skills/loader.test.ts
+  s_17b0ec10d5c5f1::t_490d96640cf4f7 12-16
+src/lib/ai/skills/vercel/SKILL.md
+  s_17b0ec10d5c5f1::t_748a64f6b5cdf4 5,8-18
+  s_17b0ec10d5c5f1::t_fd0f0132b4738f 27,29
+  s_17b0ec10d5c5f1::t_d38686d657b6df 6-7
+src/lib/ai/skills/sentry/skills/issue-management/SKILL.md
+  s_17b0ec10d5c5f1::t_84629246dfde00 5
+src/lib/ai/skills/discord/SKILL.md
+  s_17b0ec10d5c5f1::t_4b5636ef0bb0bb 14-16
+  s_17b0ec10d5c5f1::t_e80bdb116a8983 5
+src/lib/ai/skills/sentry/SKILL.md
+  s_17b0ec10d5c5f1::t_4b26d8943cde75 6-7
+  s_17b0ec10d5c5f1::t_8a3ef3d8df50f4 17-19
+  s_17b0ec10d5c5f1::t_4ab587fc75bc51 5,8
+src/lib/ai/skills/linear/SKILL.md
+  s_17b0ec10d5c5f1::t_43de0ba625339e 5
+  s_17b0ec10d5c5f1::t_dd69b0cbb4e922 14-16
+src/lib/ai/skills/notion/SKILL.md
+  s_17b0ec10d5c5f1::t_1f3816c5c2d645 5
+  s_17b0ec10d5c5f1::t_fbbc3a89a2e3f4 14,16
+src/lib/ai/subagent.test.ts
+  s_17b0ec10d5c5f1::t_7241603bef2066 102-118
+docs/skills/README.md
+  s_17b0ec10d5c5f1::t_8621861520e06b 12
+  s_17b0ec10d5c5f1::t_93183ffae143a3 26-33,35-36
+  s_17b0ec10d5c5f1::t_b138cbaa5c7a61 34
+docs/skills/adding.md
+  s_17b0ec10d5c5f1::t_69ee3be0ecf2a8 3,16-23,30
+src/lib/ai/constants.ts
+  s_17b0ec10d5c5f1::t_5ccfb218d3ad2f 52-54
+  s_17b0ec10d5c5f1::t_80f69746d56c3a 84
+src/lib/ai/delegates.ts
+  s_17b0ec10d5c5f1::t_3d7d9781250dc8 4,9,23-24,43-58,66-67,71,83-94,98-99,101-111
+  s_17b0ec10d5c5f1::t_a22515831d60de 8
+  s_17b0ec10d5c5f1::t_8f3715590a465b 95-97,100
+  s_17b0ec10d5c5f1::t_4eb176b60ba517 25-29,31
+src/lib/ai/skills/figma/SKILL.md
+  s_17b0ec10d5c5f1::t_45c03f2ef3c3cd 5
+  s_17b0ec10d5c5f1::t_893e6aea47092f 14,16
+src/lib/ai/orchestrator.ts
+  s_17b0ec10d5c5f1::t_dd27c737cc45db 9
+  s_17b0ec10d5c5f1::t_bb543cabbaab55 44-59,65
+src/lib/ai/orchestrator.test.ts
+  s_17b0ec10d5c5f1::t_815469e8dd773a 156
+  s_17b0ec10d5c5f1::t_b082609beaeb3e 160-171,173-176
+  s_17b0ec10d5c5f1::t_93183ffae143a3 41-42
+  s_17b0ec10d5c5f1::t_ec11066f086dce 5,7
+  s_17b0ec10d5c5f1::t_92b5457c8c8e16 172
+  s_17b0ec10d5c5f1::t_b0604c4e247eb1 122-155,157-159,177-186
+src/lib/ai/skills/shopping/SKILL.md
+  s_17b0ec10d5c5f1::t_f6b42e801b84b8 5
+  s_17b0ec10d5c5f1::t_12ea835c99502f 19,21
+src/lib/ai/inspect-context.ts
+  s_17b0ec10d5c5f1::t_a0a45d807e9bd0 15-19
+  s_17b0ec10d5c5f1::t_c7c272ce0c8325 6
+  s_17b0ec10d5c5f1::t_bcc821391a7df9 9
+docs/skills/registry.md
+  s_17b0ec10d5c5f1::t_d25455671371f2 23,27,30
+  s_17b0ec10d5c5f1::t_93183ffae143a3 12-16
+src/lib/ai/skills/skill-files.test.ts
+  s_17b0ec10d5c5f1::t_b57ed18f4049de 2-10,17,20,27-52
+  s_17b0ec10d5c5f1::t_fd556ab334f46f 1,11-16,18-19,21-26
+src/lib/ai/skills/loader.ts
+  s_17b0ec10d5c5f1::t_11492e4a1e4928 19
+src/lib/ai/skills/sales/SKILL.md
+  s_17b0ec10d5c5f1::t_7a17b4e9d55d49 5,8
+  s_17b0ec10d5c5f1::t_23283d8a20afc5 9-17
+  s_17b0ec10d5c5f1::t_f92e362bde86ed 26,28
+  s_17b0ec10d5c5f1::t_b4b30a2dca32f3 6-7
+src/lib/ai/skills/code/SKILL.md
+  s_17b0ec10d5c5f1::t_2b2d4cdd884602 5-9
+  s_17b0ec10d5c5f1::t_c8b70ca828489c 60,62,64
+src/lib/ai/skills/types.ts
+  s_17b0ec10d5c5f1::t_839c5f253ba088 9-14
+src/lib/ai/snapshot.ts
+  s_17b0ec10d5c5f1::t_391684f047c995 7,9
+  s_17b0ec10d5c5f1::t_f4462f8b91b820 35
+  s_17b0ec10d5c5f1::t_a1f817ee42486d 67
+src/lib/ai/skills/finance/SKILL.md
+  s_17b0ec10d5c5f1::t_9e5d1c8805fda9 5
+  s_17b0ec10d5c5f1::t_efa776f43b2b42 14,16
+src/lib/ai/delegates.test.ts
+  s_17b0ec10d5c5f1::t_02774b2ac5a333 103-104,117
+  s_17b0ec10d5c5f1::t_870e7c04f2a10f 66-102
+  s_17b0ec10d5c5f1::t_1d4f78cd229efd 26
+  s_17b0ec10d5c5f1::t_12d075ad759a94 105-116
+src/lib/ai/inspect-context.test.ts
+  s_17b0ec10d5c5f1::t_e5c7c0437b396a 225-254
+src/lib/ai/skills/github/SKILL.md
+  s_17b0ec10d5c5f1::t_51f9a9f39fc610 5
+  s_17b0ec10d5c5f1::t_0941485177230b 14-16
+docs/agents/orchestrator.md
+  s_17b0ec10d5c5f1::t_ab1d7d8258e010 8
+  s_17b0ec10d5c5f1::t_93183ffae143a3 5-7,9-10
+  s_17b0ec10d5c5f1::t_006d46d47e7116 34,39,42
+  s_17b0ec10d5c5f1::t_3afcc74500b6ab 24
+src/lib/ai/types.ts
+  s_17b0ec10d5c5f1::t_4f2c59277c0abf 137
+docs/skills/skill-md.md
+  s_17b0ec10d5c5f1::t_93183ffae143a3 24-28,30-33
+  s_17b0ec10d5c5f1::t_c0af56567e5a79 10-12,29,35,58-61,65
+scripts/compile-skills.ts
+  s_17b0ec10d5c5f1::t_e7682ee7fb8307 105
+  s_17b0ec10d5c5f1::t_23283d8a20afc5 63-65,318-320
+  s_17b0ec10d5c5f1::t_443ce637d3749a 269
+  s_17b0ec10d5c5f1::t_ca1d0b04513765 3
+  s_17b0ec10d5c5f1::t_9ebdf10e07f760 8,11-12,26-27,38-41,61-62,66-71,79,81-82,86-104,106-111,114,118,131-139,155-156,158-161,163-220,244-245,251-253,272,274-281,284-287,306-317,321
+  s_17b0ec10d5c5f1::t_3de87b8bd10297 225
+  s_17b0ec10d5c5f1::t_3cc6e4423ade3d 150-154,157,162
+  s_17b0ec10d5c5f1::t_00ff855685a504 273
+  s_17b0ec10d5c5f1::t_f3d336748a6c96 293,298-305
+docs/agents/subagents.md
+  s_17b0ec10d5c5f1::t_562e73a07d2aa2 37,39-41,43,46,51
+src/lib/ai/skills/registry.ts
+  s_17b0ec10d5c5f1::t_3f51007117ea54 31-35,40
+src/lib/ai/snapshot.test.ts
+  s_17b0ec10d5c5f1::t_5ba4bdf3b6fb31 109,111
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "698c95c9ee0e2059a16a1f5097665e140551272b",
+  "prompts": {},
+  "sessions": {
+    "s_17b0ec10d5c5f1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "11d5b927-140e-4edd-b86c-90da34374f05",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
