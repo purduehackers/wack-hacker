@@ -1,16 +1,8 @@
-import type {
-  Packet,
-  MessageCreatePacketType,
-  MessageReactionAddPacketType,
-  MessageReactionRemovePacketType,
-  MessageDeletePacketType,
-  MessageUpdatePacketType,
-  VoiceStateUpdatePacketType,
-  ThreadCreatePacketType,
-} from "@/lib/protocol/types";
+import type { Packet } from "@/lib/protocol/types";
 
-import { PacketCodec } from "@/lib/protocol/packets";
+import { kindOfPacketType } from "@/lib/protocol/events";
 
+import type { EventHandler, HandlerKind, PacketForHandlerKind } from "./events/types";
 import type { HandlerContext } from "./types";
 
 import { isBotMention, isReplyToBot } from "./mention";
@@ -20,83 +12,43 @@ export type { HandlerContext } from "./types";
 type Handler<T> = (packet: T, ctx: HandlerContext) => Promise<void>;
 
 export class EventRouter {
-  private handlers = {
-    mention: [] as Handler<MessageCreatePacketType>[],
-    message: [] as Handler<MessageCreatePacketType>[],
-    reactionAdd: [] as Handler<MessageReactionAddPacketType>[],
-    reactionRemove: [] as Handler<MessageReactionRemovePacketType>[],
-    messageDelete: [] as Handler<MessageDeletePacketType>[],
-    messageUpdate: [] as Handler<MessageUpdatePacketType>[],
-    voiceStateUpdate: [] as Handler<VoiceStateUpdatePacketType>[],
-    threadCreate: [] as Handler<ThreadCreatePacketType>[],
-  };
+  private handlers = new Map<HandlerKind, Handler<never>[]>();
 
-  onMention(h: Handler<MessageCreatePacketType>) {
-    this.handlers.mention.push(h);
-    return this;
-  }
-  onMessage(h: Handler<MessageCreatePacketType>) {
-    this.handlers.message.push(h);
-    return this;
-  }
-  onReactionAdd(h: Handler<MessageReactionAddPacketType>) {
-    this.handlers.reactionAdd.push(h);
-    return this;
-  }
-  onReactionRemove(h: Handler<MessageReactionRemovePacketType>) {
-    this.handlers.reactionRemove.push(h);
-    return this;
-  }
-  onMessageDelete(h: Handler<MessageDeletePacketType>) {
-    this.handlers.messageDelete.push(h);
-    return this;
-  }
-  onMessageUpdate(h: Handler<MessageUpdatePacketType>) {
-    this.handlers.messageUpdate.push(h);
-    return this;
-  }
-  onVoiceStateUpdate(h: Handler<VoiceStateUpdatePacketType>) {
-    this.handlers.voiceStateUpdate.push(h);
-    return this;
-  }
-  onThreadCreate(h: Handler<ThreadCreatePacketType>) {
-    this.handlers.threadCreate.push(h);
+  on<K extends HandlerKind>(kind: K, handler: Handler<PacketForHandlerKind<K>>): this {
+    const list = this.handlers.get(kind) ?? [];
+    list.push(handler as Handler<never>);
+    this.handlers.set(kind, list);
     return this;
   }
 
-  async route(raw: string, ctx: HandlerContext): Promise<void> {
-    await this.dispatch(PacketCodec.decode(raw), ctx);
+  /** Register a barrel-exported `defineEvent` handler. */
+  register(handler: EventHandler): this {
+    // TS can't correlate `type` and `handle` across the union members; `on` +
+    // dispatch keep kind and packet aligned at runtime.
+    return this.on(handler.type, async (packet, ctx) => handler.handle(packet as never, ctx));
+  }
+
+  private async run<K extends HandlerKind>(
+    kind: K,
+    packet: PacketForHandlerKind<K>,
+    ctx: HandlerContext,
+  ): Promise<void> {
+    const list = (this.handlers.get(kind) ?? []) as Handler<PacketForHandlerKind<K>>[];
+    await Promise.all(list.map((handler) => handler(packet, ctx)));
   }
 
   async dispatch(packet: Packet, ctx: HandlerContext): Promise<void> {
-    const run = <T>(handlers: Handler<T>[], p: T) => Promise.all(handlers.map((h) => h(p, ctx)));
-
-    switch (packet.type) {
-      case "GATEWAY_MESSAGE_CREATE": {
-        if (isBotMention(packet.data, ctx.botUserId) || isReplyToBot(packet.data, ctx.botUserId)) {
-          await run(this.handlers.mention, packet);
-        }
-        await run(this.handlers.message, packet);
-        break;
+    if (packet.type === "GATEWAY_MESSAGE_CREATE") {
+      const mentioned = isBotMention(packet.data, ctx.botUserId);
+      const messageCtx: HandlerContext = { ...ctx, isBotMention: mentioned };
+      if (mentioned || isReplyToBot(packet.data, ctx.botUserId)) {
+        await this.run("mention", packet, messageCtx);
       }
-      case "GATEWAY_MESSAGE_REACTION_ADD":
-        await run(this.handlers.reactionAdd, packet);
-        break;
-      case "GATEWAY_MESSAGE_REACTION_REMOVE":
-        await run(this.handlers.reactionRemove, packet);
-        break;
-      case "GATEWAY_MESSAGE_DELETE":
-        await run(this.handlers.messageDelete, packet);
-        break;
-      case "GATEWAY_MESSAGE_UPDATE":
-        await run(this.handlers.messageUpdate, packet);
-        break;
-      case "GATEWAY_VOICE_STATE_UPDATE":
-        await run(this.handlers.voiceStateUpdate, packet);
-        break;
-      case "GATEWAY_THREAD_CREATE":
-        await run(this.handlers.threadCreate, packet);
-        break;
+      await this.run("message", packet, messageCtx);
+      return;
     }
+    // Same union-correlation limitation as register(); the table maps each
+    // packet type to exactly one kind.
+    await this.run(kindOfPacketType(packet.type), packet as never, ctx);
   }
 }

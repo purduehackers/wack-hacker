@@ -5,26 +5,63 @@ import { env } from "@/env";
 import { createDiscordAPI } from "@/lib/discord/client";
 import { createWideLogger } from "@/lib/logging/wide";
 import { countMetric, recordDuration } from "@/lib/metrics";
+import { withSpan } from "@/lib/otel/tracing";
+import { getDedupKey } from "@/lib/protocol/events";
+import { PacketCodec } from "@/lib/protocol/packets";
 
 import { router } from "./routes/handlers";
 
-function getDedupKey(packet: Packet): string {
-  switch (packet.type) {
-    case "GATEWAY_MESSAGE_CREATE":
-      return `msg:${packet.data.id}`;
-    case "GATEWAY_MESSAGE_REACTION_ADD":
-      return `react:${packet.data.messageId}:${packet.data.creator.id}:${packet.data.emoji.id ?? packet.data.emoji.name}`;
-    case "GATEWAY_MESSAGE_REACTION_REMOVE":
-      return `unreact:${packet.data.messageId}:${packet.data.creator.id}:${packet.data.emoji.id ?? packet.data.emoji.name}`;
-    case "GATEWAY_MESSAGE_DELETE":
-      return `del:${packet.data.id}`;
-    case "GATEWAY_MESSAGE_UPDATE":
-      return `upd:${packet.data.id}:${packet.timestamp.getTime()}`;
-    case "GATEWAY_VOICE_STATE_UPDATE":
-      return `voice:${packet.data.userId}:${packet.data.channelId ?? "left"}:${packet.timestamp.getTime()}`;
-    case "GATEWAY_THREAD_CREATE":
-      return `thread:${packet.data.id}`;
+/**
+ * Queue-consumer entrypoint: decode the wire payload and process it. Decode
+ * failures are deterministic — retrying can't fix them — so the message is
+ * dropped (a clean return acknowledges it) with a metric instead of burning
+ * the retry budget. This is also what absorbs in-flight packets of a type the
+ * previous deploy still published.
+ */
+export async function handleDiscordEvent(
+  encoded: string,
+  metadata: { deliveryCount: number; messageId: string },
+  store: ConversationStore = new ConversationStore(),
+): Promise<void> {
+  let packet: Packet;
+  try {
+    packet = PacketCodec.decode(encoded);
+  } catch (err) {
+    countMetric("discord.event.decode_failed");
+    createWideLogger({ op: "discord.event.callback" }).warn("packet decode failed, dropping", {
+      reason: String(err),
+    });
+    return;
   }
+  return withSpan(
+    "discord.event",
+    {
+      "packet.type": packet.type,
+      "delivery.count": metadata.deliveryCount,
+    },
+    async () => {
+      const logger = createWideLogger({
+        op: "discord.event.callback",
+        event: { type: packet.type },
+        queue: { delivery_count: metadata.deliveryCount, message_id: metadata.messageId },
+      });
+      const startTime = Date.now();
+      countMetric("discord.event.callback_received", { type: packet.type });
+      try {
+        await processEvent(packet, store);
+        logger.emit({ outcome: "ok", duration_ms: Date.now() - startTime });
+      } catch (err) {
+        countMetric("discord.event.callback_error", { type: packet.type });
+        logger.error(err as Error);
+        logger.emit({ outcome: "error", duration_ms: Date.now() - startTime });
+        throw err;
+      } finally {
+        recordDuration("discord.event.callback_duration", Date.now() - startTime, {
+          type: packet.type,
+        });
+      }
+    },
+  );
 }
 
 function getMessageChannelId(packet: Packet): string | null {
@@ -32,7 +69,7 @@ function getMessageChannelId(packet: Packet): string | null {
   return packet.data.channel.id;
 }
 
-export async function processEvent(packet: Packet, store: ConversationStore): Promise<void> {
+async function processEvent(packet: Packet, store: ConversationStore): Promise<void> {
   const logger = createWideLogger({
     op: "event.process",
     event: { type: packet.type },

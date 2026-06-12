@@ -13,8 +13,8 @@ import { env } from "@/env";
 import { createWideLogger } from "@/lib/logging/wide";
 import { countMetric, recordDuration } from "@/lib/metrics";
 import { withSpan } from "@/lib/otel/tracing";
+import { bindGatewayEvents } from "@/lib/protocol/events";
 import { PacketCodec } from "@/lib/protocol/packets";
-import { isTextChannel } from "@/lib/protocol/utils";
 import { send } from "@/lib/tasks/queue/client";
 import { DISCORD_EVENT_TOPIC } from "@/lib/tasks/queue/constants";
 
@@ -189,168 +189,6 @@ async function startGatewayListener(client: Client): Promise<{ hold: Promise<voi
 
 const route = new Hono();
 
-function bindMessageHandlers(client: Client, publish: Publish): void {
-  client.on(Events.MessageCreate, async (message) => {
-    if (message.author.bot || !isTextChannel(message.channel)) return;
-
-    await publish({
-      type: "GATEWAY_MESSAGE_CREATE",
-      timestamp: new Date(),
-      data: {
-        id: message.id,
-        attachments: message.attachments.map((a) => ({
-          id: a.id,
-          url: a.url,
-          filename: a.name,
-          contentType: a.contentType ?? undefined,
-          size: a.size,
-          width: a.width ?? undefined,
-          height: a.height ?? undefined,
-        })),
-        author: {
-          id: message.author.id,
-          username: message.author.username,
-          nickname: message.author.displayName,
-          bot: message.author.bot,
-          avatarHash: message.author.avatar ?? undefined,
-        },
-        channel: { id: message.channel.id, name: message.channel.name },
-        thread:
-          message.channel.isThread() && message.channel.parent
-            ? {
-                parentId: message.channel.parentId!,
-                parentName: message.channel.parent.name,
-              }
-            : undefined,
-        content: message.content,
-        guildId: message.guildId!,
-        timestamp: message.createdAt.toISOString(),
-        memberRoles: [...(message.member?.roles.cache.keys() ?? [])],
-        flags: message.flags?.bitfield,
-        categoryId: message.channel.isThread()
-          ? undefined
-          : (message.channel.parentId ?? undefined),
-        forwardedSnapshots: (message as any).messageSnapshots?.map((s: any) => ({
-          content: s.content ?? undefined,
-          attachments: s.attachments?.map((a: any) => ({
-            id: a.id,
-            url: a.url,
-            filename: a.name,
-            contentType: a.contentType ?? undefined,
-            size: a.size,
-            width: a.width ?? undefined,
-            height: a.height ?? undefined,
-          })),
-        })),
-        mentions: [...message.mentions.users.keys()],
-        reference: message.reference?.messageId
-          ? {
-              messageId: message.reference.messageId,
-              channelId: message.reference.channelId ?? undefined,
-              authorId: message.mentions.repliedUser?.id,
-            }
-          : undefined,
-      },
-    });
-  });
-
-  client.on(Events.MessageReactionAdd, async (reaction, user) => {
-    if (user.bot) return;
-    const message = await reaction.message.fetch();
-
-    await publish({
-      type: "GATEWAY_MESSAGE_REACTION_ADD",
-      timestamp: new Date(),
-      data: {
-        messageId: message.id,
-        channelId: message.channelId,
-        guildId: message.guildId!,
-        emoji: { id: reaction.emoji.id, name: reaction.emoji.name ?? "" },
-        creator: { id: user.id, username: user.username ?? "unknown" },
-      },
-    });
-  });
-
-  client.on(Events.MessageReactionRemove, async (reaction, user) => {
-    if (user.bot) return;
-    const message = await reaction.message.fetch();
-
-    await publish({
-      type: "GATEWAY_MESSAGE_REACTION_REMOVE",
-      timestamp: new Date(),
-      data: {
-        messageId: message.id,
-        channelId: message.channelId,
-        guildId: message.guildId!,
-        emoji: { id: reaction.emoji.id, name: reaction.emoji.name ?? "" },
-        creator: { id: user.id, username: user.username ?? "unknown" },
-      },
-    });
-  });
-}
-
-function bindGuildHandlers(client: Client, publish: Publish): void {
-  client.on(Events.MessageUpdate, async (_old, message) => {
-    if (!message.guildId || message.author?.bot) return;
-
-    await publish({
-      type: "GATEWAY_MESSAGE_UPDATE",
-      timestamp: new Date(),
-      data: {
-        id: message.id,
-        channelId: message.channelId,
-        guildId: message.guildId,
-      },
-    });
-  });
-
-  client.on(Events.MessageDelete, async (message) => {
-    if (!message.guildId) return;
-
-    await publish({
-      type: "GATEWAY_MESSAGE_DELETE",
-      timestamp: new Date(),
-      data: {
-        id: message.id,
-        channelId: message.channelId,
-        guildId: message.guildId,
-      },
-    });
-  });
-  client.on(Events.VoiceStateUpdate, async (_old, state) => {
-    if (!state.guild?.id) return;
-
-    await publish({
-      type: "GATEWAY_VOICE_STATE_UPDATE",
-      timestamp: new Date(),
-      data: {
-        userId: state.id,
-        guildId: state.guild.id,
-        channelId: state.channelId,
-        sessionId: state.sessionId ?? "",
-        selfMute: state.selfMute ?? false,
-        selfDeaf: state.selfDeaf ?? false,
-      },
-    });
-  });
-
-  client.on(Events.ThreadCreate, async (thread) => {
-    if (!thread.guildId || !thread.parentId) return;
-
-    await publish({
-      type: "GATEWAY_THREAD_CREATE",
-      timestamp: new Date(),
-      data: {
-        id: thread.id,
-        name: thread.name,
-        parentId: thread.parentId,
-        guildId: thread.guildId,
-        ownerId: thread.ownerId ?? "",
-      },
-    });
-  });
-}
-
 route.get("/gateway", async (c) => {
   let oidcToken: string;
   try {
@@ -367,7 +205,6 @@ route.get("/gateway", async (c) => {
       GatewayIntentBits.GuildMessages,
       GatewayIntentBits.MessageContent,
       GatewayIntentBits.GuildMessageReactions,
-      GatewayIntentBits.GuildVoiceStates,
     ],
     partials: [Partials.Message, Partials.Reaction, Partials.Channel],
     presence: {
@@ -404,8 +241,7 @@ route.get("/gateway", async (c) => {
     if (packet?.t) log.info("gateway", `raw dispatch t=${packet.t}`);
   });
 
-  bindMessageHandlers(client, publish);
-  bindGuildHandlers(client, publish);
+  bindGatewayEvents(client, publish);
 
   let hold: Promise<void>;
   try {

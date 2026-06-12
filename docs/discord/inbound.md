@@ -7,7 +7,7 @@ The queue consumer is split across two files.
 The Next.js route file Vercel attaches the `discord-events` queue trigger to. It:
 
 1. Uses `handleCallback<string>` from `@/lib/tasks/queue/client` to wrap the POST handler with queue-aware retry logic.
-2. Decodes the payload via `PacketCodec.decode(encoded)`.
+2. Decodes the payload via `PacketCodec.decode(encoded)`. Decode failures are deterministic, so they are **dropped immediately** with a `discord.event.decode_failed` metric instead of retried — this is what absorbs in-flight packets of a type the previous deploy still published.
 3. Logs the packet type and the delivery attempt count.
 4. Constructs a fresh `ConversationStore` and forwards to `processEvent(packet, store)`.
 
@@ -25,17 +25,16 @@ The actual dispatch logic. For each packet it:
 
 ### Dedup keys
 
+Each packet type's dedup key lives in its protocol event module (`src/lib/protocol/events/`), and `processEvent` looks it up via `getDedupKey(packet)`:
+
 ```
 GATEWAY_MESSAGE_CREATE          → msg:${id}
 GATEWAY_MESSAGE_REACTION_ADD    → react:${messageId}:${userId}:${emojiId ?? emojiName}
 GATEWAY_MESSAGE_REACTION_REMOVE → unreact:${messageId}:${userId}:${emojiId ?? emojiName}
 GATEWAY_MESSAGE_DELETE          → del:${id}
-GATEWAY_MESSAGE_UPDATE          → upd:${id}:${timestamp}
-GATEWAY_VOICE_STATE_UPDATE      → voice:${userId}:${channelId ?? "left"}:${timestamp}
-GATEWAY_THREAD_CREATE           → thread:${id}
 ```
 
-Message updates and voice state updates include the timestamp so a burst of changes on the same entity doesn't get collapsed.
+Keys are built exclusively from Discord-native IDs — never relay-time timestamps, which would defeat dedup across overlapping gateway leaders.
 
 ## ConversationStore
 

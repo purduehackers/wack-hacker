@@ -1,179 +1,19 @@
 import { z } from "zod";
 
-const PacketTimestamp = z.date();
-const DiscordTimestamp = z.iso.datetime({ offset: true });
+import { packetEvents } from "./events/index.ts";
 
-const MessageDataAttachment = z.object({
-  id: z.string(),
-  url: z.string(),
-  filename: z.string(),
-  contentType: z.string().optional(),
-  size: z.number(),
-  width: z.number().optional(),
-  height: z.number().optional(),
-});
+// The union and codec derive from the event table — adding an event module to
+// `events/index.ts` extends the wire schema without touching this file.
+// The generic indirection matters: TS only applies the tuple-preserving
+// array-mapped special case to type parameters, so mapping the concrete
+// `typeof packetEvents` directly would degrade the union to unknown.
+function toSchemaTuple<T extends readonly { packet: z.ZodType }[]>(eventDefs: T) {
+  return eventDefs.map((entry) => entry.packet) as {
+    [K in keyof T]: T[K] extends { packet: infer P } ? P : never;
+  };
+}
 
-const MessageDataAuthor = z.object({
-  id: z.string(),
-  username: z.string(),
-  nickname: z.string().optional(),
-  bot: z.boolean().optional(),
-  avatarHash: z.string().optional(),
-});
-
-const MessageDataChannel = z.object({
-  id: z.string(),
-  name: z.string(),
-});
-
-const MessageDataThread = z.object({
-  parentId: z.string(),
-  parentName: z.string(),
-});
-
-const MessageSnapshot = z.object({
-  content: z.string().optional(),
-  attachments: z.array(MessageDataAttachment).optional(),
-});
-
-// Base shape shared by MESSAGE_CREATE and MESSAGE_UPDATE. `mentions` stays
-// optional here so `MessageData.partial()` on the update packet doesn't
-// silently default an omitted field to `[]` (which would be
-// indistinguishable from "the update explicitly had zero mentions").
-// MessageCreate re-tightens `mentions` to a defaulted array below.
-const MessageData = z.object({
-  id: z.string(),
-  attachments: z.array(MessageDataAttachment),
-  author: MessageDataAuthor,
-  channel: MessageDataChannel,
-  thread: MessageDataThread.optional(),
-  guildId: z.string(),
-  content: z.string(),
-  timestamp: DiscordTimestamp,
-  memberRoles: z.array(z.string()).optional(),
-  flags: z.number().optional(),
-  categoryId: z.string().optional(),
-  forwardedSnapshots: z.array(MessageSnapshot).optional(),
-  mentions: z.array(z.string()).optional(),
-  reference: z
-    .object({
-      messageId: z.string(),
-      channelId: z.string().optional(),
-      authorId: z.string().optional(),
-    })
-    .optional(),
-});
-
-const MessageCreateData = MessageData.extend({
-  mentions: z.array(z.string()).default([]),
-});
-
-const ReactionDataEmoji = z.object({
-  id: z.string().nullable(),
-  name: z.string(),
-});
-
-const ReactionDataUser = z.object({
-  id: z.string(),
-  username: z.string(),
-  nickname: z.string().optional(),
-  bot: z.boolean().optional(),
-});
-
-const ReactionData = z.object({
-  messageId: z.string(),
-  channelId: z.string(),
-  guildId: z.string(),
-  emoji: ReactionDataEmoji,
-  creator: ReactionDataUser,
-});
-
-const MessageDeleteData = z.object({
-  id: z.string(),
-  channelId: z.string(),
-  guildId: z.string(),
-});
-
-// ── Packets ──
-
-export const MessageCreatePacket = z.object({
-  type: z.literal("GATEWAY_MESSAGE_CREATE"),
-  timestamp: PacketTimestamp,
-  data: MessageCreateData,
-});
-
-export const MessageReactionAddPacket = z.object({
-  type: z.literal("GATEWAY_MESSAGE_REACTION_ADD"),
-  timestamp: PacketTimestamp,
-  data: ReactionData,
-});
-
-export const MessageReactionRemovePacket = z.object({
-  type: z.literal("GATEWAY_MESSAGE_REACTION_REMOVE"),
-  timestamp: PacketTimestamp,
-  data: ReactionData,
-});
-
-export const MessageDeletePacket = z.object({
-  type: z.literal("GATEWAY_MESSAGE_DELETE"),
-  timestamp: PacketTimestamp,
-  data: MessageDeleteData,
-});
-
-export const MessageUpdatePacket = z.object({
-  type: z.literal("GATEWAY_MESSAGE_UPDATE"),
-  timestamp: PacketTimestamp,
-  data: MessageData.partial().extend({
-    id: z.string(),
-    channelId: z.string(),
-    guildId: z.string(),
-  }),
-});
-
-// ── Voice State ──
-
-const VoiceStateData = z.object({
-  userId: z.string(),
-  guildId: z.string(),
-  channelId: z.string().nullable(),
-  sessionId: z.string(),
-  selfMute: z.boolean(),
-  selfDeaf: z.boolean(),
-});
-
-export const VoiceStateUpdatePacket = z.object({
-  type: z.literal("GATEWAY_VOICE_STATE_UPDATE"),
-  timestamp: PacketTimestamp,
-  data: VoiceStateData,
-});
-
-// ── Thread Create ──
-
-const ThreadCreateData = z.object({
-  id: z.string(),
-  name: z.string(),
-  parentId: z.string(),
-  guildId: z.string(),
-  ownerId: z.string(),
-});
-
-export const ThreadCreatePacket = z.object({
-  type: z.literal("GATEWAY_THREAD_CREATE"),
-  timestamp: PacketTimestamp,
-  data: ThreadCreateData,
-});
-
-// ── Schema + types ──
-
-export const PacketSchema = z.discriminatedUnion("type", [
-  MessageCreatePacket,
-  MessageReactionAddPacket,
-  MessageReactionRemovePacket,
-  MessageDeletePacket,
-  MessageUpdatePacket,
-  VoiceStateUpdatePacket,
-  ThreadCreatePacket,
-]);
+export const PacketSchema = z.discriminatedUnion("type", toSchemaTuple(packetEvents));
 
 export const PacketCodec = z.codec(z.string(), PacketSchema, {
   decode: (json) => {

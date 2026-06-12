@@ -1,6 +1,6 @@
-import { tool } from "ai";
 import { z } from "zod";
 
+import { defineTool } from "../_shared/define-tool.ts";
 import { hcbGet, hcbOrgSlug } from "./client.ts";
 
 interface HcbOrganization {
@@ -20,10 +20,13 @@ interface HcbOrganization {
 }
 
 /** Get the Purdue Hackers HCB organization profile. */
-export const get_organization = tool({
+export const get_organization = defineTool({
+  name: "get_organization",
+  domain: "finance",
   description:
     "Get the Hack Club Bank organization profile — name, slug, website, description, and whether Transparency Mode is enabled. Amounts are in cents.",
-  inputSchema: z.object({}),
+  access: "open",
+  input: z.object({}),
   execute: async () => {
     const data = await hcbGet<HcbOrganization>(`/organizations/${hcbOrgSlug()}`);
     return JSON.stringify({
@@ -43,10 +46,13 @@ export const get_organization = tool({
 });
 
 /** Get the current HCB account balance summary. */
-export const get_balance = tool({
+export const get_balance = defineTool({
+  name: "get_balance",
+  domain: "finance",
   description:
     "Get the current Hack Club Bank balance summary for Purdue Hackers — cleared balance, incoming (pending) balance, fee balance, and total raised. All amounts in cents (negative = outflow).",
-  inputSchema: z.object({}),
+  access: "open",
+  input: z.object({}),
   execute: async () => {
     const data = await hcbGet<HcbOrganization>(`/organizations/${hcbOrgSlug()}`);
     const b = data.balances ?? {};

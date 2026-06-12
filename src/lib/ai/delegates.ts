@@ -4,6 +4,7 @@ import type { AgentContext } from "./context.ts";
 import type { TurnUsageTracker } from "./turn-usage.ts";
 import type { SubagentSpec, TelemetryMetadata } from "./types.ts";
 
+import { BASE_TOOL_NAMES } from "./constants.ts";
 import { SKILL_MANIFEST as CMS_SUBSKILLS } from "./skills/generated/domains/cms.ts";
 import { SKILL_MANIFEST as CODE_SUBSKILLS } from "./skills/generated/domains/code.ts";
 import { SKILL_MANIFEST as DISCORD_SUBSKILLS } from "./skills/generated/domains/discord.ts";
@@ -50,90 +51,62 @@ const DOMAINS = {
   linear: {
     tools: linearTools as unknown as ToolSet,
     subSkills: LINEAR_SUBSKILLS,
-    baseToolNames: [
-      "search_entities",
-      "retrieve_entities",
-      "suggest_property_values",
-      "aggregate_issues",
-    ],
+    baseToolNames: BASE_TOOL_NAMES.linear,
   },
   github: {
     tools: githubTools as unknown as ToolSet,
     subSkills: GITHUB_SUBSKILLS,
-    baseToolNames: ["list_repositories", "get_repository", "search_code", "search_issues"],
+    baseToolNames: BASE_TOOL_NAMES.github,
   },
   discord: {
     tools: discordTools as unknown as ToolSet,
     subSkills: DISCORD_SUBSKILLS,
-    baseToolNames: ["get_server_info", "list_channels", "list_roles", "search_members"],
+    baseToolNames: BASE_TOOL_NAMES.discord,
   },
   figma: {
     tools: figmaTools as unknown as ToolSet,
     subSkills: FIGMA_SUBSKILLS,
-    baseToolNames: ["get_file", "list_projects", "list_project_files", "search_files"],
+    baseToolNames: BASE_TOOL_NAMES.figma,
   },
   notion: {
     tools: notionTools as unknown as ToolSet,
     subSkills: NOTION_SUBSKILLS,
-    baseToolNames: ["search_notion", "retrieve_page", "retrieve_database", "list_users"],
+    baseToolNames: BASE_TOOL_NAMES.notion,
   },
   sentry: {
     tools: sentryTools as unknown as ToolSet,
     subSkills: SENTRY_SUBSKILLS,
-    baseToolNames: ["list_projects", "get_project", "search_issues", "get_issue"],
+    baseToolNames: BASE_TOOL_NAMES.sentry,
   },
   finance: {
     tools: financeTools as unknown as ToolSet,
     subSkills: FINANCE_SUBSKILLS,
-    baseToolNames: ["get_organization", "get_balance", "list_transactions", "get_transaction"],
+    baseToolNames: BASE_TOOL_NAMES.finance,
   },
   shopping: {
     tools: shoppingTools as unknown as ToolSet,
     subSkills: SHOPPING_SUBSKILLS,
-    baseToolNames: ["search_products", "view_cart"],
+    baseToolNames: BASE_TOOL_NAMES.shopping,
   },
   sales: {
     tools: salesTools as unknown as ToolSet,
     subSkills: SALES_SUBSKILLS,
-    baseToolNames: [
-      "list_companies",
-      "list_contacts",
-      "list_deals",
-      "get_company",
-      "get_contact",
-      "get_deal",
-      "retrieve_crm_schema",
-    ],
+    baseToolNames: BASE_TOOL_NAMES.sales,
   },
   vercel: {
     tools: vercelTools as unknown as ToolSet,
     subSkills: VERCEL_SUBSKILLS,
-    baseToolNames: [
-      "list_projects",
-      "get_project",
-      "list_deployments",
-      "get_deployment",
-      "list_aliases",
-      "list_domains",
-      "whoami",
-      "list_teams",
-    ],
+    baseToolNames: BASE_TOOL_NAMES.vercel,
   },
   code: {
     tools: codeTools as unknown as ToolSet,
     subSkills: CODE_SUBSKILLS,
-    baseToolNames: ["read", "grep", "glob", "list_dir", "todo_write"],
+    baseToolNames: BASE_TOOL_NAMES.code,
   },
   cms: {
     tools: cmsTools as unknown as ToolSet,
     subSkills: CMS_SUBSKILLS,
-    baseToolNames: [
-      "list_events",
-      "list_hack_night_sessions",
-      "list_ugrants",
-      "list_shelter_projects",
-      "list_media",
-    ],
+    baseToolNames: BASE_TOOL_NAMES.cms,
   },
 } as const satisfies Record<
   string,

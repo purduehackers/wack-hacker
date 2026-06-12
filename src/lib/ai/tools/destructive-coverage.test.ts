@@ -36,12 +36,24 @@ interface Violation {
   snippet: string;
 }
 
+const DEFINE_TOOL_APPROVAL_ACCESS = /\baccess:\s*("approval"|\{\s*approval\b)/;
+
 function isApprovedExport(lines: readonly string[], exportIdx: number): boolean {
   if (lines[exportIdx].includes("approval(")) return true;
   // Multiline admin wrap: check the first non-blank line after the export.
   const lookahead = lines.slice(exportIdx + 1, exportIdx + 4);
   const nextContent = lookahead.find((l) => l.trim().length > 0);
-  return nextContent !== undefined && nextContent.trim().startsWith("approval(");
+  if (nextContent !== undefined && nextContent.trim().startsWith("approval(")) return true;
+  // defineTool spec: approval is declared via the `access` field. Scan the
+  // whole call — joined so the regex's \s spans line breaks — because the
+  // formatter may wrap `access: { approval: { reason } }` across lines and
+  // field order within the spec isn't guaranteed.
+  if (lines[exportIdx].includes("defineTool({")) {
+    const end = lines.findIndex((candidate, i) => i > exportIdx && /^\}\);?\s*$/.test(candidate));
+    const spec = lines.slice(exportIdx, end === -1 ? lines.length : end + 1).join("\n");
+    return DEFINE_TOOL_APPROVAL_ACCESS.test(spec);
+  }
+  return false;
 }
 
 function scanFile(sourceText: string, relPath: string): Violation[] {

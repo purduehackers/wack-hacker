@@ -2,7 +2,7 @@
 name: donations
 description: List Hack Club Bank donations and total them over a date range for fundraising reporting.
 criteria: Use when the user asks about donations, donors, recurring donations, or fundraising totals over a period.
-tools: [list_donations, donation_totals]
+tools: [list_donations, get_donation, donation_totals]
 minRole: organizer
 mode: inline
 ---

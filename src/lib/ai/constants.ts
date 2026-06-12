@@ -98,3 +98,48 @@ Plan multi-step requests before starting. When sub-tasks are independent (no cal
 - Include URLs when referencing entities. Never expose raw UUIDs.
 - Never echo API keys, tokens, or secrets.
 </formatting>`;
+
+/**
+ * Tools always visible to each domain subagent without loading a sub-skill —
+ * typically search and retrieval tools that serve as the agent's initial
+ * discovery toolkit. Kept as a dependency-free data module so tests (e.g. the
+ * tool coverage manifest) can read it without importing the delegation
+ * machinery and its SDK clients.
+ */
+export const BASE_TOOL_NAMES = {
+  linear: ["search_entities", "retrieve_entities", "suggest_property_values", "aggregate_issues"],
+  github: ["list_repositories", "get_repository", "search_code", "search_issues"],
+  discord: ["get_server_info", "list_channels", "list_roles", "search_members"],
+  figma: ["get_file", "list_projects", "list_project_files", "search_files"],
+  notion: ["search_notion", "retrieve_page", "retrieve_database", "list_users"],
+  sentry: ["list_projects", "get_project", "search_issues", "get_issue"],
+  finance: ["get_organization", "get_balance", "list_transactions", "get_transaction"],
+  shopping: ["search_products", "view_cart"],
+  sales: [
+    "list_companies",
+    "list_contacts",
+    "list_deals",
+    "get_company",
+    "get_contact",
+    "get_deal",
+    "retrieve_crm_schema",
+  ],
+  vercel: [
+    "list_projects",
+    "get_project",
+    "list_deployments",
+    "get_deployment",
+    "list_aliases",
+    "list_domains",
+    "whoami",
+    "list_teams",
+  ],
+  code: ["read", "grep", "glob", "list_dir", "todo_write"],
+  cms: [
+    "list_events",
+    "list_hack_night_sessions",
+    "list_ugrants",
+    "list_shelter_projects",
+    "list_media",
+  ],
+} as const satisfies Record<string, readonly string[]>;

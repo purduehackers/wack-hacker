@@ -1,6 +1,6 @@
-import { tool } from "ai";
 import { z } from "zod";
 
+import { defineTool } from "../_shared/define-tool.ts";
 import { hcbGet, hcbOrgSlug, hcbPaginate, paginationQuery } from "./client.ts";
 import { paginationInputShape } from "./constants.ts";
 
@@ -32,10 +32,13 @@ function projectDonation(d: HcbDonation) {
 }
 
 /** List donations to the org. */
-export const list_donations = tool({
+export const list_donations = defineTool({
+  name: "list_donations",
+  domain: "finance",
   description:
     "List donations to the Hack Club Bank org — donor name (or '(anonymous)'), amount_cents, status, recurring flag, and message.",
-  inputSchema: z.object(paginationInputShape),
+  access: "open",
+  input: z.object(paginationInputShape),
   execute: async (input) => {
     const data = await hcbGet<HcbDonation[]>(
       `/organizations/${hcbOrgSlug()}/donations`,
@@ -46,10 +49,13 @@ export const list_donations = tool({
 });
 
 /** Fetch a single donation by ID. */
-export const get_donation = tool({
+export const get_donation = defineTool({
+  name: "get_donation",
+  domain: "finance",
   description:
     "Fetch a single donation by ID. Returns donor name (or '(anonymous)'), amount_cents, status, recurring flag, and message.",
-  inputSchema: z.object({
+  access: "open",
+  input: z.object({
     id: z.string().describe("Donation ID"),
   }),
   execute: async ({ id }) => {
@@ -59,10 +65,13 @@ export const get_donation = tool({
 });
 
 /** Sum donations in a date window. */
-export const donation_totals = tool({
+export const donation_totals = defineTool({
+  name: "donation_totals",
+  domain: "finance",
   description:
     "Sum successful donations within an ISO date range. Returns total_cents, count, and a breakdown of recurring vs one-time. Useful for fundraising team asks ('what did we raise this month?').",
-  inputSchema: z.object({
+  access: "open",
+  input: z.object({
     since: z.iso.date().optional().describe("ISO date (YYYY-MM-DD) — on/after this date"),
     until: z.iso.date().optional().describe("ISO date (YYYY-MM-DD) — on/before this date"),
   }),

@@ -1,6 +1,6 @@
-import { tool } from "ai";
 import { z } from "zod";
 
+import { defineTool } from "../_shared/define-tool.ts";
 import { hcbGet, hcbOrgSlug, hcbPaginate, hcbTxnUrl, paginationQuery } from "./client.ts";
 import { paginationInputShape } from "./constants.ts";
 
@@ -33,10 +33,13 @@ function projectTransaction(t: HcbTransaction) {
 }
 
 /** List the most recent transactions. */
-export const list_transactions = tool({
+export const list_transactions = defineTool({
+  name: "list_transactions",
+  domain: "finance",
   description:
     "List recent HCB transactions for Purdue Hackers — newest first. Each transaction includes id, date, amount_cents (negative = outflow), memo, type, pending flag, and a receipts summary {count, missing}. Receipt files themselves are NOT available via HCB's API; only whether a receipt is attached.",
-  inputSchema: z.object(paginationInputShape),
+  access: "open",
+  input: z.object(paginationInputShape),
   execute: async (input) => {
     const data = await hcbGet<HcbTransaction[]>(
       `/organizations/${hcbOrgSlug()}/transactions`,
@@ -47,10 +50,13 @@ export const list_transactions = tool({
 });
 
 /** Get a single transaction by id. */
-export const get_transaction = tool({
+export const get_transaction = defineTool({
+  name: "get_transaction",
+  domain: "finance",
   description:
     "Get a single HCB transaction by id. Returns a compact summary with id, date, amount_cents (negative = outflow), memo, type, pending flag, receipts summary {count, missing}, and href. Receipt files themselves are NOT available via HCB's API; only whether a receipt is attached — visit hcb.hackclub.com/hcb/{id} for the actual file.",
-  inputSchema: z.object({
+  access: "open",
+  input: z.object({
     id: z.string().describe("HCB transaction id (e.g. 'txn_abc123')"),
   }),
   execute: async ({ id }) => {
@@ -60,10 +66,13 @@ export const get_transaction = tool({
 });
 
 /** Search transactions by memo substring, amount range, and/or date range. */
-export const find_transactions = tool({
+export const find_transactions = defineTool({
+  name: "find_transactions",
+  domain: "finance",
   description:
     "Search HCB transactions by memo substring, amount range (in cents), and/or ISO date range. Client-side filter over paginated results (capped). Useful for answering 'find the $42 charge for badges' or 'what did we spend on food last month?'.",
-  inputSchema: z.object({
+  access: "open",
+  input: z.object({
     memo_contains: z
       .string()
       .optional()

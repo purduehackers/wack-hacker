@@ -1,6 +1,6 @@
-import { tool } from "ai";
 import { z } from "zod";
 
+import { defineTool } from "../_shared/define-tool.ts";
 import { hcbGet, hcbOrgSlug, hcbPaginate, paginationQuery } from "./client.ts";
 import { paginationInputShape } from "./constants.ts";
 
@@ -32,10 +32,13 @@ function projectInvoice(i: HcbInvoice) {
 }
 
 /** List all invoices. */
-export const list_invoices = tool({
+export const list_invoices = defineTool({
+  name: "list_invoices",
+  domain: "finance",
   description:
     "List invoices sent by the org — sponsor name, amount_cents, status (open/paid/void), due/paid dates, and memo.",
-  inputSchema: z.object(paginationInputShape),
+  access: "open",
+  input: z.object(paginationInputShape),
   execute: async (input) => {
     const data = await hcbGet<HcbInvoice[]>(
       `/organizations/${hcbOrgSlug()}/invoices`,
@@ -46,10 +49,13 @@ export const list_invoices = tool({
 });
 
 /** Get a single invoice by ID. */
-export const get_invoice = tool({
+export const get_invoice = defineTool({
+  name: "get_invoice",
+  domain: "finance",
   description:
     "Get a single invoice by ID — sponsor name, amount_cents, status, due/paid dates, and memo.",
-  inputSchema: z.object({
+  access: "open",
+  input: z.object({
     id: z.string().describe("Invoice ID"),
   }),
   execute: async ({ id }) => {
@@ -59,10 +65,13 @@ export const get_invoice = tool({
 });
 
 /** List outstanding (unpaid) invoices. */
-export const list_open_invoices = tool({
+export const list_open_invoices = defineTool({
+  name: "list_open_invoices",
+  domain: "finance",
   description:
     "List outstanding (unpaid) invoices only — drives fundraising follow-ups with sponsors. Paginates through all invoices and filters to statuses that aren't paid/void.",
-  inputSchema: z.object({}),
+  access: "open",
+  input: z.object({}),
   execute: async () => {
     const all = await hcbPaginate<HcbInvoice>(
       `/organizations/${hcbOrgSlug()}/invoices`,
