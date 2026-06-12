@@ -1,3 +1,4 @@
+import { DuplicateMessageError } from "@vercel/queue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ScheduledTaskRow } from "@/lib/tasks/types";
@@ -222,25 +223,6 @@ describe("scheduled-task-fire: once → completed", () => {
     expect(hoisted.sendScheduledFire).not.toHaveBeenCalled();
   });
 
-  it("no-ops when the row exists but claimFire returns false (retry after partial success)", async () => {
-    // Scenario: the first delivery posted the Discord message and threw
-    // before advancing nextRunAt. The route released the dedup marker so
-    // the queue retries — but claimFire has already bumped lastFiredAt for
-    // this target, so the retry must NOT run the action again.
-    hoisted.getScheduledTask.mockResolvedValueOnce(makeRow());
-    hoisted.claimFire.mockResolvedValueOnce(false);
-
-    const discord = createMockAPI();
-    await scheduledTaskFire.handle(
-      { taskId: "task-1", targetIso: "2026-04-23T13:00:00.000Z" },
-      asAPI(discord),
-    );
-
-    expect(discord.callsTo("channels.createMessage")).toEqual([]);
-    expect(hoisted.updateScheduledTask).not.toHaveBeenCalled();
-    expect(hoisted.recordDistribution).not.toHaveBeenCalled();
-  });
-
   it("surfaces action errors and records the error metric", async () => {
     hoisted.getScheduledTask.mockResolvedValueOnce(makeRow());
     const discord = createMockAPI();
@@ -262,6 +244,118 @@ describe("scheduled-task-fire: once → completed", () => {
     // Row stays untouched so the next redelivery can see the original state.
     expect(hoisted.updateScheduledTask).not.toHaveBeenCalled();
     expect(hoisted.sendScheduledFire).not.toHaveBeenCalled();
+  });
+});
+
+function recurringRow(): ScheduledTaskRow {
+  return makeRow({
+    scheduleType: ScheduleType.Recurring,
+    runAt: null,
+    cron: "0 9 * * *",
+    timezone: null,
+    lastFiredAt: "2026-04-23T13:00:00.000Z",
+    fireCount: 1,
+  });
+}
+
+/**
+ * Drive one delivery whose `claimFire` returns false: `initial` is the
+ * pre-claim read, `reread` is what the heal path's second read returns.
+ */
+async function fireWithFailedClaim(
+  initial: ScheduledTaskRow,
+  reread: ScheduledTaskRow | null,
+): Promise<ReturnType<typeof createMockAPI>> {
+  hoisted.getScheduledTask.mockResolvedValueOnce(initial).mockResolvedValueOnce(reread);
+  hoisted.claimFire.mockResolvedValueOnce(false);
+  const discord = createMockAPI();
+  await scheduledTaskFire.handle(
+    { taskId: "task-1", targetIso: "2026-04-23T13:00:00.000Z" },
+    asAPI(discord),
+  );
+  return discord;
+}
+
+// A failed claim with a still-stale re-read means a prior delivery claimed
+// `targetIso`, the action threw, and the queue exhausted its retries — the
+// row is active with `nextRunAt` stuck at the target and no message in
+// flight. The retry (or a sweep re-enqueue) must NOT run the action again,
+// but it must advance the schedule so the chain doesn't die.
+describe("scheduled-task-fire: claim-failure heal", () => {
+  it("re-arms a recurring chain without re-running the action", async () => {
+    const row = recurringRow();
+    const discord = await fireWithFailedClaim(row, row);
+
+    expect(discord.callsTo("channels.createMessage")).toEqual([]);
+    expect(hoisted.sendScheduledFire).toHaveBeenCalledTimes(1);
+    const [taskId, nextDate] = hoisted.sendScheduledFire.mock.calls[0];
+    expect(taskId).toBe("task-1");
+    expect((nextDate as Date).toISOString()).toBe("2026-04-24T13:00:00.000Z");
+    expect(hoisted.updateScheduledTask).toHaveBeenCalledWith("task-1", {
+      nextRunAt: "2026-04-24T13:00:00.000Z",
+      queueMessageId: "msg-next",
+      maxDriftMs: 0,
+    });
+    expect(hoisted.countMetric).toHaveBeenCalledWith("scheduled_task.claim_healed", {
+      schedule_type: "recurring",
+    });
+    // No fire happened, so no fire drift is recorded.
+    expect(hoisted.recordDistribution).not.toHaveBeenCalled();
+  });
+
+  it("advances the row even when the next wake-up is already in flight (duplicate send)", async () => {
+    // Heal retry after a partial write: the prior finalize sent the next
+    // message but lost the row update, so re-sending the same target throws
+    // DuplicateMessageError. The goal state already holds — the row must
+    // still advance instead of the delivery failing and burning retries.
+    hoisted.sendScheduledFire.mockRejectedValueOnce(
+      new DuplicateMessageError("duplicate", "task-1:2026-04-24T13:00:00.000Z"),
+    );
+    const row = recurringRow();
+    const discord = await fireWithFailedClaim(row, row);
+
+    expect(discord.callsTo("channels.createMessage")).toEqual([]);
+    expect(hoisted.updateScheduledTask).toHaveBeenCalledWith("task-1", {
+      nextRunAt: "2026-04-24T13:00:00.000Z",
+      queueMessageId: null,
+      maxDriftMs: 0,
+    });
+  });
+
+  it("marks a one-time task failed — not completed — when the claim was never finalized", async () => {
+    const row = makeRow({ lastFiredAt: "2026-04-23T13:00:00.000Z", fireCount: 1 });
+    const discord = await fireWithFailedClaim(row, row);
+
+    expect(discord.callsTo("channels.createMessage")).toEqual([]);
+    expect(hoisted.sendScheduledFire).not.toHaveBeenCalled();
+    expect(hoisted.updateScheduledTask).toHaveBeenCalledWith("task-1", {
+      status: "failed",
+      nextRunAt: null,
+      queueMessageId: null,
+    });
+    expect(hoisted.countMetric).toHaveBeenCalledWith("scheduled_task.claim_healed", {
+      schedule_type: "once",
+    });
+  });
+
+  it("no-ops when the re-read row has advanced past the target (genuine supersede)", async () => {
+    const discord = await fireWithFailedClaim(
+      makeRow(),
+      makeRow({ nextRunAt: "2026-04-24T13:00:00.000Z" }),
+    );
+
+    expect(discord.callsTo("channels.createMessage")).toEqual([]);
+    expect(hoisted.sendScheduledFire).not.toHaveBeenCalled();
+    expect(hoisted.updateScheduledTask).not.toHaveBeenCalled();
+    expect(hoisted.recordDistribution).not.toHaveBeenCalled();
+  });
+
+  it("no-ops when the row disappears between the read and the failed claim", async () => {
+    const discord = await fireWithFailedClaim(makeRow(), null);
+
+    expect(discord.callsTo("channels.createMessage")).toEqual([]);
+    expect(hoisted.sendScheduledFire).not.toHaveBeenCalled();
+    expect(hoisted.updateScheduledTask).not.toHaveBeenCalled();
   });
 });
 
