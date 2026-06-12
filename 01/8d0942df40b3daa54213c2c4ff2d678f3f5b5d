@@ -1,0 +1,21 @@
+.github/workflows/pullfrog.yml
+  s_0dd6d7f4e6643b::t_79c7098098bea7 1-57
+src/lib/ai/orchestrator.test.ts
+  s_0dd6d7f4e6643b::t_79eb2d1a563ae0 6,18,41-42,120-131
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "018d0942df40b3daa54213c2c4ff2d678f3f5b5d",
+  "prompts": {},
+  "sessions": {
+    "s_0dd6d7f4e6643b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9061d1c1-8b36-4d0a-938e-68dfb7766d64",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
