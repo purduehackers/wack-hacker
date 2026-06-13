@@ -1,84 +1,83 @@
-import { tool } from "ai";
 import { z } from "zod";
 
-import { access } from "../../policy/index.ts";
+import { defineTool } from "../_shared/define-tool.ts";
 import { linear } from "./client.ts";
 
-export const create_initiative = access(
-  { risk: "write" },
-  tool({
-    description:
-      "Create an initiative (strategic goal grouping multiple projects). Supports owner, status (Planned/Active/Completed), target date, and Markdown content.",
-    inputSchema: z.object({
-      name: z.string(),
-      description: z.string().optional(),
-      content: z.string().optional().describe("Markdown"),
-      ownerId: z.string().optional(),
-      status: z.enum(["Planned", "Active", "Completed"]).optional(),
-      targetDate: z.string().optional().describe("ISO date"),
-    }),
-    execute: async ({ status, ...rest }) => {
-      const payload = await linear.createInitiative({ ...rest, status: status as any });
-      const initiative = await payload.initiative;
-      if (!initiative) return "Failed to create initiative";
-      return JSON.stringify({ id: initiative.id, name: initiative.name, url: initiative.url });
-    },
+export const create_initiative = defineTool({
+  name: "create_initiative",
+  domain: "linear",
+  description:
+    "Create an initiative (strategic goal grouping multiple projects). Supports owner, status (Planned/Active/Completed), target date, and Markdown content.",
+  access: { risk: "write" },
+  input: z.object({
+    name: z.string(),
+    description: z.string().optional(),
+    content: z.string().optional().describe("Markdown"),
+    ownerId: z.string().optional(),
+    status: z.enum(["Planned", "Active", "Completed"]).optional(),
+    targetDate: z.string().optional().describe("ISO date"),
   }),
-);
+  execute: async ({ status, ...rest }) => {
+    const payload = await linear.createInitiative({ ...rest, status: status as any });
+    const initiative = await payload.initiative;
+    if (!initiative) return "Failed to create initiative";
+    return JSON.stringify({ id: initiative.id, name: initiative.name, url: initiative.url });
+  },
+});
 
-export const update_initiative = access(
-  { risk: "write" },
-  tool({
-    description: "Update an initiative by ID. Only include fields to change.",
-    inputSchema: z.object({
-      id: z.string(),
-      name: z.string().optional(),
-      description: z.string().optional(),
-      content: z.string().optional().describe("Markdown"),
-      ownerId: z.string().optional(),
-      status: z.enum(["Planned", "Active", "Completed"]).optional(),
-      targetDate: z.string().optional().describe("ISO date"),
-    }),
-    execute: async ({ id, status, ...rest }) => {
-      const payload = await linear.updateInitiative(id, { ...rest, status: status as any });
-      const initiative = await payload.initiative;
-      if (!initiative) return "Failed to update initiative";
-      return JSON.stringify({ id: initiative.id, name: initiative.name, url: initiative.url });
-    },
+export const update_initiative = defineTool({
+  name: "update_initiative",
+  domain: "linear",
+  description: "Update an initiative by ID. Only include fields to change.",
+  access: { risk: "write" },
+  input: z.object({
+    id: z.string(),
+    name: z.string().optional(),
+    description: z.string().optional(),
+    content: z.string().optional().describe("Markdown"),
+    ownerId: z.string().optional(),
+    status: z.enum(["Planned", "Active", "Completed"]).optional(),
+    targetDate: z.string().optional().describe("ISO date"),
   }),
-);
+  execute: async ({ id, status, ...rest }) => {
+    const payload = await linear.updateInitiative(id, { ...rest, status: status as any });
+    const initiative = await payload.initiative;
+    if (!initiative) return "Failed to update initiative";
+    return JSON.stringify({ id: initiative.id, name: initiative.name, url: initiative.url });
+  },
+});
 
-export const list_initiatives = access(
-  { risk: "read" },
-  tool({
-    description: "List all initiatives with name, status, target date, and URL.",
-    inputSchema: z.object({}),
-    execute: async () => {
-      const r = await linear.initiatives();
-      return JSON.stringify(
-        r.nodes.map((i) => ({
-          id: i.id,
-          name: i.name,
-          status: i.status,
-          targetDate: i.targetDate,
-          url: i.url,
-        })),
-      );
-    },
-  }),
-);
+export const list_initiatives = defineTool({
+  name: "list_initiatives",
+  domain: "linear",
+  description: "List all initiatives with name, status, target date, and URL.",
+  access: { risk: "read" },
+  input: z.object({}),
+  execute: async () => {
+    const r = await linear.initiatives();
+    return JSON.stringify(
+      r.nodes.map((i) => ({
+        id: i.id,
+        name: i.name,
+        status: i.status,
+        targetDate: i.targetDate,
+        url: i.url,
+      })),
+    );
+  },
+});
 
-export const query_initiative_activity = access(
-  { risk: "read" },
-  tool({
-    description: "Fetch an initiative's change history (status changes, owner changes, etc.).",
-    inputSchema: z.object({ id: z.string() }),
-    execute: async ({ id }) => {
-      const initiative = await linear.initiative(id);
-      const history = await initiative.history();
-      return JSON.stringify({
-        history: history.nodes.map((h) => ({ id: h.id, createdAt: h.createdAt })),
-      });
-    },
-  }),
-);
+export const query_initiative_activity = defineTool({
+  name: "query_initiative_activity",
+  domain: "linear",
+  description: "Fetch an initiative's change history (status changes, owner changes, etc.).",
+  access: { risk: "read" },
+  input: z.object({ id: z.string() }),
+  execute: async ({ id }) => {
+    const initiative = await linear.initiative(id);
+    const history = await initiative.history();
+    return JSON.stringify({
+      history: history.nodes.map((h) => ({ id: h.id, createdAt: h.createdAt })),
+    });
+  },
+});

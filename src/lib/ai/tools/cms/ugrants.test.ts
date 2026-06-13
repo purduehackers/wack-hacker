@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { payloadSDKClass, toolOpts } from "@/lib/test/fixtures";
 
-import { getAccessSpec } from "../../policy/index.ts";
+import { resolveAccessSpec } from "../../policy/index.ts";
 
 const mocks = vi.hoisted(() => ({
   find: vi.fn(),
@@ -141,7 +141,7 @@ describe("update_ugrant", () => {
 
 describe("delete_ugrant", () => {
   it("is approval-gated", () => {
-    expect(getAccessSpec(delete_ugrant)?.risk).toBe("destructive");
+    expect(resolveAccessSpec(delete_ugrant)?.risk).toBe("destructive");
   });
 });
 

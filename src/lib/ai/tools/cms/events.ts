@@ -1,7 +1,6 @@
-import { tool } from "ai";
 import { z } from "zod";
 
-import { access } from "../../policy/index.ts";
+import { defineTool } from "../_shared/define-tool.ts";
 import { cmsAdminUrl, paginationQuery, payload, wrapPayloadError } from "./client.ts";
 import { paginationInputShape } from "./constants.ts";
 import { richTextParagraph } from "./richtext.ts";
@@ -44,193 +43,193 @@ function projectEvent(e: PayloadEvent) {
   };
 }
 
-export const list_events = access(
-  { risk: "read" },
-  tool({
-    description:
-      "List events from the CMS. Supports pagination and sort (prefix field with '-' for descending, e.g. '-start'). Includes published flag, start/end, location, and email-send status.",
-    inputSchema: z.object({
-      ...paginationInputShape,
-      published_only: z
-        .boolean()
-        .optional()
-        .describe("When true, return only events with published === true"),
-    }),
-    execute: async ({ published_only, ...input }) => {
-      try {
-        const res = await payload.find({
-          collection: COLLECTION,
-          ...paginationQuery(input),
-          ...(published_only ? { where: { published: { equals: true } } } : {}),
-        });
-        return JSON.stringify({
-          total_docs: res.totalDocs,
-          total_pages: res.totalPages,
-          page: res.page,
-          docs: (res.docs as PayloadEvent[]).map(projectEvent),
-        });
-      } catch (err) {
-        throw wrapPayloadError(err);
-      }
-    },
+export const list_events = defineTool({
+  name: "list_events",
+  domain: "cms",
+  description:
+    "List events from the CMS. Supports pagination and sort (prefix field with '-' for descending, e.g. '-start'). Includes published flag, start/end, location, and email-send status.",
+  access: { risk: "read" },
+  input: z.object({
+    ...paginationInputShape,
+    published_only: z
+      .boolean()
+      .optional()
+      .describe("When true, return only events with published === true"),
   }),
-);
+  execute: async ({ published_only, ...input }) => {
+    try {
+      const res = await payload.find({
+        collection: COLLECTION,
+        ...paginationQuery(input),
+        ...(published_only ? { where: { published: { equals: true } } } : {}),
+      });
+      return JSON.stringify({
+        total_docs: res.totalDocs,
+        total_pages: res.totalPages,
+        page: res.page,
+        docs: (res.docs as PayloadEvent[]).map(projectEvent),
+      });
+    } catch (err) {
+      throw wrapPayloadError(err);
+    }
+  },
+});
 
-export const get_event = access(
-  { risk: "read" },
-  tool({
-    description: "Fetch a single event by ID.",
-    inputSchema: z.object({ id: z.union([z.string(), z.number()]).describe("Event ID") }),
-    execute: async ({ id }) => {
-      try {
-        const doc = (await payload.findByID({ collection: COLLECTION, id })) as PayloadEvent;
-        return JSON.stringify(projectEvent(doc));
-      } catch (err) {
-        throw wrapPayloadError(err);
-      }
-    },
-  }),
-);
+export const get_event = defineTool({
+  name: "get_event",
+  domain: "cms",
+  description: "Fetch a single event by ID.",
+  access: { risk: "read" },
+  input: z.object({ id: z.union([z.string(), z.number()]).describe("Event ID") }),
+  execute: async ({ id }) => {
+    try {
+      const doc = (await payload.findByID({ collection: COLLECTION, id })) as PayloadEvent;
+      return JSON.stringify(projectEvent(doc));
+    } catch (err) {
+      throw wrapPayloadError(err);
+    }
+  },
+});
 
-export const create_event = access(
-  { risk: "write" },
-  tool({
-    description:
-      "Create a new event. `description` accepts plain text and is wrapped as a single Lexical paragraph. Set `published: true` only when the event is ready to appear on the website.",
-    inputSchema: z.object({
-      name: z.string(),
-      start: z.string().describe("ISO datetime for event start"),
-      end: z.string().optional().describe("ISO datetime for event end"),
-      event_type: z.string().optional().describe("Event type (default 'hack-night')"),
-      location_name: z.string().optional(),
-      location_url: z.string().optional(),
-      description: z.string().describe("Plain text description"),
-      published: z.boolean().optional(),
-    }),
-    execute: async ({ event_type, description, ...rest }) => {
-      try {
-        const data: Record<string, unknown> = {
-          ...rest,
-          eventType: event_type ?? "hack-night",
-          description: richTextParagraph(description),
-          published: rest.published ?? false,
-        };
-        const doc = (await payload.create({ collection: COLLECTION, data })) as PayloadEvent;
-        return JSON.stringify(projectEvent(doc));
-      } catch (err) {
-        throw wrapPayloadError(err);
-      }
-    },
+export const create_event = defineTool({
+  name: "create_event",
+  domain: "cms",
+  description:
+    "Create a new event. `description` accepts plain text and is wrapped as a single Lexical paragraph. Set `published: true` only when the event is ready to appear on the website.",
+  access: { risk: "write" },
+  input: z.object({
+    name: z.string(),
+    start: z.string().describe("ISO datetime for event start"),
+    end: z.string().optional().describe("ISO datetime for event end"),
+    event_type: z.string().optional().describe("Event type (default 'hack-night')"),
+    location_name: z.string().optional(),
+    location_url: z.string().optional(),
+    description: z.string().describe("Plain text description"),
+    published: z.boolean().optional(),
   }),
-);
+  execute: async ({ event_type, description, ...rest }) => {
+    try {
+      const data: Record<string, unknown> = {
+        ...rest,
+        eventType: event_type ?? "hack-night",
+        description: richTextParagraph(description),
+        published: rest.published ?? false,
+      };
+      const doc = (await payload.create({ collection: COLLECTION, data })) as PayloadEvent;
+      return JSON.stringify(projectEvent(doc));
+    } catch (err) {
+      throw wrapPayloadError(err);
+    }
+  },
+});
 
-export const update_event = access(
-  { risk: "write" },
-  tool({
-    description:
-      "Update an event by ID. Only fields you pass are changed. `description` (if set) is wrapped as a single Lexical paragraph — omit it when you don't want to overwrite existing richText.",
-    inputSchema: z.object({
-      id: z.union([z.string(), z.number()]),
-      name: z.string().optional(),
-      start: z.string().optional(),
-      end: z.string().optional(),
-      event_type: z.string().optional(),
-      location_name: z.string().optional(),
-      location_url: z.string().optional(),
-      description: z.string().optional(),
-      published: z.boolean().optional(),
-    }),
-    execute: async ({ id, event_type, description, ...rest }) => {
-      try {
-        const data: Record<string, unknown> = { ...rest };
-        if (event_type !== undefined) data.eventType = event_type;
-        if (description !== undefined) data.description = richTextParagraph(description);
-        const doc = (await payload.update({
-          collection: COLLECTION,
-          id,
-          data,
-        })) as PayloadEvent;
-        return JSON.stringify(projectEvent(doc));
-      } catch (err) {
-        throw wrapPayloadError(err);
-      }
-    },
+export const update_event = defineTool({
+  name: "update_event",
+  domain: "cms",
+  description:
+    "Update an event by ID. Only fields you pass are changed. `description` (if set) is wrapped as a single Lexical paragraph — omit it when you don't want to overwrite existing richText.",
+  access: { risk: "write" },
+  input: z.object({
+    id: z.union([z.string(), z.number()]),
+    name: z.string().optional(),
+    start: z.string().optional(),
+    end: z.string().optional(),
+    event_type: z.string().optional(),
+    location_name: z.string().optional(),
+    location_url: z.string().optional(),
+    description: z.string().optional(),
+    published: z.boolean().optional(),
   }),
-);
+  execute: async ({ id, event_type, description, ...rest }) => {
+    try {
+      const data: Record<string, unknown> = { ...rest };
+      if (event_type !== undefined) data.eventType = event_type;
+      if (description !== undefined) data.description = richTextParagraph(description);
+      const doc = (await payload.update({
+        collection: COLLECTION,
+        id,
+        data,
+      })) as PayloadEvent;
+      return JSON.stringify(projectEvent(doc));
+    } catch (err) {
+      throw wrapPayloadError(err);
+    }
+  },
+});
 
-export const delete_event = access(
-  { risk: "destructive" },
-  tool({
-    description: "Delete an event permanently. Also detaches RSVPs and sent-email records.",
-    inputSchema: z.object({ id: z.union([z.string(), z.number()]) }),
-    execute: async ({ id }) => {
-      try {
-        const doc = (await payload.delete({ collection: COLLECTION, id })) as PayloadEvent;
-        return JSON.stringify({ deleted: true, id: doc.id ?? id });
-      } catch (err) {
-        throw wrapPayloadError(err);
-      }
-    },
-  }),
-);
+export const delete_event = defineTool({
+  name: "delete_event",
+  domain: "cms",
+  description: "Delete an event permanently. Also detaches RSVPs and sent-email records.",
+  access: { risk: "destructive" },
+  input: z.object({ id: z.union([z.string(), z.number()]) }),
+  execute: async ({ id }) => {
+    try {
+      const doc = (await payload.delete({ collection: COLLECTION, id })) as PayloadEvent;
+      return JSON.stringify({ deleted: true, id: doc.id ?? id });
+    } catch (err) {
+      throw wrapPayloadError(err);
+    }
+  },
+});
 
-export const publish_event = access(
-  { risk: "destructive" },
-  tool({
-    description: "Mark an event as published (visible on the website).",
-    inputSchema: z.object({ id: z.union([z.string(), z.number()]) }),
-    execute: async ({ id }) => {
-      try {
-        const doc = (await payload.update({
-          collection: COLLECTION,
-          id,
-          data: { published: true },
-        })) as PayloadEvent;
-        return JSON.stringify(projectEvent(doc));
-      } catch (err) {
-        throw wrapPayloadError(err);
-      }
-    },
-  }),
-);
+export const publish_event = defineTool({
+  name: "publish_event",
+  domain: "cms",
+  description: "Mark an event as published (visible on the website).",
+  access: { risk: "destructive" },
+  input: z.object({ id: z.union([z.string(), z.number()]) }),
+  execute: async ({ id }) => {
+    try {
+      const doc = (await payload.update({
+        collection: COLLECTION,
+        id,
+        data: { published: true },
+      })) as PayloadEvent;
+      return JSON.stringify(projectEvent(doc));
+    } catch (err) {
+      throw wrapPayloadError(err);
+    }
+  },
+});
 
-export const unpublish_event = access(
-  { risk: "destructive" },
-  tool({
-    description: "Mark an event as unpublished (hidden from the website).",
-    inputSchema: z.object({ id: z.union([z.string(), z.number()]) }),
-    execute: async ({ id }) => {
-      try {
-        const doc = (await payload.update({
-          collection: COLLECTION,
-          id,
-          data: { published: false },
-        })) as PayloadEvent;
-        return JSON.stringify(projectEvent(doc));
-      } catch (err) {
-        throw wrapPayloadError(err);
-      }
-    },
-  }),
-);
+export const unpublish_event = defineTool({
+  name: "unpublish_event",
+  domain: "cms",
+  description: "Mark an event as unpublished (hidden from the website).",
+  access: { risk: "destructive" },
+  input: z.object({ id: z.union([z.string(), z.number()]) }),
+  execute: async ({ id }) => {
+    try {
+      const doc = (await payload.update({
+        collection: COLLECTION,
+        id,
+        data: { published: false },
+      })) as PayloadEvent;
+      return JSON.stringify(projectEvent(doc));
+    } catch (err) {
+      throw wrapPayloadError(err);
+    }
+  },
+});
 
-export const send_blast = access(
-  { risk: "destructive" },
-  tool({
-    description:
-      "Fire the email blast for this event to all active RSVPs (sets `send: true`). Payload's afterChange hook sends real emails via Resend and resets `send` to false afterwards. Destructive external side effect — use only after explicit confirmation.",
-    inputSchema: z.object({ id: z.union([z.string(), z.number()]) }),
-    execute: async ({ id }) => {
-      try {
-        const doc = (await payload.update({
-          collection: COLLECTION,
-          id,
-          data: { send: true },
-        })) as PayloadEvent;
-        return JSON.stringify({ triggered: true, ...projectEvent(doc) });
-      } catch (err) {
-        throw wrapPayloadError(err);
-      }
-    },
-  }),
-);
+export const send_blast = defineTool({
+  name: "send_blast",
+  domain: "cms",
+  description:
+    "Fire the email blast for this event to all active RSVPs (sets `send: true`). Payload's afterChange hook sends real emails via Resend and resets `send` to false afterwards. Destructive external side effect — use only after explicit confirmation.",
+  access: { risk: "destructive" },
+  input: z.object({ id: z.union([z.string(), z.number()]) }),
+  execute: async ({ id }) => {
+    try {
+      const doc = (await payload.update({
+        collection: COLLECTION,
+        id,
+        data: { send: true },
+      })) as PayloadEvent;
+      return JSON.stringify({ triggered: true, ...projectEvent(doc) });
+    } catch (err) {
+      throw wrapPayloadError(err);
+    }
+  },
+});

@@ -1,9 +1,8 @@
-import { tool } from "ai";
 import { Routes } from "discord-api-types/v10";
 import { z } from "zod";
 
 import { DISCORD_GUILD_ID } from "../../../protocol/constants.ts";
-import { access } from "../../policy/index.ts";
+import { defineTool } from "../_shared/define-tool.ts";
 import { discord } from "./client.ts";
 
 interface Sticker {
@@ -28,80 +27,80 @@ function summarize(s: Sticker) {
   };
 }
 
-export const list_stickers = access(
-  { risk: "read" },
-  tool({
-    description:
-      "List all custom stickers in the Discord server. Returns each sticker's ID, name, description, tags, and URL.",
-    inputSchema: z.object({}),
-    execute: async () => {
-      const stickers = (await discord.get(Routes.guildStickers(DISCORD_GUILD_ID))) as Sticker[];
-      return JSON.stringify(stickers.map(summarize));
-    },
+export const list_stickers = defineTool({
+  name: "list_stickers",
+  domain: "discord",
+  access: { risk: "read" },
+  description:
+    "List all custom stickers in the Discord server. Returns each sticker's ID, name, description, tags, and URL.",
+  input: z.object({}),
+  execute: async () => {
+    const stickers = (await discord.get(Routes.guildStickers(DISCORD_GUILD_ID))) as Sticker[];
+    return JSON.stringify(stickers.map(summarize));
+  },
+});
+
+export const create_sticker = defineTool({
+  name: "create_sticker",
+  domain: "discord",
+  access: { risk: "write" },
+  description:
+    "Upload a new custom sticker. Formats: PNG, APNG, or Lottie JSON. Max 512KB, 320x320px recommended. Requires a name (2-30 chars), tag (autocomplete suggestion, 2-200 chars), and image URL.",
+  input: z.object({
+    name: z.string().min(2).max(30).describe("Sticker name"),
+    description: z.string().max(100).optional().describe("Sticker description"),
+    tags: z.string().min(2).max(200).describe("Comma-separated autocomplete suggestions"),
+    url: z.string().describe("Image URL (PNG, APNG, or Lottie JSON)"),
   }),
-);
+  execute: async ({ name, description, tags, url }) => {
+    const response = await fetch(url);
+    const buffer = await response.arrayBuffer();
+    const contentType = response.headers.get("content-type") ?? "image/png";
 
-export const create_sticker = access(
-  { risk: "write" },
-  tool({
-    description:
-      "Upload a new custom sticker. Formats: PNG, APNG, or Lottie JSON. Max 512KB, 320x320px recommended. Requires a name (2-30 chars), tag (autocomplete suggestion, 2-200 chars), and image URL.",
-    inputSchema: z.object({
-      name: z.string().min(2).max(30).describe("Sticker name"),
-      description: z.string().max(100).optional().describe("Sticker description"),
-      tags: z.string().min(2).max(200).describe("Comma-separated autocomplete suggestions"),
-      url: z.string().describe("Image URL (PNG, APNG, or Lottie JSON)"),
-    }),
-    execute: async ({ name, description, tags, url }) => {
-      const response = await fetch(url);
-      const buffer = await response.arrayBuffer();
-      const contentType = response.headers.get("content-type") ?? "image/png";
+    const form = new FormData();
+    form.append("name", name);
+    if (description) form.append("description", description);
+    form.append("tags", tags);
+    form.append("file", new Blob([buffer], { type: contentType }), "sticker");
 
-      const form = new FormData();
-      form.append("name", name);
-      if (description) form.append("description", description);
-      form.append("tags", tags);
-      form.append("file", new Blob([buffer], { type: contentType }), "sticker");
+    const sticker = (await discord.post(Routes.guildStickers(DISCORD_GUILD_ID), {
+      body: form,
+      passThroughBody: true,
+    })) as Sticker;
+    return JSON.stringify(summarize(sticker));
+  },
+});
 
-      const sticker = (await discord.post(Routes.guildStickers(DISCORD_GUILD_ID), {
-        body: form,
-        passThroughBody: true,
-      })) as Sticker;
-      return JSON.stringify(summarize(sticker));
-    },
+export const edit_sticker = defineTool({
+  name: "edit_sticker",
+  domain: "discord",
+  access: { risk: "write" },
+  description: "Edit a custom sticker's name, description, or tag.",
+  input: z.object({
+    sticker_id: z.string().describe("Sticker ID"),
+    name: z.string().min(2).max(30).optional(),
+    description: z.string().max(100).optional(),
+    tags: z.string().min(2).max(200).optional(),
   }),
-);
+  execute: async ({ sticker_id, ...body }) => {
+    const sticker = (await discord.patch(Routes.guildSticker(DISCORD_GUILD_ID, sticker_id), {
+      body,
+    })) as Sticker;
+    return JSON.stringify(summarize(sticker));
+  },
+});
 
-export const edit_sticker = access(
-  { risk: "write" },
-  tool({
-    description: "Edit a custom sticker's name, description, or tag.",
-    inputSchema: z.object({
-      sticker_id: z.string().describe("Sticker ID"),
-      name: z.string().min(2).max(30).optional(),
-      description: z.string().max(100).optional(),
-      tags: z.string().min(2).max(200).optional(),
-    }),
-    execute: async ({ sticker_id, ...body }) => {
-      const sticker = (await discord.patch(Routes.guildSticker(DISCORD_GUILD_ID, sticker_id), {
-        body,
-      })) as Sticker;
-      return JSON.stringify(summarize(sticker));
-    },
+export const delete_sticker = defineTool({
+  name: "delete_sticker",
+  domain: "discord",
+  access: { risk: "destructive" },
+  description:
+    "Delete a custom sticker. Irreversible — all prior uses of the sticker become unresolved references.",
+  input: z.object({
+    sticker_id: z.string().describe("Sticker ID to delete"),
   }),
-);
-
-export const delete_sticker = access(
-  { risk: "destructive" },
-  tool({
-    description:
-      "Delete a custom sticker. Irreversible — all prior uses of the sticker become unresolved references.",
-    inputSchema: z.object({
-      sticker_id: z.string().describe("Sticker ID to delete"),
-    }),
-    execute: async ({ sticker_id }) => {
-      await discord.delete(Routes.guildSticker(DISCORD_GUILD_ID, sticker_id));
-      return JSON.stringify({ deleted: true, sticker_id });
-    },
-  }),
-);
+  execute: async ({ sticker_id }) => {
+    await discord.delete(Routes.guildSticker(DISCORD_GUILD_ID, sticker_id));
+    return JSON.stringify({ deleted: true, sticker_id });
+  },
+});

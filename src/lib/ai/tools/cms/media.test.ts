@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { mockFetch, payloadSDKClass, toolOpts } from "@/lib/test/fixtures";
 
-import { getAccessSpec } from "../../policy/index.ts";
+import { resolveAccessSpec } from "../../policy/index.ts";
 
 const mocks = vi.hoisted(() => ({
   find: vi.fn(),
@@ -137,20 +137,18 @@ describe("upload_media", () => {
     });
   });
 
-  it("throws when the source URL returns non-OK", async () => {
+  it("returns an error envelope when the source URL returns non-OK", async () => {
     ({ restore: restoreFetch } = mockFetch(() => new Response("nope", { status: 404 })));
-    await expect(
-      upload_media.execute!({ url: "https://cdn/none.jpg", alt: "a" }, toolOpts),
-    ).rejects.toThrow(/Failed to fetch/);
+    const result = await upload_media.execute!({ url: "https://cdn/none.jpg", alt: "a" }, toolOpts);
+    expect(String(result)).toMatch(/Failed to fetch/);
   });
 
   it("translates AbortSignal timeouts into a human-readable error", async () => {
     ({ restore: restoreFetch } = mockFetch(() => {
       throw new DOMException("timeout", "TimeoutError");
     }));
-    await expect(
-      upload_media.execute!({ url: "https://cdn/slow.jpg", alt: "a" }, toolOpts),
-    ).rejects.toThrow(/Timed out fetching/);
+    const result = await upload_media.execute!({ url: "https://cdn/slow.jpg", alt: "a" }, toolOpts);
+    expect(String(result)).toMatch(/Timed out fetching/);
   });
 
   it("passes a timeout signal into fetch", async () => {
@@ -167,6 +165,6 @@ describe("upload_media", () => {
 
 describe("delete_media", () => {
   it("is approval-gated", () => {
-    expect(getAccessSpec(delete_media)?.risk).toBe("destructive");
+    expect(resolveAccessSpec(delete_media)?.risk).toBe("destructive");
   });
 });

@@ -187,6 +187,12 @@ export function defineTool<I extends z.ZodObject>(spec: {
   access: AccessSpec;
   input: I;
   outputBudget?: number;
+  /**
+   * Optional passthrough to the AI SDK's `tool().toModelOutput` — maps the
+   * yielded/returned value to the model-facing output. Streaming tools (e.g.
+   * `bash`) use it to pick the final text part out of their UIMessage stream.
+   */
+  toModelOutput?: (options: { output: unknown }) => { type: "text"; value: string };
   execute: (input: z.output<I>, ctx: ToolCallOptions) => Promise<unknown> | AsyncIterable<unknown>;
 }) {
   const { name, domain, access: accessSpec, outputBudget = DEFAULT_OUTPUT_BUDGET } = spec;
@@ -225,6 +231,7 @@ export function defineTool<I extends z.ZodObject>(spec: {
     description: spec.description,
     inputSchema: spec.input,
     execute: isStreaming ? streamingExecute : bufferedExecute,
+    ...(spec.toModelOutput ? { toModelOutput: spec.toModelOutput } : {}),
   });
 
   // Single marker: the access spec lives only on the tool meta, read by

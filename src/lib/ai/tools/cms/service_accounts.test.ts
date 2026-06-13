@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { payloadSDKClass, toolOpts } from "@/lib/test/fixtures";
 
-import { getAccessSpec } from "../../policy/index.ts";
+import { resolveAccessSpec } from "../../policy/index.ts";
 
 const mocks = vi.hoisted(() => ({
   find: vi.fn(),
@@ -42,7 +42,7 @@ describe("organizer visibility", () => {
       update_service_account,
     };
     for (const [name, t] of Object.entries(tools)) {
-      expect(getAccessSpec(t)?.minRole, name).not.toBe("admin");
+      expect(resolveAccessSpec(t)?.minRole, name).not.toBe("admin");
     }
   });
 });
@@ -112,10 +112,10 @@ describe("update_service_account", () => {
 
 describe("delete_service_account", () => {
   it("is declared destructive (self-approval by default)", () => {
-    expect(getAccessSpec(delete_service_account)?.risk).toBe("destructive");
+    expect(resolveAccessSpec(delete_service_account)?.risk).toBe("destructive");
   });
 
   it("remains visible to organizer (no admin minRole)", () => {
-    expect(getAccessSpec(delete_service_account)?.minRole).not.toBe("admin");
+    expect(resolveAccessSpec(delete_service_account)?.minRole).not.toBe("admin");
   });
 });
