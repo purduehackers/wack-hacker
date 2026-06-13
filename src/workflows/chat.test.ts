@@ -77,6 +77,12 @@ function installHook(...events: ChatHookEvent[]) {
     },
     [Symbol.dispose]() {},
   };
+  // Deliver like the real WDK hook: the OLDEST pending next() gets the event.
+  return (event: ChatHookEvent) => {
+    const waiter = waiters.shift();
+    if (waiter) waiter({ done: false, value: event });
+    else queue.push(event);
+  };
 }
 
 const usage = (): TurnUsage => ({
@@ -199,6 +205,24 @@ describe("chatWorkflow: graceful termination", () => {
     expect(await new ConversationStore().get("ch-1")).toBeNull();
     const terminal = h.emits.find((e) => "ended_by" in e);
     expect(terminal).toMatchObject({ outcome: "ok", ended_by: "user", turn_count: 2 });
+  });
+
+  it("answers a follow-up that raced the idle timeout (lands on the abandoned next())", async () => {
+    await seedConversation();
+    const push = installHook();
+    // By the time cleanup's releaseSession runs, the loop has abandoned its
+    // pending next() to the idle timer. The straggler resolves that same
+    // armed promise — the drain must still receive it.
+    h.releaseSession.mockImplementation(async () => {
+      push(messageEvent("late after idle"));
+    });
+
+    await chatWorkflow(payload());
+
+    expect(h.streamTurn).toHaveBeenCalledTimes(2);
+    expect(h.messagesSeen[1].at(-1)).toEqual({ role: "user", content: "late after idle" });
+    const terminal = h.emits.find((e) => "ended_by" in e);
+    expect(terminal).toMatchObject({ outcome: "ok", ended_by: "idle_timeout", turn_count: 2 });
   });
 
   it("cleans up on the error path too", async () => {

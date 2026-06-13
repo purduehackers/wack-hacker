@@ -83,9 +83,14 @@ summarizeHistory.maxRetries = 1;
 async function capHistory(messages: ChatMessage[]): Promise<void> {
   if (messages.length <= MAX_HISTORY_MESSAGES) return;
   // +1 reserves room for the summary message itself; then advance to the next
-  // user message so the retained history keeps user/assistant alternation.
-  let dropCount = messages.length - MAX_HISTORY_MESSAGES + 1;
-  while (dropCount < messages.length && messages[dropCount].role !== "user") dropCount += 1;
+  // user message so the retained history starts with a user turn. (The
+  // summary is also user-role, so the model may see two consecutive user
+  // messages — the AI SDK provider conversion merges those into one.) Never
+  // drop the latest exchange, even on a degenerate non-alternating tail —
+  // otherwise a failed summary could wipe the entire history.
+  const maxDrop = messages.length - 2;
+  let dropCount = Math.min(messages.length - MAX_HISTORY_MESSAGES + 1, maxDrop);
+  while (dropCount < maxDrop && messages[dropCount].role !== "user") dropCount += 1;
   const dropped = messages.slice(0, dropCount);
   try {
     const summary = await summarizeHistory(dropped);
@@ -437,6 +442,32 @@ async function handleFollowupTurn(args: {
 }
 
 /**
+ * Single-flight view over the hook iterator that survives lost races. A
+ * `next()` abandoned when a timer wins the race stays armed and is re-awaited
+ * by the next caller — calling `hookEvents.next()` again would enqueue a
+ * second waiter behind the abandoned one, and the first event to arrive would
+ * resolve the abandoned promise and vanish. Callers `consume()` after a race
+ * the event won so the following call arms a fresh `next()`.
+ */
+interface HookEventSource {
+  next(): Promise<IteratorResult<ChatHookEvent>>;
+  consume(): void;
+}
+
+function createHookEventSource(hookEvents: AsyncIterator<ChatHookEvent>): HookEventSource {
+  let pending: Promise<IteratorResult<ChatHookEvent>> | null = null;
+  return {
+    next() {
+      pending ??= hookEvents.next();
+      return pending;
+    },
+    consume() {
+      pending = null;
+    },
+  };
+}
+
+/**
  * Answer hook events that landed in the buffer after the main loop stopped
  * consuming them: a resumeHook that was in flight while the loop exited
  * succeeded from its sender's perspective (handlers touch-and-return), so
@@ -444,7 +475,7 @@ async function handleFollowupTurn(args: {
  * the conversation key is already gone, so no new resume targets this run.
  */
 async function drainStragglers(args: {
-  hookEvents: AsyncIterator<ChatHookEvent>;
+  events: HookEventSource;
   state: ConversationState;
   stable: StableScope;
   channelId: string;
@@ -452,14 +483,13 @@ async function drainStragglers(args: {
   workflowRunId: string;
   workflowLogger: ReturnType<typeof createWideLogger>;
 }): Promise<void> {
-  const { hookEvents, state, stable, channelId, threadId, workflowRunId, workflowLogger } = args;
+  const { events, state, stable, channelId, threadId, workflowRunId, workflowLogger } = args;
   try {
     while (true) {
-      const straggler = await Promise.race([
-        hookEvents.next(),
-        sleep(DRAIN_GRACE).then(() => IDLE),
-      ]);
-      if (typeof straggler === "string" || straggler.done) break;
+      const straggler = await Promise.race([events.next(), sleep(DRAIN_GRACE).then(() => IDLE)]);
+      if (typeof straggler === "string") break;
+      events.consume();
+      if (straggler.done) break;
       const event = straggler.value;
       countMetric("workflow.chat.drained_event", { type: event.type });
       if (event.type !== "message" || !event.content) continue;
@@ -476,23 +506,24 @@ async function drainStragglers(args: {
  * timeout, or the hook closing. Returns how the loop ended.
  */
 async function runHookLoop(args: {
-  hookEvents: AsyncIterator<ChatHookEvent>;
+  events: HookEventSource;
   state: ConversationState;
   stable: StableScope;
   channelId: string;
   threadId: string | undefined;
   workflowRunId: string;
 }): Promise<"user" | "idle_timeout" | "hook_close"> {
-  const { hookEvents, state, stable, channelId, threadId, workflowRunId } = args;
+  const { events, state, stable, channelId, threadId, workflowRunId } = args;
   while (true) {
     // Documented WDK timeout pattern: race the next hook event against a
     // durable sleep. A losing sleep keeps ticking but is discarded when the
     // workflow ends.
-    const winner = await Promise.race([hookEvents.next(), sleep(IDLE_TIMEOUT).then(() => IDLE)]);
+    const winner = await Promise.race([events.next(), sleep(IDLE_TIMEOUT).then(() => IDLE)]);
     if (typeof winner === "string") {
       countMetric("workflow.chat.idle_timeout");
       return "idle_timeout";
     }
+    events.consume();
     if (winner.done) return "hook_close";
     const event = winner.value;
     countMetric("workflow.chat.hook_event", { type: event.type });
@@ -545,7 +576,7 @@ async function runChatWorkflow(payload: ChatPayload, workflowRunId: string): Pro
 
   const workflowStart = Date.now();
   using hook = createHook<ChatHookEvent>({ token: workflowRunId });
-  const hookEvents = hook[Symbol.asyncIterator]();
+  const events = createHookEventSource(hook[Symbol.asyncIterator]());
 
   let endedBy: "user" | "idle_timeout" | "hook_close" | "error" = "error";
   try {
@@ -558,7 +589,7 @@ async function runChatWorkflow(payload: ChatPayload, workflowRunId: string): Pro
       serializedContext: payload.context,
       placeholderMessageId: payload.placeholderMessageId,
     });
-    endedBy = await runHookLoop({ hookEvents, state, stable, channelId, threadId, workflowRunId });
+    endedBy = await runHookLoop({ events, state, stable, channelId, threadId, workflowRunId });
   } finally {
     try {
       // The error path must release the conversation too — otherwise the
@@ -572,7 +603,7 @@ async function runChatWorkflow(payload: ChatPayload, workflowRunId: string): Pro
         traceparent: state.traceparent,
       });
       await drainStragglers({
-        hookEvents,
+        events,
         state,
         stable,
         channelId,
