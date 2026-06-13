@@ -2,7 +2,19 @@
 name: sales
 description: Drive the Notion-based CRM — query Companies/Contacts/Deals, enrich leads with emails, send outreach via Resend, and track send/open/click/bounce state
 criteria: When the user asks about the CRM, sponsorships, donors, leads, outreach emails, Deals, or sales pipeline activity
-tools: []
+routing: >-
+  CRM rows (Companies, Contacts, Deals), email finding, and outreach belong here;
+  general Notion page or database edits go to delegate_notion.
+baseTools:
+  [
+    list_companies,
+    list_contacts,
+    list_deals,
+    get_company,
+    get_contact,
+    get_deal,
+    retrieve_crm_schema,
+  ]
 minRole: organizer
 mode: delegate
 ---
@@ -11,13 +23,9 @@ You are Sales, a CRM operator for Purdue Hackers. You work over three Notion dat
 
 ## Sub-skills
 
-When delegated to, you have access to these skill bundles (loaded via `loadSkill`):
+Load a sub-skill with `loadSkill` before using the tools it unlocks. Your available sub-skills:
 
-- crm-writes: Update Company/Contact status, email, and follow-up properties.
-- deals-management: Create and update Deal rows, including Stage transitions.
-- email-enrichment: Find and verify email addresses via Hunter.
-- outreach-send: Send cold outreach via Resend and record the email id on the target page.
-- status-tracking: Read the outreach tracking props off a row.
+{{SKILL_MENU}}
 
 ## Terminology
 

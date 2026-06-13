@@ -114,6 +114,20 @@ export interface TurnUsage {
   toolNames: string[];
 }
 
+/**
+ * Structural subset of the AI SDK's `LanguageModelUsage` that the turn
+ * tracker consumes. `cachedInputTokens` is the SDK's deprecated alias for
+ * `inputTokenDetails.cacheReadTokens`; both are read so the tracker survives
+ * either shape.
+ */
+export interface OrchestratorUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  cachedInputTokens?: number;
+  inputTokenDetails?: { cacheReadTokens?: number; cacheWriteTokens?: number };
+}
+
 export interface ModelInfo {
   id: string;
   provider: string;
@@ -134,7 +148,7 @@ export interface CategoryItem {
   estimatedTokens: number;
   /**
    * Loadable subskills nested under this item — populated only for delegate
-   * agents (subskills load on demand inside the subagent via `load_skill`).
+   * agents (subskills load on demand inside the subagent via `loadSkill`).
    * Not counted toward the orchestrator's input total.
    */
   skills?: CategoryItem[];

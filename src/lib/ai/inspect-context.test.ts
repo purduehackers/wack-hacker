@@ -222,6 +222,36 @@ describe("breakdownFromSnapshot — delegate subskills", () => {
     }
   });
 
+  it("attaches subskills for every delegate domain (generated table covers all 12)", async () => {
+    const fetchInfo = vi.fn().mockResolvedValue(modelInfo);
+    const domains = [
+      "cms",
+      "code",
+      "discord",
+      "figma",
+      "finance",
+      "github",
+      "linear",
+      "notion",
+      "sales",
+      "sentry",
+      "shopping",
+      "vercel",
+    ];
+    const snap = {
+      ...baseSnap,
+      // Admin role so admin-gated domains (code) and sub-skills attach too.
+      context: { ...baseSnap.context, memberRoles: ["1344066433172373656"] },
+      tools: domains.map((d) => ({ name: `delegate_${d}`, description: d, inputSchema: {} })),
+    };
+    const out = await breakdownFromSnapshot(snap, fetchInfo);
+    const delegates = out.categories.find((c) => c.label === "Delegate agents");
+    for (const d of domains) {
+      const item = delegates?.items?.find((i) => i.name === `delegate_${d}`);
+      expect(item?.skills?.length, `delegate_${d} should list sub-skills`).toBeGreaterThan(0);
+    }
+  });
+
   it("returns undefined skills for a delegate whose domain is not registered", async () => {
     const fetchInfo = vi.fn().mockResolvedValue(modelInfo);
     const snap = {

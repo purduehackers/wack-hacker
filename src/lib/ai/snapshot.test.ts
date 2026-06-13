@@ -106,8 +106,9 @@ describe("buildContextSnapshot", () => {
     });
     expect(snap.systemPrompt).toContain("<execution_context>");
     expect(snap.systemPrompt).toContain("<identity>");
-    // Date placeholder was substituted
+    // Placeholders were substituted
     expect(snap.systemPrompt).not.toContain("{{DATE}}");
+    expect(snap.systemPrompt).not.toContain("{{DELEGATES}}");
   });
 
   it("serializes the orchestrator tool surface", () => {

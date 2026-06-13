@@ -18,15 +18,16 @@ There are three distinct pieces of state a chat workflow carries:
 │    • channel         : ChannelInfo                         │
 │    • thread?         : ThreadInfo                          │
 │    • recentMessages? : RecentMessage[]                     │
-│                        ↑ channel/thread history LEADING IN │
-│                        to the conversation. Does NOT flip  │
-│                        to conversation history over time.  │
+│    │                   ↑ channel/thread history LEADING IN │
+│    │                   to the conversation. Does NOT flip  │
+│    │                   to conversation history over time.  │
+│    • date / nowISO / timezone       (first turn's clock —  │
+│                        pinned for prompt-cache stability)  │
 │                                                            │
 │  FRESH PER TURN ─ rebuilt from each triggering packet:     │
 │    • userId / username / nickname   (this turn's sender)   │
 │    • memberRoles?                   (this turn's roles)    │
 │    • attachments?                   (this turn's files)    │
-│    • date                           (now())                │
 └────────────────────────────────────────────────────────────┘
 
 ┌─ Workflow-local messages array ────────────────────────────┐
@@ -52,14 +53,14 @@ Splitting them gives each piece one clear job:
 
 ## Fields
 
-| Field                            | Stable / Fresh | Source                                                                 |
-| -------------------------------- | -------------- | ---------------------------------------------------------------------- |
-| `userId`, `username`, `nickname` | fresh          | The Discord member who triggered the current turn                      |
-| `channel`, `thread?`             | stable         | Where the conversation lives (pinned when workflow starts)             |
-| `date`                           | fresh          | Pre-formatted current date string (e.g. `"Wednesday, April 15, 2026"`) |
-| `attachments?`                   | fresh          | Files on the current turn's message                                    |
-| `memberRoles?`                   | fresh          | Discord role IDs for the current sender                                |
-| `recentMessages?`                | stable         | Last ~15 channel/thread messages before the workflow started           |
+| Field                            | Stable / Fresh | Source                                                                                                                                                                                                                                             |
+| -------------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `userId`, `username`, `nickname` | fresh          | The Discord member who triggered the current turn                                                                                                                                                                                                  |
+| `channel`, `thread?`             | stable         | Where the conversation lives (pinned when workflow starts)                                                                                                                                                                                         |
+| `date`, `nowISO`, `timezone`     | stable         | First turn's date/instant/timezone (pinned so the rendered system prompt stays byte-stable for prompt caching; followup turns get fresh wall-clock time stamped onto the user message instead — see `stampCurrentTime` in `src/workflows/chat.ts`) |
+| `attachments?`                   | fresh          | Files on the current turn's message                                                                                                                                                                                                                |
+| `memberRoles?`                   | fresh          | Discord role IDs for the current sender                                                                                                                                                                                                            |
+| `recentMessages?`                | stable         | Last ~15 channel/thread messages before the workflow started (each message capped at 300 chars, each rendered block at 4,000 chars; dropped from the prompt after turn 3 — by then the model has real conversation history)                        |
 
 `role: UserRole` is a **getter** (not a stored field) that resolves at access time by checking `memberRoles` against the `ROLE_IDS` constant defined inside `context.ts`: admin first, then organizer, falling back to public. Because `memberRoles` is fresh per turn, `role` correctly reflects the current sender — a follow-up from a different user is evaluated against their own roles, not the original author's. See [Role-based access](./roles.md).
 
