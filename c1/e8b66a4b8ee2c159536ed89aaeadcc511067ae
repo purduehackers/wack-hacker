@@ -1,0 +1,19 @@
+src/lib/tasks/queue/handlers/scheduled-task-fire.test.ts
+  s_3ca78ed2011f24::t_71aa9c85b9acca 325-332
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "c1e8b66a4b8ee2c159536ed89aaeadcc511067ae",
+  "prompts": {},
+  "sessions": {
+    "s_3ca78ed2011f24": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "124a68ff-f8c9-4309-b110-2b491f1386b5",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
