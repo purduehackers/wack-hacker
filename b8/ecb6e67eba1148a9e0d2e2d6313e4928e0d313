@@ -1,0 +1,37 @@
+docs/skills/README.md
+  s_e947ebbd513117::t_70a30180378934 31
+src/lib/ai/policy/apply.test.ts
+  s_e947ebbd513117::t_50df227c1dad06 181,189
+src/lib/ai/subagent.ts
+  s_e947ebbd513117::t_f84144df5e1f72 142
+  s_e947ebbd513117::t_e2bcc215114b94 223
+src/lib/ai/orchestrator.test.ts
+  s_e947ebbd513117::t_dd8022477fd86b 232-236,238-246
+src/lib/ai/tools/_shared/define-tool.test.ts
+  s_e947ebbd513117::t_868de26ab06e61 67
+  s_e947ebbd513117::t_bf37f0f9359050 12
+  s_e947ebbd513117::t_f80831e67ab4c3 26
+  s_e947ebbd513117::t_4a6f329fde3bcd 200-211,213-218
+src/lib/ai/tools/_shared/define-tool.ts
+  s_e947ebbd513117::t_36cf51f1a19ec6 7-16
+  s_e947ebbd513117::t_1d5cec466c6d50 164-166
+  s_e947ebbd513117::t_7a80ee67a6be2b 176
+  s_e947ebbd513117::t_07620c087a16f7 189
+  s_e947ebbd513117::t_879496ed9366df 216-219
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "b8ecb6e67eba1148a9e0d2e2d6313e4928e0d313",
+  "prompts": {},
+  "sessions": {
+    "s_e947ebbd513117": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bbc7243f-7d19-41f9-9d1d-97eedb0b6968",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
