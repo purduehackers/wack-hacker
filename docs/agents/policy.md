@@ -1,31 +1,38 @@
 # Access policy
 
-`src/lib/ai/policy/` is the single permissions primitive. Every tool declares what it does via `access()`; one pure function (`decide()`) turns that declaration plus the caller's role into a decision; one choke point (`applyPolicy()`) enforces it on every ToolSet handed to a model. It replaces the old pair of independent markers — `admin()` (deleted) and `approval()` (legacy, still honored, no longer used).
+`src/lib/ai/policy/` is the single permissions primitive. Every tool declares what it does via its `defineTool` `access` spec; one pure function (`decide()`) turns that declaration plus the caller's role into a decision; one choke point (`applyPolicy()`) enforces it on every ToolSet handed to a model. It replaces the old pair of independent markers — `admin()` (deleted) and `approval()` (legacy, still honored, no longer used).
 
-| File           | What it is                                                                                      |
-| -------------- | ----------------------------------------------------------------------------------------------- |
-| `access.ts`    | `access(spec, tool)` symbol marker, `getAccessSpec`, `resolveAccessSpec` (legacy fallback).     |
-| `decide.ts`    | `decide(subject, tool, ctx)` — the pure decision point, plus the role×risk defaults table.      |
-| `apply.ts`     | `applyPolicy(tools, opts)` — enforcement on a ToolSet.                                          |
-| `audit.ts`     | `AuditLog` — durable append-only writer for the Turso `action_audit` table.                     |
-| `budget.ts`    | `BudgetStore` + `readBudgetState`/`recordTurnTokens` — the daily token budget dimension.        |
-| `constants.ts` | `RiskLevel`, `ConfirmMode`, `PolicySource`, `AuditDecision` (as-const enums), budget constants. |
-| `types.ts`     | `AccessSpec`, `PolicyDecision`, `ActionAuditEntry`, `ApplyPolicyOptions`, …                     |
+| File           | What it is                                                                                                                                  |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `access.ts`    | `resolveAccessSpec` (reads each tool's `defineTool` metadata); the `access()`/`getAccessSpec` symbol marker is kept only for test fixtures. |
+| `decide.ts`    | `decide(subject, tool, ctx)` — the pure decision point, plus the role×risk defaults table.                                                  |
+| `apply.ts`     | `applyPolicy(tools, opts)` — enforcement on a ToolSet.                                                                                      |
+| `audit.ts`     | `AuditLog` — durable append-only writer for the Turso `action_audit` table.                                                                 |
+| `budget.ts`    | `BudgetStore` + `readBudgetState`/`recordTurnTokens` — the daily token budget dimension.                                                    |
+| `constants.ts` | `RiskLevel`, `ConfirmMode`, `PolicySource`, `AuditDecision` (as-const enums), budget constants.                                             |
+| `types.ts`     | `AccessSpec`, `PolicyDecision`, `ActionAuditEntry`, `ApplyPolicyOptions`, …                                                                 |
 
 ## Declaring access
 
-Every exported tool in `src/lib/ai/tools/**` wraps its definition:
+Every exported tool in `src/lib/ai/tools/**` declares its access inline via `defineTool`:
 
 ```ts
-import { access } from "@/lib/ai/policy";
-import { tool } from "ai";
+import { z } from "zod";
 
-export const delete_project = access(
-  { risk: "destructive" },
-  tool({
+import { defineTool } from "@/lib/ai/tools/_shared/define-tool";
+
+export const delete_project = defineTool({
+  name: "delete_project",
+  domain: "vercel",
+  description: "…",
+  access: { risk: "destructive" },
+  input: z.object({
     /* ... */
   }),
-);
+  execute: async (input, ctx) => {
+    /* ... */
+  },
+});
 ```
 
 `AccessSpec` fields:

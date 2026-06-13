@@ -8,10 +8,10 @@ import type { AccessSpec } from "../../policy/types.ts";
 
 /**
  * `defineTool` declares a tool's access with plan 09's `AccessSpec`
- * (`{ risk, minRole?, confirm?, reason? }`) and stamps it via the policy
- * `access()` marker, so `applyPolicy` enforces defineTool'd tools and
- * hand-`access()`-wrapped tools through one path. Tool files declare intent
- * here instead of wrapping exports by hand.
+ * (`{ risk, minRole?, confirm?, reason? }`) and stamps it directly onto the
+ * tool's `TOOL_META` — the single marker `applyPolicy` reads (via
+ * `resolveAccessSpec`). `defineTool` is the one authoring path; tool files
+ * declare intent here instead of hand-wrapping exports.
  */
 type ToolErrorClass =
   | "not-found"

@@ -21,11 +21,11 @@ The queue used is the `tasks` topic served by `src/app/api/tasks/route.ts`. Visi
 
 ## Tools
 
-| Tool                   | What it does                                                                                                                                                                          |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `schedule_task`        | Validates input, computes the target instant, enqueues a `sendScheduledFire`, then inserts the `scheduled_tasks` row. Confirm-gated via `access({ risk: "write", confirm: "self" })`. |
-| `list_scheduled_tasks` | Reads from `listScheduledTasks(opts?)`, optionally filtered by user. Returns only rows with `status='active'`.                                                                        |
-| `cancel_task`          | `updateScheduledTask(id, { status: 'cancelled', nextRunAt: null })`. Leftover queue messages no-op when delivered. Confirm-gated via `access({ risk: "destructive" })`.               |
+| Tool                   | What it does                                                                                                                                                                                   |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `schedule_task`        | Validates input, computes the target instant, enqueues a `sendScheduledFire`, then inserts the `scheduled_tasks` row. Confirm-gated via its `access: { risk: "write", confirm: "self" }` spec. |
+| `list_scheduled_tasks` | Reads from `listScheduledTasks(opts?)`, optionally filtered by user. Returns only rows with `status='active'`.                                                                                 |
+| `cancel_task`          | `updateScheduledTask(id, { status: 'cancelled', nextRunAt: null })`. Leftover queue messages no-op when delivered. Confirm-gated via its `access: { risk: "destructive" }` spec.               |
 
 ## Long horizons
 
