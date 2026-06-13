@@ -1,0 +1,34 @@
+src/lib/protocol/events/message-delete.ts
+  s_e947ebbd513117::t_405836ae60f21e 5
+  s_e947ebbd513117::t_0f54ebbf10ccfe 19-21,23-33
+src/server/routes/gateway/index.test.ts
+  s_e947ebbd513117::t_6ebad907580b9a 12-16
+src/lib/protocol/events/reactions.ts
+  s_e947ebbd513117::t_4f7f8100d5e28d 33-38,40-52
+  s_e947ebbd513117::t_a8ada89a37d7c5 5
+  s_e947ebbd513117::t_9294790c047eb3 63-65,67-79
+src/lib/protocol/events/guard.ts
+  s_e947ebbd513117::t_7aba6726afe040 1-16
+src/lib/protocol/events/message-create.ts
+  s_e947ebbd513117::t_ccefa81a8b55e8 6
+  s_e947ebbd513117::t_a8ab2cf7d03c80 92-94,96-130,132-134,137-140
+src/lib/protocol/events/binds.test.ts
+  s_e947ebbd513117::t_e27aa52203c788 103,105
+  s_e947ebbd513117::t_1e93d5f82ea486 198-199,202
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "254d48a434ee694c755a11f8b0a07c2744ed205c",
+  "prompts": {},
+  "sessions": {
+    "s_e947ebbd513117": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bbc7243f-7d19-41f9-9d1d-97eedb0b6968",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
