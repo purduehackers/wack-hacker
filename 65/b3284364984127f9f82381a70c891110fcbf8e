@@ -1,0 +1,19 @@
+src/lib/ai/context.test.ts
+  s_1d7c46430d8514::t_ac10570235c5ef 368-370
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "65b3284364984127f9f82381a70c891110fcbf8e",
+  "prompts": {},
+  "sessions": {
+    "s_1d7c46430d8514": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "46492d35-d480-4e29-9b7c-cce9a445e37d",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
