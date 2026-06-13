@@ -1,0 +1,30 @@
+src/lib/ai/policy/apply.test.ts
+  s_0dd6d7f4e6643b::t_feccc861007107 240-256
+src/lib/ai/policy/budget.test.ts
+  s_0dd6d7f4e6643b::t_feccc861007107 52-60
+src/lib/ai/policy/audit.test.ts
+  s_0dd6d7f4e6643b::t_253878b0fb8b24 129-131
+  s_0dd6d7f4e6643b::t_feccc861007107 23,113-128,132-148
+src/lib/ai/approvals/runtime.ts
+  s_0dd6d7f4e6643b::t_1f55c9c530cb92 209-211
+src/lib/ai/policy/budget.ts
+  s_0dd6d7f4e6643b::t_1f55c9c530cb92 43-48
+src/lib/ai/policy/audit.ts
+  s_0dd6d7f4e6643b::t_1f55c9c530cb92 13-31,78-79
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "dc93ce3acb19c4fc2b5fc5660a17d2640cedd037",
+  "prompts": {},
+  "sessions": {
+    "s_0dd6d7f4e6643b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9061d1c1-8b36-4d0a-938e-68dfb7766d64",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
