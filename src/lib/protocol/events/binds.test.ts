@@ -4,7 +4,7 @@ import { ChannelType, Events } from "discord.js";
 import { describe, expect, it, vi } from "vitest";
 
 import { PacketSchema } from "../packets.ts";
-import { getDedupKey, packetEvents } from "./index.ts";
+import { bindGatewayEvents, getDedupKey, packetEvents } from "./index.ts";
 import { messageCreateEvent } from "./message-create.ts";
 import { messageDeleteEvent } from "./message-delete.ts";
 import { reactionAddEvent, reactionRemoveEvent } from "./reactions.ts";
@@ -113,12 +113,79 @@ describe("messageCreateEvent.bind", () => {
           parent: { name: "general" },
           parentId: "ch-1",
         },
+        reference: null,
       }),
     );
     const packet = PacketSchema.parse(publish.mock.calls[0]![0]);
     if (packet.type !== "GATEWAY_MESSAGE_CREATE") throw new Error("wrong type");
     expect(packet.data.thread).toEqual({ parentId: "ch-1", parentName: "general" });
     expect(packet.data.categoryId).toBeUndefined();
+    expect(packet.data.reference).toBeUndefined();
+  });
+
+  it("serializes forwarded snapshots and falls back on sparse fields", async () => {
+    const { listeners, publish } = capture(messageCreateEvent.bind);
+    await listeners.get(Events.MessageCreate)!(
+      fakeMessage({
+        member: null,
+        flags: undefined,
+        attachments: [],
+        author: { id: "user-1", username: "alice", displayName: "Alice", bot: false, avatar: null },
+        channel: {
+          id: "ch-1",
+          name: "general",
+          type: ChannelType.GuildText,
+          isThread: () => false,
+          parent: null,
+          parentId: null,
+        },
+        mentions: { users: new Map(), repliedUser: undefined },
+        reference: { messageId: "msg-0", channelId: null },
+        messageSnapshots: [
+          {
+            content: "forwarded text",
+            attachments: [
+              {
+                id: "fa1",
+                url: "https://x.com/g.png",
+                name: "g.png",
+                contentType: null,
+                size: 5,
+                width: null,
+                height: null,
+              },
+            ],
+          },
+          { content: null, attachments: null },
+        ],
+      }),
+    );
+    const packet = PacketSchema.parse(publish.mock.calls[0]![0]);
+    if (packet.type !== "GATEWAY_MESSAGE_CREATE") throw new Error("wrong type");
+    expect(packet.data.memberRoles).toEqual([]);
+    expect(packet.data.flags).toBeUndefined();
+    expect(packet.data.reference).toEqual({
+      messageId: "msg-0",
+      channelId: undefined,
+      authorId: undefined,
+    });
+    expect(packet.data.forwardedSnapshots).toEqual([
+      {
+        content: "forwarded text",
+        attachments: [
+          {
+            id: "fa1",
+            url: "https://x.com/g.png",
+            filename: "g.png",
+            contentType: undefined,
+            size: 5,
+            width: undefined,
+            height: undefined,
+          },
+        ],
+      },
+      { content: undefined, attachments: undefined },
+    ]);
   });
 });
 
@@ -154,6 +221,19 @@ describe.each([
     await listeners.get(discordEvent)!(reaction, { id: "b", username: "bot", bot: true });
     expect(publish).not.toHaveBeenCalled();
   });
+
+  it("falls back for custom emoji without a name and users without a username", async () => {
+    const { listeners, publish } = capture(event.bind as never);
+    await listeners.get(discordEvent)!(
+      { ...reaction, emoji: { id: "emoji-1", name: null } },
+      { id: "user-1", username: undefined, bot: false },
+    );
+    const packet = PacketSchema.parse(publish.mock.calls[0]![0]);
+    expect(packet.data).toMatchObject({
+      emoji: { id: "emoji-1", name: "" },
+      creator: { id: "user-1", username: "unknown" },
+    });
+  });
 });
 
 describe("messageDeleteEvent.bind", () => {
@@ -183,5 +263,21 @@ describe("packetEvents table", () => {
     const kinds = packetEvents.map((event) => event.kind);
     expect(new Set(types).size).toBe(types.length);
     expect(new Set(kinds).size).toBe(kinds.length);
+  });
+
+  it("bindGatewayEvents attaches every event's listener", async () => {
+    const registered: string[] = [];
+    const client = {
+      on: (event: string) => {
+        registered.push(event);
+      },
+    } as unknown as Client;
+    bindGatewayEvents(client, vi.fn().mockResolvedValue(undefined));
+    expect(registered).toEqual([
+      Events.MessageCreate,
+      Events.MessageReactionAdd,
+      Events.MessageReactionRemove,
+      Events.MessageDelete,
+    ]);
   });
 });
