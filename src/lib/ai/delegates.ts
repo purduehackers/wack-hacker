@@ -1,135 +1,66 @@
 import type { ToolSet } from "ai";
 
 import type { AgentContext } from "./context.ts";
+import type { SkillBundle } from "./skills/types.ts";
 import type { TurnUsageTracker } from "./turn-usage.ts";
-import type { SubagentSpec, TelemetryMetadata } from "./types.ts";
+import type { SubagentPromptConfig, SubagentSpecBase, TelemetryMetadata } from "./types.ts";
 
-import { BASE_TOOL_NAMES } from "./constants.ts";
-import { SKILL_MANIFEST as CMS_SUBSKILLS } from "./skills/generated/domains/cms.ts";
-import { SKILL_MANIFEST as CODE_SUBSKILLS } from "./skills/generated/domains/code.ts";
-import { SKILL_MANIFEST as DISCORD_SUBSKILLS } from "./skills/generated/domains/discord.ts";
-import { SKILL_MANIFEST as FIGMA_SUBSKILLS } from "./skills/generated/domains/figma.ts";
-import { SKILL_MANIFEST as FINANCE_SUBSKILLS } from "./skills/generated/domains/finance.ts";
-import { SKILL_MANIFEST as GITHUB_SUBSKILLS } from "./skills/generated/domains/github.ts";
-import { SKILL_MANIFEST as LINEAR_SUBSKILLS } from "./skills/generated/domains/linear.ts";
-import { SKILL_MANIFEST as NOTION_SUBSKILLS } from "./skills/generated/domains/notion.ts";
-import { SKILL_MANIFEST as SALES_SUBSKILLS } from "./skills/generated/domains/sales.ts";
-import { SKILL_MANIFEST as SENTRY_SUBSKILLS } from "./skills/generated/domains/sentry.ts";
-import { SKILL_MANIFEST as SHOPPING_SUBSKILLS } from "./skills/generated/domains/shopping.ts";
-import { SKILL_MANIFEST as VERCEL_SUBSKILLS } from "./skills/generated/domains/vercel.ts";
+import { DELEGATE_PREFIX, UserRole } from "./constants.ts";
+import { DOMAINS } from "./skills/generated/domains.ts";
 import { SKILL_MANIFEST } from "./skills/generated/manifest.ts";
 import { SkillRegistry } from "./skills/registry.ts";
 import { createDelegationTool } from "./subagent.ts";
-import * as cmsTools from "./tools/cms/index.ts";
 import {
   buildCodeExperimentalContext,
   codeDelegationInputSchema,
   codePostFinish,
+  getCodeDelegationPrompt,
 } from "./tools/code/delegation.ts";
-import * as codeTools from "./tools/code/index.ts";
-import * as discordTools from "./tools/discord/index.ts";
-import * as figmaTools from "./tools/figma/index.ts";
-import * as financeTools from "./tools/finance/index.ts";
-import * as githubTools from "./tools/github/index.ts";
-import * as linearTools from "./tools/linear/index.ts";
-import * as notionTools from "./tools/notion/index.ts";
-import * as salesTools from "./tools/sales/index.ts";
-import * as sentryTools from "./tools/sentry/index.ts";
-import * as shoppingTools from "./tools/shopping/index.ts";
-import * as vercelTools from "./tools/vercel/index.ts";
-
-const DELEGATE_PREFIX = "delegate_";
-
-/**
- * Per-domain configuration for delegation subagents.
- *
- * `tools` is the full domain tool set. `baseToolNames` are the tools always
- * visible to the subagent without loading a sub-skill — typically search and
- * retrieval tools that serve as the agent's initial discovery toolkit.
- */
-const DOMAINS = {
-  linear: {
-    tools: linearTools as unknown as ToolSet,
-    subSkills: LINEAR_SUBSKILLS,
-    baseToolNames: BASE_TOOL_NAMES.linear,
-  },
-  github: {
-    tools: githubTools as unknown as ToolSet,
-    subSkills: GITHUB_SUBSKILLS,
-    baseToolNames: BASE_TOOL_NAMES.github,
-  },
-  discord: {
-    tools: discordTools as unknown as ToolSet,
-    subSkills: DISCORD_SUBSKILLS,
-    baseToolNames: BASE_TOOL_NAMES.discord,
-  },
-  figma: {
-    tools: figmaTools as unknown as ToolSet,
-    subSkills: FIGMA_SUBSKILLS,
-    baseToolNames: BASE_TOOL_NAMES.figma,
-  },
-  notion: {
-    tools: notionTools as unknown as ToolSet,
-    subSkills: NOTION_SUBSKILLS,
-    baseToolNames: BASE_TOOL_NAMES.notion,
-  },
-  sentry: {
-    tools: sentryTools as unknown as ToolSet,
-    subSkills: SENTRY_SUBSKILLS,
-    baseToolNames: BASE_TOOL_NAMES.sentry,
-  },
-  finance: {
-    tools: financeTools as unknown as ToolSet,
-    subSkills: FINANCE_SUBSKILLS,
-    baseToolNames: BASE_TOOL_NAMES.finance,
-  },
-  shopping: {
-    tools: shoppingTools as unknown as ToolSet,
-    subSkills: SHOPPING_SUBSKILLS,
-    baseToolNames: BASE_TOOL_NAMES.shopping,
-  },
-  sales: {
-    tools: salesTools as unknown as ToolSet,
-    subSkills: SALES_SUBSKILLS,
-    baseToolNames: BASE_TOOL_NAMES.sales,
-  },
-  vercel: {
-    tools: vercelTools as unknown as ToolSet,
-    subSkills: VERCEL_SUBSKILLS,
-    baseToolNames: BASE_TOOL_NAMES.vercel,
-  },
-  code: {
-    tools: codeTools as unknown as ToolSet,
-    subSkills: CODE_SUBSKILLS,
-    baseToolNames: BASE_TOOL_NAMES.code,
-  },
-  cms: {
-    tools: cmsTools as unknown as ToolSet,
-    subSkills: CMS_SUBSKILLS,
-    baseToolNames: BASE_TOOL_NAMES.cms,
-  },
-} as const satisfies Record<
-  string,
-  { tools: ToolSet; subSkills: unknown; baseToolNames: readonly string[] }
->;
 
 /**
  * Per-domain overrides layered into the `SubagentSpec` before creating the
  * delegation tool. Today only `code` needs non-default values — stronger
- * model, more steps, custom input schema, sandbox context builder, and the
- * post-finish commit/push/PR step. Other domains use the defaults.
+ * model, more steps, custom input schema + prompt extractor, sandbox context
+ * builder, and the post-finish commit/push/PR step. Other domains use the
+ * defaults from the generated `DOMAINS` registry. These reference runtime
+ * functions, so they stay hand-written rather than compiler-emitted.
+ *
+ * Keys are plain strings (the generated `DOMAINS` is `Record<string, …>`), so
+ * a stale key no longer fails typecheck — delegates.test.ts asserts the
+ * override is observably applied instead. The base fields are `Partial`, but
+ * `SubagentPromptConfig` is kept whole so an override can't introduce a custom
+ * `inputSchema` without its paired `getPrompt`.
  */
-const DOMAIN_SPEC_OVERRIDES: Partial<Record<keyof typeof DOMAINS, Partial<SubagentSpec>>> = {
+const DOMAIN_SPEC_OVERRIDES: Partial<
+  Record<string, Partial<SubagentSpecBase> & SubagentPromptConfig>
+> = {
   code: {
     model: "anthropic/claude-opus-4.7",
     stopSteps: 60,
     inputSchema: codeDelegationInputSchema,
+    getPrompt: getCodeDelegationPrompt,
     buildExperimentalContext: buildCodeExperimentalContext,
     postFinish: codePostFinish,
   },
 };
 
 const registry = new SkillRegistry(SKILL_MANIFEST);
+
+/**
+ * Delegate-mode domains the role can access, paired with their top-level
+ * skill bundle. Single filter shared by `buildDelegationTools` and
+ * `buildDelegateDocs` so the rendered prompt can never drift from the actual
+ * tool surface.
+ */
+function availableDelegates(
+  role: UserRole,
+): { name: string; config: (typeof DOMAINS)[string]; skill: SkillBundle }[] {
+  return Object.entries(DOMAINS).flatMap(([name, config]) => {
+    const skill = registry.loadSkill(name, role);
+    if (!skill || skill.mode !== "delegate") return [];
+    return [{ name, config, skill }];
+  });
+}
 
 /** Build delegation tools for every delegate-mode skill the role can access. */
 export function buildDelegationTools(
@@ -138,14 +69,12 @@ export function buildDelegationTools(
   extraMetadata?: TelemetryMetadata,
 ): ToolSet {
   const tools: ToolSet = {};
-  for (const [name, config] of Object.entries(DOMAINS)) {
-    const skill = registry.loadSkill(name, context.role);
-    if (!skill || skill.mode !== "delegate") continue;
-    const overrides = DOMAIN_SPEC_OVERRIDES[name as keyof typeof DOMAINS] ?? {};
+  for (const { name, config, skill } of availableDelegates(context.role)) {
+    const overrides = DOMAIN_SPEC_OVERRIDES[name] ?? {};
     tools[DELEGATE_PREFIX + name] = createDelegationTool(
       {
         name,
-        description: skill.description,
+        description: `${skill.description}. Use when: ${skill.criteria}`,
         systemPrompt: skill.instructions,
         ...config,
         ...overrides,
@@ -156,4 +85,34 @@ export function buildDelegationTools(
     );
   }
   return tools;
+}
+
+/**
+ * Render the system prompt's delegate-tool section for a role. Generated from
+ * the same registry that `buildDelegationTools` uses, so the prompt lists
+ * exactly the delegate tools the role actually has — public users see no
+ * delegation docs at all. Returns an empty string when the role has no
+ * delegates.
+ */
+export function buildDelegateDocs(role: UserRole): string {
+  const delegates = availableDelegates(role);
+  if (delegates.length === 0) return "";
+
+  // Criteria + routing only — each delegate tool's own description already
+  // carries `description. Use when: criteria`, so repeating the description
+  // here would double-spend tokens on every step.
+  const lines = delegates.map(({ name, skill }) => {
+    const routing = skill.routing ? ` ${skill.routing}` : "";
+    return `- **${DELEGATE_PREFIX + name}** — use when: ${skill.criteria}.${routing}`;
+  });
+
+  return `These delegation tools forward a task to a focused domain subagent:
+
+${lines.join("\n")}
+
+Delegation rules:
+
+- Only delegate when the user's request clearly requires a domain-specific action (e.g. creating a channel, filing an issue, querying a database). If the message is casual, ambiguous, or conversational, respond directly — do not delegate.
+- Forward the user's wording verbatim; the subagent needs the exact phrasing. Wait for the subagent's final result.
+- Delegations to different domains are independent — when a request spans domains, emit the delegate calls in a single turn so they run in parallel.`;
 }

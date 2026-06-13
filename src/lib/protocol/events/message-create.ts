@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { isTextChannel } from "../utils.ts";
 import { definePacketEvent } from "./define.ts";
+import { guardEvent } from "./guard.ts";
 
 const DiscordTimestamp = z.iso.datetime({ offset: true });
 
@@ -88,52 +89,54 @@ export const messageCreateEvent = definePacketEvent({
   data: MessageCreateData,
   dedupKey: (packet) => `msg:${packet.data.id}`,
   bind: (client, publish) => {
-    client.on(Events.MessageCreate, async (message) => {
-      if (message.author.bot || !isTextChannel(message.channel)) return;
+    client.on(Events.MessageCreate, (message) =>
+      guardEvent("messageCreate", async () => {
+        if (message.author.bot || !isTextChannel(message.channel)) return;
 
-      await publish({
-        type: "GATEWAY_MESSAGE_CREATE",
-        timestamp: new Date(),
-        data: {
-          id: message.id,
-          attachments: message.attachments.map(serializeAttachment),
-          author: {
-            id: message.author.id,
-            username: message.author.username,
-            nickname: message.author.displayName,
-            bot: message.author.bot,
-            avatarHash: message.author.avatar ?? undefined,
-          },
-          channel: { id: message.channel.id, name: message.channel.name },
-          thread:
-            message.channel.isThread() && message.channel.parent
+        await publish({
+          type: "GATEWAY_MESSAGE_CREATE",
+          timestamp: new Date(),
+          data: {
+            id: message.id,
+            attachments: message.attachments.map(serializeAttachment),
+            author: {
+              id: message.author.id,
+              username: message.author.username,
+              nickname: message.author.displayName,
+              bot: message.author.bot,
+              avatarHash: message.author.avatar ?? undefined,
+            },
+            channel: { id: message.channel.id, name: message.channel.name },
+            thread:
+              message.channel.isThread() && message.channel.parent
+                ? {
+                    parentId: message.channel.parentId!,
+                    parentName: message.channel.parent.name,
+                  }
+                : undefined,
+            content: message.content,
+            guildId: message.guildId!,
+            timestamp: message.createdAt.toISOString(),
+            memberRoles: [...(message.member?.roles.cache.keys() ?? [])],
+            flags: message.flags?.bitfield,
+            categoryId: message.channel.isThread()
+              ? undefined
+              : (message.channel.parentId ?? undefined),
+            forwardedSnapshots: (message as any).messageSnapshots?.map((s: any) => ({
+              content: s.content ?? undefined,
+              attachments: s.attachments?.map(serializeAttachment),
+            })),
+            mentions: [...message.mentions.users.keys()],
+            reference: message.reference?.messageId
               ? {
-                  parentId: message.channel.parentId!,
-                  parentName: message.channel.parent.name,
+                  messageId: message.reference.messageId,
+                  channelId: message.reference.channelId ?? undefined,
+                  authorId: message.mentions.repliedUser?.id,
                 }
               : undefined,
-          content: message.content,
-          guildId: message.guildId!,
-          timestamp: message.createdAt.toISOString(),
-          memberRoles: [...(message.member?.roles.cache.keys() ?? [])],
-          flags: message.flags?.bitfield,
-          categoryId: message.channel.isThread()
-            ? undefined
-            : (message.channel.parentId ?? undefined),
-          forwardedSnapshots: (message as any).messageSnapshots?.map((s: any) => ({
-            content: s.content ?? undefined,
-            attachments: s.attachments?.map(serializeAttachment),
-          })),
-          mentions: [...message.mentions.users.keys()],
-          reference: message.reference?.messageId
-            ? {
-                messageId: message.reference.messageId,
-                channelId: message.reference.channelId ?? undefined,
-                authorId: message.mentions.repliedUser?.id,
-              }
-            : undefined,
-        },
-      });
-    });
+          },
+        });
+      }),
+    );
   },
 });

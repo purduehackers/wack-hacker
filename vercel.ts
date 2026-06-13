@@ -33,5 +33,15 @@ export const config: VercelConfig = {
     "src/app/api/[[...route]]/route.ts": {
       maxDuration: "max",
     },
+    // Workflow DevKit handler routes, generated into src/app at build time
+    // (gitignored). The step handler executes entire chat turns — long Opus
+    // code-domain turns get killed mid-stream and replayed under the default
+    // duration.
+    "src/app/.well-known/workflow/v1/step/route.js": {
+      maxDuration: "max",
+    },
+    "src/app/.well-known/workflow/v1/flow/route.js": {
+      maxDuration: "max",
+    },
   },
 };

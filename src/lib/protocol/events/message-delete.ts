@@ -2,6 +2,7 @@ import { Events } from "discord.js";
 import { z } from "zod";
 
 import { definePacketEvent } from "./define.ts";
+import { guardEvent } from "./guard.ts";
 
 const MessageDeleteData = z.object({
   id: z.string(),
@@ -15,18 +16,20 @@ export const messageDeleteEvent = definePacketEvent({
   data: MessageDeleteData,
   dedupKey: (packet) => `del:${packet.data.id}`,
   bind: (client, publish) => {
-    client.on(Events.MessageDelete, async (message) => {
-      if (!message.guildId) return;
+    client.on(Events.MessageDelete, (message) =>
+      guardEvent("messageDelete", async () => {
+        if (!message.guildId) return;
 
-      await publish({
-        type: "GATEWAY_MESSAGE_DELETE",
-        timestamp: new Date(),
-        data: {
-          id: message.id,
-          channelId: message.channelId,
-          guildId: message.guildId,
-        },
-      });
-    });
+        await publish({
+          type: "GATEWAY_MESSAGE_DELETE",
+          timestamp: new Date(),
+          data: {
+            id: message.id,
+            channelId: message.channelId,
+            guildId: message.guildId,
+          },
+        });
+      }),
+    );
   },
 });

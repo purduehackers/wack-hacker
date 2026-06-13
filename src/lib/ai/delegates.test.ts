@@ -23,6 +23,7 @@ vi.mock("@vercel/edge-config", () => ({
 }));
 
 const { buildDelegationTools } = await import("./delegates.ts");
+const { DOMAINS } = await import("./skills/generated/domains.ts");
 const { SKILL_MANIFEST } = await import("./skills/generated/manifest.ts");
 
 const ROLE_LEVEL: Record<UserRole, number> = {
@@ -61,5 +62,57 @@ describe("buildDelegationTools", () => {
         expect(tools).toHaveProperty(`delegate_${skill.name}`);
       }
     }
+  });
+
+  it("appends routing criteria to every delegation tool description", () => {
+    const tools = buildDelegationTools(contextForRole(UserRole.Admin), new TurnUsageTracker());
+    for (const [name, tool] of Object.entries(tools)) {
+      const description = (tool as { description?: string }).description ?? "";
+      expect(description, `${name} description should carry criteria`).toContain(". Use when: ");
+    }
+  });
+});
+
+// Drift guards over the generated domain registry: every tool name a SKILL.md
+// declares (baseTools frontmatter, sub-skill `tools` lists) must resolve to a
+// real export in the domain's tool barrel.
+describe("generated DOMAINS registry", () => {
+  it("resolves every baseTool to a real tool export", () => {
+    for (const [domain, config] of Object.entries(DOMAINS)) {
+      const missing = config.baseToolNames.filter((name) => !(name in config.tools));
+      expect(missing, `${domain}: baseTools missing from tool barrel`).toEqual([]);
+    }
+  });
+
+  it("resolves every sub-skill tool to a real tool export", () => {
+    for (const [domain, config] of Object.entries(DOMAINS)) {
+      for (const [subName, bundle] of Object.entries(config.subSkills)) {
+        const missing = bundle.toolNames.filter((name) => !(name in config.tools));
+        expect(missing, `${domain}/${subName}: tools missing from barrel`).toEqual([]);
+      }
+    }
+  });
+
+  it("registers every delegate-mode skill from the top-level manifest", () => {
+    const delegateSkills = Object.values(SKILL_MANIFEST)
+      .filter((s) => s.mode === "delegate")
+      .map((s) => s.name)
+      .sort();
+    expect(Object.keys(DOMAINS).sort()).toEqual(delegateSkills);
+  });
+
+  // DOMAINS keys are generated strings now, so a stale DOMAIN_SPEC_OVERRIDES
+  // key no longer fails typecheck — it would silently stop applying and
+  // delegate_code would fall back to the default `{ task }` schema, model,
+  // and step cap. The custom input schema is the observable fingerprint.
+  it("applies the code domain's spec overrides (custom { repo, task } schema)", () => {
+    const tools = buildDelegationTools(contextForRole(UserRole.Admin), new TurnUsageTracker());
+    const schema = (tools.delegate_code as { inputSchema?: unknown }).inputSchema as {
+      safeParse: (input: unknown) => { success: boolean };
+    };
+    expect(schema.safeParse({ repo: "purduehackers/site", task: "fix the bug" }).success).toBe(
+      true,
+    );
+    expect(schema.safeParse({ task: "fix the bug" }).success).toBe(false);
   });
 });

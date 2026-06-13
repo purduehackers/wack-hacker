@@ -2,7 +2,9 @@ import type { MockLanguageModelV3 } from "ai/test";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { UserRole } from "@/lib/ai/constants";
 import {
+  contextForRole,
   discordRESTClass,
   installMockProvider,
   linearClientClass,
@@ -36,7 +38,8 @@ vi.mock("@vercel/sandbox", () => ({
   Sandbox: class MockSandbox {},
 }));
 
-const { createOrchestrator } = await import("./orchestrator.ts");
+const { buildSystemPrompt, createOrchestrator, getOrchestratorTools, ORCHESTRATOR_MODEL } =
+  await import("./orchestrator.ts");
 
 const BASE_TOOLS = [
   "cancel_task",
@@ -60,7 +63,7 @@ describe("createOrchestrator", () => {
   });
 
   async function drain(ctx: AgentContext) {
-    const agent = createOrchestrator(ctx, new TurnUsageTracker());
+    const agent = createOrchestrator(ctx, new TurnUsageTracker(), undefined, ORCHESTRATOR_MODEL);
     const result = await agent.stream({ prompt: "say hi" });
     const reader = result.toUIMessageStream().getReader();
     while (!(await reader.read()).done);
@@ -73,6 +76,21 @@ describe("createOrchestrator", () => {
       .filter((n): n is string => typeof n === "string")
       .sort();
   }
+
+  it("streams with an explicit model override", async () => {
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    const agent = createOrchestrator(
+      ctx,
+      new TurnUsageTracker(),
+      undefined,
+      "anthropic/claude-haiku-4.5",
+    );
+    const result = await agent.stream({ prompt: "say hi" });
+    const reader = result.toUIMessageStream().getReader();
+    while (!(await reader.read()).done);
+
+    expect(model.doStreamCalls.length).toBeGreaterThan(0);
+  });
 
   it("gives public users only base tools (all delegate skills require organizer+)", async () => {
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
@@ -101,6 +119,48 @@ describe("createOrchestrator", () => {
       ]),
     );
   });
+});
+
+describe("createOrchestrator — caching & execution context", () => {
+  let model: MockLanguageModelV3;
+
+  beforeEach(() => {
+    model = streamingTextModel("hi");
+    installMockProvider(model);
+  });
+
+  afterEach(() => {
+    uninstallMockProvider();
+  });
+
+  async function drain(ctx: AgentContext) {
+    const agent = createOrchestrator(ctx, new TurnUsageTracker(), undefined, ORCHESTRATOR_MODEL);
+    const result = await agent.stream({ prompt: "say hi" });
+    const reader = result.toUIMessageStream().getReader();
+    while (!(await reader.read()).done);
+  }
+
+  it("marks the last tool and last message with an anthropic cache breakpoint", async () => {
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    await drain(ctx);
+
+    const call = model.doStreamCalls[0]!;
+    const tools = (call.tools ?? []) as { providerOptions?: Record<string, unknown> }[];
+    expect(tools.length).toBeGreaterThan(0);
+    expect(tools.at(-1)!.providerOptions).toMatchObject({
+      anthropic: { cacheControl: { type: "ephemeral" } },
+    });
+    // Only the last tool carries a breakpoint — Anthropic allows at most 4
+    // per request and the trailing message takes another.
+    for (const t of tools.slice(0, -1)) {
+      expect(t.providerOptions?.anthropic).toBeUndefined();
+    }
+
+    const lastMessage = call.prompt.at(-1)! as { providerOptions?: Record<string, unknown> };
+    expect(lastMessage.providerOptions).toMatchObject({
+      anthropic: { cacheControl: { type: "ephemeral" } },
+    });
+  });
 
   it("injects execution context into system prompt via buildInstructions", async () => {
     const ctx = AgentContext.fromPacket(
@@ -116,5 +176,72 @@ describe("createOrchestrator", () => {
     expect(systemContent).toContain('username: "alice"');
     expect(systemContent).toContain("Purdue Hackers");
     expect(systemContent).not.toContain("{{DATE}}");
+    expect(systemContent).not.toContain("{{DELEGATES}}");
+  });
+});
+
+describe("buildSystemPrompt", () => {
+  function delegatesInPrompt(prompt: string): string[] {
+    return [...new Set(prompt.match(/delegate_[a-z0-9_]+/g) ?? [])].sort();
+  }
+
+  function delegatesInToolSet(role: UserRole): string[] {
+    const tools = getOrchestratorTools(contextForRole(role), new TurnUsageTracker());
+    return Object.keys(tools)
+      .filter((name) => name.startsWith("delegate_"))
+      .sort();
+  }
+
+  // Drift guard: the prompt's delegate docs are generated from the same
+  // registry as the delegation tools, so every delegate name the model reads
+  // about must exist in its ToolSet — and vice versa.
+  it("mentions exactly the organizer's delegate tools", () => {
+    const prompt = buildSystemPrompt(contextForRole(UserRole.Organizer));
+    expect(delegatesInPrompt(prompt)).toEqual(delegatesInToolSet(UserRole.Organizer));
+  });
+
+  it("mentions exactly the admin's delegate tools (including delegate_code)", () => {
+    const prompt = buildSystemPrompt(contextForRole(UserRole.Admin));
+    const mentioned = delegatesInPrompt(prompt);
+    expect(mentioned).toContain("delegate_code");
+    expect(mentioned).toEqual(delegatesInToolSet(UserRole.Admin));
+  });
+
+  it("documents each delegate with its routing criteria", () => {
+    const prompt = buildSystemPrompt(contextForRole(UserRole.Organizer));
+    for (const name of delegatesInToolSet(UserRole.Organizer)) {
+      expect(prompt).toMatch(new RegExp(`\\*\\*${name}\\*\\* — use when: .+`));
+    }
+  });
+
+  // Base tools stay hand-written in SYSTEM_PROMPT, so cross-check every
+  // **bold** tool mention (base and delegate, including "a / b / c" bullets)
+  // against the actual ToolSet — stale prose about a renamed tool fails here.
+  it("documents only tools that exist in the role's ToolSet (base + delegates)", () => {
+    for (const role of [UserRole.Organizer, UserRole.Admin]) {
+      const prompt = buildSystemPrompt(contextForRole(role));
+      const tools = getOrchestratorTools(contextForRole(role), new TurnUsageTracker());
+      const mentioned = [...prompt.matchAll(/\*\*([a-z0-9_ /]+)\*\*/g)]
+        .flatMap((m) => m[1].split(" / "))
+        .map((name) => name.trim());
+      // web_search once shipped documented-but-unregistered (#127) — keep it
+      // pinned so the extraction regex can't silently rot either.
+      expect(mentioned).toContain("web_search");
+      for (const name of mentioned) {
+        expect(tools, `prompt documents nonexistent tool ${name} for ${role}`).toHaveProperty(name);
+      }
+    }
+  });
+
+  it("renders no delegation docs for public users", () => {
+    const prompt = buildSystemPrompt(contextForRole(UserRole.Public));
+    expect(prompt).not.toContain("delegate_");
+    expect(prompt).not.toContain("{{DELEGATES}}");
+  });
+
+  it("leaves no unsubstituted placeholder for any role", () => {
+    for (const role of [UserRole.Public, UserRole.Organizer, UserRole.Admin]) {
+      expect(buildSystemPrompt(contextForRole(role))).not.toContain("{{DELEGATES}}");
+    }
   });
 });

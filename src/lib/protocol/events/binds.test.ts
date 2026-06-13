@@ -100,7 +100,9 @@ describe("messageCreateEvent.bind", () => {
     );
     expect(publish).not.toHaveBeenCalled();
   });
+});
 
+describe("messageCreateEvent.bind — serialization", () => {
   it("serializes thread messages with the parent reference", async () => {
     const { listeners, publish } = capture(messageCreateEvent.bind);
     await listeners.get(Events.MessageCreate)!(
@@ -193,11 +195,11 @@ describe.each([
   { event: reactionAddEvent, discordEvent: Events.MessageReactionAdd, keyPrefix: "react" },
   { event: reactionRemoveEvent, discordEvent: Events.MessageReactionRemove, keyPrefix: "unreact" },
 ])("$event.type bind", ({ event, discordEvent, keyPrefix }) => {
+  // ids live on the partial — the bind reads them directly without a REST
+  // fetch, so the fake deliberately omits a `fetch` method.
   const reaction = {
     emoji: { id: null, name: "👋" },
-    message: {
-      fetch: async () => ({ id: "msg-1", channelId: "ch-1", guildId: "guild-1" }),
-    },
+    message: { id: "msg-1", channelId: "ch-1", guildId: "guild-1" },
   };
 
   it("publishes a packet that parses against PacketSchema", async () => {

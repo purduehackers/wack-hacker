@@ -2,6 +2,7 @@ import { Events } from "discord.js";
 import { z } from "zod";
 
 import { definePacketEvent } from "./define.ts";
+import { guardEvent } from "./guard.ts";
 
 const ReactionData = z.object({
   messageId: z.string(),
@@ -29,22 +30,26 @@ export const reactionAddEvent = definePacketEvent({
   dedupKey: (packet) =>
     `react:${packet.data.messageId}:${packet.data.creator.id}:${packet.data.emoji.id ?? packet.data.emoji.name}`,
   bind: (client, publish) => {
-    client.on(Events.MessageReactionAdd, async (reaction, user) => {
-      if (user.bot) return;
-      const message = await reaction.message.fetch();
+    // The reaction packets only need ids, all present on the partial — fetching
+    // the full message costs a REST round-trip per reaction and rejects when the
+    // message was just deleted, which used to silently drop the event.
+    client.on(Events.MessageReactionAdd, (reaction, user) =>
+      guardEvent("reactionAdd", async () => {
+        if (user.bot) return;
 
-      await publish({
-        type: "GATEWAY_MESSAGE_REACTION_ADD",
-        timestamp: new Date(),
-        data: {
-          messageId: message.id,
-          channelId: message.channelId,
-          guildId: message.guildId!,
-          emoji: { id: reaction.emoji.id, name: reaction.emoji.name ?? "" },
-          creator: { id: user.id, username: user.username ?? "unknown" },
-        },
-      });
-    });
+        await publish({
+          type: "GATEWAY_MESSAGE_REACTION_ADD",
+          timestamp: new Date(),
+          data: {
+            messageId: reaction.message.id,
+            channelId: reaction.message.channelId,
+            guildId: reaction.message.guildId ?? "",
+            emoji: { id: reaction.emoji.id, name: reaction.emoji.name ?? "" },
+            creator: { id: user.id, username: user.username ?? "unknown" },
+          },
+        });
+      }),
+    );
   },
 });
 
@@ -55,21 +60,22 @@ export const reactionRemoveEvent = definePacketEvent({
   dedupKey: (packet) =>
     `unreact:${packet.data.messageId}:${packet.data.creator.id}:${packet.data.emoji.id ?? packet.data.emoji.name}`,
   bind: (client, publish) => {
-    client.on(Events.MessageReactionRemove, async (reaction, user) => {
-      if (user.bot) return;
-      const message = await reaction.message.fetch();
+    client.on(Events.MessageReactionRemove, (reaction, user) =>
+      guardEvent("reactionRemove", async () => {
+        if (user.bot) return;
 
-      await publish({
-        type: "GATEWAY_MESSAGE_REACTION_REMOVE",
-        timestamp: new Date(),
-        data: {
-          messageId: message.id,
-          channelId: message.channelId,
-          guildId: message.guildId!,
-          emoji: { id: reaction.emoji.id, name: reaction.emoji.name ?? "" },
-          creator: { id: user.id, username: user.username ?? "unknown" },
-        },
-      });
-    });
+        await publish({
+          type: "GATEWAY_MESSAGE_REACTION_REMOVE",
+          timestamp: new Date(),
+          data: {
+            messageId: reaction.message.id,
+            channelId: reaction.message.channelId,
+            guildId: reaction.message.guildId ?? "",
+            emoji: { id: reaction.emoji.id, name: reaction.emoji.name ?? "" },
+            creator: { id: user.id, username: user.username ?? "unknown" },
+          },
+        });
+      }),
+    );
   },
 });

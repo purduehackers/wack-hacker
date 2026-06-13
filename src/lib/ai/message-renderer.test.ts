@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 
 import type { FooterMeta } from "./types.ts";
 
@@ -340,7 +340,7 @@ describe("MessageRenderer: components", () => {
     });
 
     await renderer.init();
-    await renderer.showSubagentPreview("Searching...");
+    await renderer.showSubagentPreview("call-1", "Searching...");
 
     const edits = discord.callsTo("channels.editMessage");
     const editBodies = edits.map((e) => (e[2] as { content: string }).content);
@@ -492,5 +492,102 @@ describe("MessageRenderer: finalize edge cases", () => {
       stepCount: 1,
     };
     await expect(renderer.finalize(meta)).rejects.toThrow(/before init/);
+  });
+});
+
+describe("MessageRenderer: concurrent previews and failure states", () => {
+  function unthrottledRenderer() {
+    const discord = createMockAPI();
+    const renderer = new MessageRenderer(asAPI(discord), "ch-1");
+    const realNow = Date.now;
+    let now = realNow.call(Date);
+    vi.spyOn(Date, "now").mockImplementation(() => {
+      now += 2000;
+      return now;
+    });
+    return { discord, renderer };
+  }
+
+  function editBodies(discord: ReturnType<typeof createMockAPI>): string[] {
+    return discord
+      .callsTo("channels.editMessage")
+      .map((e) => (e[2] as { content: string }).content);
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("renders two concurrent previews independently", async () => {
+    const { discord, renderer } = unthrottledRenderer();
+    await renderer.init();
+    await renderer.showSubagentPreview("call-1", "Linear progress");
+    await renderer.showSubagentPreview("call-2", "GitHub progress");
+
+    const last = editBodies(discord).at(-1);
+    expect(last).toContain("> Linear progress");
+    expect(last).toContain("> GitHub progress");
+  });
+
+  it("clearActivity with a toolCallId drops only that preview", async () => {
+    const { discord, renderer } = unthrottledRenderer();
+    await renderer.init();
+    await renderer.showSubagentPreview("call-1", "Linear progress");
+    await renderer.showSubagentPreview("call-2", "GitHub progress");
+    renderer.clearActivity("call-1");
+    await renderer.showSubagentPreview("call-2", "GitHub progress, more");
+
+    const last = editBodies(discord).at(-1);
+    expect(last).not.toContain("Linear progress");
+    expect(last).toContain("> GitHub progress, more");
+  });
+
+  it("clearActivity without a toolCallId drops everything", async () => {
+    const { discord, renderer } = unthrottledRenderer();
+    await renderer.init();
+    await renderer.showToolCall("delegate_linear");
+    await renderer.showSubagentPreview("call-1", "Linear progress");
+    renderer.clearActivity();
+    await renderer.appendText("Done.");
+
+    const last = editBodies(discord).at(-1);
+    expect(last).toBe("Done.");
+  });
+
+  it("showToolFailed renders a failed status line", async () => {
+    const { discord, renderer } = unthrottledRenderer();
+    await renderer.init();
+    await renderer.showToolCall("delegate_github");
+    await renderer.showToolFailed("delegate_github");
+
+    const last = editBodies(discord).at(-1);
+    expect(last).toContain("-# `delegate_github` failed.");
+    expect(last).not.toContain("Calling");
+  });
+
+  it("renderFailure replaces streamed content immediately, bypassing the rate limit", async () => {
+    // No Date.now mocking: the failure edit must go out despite the throttle.
+    const discord = createMockAPI();
+    const renderer = new MessageRenderer(asAPI(discord), "ch-1");
+    await renderer.init();
+    await renderer.appendText("partial answer that will be discarded");
+    await renderer.renderFailure("Something went wrong — try again. Trace: `abc123`");
+
+    const bodies = discord
+      .callsTo("channels.editMessage")
+      .map((e) => (e[2] as { content: string }).content);
+    expect(bodies.at(-1)).toBe("Something went wrong — try again. Trace: `abc123`");
+  });
+
+  it("reset clears accumulated text so a retry starts clean", async () => {
+    const { discord, renderer } = unthrottledRenderer();
+    await renderer.init();
+    await renderer.appendText("first attempt text");
+    renderer.reset();
+    await renderer.appendText("second attempt text");
+
+    expect(renderer.content).toBe("second attempt text");
+    const last = editBodies(discord).at(-1);
+    expect(last).toBe("second attempt text");
   });
 });

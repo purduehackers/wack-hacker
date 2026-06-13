@@ -190,6 +190,16 @@ async function startGatewayListener(client: Client): Promise<{ hold: Promise<voi
 const route = new Hono();
 
 route.get("/gateway", async (c) => {
+  // Vercel crons attach `Authorization: Bearer ${CRON_SECRET}` on every
+  // invocation. Reject anything else: lease acquisition below is an
+  // unconditional set, so an unauthenticated GET could steal leadership and
+  // black out the gateway for the whole login handoff.
+  const auth = c.req.header("authorization");
+  if (auth !== `Bearer ${env.CRON_SECRET}`) {
+    createWideLogger({ op: "gateway.route" }).emit({ outcome: "unauthorized" });
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
   let oidcToken: string;
   try {
     oidcToken = getVercelOidcTokenSync();

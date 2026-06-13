@@ -12,7 +12,12 @@ export class MessageRenderer {
   private messageId: string | null = null;
   private text = "";
   private activity: string | null = null;
-  private subagentPreview = "";
+  /**
+   * In-flight subagent previews keyed by toolCallId. The orchestrator runs
+   * parallel delegations under `Promise.all`, so concurrent previews must
+   * not clobber each other; each renders as its own quote block.
+   */
+  private subagentPreviews = new Map<string, string>();
   private taskId: string | undefined;
   private lastEdit = 0;
   private lastRendered = "";
@@ -55,31 +60,64 @@ export class MessageRenderer {
     this.lastEdit = 0;
   }
 
-  /** Append streamed text. Clears activity/preview since text is arriving. */
+  /** Append streamed text. Clears activity/previews since text is arriving. */
   async appendText(delta: string): Promise<void> {
     this.text += delta;
     this.activity = null;
-    this.subagentPreview = "";
+    this.subagentPreviews.clear();
     await this.flush();
   }
 
-  /** Show tool call activity indicator. */
+  /**
+   * Show tool call activity indicator. Leaves existing previews alone — a
+   * sibling delegation may still be streaming when another tool starts.
+   */
   async showToolCall(toolName: string): Promise<void> {
     this.activity = `Calling \`${toolName}\`...`;
-    this.subagentPreview = "";
     await this.flush();
   }
 
-  /** Show subagent progress preview. */
-  async showSubagentPreview(text: string): Promise<void> {
-    this.subagentPreview = text;
+  /** Show subagent progress preview for one in-flight tool call. */
+  async showSubagentPreview(toolCallId: string, text: string): Promise<void> {
+    this.subagentPreviews.set(toolCallId, text);
     await this.flush();
   }
 
-  /** Clear activity state (e.g. after non-preliminary tool-result). */
-  clearActivity(): void {
+  /** Show a transient tool-failure status line (replaced by the next text). */
+  async showToolFailed(toolName: string): Promise<void> {
+    this.activity = `\`${toolName}\` failed.`;
+    await this.flush();
+  }
+
+  /**
+   * Clear activity state (e.g. after a non-preliminary tool-result or a
+   * tool-error). With a `toolCallId`, only that call's preview is dropped so
+   * concurrent delegations keep theirs; without one, everything clears.
+   */
+  clearActivity(toolCallId?: string): void {
     this.activity = null;
-    this.subagentPreview = "";
+    if (toolCallId === undefined) this.subagentPreviews.clear();
+    else this.subagentPreviews.delete(toolCallId);
+  }
+
+  /** Drop accumulated content so a fallback-model retry re-streams from scratch. */
+  reset(): void {
+    this.text = "";
+    this.activity = null;
+    this.subagentPreviews.clear();
+  }
+
+  /**
+   * Replace the in-progress message with a failure notice immediately,
+   * bypassing the edit rate limit. Best-effort terminal edit for the error
+   * path — `flush()` swallows Discord failures.
+   */
+  async renderFailure(notice: string): Promise<void> {
+    this.text = notice;
+    this.activity = null;
+    this.subagentPreviews.clear();
+    this.lastEdit = 0;
+    await this.flush();
   }
 
   /**
@@ -243,7 +281,9 @@ export class MessageRenderer {
   private render(): string {
     const parts: string[] = [];
     if (this.activity) parts.push(`-# ${this.activity}`);
-    if (this.subagentPreview) parts.push(`> ${this.subagentPreview.replaceAll("\n", "\n> ")}`);
+    for (const preview of this.subagentPreviews.values()) {
+      parts.push(`> ${preview.replaceAll("\n", "\n> ")}`);
+    }
     if (this.text) parts.push(this.text);
     const body = parts.join("\n\n") || "> Thinking...";
     return body.length > MAX_LENGTH ? body.slice(0, MAX_LENGTH - 1) + "…" : body;
