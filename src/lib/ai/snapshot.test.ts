@@ -147,7 +147,9 @@ describe("buildContextSnapshot", () => {
     expect(schema?.type).toBe("object");
     expect(schema?.properties).toBeDefined();
   });
+});
 
+describe("buildContextSnapshot — messages and metadata", () => {
   it("preserves messages and usage verbatim", () => {
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
     const msgs = [
@@ -164,6 +166,19 @@ describe("buildContextSnapshot", () => {
     expect(snap.messages).toEqual(msgs);
     expect(snap.totalUsage).toEqual(usage);
     expect(snap.turnCount).toBe(7);
+  });
+
+  it("carries through a stored updatedAt instead of stamping a new one", () => {
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    const snap = buildContextSnapshot({
+      context: ctx.toJSON(),
+      messages: [],
+      totalUsage: usage,
+      turnCount: 1,
+      updatedAt: "2026-06-11T00:00:00.000Z",
+      getTools: syntheticTools,
+    });
+    expect(snap.updatedAt).toBe("2026-06-11T00:00:00.000Z");
   });
 
   it("stamps updatedAt with an ISO timestamp", () => {

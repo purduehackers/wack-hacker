@@ -26,7 +26,7 @@ interface WakeDecision {
   reason?: string;
 }
 
-async function decideWake(threadKey: string): Promise<WakeDecision> {
+async function decideWake(threadKey: string, runId: string): Promise<WakeDecision> {
   "use step";
   return withSpan(
     "sandbox.lifecycle.decide_wake",
@@ -40,6 +40,12 @@ async function decideWake(threadKey: string): Promise<WakeDecision> {
       if (!meta) {
         logger.emit({ action: "exit", reason: "session-gone" });
         return { action: "exit", reason: "session-gone" };
+      }
+      // Another lifecycle run claimed the session after us (takeover) —
+      // stand down so two watchers don't race the same deadline.
+      if (meta.lifecycleRunId && meta.lifecycleRunId !== runId) {
+        logger.emit({ action: "exit", reason: "superseded" });
+        return { action: "exit", reason: "superseded" };
       }
       if (meta.hibernated) {
         logger.emit({ action: "exit", reason: "already-hibernated" });
@@ -159,7 +165,7 @@ export async function sandboxLifecycleWorkflow(threadKey: string, runId: string)
   // Cap the loop at a sane iteration count so a malfunctioning Redis state
   // can't spin forever.
   for (let iteration = 0; iteration < 24; iteration += 1) {
-    const decision = await decideWake(threadKey);
+    const decision = await decideWake(threadKey, runId);
     if (decision.action === "exit") {
       workflowLogger.emit({
         outcome: "exit",
@@ -183,6 +189,14 @@ export async function sandboxLifecycleWorkflow(threadKey: string, runId: string)
     // "still-active" — loop back and re-compute wake time against the new deadline.
   }
 
+  // Out of iterations with a live VM still out there — try to hibernate it
+  // once instead of abandoning it to its hard deadline. "still-active" here
+  // means the deadline keeps moving; leave the next watcher to pick it up.
   countMetric("sandbox.lifecycle.max_iterations");
-  workflowLogger.emit({ outcome: "exit", reason: "max-iterations" });
+  const finalAttempt = await performHibernation(threadKey);
+  workflowLogger.emit({
+    outcome: "exit",
+    reason: "max-iterations",
+    final_hibernation: finalAttempt,
+  });
 }

@@ -38,7 +38,7 @@ vi.mock("@vercel/sandbox", () => ({
   Sandbox: class MockSandbox {},
 }));
 
-const { buildSystemPrompt, createOrchestrator, getOrchestratorTools } =
+const { buildSystemPrompt, createOrchestrator, getOrchestratorTools, ORCHESTRATOR_MODEL } =
   await import("./orchestrator.ts");
 
 const BASE_TOOLS = [
@@ -63,7 +63,7 @@ describe("createOrchestrator", () => {
   });
 
   async function drain(ctx: AgentContext) {
-    const agent = createOrchestrator(ctx, new TurnUsageTracker());
+    const agent = createOrchestrator(ctx, new TurnUsageTracker(), undefined, ORCHESTRATOR_MODEL);
     const result = await agent.stream({ prompt: "say hi" });
     const reader = result.toUIMessageStream().getReader();
     while (!(await reader.read()).done);
@@ -76,6 +76,21 @@ describe("createOrchestrator", () => {
       .filter((n): n is string => typeof n === "string")
       .sort();
   }
+
+  it("streams with an explicit model override", async () => {
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+    const agent = createOrchestrator(
+      ctx,
+      new TurnUsageTracker(),
+      undefined,
+      "anthropic/claude-haiku-4.5",
+    );
+    const result = await agent.stream({ prompt: "say hi" });
+    const reader = result.toUIMessageStream().getReader();
+    while (!(await reader.read()).done);
+
+    expect(model.doStreamCalls.length).toBeGreaterThan(0);
+  });
 
   it("gives public users only base tools (all delegate skills require organizer+)", async () => {
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
@@ -104,6 +119,26 @@ describe("createOrchestrator", () => {
       ]),
     );
   });
+});
+
+describe("createOrchestrator — caching & execution context", () => {
+  let model: MockLanguageModelV3;
+
+  beforeEach(() => {
+    model = streamingTextModel("hi");
+    installMockProvider(model);
+  });
+
+  afterEach(() => {
+    uninstallMockProvider();
+  });
+
+  async function drain(ctx: AgentContext) {
+    const agent = createOrchestrator(ctx, new TurnUsageTracker(), undefined, ORCHESTRATOR_MODEL);
+    const result = await agent.stream({ prompt: "say hi" });
+    const reader = result.toUIMessageStream().getReader();
+    while (!(await reader.read()).done);
+  }
 
   it("marks the last tool and last message with an anthropic cache breakpoint", async () => {
     const ctx = AgentContext.fromPacket(messagePacket("hello"));

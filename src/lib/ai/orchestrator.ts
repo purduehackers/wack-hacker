@@ -61,7 +61,8 @@ export function buildSystemPrompt(context: AgentContext): string {
 export function createOrchestrator(
   context: AgentContext,
   tracker: TurnUsageTracker,
-  extraMetadata?: TelemetryMetadata,
+  extraMetadata: TelemetryMetadata | undefined,
+  model: string,
 ) {
   const instructions = buildSystemPrompt(context);
   // Cache-control on the tools block is applied once at construction:
@@ -76,7 +77,7 @@ export function createOrchestrator(
   });
 
   return new ToolLoopAgent({
-    model: ORCHESTRATOR_MODEL,
+    model,
     instructions,
     tools,
     // Re-mark the trailing message each step so the conversation prefix caches

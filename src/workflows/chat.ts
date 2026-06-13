@@ -1,10 +1,15 @@
-import { createHook, getWorkflowMetadata } from "workflow";
+import { generateText } from "ai";
+import { createHook, FatalError, getWorkflowMetadata, sleep } from "workflow";
 
-import type { ChatMessage, SerializedAgentContext, TurnUsage } from "@/lib/ai/types";
+import type {
+  ChatMessage,
+  SerializedAgentContext,
+  StreamTurnResult,
+  TurnUsage,
+} from "@/lib/ai/types";
 
 import { ContextSnapshotStore } from "@/bot/context-snapshot";
 import { ConversationStore } from "@/bot/store";
-import { buildContextSnapshot } from "@/lib/ai/snapshot";
 import { streamTurn } from "@/lib/ai/streaming";
 import { addTurnUsage, emptyTurnUsage } from "@/lib/ai/turn-usage";
 import { createDiscordAPI } from "@/lib/discord/client";
@@ -18,26 +23,96 @@ import type { ChatHookEvent, ChatPayload } from "./types";
 
 export type { ChatHookEvent, ChatPayload } from "./types";
 
-/** Cap on accumulated user+assistant turns — 25 exchanges. Drops oldest pairs. */
+/** Cap on accumulated user+assistant turns — 25 exchanges. */
 const MAX_HISTORY_MESSAGES = 50;
 
-// TODO: run the dropped messages through a small fast model (e.g. Haiku) and
-// replace them with a compact summary assistant message, instead of throwing
-// the context away entirely. Preserves continuity on long conversations at
-// the cost of one extra round-trip per cap event.
-function capHistory(messages: ChatMessage[]): void {
+/**
+ * Stored assistant turns are clipped to this many chars. The full text was
+ * already delivered to Discord; history only needs enough for continuity.
+ */
+const MAX_STORED_ASSISTANT_CHARS = 4000;
+
+/** Cheap model that compacts dropped history into one summary message. */
+const HISTORY_SUMMARY_MODEL = "openai/gpt-5.4-mini";
+
+/**
+ * How long the hook loop waits for a follow-up before ending the
+ * conversation. Must stay strictly BELOW the 1h ConversationStore TTL
+ * (src/bot/store.ts): the key's TTL is refreshed when a message arrives but
+ * the idle timer is armed only after the turn finishes, so an idle window of
+ * exactly 1h would always find the key already expired and skip cleanup. The
+ * 5m margin covers turn duration; `cleanupConversation` compare-and-deletes
+ * on `workflowRunId` as a second guard against cleaning up a successor.
+ */
+const IDLE_TIMEOUT = "55m";
+
+/** Race sentinel for the idle timeout; never confusable with an IteratorResult. */
+const IDLE = "idle-timeout";
+
+/**
+ * After cleanup, how long the workflow listens for stragglers: a resumeHook
+ * that succeeded just as the loop stopped consuming events would otherwise
+ * sit in the hook buffer forever — the sender saw success, so nobody starts
+ * a fresh workflow and the message would be silently dropped.
+ */
+const DRAIN_GRACE = "10s";
+
+function truncateForHistory(text: string): string {
+  if (text.length <= MAX_STORED_ASSISTANT_CHARS) return text;
+  return `${text.slice(0, MAX_STORED_ASSISTANT_CHARS)}\n[truncated]`;
+}
+
+async function summarizeHistory(dropped: ChatMessage[]): Promise<string> {
+  "use step";
+  const transcript = dropped.map((m) => `${m.role}: ${m.content}`).join("\n\n");
+  const { text } = await generateText({
+    model: HISTORY_SUMMARY_MODEL,
+    prompt:
+      "Summarize this conversation excerpt in under 200 words. Preserve concrete facts, decisions, names, links, and any commitments the assistant made. Write it as context the assistant will rely on to continue the conversation.\n\n" +
+      transcript,
+  });
+  return text;
+}
+summarizeHistory.maxRetries = 1;
+
+/**
+ * Keep history under the cap by replacing the dropped prefix with one
+ * cheap-model summary message. Falls back to plain dropping when the summary
+ * step fails — losing old context beats failing the conversation.
+ */
+async function capHistory(messages: ChatMessage[]): Promise<void> {
   if (messages.length <= MAX_HISTORY_MESSAGES) return;
-  // Drop pairs (even count) so history always starts with a user message.
-  const excess = messages.length - MAX_HISTORY_MESSAGES;
-  messages.splice(0, excess + (excess % 2));
+  // +1 reserves room for the summary message itself; then advance to the next
+  // user message so the retained history starts with a user turn. (The
+  // summary is also user-role, so the model may see two consecutive user
+  // messages — the AI SDK provider conversion merges those into one.) Never
+  // drop the latest exchange, even on a degenerate non-alternating tail —
+  // otherwise a failed summary could wipe the entire history.
+  const maxDrop = messages.length - 2;
+  let dropCount = Math.min(messages.length - MAX_HISTORY_MESSAGES + 1, maxDrop);
+  while (dropCount < maxDrop && messages[dropCount].role !== "user") dropCount += 1;
+  const dropped = messages.slice(0, dropCount);
+  try {
+    const summary = await summarizeHistory(dropped);
+    messages.splice(0, dropCount, {
+      role: "user",
+      content: `[Summary of ${dropped.length} earlier messages, compacted to save space]\n${summary}`,
+    });
+  } catch {
+    countMetric("workflow.chat.history_summary_failed");
+    messages.splice(0, dropCount);
+  }
 }
 
 interface RunTurnArgs {
   channelId: string;
+  threadId: string | undefined;
   messages: ChatMessage[];
   serializedContext: SerializedAgentContext;
   workflowRunId: string;
   turnIndex: number;
+  /** Conversation-wide usage before this turn; the persisted snapshot adds this turn on top. */
+  priorUsage: TurnUsage;
   traceparent: string | undefined;
   /**
    * Pre-created "> Thinking..." message id from the mention handler. Set only
@@ -47,14 +122,55 @@ interface RunTurnArgs {
   placeholderMessageId?: string;
 }
 
-async function runTurn(args: RunTurnArgs) {
+/**
+ * Sentinel for a turn that failed after side effects may have run. The user
+ * was already shown a failure message; the workflow stays alive and keeps
+ * listening for follow-ups instead of replaying an expensive turn.
+ */
+interface TurnFailure {
+  error: true;
+}
+
+/**
+ * Best-effort write of the per-turn debug snapshot consumed by the
+ * /inspect-context command. Persists only the cheap dynamic slice — the
+ * inspector derives the system prompt + materialized tool schemas on demand
+ * at read time (src/lib/ai/snapshot.ts). A Redis blip must not fail the turn.
+ */
+async function persistSnapshot(args: {
+  channelId: string;
+  threadId: string | undefined;
+  context: SerializedAgentContext;
+  messages: ChatMessage[];
+  totalUsage: TurnUsage;
+  turnCount: number;
+}): Promise<void> {
+  const startTime = Date.now();
+  try {
+    await new ContextSnapshotStore().set(args.channelId, args.threadId, {
+      context: args.context,
+      messages: args.messages,
+      totalUsage: args.totalUsage,
+      turnCount: args.turnCount,
+      updatedAt: new Date().toISOString(),
+    });
+  } catch {
+    countMetric("workflow.chat.snapshot_error");
+  } finally {
+    recordDuration("workflow.chat.persist_snapshot_duration", Date.now() - startTime);
+  }
+}
+
+async function runTurn(args: RunTurnArgs): Promise<StreamTurnResult | TurnFailure> {
   "use step";
   const {
     channelId,
+    threadId,
     messages,
     serializedContext,
     workflowRunId,
     turnIndex,
+    priorUsage,
     traceparent,
     placeholderMessageId,
   } = args;
@@ -87,6 +203,14 @@ async function runTurn(args: RunTurnArgs) {
           turnIndex,
           placeholderMessageId,
         });
+        await persistSnapshot({
+          channelId,
+          threadId,
+          context: serializedContext,
+          messages: [...messages, { role: "assistant", content: truncateForHistory(result.text) }],
+          totalUsage: addTurnUsage(priorUsage, result.usage),
+          turnCount: turnIndex,
+        });
         logger.set({
           turn: turnIndex === 1 ? "first" : "followup",
           tokens: result.usage.totalTokens,
@@ -103,6 +227,17 @@ async function runTurn(args: RunTurnArgs) {
         return result;
       },
     );
+  } catch (err) {
+    // streamTurn classifies failures that happen once the stream is live as
+    // FatalError, after showing the user a failure message. Swallow those so
+    // the workflow keeps listening — replaying would re-run subagent
+    // delegations and external writes. Anything else failed before the
+    // stream started and is safe for WDK to retry.
+    if (err instanceof FatalError) {
+      countMetric("workflow.chat.turn_failed");
+      return { error: true };
+    }
+    throw err;
   } finally {
     recordDuration("workflow.chat.run_turn_duration", Date.now() - startTime, {
       turn: turnIndex === 1 ? "first" : "followup",
@@ -110,53 +245,26 @@ async function runTurn(args: RunTurnArgs) {
   }
 }
 
-async function persistSnapshot(
-  channelId: string,
-  threadId: string | undefined,
-  args: {
-    context: SerializedAgentContext;
-    messages: ChatMessage[];
-    totalUsage: TurnUsage;
-    turnCount: number;
-  },
-  traceparent: string | undefined,
-) {
+/**
+ * Last-resort user notification for turns that died before `streamTurn`
+ * could render its own failure message (e.g. the step exhausted its retries
+ * on a pre-stream error). Best-effort: never throws.
+ */
+async function notifyTurnFailure(args: {
+  channelId: string;
+  placeholderMessageId?: string;
+}): Promise<void> {
   "use step";
-  const startTime = Date.now();
+  const content = "Something went wrong while answering — try again.";
   try {
-    // Build the snapshot inside the step. buildContextSnapshot materializes the
-    // full orchestrator tool set (AI SDK `tool()` wrappers, Zod → JSON Schema
-    // conversion), which must not run in the workflow sandbox. Best-effort: a
-    // Redis blip should not abort the chat workflow, so we swallow the rethrow.
-    await runInstrumented(
-      {
-        op: "workflow.chat.persist_snapshot",
-        traceparent,
-        spanAttrs: {
-          "chat.channel_id": channelId,
-          ...(threadId ? { "chat.thread_id": threadId } : {}),
-          "chat.user_id": args.context.userId,
-          "chat.turn_count": args.turnCount,
-        },
-        loggerContext: {
-          chat: {
-            channel_id: channelId,
-            thread_id: threadId,
-            user_id: args.context.userId,
-            turn_count: args.turnCount,
-            total_tokens: args.totalUsage.totalTokens,
-          },
-        },
-      },
-      async () => {
-        const snapshot = buildContextSnapshot(args);
-        await new ContextSnapshotStore().set(channelId, threadId, snapshot);
-      },
-    );
+    const discord = createDiscordAPI();
+    if (args.placeholderMessageId) {
+      await discord.channels.editMessage(args.channelId, args.placeholderMessageId, { content });
+    } else {
+      await discord.channels.createMessage(args.channelId, { content });
+    }
   } catch {
-    countMetric("workflow.chat.snapshot_error");
-  } finally {
-    recordDuration("workflow.chat.persist_snapshot_duration", Date.now() - startTime);
+    countMetric("workflow.chat.notify_failure_error");
   }
 }
 
@@ -164,14 +272,16 @@ async function cleanupConversation(args: {
   channelId: string;
   threadId: string | undefined;
   userId: string;
+  workflowRunId: string;
   traceparent: string | undefined;
 }) {
   "use step";
-  const { channelId, threadId, userId, traceparent } = args;
+  const { channelId, threadId, userId, workflowRunId, traceparent } = args;
   return withSpanFromParent(
     traceparent,
     "workflow.chat.cleanup",
     {
+      "chat.id": workflowRunId,
       "chat.channel_id": channelId,
       ...(threadId ? { "chat.thread_id": threadId } : {}),
       "chat.user_id": userId,
@@ -179,14 +289,31 @@ async function cleanupConversation(args: {
     async () => {
       const logger = createWideLogger({
         op: "workflow.chat.cleanup",
-        chat: { channel_id: channelId, thread_id: threadId, user_id: userId },
+        chat: { id: workflowRunId, channel_id: channelId, thread_id: threadId, user_id: userId },
       });
       const startTime = Date.now();
       const threadKey = threadId ?? channelId;
+      const store = new ConversationStore();
+
+      // Compare-and-delete: a successor workflow may own this thread by now
+      // (this run idled past the conversation TTL and a new mention started a
+      // fresh run). Deleting blindly would tear down the successor's
+      // conversation key and stop its live sandbox.
+      const currentOwner = await store.get(channelId, threadId);
+      if (currentOwner?.workflowRunId !== workflowRunId) {
+        countMetric("workflow.chat.cleanup_skipped_stale");
+        logger.emit({
+          outcome: "skipped_stale",
+          duration_ms: Date.now() - startTime,
+          stored_run_id: currentOwner?.workflowRunId ?? null,
+        });
+        return;
+      }
+
       // Snapshot + sandbox release are best-effort; only the ConversationStore
       // delete is load-bearing for starting a fresh workflow later.
       const [conversationResult, snapshotResult, sandboxResult] = await Promise.allSettled([
-        new ConversationStore().delete(channelId),
+        store.delete(channelId, threadId),
         new ContextSnapshotStore().delete(channelId, threadId),
         releaseSession(threadKey),
       ]);
@@ -276,33 +403,51 @@ function stampCurrentTime(content: string, nowISO: string | undefined): string {
   return nowISO ? `${content}\n\n[current time: ${nowISO}]` : content;
 }
 
-async function runFirstTurn(args: {
-  payload: ChatPayload;
+/**
+ * Run one conversation turn: push the user message, execute the turn step,
+ * and fold the assistant reply into history. On failure (sentinel or a step
+ * error after retries) the pushed user message is popped so the failed turn
+ * leaves no trace and a follow-up starts clean.
+ */
+async function runConversationTurn(args: {
+  state: ConversationState;
+  channelId: string;
+  threadId: string | undefined;
   workflowRunId: string;
-  traceparent: string | undefined;
-}): Promise<{ messages: ChatMessage[]; totalUsage: TurnUsage }> {
-  const { payload, workflowRunId, traceparent } = args;
-  const { channelId, threadId, content, context, placeholderMessageId } = payload;
-  const messages: ChatMessage[] = [{ role: "user", content }];
-  const first = await runTurn({
-    channelId,
-    messages,
-    serializedContext: context,
-    workflowRunId,
-    turnIndex: 1,
-    traceparent,
-    placeholderMessageId,
-  });
-  messages.push({ role: "assistant", content: first.text });
-  capHistory(messages);
-  const totalUsage = addTurnUsage(emptyTurnUsage(), first.usage);
-  await persistSnapshot(
-    channelId,
-    threadId,
-    { context, messages, totalUsage, turnCount: 1 },
-    traceparent,
-  );
-  return { messages, totalUsage };
+  content: string;
+  serializedContext: SerializedAgentContext;
+  placeholderMessageId?: string;
+}): Promise<void> {
+  const { state, channelId, threadId, workflowRunId, content, serializedContext } = args;
+  const { placeholderMessageId } = args;
+  const turnLabel = state.turnCount === 0 ? "first" : "followup";
+  state.messages.push({ role: "user", content });
+  let turn: StreamTurnResult | TurnFailure;
+  try {
+    turn = await runTurn({
+      channelId,
+      threadId,
+      messages: state.messages,
+      serializedContext,
+      workflowRunId,
+      turnIndex: state.turnCount + 1,
+      priorUsage: state.totalUsage,
+      traceparent: state.traceparent,
+      placeholderMessageId,
+    });
+  } catch {
+    await notifyTurnFailure({ channelId, placeholderMessageId });
+    turn = { error: true };
+  }
+  if ("error" in turn) {
+    countMetric("workflow.chat.turn_error", { turn: turnLabel });
+    state.messages.pop();
+    return;
+  }
+  state.messages.push({ role: "assistant", content: truncateForHistory(turn.text) });
+  await capHistory(state.messages);
+  state.turnCount += 1;
+  state.totalUsage = addTurnUsage(state.totalUsage, turn.usage);
 }
 
 async function handleFollowupTurn(args: {
@@ -315,40 +460,116 @@ async function handleFollowupTurn(args: {
 }): Promise<void> {
   const { event, state, stable, channelId, threadId, workflowRunId } = args;
   if (event.traceparent) state.traceparent = event.traceparent;
-  const turnContext: SerializedAgentContext = {
-    ...event.context,
-    ...stable,
-    ...(state.turnCount >= LEADIN_TURN_LIMIT
-      ? { recentMessages: undefined, referencedContext: undefined }
-      : {}),
-  };
-  state.messages.push({
-    role: "user",
-    content: stampCurrentTime(event.content, event.context.nowISO),
-  });
-  const turn = await runTurn({
-    channelId,
-    messages: state.messages,
-    serializedContext: turnContext,
-    workflowRunId,
-    turnIndex: state.turnCount + 1,
-    traceparent: state.traceparent,
-  });
-  state.messages.push({ role: "assistant", content: turn.text });
-  capHistory(state.messages);
-  state.turnCount += 1;
-  state.totalUsage = addTurnUsage(state.totalUsage, turn.usage);
-  await persistSnapshot(
+  await runConversationTurn({
+    state,
     channelId,
     threadId,
-    {
-      context: turnContext,
-      messages: state.messages,
-      totalUsage: state.totalUsage,
-      turnCount: state.turnCount,
+    workflowRunId,
+    content: stampCurrentTime(event.content, event.context.nowISO),
+    serializedContext: {
+      ...event.context,
+      ...stable,
+      ...(state.turnCount >= LEADIN_TURN_LIMIT
+        ? { recentMessages: undefined, referencedContext: undefined }
+        : {}),
     },
-    state.traceparent,
-  );
+  });
+}
+
+/**
+ * Single-flight view over the hook iterator that survives lost races. A
+ * `next()` abandoned when a timer wins the race stays armed and is re-awaited
+ * by the next caller — calling `hookEvents.next()` again would enqueue a
+ * second waiter behind the abandoned one, and the first event to arrive would
+ * resolve the abandoned promise and vanish. Callers `consume()` after a race
+ * the event won so the following call arms a fresh `next()`.
+ */
+interface HookEventSource {
+  next(): Promise<IteratorResult<ChatHookEvent>>;
+  consume(): void;
+}
+
+function createHookEventSource(hookEvents: AsyncIterator<ChatHookEvent>): HookEventSource {
+  let pending: Promise<IteratorResult<ChatHookEvent>> | null = null;
+  return {
+    next() {
+      pending ??= hookEvents.next();
+      return pending;
+    },
+    consume() {
+      pending = null;
+    },
+  };
+}
+
+/**
+ * Answer hook events that landed in the buffer after the main loop stopped
+ * consuming them: a resumeHook that was in flight while the loop exited
+ * succeeded from its sender's perspective (handlers touch-and-return), so
+ * dropping the event would silently eat a user message. Runs after cleanup —
+ * the conversation key is already gone, so no new resume targets this run.
+ */
+async function drainStragglers(args: {
+  events: HookEventSource;
+  state: ConversationState;
+  stable: StableScope;
+  channelId: string;
+  threadId: string | undefined;
+  workflowRunId: string;
+  workflowLogger: ReturnType<typeof createWideLogger>;
+}): Promise<void> {
+  const { events, state, stable, channelId, threadId, workflowRunId, workflowLogger } = args;
+  try {
+    while (true) {
+      const straggler = await Promise.race([events.next(), sleep(DRAIN_GRACE).then(() => IDLE)]);
+      if (typeof straggler === "string") break;
+      events.consume();
+      if (straggler.done) break;
+      const event = straggler.value;
+      countMetric("workflow.chat.drained_event", { type: event.type });
+      if (event.type !== "message" || !event.content) continue;
+      await handleFollowupTurn({ event, state, stable, channelId, threadId, workflowRunId });
+    }
+  } catch (err) {
+    countMetric("workflow.chat.drain_error");
+    workflowLogger.warn("post-cleanup drain failed", { reason: String(err) });
+  }
+}
+
+/**
+ * Consume hook events until the conversation ends: a `done` event, the idle
+ * timeout, or the hook closing. Returns how the loop ended.
+ */
+async function runHookLoop(args: {
+  events: HookEventSource;
+  state: ConversationState;
+  stable: StableScope;
+  channelId: string;
+  threadId: string | undefined;
+  workflowRunId: string;
+}): Promise<"user" | "idle_timeout" | "hook_close"> {
+  const { events, state, stable, channelId, threadId, workflowRunId } = args;
+  while (true) {
+    // Documented WDK timeout pattern: race the next hook event against a
+    // durable sleep. A losing sleep keeps ticking but is discarded when the
+    // workflow ends.
+    const winner = await Promise.race([events.next(), sleep(IDLE_TIMEOUT).then(() => IDLE)]);
+    if (typeof winner === "string") {
+      countMetric("workflow.chat.idle_timeout");
+      return "idle_timeout";
+    }
+    events.consume();
+    if (winner.done) return "hook_close";
+    const event = winner.value;
+    countMetric("workflow.chat.hook_event", { type: event.type });
+    if (event.type === "done") {
+      countMetric("workflow.chat.ended");
+      return "user";
+    }
+    if (!event.content) continue;
+    countMetric("workflow.chat.followup");
+    await handleFollowupTurn({ event, state, stable, channelId, threadId, workflowRunId });
+  }
 }
 
 /**
@@ -389,49 +610,64 @@ async function runChatWorkflow(payload: ChatPayload, workflowRunId: string): Pro
     timezone: context.timezone,
   };
 
-  const workflowStart = Date.now();
-  const { messages, totalUsage: initialUsage } = await runFirstTurn({
-    payload,
-    workflowRunId,
-    traceparent,
-  });
   const state: ConversationState = {
-    messages,
-    turnCount: 1,
-    totalUsage: initialUsage,
+    messages: [],
+    turnCount: 0,
+    totalUsage: emptyTurnUsage(),
     traceparent,
   };
 
+  const workflowStart = Date.now();
   using hook = createHook<ChatHookEvent>({ token: workflowRunId });
+  const events = createHookEventSource(hook[Symbol.asyncIterator]());
 
-  let endedByUser = false;
-
-  for await (const event of hook) {
-    countMetric("workflow.chat.hook_event", { type: event.type });
-    if (event.type === "done") {
-      countMetric("workflow.chat.ended");
-      endedByUser = true;
-      break;
+  let endedBy: "user" | "idle_timeout" | "hook_close" | "error" = "error";
+  try {
+    await runConversationTurn({
+      state,
+      channelId,
+      threadId,
+      workflowRunId,
+      content: payload.content,
+      serializedContext: payload.context,
+      placeholderMessageId: payload.placeholderMessageId,
+    });
+    endedBy = await runHookLoop({ events, state, stable, channelId, threadId, workflowRunId });
+  } finally {
+    try {
+      // The error path must release the conversation too — otherwise the
+      // thread stays claimed until the Redis TTL expires with no way to
+      // start fresh.
+      await cleanupConversation({
+        channelId,
+        threadId,
+        userId: context.userId,
+        workflowRunId,
+        traceparent: state.traceparent,
+      });
+      await drainStragglers({
+        events,
+        state,
+        stable,
+        channelId,
+        threadId,
+        workflowRunId,
+        workflowLogger,
+      });
+    } finally {
+      // Always emit the conversation's single terminal wide event, even when
+      // cleanup itself failed — losing ended_by/turn_count telemetry would
+      // make the conversation vanish from analytics.
+      workflowLogger.emit({
+        outcome: endedBy === "error" ? "error" : "ok",
+        duration_ms: Date.now() - workflowStart,
+        ended_by: endedBy,
+        turn_count: state.turnCount,
+        total_tokens: state.totalUsage.totalTokens,
+        tool_calls: state.totalUsage.toolCallCount,
+      });
     }
-    if (!event.content) continue;
-    countMetric("workflow.chat.followup");
-    await handleFollowupTurn({ event, state, stable, channelId, threadId, workflowRunId });
   }
-
-  await cleanupConversation({
-    channelId,
-    threadId,
-    userId: context.userId,
-    traceparent: state.traceparent,
-  });
-  workflowLogger.emit({
-    outcome: "ok",
-    duration_ms: Date.now() - workflowStart,
-    ended_by: endedByUser ? "user" : "hook_close",
-    turn_count: state.turnCount,
-    total_tokens: state.totalUsage.totalTokens,
-    tool_calls: state.totalUsage.toolCallCount,
-  });
 }
 
 export async function chatWorkflow(payload: ChatPayload) {

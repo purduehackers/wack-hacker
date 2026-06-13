@@ -1,4 +1,4 @@
-import type { ToolSet, UIMessage } from "ai";
+import type { ModelMessage, ToolSet, UIMessage } from "ai";
 import type { z } from "zod";
 
 import type { AgentContext } from "./context.ts";
@@ -289,10 +289,10 @@ export interface HandoffEntity {
  * the AI SDK's full generic machinery.
  */
 export interface OrchestratorAgent {
-  stream(input: { messages: unknown[] }): Promise<{
+  stream(input: { messages: ModelMessage[] }): Promise<{
     fullStream: AsyncIterable<unknown>;
-    totalUsage: Promise<unknown>;
-    steps: Promise<unknown>;
+    totalUsage: PromiseLike<unknown>;
+    steps: PromiseLike<unknown>;
   }>;
 }
 
@@ -313,7 +313,12 @@ export type TelemetryMetadata = Record<string, string | number | undefined>;
 export type OrchestratorFactory = (
   ctx: AgentContext,
   tracker: TurnUsageTracker,
-  extraMetadata?: TelemetryMetadata,
+  extraMetadata: TelemetryMetadata | undefined,
+  /**
+   * Gateway model slug to run. `streamTurn` starts with `ORCHESTRATOR_MODEL`
+   * and retries on a fallback model after a terminal provider error.
+   */
+  model: string,
 ) => OrchestratorAgent;
 
 /**

@@ -75,6 +75,14 @@ export const SUBAGENT_MODEL = "openai/gpt-5.4-mini";
 
 export const ORCHESTRATOR_MODEL = "anthropic/claude-sonnet-4.6";
 
+/**
+ * Tried in order after `ORCHESTRATOR_MODEL` when the orchestrator stream dies
+ * on a terminal provider error before any tool has run (see
+ * `src/lib/ai/streaming.ts`). An availability fallback, not a quality tier —
+ * keep the list short and cheap.
+ */
+export const ORCHESTRATOR_FALLBACK_MODELS = ["anthropic/claude-haiku-4.5"];
+
 export const SYSTEM_PROMPT = `<identity>
 You are a helpful assistant for Purdue Hackers, embedded in Discord. You speak as "I" and keep responses concise and actionable.
 </identity>
