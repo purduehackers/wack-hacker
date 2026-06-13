@@ -52,17 +52,17 @@ describe("list_dir tool", () => {
     expect(parsed.entries.map((e: { name: string }) => e.name).sort()).toEqual(["a.ts", "b.ts"]);
   });
 
-  it("returns an error JSON for missing directories", async () => {
+  it("surfaces a classified error envelope for missing directories", async () => {
     const sandbox = new InMemorySandbox();
     const raw = await call(makeCtx(sandbox), { path: "nope" });
-    const parsed = JSON.parse(raw as string);
-    expect(parsed.error).toMatch(/ENOENT/);
+    expect(String(raw)).toMatch(/list_dir failed/);
+    expect(String(raw)).toMatch(/ENOENT/);
   });
 
   it("refuses directories that escape the repo", async () => {
     const sandbox = new InMemorySandbox();
     const raw = await call(makeCtx(sandbox), { path: "../etc" });
-    const parsed = JSON.parse(raw as string);
-    expect(parsed.error).toMatch(/outside the repo/);
+    expect(String(raw)).toMatch(/list_dir failed/);
+    expect(String(raw)).toContain("outside the repo");
   });
 });

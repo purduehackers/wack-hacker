@@ -27,22 +27,9 @@ Prefer this over \`write\` for incremental changes — it preserves surrounding 
     { experimental_context },
   ) => {
     const { sandbox, repoDir } = getSandboxContext(experimental_context, "edit");
-    let absolute: string;
-    try {
-      absolute = resolvePath(repoDir, userPath);
-    } catch (err) {
-      return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
-    }
+    const absolute = resolvePath(repoDir, userPath);
 
-    let content: string;
-    try {
-      content = await sandbox.readFile(absolute);
-    } catch (err) {
-      return JSON.stringify({
-        error: err instanceof Error ? err.message : String(err),
-        path: toRelative(repoDir, absolute),
-      });
-    }
+    const content = await sandbox.readFile(absolute);
 
     if (old_string === new_string) {
       return JSON.stringify({
@@ -69,14 +56,7 @@ Prefer this over \`write\` for incremental changes — it preserves surrounding 
       ? content.split(old_string).join(new_string)
       : content.replace(old_string, new_string);
 
-    try {
-      await sandbox.writeFile(absolute, updated);
-    } catch (err) {
-      return JSON.stringify({
-        error: err instanceof Error ? err.message : String(err),
-        path: toRelative(repoDir, absolute),
-      });
-    }
+    await sandbox.writeFile(absolute, updated);
 
     return JSON.stringify({
       path: toRelative(repoDir, absolute),

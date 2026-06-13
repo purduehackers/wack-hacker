@@ -44,18 +44,17 @@ describe("read tool", () => {
     expect(parsed.content).not.toContain("line 7");
   });
 
-  it("returns an error JSON for missing files (does not throw)", async () => {
+  it("propagates a classified error envelope for missing files", async () => {
     const sandbox = new InMemorySandbox();
-    const raw = await call(makeCtx(sandbox), { path: "missing.txt" });
-    const parsed = JSON.parse(raw as string);
-    expect(parsed.error).toMatch(/ENOENT/);
-    expect(parsed.path).toBe("missing.txt");
+    const result = await call(makeCtx(sandbox), { path: "missing.txt" });
+    expect(String(result)).toMatch(/read failed \(not-found\)/);
+    expect(String(result)).toContain("ENOENT: no such file");
   });
 
-  it("refuses paths that escape the repo directory", async () => {
+  it("propagates a classified error envelope for paths that escape the repo directory", async () => {
     const sandbox = new InMemorySandbox();
-    const raw = await call(makeCtx(sandbox), { path: "../etc/passwd" });
-    const parsed = JSON.parse(raw as string);
-    expect(parsed.error).toMatch(/outside the repo/);
+    const result = await call(makeCtx(sandbox), { path: "../etc/passwd" });
+    expect(String(result)).toMatch(/read failed/);
+    expect(String(result)).toContain("resolves outside the repo directory");
   });
 });

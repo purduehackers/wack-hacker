@@ -33,12 +33,7 @@ Use specific patterns — regex is supported. Narrow with \`glob\` (e.g. \`**/*.
     { experimental_context, abortSignal },
   ) => {
     const { sandbox, repoDir } = getSandboxContext(experimental_context, "grep");
-    let absolute: string;
-    try {
-      absolute = resolvePath(repoDir, userPath);
-    } catch (err) {
-      return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
-    }
+    const absolute = resolvePath(repoDir, userPath);
 
     const args = ["--json", "--max-count", String(max_count)];
     if (case_insensitive) args.push("-i");

@@ -84,41 +84,36 @@ export const web_search = defineTool({
     includeText,
     excludeText,
   }) => {
-    try {
-      const exa = new Exa(env.EXA_API_KEY);
-      const response = await exa.searchAndContents(query, {
-        numResults,
-        type,
-        livecrawl,
-        ...(category && { category }),
-        ...(startPublishedDate && { startPublishedDate }),
-        ...(endPublishedDate && { endPublishedDate }),
-        ...(includeDomains?.length && { includeDomains }),
-        ...(excludeDomains?.length && { excludeDomains }),
-        ...(includeText && { includeText: [includeText] }),
-        ...(excludeText && { excludeText: [excludeText] }),
-        summary: { query },
-        highlights: { numSentences: 3, highlightsPerUrl: 2 },
-      });
+    const exa = new Exa(env.EXA_API_KEY);
+    const response = await exa.searchAndContents(query, {
+      numResults,
+      type,
+      livecrawl,
+      ...(category && { category }),
+      ...(startPublishedDate && { startPublishedDate }),
+      ...(endPublishedDate && { endPublishedDate }),
+      ...(includeDomains?.length && { includeDomains }),
+      ...(excludeDomains?.length && { excludeDomains }),
+      ...(includeText && { includeText: [includeText] }),
+      ...(excludeText && { excludeText: [excludeText] }),
+      summary: { query },
+      highlights: { numSentences: 3, highlightsPerUrl: 2 },
+    });
 
-      if (!response.results.length) {
-        return "No results found.";
-      }
-
-      return response.results
-        .map((r, i) => {
-          const date = r.publishedDate ? ` (${r.publishedDate.slice(0, 10)})` : "";
-          const author = r.author ? ` — ${r.author}` : "";
-          const summary = r.summary?.trim();
-          const highlights =
-            r.highlights && r.highlights.length > 0 ? r.highlights.join(" … ") : "";
-          const snippet =
-            summary && summary.length > 0 ? summary : highlights || "(no preview available)";
-          return `**${i + 1}. ${r.title ?? "Untitled"}**${date}${author}\n${r.url}\n${snippet}`;
-        })
-        .join("\n\n");
-    } catch (e) {
-      return `Web search failed: ${e instanceof Error ? e.message : String(e)}`;
+    if (!response.results.length) {
+      return "No results found.";
     }
+
+    return response.results
+      .map((r, i) => {
+        const date = r.publishedDate ? ` (${r.publishedDate.slice(0, 10)})` : "";
+        const author = r.author ? ` — ${r.author}` : "";
+        const summary = r.summary?.trim();
+        const highlights = r.highlights && r.highlights.length > 0 ? r.highlights.join(" … ") : "";
+        const snippet =
+          summary && summary.length > 0 ? summary : highlights || "(no preview available)";
+        return `**${i + 1}. ${r.title ?? "Untitled"}**${date}${author}\n${r.url}\n${snippet}`;
+      })
+      .join("\n\n");
   },
 });

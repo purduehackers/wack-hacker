@@ -29,12 +29,7 @@ Use this for "where is X?" discovery. Prefer \`grep\` when you need to search fi
     { experimental_context, abortSignal },
   ) => {
     const { sandbox, repoDir } = getSandboxContext(experimental_context, "glob");
-    let absolute: string;
-    try {
-      absolute = resolvePath(repoDir, userPath);
-    } catch (err) {
-      return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
-    }
+    const absolute = resolvePath(repoDir, userPath);
 
     // Run against a repo-relative root so rg emits relative paths. Using `.`
     // when the target is the repo root itself means file listings like

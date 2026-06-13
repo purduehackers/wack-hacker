@@ -18,25 +18,13 @@ Prefer \`glob\` when you want to recursively find files by pattern; \`list_dir\`
   }),
   execute: async ({ path: userPath }, { experimental_context }) => {
     const { sandbox, repoDir } = getSandboxContext(experimental_context, "list_dir");
-    let absolute: string;
-    try {
-      absolute = resolvePath(repoDir, userPath);
-    } catch (err) {
-      return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
-    }
+    const absolute = resolvePath(repoDir, userPath);
 
-    try {
-      const entries = await sandbox.readdir(absolute);
-      entries.sort((a, b) => a.name.localeCompare(b.name));
-      return JSON.stringify({
-        path: toRelative(repoDir, absolute),
-        entries: entries.map((e) => ({ name: e.name, type: e.type })),
-      });
-    } catch (err) {
-      return JSON.stringify({
-        error: err instanceof Error ? err.message : String(err),
-        path: toRelative(repoDir, absolute),
-      });
-    }
+    const entries = await sandbox.readdir(absolute);
+    entries.sort((a, b) => a.name.localeCompare(b.name));
+    return JSON.stringify({
+      path: toRelative(repoDir, absolute),
+      entries: entries.map((e) => ({ name: e.name, type: e.type })),
+    });
   },
 });

@@ -25,22 +25,8 @@ Use this BEFORE editing a file so you can target exact strings. Prefer targeted 
   }),
   execute: async ({ path: userPath, offset, limit }, { experimental_context }) => {
     const { sandbox, repoDir } = getSandboxContext(experimental_context, "read");
-    let absolute: string;
-    try {
-      absolute = resolvePath(repoDir, userPath);
-    } catch (err) {
-      return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
-    }
-
-    let content: string;
-    try {
-      content = await sandbox.readFile(absolute);
-    } catch (err) {
-      return JSON.stringify({
-        error: err instanceof Error ? err.message : String(err),
-        path: toRelative(repoDir, absolute),
-      });
-    }
+    const absolute = resolvePath(repoDir, userPath);
+    const content = await sandbox.readFile(absolute);
 
     const lines = content.split("\n");
     const start = offset ? offset - 1 : 0;

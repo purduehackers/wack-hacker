@@ -134,8 +134,8 @@ describe("grep tool — error paths", () => {
       case_insensitive: false,
       max_count: 100,
     });
-    const parsed = JSON.parse(raw as string);
-    expect(parsed.error).toMatch(/outside the repo/);
+    expect(String(raw)).toMatch(/grep failed/);
+    expect(String(raw)).toContain("outside the repo directory");
   });
 
   it("returns an error for non-1 non-0 exit codes", async () => {

@@ -17,12 +17,7 @@ Refuses paths outside the repo. Creates parent directories as needed.`,
   }),
   execute: async ({ path: userPath, content }, { experimental_context }) => {
     const { sandbox, repoDir } = getSandboxContext(experimental_context, "write");
-    let absolute: string;
-    try {
-      absolute = resolvePath(repoDir, userPath);
-    } catch (err) {
-      return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
-    }
+    const absolute = resolvePath(repoDir, userPath);
 
     const parent = path.dirname(absolute);
     if (parent !== absolute) {
@@ -41,14 +36,7 @@ Refuses paths outside the repo. Creates parent directories as needed.`,
       existed = false;
     }
 
-    try {
-      await sandbox.writeFile(absolute, content);
-    } catch (err) {
-      return JSON.stringify({
-        error: err instanceof Error ? err.message : String(err),
-        path: toRelative(repoDir, absolute),
-      });
-    }
+    await sandbox.writeFile(absolute, content);
 
     return JSON.stringify({
       path: toRelative(repoDir, absolute),
