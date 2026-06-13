@@ -16,7 +16,7 @@ export function createLoadSkillTool(registry: SkillRegistry, role: UserRole) {
     description:
       "Load a skill to get detailed instructions and activate its tools. " +
       "Call this BEFORE using any skill-specific tools. " +
-      "Available skills are listed in <available_skills>.",
+      "Available skills are listed in the <sub_skills> block of your system prompt.",
     inputSchema: z.object({
       name: z.string().describe("The skill name to load"),
     }),

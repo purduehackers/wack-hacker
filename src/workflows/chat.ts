@@ -362,16 +362,45 @@ interface ConversationState {
 
 /**
  * Slice of `SerializedAgentContext` that stays fixed once the workflow
- * starts: the conversation's channel/thread and the lead-in messages that
- * preceded the initial mention. Re-applied on every followup turn so the
- * event's per-turn context (author, role, attachments) combines cleanly
- * with the pinned location.
+ * starts: the conversation's channel/thread, the lead-in messages that
+ * preceded the initial mention, and the first turn's date/instant/timezone.
+ * Re-applied on every followup turn so the event's per-turn context (author,
+ * role, attachments) combines cleanly with the pinned fields.
+ *
+ * Date and time are pinned deliberately: they're interpolated into the
+ * system prompt, and a prompt that changes between turns invalidates the
+ * Anthropic prompt cache for the whole conversation prefix. Followup turns
+ * get the true current time stamped onto the user message instead (see
+ * `stampCurrentTime`).
  */
 interface StableScope {
   channel: SerializedAgentContext["channel"];
   thread: SerializedAgentContext["thread"];
   recentMessages: SerializedAgentContext["recentMessages"];
+  recentMessagesFromThread: SerializedAgentContext["recentMessagesFromThread"];
   referencedContext: SerializedAgentContext["referencedContext"];
+  date: SerializedAgentContext["date"];
+  nowISO: SerializedAgentContext["nowISO"];
+  timezone: SerializedAgentContext["timezone"];
+}
+
+/**
+ * Followup turns past this count drop the scraped lead-in blocks from the
+ * system prompt — by then the model has real conversation history and the
+ * lead-in is just pinned token weight. Dropping it changes the prompt once
+ * (one cache miss at the boundary turn), after which it is stable again.
+ */
+const LEADIN_TURN_LIMIT = 3;
+
+/**
+ * Append the turn's wall-clock time to a followup user message. The system
+ * prompt's `{{NOW_ISO}}`/`{{DATE}}` are pinned to the first turn so the
+ * prompt stays byte-stable across turns; this stamp is how later turns learn
+ * the real current time. It is persisted into conversation history so the
+ * replayed prefix stays byte-stable too.
+ */
+function stampCurrentTime(content: string, nowISO: string | undefined): string {
+  return nowISO ? `${content}\n\n[current time: ${nowISO}]` : content;
 }
 
 /**
@@ -436,8 +465,14 @@ async function handleFollowupTurn(args: {
     channelId,
     threadId,
     workflowRunId,
-    content: event.content,
-    serializedContext: { ...event.context, ...stable },
+    content: stampCurrentTime(event.content, event.context.nowISO),
+    serializedContext: {
+      ...event.context,
+      ...stable,
+      ...(state.turnCount >= LEADIN_TURN_LIMIT
+        ? { recentMessages: undefined, referencedContext: undefined }
+        : {}),
+    },
   });
 }
 
@@ -558,13 +593,21 @@ async function runChatWorkflow(payload: ChatPayload, workflowRunId: string): Pro
   countMetric("workflow.chat.started");
 
   // Stable for the lifetime of this workflow — the conversation is pinned to
-  // one Discord channel/thread and the pre-conversation lead-in does not
-  // change. Per-turn context splats these verbatim from the initial payload.
+  // one Discord channel/thread, the pre-conversation lead-in does not change,
+  // and date/now/timezone are frozen at first-turn values to keep the system
+  // prompt byte-stable for prompt caching. Per-turn context splats these
+  // verbatim from the initial payload.
   const stable: StableScope = {
     channel: context.channel,
     thread: context.thread,
     recentMessages: context.recentMessages,
+    // Pinned with the lead-in it describes — followup packets carry no lead-in,
+    // so their context would otherwise flip the rendered block's tag.
+    recentMessagesFromThread: context.recentMessagesFromThread,
     referencedContext: context.referencedContext,
+    date: context.date,
+    nowISO: context.nowISO,
+    timezone: context.timezone,
   };
 
   const state: ConversationState = {

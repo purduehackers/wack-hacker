@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { SUBAGENT_PREAMBLE, SYSTEM_PROMPT } from "@/lib/ai/constants";
 import { AgentContext } from "@/lib/ai/context";
 import { createMemoryRedis, messagePacket } from "@/lib/test/fixtures";
 
@@ -147,8 +148,24 @@ describe("wrapApprovalTools — shape", () => {
       }) as unknown as ReturnType<typeof gatedTool>,
     );
     const out = wrapApprovalTools({ t: bare }, { context });
-    // Wrapper's synthesized description still carries the approval note.
-    expect(out.t.description).toMatch(/Requires user approval/);
+    // Wrapper's synthesized description still carries the approval marker.
+    expect(out.t.description).toBe("[approval]");
+  });
+
+  it("appends only the short [approval] marker to the original description", () => {
+    const out = wrapApprovalTools({ t: gatedTool() }, { context });
+    // The protocol lives once in the agent preambles, not on each of the
+    // ~155 wrapped tools — the per-tool note is just the marker.
+    expect(out.t.description).toBe("Create a thing\n\n[approval]");
+    expect(out.t.description).not.toMatch(/Requires user approval/);
+  });
+
+  it("states the approval protocol exactly once in each agent preamble", () => {
+    for (const preamble of [SUBAGENT_PREAMBLE, SYSTEM_PROMPT]) {
+      const occurrences = preamble.split("Tools marked [approval]").length - 1;
+      expect(occurrences).toBe(1);
+      expect(preamble).toContain("_reason");
+    }
   });
 });
 

@@ -28,11 +28,15 @@ export class SkillRegistry {
     return skill;
   }
 
-  /** Format the skill menu for injection into a system prompt. */
+  /**
+   * Format the skill menu for injection into a system prompt (substituted for
+   * the `{{SKILL_MENU}}` placeholder). The `<sub_skills>` tag must match what
+   * the `loadSkill` tool description points the model at.
+   */
   buildSkillMenu(role: UserRole): string {
     const skills = this.getAvailableSkills(role);
     if (skills.length === 0) return "";
     const lines = skills.map((s) => `- ${s.name}: ${s.description} (use when: ${s.criteria})`);
-    return `<available_skills>\n${lines.join("\n")}\n</available_skills>`;
+    return `<sub_skills>\n${lines.join("\n")}\n</sub_skills>`;
   }
 }

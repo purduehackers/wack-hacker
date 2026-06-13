@@ -106,8 +106,9 @@ describe("buildContextSnapshot", () => {
     });
     expect(snap.systemPrompt).toContain("<execution_context>");
     expect(snap.systemPrompt).toContain("<identity>");
-    // Date placeholder was substituted
+    // Placeholders were substituted
     expect(snap.systemPrompt).not.toContain("{{DATE}}");
+    expect(snap.systemPrompt).not.toContain("{{DELEGATES}}");
   });
 
   it("serializes the orchestrator tool surface", () => {
@@ -146,7 +147,9 @@ describe("buildContextSnapshot", () => {
     expect(schema?.type).toBe("object");
     expect(schema?.properties).toBeDefined();
   });
+});
 
+describe("buildContextSnapshot — messages and metadata", () => {
   it("preserves messages and usage verbatim", () => {
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
     const msgs = [

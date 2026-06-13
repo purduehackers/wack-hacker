@@ -4,9 +4,9 @@ import type { ContextSnapshot, ToolDefSnapshot } from "@/bot/context-snapshot";
 
 import type { ChatMessage, SerializedAgentContext, TurnUsage } from "./types.ts";
 
-import { ORCHESTRATOR_MODEL, SYSTEM_PROMPT } from "./constants.ts";
+import { ORCHESTRATOR_MODEL } from "./constants.ts";
 import { AgentContext } from "./context.ts";
-import { getOrchestratorTools } from "./orchestrator.ts";
+import { buildSystemPrompt, getOrchestratorTools } from "./orchestrator.ts";
 import { TurnUsageTracker } from "./turn-usage.ts";
 
 interface MinimalTool {
@@ -32,9 +32,9 @@ function describeSchema(schema: unknown): unknown {
 /**
  * Build a snapshot of the exact context the orchestrator assembled for this
  * turn. Uses the same code paths the orchestrator runs with (getOrchestratorTools,
- * AgentContext.buildInstructions) so the snapshot is the orchestrator's view.
- * Called at /inspect-context read time — the workflow persists only the cheap
- * dynamic slice (`StoredContextSnapshot`) and this derives the rest on demand.
+ * buildSystemPrompt) so the snapshot is the orchestrator's view. Called at
+ * /inspect-context read time — the workflow persists only the cheap dynamic
+ * slice (`StoredContextSnapshot`) and this derives the rest on demand.
  *
  * `totalUsage` is the conversation-wide cumulative spend; the workflow accumulates
  * each turn's usage into a running total before calling this. `getTools` is the
@@ -68,7 +68,7 @@ export function buildContextSnapshot(args: {
   return {
     model: ORCHESTRATOR_MODEL,
     context,
-    systemPrompt: agentCtx.buildInstructions(SYSTEM_PROMPT),
+    systemPrompt: buildSystemPrompt(agentCtx),
     tools,
     messages,
     totalUsage,

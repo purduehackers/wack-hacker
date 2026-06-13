@@ -13,6 +13,7 @@ import type {
   Attachment,
   ChatMessage,
   OrchestratorFactory,
+  OrchestratorUsage,
   SerializedAgentContext,
   StreamTurnOptions,
   StreamTurnResult,
@@ -222,6 +223,8 @@ function emitTurnSuccess(args: {
     "ai.provider": provider,
     "ai.input_tokens": usage.inputTokens,
     "ai.output_tokens": usage.outputTokens,
+    "ai.cache_read_tokens": tracker.cacheReadTokens,
+    "ai.cache_write_tokens": tracker.cacheWriteTokens,
     "ai.subagent_tokens": usage.subagentTokens,
     "ai.total_tokens": usage.totalTokens,
     "ai.tool_calls": usage.toolCallCount,
@@ -237,6 +240,8 @@ function emitTurnSuccess(args: {
     tokens: usage.totalTokens,
     input_tokens: usage.inputTokens,
     output_tokens: usage.outputTokens,
+    cache_read_tokens: tracker.cacheReadTokens,
+    cache_write_tokens: tracker.cacheWriteTokens,
     subagent_tokens: usage.subagentTokens,
     tool_calls: usage.toolCallCount,
     tool_names: usage.toolNames,
@@ -432,7 +437,7 @@ async function finalizeTurn(args: {
   try {
     const [totalUsage, steps] = await Promise.all([result.totalUsage, result.steps]);
     tracker.recordOrchestrator({
-      usage: totalUsage as { inputTokens?: number; outputTokens?: number; totalTokens?: number },
+      usage: totalUsage as OrchestratorUsage,
       steps: steps as readonly { toolCalls: readonly unknown[] }[],
     });
 
@@ -447,6 +452,8 @@ async function finalizeTurn(args: {
     recordDistribution("ai.turn.tokens", tracker.totalTokens);
     recordDistribution("ai.turn.tool_calls", tracker.totalToolCalls);
     recordDistribution("ai.turn.steps", tracker.totalSteps);
+    recordDistribution("ai.turn.cache_read_tokens", tracker.cacheReadTokens);
+    recordDistribution("ai.turn.cache_write_tokens", tracker.cacheWriteTokens);
     return { metadataError: undefined, finalized };
   } catch (err) {
     countMetric("ai.turn.metadata_error");

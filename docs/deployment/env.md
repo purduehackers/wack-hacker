@@ -7,7 +7,7 @@
 The full list changes often; the canonical source is always [`src/env.ts`](../../src/env.ts). Today it covers:
 
 - **Discord** — `DISCORD_BOT_TOKEN`, `DISCORD_BOT_CLIENT_ID`, `DISCORD_BOT_PUBLIC_KEY`. The guild ID is a hard-coded constant in `src/lib/constants.ts`, not an env var.
-- **Cron auth** — `CRON_SECRET` (bearer token for `/api/crons/*`).
+- **Cron auth** — `CRON_SECRET` (bearer token for `/api/crons/*` and `/api/discord/gateway`).
 - **AI** — `GROQ_API_KEY` (used by one specialized tool). The AI SDK Gateway authenticates via the standard `VERCEL_*` OIDC vars loaded by the `vercel()` preset.
 - **Integrations — engineering** — Linear (`LINEAR_API_KEY`), Notion (`NOTION_TOKEN`), GitHub App (`GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_ORG`), Figma (`FIGMA_ACCESS_TOKEN`, `FIGMA_TEAM_ID`), Sentry (`SENTRY_AUTH_TOKEN`, `SENTRY_ORG`).
 - **Integrations — ops & platform** — Vercel (`VERCEL_API_TOKEN`, `DASHBOARD_EDGE_CONFIG`, `EDGE_CONFIG`), Hack Club Bank (`HCB_ORG_SLUG`), SerpAPI for `delegate_shopping` (`SERPAPI_API_KEY`).

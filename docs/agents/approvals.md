@@ -37,7 +37,7 @@ export const wipe_channel = approval(
 
 ## What the agent sees
 
-`wrapApprovalTools` rewrites a marked tool's `inputSchema` to add an injected `_reason: string` field. The description gets an appended note that explains `_reason` is required (or optional, if a static `reason` was set). The rest of the tool's schema is preserved verbatim — the agent sees its original arguments plus `_reason`.
+`wrapApprovalTools` rewrites a marked tool's `inputSchema` to add an injected `_reason: string` field (optional when a static `reason` was set, required otherwise). The description gets a short appended `[approval]` marker — the approval protocol itself is stated once in the agent preambles (`SYSTEM_PROMPT` / `SUBAGENT_PREAMBLE`) rather than repeated on every wrapped tool, which keeps ~155 tool descriptions from each re-billing a paragraph of boilerplate per step. The rest of the tool's schema is preserved verbatim — the agent sees its original arguments plus `_reason`.
 
 If the wrapped tool's original `inputSchema` is not a `ZodObject`, `wrapApprovalTools` throws at wrap time (not runtime). The constraint exists because `_reason` has to live on a plain object shape for the wrapper to be able to extract it.
 
