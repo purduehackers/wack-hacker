@@ -4,6 +4,7 @@ import type { TurnUsageTracker } from "./turn-usage.ts";
 import type { TelemetryMetadata } from "./types.ts";
 
 import { wrapApprovalTools } from "./approvals/index.ts";
+import { addCacheControl } from "./cache-control.ts";
 import { ORCHESTRATOR_MODEL, SYSTEM_PROMPT } from "./constants.ts";
 import { AgentContext } from "./context.ts";
 import { buildDelegateDocs, buildDelegationTools } from "./delegates.ts";
@@ -63,12 +64,27 @@ export function createOrchestrator(
   extraMetadata?: TelemetryMetadata,
 ) {
   const instructions = buildSystemPrompt(context);
-  const tools = getOrchestratorTools(context, tracker, extraMetadata);
+  // Cache-control on the tools block is applied once at construction:
+  // `PrepareStepResult` in ai@6 has no `tools` field, so a per-step override
+  // would be silently ignored — and the orchestrator's tool set never changes
+  // mid-turn anyway. The breakpoint lands on the last tool, which requires the
+  // serialized tool order to stay byte-stable across steps; reusing this one
+  // object for every step guarantees that.
+  const tools = addCacheControl({
+    tools: getOrchestratorTools(context, tracker, extraMetadata),
+    model: ORCHESTRATOR_MODEL,
+  });
 
   return new ToolLoopAgent({
     model: ORCHESTRATOR_MODEL,
     instructions,
     tools,
+    // Re-mark the trailing message each step so the conversation prefix caches
+    // incrementally. Two breakpoints total (last tool + last message) — well
+    // under Anthropic's 4-breakpoint limit.
+    prepareStep: ({ messages }) => ({
+      messages: addCacheControl({ messages, model: ORCHESTRATOR_MODEL }),
+    }),
     experimental_telemetry: {
       isEnabled: true,
       functionId: "orchestrator",

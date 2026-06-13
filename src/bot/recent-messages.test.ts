@@ -40,6 +40,32 @@ describe("fetchRecentMessages", () => {
       { id: "m2", author: "Bob", content: "world", timestamp: expect.any(String) },
     ]);
   });
+
+  it("ellipsizes messages longer than 300 chars", async () => {
+    // Lead-in messages are pinned into the system prompt for the whole
+    // conversation — one pasted wall of text must not blow the token budget.
+    const long = "a".repeat(400);
+    const mock = withMessages([fakeRawMessage("m1", "a", long, "2024-01-01T13:01:00Z")]);
+    const result = await fetchRecentMessages(asAPI(mock), "ch-1", "msg-0");
+    expect(result![0]!.content).toHaveLength(300);
+    expect(result![0]!.content).toBe(`${"a".repeat(299)}…`);
+  });
+
+  it("leaves messages at or under 300 chars untouched", async () => {
+    const exact = "b".repeat(300);
+    const mock = withMessages([fakeRawMessage("m1", "a", exact, "2024-01-01T13:01:00Z")]);
+    const result = await fetchRecentMessages(asAPI(mock), "ch-1", "msg-0");
+    expect(result![0]!.content).toBe(exact);
+  });
+
+  it("does not split a surrogate pair at the truncation point", async () => {
+    // 298 chars + an emoji (2 UTF-16 units) puts the cut mid-pair.
+    const tricky = `${"c".repeat(298)}😀${"d".repeat(50)}`;
+    const mock = withMessages([fakeRawMessage("m1", "a", tricky, "2024-01-01T13:01:00Z")]);
+    const result = await fetchRecentMessages(asAPI(mock), "ch-1", "msg-0");
+    expect(result![0]!.content).toBe(`${"c".repeat(298)}…`);
+    expect(result![0]!.content).not.toContain("\ud83d");
+  });
 });
 
 describe("fetchReferencedMessageContext", () => {

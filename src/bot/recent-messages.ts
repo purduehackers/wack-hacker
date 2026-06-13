@@ -7,6 +7,23 @@ import type { RecentMessage } from "@/lib/ai/types";
 const MAX_RECENT_MESSAGES = 15;
 const REFERENCED_CONTEXT_SIZE = 15;
 
+/**
+ * Per-message cap inside the lead-in blocks. The lead-in is pinned into the
+ * system prompt for the conversation's lifetime, so one pasted wall of text
+ * would otherwise be re-billed on every step of every turn.
+ */
+const MAX_MESSAGE_CHARS = 300;
+
+function ellipsize(content: string): string {
+  if (content.length <= MAX_MESSAGE_CHARS) return content;
+  let cut = content.slice(0, MAX_MESSAGE_CHARS - 1);
+  // Don't split a surrogate pair at the cut point — a lone high surrogate
+  // renders as � in the prompt.
+  const last = cut.charCodeAt(cut.length - 1);
+  if (last >= 0xd800 && last <= 0xdbff) cut = cut.slice(0, -1);
+  return `${cut}…`;
+}
+
 type RawMessage = Awaited<ReturnType<API["channels"]["getMessage"]>>;
 
 function toRecentMessage(m: RawMessage): RecentMessage {
@@ -17,7 +34,7 @@ function toRecentMessage(m: RawMessage): RecentMessage {
     // placeholder so callers that include such messages (e.g. the anchor of a
     // reply-context fetch) produce a line the model can see, rather than a
     // dangling `author:` with nothing after it.
-    content: m.content?.trim() ? m.content : "(no text content)",
+    content: m.content?.trim() ? ellipsize(m.content) : "(no text content)",
     timestamp: new Date(m.timestamp).toLocaleTimeString("en-US", {
       hour: "numeric",
       minute: "2-digit",

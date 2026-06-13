@@ -11,6 +11,7 @@ import { setActiveSpanAttributes, withSpan } from "@/lib/otel/tracing";
 import type {
   Attachment,
   ChatMessage,
+  OrchestratorUsage,
   SerializedAgentContext,
   StreamTurnOptions,
   StreamTurnResult,
@@ -174,12 +175,37 @@ async function runStreamTurn(args: {
   recordDuration("ai.turn.duration", elapsedMs);
 
   const usage = tracker.toTurnUsage();
+  emitTurnTelemetry({ usage, tracker, renderer, finalized, metadataError, elapsedMs, logger });
 
-  // Mirror the per-turn totals onto the active chat.turn span so operators can
-  // query the trace directly without joining against wide events.
+  return {
+    text: renderer.content,
+    usage,
+    discordMessageId: finalized.messageId,
+    model: ORCHESTRATOR_MODEL,
+  };
+}
+
+/**
+ * Mirror the per-turn totals onto the active chat.turn span (so operators can
+ * query the trace directly without joining against wide events) and emit the
+ * ai.turn wide event.
+ */
+function emitTurnTelemetry(args: {
+  usage: ReturnType<TurnUsageTracker["toTurnUsage"]>;
+  tracker: TurnUsageTracker;
+  renderer: MessageRenderer;
+  finalized: { messageId: string };
+  metadataError: unknown;
+  elapsedMs: number;
+  logger: ReturnType<typeof createWideLogger>;
+}): void {
+  const { usage, tracker, renderer, finalized, metadataError, elapsedMs, logger } = args;
+
   setActiveSpanAttributes({
     "ai.input_tokens": usage.inputTokens,
     "ai.output_tokens": usage.outputTokens,
+    "ai.cache_read_tokens": tracker.cacheReadTokens,
+    "ai.cache_write_tokens": tracker.cacheWriteTokens,
     "ai.subagent_tokens": usage.subagentTokens,
     "ai.total_tokens": usage.totalTokens,
     "ai.tool_calls": usage.toolCallCount,
@@ -195,6 +221,8 @@ async function runStreamTurn(args: {
     tokens: usage.totalTokens,
     input_tokens: usage.inputTokens,
     output_tokens: usage.outputTokens,
+    cache_read_tokens: tracker.cacheReadTokens,
+    cache_write_tokens: tracker.cacheWriteTokens,
     subagent_tokens: usage.subagentTokens,
     tool_calls: usage.toolCallCount,
     tool_names: usage.toolNames,
@@ -202,13 +230,6 @@ async function runStreamTurn(args: {
     model: ORCHESTRATOR_MODEL,
     discord_message_id: finalized.messageId,
   });
-
-  return {
-    text: renderer.content,
-    usage,
-    discordMessageId: finalized.messageId,
-    model: ORCHESTRATOR_MODEL,
-  };
 }
 
 async function renderStream(
@@ -269,7 +290,7 @@ async function finalizeTurn(args: {
   try {
     const [totalUsage, steps] = await Promise.all([result.totalUsage, result.steps]);
     tracker.recordOrchestrator({
-      usage: totalUsage as { inputTokens?: number; outputTokens?: number; totalTokens?: number },
+      usage: totalUsage as OrchestratorUsage,
       steps: steps as readonly { toolCalls: readonly unknown[] }[],
     });
 
@@ -284,6 +305,8 @@ async function finalizeTurn(args: {
     recordDistribution("ai.turn.tokens", tracker.totalTokens);
     recordDistribution("ai.turn.tool_calls", tracker.totalToolCalls);
     recordDistribution("ai.turn.steps", tracker.totalSteps);
+    recordDistribution("ai.turn.cache_read_tokens", tracker.cacheReadTokens);
+    recordDistribution("ai.turn.cache_write_tokens", tracker.cacheWriteTokens);
     return { metadataError: undefined, finalized };
   } catch (err) {
     countMetric("ai.turn.metadata_error");

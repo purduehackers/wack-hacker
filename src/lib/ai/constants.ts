@@ -15,6 +15,14 @@ export const UserRole = {
 export type UserRole = (typeof UserRole)[keyof typeof UserRole];
 
 /**
+ * The approval protocol, stated once per agent preamble. Per-tool descriptions
+ * carry only a short `[approval]` marker (see `approvals/runtime.ts`) so ~155
+ * wrapped tools don't each re-bill a paragraph of boilerplate per step.
+ */
+const APPROVAL_PROTOCOL =
+  "Tools marked [approval] pause until the user approves them in Discord. Pass `_reason` — one sentence on why the call is needed.";
+
+/**
  * Shared execution contract prepended to every delegation subagent's system
  * prompt. Domain `SKILL.md` files own the persona and domain rules; this
  * preamble sits above them and enforces the fire-and-forget loop semantics
@@ -36,6 +44,9 @@ export const SUBAGENT_PREAMBLE = `You are a specialized subagent delegated to by
 ## CALL INDEPENDENT TOOLS IN PARALLEL
 - When you need data from multiple tools and none of them depend on another's result, emit those tool calls in a SINGLE turn — they will run concurrently.
 - Only serialize when a later call requires data returned by an earlier one.
+
+## TOOL APPROVALS
+- ${APPROVAL_PROTOCOL}
 
 ## ONLY TAKE REQUESTED ACTIONS
 - Only perform actions (create, modify, delete resources) that the user explicitly asked for.
@@ -68,6 +79,7 @@ Default timezone: {{USER_TZ}}
 
 <scheduling_rules>
 - Use the instant above for relative times (e.g. "in 10 minutes"). Do not guess the current time.
+- In ongoing conversations a \`[current time: …]\` line may follow the user's message; when present, it supersedes the instant above.
 - Interpret clock times (e.g. "at 9am tomorrow") in {{USER_TZ}} unless the user specifies a different zone.
 - \`run_at\` must be ISO 8601 with a \`Z\` or \`±HH:MM\` suffix.
 - Pass \`timezone\` explicitly on recurring tasks whose intent is timezone-specific.
@@ -84,6 +96,8 @@ You have direct access to these tools:
 {{DELEGATES}}
 
 Plan multi-step requests before starting. When sub-tasks are independent (no call needs another's result), emit the tool calls in a SINGLE turn — they will run in parallel. Serialize only when a later call depends on an earlier result.
+
+${APPROVAL_PROTOCOL}
 </tools>
 
 <tone>
