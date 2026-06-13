@@ -25,7 +25,7 @@ export const get_organization = defineTool({
   domain: "finance",
   description:
     "Get the Hack Club Bank organization profile — name, slug, website, description, and whether Transparency Mode is enabled. Amounts are in cents.",
-  access: "open",
+  access: { risk: "read" },
   input: z.object({}),
   execute: async () => {
     const data = await hcbGet<HcbOrganization>(`/organizations/${hcbOrgSlug()}`);
@@ -51,7 +51,7 @@ export const get_balance = defineTool({
   domain: "finance",
   description:
     "Get the current Hack Club Bank balance summary for Purdue Hackers — cleared balance, incoming (pending) balance, fee balance, and total raised. All amounts in cents (negative = outflow).",
-  access: "open",
+  access: { risk: "read" },
   input: z.object({}),
   execute: async () => {
     const data = await hcbGet<HcbOrganization>(`/organizations/${hcbOrgSlug()}`);

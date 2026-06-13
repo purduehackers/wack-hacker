@@ -37,7 +37,7 @@ export const list_invoices = defineTool({
   domain: "finance",
   description:
     "List invoices sent by the org — sponsor name, amount_cents, status (open/paid/void), due/paid dates, and memo.",
-  access: "open",
+  access: { risk: "read" },
   input: z.object(paginationInputShape),
   execute: async (input) => {
     const data = await hcbGet<HcbInvoice[]>(
@@ -54,7 +54,7 @@ export const get_invoice = defineTool({
   domain: "finance",
   description:
     "Get a single invoice by ID — sponsor name, amount_cents, status, due/paid dates, and memo.",
-  access: "open",
+  access: { risk: "read" },
   input: z.object({
     id: z.string().describe("Invoice ID"),
   }),
@@ -70,7 +70,7 @@ export const list_open_invoices = defineTool({
   domain: "finance",
   description:
     "List outstanding (unpaid) invoices only — drives fundraising follow-ups with sponsors. Paginates through all invoices and filters to statuses that aren't paid/void.",
-  access: "open",
+  access: { risk: "read" },
   input: z.object({}),
   execute: async () => {
     const all = await hcbPaginate<HcbInvoice>(

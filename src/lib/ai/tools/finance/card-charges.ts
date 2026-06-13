@@ -39,7 +39,7 @@ export const list_card_charges = defineTool({
   domain: "finance",
   description:
     "List HCB card charges — merchant, user, amount_cents, and receipts summary {count, missing}. Supports an optional user filter (substring match on cardholder name or email) for microgrant recipient spend tracking.",
-  access: "open",
+  access: { risk: "read" },
   input: z.object({
     user: z
       .string()

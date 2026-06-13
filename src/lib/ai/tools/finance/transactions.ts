@@ -38,7 +38,7 @@ export const list_transactions = defineTool({
   domain: "finance",
   description:
     "List recent HCB transactions for Purdue Hackers — newest first. Each transaction includes id, date, amount_cents (negative = outflow), memo, type, pending flag, and a receipts summary {count, missing}. Receipt files themselves are NOT available via HCB's API; only whether a receipt is attached.",
-  access: "open",
+  access: { risk: "read" },
   input: z.object(paginationInputShape),
   execute: async (input) => {
     const data = await hcbGet<HcbTransaction[]>(
@@ -55,7 +55,7 @@ export const get_transaction = defineTool({
   domain: "finance",
   description:
     "Get a single HCB transaction by id. Returns a compact summary with id, date, amount_cents (negative = outflow), memo, type, pending flag, receipts summary {count, missing}, and href. Receipt files themselves are NOT available via HCB's API; only whether a receipt is attached — visit hcb.hackclub.com/hcb/{id} for the actual file.",
-  access: "open",
+  access: { risk: "read" },
   input: z.object({
     id: z.string().describe("HCB transaction id (e.g. 'txn_abc123')"),
   }),
@@ -71,7 +71,7 @@ export const find_transactions = defineTool({
   domain: "finance",
   description:
     "Search HCB transactions by memo substring, amount range (in cents), and/or ISO date range. Client-side filter over paginated results (capped). Useful for answering 'find the $42 charge for badges' or 'what did we spend on food last month?'.",
-  access: "open",
+  access: { risk: "read" },
   input: z.object({
     memo_contains: z
       .string()

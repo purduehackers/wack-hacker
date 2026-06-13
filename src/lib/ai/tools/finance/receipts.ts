@@ -26,7 +26,7 @@ export const list_missing_receipts = defineTool({
   domain: "finance",
   description:
     "List HCB transactions flagged as missing a receipt. Note: only HCB card charges and HCB reimbursements are tracked here — org-wide reimbursements through Purdue's BOSO portal are NOT in HCB. The HCB API does not expose receipt files themselves — only whether one is attached. Link users to hcb.hackclub.com/hcb/{id} to upload/view files.",
-  access: "open",
+  access: { risk: "read" },
   input: z.object({
     limit: z.number().int().min(1).max(200).optional().describe("Max results (default 50)"),
   }),
@@ -58,7 +58,7 @@ export const get_receipt_status = defineTool({
   domain: "finance",
   description:
     "Report whether a given HCB transaction has a receipt attached — returns { id, receipts: { count, missing }, href }. The HCB API does not expose the receipt file itself; to upload or view the actual image/PDF, visit hcb.hackclub.com/hcb/{id}.",
-  access: "open",
+  access: { risk: "read" },
   input: z.object({
     id: z.string().describe("HCB transaction id"),
   }),

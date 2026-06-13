@@ -9,6 +9,7 @@ import { countMetric, recordDistribution, recordDuration } from "@/lib/metrics";
 import { buildChatAttributes } from "@/lib/otel/chat-attributes";
 import { setActiveSpanAttributes, withSpan } from "@/lib/otel/tracing";
 
+import type { BudgetState } from "./policy/index.ts";
 import type {
   Attachment,
   ChatMessage,
@@ -23,6 +24,7 @@ import { ORCHESTRATOR_FALLBACK_MODELS, ORCHESTRATOR_MODEL } from "./constants.ts
 import { AgentContext } from "./context.ts";
 import { MessageRenderer } from "./message-renderer.ts";
 import { createOrchestrator } from "./orchestrator.ts";
+import { readBudgetState, recordTurnTokens } from "./policy/index.ts";
 import { TurnUsageTracker } from "./turn-usage.ts";
 
 /**
@@ -132,6 +134,7 @@ async function runStreamTurn(args: {
   } = options;
   const agentCtx = AgentContext.fromJSON(serializedContext);
   const tracker = new TurnUsageTracker();
+  const budget = await readBudgetState({ userId: agentCtx.userId, role: agentCtx.role });
   const renderer = new MessageRenderer(discord, channelId, { taskId });
 
   const logger = createWideLogger({
@@ -162,6 +165,7 @@ async function runStreamTurn(args: {
       createAgent,
       agentCtx,
       tracker,
+      budget,
       chatAttrs,
       renderer,
       messages: [...priorMessages, currentMessage],
@@ -188,7 +192,7 @@ async function runStreamTurn(args: {
   countMetric("ai.turn.completed");
   recordDuration("ai.turn.duration", elapsedMs);
 
-  return emitTurnSuccess({
+  const turnResult = emitTurnSuccess({
     tracker,
     renderer,
     logger,
@@ -197,6 +201,10 @@ async function runStreamTurn(args: {
     messageId: finalized.messageId,
     metadataError,
   });
+  // Fold this turn's tokens into the subject's daily budget counter for all
+  // roles — enforcement is role-gated in decide(), but the data is universal.
+  await recordTurnTokens(agentCtx.userId, turnResult.usage.totalTokens);
+  return turnResult;
 }
 
 /** Mirror per-turn totals onto the span + wide event and build the result. */
@@ -307,12 +315,13 @@ async function streamWithFallback(args: {
   createAgent: OrchestratorFactory;
   agentCtx: AgentContext;
   tracker: TurnUsageTracker;
+  budget: BudgetState | null;
   chatAttrs: ReturnType<typeof buildChatAttributes> | undefined;
   renderer: MessageRenderer;
   messages: NonNullable<Parameters<ReturnType<typeof createOrchestrator>["stream"]>[0]["messages"]>;
   logger: ReturnType<typeof createWideLogger>;
 }): Promise<StreamWithFallbackResult> {
-  const { createAgent, agentCtx, tracker, chatAttrs, renderer, messages, logger } = args;
+  const { createAgent, agentCtx, tracker, budget, chatAttrs, renderer, messages, logger } = args;
   const models = [ORCHESTRATOR_MODEL, ...ORCHESTRATOR_FALLBACK_MODELS];
   let toolCallSeen = false;
 
@@ -321,9 +330,13 @@ async function streamWithFallback(args: {
     // The `OrchestratorFactory` return type is a structural subset of the
     // real ToolLoopAgent, so we cast back to the concrete agent type here to
     // keep the stream-event discriminated union typed.
-    const agent = createAgent(agentCtx, tracker, chatAttrs, modelUsed) as unknown as ReturnType<
-      typeof createOrchestrator
-    >;
+    const agent = createAgent(
+      agentCtx,
+      tracker,
+      chatAttrs,
+      modelUsed,
+      budget,
+    ) as unknown as ReturnType<typeof createOrchestrator>;
     try {
       const result = await agent.stream({ messages });
       const outcome = await renderStream(result.fullStream, renderer);

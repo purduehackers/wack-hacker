@@ -6,6 +6,9 @@ import type { ApprovalState, ApprovalStoreLike } from "@/lib/ai/approvals";
 import type { DiscordInteraction } from "@/lib/protocol/types";
 
 import { ApprovalStore, buildDecisionEmbed } from "@/lib/ai/approvals";
+import { UserRole } from "@/lib/ai/constants";
+import { roleFromMemberRoles } from "@/lib/ai/context";
+import { roleAtLeast } from "@/lib/ai/policy";
 
 import type { ComponentHandler } from "./types";
 
@@ -51,12 +54,9 @@ export function buildToolApprovalHandler(store?: ApprovalStoreLike): ComponentHa
         return;
       }
 
-      if (clickerId !== state.requesterUserId) {
-        await sendEphemeral(
-          discord,
-          interaction,
-          `Only <@${state.requesterUserId}> can approve this request.`,
-        );
+      const rejection = clickerRejection(state, clickerId, interaction.member?.roles);
+      if (rejection) {
+        await sendEphemeral(discord, interaction, rejection);
         return;
       }
 
@@ -78,6 +78,34 @@ export function buildToolApprovalHandler(store?: ApprovalStoreLike): ComponentHa
 }
 
 export const toolApproval = buildToolApprovalHandler();
+
+/**
+ * Policy-driven click authorization. Returns the rejection message to show
+ * the clicker, or null when they may decide.
+ *
+ * - "self" (and legacy rows without a mode): only the requester may decide —
+ *   a guard against model misfires, not a control on the human.
+ * - "second-party": any organizer or admin *other than* the requester may
+ *   Approve/Deny; the requester's own clicks are rejected outright.
+ */
+export function clickerRejection(
+  state: ApprovalState,
+  clickerId: string,
+  clickerRoles: readonly string[] | undefined,
+): string | null {
+  if ((state.confirmMode ?? "self") !== "second-party") {
+    return clickerId === state.requesterUserId
+      ? null
+      : `Only <@${state.requesterUserId}> can approve this request.`;
+  }
+  if (clickerId === state.requesterUserId) {
+    return "This action needs a second organizer's sign-off — you can't approve your own request.";
+  }
+  if (!roleAtLeast(roleFromMemberRoles(clickerRoles), UserRole.Organizer)) {
+    return "Only organizers can decide this request.";
+  }
+  return null;
+}
 
 function parseCustomId(customId: string): { action: "approve" | "deny"; id: string } | null {
   const [, action, id] = customId.split(":");

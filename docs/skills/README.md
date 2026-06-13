@@ -18,7 +18,7 @@ Skills break a domain into sub-skills (e.g. `issues`, `pull-requests`, `actions`
 | [SKILL.md format](./skill-md.md)          | Frontmatter fields, top-level vs sub-skill, compilation.                          |
 | [SkillRegistry](./registry.md)            | `SkillRegistry`, role filtering, `loadSkill`, `buildSkillMenu`.                   |
 | [Progressive disclosure](./disclosure.md) | How `loadSkill` and `prepareStep` unlock tools inside a subagent.                 |
-| [Admin gating](./admin.md)                | `admin()` wrapper and `filterAdmin()`.                                            |
+| [Access policy](../agents/policy.md)      | `access()` descriptor — risk, `minRole`, confirmation; enforced by `applyPolicy`. |
 | [Adding skills and domains](./adding.md)  | Adding a sub-skill to an existing domain or creating a whole new delegate domain. |
 
 ## Where to look in the code
@@ -28,7 +28,7 @@ Skills break a domain into sub-skills (e.g. `issues`, `pull-requests`, `actions`
 | `src/lib/ai/skills/registry.ts` | `SkillRegistry`, `buildSkillMenu`, role gating                                               |
 | `src/lib/ai/skills/loader.ts`   | `createLoadSkillTool` — the `loadSkill` tool used inside subagents                           |
 | `src/lib/ai/skills/runtime.ts`  | `computeActiveTools` — used by `prepareStep` to scan step history                            |
-| `src/lib/ai/skills/admin.ts`    | `admin()` wrapper and `filterAdmin()`                                                        |
+| `src/lib/ai/policy/`            | `access()` descriptor + `applyPolicy` enforcement (replaces the old `admin()`/`filterAdmin`) |
 | `src/lib/ai/skills/types.ts`    | `SkillMeta`, `SkillBundle`                                                                   |
 | `src/lib/ai/skills/generated/`  | Compiled manifests + domain registries (gitignored; regenerate with `compile-skills.ts`)     |
 | `generated/domains.ts`          | `DOMAINS` — full domain registry (tools + manifests + baseTools), consumed by `delegates.ts` |

@@ -58,6 +58,14 @@ export function createMemoryRedis(): RedisClient & { reset(): void } {
       if (entry) entry.expiresAt = Date.now() + seconds * 1000;
       return Number(!!entry);
     },
+    incrby: async (key: string, increment: number) => {
+      const entry = data.get(key);
+      const expired = entry?.expiresAt !== undefined && Date.now() > entry.expiresAt;
+      const current = entry && !expired ? Number(entry.value) : 0;
+      const next = current + increment;
+      data.set(key, { value: next, expiresAt: expired ? undefined : entry?.expiresAt });
+      return next;
+    },
     eval: async (_script: string, evalKeys: string[], args: unknown[]) => {
       // Single Lua script we use: compare-and-delete for lock release.
       const entry = data.get(evalKeys[0]);

@@ -9,8 +9,7 @@ vi.mock("@/lib/metrics", () => ({
 
 import { countMetric } from "@/lib/metrics";
 
-import { getApprovalOptions, hasApprovalMarker } from "../../approvals/index.ts";
-import { filterAdmin } from "../../skills/admin.ts";
+import { getAccessSpec } from "../../policy/index.ts";
 import { classifyToolError, defineTool, getToolMeta } from "./define-tool.ts";
 
 function makeTool(
@@ -24,7 +23,7 @@ function makeTool(
     name: "test_tool",
     domain: "testing",
     description: "A test tool.",
-    access: overrides.access ?? "open",
+    access: overrides.access ?? { risk: "read" },
     input: z.object({ q: z.string().optional() }),
     outputBudget: overrides.outputBudget,
     execute,
@@ -65,7 +64,7 @@ describe("defineTool — passthrough", () => {
     expect(getToolMeta(t)).toEqual({
       name: "test_tool",
       domain: "testing",
-      access: "open",
+      access: { risk: "read" },
       outputBudget: 4000,
     });
     expect(getToolMeta({})).toBeNull();
@@ -198,24 +197,24 @@ describe("defineTool — output budget", () => {
 });
 
 describe("defineTool — access", () => {
-  it("open tools carry no markers", () => {
-    const t = makeTool(async () => "ok");
-    expect(hasApprovalMarker(t)).toBe(false);
-    expect(Object.keys(filterAdmin({ test_tool: t }))).toEqual(["test_tool"]);
+  it("stamps the access descriptor for applyPolicy to read", () => {
+    const t = makeTool(async () => "ok", { access: { risk: "read" } });
+    expect(getAccessSpec(t)).toEqual({ risk: "read" });
   });
 
-  it("admin tools are stripped by filterAdmin", () => {
-    const t = makeTool(async () => "ok", { access: "admin" });
-    expect(filterAdmin({ test_tool: t })).toEqual({});
+  it("carries a destructive descriptor with confirm + reason verbatim", () => {
+    const t = makeTool(async () => "ok", {
+      access: { risk: "destructive", confirm: "self", reason: "irreversible" },
+    });
+    expect(getAccessSpec(t)).toEqual({
+      risk: "destructive",
+      confirm: "self",
+      reason: "irreversible",
+    });
   });
 
-  it("approval tools carry the approval marker with default options", () => {
-    const t = makeTool(async () => "ok", { access: "approval" });
-    expect(getApprovalOptions(t)).toEqual({});
-  });
-
-  it("approval tools carry explicit ApprovalOptions", () => {
-    const t = makeTool(async () => "ok", { access: { approval: { reason: "irreversible" } } });
-    expect(getApprovalOptions(t)).toEqual({ reason: "irreversible" });
+  it("mirrors the descriptor onto the tool meta", () => {
+    const t = makeTool(async () => "ok", { access: { risk: "write", minRole: "admin" } });
+    expect(getToolMeta(t)?.access).toEqual({ risk: "write", minRole: "admin" });
   });
 });

@@ -250,16 +250,18 @@ describe("buildContextSnapshot: default tool resolver", () => {
       totalUsage: usage,
       turnCount: 1,
     });
-    // The real orchestrator always exposes these base tools.
+    // The real orchestrator exposes the public read surface for a roleless
+    // context; write/destructive tools (schedule_task, cancel_task) are
+    // stripped by policy below the organizer tier.
     const names = snap.tools.map((t) => t.name);
     expect(names).toEqual(
       expect.arrayContaining([
         "documentation",
         "resolve_organizer",
-        "schedule_task",
         "list_scheduled_tasks",
-        "cancel_task",
+        "web_search",
       ]),
     );
+    expect(names).not.toContain("schedule_task");
   });
 });

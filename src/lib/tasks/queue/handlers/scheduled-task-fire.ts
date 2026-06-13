@@ -5,12 +5,14 @@ import { z } from "zod";
 
 import type { ScheduledTaskRow } from "@/lib/tasks/types";
 
-import { AgentContext } from "@/lib/ai/context.ts";
+import { AgentContext, roleFromMemberRoles } from "@/lib/ai/context.ts";
 import { MessageRenderer } from "@/lib/ai/message-renderer.ts";
+import { AuditLog, roleAtLeast } from "@/lib/ai/policy";
 import { streamTurn } from "@/lib/ai/streaming.ts";
 import { createWideLogger } from "@/lib/logging/wide";
 import { countMetric, recordDistribution } from "@/lib/metrics";
 import { withSpan } from "@/lib/otel/tracing";
+import { DISCORD_GUILD_ID } from "@/lib/protocol/constants";
 import { DEFAULT_TIMEZONE } from "@/lib/tasks/constants";
 import { nextOccurrence } from "@/lib/tasks/cron";
 import { claimFire, getScheduledTask, updateScheduledTask } from "@/lib/tasks/db";
@@ -269,9 +271,14 @@ async function executeAction(task: ScheduledTaskRow, discord: API): Promise<void
 
   const { channelId, prompt } = task.action;
   const fireTime = new Date();
-  // `memberRoles` is re-resolved by `AgentContext.role` at execute time, so a
-  // privilege revocation between scheduling and firing is honored. `nowISO`
-  // is fresh so `{{NOW_ISO}}` reflects the fire moment, not schedule time.
+  // Re-resolve the creator's CURRENT roles instead of trusting the snapshot
+  // persisted at schedule time — otherwise a de-roled user keeps organizer-
+  // powered recurring runs forever. The snapshot is only a fallback for when
+  // Discord is unreachable (an outage must not cancel everyone's tasks).
+  // `nowISO` is fresh so `{{NOW_ISO}}` reflects the fire moment.
+  const { memberRoles, rolePath } = await resolveFireRoles(discord, task);
+  await notifyIfDowngraded(discord, task, memberRoles);
+
   const context = AgentContext.fromJSON({
     userId: task.userId,
     username: "system",
@@ -285,12 +292,114 @@ async function executeAction(task: ScheduledTaskRow, discord: API): Promise<void
     }),
     nowISO: fireTime.toISOString(),
     timezone: task.timezone ?? DEFAULT_TIMEZONE,
-    memberRoles: task.memberRoles ?? undefined,
+    memberRoles,
+    source: "scheduled",
   });
 
-  await streamTurn(discord, channelId, [{ role: "user", content: prompt }], context.toJSON(), {
-    taskId: task.id,
-    workflowRunId: task.id,
-    turnIndex: 1,
+  try {
+    await streamTurn(discord, channelId, [{ role: "user", content: prompt }], context.toJSON(), {
+      taskId: task.id,
+      workflowRunId: task.id,
+      turnIndex: 1,
+    });
+  } catch (err: unknown) {
+    await recordFireAudit(task, memberRoles, rolePath, "failed");
+    throw err;
+  }
+  await recordFireAudit(task, memberRoles, rolePath, "executed");
+}
+
+type RolePath = "resolved" | "member_left" | "snapshot_fallback";
+
+/**
+ * Fetch the task creator's current guild roles. A missing member (left or
+ * kicked) resolves to no roles — public tier; any other Discord failure
+ * degrades to the stored snapshot rather than blocking the fire.
+ */
+async function resolveFireRoles(
+  discord: API,
+  task: ScheduledTaskRow,
+): Promise<{ memberRoles: string[] | undefined; rolePath: RolePath }> {
+  try {
+    const member = await discord.guilds.getMember(DISCORD_GUILD_ID, task.userId);
+    return { memberRoles: member.roles, rolePath: "resolved" };
+  } catch (err: unknown) {
+    if (isUnknownMember(err)) {
+      return { memberRoles: [], rolePath: "member_left" };
+    }
+    const message = err instanceof Error ? err.message : "unknown error";
+    countMetric("scheduled_task.role_resolution_failed");
+    createWideLogger({ op: "scheduled_task.fire", task: { id: task.id } }).emit({
+      outcome: "role_resolution_failed",
+      reason: message,
+    });
+    return { memberRoles: task.memberRoles ?? undefined, rolePath: "snapshot_fallback" };
+  }
+}
+
+/** Discord "Unknown Member" — code 10_007 (raw REST) or a plain 404. */
+function isUnknownMember(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const { code, status } = err as { code?: unknown; status?: unknown };
+  return code === 10_007 || status === 404;
+}
+
+/** Compare the creator's roles now vs the snapshot taken at schedule time. */
+function fireRoleChange(task: ScheduledTaskRow, memberRoles: string[] | undefined) {
+  const snapshotRole = roleFromMemberRoles(task.memberRoles ?? undefined);
+  const currentRole = roleFromMemberRoles(memberRoles);
+  return { snapshotRole, currentRole, downgraded: !roleAtLeast(currentRole, snapshotRole) };
+}
+
+/**
+ * Audit one agent-action fire after it ran (or failed), recording which role
+ * resolution path was taken and whether the creator's access had dropped.
+ */
+async function recordFireAudit(
+  task: ScheduledTaskRow,
+  memberRoles: string[] | undefined,
+  rolePath: RolePath,
+  decision: "executed" | "failed",
+): Promise<void> {
+  const { snapshotRole, currentRole, downgraded } = fireRoleChange(task, memberRoles);
+
+  await new AuditLog().record({
+    userId: task.userId,
+    role: currentRole,
+    source: "scheduled",
+    tool: "scheduled_task.fire",
+    risk: "write",
+    input: { taskId: task.id, description: task.description },
+    reason: downgraded
+      ? `roles:${rolePath},downgraded:${snapshotRole}->${currentRole}`
+      : `roles:${rolePath}`,
+    decision,
   });
+}
+
+/**
+ * Post a channel notice when the creator's access dropped below what it was
+ * at schedule time. The run itself proceeds with the (possibly reduced)
+ * current role — policy strips whatever the lower tier can no longer reach.
+ */
+async function notifyIfDowngraded(
+  discord: API,
+  task: ScheduledTaskRow,
+  memberRoles: string[] | undefined,
+): Promise<void> {
+  const { snapshotRole, currentRole, downgraded } = fireRoleChange(task, memberRoles);
+  if (!downgraded) return;
+  try {
+    await discord.channels.createMessage(task.action.channelId, {
+      content:
+        `-# ⚠️ Scheduled task **${task.description}** was created by <@${task.userId}> with ` +
+        `${snapshotRole} access, but their access is now ${currentRole}. Running with current permissions.`,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "unknown error";
+    createWideLogger({ op: "scheduled_task.fire", task: { id: task.id } }).emit({
+      outcome: "downgrade_notice_failed",
+      reason: message,
+    });
+  }
 }

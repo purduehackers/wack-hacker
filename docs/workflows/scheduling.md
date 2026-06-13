@@ -21,17 +21,21 @@ The queue used is the `tasks` topic served by `src/app/api/tasks/route.ts`. Visi
 
 ## Tools
 
-| Tool                   | What it does                                                                                                                                     |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `schedule_task`        | Validates input, computes the target instant, enqueues a `sendScheduledFire`, then inserts the `scheduled_tasks` row. Wrapped with `approval()`. |
-| `list_scheduled_tasks` | Reads from `listScheduledTasks(opts?)`, optionally filtered by user. Returns only rows with `status='active'`.                                   |
-| `cancel_task`          | `updateScheduledTask(id, { status: 'cancelled', nextRunAt: null })`. Leftover queue messages no-op when delivered. Wrapped with `approval()`.    |
+| Tool                   | What it does                                                                                                                                                                          |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `schedule_task`        | Validates input, computes the target instant, enqueues a `sendScheduledFire`, then inserts the `scheduled_tasks` row. Confirm-gated via `access({ risk: "write", confirm: "self" })`. |
+| `list_scheduled_tasks` | Reads from `listScheduledTasks(opts?)`, optionally filtered by user. Returns only rows with `status='active'`.                                                                        |
+| `cancel_task`          | `updateScheduledTask(id, { status: 'cancelled', nextRunAt: null })`. Leftover queue messages no-op when delivered. Confirm-gated via `access({ risk: "destructive" })`.               |
 
 ## Long horizons
 
 `@vercel/queue` caps `delaySeconds` at 7 days. `sendScheduledFire` clamps to 6 days; if the real horizon is longer, the handler detects early delivery (`Date.now() < targetMs - 5s`) and re-enqueues the remaining delay. Each hop is one DB read + one queue send. A 30-day schedule takes 5 hops; a year takes ~62.
 
 The `idempotencyKey = "${taskId}:${targetIso}"` prevents double-enqueue. Since hops are ≥6 days apart and the queue's idempotency dedup window is 24h, the key naturally re-registers between hops.
+
+## Roles at fire time
+
+Agent-action fires re-resolve the creator's **current** Discord roles (guild member fetch) before building the `AgentContext`, so a user de-roled after scheduling does not keep organizer-powered recurring runs. The `memberRoles` snapshot stored on the row is only a fallback for when Discord is unreachable — an outage must not cancel everyone's tasks. A member who left resolves to `public`. Downgrades post a `-#` notice to the task's channel and the resolution path is recorded in the [audit log](../agents/policy.md#audit-log). Fired contexts carry `source: "scheduled"`.
 
 ## Failure modes
 

@@ -52,6 +52,18 @@ function capBlockLines(lines: string[], maxChars: number): string[] {
   return start === 0 ? lines : lines.slice(start);
 }
 
+/**
+ * Resolve Discord role IDs to an application-level access tier. Shared by
+ * `AgentContext.role` and call sites that only have a raw roles array (the
+ * approval button handler, the scheduled-fire role re-resolution).
+ */
+export function roleFromMemberRoles(memberRoles?: readonly string[]): UserRole {
+  if (!memberRoles) return UserRole.Public;
+  if (memberRoles.includes(DISCORD_IDS.roles.ADMIN)) return UserRole.Admin;
+  if (memberRoles.includes(DISCORD_IDS.roles.ORGANIZER)) return UserRole.Organizer;
+  return UserRole.Public;
+}
+
 export class AgentContext {
   readonly userId: string;
   readonly username: string;
@@ -63,6 +75,7 @@ export class AgentContext {
   readonly timezone: string;
   readonly attachments?: Attachment[];
   readonly memberRoles?: string[];
+  readonly source: "chat" | "scheduled";
   readonly recentMessages?: RecentMessage[];
   readonly recentMessagesFromThread?: boolean;
   readonly referencedContext?: RecentMessage[];
@@ -80,6 +93,7 @@ export class AgentContext {
     this.timezone = data.timezone ?? DEFAULT_TIMEZONE;
     this.attachments = data.attachments;
     this.memberRoles = data.memberRoles;
+    this.source = data.source ?? "chat";
     this.recentMessages = data.recentMessages;
     this.recentMessagesFromThread = data.recentMessagesFromThread;
     this.referencedContext = data.referencedContext;
@@ -87,10 +101,7 @@ export class AgentContext {
 
   /** Resolve Discord role IDs to an application-level access tier. */
   get role(): UserRole {
-    if (!this.memberRoles) return UserRole.Public;
-    if (this.memberRoles.includes(DISCORD_IDS.roles.ADMIN)) return UserRole.Admin;
-    if (this.memberRoles.includes(DISCORD_IDS.roles.ORGANIZER)) return UserRole.Organizer;
-    return UserRole.Public;
+    return roleFromMemberRoles(this.memberRoles);
   }
 
   /**
@@ -190,6 +201,7 @@ export class AgentContext {
       timezone: this.timezone,
       attachments: this.attachments,
       memberRoles: this.memberRoles,
+      source: this.source,
       recentMessages: this.recentMessages,
       recentMessagesFromThread: this.recentMessagesFromThread,
       referencedContext: this.referencedContext,

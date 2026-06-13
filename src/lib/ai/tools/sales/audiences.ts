@@ -1,45 +1,55 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { approval } from "../../approvals/index.ts";
+import { access } from "../../policy/index.ts";
 import { resend } from "./client.ts";
 
-export const list_audiences = tool({
-  description:
-    "List Resend segments (audiences) used for grouping contacts. Returns each segment's id, name, and creation timestamp.",
-  inputSchema: z.object({}),
-  execute: async () => {
-    const result = await resend().segments.list();
-    if (result.error) return JSON.stringify({ error: result.error.message });
-    return JSON.stringify(result.data?.data ?? []);
-  },
-});
-
-export const get_audience = tool({
-  description: "Get a single Resend segment (audience) by ID.",
-  inputSchema: z.object({
-    audience_id: z.string().describe("Resend segment ID"),
+export const list_audiences = access(
+  { risk: "read" },
+  tool({
+    description:
+      "List Resend segments (audiences) used for grouping contacts. Returns each segment's id, name, and creation timestamp.",
+    inputSchema: z.object({}),
+    execute: async () => {
+      const result = await resend().segments.list();
+      if (result.error) return JSON.stringify({ error: result.error.message });
+      return JSON.stringify(result.data?.data ?? []);
+    },
   }),
-  execute: async ({ audience_id }) => {
-    const result = await resend().segments.get(audience_id);
-    if (result.error) return JSON.stringify({ error: result.error.message });
-    return JSON.stringify(result.data);
-  },
-});
+);
 
-export const create_audience = tool({
-  description: "Create a new Resend segment (audience).",
-  inputSchema: z.object({
-    name: z.string().describe("Segment name"),
+export const get_audience = access(
+  { risk: "read" },
+  tool({
+    description: "Get a single Resend segment (audience) by ID.",
+    inputSchema: z.object({
+      audience_id: z.string().describe("Resend segment ID"),
+    }),
+    execute: async ({ audience_id }) => {
+      const result = await resend().segments.get(audience_id);
+      if (result.error) return JSON.stringify({ error: result.error.message });
+      return JSON.stringify(result.data);
+    },
   }),
-  execute: async ({ name }) => {
-    const result = await resend().segments.create({ name });
-    if (result.error) return JSON.stringify({ error: result.error.message });
-    return JSON.stringify(result.data);
-  },
-});
+);
 
-export const delete_audience = approval(
+export const create_audience = access(
+  { risk: "write" },
+  tool({
+    description: "Create a new Resend segment (audience).",
+    inputSchema: z.object({
+      name: z.string().describe("Segment name"),
+    }),
+    execute: async ({ name }) => {
+      const result = await resend().segments.create({ name });
+      if (result.error) return JSON.stringify({ error: result.error.message });
+      return JSON.stringify(result.data);
+    },
+  }),
+);
+
+export const delete_audience = access(
+  { risk: "destructive" },
   tool({
     description:
       "Delete a Resend segment (audience). Contacts in the segment are not deleted; they lose their segment membership.",
@@ -54,42 +64,50 @@ export const delete_audience = approval(
   }),
 );
 
-export const list_contacts_in_audience = tool({
-  description:
-    "List contacts in a Resend segment (audience). Returns each contact's id, email, first/last name, and subscription state.",
-  inputSchema: z.object({
-    audience_id: z.string().describe("Resend segment ID"),
+export const list_contacts_in_audience = access(
+  { risk: "read" },
+  tool({
+    description:
+      "List contacts in a Resend segment (audience). Returns each contact's id, email, first/last name, and subscription state.",
+    inputSchema: z.object({
+      audience_id: z.string().describe("Resend segment ID"),
+    }),
+    execute: async ({ audience_id }) => {
+      const result = await resend().contacts.list({ audienceId: audience_id });
+      if (result.error) return JSON.stringify({ error: result.error.message });
+      return JSON.stringify(result.data?.data ?? []);
+    },
   }),
-  execute: async ({ audience_id }) => {
-    const result = await resend().contacts.list({ audienceId: audience_id });
-    if (result.error) return JSON.stringify({ error: result.error.message });
-    return JSON.stringify(result.data?.data ?? []);
-  },
-});
+);
 
-export const add_contact_to_audience = tool({
-  description: "Add a contact to a Resend segment (audience) by email. Creates the contact if new.",
-  inputSchema: z.object({
-    audience_id: z.string().describe("Resend segment ID"),
-    email: z.email().describe("Contact email"),
-    first_name: z.string().optional(),
-    last_name: z.string().optional(),
-    unsubscribed: z.boolean().optional().describe("Mark as unsubscribed"),
+export const add_contact_to_audience = access(
+  { risk: "write" },
+  tool({
+    description:
+      "Add a contact to a Resend segment (audience) by email. Creates the contact if new.",
+    inputSchema: z.object({
+      audience_id: z.string().describe("Resend segment ID"),
+      email: z.email().describe("Contact email"),
+      first_name: z.string().optional(),
+      last_name: z.string().optional(),
+      unsubscribed: z.boolean().optional().describe("Mark as unsubscribed"),
+    }),
+    execute: async ({ audience_id, email, first_name, last_name, unsubscribed }) => {
+      const result = await resend().contacts.create({
+        audienceId: audience_id,
+        email,
+        firstName: first_name,
+        lastName: last_name,
+        unsubscribed,
+      });
+      if (result.error) return JSON.stringify({ error: result.error.message });
+      return JSON.stringify(result.data);
+    },
   }),
-  execute: async ({ audience_id, email, first_name, last_name, unsubscribed }) => {
-    const result = await resend().contacts.create({
-      audienceId: audience_id,
-      email,
-      firstName: first_name,
-      lastName: last_name,
-      unsubscribed,
-    });
-    if (result.error) return JSON.stringify({ error: result.error.message });
-    return JSON.stringify(result.data);
-  },
-});
+);
 
-export const remove_contact_from_audience = approval(
+export const remove_contact_from_audience = access(
+  { risk: "destructive" },
   tool({
     description:
       "Remove a contact from a Resend segment (audience). Provide either contact_id or email.",

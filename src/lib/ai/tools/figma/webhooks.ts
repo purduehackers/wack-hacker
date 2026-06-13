@@ -9,8 +9,7 @@ import type {
 import { tool } from "ai";
 import { z } from "zod";
 
-import { approval } from "../../approvals/index.ts";
-import { admin } from "../../skills/admin.ts";
+import { access } from "../../policy/index.ts";
 import { figma } from "./client.ts";
 
 // ---------------------------------------------------------------------------
@@ -33,7 +32,8 @@ function summarizeWebhook(w: WebhookV2) {
 // Tools
 // ---------------------------------------------------------------------------
 
-export const list_team_webhooks = admin(
+export const list_team_webhooks = access(
+  { risk: "read", minRole: "admin" },
   tool({
     description: "List all webhooks configured for the team.",
     inputSchema: z.object({}),
@@ -44,7 +44,8 @@ export const list_team_webhooks = admin(
   }),
 );
 
-export const create_webhook = admin(
+export const create_webhook = access(
+  { risk: "destructive", minRole: "admin" },
   tool({
     description:
       "Create a new webhook for team events. Events include FILE_UPDATE, FILE_DELETE, FILE_VERSION_UPDATE, LIBRARY_PUBLISH, and more.",
@@ -69,7 +70,8 @@ export const create_webhook = admin(
   }),
 );
 
-export const get_webhook = admin(
+export const get_webhook = access(
+  { risk: "read", minRole: "admin" },
   tool({
     description: "Get a webhook's details by ID.",
     inputSchema: z.object({
@@ -82,7 +84,8 @@ export const get_webhook = admin(
   }),
 );
 
-export const update_webhook = admin(
+export const update_webhook = access(
+  { risk: "destructive", minRole: "admin" },
   tool({
     description: "Update webhook configuration — endpoint, passcode, description, or status.",
     inputSchema: z.object({
@@ -107,17 +110,16 @@ export const update_webhook = admin(
   }),
 );
 
-export const delete_webhook = admin(
-  approval(
-    tool({
-      description: "Delete a webhook permanently.",
-      inputSchema: z.object({
-        webhook_id: z.string().describe("The webhook ID to delete"),
-      }),
-      execute: async ({ webhook_id }) => {
-        const result = await figma.delete<WebhookV2>(`/v2/webhooks/${webhook_id}`);
-        return JSON.stringify(summarizeWebhook(result));
-      },
+export const delete_webhook = access(
+  { risk: "destructive", minRole: "admin" },
+  tool({
+    description: "Delete a webhook permanently.",
+    inputSchema: z.object({
+      webhook_id: z.string().describe("The webhook ID to delete"),
     }),
-  ),
+    execute: async ({ webhook_id }) => {
+      const result = await figma.delete<WebhookV2>(`/v2/webhooks/${webhook_id}`);
+      return JSON.stringify(summarizeWebhook(result));
+    },
+  }),
 );

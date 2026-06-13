@@ -14,9 +14,10 @@ The subagent is **progressive**: it starts with a small discovery toolkit plus a
 | [AgentContext](./context.md)             | Execution context (user, channel, date, role), `buildInstructions`, serialization.     |
 | [Delegation & subagents](./subagents.md) | `createDelegationTool`, per-subagent config, `DOMAIN_SPEC_OVERRIDES`, `toModelOutput`. |
 | [Code sandbox](./code-sandbox.md)        | `delegate_code` — Vercel Sandbox provisioning, credential brokering, `postFinish` PR.  |
-| [Approvals](./approvals.md)              | `approval()` wrapper, Discord button prompt, `ApprovalStore`, `wrapApprovalTools`.     |
+| [Approvals](./approvals.md)              | Discord button prompt, self vs second-party modes, `ApprovalStore`, the wrap runtime.  |
+| [Access policy](./policy.md)             | `access()` descriptor, `decide()`, `applyPolicy`, audit log, budgets.                  |
 | [Streaming](./streaming.md)              | `streamTurn`: the live Discord message edit loop.                                      |
-| [Role-based access](./roles.md)          | `UserRole`, `ROLE_IDS`, `buildDelegationTools`, `filterAdmin`, `getAvailableSkills`.   |
+| [Role-based access](./roles.md)          | `UserRole`, `roleFromMemberRoles`, `buildDelegationTools`, `applyPolicy`, skill menus. |
 | [Adding a base tool](./adding-tools.md)  | How to add a new flat tool to the orchestrator (not a delegate domain).                |
 
 ## Where they plug in

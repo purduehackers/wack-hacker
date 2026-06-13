@@ -37,7 +37,7 @@ export const list_donations = defineTool({
   domain: "finance",
   description:
     "List donations to the Hack Club Bank org — donor name (or '(anonymous)'), amount_cents, status, recurring flag, and message.",
-  access: "open",
+  access: { risk: "read" },
   input: z.object(paginationInputShape),
   execute: async (input) => {
     const data = await hcbGet<HcbDonation[]>(
@@ -54,7 +54,7 @@ export const get_donation = defineTool({
   domain: "finance",
   description:
     "Fetch a single donation by ID. Returns donor name (or '(anonymous)'), amount_cents, status, recurring flag, and message.",
-  access: "open",
+  access: { risk: "read" },
   input: z.object({
     id: z.string().describe("Donation ID"),
   }),
@@ -70,7 +70,7 @@ export const donation_totals = defineTool({
   domain: "finance",
   description:
     "Sum successful donations within an ISO date range. Returns total_cents, count, and a breakdown of recurring vs one-time. Useful for fundraising team asks ('what did we raise this month?').",
-  access: "open",
+  access: { risk: "read" },
   input: z.object({
     since: z.iso.date().optional().describe("ISO date (YYYY-MM-DD) — on/after this date"),
     until: z.iso.date().optional().describe("ISO date (YYYY-MM-DD) — on/before this date"),

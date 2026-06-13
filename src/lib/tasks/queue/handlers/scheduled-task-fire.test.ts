@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ScheduledTaskRow } from "@/lib/tasks/types";
 
+import { DISCORD_IDS } from "@/lib/protocol/constants";
 import { ScheduledTaskStatus, ScheduleType } from "@/lib/tasks/enums";
 import {
   asAPI,
@@ -481,5 +482,103 @@ describe("scheduled-task-fire: agent action", () => {
       ...discord.callsTo("channels.editMessage").map((c) => c[2] as { content: string }),
     ];
     expect(bodies.some((b) => b.content.includes("-# Task: task-1"))).toBe(true);
+  });
+});
+
+describe("scheduled-task-fire: role re-resolution at fire time", () => {
+  beforeEach(() => {
+    installMockProvider(streamingTextModel("Agent reply."));
+  });
+
+  afterEach(() => {
+    uninstallMockProvider();
+  });
+
+  function agentRow(memberRoles: string[] | null) {
+    return makeRow({
+      action: { type: "agent", channelId: "ch-9", prompt: "summarize today" },
+      memberRoles,
+    });
+  }
+
+  function noticeBodies(discord: ReturnType<typeof createMockAPI>): string[] {
+    return discord
+      .callsTo("channels.createMessage")
+      .map((c) => (c[1] as { content: string }).content)
+      .filter((content) => content.includes("Running with current permissions"));
+  }
+
+  it("notifies the channel when the creator's access dropped since scheduling", async () => {
+    hoisted.getScheduledTask.mockResolvedValueOnce(agentRow([DISCORD_IDS.roles.ORGANIZER]));
+    const discord = createMockAPI();
+    // Default mock getMember resolves { roles: [] } — the creator was de-roled.
+
+    await scheduledTaskFire.handle(
+      { taskId: "task-1", targetIso: "2026-04-23T13:00:00.000Z" },
+      asAPI(discord),
+    );
+
+    expect(discord.callsTo("guilds.getMember")).toEqual([[expect.any(String), "user-1"]]);
+    const notices = noticeBodies(discord);
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toContain("organizer");
+    expect(notices[0]).toContain("public");
+  });
+
+  it("posts no notice when current roles still match the snapshot", async () => {
+    hoisted.getScheduledTask.mockResolvedValueOnce(agentRow([DISCORD_IDS.roles.ORGANIZER]));
+    const discord = createMockAPI();
+    discord.guilds.getMember = async () => ({ roles: [DISCORD_IDS.roles.ORGANIZER] });
+
+    await scheduledTaskFire.handle(
+      { taskId: "task-1", targetIso: "2026-04-23T13:00:00.000Z" },
+      asAPI(discord),
+    );
+
+    expect(noticeBodies(discord)).toHaveLength(0);
+  });
+
+  it("falls back to the snapshot when Discord is unreachable (no downgrade, no notice)", async () => {
+    hoisted.getScheduledTask.mockResolvedValueOnce(agentRow([DISCORD_IDS.roles.ORGANIZER]));
+    const discord = createMockAPI();
+    discord.guilds.getMember = async () => {
+      throw Object.assign(new Error("discord down"), { status: 500 });
+    };
+
+    await scheduledTaskFire.handle(
+      { taskId: "task-1", targetIso: "2026-04-23T13:00:00.000Z" },
+      asAPI(discord),
+    );
+
+    expect(noticeBodies(discord)).toHaveLength(0);
+    expect(hoisted.countMetric).toHaveBeenCalledWith("scheduled_task.role_resolution_failed");
+  });
+
+  it("treats a missing member (404) as public and notifies", async () => {
+    hoisted.getScheduledTask.mockResolvedValueOnce(agentRow([DISCORD_IDS.roles.ORGANIZER]));
+    const discord = createMockAPI();
+    discord.guilds.getMember = async () => {
+      throw Object.assign(new Error("Unknown Member"), { status: 404, code: 10_007 });
+    };
+
+    await scheduledTaskFire.handle(
+      { taskId: "task-1", targetIso: "2026-04-23T13:00:00.000Z" },
+      asAPI(discord),
+    );
+
+    expect(noticeBodies(discord)).toHaveLength(1);
+    expect(hoisted.countMetric).not.toHaveBeenCalledWith("scheduled_task.role_resolution_failed");
+  });
+
+  it("skips role re-resolution entirely for message actions", async () => {
+    hoisted.getScheduledTask.mockResolvedValueOnce(makeRow());
+    const discord = createMockAPI();
+
+    await scheduledTaskFire.handle(
+      { taskId: "task-1", targetIso: "2026-04-23T13:00:00.000Z" },
+      asAPI(discord),
+    );
+
+    expect(discord.callsTo("guilds.getMember")).toEqual([]);
   });
 });

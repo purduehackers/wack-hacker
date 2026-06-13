@@ -41,14 +41,10 @@ vi.mock("@vercel/sandbox", () => ({
 const { buildSystemPrompt, createOrchestrator, getOrchestratorTools, ORCHESTRATOR_MODEL } =
   await import("./orchestrator.ts");
 
-const BASE_TOOLS = [
-  "cancel_task",
-  "documentation",
-  "list_scheduled_tasks",
-  "resolve_organizer",
-  "schedule_task",
-  "web_search",
-];
+// Post-policy public surface: read tools with minRole "public". Write and
+// destructive tools (schedule_task, cancel_task) require organizer+.
+const PUBLIC_TOOLS = ["documentation", "list_scheduled_tasks", "resolve_organizer", "web_search"];
+const ORGANIZER_BASE_TOOLS = [...PUBLIC_TOOLS, "cancel_task", "schedule_task"];
 
 describe("createOrchestrator", () => {
   let model: MockLanguageModelV3;
@@ -92,11 +88,27 @@ describe("createOrchestrator", () => {
     expect(model.doStreamCalls.length).toBeGreaterThan(0);
   });
 
-  it("gives public users only base tools (all delegate skills require organizer+)", async () => {
+  it("gives public users only public read tools (writes and delegates require organizer+)", async () => {
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
     await drain(ctx);
 
-    expect(getToolNames()).toEqual(BASE_TOOLS.sort());
+    expect(getToolNames()).toEqual([...PUBLIC_TOOLS].sort());
+  });
+
+  it("exposes the audit log tool to admins but not organizers", async () => {
+    const organizerCtx = AgentContext.fromPacket(
+      messagePacket("hello", { memberRoles: ["1012751663322382438"] }),
+    );
+    await drain(organizerCtx);
+    expect(getToolNames()).not.toContain("list_audit_log");
+
+    model = streamingTextModel("hi");
+    installMockProvider(model);
+    const adminCtx = AgentContext.fromPacket(
+      messagePacket("hello", { memberRoles: ["1344066433172373656"] }),
+    );
+    await drain(adminCtx);
+    expect(getToolNames()).toContain("list_audit_log");
   });
 
   it("includes delegation tools for users with the organizer role", async () => {
@@ -108,7 +120,7 @@ describe("createOrchestrator", () => {
     const tools = getToolNames();
     expect(tools).toEqual(
       expect.arrayContaining([
-        ...BASE_TOOLS,
+        ...ORGANIZER_BASE_TOOLS,
         "delegate_discord",
         "delegate_figma",
         "delegate_github",
@@ -217,19 +229,21 @@ describe("buildSystemPrompt", () => {
   // Base tools stay hand-written in SYSTEM_PROMPT, so cross-check every
   // **bold** tool mention (base and delegate, including "a / b / c" bullets)
   // against the actual ToolSet — stale prose about a renamed tool fails here.
-  it("documents only tools that exist in the role's ToolSet (base + delegates)", () => {
-    for (const role of [UserRole.Organizer, UserRole.Admin]) {
-      const prompt = buildSystemPrompt(contextForRole(role));
-      const tools = getOrchestratorTools(contextForRole(role), new TurnUsageTracker());
-      const mentioned = [...prompt.matchAll(/\*\*([a-z0-9_ /]+)\*\*/g)]
-        .flatMap((m) => m[1].split(" / "))
-        .map((name) => name.trim());
-      // web_search once shipped documented-but-unregistered (#127) — keep it
-      // pinned so the extraction regex can't silently rot either.
-      expect(mentioned).toContain("web_search");
-      for (const name of mentioned) {
-        expect(tools, `prompt documents nonexistent tool ${name} for ${role}`).toHaveProperty(name);
-      }
+  // Checked against the admin surface, the superset: the static base section
+  // documents role-gated tools (e.g. list_audit_log, "Admin only") that
+  // applyPolicy strips for lower roles, so only admin has every mention.
+  it("documents only tools that exist in the admin ToolSet (base + delegates)", () => {
+    const prompt = buildSystemPrompt(contextForRole(UserRole.Admin));
+    const tools = getOrchestratorTools(contextForRole(UserRole.Admin), new TurnUsageTracker());
+    const mentioned = [...prompt.matchAll(/\*\*([a-z0-9_ /]+)\*\*/g)]
+      .flatMap((m) => m[1].split(" / "))
+      .map((name) => name.trim());
+    // web_search once shipped documented-but-unregistered (#127) — keep it
+    // pinned so the extraction regex can't silently rot either.
+    expect(mentioned).toContain("web_search");
+    expect(mentioned).toContain("list_audit_log");
+    for (const name of mentioned) {
+      expect(tools, `prompt documents nonexistent tool ${name}`).toHaveProperty(name);
     }
   });
 

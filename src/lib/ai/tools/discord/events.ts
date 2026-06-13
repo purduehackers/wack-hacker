@@ -3,7 +3,7 @@ import { Routes } from "discord-api-types/v10";
 import { z } from "zod";
 
 import { DISCORD_GUILD_ID } from "../../../protocol/constants.ts";
-import { approval } from "../../approvals/index.ts";
+import { access } from "../../policy/index.ts";
 import { discord } from "./client.ts";
 
 // ---------------------------------------------------------------------------
@@ -46,132 +46,142 @@ function summarizeEvent(e: any) {
 // Tools
 // ---------------------------------------------------------------------------
 
-export const list_events = tool({
-  description:
-    "List all scheduled events in the server. Returns event details including name, description, times, type, location, and attendee count.",
-  inputSchema: z.object({}),
-  execute: async () => {
-    const events = (await discord.get(Routes.guildScheduledEvents(DISCORD_GUILD_ID), {
-      query: new URLSearchParams({ with_user_count: "true" }),
-    })) as any[];
-    return JSON.stringify(events.map(summarizeEvent));
-  },
-});
-
-export const create_event = tool({
-  description:
-    "Create a scheduled event in the server. Supports voice channel events, stage events, and external (location-based) events. External events require an end time and location.",
-  inputSchema: z.object({
-    name: z.string().describe("Event name"),
-    description: z.string().optional().describe("Event description"),
-    scheduled_start: z.string().describe("Start time (ISO 8601 string)"),
-    scheduled_end: z
-      .string()
-      .optional()
-      .describe("End time (ISO 8601 string, required for external events)"),
-    type: z.enum(["voice", "stage", "external"]).default("external").describe("Event type"),
-    channel_id: z
-      .string()
-      .optional()
-      .describe("Voice/stage channel ID (required for voice/stage events)"),
-    location: z.string().optional().describe("Location string (required for external events)"),
-    image: z.string().optional().describe("Cover image URL"),
+export const list_events = access(
+  { risk: "read" },
+  tool({
+    description:
+      "List all scheduled events in the server. Returns event details including name, description, times, type, location, and attendee count.",
+    inputSchema: z.object({}),
+    execute: async () => {
+      const events = (await discord.get(Routes.guildScheduledEvents(DISCORD_GUILD_ID), {
+        query: new URLSearchParams({ with_user_count: "true" }),
+      })) as any[];
+      return JSON.stringify(events.map(summarizeEvent));
+    },
   }),
-  execute: async ({
-    name,
-    description,
-    scheduled_start,
-    scheduled_end,
-    type,
-    channel_id,
-    location,
-    image,
-  }) => {
-    const entityType = ENTITY_TYPE_MAP[type] ?? 3;
+);
 
-    const body: Record<string, any> = {
+export const create_event = access(
+  { risk: "write" },
+  tool({
+    description:
+      "Create a scheduled event in the server. Supports voice channel events, stage events, and external (location-based) events. External events require an end time and location.",
+    inputSchema: z.object({
+      name: z.string().describe("Event name"),
+      description: z.string().optional().describe("Event description"),
+      scheduled_start: z.string().describe("Start time (ISO 8601 string)"),
+      scheduled_end: z
+        .string()
+        .optional()
+        .describe("End time (ISO 8601 string, required for external events)"),
+      type: z.enum(["voice", "stage", "external"]).default("external").describe("Event type"),
+      channel_id: z
+        .string()
+        .optional()
+        .describe("Voice/stage channel ID (required for voice/stage events)"),
+      location: z.string().optional().describe("Location string (required for external events)"),
+      image: z.string().optional().describe("Cover image URL"),
+    }),
+    execute: async ({
       name,
-      scheduled_start_time: scheduled_start,
-      privacy_level: 2, // GUILD_ONLY
-      entity_type: entityType,
-    };
-    if (description) body.description = description;
-    if (scheduled_end) body.scheduled_end_time = scheduled_end;
-    if (channel_id) body.channel_id = channel_id;
-    if (location) body.entity_metadata = { location };
-    if (image) body.image = image;
+      description,
+      scheduled_start,
+      scheduled_end,
+      type,
+      channel_id,
+      location,
+      image,
+    }) => {
+      const entityType = ENTITY_TYPE_MAP[type] ?? 3;
 
-    const event = (await discord.post(Routes.guildScheduledEvents(DISCORD_GUILD_ID), {
-      body,
-    })) as any;
+      const body: Record<string, any> = {
+        name,
+        scheduled_start_time: scheduled_start,
+        privacy_level: 2, // GUILD_ONLY
+        entity_type: entityType,
+      };
+      if (description) body.description = description;
+      if (scheduled_end) body.scheduled_end_time = scheduled_end;
+      if (channel_id) body.channel_id = channel_id;
+      if (location) body.entity_metadata = { location };
+      if (image) body.image = image;
 
-    return JSON.stringify({
-      id: event.id,
-      name: event.name,
-      scheduledStartAt: event.scheduled_start_time,
-      scheduledEndAt: event.scheduled_end_time ?? null,
-      status: event.status,
-    });
-  },
-});
+      const event = (await discord.post(Routes.guildScheduledEvents(DISCORD_GUILD_ID), {
+        body,
+      })) as any;
 
-export const edit_event = tool({
-  description:
-    "Edit a scheduled event's name, description, times, location, image, status, or channel. Use status to start ('active'), end ('completed'), or cancel ('canceled') an event.",
-  inputSchema: z.object({
-    event_id: z.string().describe("Event ID"),
-    name: z.string().optional().describe("New event name"),
-    description: z.string().optional().describe("New description"),
-    scheduled_start: z.string().optional().describe("New start time (ISO 8601)"),
-    scheduled_end: z.string().optional().describe("New end time (ISO 8601)"),
-    location: z.string().optional().describe("New location (external events only)"),
-    image: z.string().optional().describe("New cover image URL"),
-    status: z
-      .enum(["scheduled", "active", "completed", "canceled"])
-      .optional()
-      .describe("New event status (e.g. 'active' to start, 'completed' or 'canceled' to end)"),
-    channel_id: z
-      .string()
-      .nullable()
-      .optional()
-      .describe("Voice/stage channel ID (null to clear, for voice/stage events)"),
+      return JSON.stringify({
+        id: event.id,
+        name: event.name,
+        scheduledStartAt: event.scheduled_start_time,
+        scheduledEndAt: event.scheduled_end_time ?? null,
+        status: event.status,
+      });
+    },
   }),
-  execute: async ({
-    event_id,
-    name,
-    description,
-    scheduled_start,
-    scheduled_end,
-    location,
-    image,
-    status,
-    channel_id,
-  }) => {
-    const body: Record<string, any> = {};
-    if (name) body.name = name;
-    if (description !== undefined) body.description = description;
-    if (scheduled_start) body.scheduled_start_time = scheduled_start;
-    if (scheduled_end) body.scheduled_end_time = scheduled_end;
-    if (location) body.entity_metadata = { location };
-    if (image) body.image = image;
-    if (status) body.status = STATUS_MAP[status];
-    if (channel_id !== undefined) body.channel_id = channel_id;
+);
 
-    const edited = (await discord.patch(Routes.guildScheduledEvent(DISCORD_GUILD_ID, event_id), {
-      body,
-    })) as any;
+export const edit_event = access(
+  { risk: "write" },
+  tool({
+    description:
+      "Edit a scheduled event's name, description, times, location, image, status, or channel. Use status to start ('active'), end ('completed'), or cancel ('canceled') an event.",
+    inputSchema: z.object({
+      event_id: z.string().describe("Event ID"),
+      name: z.string().optional().describe("New event name"),
+      description: z.string().optional().describe("New description"),
+      scheduled_start: z.string().optional().describe("New start time (ISO 8601)"),
+      scheduled_end: z.string().optional().describe("New end time (ISO 8601)"),
+      location: z.string().optional().describe("New location (external events only)"),
+      image: z.string().optional().describe("New cover image URL"),
+      status: z
+        .enum(["scheduled", "active", "completed", "canceled"])
+        .optional()
+        .describe("New event status (e.g. 'active' to start, 'completed' or 'canceled' to end)"),
+      channel_id: z
+        .string()
+        .nullable()
+        .optional()
+        .describe("Voice/stage channel ID (null to clear, for voice/stage events)"),
+    }),
+    execute: async ({
+      event_id,
+      name,
+      description,
+      scheduled_start,
+      scheduled_end,
+      location,
+      image,
+      status,
+      channel_id,
+    }) => {
+      const body: Record<string, any> = {};
+      if (name) body.name = name;
+      if (description !== undefined) body.description = description;
+      if (scheduled_start) body.scheduled_start_time = scheduled_start;
+      if (scheduled_end) body.scheduled_end_time = scheduled_end;
+      if (location) body.entity_metadata = { location };
+      if (image) body.image = image;
+      if (status) body.status = STATUS_MAP[status];
+      if (channel_id !== undefined) body.channel_id = channel_id;
 
-    return JSON.stringify({
-      id: edited.id,
-      name: edited.name,
-      scheduledStartAt: edited.scheduled_start_time,
-      scheduledEndAt: edited.scheduled_end_time ?? null,
-      status: edited.status,
-    });
-  },
-});
+      const edited = (await discord.patch(Routes.guildScheduledEvent(DISCORD_GUILD_ID, event_id), {
+        body,
+      })) as any;
 
-export const delete_event = approval(
+      return JSON.stringify({
+        id: edited.id,
+        name: edited.name,
+        scheduledStartAt: edited.scheduled_start_time,
+        scheduledEndAt: edited.scheduled_end_time ?? null,
+        status: edited.status,
+      });
+    },
+  }),
+);
+
+export const delete_event = access(
+  { risk: "destructive" },
   tool({
     description:
       "Delete a scheduled event. This is irreversible and will notify users who have indicated interest.",

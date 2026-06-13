@@ -38,7 +38,7 @@ export const add_to_cart = defineTool({
   domain: "shopping",
   description:
     "Add a product to the shared cart. If the ASIN is already in the cart, the quantity is increased. Use search_products first to get the ASIN, title, and price.",
-  access: "open",
+  access: { risk: "write" },
   input: z.object({
     asin: z.string().min(1).describe("Amazon ASIN from search_products"),
     title: z.string().min(1).describe("Product title"),
@@ -60,7 +60,7 @@ export const remove_from_cart = defineTool({
   name: "remove_from_cart",
   domain: "shopping",
   description: "Remove a product from the cart by ASIN.",
-  access: "approval",
+  access: { risk: "write", confirm: "self" },
   input: z.object({
     asin: z.string().min(1).describe("ASIN of the item to remove"),
   }),
@@ -79,7 +79,7 @@ export const update_quantity = defineTool({
   domain: "shopping",
   description:
     "Set the quantity of an item in the cart. Quantity of 0 removes the item. Item must already be in the cart.",
-  access: "open",
+  access: { risk: "write" },
   input: z.object({
     asin: z.string().min(1).describe("ASIN of the item to update"),
     quantity: z.number().int().min(0).describe("New quantity (0 removes the item)"),
@@ -96,7 +96,7 @@ export const view_cart = defineTool({
   domain: "shopping",
   description:
     "View the shared cart. Items are paginated to keep Discord messages short — pass `page` (1-indexed) to navigate when there are many items.",
-  access: "open",
+  access: { risk: "read" },
   input: z.object({
     page: z
       .number()
@@ -126,7 +126,7 @@ export const clear_cart = defineTool({
   domain: "shopping",
   description:
     "Remove every item from the shared cart. This is irreversible — always confirm with the user before calling.",
-  access: "approval",
+  access: { risk: "write", confirm: "self" },
   input: z.object({}),
   execute: async () => {
     await clearCart();

@@ -11,7 +11,7 @@ export const search_products = defineTool({
   domain: "shopping",
   description:
     "Search Amazon for products matching a query. Returns a list of products with ASIN, title, price (USD), rating, image URL, and product URL. Use the ASIN when adding to the cart.",
-  access: "open",
+  access: { risk: "read" },
   input: z.object({
     query: z
       .string()

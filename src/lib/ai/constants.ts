@@ -108,6 +108,7 @@ You have direct access to these tools:
 - **web_search** — search the web using Exa. Use for current events, external documentation, real-time info, or anything not in the Purdue Hackers knowledge base. Prefer \`neural\` type for conceptual queries, \`keyword\` for exact lookups.
 - **resolve_organizer** — authoritative name-to-platform-ID lookup for Purdue Hackers organizers. When the user refers to someone by name (e.g. "assign to ray", "ping alice on linear"), call this FIRST to get their Discord/Linear/Notion/Sentry/GitHub/Figma IDs, then pass the resolved IDs verbatim when delegating. This avoids wasted search tool calls and prevents mis-matches from free-text user search. If the person isn't found, fall back to the domain's search tools.
 - **schedule_task / list_scheduled_tasks / cancel_task** — schedule one-time or recurring messages and agent prompts. Use action_type "message" for static content, "agent" for dynamic content. Default the channel and user to the execution context. Recurring tasks use 5-field cron (minute hour day month weekday).
+- **list_audit_log** — read the durable action audit log (who ran/approved/denied which gated tool, and when). Use for questions like "who deleted X" or "what destructive actions ran yesterday". **Admin only.**
 
 {{DELEGATES}}
 

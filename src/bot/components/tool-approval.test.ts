@@ -17,7 +17,9 @@ vi.mock("@upstash/redis", () => ({
   Redis: { fromEnv: () => createMemoryRedis() },
 }));
 
-import { buildToolApprovalHandler, toolApproval } from "./tool-approval";
+import { DISCORD_IDS } from "@/lib/protocol/constants";
+
+import { buildToolApprovalHandler, clickerRejection, toolApproval } from "./tool-approval";
 
 function setup() {
   const store = new ApprovalStore(createMemoryRedis());
@@ -84,6 +86,114 @@ describe("toolApproval — authorization", () => {
     expect((follows[0]![2] as { content: string }).content).toMatch(/Only <@user-1>/);
     const after = await store.get("a1");
     expect(after?.status).toBe("pending");
+  });
+});
+
+describe("toolApproval — second-party authorization", () => {
+  const secondParty = () => baseApprovalState({ confirmMode: "second-party" });
+
+  it("rejects the requester's own click and leaves state pending", async () => {
+    const { store, handler, discord, mockAPI } = setup();
+    await store.create(secondParty());
+
+    await handler.handle({
+      interaction: buttonInteraction("tool-approval:approve:a1", "user-1", [
+        DISCORD_IDS.roles.ORGANIZER,
+      ]),
+      discord,
+      customId: "tool-approval:approve:a1",
+    });
+
+    expect(mockAPI.callsTo("channels.editMessage")).toHaveLength(0);
+    const follows = mockAPI.callsTo("interactions.followUp");
+    expect((follows[0]![2] as { content: string }).content).toMatch(/second organizer/);
+    expect((await store.get("a1"))?.status).toBe("pending");
+  });
+
+  it("lets a different organizer approve", async () => {
+    const { store, handler, discord, mockAPI } = setup();
+    await store.create(secondParty());
+
+    await handler.handle({
+      interaction: buttonInteraction("tool-approval:approve:a1", "other-org", [
+        DISCORD_IDS.roles.ORGANIZER,
+      ]),
+      discord,
+      customId: "tool-approval:approve:a1",
+    });
+
+    expect(mockAPI.callsTo("channels.editMessage")).toHaveLength(1);
+    const after = await store.get("a1");
+    expect(after?.status).toBe("approved");
+    expect(after?.decidedByUserId).toBe("other-org");
+  });
+
+  it("lets a different admin deny", async () => {
+    const { store, handler, discord } = setup();
+    await store.create(secondParty());
+
+    await handler.handle({
+      interaction: buttonInteraction("tool-approval:deny:a1", "the-admin", [
+        DISCORD_IDS.roles.ADMIN,
+      ]),
+      discord,
+      customId: "tool-approval:deny:a1",
+    });
+
+    expect((await store.get("a1"))?.status).toBe("denied");
+  });
+
+  it("rejects clickers without organizer or admin roles", async () => {
+    const { store, handler, discord, mockAPI } = setup();
+    await store.create(secondParty());
+
+    await handler.handle({
+      interaction: buttonInteraction("tool-approval:approve:a1", "rando", []),
+      discord,
+      customId: "tool-approval:approve:a1",
+    });
+
+    const follows = mockAPI.callsTo("interactions.followUp");
+    expect((follows[0]![2] as { content: string }).content).toMatch(/Only organizers/);
+    expect((await store.get("a1"))?.status).toBe("pending");
+  });
+
+  it("treats legacy rows without confirmMode as requester-only (self)", async () => {
+    const { store, handler, discord } = setup();
+    await store.create(baseApprovalState());
+
+    await handler.handle({
+      interaction: buttonInteraction("tool-approval:approve:a1", "other-org", [
+        DISCORD_IDS.roles.ORGANIZER,
+      ]),
+      discord,
+      customId: "tool-approval:approve:a1",
+    });
+
+    expect((await store.get("a1"))?.status).toBe("pending");
+  });
+});
+
+describe("clickerRejection — decision matrix", () => {
+  const ORGANIZER = [DISCORD_IDS.roles.ORGANIZER];
+
+  it("self mode: requester passes, others rejected", () => {
+    const state = baseApprovalState();
+    expect(clickerRejection(state, "user-1", [])).toBeNull();
+    expect(clickerRejection(state, "someone-else", ORGANIZER)).toMatch(/Only <@user-1>/);
+  });
+
+  it("second-party mode: requester rejected, organizer passes, public rejected", () => {
+    const state = baseApprovalState({ confirmMode: "second-party" });
+    expect(clickerRejection(state, "user-1", ORGANIZER)).toMatch(/second organizer/);
+    expect(clickerRejection(state, "other", ORGANIZER)).toBeNull();
+    expect(clickerRejection(state, "other", [])).toMatch(/Only organizers/);
+    expect(clickerRejection(state, "other", undefined)).toMatch(/Only organizers/);
+  });
+
+  it("explicit self mode behaves like the legacy default", () => {
+    const state = baseApprovalState({ confirmMode: "self" });
+    expect(clickerRejection(state, "user-1", [])).toBeNull();
   });
 });
 

@@ -12,7 +12,7 @@ import { sendScheduledFire } from "@/lib/tasks/queue/schedule-fire";
 import type { AgentContext } from "../../context.ts";
 
 import { nextOccurrence } from "../../../tasks/cron.ts";
-import { approval } from "../../approvals/index.ts";
+import { access } from "../../policy/index.ts";
 
 interface ScheduleInput {
   action_type: "message" | "agent";
@@ -79,7 +79,8 @@ function validateScheduleInput(input: ScheduleInput): string | null {
  * to `UserRole.Public` and lose access to every `delegate_*` subagent.
  */
 export function createScheduleTask(context: AgentContext) {
-  return approval(
+  return access(
+    { risk: "write", confirm: "self" },
     tool({
       description:
         "Schedule a one-time or recurring task. Use action_type 'message' for static text (reminders, announcements) or 'agent' to run an AI prompt at execution time (dynamic content). Recurring tasks use 5-field cron expressions (minute hour day month weekday).",
@@ -166,26 +167,30 @@ export function createScheduleTask(context: AgentContext) {
   );
 }
 
-export const list_scheduled_tasks = tool({
-  description: "List active scheduled tasks. Optionally filter by the user who created them.",
-  inputSchema: z.object({
-    user_id: z.string().optional().describe("Filter by creator's Discord user ID"),
+export const list_scheduled_tasks = access(
+  { risk: "read", minRole: "public" },
+  tool({
+    description: "List active scheduled tasks. Optionally filter by the user who created them.",
+    inputSchema: z.object({
+      user_id: z.string().optional().describe("Filter by creator's Discord user ID"),
+    }),
+    execute: async ({ user_id }) => {
+      const tasks = await listScheduledTasks(user_id ? { userId: user_id } : undefined);
+      if (!tasks.length) return "No active scheduled tasks.";
+
+      return tasks
+        .map((t) => {
+          const schedStr =
+            t.scheduleType === ScheduleType.Once ? `once at ${t.runAt}` : `recurring (${t.cron})`;
+          return `- **${t.description}** (ID: ${t.id}) — ${schedStr}, ${t.action.type} action`;
+        })
+        .join("\n");
+    },
   }),
-  execute: async ({ user_id }) => {
-    const tasks = await listScheduledTasks(user_id ? { userId: user_id } : undefined);
-    if (!tasks.length) return "No active scheduled tasks.";
+);
 
-    return tasks
-      .map((t) => {
-        const schedStr =
-          t.scheduleType === ScheduleType.Once ? `once at ${t.runAt}` : `recurring (${t.cron})`;
-        return `- **${t.description}** (ID: ${t.id}) — ${schedStr}, ${t.action.type} action`;
-      })
-      .join("\n");
-  },
-});
-
-export const cancel_task = approval(
+export const cancel_task = access(
+  { risk: "destructive" },
   tool({
     description:
       "Cancel a scheduled task by its ID. This marks the task inactive so its next wake-up is a no-op.",

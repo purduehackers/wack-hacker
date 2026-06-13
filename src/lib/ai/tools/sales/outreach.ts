@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { approval } from "../../approvals/index.ts";
+import { access } from "../../policy/index.ts";
 import { notion, resend } from "./client.ts";
 import {
   COMPANIES_DATA_SOURCE_ID,
@@ -45,7 +45,8 @@ async function preflight(pageId: string, target: "company" | "contact"): Promise
   return null;
 }
 
-export const send_outreach_email = approval(
+export const send_outreach_email = access(
+  { risk: "destructive" },
   tool({
     description: `Send an outreach email via Resend and record the resulting email id on the target Notion page ("Last Outreach ID", "Outreach Status" = Sent). The target page must not have "Do Not Contact" checked. Sends from the fixed SALES_FROM_EMAIL with SALES_REPLY_TO_EMAIL in the Reply-To header.`,
     inputSchema: z.object({
@@ -82,40 +83,43 @@ export const send_outreach_email = approval(
   }),
 );
 
-export const get_email_status = tool({
-  description: `Read the outreach tracking properties off a Company or Contact page. Returns Last Outreach ID, Outreach Status, Outreach Last Event At, Do Not Contact. The Resend webhook keeps these authoritative.`,
-  inputSchema: z.object({
-    page_id: z.string(),
+export const get_email_status = access(
+  { risk: "read" },
+  tool({
+    description: `Read the outreach tracking properties off a Company or Contact page. Returns Last Outreach ID, Outreach Status, Outreach Last Event At, Do Not Contact. The Resend webhook keeps these authoritative.`,
+    inputSchema: z.object({
+      page_id: z.string(),
+    }),
+    execute: async ({ page_id }) => {
+      const page = await notion.pages.retrieve({ page_id });
+      if (!("properties" in page)) return JSON.stringify({ id: page.id });
+      const props = page.properties as Record<string, { type?: string; [key: string]: unknown }>;
+      const readRich = (property: { type?: string; [key: string]: unknown } | undefined) => {
+        if (!property || property.type !== "rich_text" || !Array.isArray(property.rich_text))
+          return null;
+        return (property.rich_text as Array<{ plain_text?: string }>)
+          .map((t) => t.plain_text ?? "")
+          .join("");
+      };
+      const readSelect = (property: { type?: string; [key: string]: unknown } | undefined) => {
+        if (!property || property.type !== "select" || !property.select) return null;
+        return (property.select as { name?: string }).name ?? null;
+      };
+      const readDate = (property: { type?: string; [key: string]: unknown } | undefined) => {
+        if (!property || property.type !== "date" || !property.date) return null;
+        return (property.date as { start?: string }).start ?? null;
+      };
+      const readCheckbox = (property: { type?: string; [key: string]: unknown } | undefined) => {
+        if (!property || property.type !== "checkbox") return null;
+        return property.checkbox as boolean;
+      };
+      return JSON.stringify({
+        id: page.id,
+        last_outreach_id: readRich(props["Last Outreach ID"]),
+        outreach_status: readSelect(props["Outreach Status"]),
+        outreach_last_event_at: readDate(props["Outreach Last Event At"]),
+        do_not_contact: readCheckbox(props["Do Not Contact"]),
+      });
+    },
   }),
-  execute: async ({ page_id }) => {
-    const page = await notion.pages.retrieve({ page_id });
-    if (!("properties" in page)) return JSON.stringify({ id: page.id });
-    const props = page.properties as Record<string, { type?: string; [key: string]: unknown }>;
-    const readRich = (property: { type?: string; [key: string]: unknown } | undefined) => {
-      if (!property || property.type !== "rich_text" || !Array.isArray(property.rich_text))
-        return null;
-      return (property.rich_text as Array<{ plain_text?: string }>)
-        .map((t) => t.plain_text ?? "")
-        .join("");
-    };
-    const readSelect = (property: { type?: string; [key: string]: unknown } | undefined) => {
-      if (!property || property.type !== "select" || !property.select) return null;
-      return (property.select as { name?: string }).name ?? null;
-    };
-    const readDate = (property: { type?: string; [key: string]: unknown } | undefined) => {
-      if (!property || property.type !== "date" || !property.date) return null;
-      return (property.date as { start?: string }).start ?? null;
-    };
-    const readCheckbox = (property: { type?: string; [key: string]: unknown } | undefined) => {
-      if (!property || property.type !== "checkbox") return null;
-      return property.checkbox as boolean;
-    };
-    return JSON.stringify({
-      id: page.id,
-      last_outreach_id: readRich(props["Last Outreach ID"]),
-      outreach_status: readSelect(props["Outreach Status"]),
-      outreach_last_event_at: readDate(props["Outreach Last Event At"]),
-      do_not_contact: readCheckbox(props["Do Not Contact"]),
-    });
-  },
-});
+);

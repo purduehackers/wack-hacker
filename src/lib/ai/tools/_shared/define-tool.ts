@@ -4,25 +4,17 @@ import { z } from "zod";
 import { countMetric } from "@/lib/metrics";
 import { withSpan } from "@/lib/otel/tracing";
 
-import type { ApprovalOptions } from "../../approvals/types.ts";
+import type { AccessSpec } from "../../policy/types.ts";
 
-import { approval } from "../../approvals/index.ts";
-import { admin } from "../../skills/admin.ts";
+import { access } from "../../policy/index.ts";
 
 /**
- * Access semantics for a tool, applied uniformly by `defineTool`:
- * - `"open"` — visible to any role that can reach the domain.
- * - `"admin"` — stripped for non-admin roles (see `filterAdmin`).
- * - `"approval"` — requires per-call user approval (see `wrapApprovalTools`).
- *
- * Pass `{ approval: {...} }` to attach `ApprovalOptions` (e.g. a static reason).
- * This is the seam where plan 09's richer access descriptor slots in later —
- * tool files declare intent here instead of wrapping exports by hand.
- * (Kept module-private: exported string unions are disallowed, and call sites
- * only ever pass literals.)
+ * `defineTool` declares a tool's access with plan 09's `AccessSpec`
+ * (`{ risk, minRole?, confirm?, reason? }`) and stamps it via the policy
+ * `access()` marker, so `applyPolicy` enforces defineTool'd tools and
+ * hand-`access()`-wrapped tools through one path. Tool files declare intent
+ * here instead of wrapping exports by hand.
  */
-type AccessSpec = "open" | "admin" | "approval" | { approval: ApprovalOptions };
-
 type ToolErrorClass =
   | "not-found"
   | "permission"
@@ -165,19 +157,13 @@ function enforceBudget(text: string, budget: number): string {
   );
 }
 
-function applyAccess<T>(t: T, access: AccessSpec): T {
-  if (access === "admin") return admin(t);
-  if (access === "approval") return approval(t);
-  if (typeof access === "object") return approval(t, access.approval);
-  return t;
-}
-
 /**
  * Uniform authoring surface for the tool catalog. Wraps the AI SDK's `tool()`
  * with the four cross-cutting behaviors every tool needs:
  *
- * 1. Access — applies the `admin()`/`approval()` markers from `access`, so
- *    call sites stop hand-wrapping exports.
+ * 1. Access — stamps the policy `access()` descriptor from `access`, so
+ *    `applyPolicy` gates/confirms the tool uniformly and call sites stop
+ *    hand-wrapping exports.
  * 2. Error envelope — failures come back as a one-line, model-actionable
  *    string (classified not-found / permission / rate-limit / invalid-input /
  *    transient), never a stack. Counted as `tool.error{domain, tool, class}`.
@@ -187,7 +173,7 @@ function applyAccess<T>(t: T, access: AccessSpec): T {
  * 4. Telemetry — a `tool.execute` span (domain/tool/outcome attrs) plus
  *    `tool.called{domain, tool}`, cheap aggregates independent of sampling.
  *
- * Approval denials happen in `wrapApprovalTools`, outside this wrapper, so the
+ * Approval denials happen in `applyPolicy`, outside this wrapper, so the
  * envelope can never swallow them.
  */
 export function defineTool<I extends z.ZodObject>(spec: {
@@ -200,7 +186,7 @@ export function defineTool<I extends z.ZodObject>(spec: {
   outputBudget?: number;
   execute: (input: z.output<I>, ctx: ToolCallOptions) => Promise<unknown>;
 }) {
-  const { name, domain, access, outputBudget = DEFAULT_OUTPUT_BUDGET } = spec;
+  const { name, domain, access: accessSpec, outputBudget = DEFAULT_OUTPUT_BUDGET } = spec;
 
   const wrapped = tool({
     description: spec.description,
@@ -227,8 +213,8 @@ export function defineTool<I extends z.ZodObject>(spec: {
   (wrapped as unknown as Record<symbol, ToolMeta>)[TOOL_META] = {
     name,
     domain,
-    access,
+    access: accessSpec,
     outputBudget,
   };
-  return applyAccess(wrapped, access);
+  return access(accessSpec, wrapped);
 }

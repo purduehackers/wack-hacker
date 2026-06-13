@@ -1,13 +1,15 @@
 import { ToolLoopAgent, type ToolSet } from "ai";
 
+import type { BudgetState } from "./policy/index.ts";
 import type { TurnUsageTracker } from "./turn-usage.ts";
 import type { TelemetryMetadata } from "./types.ts";
 
-import { wrapApprovalTools } from "./approvals/index.ts";
 import { addCacheControl } from "./cache-control.ts";
 import { ORCHESTRATOR_MODEL, SYSTEM_PROMPT } from "./constants.ts";
 import { AgentContext } from "./context.ts";
 import { buildDelegateDocs, buildDelegationTools } from "./delegates.ts";
+import { applyPolicy } from "./policy/index.ts";
+import { list_audit_log } from "./tools/audit/index.ts";
 import { documentation } from "./tools/docs/index.ts";
 import { resolve_organizer } from "./tools/roster/index.ts";
 import { createScheduleTask, list_scheduled_tasks, cancel_task } from "./tools/schedule/index.ts";
@@ -29,6 +31,7 @@ export function getOrchestratorTools(
   context: AgentContext,
   tracker: TurnUsageTracker,
   extraMetadata?: TelemetryMetadata,
+  budget?: BudgetState | null,
 ): ToolSet {
   const tools: ToolSet = {
     documentation,
@@ -36,10 +39,11 @@ export function getOrchestratorTools(
     schedule_task: createScheduleTask(context),
     list_scheduled_tasks,
     cancel_task,
+    list_audit_log,
     web_search,
     ...buildDelegationTools(context, tracker, extraMetadata),
   };
-  return wrapApprovalTools(tools, { context });
+  return applyPolicy(tools, { context, budget });
 }
 
 /**
@@ -63,6 +67,7 @@ export function createOrchestrator(
   tracker: TurnUsageTracker,
   extraMetadata: TelemetryMetadata | undefined,
   model: string,
+  budget?: BudgetState | null,
 ) {
   const instructions = buildSystemPrompt(context);
   // Cache-control on the tools block is applied once at construction:
@@ -72,7 +77,7 @@ export function createOrchestrator(
   // serialized tool order to stay byte-stable across steps; reusing this one
   // object for every step guarantees that.
   const tools = addCacheControl({
-    tools: getOrchestratorTools(context, tracker, extraMetadata),
+    tools: getOrchestratorTools(context, tracker, extraMetadata, budget),
     model: ORCHESTRATOR_MODEL,
   });
 

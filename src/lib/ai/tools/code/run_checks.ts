@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import type { Sandbox } from "@/lib/sandbox/types";
 
+import { access } from "../../policy/index.ts";
 import { getSandboxContext } from "./utils.ts";
 
 /**
@@ -13,72 +14,75 @@ import { getSandboxContext } from "./utils.ts";
  */
 const CANDIDATE_SCRIPTS = ["typecheck", "lint", "test", "format:check", "format"] as const;
 
-export const run_checks = tool({
-  description: `Run the repo's typecheck / lint / test scripts (whichever exist in \`package.json\`) in parallel. Returns per-check pass/fail + output.
+export const run_checks = access(
+  { risk: "read" },
+  tool({
+    description: `Run the repo's typecheck / lint / test scripts (whichever exist in \`package.json\`) in parallel. Returns per-check pass/fail + output.
 
 Use this after any non-trivial change. If something fails, read the output, fix the root cause, and run again. Do not finish or let a PR open with failing checks unless you have a documented unresolvable blocker.
 
 The package manager is auto-detected from lockfiles (bun → pnpm → yarn → npm). Each check has a 5-minute budget.`,
-  inputSchema: z.object({
-    only: z
-      .array(z.enum(CANDIDATE_SCRIPTS))
-      .optional()
-      .describe("Run only these scripts. Omit to run every script that exists in package.json."),
-  }),
-  execute: async ({ only }, { experimental_context, abortSignal }) => {
-    const { sandbox, repoDir } = getSandboxContext(experimental_context, "run_checks");
+    inputSchema: z.object({
+      only: z
+        .array(z.enum(CANDIDATE_SCRIPTS))
+        .optional()
+        .describe("Run only these scripts. Omit to run every script that exists in package.json."),
+    }),
+    execute: async ({ only }, { experimental_context, abortSignal }) => {
+      const { sandbox, repoDir } = getSandboxContext(experimental_context, "run_checks");
 
-    const manifest = await readPackageJson(sandbox, repoDir);
-    if (!manifest) {
-      return JSON.stringify({
-        error: "no package.json at repo root; run_checks expects a JS/TS project",
-      });
-    }
+      const manifest = await readPackageJson(sandbox, repoDir);
+      if (!manifest) {
+        return JSON.stringify({
+          error: "no package.json at repo root; run_checks expects a JS/TS project",
+        });
+      }
 
-    const manager = await detectPackageManager(sandbox, repoDir);
-    const scripts = manifest.scripts ?? {};
-    const candidates = (only ?? CANDIDATE_SCRIPTS).filter((name) => name in scripts);
+      const manager = await detectPackageManager(sandbox, repoDir);
+      const scripts = manifest.scripts ?? {};
+      const candidates = (only ?? CANDIDATE_SCRIPTS).filter((name) => name in scripts);
 
-    if (candidates.length === 0) {
+      if (candidates.length === 0) {
+        return JSON.stringify({
+          package_manager: manager,
+          skipped: true,
+          reason: `no ${(only ?? CANDIDATE_SCRIPTS).join("/")} scripts in package.json`,
+          available_scripts: Object.keys(scripts).sort(),
+        });
+      }
+
+      const results = await Promise.all(
+        candidates.map(async (name) => {
+          const command = `${manager} run ${name}`;
+          const result = await sandbox.exec(command, {
+            cwd: repoDir,
+            timeoutMs: 5 * 60 * 1000,
+            signal: abortSignal,
+          });
+          return {
+            name,
+            command,
+            passed: result.exitCode === 0,
+            exit_code: result.exitCode,
+            stdout_tail: tail(result.stdout, 4000),
+            stderr_tail: tail(result.stderr, 4000),
+            truncated: result.truncated,
+          };
+        }),
+      );
+
+      const failed = results.filter((r) => !r.passed);
+
       return JSON.stringify({
         package_manager: manager,
-        skipped: true,
-        reason: `no ${(only ?? CANDIDATE_SCRIPTS).join("/")} scripts in package.json`,
-        available_scripts: Object.keys(scripts).sort(),
+        all_passed: failed.length === 0,
+        passed_count: results.length - failed.length,
+        failed_count: failed.length,
+        results,
       });
-    }
-
-    const results = await Promise.all(
-      candidates.map(async (name) => {
-        const command = `${manager} run ${name}`;
-        const result = await sandbox.exec(command, {
-          cwd: repoDir,
-          timeoutMs: 5 * 60 * 1000,
-          signal: abortSignal,
-        });
-        return {
-          name,
-          command,
-          passed: result.exitCode === 0,
-          exit_code: result.exitCode,
-          stdout_tail: tail(result.stdout, 4000),
-          stderr_tail: tail(result.stderr, 4000),
-          truncated: result.truncated,
-        };
-      }),
-    );
-
-    const failed = results.filter((r) => !r.passed);
-
-    return JSON.stringify({
-      package_manager: manager,
-      all_passed: failed.length === 0,
-      passed_count: results.length - failed.length,
-      failed_count: failed.length,
-      results,
-    });
-  },
-});
+    },
+  }),
+);
 
 async function readPackageJson(
   sandbox: Sandbox,

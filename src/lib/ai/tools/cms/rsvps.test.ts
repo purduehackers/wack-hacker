@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { payloadSDKClass, toolOpts } from "@/lib/test/fixtures";
 
-import { hasApprovalMarker } from "../../approvals/index.ts";
+import { getAccessSpec } from "../../policy/index.ts";
 
 const mocks = vi.hoisted(() => ({
   find: vi.fn(),
@@ -84,7 +84,7 @@ describe("update_rsvp", () => {
 
 describe("delete_rsvp", () => {
   it("is approval-gated", () => {
-    expect(hasApprovalMarker(delete_rsvp)).toBe(true);
+    expect(getAccessSpec(delete_rsvp)?.risk).toBe("destructive");
   });
 
   it("returns delete confirmation", async () => {
