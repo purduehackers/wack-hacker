@@ -88,26 +88,6 @@ export const list_project_files = defineTool({
   },
 });
 
-export const get_me = defineTool({
-  name: "get_me",
-  domain: "figma",
-  description:
-    "Get details about the Figma user backing the access token — email, ID, and display name. Useful for confirming which identity the bot is acting as.",
-  access: { risk: "read" },
-  input: z.object({}),
-  execute: async () => {
-    const me = await figma.get<{ id: string; email: string; handle: string; img_url?: string }>(
-      "/v1/me",
-    );
-    return JSON.stringify({
-      id: me.id,
-      email: me.email,
-      handle: me.handle,
-      avatar: me.img_url,
-    });
-  },
-});
-
 export const search_files = defineTool({
   name: "search_files",
   domain: "figma",

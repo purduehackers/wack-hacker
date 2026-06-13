@@ -1,4 +1,7 @@
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import { parse as parseYaml } from "yaml";
 
 // A few domain clients construct their SDK at import time and throw without
 // credentials (Octokit needs an appId, LinearClient an apiKey, etc.). This
@@ -22,10 +25,11 @@ import { getToolMeta } from "./_shared/define-tool.ts";
 
 /**
  * Coverage manifest for every delegate domain. Every exported tool must be
- * reachable by the model — either always-on via the domain's `baseToolNames`
- * or activated by a sub-skill's `tools:` list. Orphan tools are dead weight:
- * wire them into a SKILL.md or delete them. (knip can't catch these —
- * `src/lib/ai/tools/**` is in its ignore list.)
+ * accounted for — reachable by the model (always-on via the domain's
+ * `baseToolNames`, or activated by a sub-skill's `tools:` list) or parked
+ * behind a disabled (`_`-prefixed) sub-skill. An orphan is neither: dead weight
+ * the model can never call. Wire it into a SKILL.md, park it, or delete it.
+ * (knip can't catch these — `src/lib/ai/tools/**` is in its ignore list.)
  *
  * Driven by the generated `DOMAINS` registry, so a new domain is covered the
  * moment `compile-skills.ts` emits it — no edits needed here.
@@ -38,13 +42,39 @@ function exportedToolNames(tools: Record<string, unknown>): string[] {
 
 function referencedToolNames(
   baseToolNames: readonly string[],
+  parkedToolNames: readonly string[],
   subSkills: Record<string, { toolNames: readonly string[] }>,
 ): Set<string> {
-  const referenced = new Set<string>(baseToolNames);
+  // baseToolNames + every active sub-skill's tools = reachable. parkedToolNames
+  // = tools held only by a disabled (`_`) sub-skill: not reachable, but parked
+  // on purpose, so not orphans either.
+  const referenced = new Set<string>([...baseToolNames, ...parkedToolNames]);
   for (const skill of Object.values(subSkills)) {
     for (const name of skill.toolNames) referenced.add(name);
   }
   return referenced;
+}
+
+/**
+ * Tools listed only by a DISABLED sub-skill. Disabling a skill is just renaming
+ * its dir with a leading `_` (which `compile-skills` skips). Those tools are
+ * unreachable but parked on purpose — read their `tools:` straight from the
+ * disabled SKILL.md so the orphan check honors the disable with no build-time
+ * plumbing.
+ */
+function parkedToolNames(domain: string): string[] {
+  const dir = join(process.cwd(), "src/lib/ai/skills", domain, "skills");
+  if (!existsSync(dir)) return [];
+  const names: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !entry.name.startsWith("_")) continue;
+    const frontmatter = readFileSync(join(dir, entry.name, "SKILL.md"), "utf8").match(
+      /^---\n([\s\S]*?)\n---/,
+    );
+    if (!frontmatter) continue;
+    names.push(...((parseYaml(frontmatter[1]) as { tools?: string[] }).tools ?? []));
+  }
+  return names;
 }
 
 const DOMAIN_CASES = Object.entries(DOMAINS).map(([domain, d]) => ({
@@ -54,53 +84,17 @@ const DOMAIN_CASES = Object.entries(DOMAINS).map(([domain, d]) => ({
   subSkills: d.subSkills,
 }));
 
-/**
- * Pre-existing orphans, surfaced when coverage was extended from 2 → all
- * domains. Each is an exported tool no sub-skill or `baseToolNames` reaches, so
- * the model can never call it. This is a burn-down baseline, NOT an exemption
- * list: wire each into a SKILL.md (or delete it), then remove it here. The test
- * fails on any NEW orphan and on any stale entry, so the list can only shrink.
- */
-const KNOWN_ORPHANS: Record<string, readonly string[]> = {
-  figma: ["get_me"],
-  sales: ["set_company_last_outreach", "set_contact_last_outreach", "send_outreach_email"],
-  sentry: ["search_logs", "get_log_stats"],
-  vercel: [
-    "list_user_events",
-    "list_event_types",
-    "get_runtime_logs",
-    "list_log_drains",
-    "get_log_drain",
-    "delete_configurable_log_drain",
-    "list_integration_log_drains",
-    "delete_integration_log_drain",
-    "list_drains",
-    "get_drain",
-    "delete_drain",
-    "get_observability_config",
-    "update_observability_config",
-    "artifacts_status",
-    "artifact_exists",
-    "artifact_query",
-  ],
-};
-
 describe.each(DOMAIN_CASES)(
   "$domain tool coverage",
   ({ domain, tools, baseToolNames, subSkills }) => {
     const exported = exportedToolNames(tools);
-    const referenced = referencedToolNames(baseToolNames, subSkills);
+    const referenced = referencedToolNames(baseToolNames, parkedToolNames(domain), subSkills);
 
-    it("has no orphan tools beyond the known baseline", () => {
+    it("has no orphan tools (exported but neither reachable nor parked)", () => {
       const orphans = exported.filter((name) => !referenced.has(name));
-      const known = KNOWN_ORPHANS[domain] ?? [];
       expect(
-        orphans.filter((name) => !known.includes(name)),
-        `${domain}: NEW orphan tool(s) — wire into a SKILL.md / baseToolNames, or delete`,
-      ).toEqual([]);
-      expect(
-        known.filter((name) => !orphans.includes(name)),
-        `${domain}: stale KNOWN_ORPHANS entries (now reachable or removed) — delete them from the baseline`,
+        orphans,
+        `${domain}: orphan tool(s) — wire into a SKILL.md / baseToolNames, disable via a _-prefixed sub-skill, or delete`,
       ).toEqual([]);
     });
 
