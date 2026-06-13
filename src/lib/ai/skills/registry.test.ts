@@ -44,9 +44,15 @@ describe("SkillRegistry", () => {
   describe("buildSkillMenu", () => {
     it("generates formatted menu for role", () => {
       const menu = registry.buildSkillMenu(UserRole.Public);
-      expect(menu).toContain("<available_skills>");
+      expect(menu).toContain("<sub_skills>");
       expect(menu).toContain("scheduling: Schedule tasks");
       expect(menu).not.toContain("linear");
+    });
+
+    it("wraps the menu in the tag the loadSkill tool description points at", () => {
+      const menu = registry.buildSkillMenu(UserRole.Public);
+      expect(menu.startsWith("<sub_skills>\n")).toBe(true);
+      expect(menu.endsWith("\n</sub_skills>")).toBe(true);
     });
 
     it("returns empty string when no skills available", () => {
