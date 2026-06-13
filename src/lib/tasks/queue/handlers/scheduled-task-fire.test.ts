@@ -322,6 +322,14 @@ describe("scheduled-task-fire: claim-failure heal", () => {
     });
   });
 
+  it("propagates non-duplicate send failures so the queue retries the heal", async () => {
+    hoisted.sendScheduledFire.mockRejectedValueOnce(new Error("queue unavailable"));
+    const row = recurringRow();
+
+    await expect(fireWithFailedClaim(row, row)).rejects.toThrow("queue unavailable");
+    expect(hoisted.updateScheduledTask).not.toHaveBeenCalled();
+  });
+
   it("marks a one-time task failed — not completed — when the claim was never finalized", async () => {
     const row = makeRow({ lastFiredAt: "2026-04-23T13:00:00.000Z", fireCount: 1 });
     const discord = await fireWithFailedClaim(row, row);
