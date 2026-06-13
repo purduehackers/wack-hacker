@@ -170,12 +170,16 @@ function enforceBudget(text: string, budget: number): string {
  *    truncated with an explicit marker, item-aware for JSON list payloads.
  * 4. Telemetry — a `tool.execute` span (domain/tool/outcome attrs) plus
  *    `tool.called{domain, tool}`, cheap aggregates independent of sampling.
+ *    The streaming path emits the counters only (no `tool.execute` span):
+ *    a generator's open-ended lifetime doesn't fit `withSpan`'s scoped
+ *    callback. (`bash` never had a span either.)
  *
  * `execute` may be a normal async function or an async generator. Streaming
  * tools (e.g. the sandbox's `bash`) take the generator path: their chunks pass
- * through untouched (no mid-stream budget truncation), with telemetry and a
- * final error envelope still applied — yielded as a UIMessage text part so a
- * streaming tool's `toModelOutput` surfaces it rather than dropping it.
+ * through untouched (no mid-stream budget truncation), with the `tool.called`/
+ * `tool.error` counters and a final error envelope still applied — the envelope
+ * yielded as a UIMessage text part so a streaming tool's `toModelOutput`
+ * surfaces it rather than dropping it.
  *
  * Approval denials happen in `applyPolicy`, outside this wrapper, so the
  * envelope can never swallow them.
