@@ -1,0 +1,22 @@
+src/lib/ai/orchestrator.test.ts
+  s_d27df44b7ac328::t_bdaf214a0e9fa6 6,18,41-42,123-134
+.github/workflows/pullfrog.yml
+  s_d27df44b7ac328::t_f7f3bc49200e29 1-36,38-43,45-50,52-56
+  s_d27df44b7ac328::t_e8ac4940db54f0 37,44,51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "a084e924bc0beffc337d99a1c65cfe4a8895dfd4",
+  "prompts": {},
+  "sessions": {
+    "s_d27df44b7ac328": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9f2172a4-c814-4433-969c-6d93c4563a7f",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
