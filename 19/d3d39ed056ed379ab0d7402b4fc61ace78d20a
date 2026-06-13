@@ -1,0 +1,29 @@
+src/lib/ai/skills/vercel/skills/observability/SKILL.md
+  s_e947ebbd513117::t_81ad2ae3481200 1-29
+src/lib/ai/skills/vercel/skills/artifacts/SKILL.md
+  s_e947ebbd513117::t_eecb44be97651b 1-14
+src/lib/ai/tools/coverage-manifest.test.ts
+  s_e947ebbd513117::t_15f3bfb224c30b 25-29,42,45-48,59,65,67,69,72-73
+scripts/compile-skills.ts
+  s_e947ebbd513117::t_80584bfff1e0d3 170-173,187,201-207
+  s_e947ebbd513117::t_81922d80ab7b45 250-278
+  s_e947ebbd513117::t_47e9309488db25 352-360
+src/lib/ai/skills/sentry/skills/log-search/SKILL.md
+  s_e947ebbd513117::t_8f1095fb75641f 1-20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "19d3d39ed056ed379ab0d7402b4fc61ace78d20a",
+  "prompts": {},
+  "sessions": {
+    "s_e947ebbd513117": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bbc7243f-7d19-41f9-9d1d-97eedb0b6968",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
