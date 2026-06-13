@@ -1,9 +1,7 @@
-import type { z } from "zod";
-
 import { log } from "evlog";
 
 import type { ShipAttachmentInput } from "@/bot/integrations/ships";
-import type { MessageCreatePacket } from "@/lib/protocol/packets";
+import type { MessageCreatePacketType } from "@/lib/protocol/types";
 
 import { defineEvent } from "@/bot/events/define";
 import { ShipsClient } from "@/bot/integrations/ships";
@@ -12,7 +10,7 @@ import { DISCORD_IDS } from "@/lib/protocol/constants";
 
 const URL_PATTERN = /https?:\/\/\S+/i;
 
-type MessageData = z.infer<typeof MessageCreatePacket>["data"];
+type MessageData = MessageCreatePacketType["data"];
 type Attachment = MessageData["attachments"][number];
 
 function collectFromSnapshots(data: MessageData): {

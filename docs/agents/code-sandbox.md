@@ -80,6 +80,7 @@ Copy the ID it prints into your Vercel environment as `SANDBOX_BASE_SNAPSHOT_ID`
 
 After the subagent emits its final "Summary" / "Answer" message, `codePostFinish` runs as an async generator that yields additional `UIMessage`s (which the orchestrator surfaces as the subagent's apparent trailing output).
 
+0. Strip the machine-readable ` ```entities ` trailer from the final text — it's for the orchestrator only and must not leak into commit messages, PR bodies, or the relayed status.
 1. `git status --porcelain` — if the working tree is clean, yield "No changes to commit" and return.
 2. Parse a commit message. The expected format is a trailing `**Commit message**: <message>` line in the subagent's final text; if that's missing, the first non-empty line is used (truncated to 72 chars).
 3. `git add -A && git commit -m <msg>`.
@@ -90,6 +91,10 @@ After the subagent emits its final "Summary" / "Answer" message, `codePostFinish
 6. Yield a final message appending `**PR**: <url>` to the subagent's summary.
 
 If any step fails, the generator yields a short diagnostic and returns — the subagent's own text is still visible to the user, and the feature branch state is whatever it was when the failure occurred.
+
+### Partial-work labeling
+
+`codePostFinish` receives the run's cap outcome (`exhausted` / `hitStepCap`) from the delegation wrapper. When the run used every step under its 60-step cap, the work cannot be assumed complete — even if the forced wrap-up step produced a clean summary. In that case every outward artifact is labeled: status messages get a `⚠️ The coding agent hit its step cap` note, the PR title gets a `[partial]` prefix, and the PR body opens with a `[!WARNING]` admonition so reviewers don't treat the diff as finished.
 
 ## Session lifecycle
 

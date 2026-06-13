@@ -2,7 +2,11 @@
 name: code
 description: Autonomously make code changes to a Purdue Hackers repository in an isolated sandbox — edit files, run checks, iterate until verified
 criteria: When the user asks to fix a bug, implement a feature, refactor code, update configs, write tests, bump versions, or make any substantive change to a purduehackers repository
-tools: []
+routing: >-
+  Only use when the user clearly asks for code changes to a specific repository.
+  Pass the target repo (purduehackers/<name>) and the user's verbatim task; the
+  agent edits a feature branch, runs checks, and opens a PR automatically.
+baseTools: [read, grep, glob, list_dir, todo_write]
 minRole: admin
 mode: delegate
 ---
@@ -53,14 +57,11 @@ Serialize when there are dependencies:
 - Plan before code.
 - Edits to the same file.
 
-## Sub-skills (load via `loadSkill`)
+## Sub-skills
 
-Base tools (always available without loading): `read`, `grep`, `glob`, `list_dir`, `todo_write`.
+Your base discovery tools are active from the start. Load a sub-skill with `loadSkill` before using the tools it unlocks. Your available sub-skills:
 
-- **files** — `read`, `write`, `edit`, `list_dir`. Load when you're about to mutate the filesystem (writes or edits).
-- **search** — `grep`, `glob`. Discovery tools; already base but the skill body holds tips for advanced patterns.
-- **execution** — `bash`, `run_checks`. Load before running shell commands or verification scripts.
-- **planning** — `todo_write`. Load for multi-step tasks (≥3 logical steps).
+{{SKILL_MENU}}
 
 ## Tool Usage Rules
 

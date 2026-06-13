@@ -1,7 +1,6 @@
-import { tool } from "ai";
 import { z } from "zod";
 
-import { access } from "../../policy/index.ts";
+import { defineTool } from "../_shared/define-tool.ts";
 import { hcbGet, hcbOrgSlug, hcbPaginate, hcbTxnUrl, paginationQuery } from "./client.ts";
 import { paginationInputShape } from "./constants.ts";
 
@@ -34,85 +33,81 @@ function projectTransaction(t: HcbTransaction) {
 }
 
 /** List the most recent transactions. */
-export const list_transactions = access(
-  { risk: "read" },
-  tool({
-    description:
-      "List recent HCB transactions for Purdue Hackers — newest first. Each transaction includes id, date, amount_cents (negative = outflow), memo, type, pending flag, and a receipts summary {count, missing}. Receipt files themselves are NOT available via HCB's API; only whether a receipt is attached.",
-    inputSchema: z.object(paginationInputShape),
-    execute: async (input) => {
-      const data = await hcbGet<HcbTransaction[]>(
-        `/organizations/${hcbOrgSlug()}/transactions`,
-        paginationQuery(input),
-      );
-      return JSON.stringify(data.map(projectTransaction));
-    },
-  }),
-);
+export const list_transactions = defineTool({
+  name: "list_transactions",
+  domain: "finance",
+  description:
+    "List recent HCB transactions for Purdue Hackers — newest first. Each transaction includes id, date, amount_cents (negative = outflow), memo, type, pending flag, and a receipts summary {count, missing}. Receipt files themselves are NOT available via HCB's API; only whether a receipt is attached.",
+  access: { risk: "read" },
+  input: z.object(paginationInputShape),
+  execute: async (input) => {
+    const data = await hcbGet<HcbTransaction[]>(
+      `/organizations/${hcbOrgSlug()}/transactions`,
+      paginationQuery(input),
+    );
+    return JSON.stringify(data.map(projectTransaction));
+  },
+});
 
 /** Get a single transaction by id. */
-export const get_transaction = access(
-  { risk: "read" },
-  tool({
-    description:
-      "Get a single HCB transaction by id. Returns a compact summary with id, date, amount_cents (negative = outflow), memo, type, pending flag, receipts summary {count, missing}, and href. Receipt files themselves are NOT available via HCB's API; only whether a receipt is attached — visit hcb.hackclub.com/hcb/{id} for the actual file.",
-    inputSchema: z.object({
-      id: z.string().describe("HCB transaction id (e.g. 'txn_abc123')"),
-    }),
-    execute: async ({ id }) => {
-      const data = await hcbGet<HcbTransaction>(`/transactions/${id}`);
-      return JSON.stringify({ ...projectTransaction(data), href: hcbTxnUrl(id) });
-    },
+export const get_transaction = defineTool({
+  name: "get_transaction",
+  domain: "finance",
+  description:
+    "Get a single HCB transaction by id. Returns a compact summary with id, date, amount_cents (negative = outflow), memo, type, pending flag, receipts summary {count, missing}, and href. Receipt files themselves are NOT available via HCB's API; only whether a receipt is attached — visit hcb.hackclub.com/hcb/{id} for the actual file.",
+  access: { risk: "read" },
+  input: z.object({
+    id: z.string().describe("HCB transaction id (e.g. 'txn_abc123')"),
   }),
-);
+  execute: async ({ id }) => {
+    const data = await hcbGet<HcbTransaction>(`/transactions/${id}`);
+    return JSON.stringify({ ...projectTransaction(data), href: hcbTxnUrl(id) });
+  },
+});
 
 /** Search transactions by memo substring, amount range, and/or date range. */
-export const find_transactions = access(
-  { risk: "read" },
-  tool({
-    description:
-      "Search HCB transactions by memo substring, amount range (in cents), and/or ISO date range. Client-side filter over paginated results (capped). Useful for answering 'find the $42 charge for badges' or 'what did we spend on food last month?'.",
-    inputSchema: z.object({
-      memo_contains: z
-        .string()
-        .optional()
-        .describe("Case-insensitive substring match on the memo field"),
-      min_amount_cents: z
-        .number()
-        .int()
-        .optional()
-        .describe("Inclusive lower bound on amount_cents (signed — negatives are outflows)"),
-      max_amount_cents: z
-        .number()
-        .int()
-        .optional()
-        .describe("Inclusive upper bound on amount_cents"),
-      since: z.iso.date().optional().describe("ISO date (YYYY-MM-DD) — on/after this date"),
-      until: z.iso.date().optional().describe("ISO date (YYYY-MM-DD) — on/before this date"),
-      pending: z
-        .enum(["any", "only", "exclude"])
-        .optional()
-        .describe("Filter by pending status (default 'any')"),
-      limit: z
-        .number()
-        .int()
-        .min(1)
-        .max(200)
-        .optional()
-        .describe("Max results to return (default 50)"),
-    }),
-    execute: async (input) => {
-      const all = await hcbPaginate<HcbTransaction>(
-        `/organizations/${hcbOrgSlug()}/transactions`,
-        {},
-        { maxItems: 500, maxPages: 10, perPage: 100 },
-      );
-      const predicate = buildTransactionFilter(input);
-      const filtered = all.filter(predicate);
-      return JSON.stringify(filtered.slice(0, input.limit ?? 50).map(projectTransaction));
-    },
+export const find_transactions = defineTool({
+  name: "find_transactions",
+  domain: "finance",
+  description:
+    "Search HCB transactions by memo substring, amount range (in cents), and/or ISO date range. Client-side filter over paginated results (capped). Useful for answering 'find the $42 charge for badges' or 'what did we spend on food last month?'.",
+  access: { risk: "read" },
+  input: z.object({
+    memo_contains: z
+      .string()
+      .optional()
+      .describe("Case-insensitive substring match on the memo field"),
+    min_amount_cents: z
+      .number()
+      .int()
+      .optional()
+      .describe("Inclusive lower bound on amount_cents (signed — negatives are outflows)"),
+    max_amount_cents: z.number().int().optional().describe("Inclusive upper bound on amount_cents"),
+    since: z.iso.date().optional().describe("ISO date (YYYY-MM-DD) — on/after this date"),
+    until: z.iso.date().optional().describe("ISO date (YYYY-MM-DD) — on/before this date"),
+    pending: z
+      .enum(["any", "only", "exclude"])
+      .optional()
+      .describe("Filter by pending status (default 'any')"),
+    limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(200)
+      .optional()
+      .describe("Max results to return (default 50)"),
   }),
-);
+  execute: async (input) => {
+    const all = await hcbPaginate<HcbTransaction>(
+      `/organizations/${hcbOrgSlug()}/transactions`,
+      {},
+      { maxItems: 500, maxPages: 10, perPage: 100 },
+    );
+    const predicate = buildTransactionFilter(input);
+    const filtered = all.filter(predicate);
+    return JSON.stringify(filtered.slice(0, input.limit ?? 50).map(projectTransaction));
+  },
+});
 
 interface FindFilter {
   memo_contains?: string;

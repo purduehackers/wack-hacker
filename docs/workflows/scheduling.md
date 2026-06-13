@@ -15,8 +15,9 @@ Key pieces:
 - **Queue wake-ups**: `src/lib/tasks/queue/schedule-fire.ts` — `sendScheduledFire(taskId, target, delaySec)`. Clamps `delaySeconds` to 6d and sets `retentionSeconds=7d`. Stamps `idempotencyKey = "${taskId}:${targetIso}"` so tool retries / duplicate sends collapse into one.
 - **Fire handler**: `src/lib/tasks/queue/handlers/scheduled-task-fire.ts` — single handler for `task: "scheduled-task-fire"`. Short-circuits if the row is missing, cancelled, or superseded; otherwise records drift, executes the action, and either marks completed (one-time) or enqueues the next occurrence (recurring).
 - **Cron parser**: `src/lib/tasks/cron.ts` — hand-rolled next-occurrence for 5-field cron expressions. Default timezone is `America/New_York`.
+- **Reconciliation sweep**: `src/bot/handlers/crons/scheduled-task-sweep/` — daily cron that re-enqueues wake-ups for active rows whose `nextRunAt` is stuck more than an hour in the past (see failure modes below).
 
-The queue used is the same `tasks` topic served by `src/app/api/tasks/route.ts`, alongside the existing `send-message` task. Visibility timeout on that route is `600s` so agent-action fires don't get redelivered mid-stream.
+The queue used is the `tasks` topic served by `src/app/api/tasks/route.ts`. Visibility timeout on that route is `600s` so agent-action fires don't get redelivered mid-stream.
 
 ## Tools
 
@@ -45,6 +46,7 @@ Agent-action fires re-resolve the creator's **current** Discord roles (guild mem
 - **Cancellation race**: once the handler reads `status='active'`, it runs to completion. A simultaneous `cancel_task` sets `status='cancelled'`; the next wake-up sees it and no-ops.
 - **Invalid cron at re-enqueue time**: handler sets `status='failed'` and throws so the error surfaces in Sentry.
 - **Partial-write on recurring re-enqueue**: `finalizeFire` sends the next queue message before updating the row. If the DB write fails after the send, the row is left pointing at the old target while the queue already carries the new one. The supersede check uses `row.nextRunAt > targetIso` (ISO 8601 sorts lexicographically), so a stale row that's _behind_ the delivered `targetIso` still fires — the chain self-heals. A row that's _ahead_ of `targetIso` is still treated as superseded (normal redelivery dedup).
+- **Action fails through every retry (chain death)**: `claimFire` bumps `lastFiredAt` _before_ the action runs, so when the action throws and the queue retries, every retry fails the claim and short-circuits — and once the message exhausts `MAX_RETRIES` it's acked with the row still `active`, `nextRunAt` stuck in the past, and **no message in flight**. Nothing would ever re-enqueue it. Two-part fix: (1) on a failed claim the handler re-reads the row, and if the schedule never advanced past `targetIso` it finalizes _without re-running the action_ (`healUnfinalizedClaim`) — recurring chains re-arm, one-time tasks are marked `failed` (not `completed`; the action never verifiably ran); (2) the daily `scheduled-task-sweep` cron re-enqueues a fire for any active row stuck >1h, which also covers wake-ups lost before any claim (dropped checkpoint hop, message acked pre-claim). The sweep catches `DuplicateMessageError` per row — a duplicate `(taskId, targetIso)` idempotency key inside the dedup window throws rather than deduping silently. `finalizeFire` catches it too: a heal retry after a partial write recomputes the same next target while its key is still in the window, and since the wake-up already being in flight _is_ the goal state, it advances the row instead of failing the delivery.
 
 ## Observability
 
@@ -56,5 +58,7 @@ Per-fire metrics emitted from the handler:
 - `scheduled_task.checkpoint_hop` — counter when the handler detects an early delivery and re-enqueues.
 - `scheduled_task.recurring_parse_error` — counter on invalid-cron failures.
 - `scheduled_task.action_error` — counter when the action throws.
+- `scheduled_task.claim_healed` — counter when a failed claim turns out to be an unfinalized prior delivery (recurring re-armed, or one-time marked `failed`). Tagged by `schedule_type`.
+- `scheduled_task.swept` — counter per stale row the reconciliation sweep re-enqueues. Tagged by `schedule_type`.
 
 Row-level: `scheduled_tasks.fireCount`, `lastFiredAt`, and `maxDriftMs` are updated on every fire so you can spot-check drift per task.

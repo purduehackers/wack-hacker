@@ -1,12 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import {
-  messagePacket,
-  reactionPacket,
-  deletePacket,
-  voiceStatePacket,
-  threadCreatePacket,
-} from "../test/fixtures";
+import { messagePacket, reactionPacket, deletePacket } from "../test/fixtures";
 import { PacketCodec, PacketSchema } from "./packets";
 
 describe("PacketCodec", () => {
@@ -33,17 +27,6 @@ describe("PacketCodec", () => {
   it("roundtrips a message delete packet", () => {
     const decoded = PacketCodec.decode(PacketCodec.encode(deletePacket()));
     expect(decoded.type).toBe("GATEWAY_MESSAGE_DELETE");
-  });
-
-  it("roundtrips a voice state update packet", () => {
-    const decoded = PacketCodec.decode(PacketCodec.encode(voiceStatePacket("vc-1")));
-    expect(decoded.type).toBe("GATEWAY_VOICE_STATE_UPDATE");
-    if (decoded.type === "GATEWAY_VOICE_STATE_UPDATE") expect(decoded.data.channelId).toBe("vc-1");
-  });
-
-  it("roundtrips a thread create packet", () => {
-    const decoded = PacketCodec.decode(PacketCodec.encode(threadCreatePacket()));
-    expect(decoded.type).toBe("GATEWAY_THREAD_CREATE");
   });
 
   it("preserves optional fields on messages", () => {
@@ -85,13 +68,17 @@ describe("PacketCodec", () => {
     });
   });
 
-  it("handles voice state with null channelId", () => {
-    const decoded = PacketCodec.decode(PacketCodec.encode(voiceStatePacket(null)));
-    if (decoded.type === "GATEWAY_VOICE_STATE_UPDATE") expect(decoded.data.channelId).toBeNull();
-  });
-
   it("rejects invalid JSON", () => {
     expect(() => PacketCodec.decode("not json")).toThrow();
+  });
+
+  it("rejects packet types removed from the protocol (previous-deploy traffic)", () => {
+    const raw = JSON.stringify({
+      type: "GATEWAY_VOICE_STATE_UPDATE",
+      timestamp: new Date("2024-01-01"),
+      data: { userId: "u1", guildId: "g1", channelId: null, sessionId: "s1" },
+    });
+    expect(() => PacketCodec.decode(raw)).toThrow();
   });
 });
 
@@ -113,17 +100,6 @@ describe("PacketCodec - mentions defaulting", () => {
     const decoded = PacketCodec.decode(raw);
     if (decoded.type !== "GATEWAY_MESSAGE_CREATE") throw new Error("wrong type");
     expect(decoded.data.mentions).toEqual([]);
-  });
-
-  it("leaves mentions undefined on MESSAGE_UPDATE when omitted (no default leak)", () => {
-    const raw = JSON.stringify({
-      type: "GATEWAY_MESSAGE_UPDATE",
-      timestamp: new Date("2024-01-01"),
-      data: { id: "msg-1", channelId: "ch-1", guildId: "guild-1" },
-    });
-    const decoded = PacketCodec.decode(raw);
-    if (decoded.type !== "GATEWAY_MESSAGE_UPDATE") throw new Error("wrong type");
-    expect(decoded.data.mentions).toBeUndefined();
   });
 });
 

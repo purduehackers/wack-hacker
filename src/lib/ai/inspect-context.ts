@@ -1,40 +1,23 @@
 import type { ContextSnapshot, ToolDefSnapshot } from "@/bot/context-snapshot";
 
 import type { UserRole } from "./constants.ts";
-import type { SkillBundle } from "./skills/types.ts";
 import type { CategoryBreakdown, CategoryItem, ContextBreakdown, ModelInfo } from "./types.ts";
 
+import { DELEGATE_PREFIX } from "./constants.ts";
 import { AgentContext } from "./context.ts";
 import { fetchModelInfo } from "./models-dev.ts";
-import { SKILL_MANIFEST as DISCORD_SUBSKILLS } from "./skills/generated/domains/discord.ts";
-import { SKILL_MANIFEST as FIGMA_SUBSKILLS } from "./skills/generated/domains/figma.ts";
-import { SKILL_MANIFEST as GITHUB_SUBSKILLS } from "./skills/generated/domains/github.ts";
-import { SKILL_MANIFEST as LINEAR_SUBSKILLS } from "./skills/generated/domains/linear.ts";
-import { SKILL_MANIFEST as NOTION_SUBSKILLS } from "./skills/generated/domains/notion.ts";
-import { SKILL_MANIFEST as SENTRY_SUBSKILLS } from "./skills/generated/domains/sentry.ts";
-import { SKILL_MANIFEST as SHOPPING_SUBSKILLS } from "./skills/generated/domains/shopping.ts";
+import { DOMAIN_SUBSKILLS } from "./skills/generated/subskills.ts";
 import { SkillRegistry } from "./skills/registry.ts";
 
 export type { CategoryBreakdown, CategoryItem, ContextBreakdown, ModelInfo } from "./types.ts";
 
-const DELEGATE_PREFIX = "delegate_";
-
 /**
- * Domain → subskill manifest. Subskills are loaded on demand inside delegate
- * subagents (via load_skill); they don't enter the orchestrator's window. The
- * inspector lists them under each delegate so organizers can see what's
- * loadable without those tokens inflating the input estimate.
+ * Sub-skills are loaded on demand inside delegate subagents (via loadSkill);
+ * they don't enter the orchestrator's window. The inspector lists them under
+ * each delegate so organizers can see what's loadable without those tokens
+ * inflating the input estimate. `DOMAIN_SUBSKILLS` is the generated data-only
+ * table — it carries manifests but no tool implementations.
  */
-const DOMAIN_SUBSKILLS: Record<string, Record<string, SkillBundle>> = {
-  linear: LINEAR_SUBSKILLS,
-  github: GITHUB_SUBSKILLS,
-  discord: DISCORD_SUBSKILLS,
-  notion: NOTION_SUBSKILLS,
-  figma: FIGMA_SUBSKILLS,
-  sentry: SENTRY_SUBSKILLS,
-  shopping: SHOPPING_SUBSKILLS,
-};
-
 function loadableSkillsFor(domain: string, role: UserRole): CategoryItem[] | undefined {
   const manifest = DOMAIN_SUBSKILLS[domain];
   if (!manifest) return undefined;

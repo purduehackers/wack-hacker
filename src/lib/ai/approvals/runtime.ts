@@ -46,16 +46,18 @@ export function wrapApprovalTools(tools: ToolSet, opts: WrapApprovalOptions): To
   return out;
 }
 
+// The approval protocol is stated once in the agent preambles (SYSTEM_PROMPT /
+// SUBAGENT_PREAMBLE); per-tool text is kept to a short marker + reason hint so
+// ~155 wrapped tools don't each re-bill a paragraph of boilerplate per step.
+const REASON_DESCRIPTION = "One-sentence reason shown to the approving user.";
+
 function buildWrappedSchema(
   originalSchema: z.ZodTypeAny | undefined,
   staticReason: string | undefined,
 ): z.ZodTypeAny {
-  const description = staticReason
-    ? "Short explanation of why this tool call is needed. Shown to the user for approval. Optional — falls back to the configured static reason when omitted."
-    : "Short explanation of why this tool call is needed. Shown to the user for approval.";
   const reasonSchema = staticReason
-    ? z.string().optional().describe(description)
-    : z.string().describe(description);
+    ? z.string().optional().describe(REASON_DESCRIPTION)
+    : z.string().describe(REASON_DESCRIPTION);
 
   if (originalSchema === undefined) {
     return z.object({ _reason: reasonSchema });
@@ -72,14 +74,8 @@ function buildWrappedSchema(
   );
 }
 
-function buildWrappedDescription(
-  originalDescription: string | undefined,
-  staticReason: string | undefined,
-): string {
-  const note = staticReason
-    ? "⚠️ Requires user approval before execution. You may include a concise `_reason`; when omitted, the tool's configured static reason is used."
-    : "⚠️ Requires user approval before execution. You MUST include a concise `_reason` in your arguments explaining why this action is needed.";
-  return `${originalDescription ?? ""}\n\n${note}`;
+function buildWrappedDescription(originalDescription: string | undefined): string {
+  return originalDescription ? `${originalDescription}\n\n[approval]` : "[approval]";
 }
 
 async function postApprovalMessage(args: {
@@ -166,7 +162,7 @@ export function wrapToolWithApproval(
   const originalExecute = original.execute as RuntimeExecuteFn | undefined;
 
   return tool({
-    description: buildWrappedDescription(original.description, staticReason),
+    description: buildWrappedDescription(original.description),
     inputSchema: schemaToUse,
     execute: async function* (rawInput: unknown, runtime: unknown) {
       const { context, delegateName, audit } = wrapOpts;

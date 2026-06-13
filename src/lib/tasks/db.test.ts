@@ -22,8 +22,14 @@ vi.mock("@libsql/client", async () => {
 
 const { getDb } = await import("../db/index.ts");
 const { scheduledTasks } = await import("../db/schemas/scheduled-tasks.ts");
-const { saveScheduledTask, getScheduledTask, updateScheduledTask, listScheduledTasks, claimFire } =
-  await import("./db.ts");
+const {
+  saveScheduledTask,
+  getScheduledTask,
+  updateScheduledTask,
+  listScheduledTasks,
+  listOverdueActiveTasks,
+  claimFire,
+} = await import("./db.ts");
 
 beforeAll(async () => {
   const migrationsDir = "./drizzle";
@@ -181,6 +187,40 @@ describe("claimFire", () => {
 
   it("returns false when the row doesn't exist", async () => {
     expect(await claimFire("ghost", "2026-04-23T13:00:00.000Z")).toBe(false);
+  });
+});
+
+describe("listOverdueActiveTasks", () => {
+  const cutoffIso = "2026-04-23T12:00:00.000Z";
+
+  beforeEach(async () => {
+    await saveScheduledTask(makeRow({ id: "stale", nextRunAt: "2026-04-23T11:00:00.000Z" }));
+    await saveScheduledTask(makeRow({ id: "fresh", nextRunAt: "2026-04-23T13:00:00.000Z" }));
+    await saveScheduledTask(
+      makeRow({
+        id: "stale-cancelled",
+        nextRunAt: "2026-04-23T11:00:00.000Z",
+        status: ScheduledTaskStatus.Cancelled,
+      }),
+    );
+    await saveScheduledTask(
+      makeRow({
+        id: "stale-completed",
+        nextRunAt: "2026-04-23T11:00:00.000Z",
+        status: ScheduledTaskStatus.Completed,
+      }),
+    );
+    await saveScheduledTask(makeRow({ id: "no-next-run", nextRunAt: null }));
+  });
+
+  it("returns only active rows whose nextRunAt is before the cutoff", async () => {
+    const rows = await listOverdueActiveTasks(cutoffIso);
+    expect(rows.map((r) => r.id)).toEqual(["stale"]);
+  });
+
+  it("excludes rows sitting exactly at the cutoff", async () => {
+    const rows = await listOverdueActiveTasks("2026-04-23T11:00:00.000Z");
+    expect(rows).toEqual([]);
   });
 });
 

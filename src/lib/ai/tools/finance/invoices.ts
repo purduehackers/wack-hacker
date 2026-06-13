@@ -1,7 +1,6 @@
-import { tool } from "ai";
 import { z } from "zod";
 
-import { access } from "../../policy/index.ts";
+import { defineTool } from "../_shared/define-tool.ts";
 import { hcbGet, hcbOrgSlug, hcbPaginate, paginationQuery } from "./client.ts";
 import { paginationInputShape } from "./constants.ts";
 
@@ -33,53 +32,53 @@ function projectInvoice(i: HcbInvoice) {
 }
 
 /** List all invoices. */
-export const list_invoices = access(
-  { risk: "read" },
-  tool({
-    description:
-      "List invoices sent by the org — sponsor name, amount_cents, status (open/paid/void), due/paid dates, and memo.",
-    inputSchema: z.object(paginationInputShape),
-    execute: async (input) => {
-      const data = await hcbGet<HcbInvoice[]>(
-        `/organizations/${hcbOrgSlug()}/invoices`,
-        paginationQuery(input),
-      );
-      return JSON.stringify(data.map(projectInvoice));
-    },
-  }),
-);
+export const list_invoices = defineTool({
+  name: "list_invoices",
+  domain: "finance",
+  description:
+    "List invoices sent by the org — sponsor name, amount_cents, status (open/paid/void), due/paid dates, and memo.",
+  access: { risk: "read" },
+  input: z.object(paginationInputShape),
+  execute: async (input) => {
+    const data = await hcbGet<HcbInvoice[]>(
+      `/organizations/${hcbOrgSlug()}/invoices`,
+      paginationQuery(input),
+    );
+    return JSON.stringify(data.map(projectInvoice));
+  },
+});
 
 /** Get a single invoice by ID. */
-export const get_invoice = access(
-  { risk: "read" },
-  tool({
-    description:
-      "Get a single invoice by ID — sponsor name, amount_cents, status, due/paid dates, and memo.",
-    inputSchema: z.object({
-      id: z.string().describe("Invoice ID"),
-    }),
-    execute: async ({ id }) => {
-      const data = await hcbGet<HcbInvoice>(`/invoices/${id}`);
-      return JSON.stringify(projectInvoice(data));
-    },
+export const get_invoice = defineTool({
+  name: "get_invoice",
+  domain: "finance",
+  description:
+    "Get a single invoice by ID — sponsor name, amount_cents, status, due/paid dates, and memo.",
+  access: { risk: "read" },
+  input: z.object({
+    id: z.string().describe("Invoice ID"),
   }),
-);
+  execute: async ({ id }) => {
+    const data = await hcbGet<HcbInvoice>(`/invoices/${id}`);
+    return JSON.stringify(projectInvoice(data));
+  },
+});
 
 /** List outstanding (unpaid) invoices. */
-export const list_open_invoices = access(
-  { risk: "read" },
-  tool({
-    description:
-      "List outstanding (unpaid) invoices only — drives fundraising follow-ups with sponsors. Paginates through all invoices and filters to statuses that aren't paid/void.",
-    inputSchema: z.object({}),
-    execute: async () => {
-      const all = await hcbPaginate<HcbInvoice>(
-        `/organizations/${hcbOrgSlug()}/invoices`,
-        {},
-        { maxItems: 500, maxPages: 10, perPage: 100 },
-      );
-      const open = all.filter((i) => !CLOSED_INVOICE_STATUSES.has((i.status ?? "").toLowerCase()));
-      return JSON.stringify(open.map(projectInvoice));
-    },
-  }),
-);
+export const list_open_invoices = defineTool({
+  name: "list_open_invoices",
+  domain: "finance",
+  description:
+    "List outstanding (unpaid) invoices only — drives fundraising follow-ups with sponsors. Paginates through all invoices and filters to statuses that aren't paid/void.",
+  access: { risk: "read" },
+  input: z.object({}),
+  execute: async () => {
+    const all = await hcbPaginate<HcbInvoice>(
+      `/organizations/${hcbOrgSlug()}/invoices`,
+      {},
+      { maxItems: 500, maxPages: 10, perPage: 100 },
+    );
+    const open = all.filter((i) => !CLOSED_INVOICE_STATUSES.has((i.status ?? "").toLowerCase()));
+    return JSON.stringify(open.map(projectInvoice));
+  },
+});

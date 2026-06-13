@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 
 import { createMemoryRedis } from "@/lib/test/fixtures";
 
-import type { ContextSnapshot } from "./context-snapshot";
+import type { StoredContextSnapshot } from "./context-snapshot";
 
 import { ContextSnapshotStore } from "./context-snapshot";
 
@@ -10,8 +10,7 @@ vi.mock("@upstash/redis", () => ({
   Redis: { fromEnv: () => createMemoryRedis() },
 }));
 
-const sampleSnapshot: ContextSnapshot = {
-  model: "anthropic/claude-sonnet-4.6",
+const sampleSnapshot: StoredContextSnapshot = {
   context: {
     userId: "u-1",
     username: "rayhan",
@@ -19,8 +18,6 @@ const sampleSnapshot: ContextSnapshot = {
     channel: { id: "ch-1", name: "bot-testing" },
     date: "Wednesday, April 15, 2026",
   },
-  systemPrompt: "You are a helpful assistant...",
-  tools: [{ name: "resolve_organizer", description: "Resolve an organizer.", inputSchema: {} }],
   messages: [
     { role: "user", content: "hi" },
     { role: "assistant", content: "hello" },
@@ -43,7 +40,7 @@ describe("ContextSnapshotStore", () => {
     const store = new ContextSnapshotStore(createMemoryRedis());
     await store.set("ch-1", undefined, sampleSnapshot);
     const out = await store.get("ch-1");
-    expect(out?.model).toBe("anthropic/claude-sonnet-4.6");
+    expect(out?.turnCount).toBe(1);
     expect(out?.messages).toHaveLength(2);
   });
 

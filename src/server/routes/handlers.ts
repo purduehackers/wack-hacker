@@ -5,7 +5,6 @@ import type { ChatHookEvent } from "@/workflows/chat";
 
 import * as userEvents from "@/bot/handlers/events";
 import { handleMention } from "@/bot/handlers/events";
-import { isBotMention } from "@/bot/mention";
 import { EventRouter } from "@/bot/router";
 import { AgentContext } from "@/lib/ai/context";
 import { createWideLogger } from "@/lib/logging/wide";
@@ -14,13 +13,13 @@ import { captureTraceparent, withSpan } from "@/lib/otel/tracing";
 
 export const router = new EventRouter();
 
-router.onMention(handleMention);
+router.on("mention", handleMention);
 
-router.onMessage(async (packet, ctx) => {
+router.on("message", async (packet, ctx) => {
   // Mentions are already handled by `handleMention`, which calls `resumeHook`
   // with the mention prefix stripped. Forwarding again here would duplicate
   // the turn and push the un-stripped content into the conversation.
-  if (isBotMention(packet.data, ctx.botUserId)) return;
+  if (ctx.isBotMention) return;
   if (packet.data.thread) return;
 
   const channelId = packet.data.channel.id;
@@ -67,27 +66,5 @@ router.onMessage(async (packet, ctx) => {
 
 for (const h of Object.values(userEvents) as EventHandler[]) {
   if (!h?.type) continue;
-  switch (h.type) {
-    case "message":
-      router.onMessage((p, c) => h.handle(p, c));
-      break;
-    case "reactionAdd":
-      router.onReactionAdd((p, c) => h.handle(p, c));
-      break;
-    case "reactionRemove":
-      router.onReactionRemove((p, c) => h.handle(p, c));
-      break;
-    case "messageDelete":
-      router.onMessageDelete((p, c) => h.handle(p, c));
-      break;
-    case "messageUpdate":
-      router.onMessageUpdate((p, c) => h.handle(p, c));
-      break;
-    case "voiceStateUpdate":
-      router.onVoiceStateUpdate((p, c) => h.handle(p, c));
-      break;
-    case "threadCreate":
-      router.onThreadCreate((p, c) => h.handle(p, c));
-      break;
-  }
+  router.register(h);
 }

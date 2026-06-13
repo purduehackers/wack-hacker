@@ -7,35 +7,40 @@ The queue consumer is split across two files.
 The Next.js route file Vercel attaches the `discord-events` queue trigger to. It:
 
 1. Uses `handleCallback<string>` from `@/lib/tasks/queue/client` to wrap the POST handler with queue-aware retry logic.
-2. Decodes the payload via `PacketCodec.decode(encoded)`.
+2. Decodes the payload via `PacketCodec.decode(encoded)`. Decode failures are deterministic, so they are **dropped immediately** with a `discord.event.decode_failed` metric instead of retried — this is what absorbs in-flight packets of a type the previous deploy still published.
 3. Logs the packet type and the delivery attempt count.
-4. Constructs a fresh `ConversationStore` and forwards to `processEvent(packet, store)`.
+4. Constructs a fresh `ConversationStore` and forwards to `processEvent(packet, store, dispatch)`, injecting `router.dispatch` as the dispatcher.
 
-Retries up to **3 times** with exponential backoff (`Math.min(300, 2 ** deliveryCount * 5)` seconds between attempts). After the third failure, it returns `{ acknowledge: true }` to drop the message.
+The retry policy is `eventRetryPolicy` (exported from `src/server/process-event.ts`):
+
+- **Generic errors**: up to **3 deliveries** with exponential backoff (`Math.min(300, 2 ** deliveryCount * 5)` seconds between attempts), then `{ acknowledge: true }` to drop the message.
+- **`LockContentionError`**: up to **10 deliveries** on a fixed **3-second** delay — the channel lock is legitimately held for multi-second mention dispatches, so contention gets a larger budget than real failures. It's logged as a warning, not through the error path.
+
+Only a **throw** from the handler reaches the retry policy — `@vercel/queue`'s `MessageHandler` return value is ignored.
 
 ## `src/server/process-event.ts`
 
 The actual dispatch logic. For each packet it:
 
-1. **Dedupes** using `ConversationStore.dedup(key)` — atomic `SET NX` against Redis, 5-minute window by default. Dedup keys are packet-type-specific (see below). If the key already exists, the packet is dropped silently (`log.debug "Dedup hit"`).
+1. **Dedupes** using `ConversationStore.dedup(key)` — atomic `SET NX` against Redis, 5-minute window by default. Dedup keys are packet-type-specific (see below). If the key already exists, the packet is dropped (`event.dedup_hit` metric + wide event).
 2. **Locks per channel** for `MESSAGE_CREATE` only via `ConversationStore.acquireLock(channelId)` — 30-second TTL, token-matched release (Lua script). Other packet types skip locking.
-3. **If the lock can't be acquired**, the packet is **dropped** with a warning log — it does not wait. Vercel Queues will retry the delivery later, by which point the lock has likely expired.
-4. **Dispatches** to `router.dispatch(packet, ctx)` with a freshly-constructed `ctx` containing a Discord API client (`new API(new REST({ version: "10" }).setToken(env.DISCORD_BOT_TOKEN))`), the `ConversationStore`, and `env.DISCORD_BOT_CLIENT_ID` as the bot user ID.
+3. **If the lock can't be acquired**, the dedup claim is released and a typed `LockContentionError` is thrown — the queue redelivers ~3 seconds later (see the retry policy above), by which point the lock holder has usually finished.
+4. **Dispatches** through the injected dispatcher (`router.dispatch(packet, ctx)` in production) with a freshly-constructed `ctx` containing a Discord API client, the `ConversationStore`, and `env.DISCORD_BOT_CLIENT_ID` as the bot user ID.
 5. **Releases** the lock in a `finally`.
+6. **On any dispatch failure**, releases the dedup claim before rethrowing so the queue's retry actually re-runs the work instead of short-circuiting as a dedup hit. The tradeoff: handlers without their own non-reexecution invariant (e.g. the chat workflow hook loop) can duplicate work if the failure happened after partial side effects — the same accepted tradeoff as the tasks route.
 
 ### Dedup keys
+
+Each packet type's dedup key lives in its protocol event module (`src/lib/protocol/events/`), and `processEvent` looks it up via `getDedupKey(packet)`:
 
 ```
 GATEWAY_MESSAGE_CREATE          → msg:${id}
 GATEWAY_MESSAGE_REACTION_ADD    → react:${messageId}:${userId}:${emojiId ?? emojiName}
 GATEWAY_MESSAGE_REACTION_REMOVE → unreact:${messageId}:${userId}:${emojiId ?? emojiName}
 GATEWAY_MESSAGE_DELETE          → del:${id}
-GATEWAY_MESSAGE_UPDATE          → upd:${id}:${timestamp}
-GATEWAY_VOICE_STATE_UPDATE      → voice:${userId}:${channelId ?? "left"}:${timestamp}
-GATEWAY_THREAD_CREATE           → thread:${id}
 ```
 
-Message updates and voice state updates include the timestamp so a burst of changes on the same entity doesn't get collapsed.
+Keys are built exclusively from Discord-native IDs — never relay-time timestamps, which would defeat dedup across overlapping gateway leaders.
 
 ## ConversationStore
 

@@ -209,6 +209,12 @@ export interface SandboxSessionMetadata {
   snapshotId?: string;
   /** ms since epoch — records when the user last interacted. Drives idle-hibernation. */
   lastUsedAt?: number;
+  /**
+   * Run id of the lifecycle workflow that owns this session's hibernation
+   * watch. A watcher exits when it sees another run's id here, so a new
+   * invocation can take over without two watchers racing the same deadline.
+   */
+  lifecycleRunId?: string;
 }
 
 export interface SandboxSession {

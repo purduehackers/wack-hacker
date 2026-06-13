@@ -7,8 +7,7 @@ import { createDiscordAPI } from "@/lib/discord/client";
 import { createWideLogger } from "@/lib/logging/wide";
 import { countMetric, recordDuration } from "@/lib/metrics";
 import { withSpan } from "@/lib/otel/tracing";
-import { handleCallback, send } from "@/lib/tasks/queue/client";
-import { TASK_TOPIC } from "@/lib/tasks/queue/constants";
+import { handleCallback } from "@/lib/tasks/queue/client";
 import { InvalidTaskPayloadError, UnknownTaskError } from "@/lib/tasks/queue/errors";
 import * as taskHandlers from "@/lib/tasks/queue/handlers";
 
@@ -45,31 +44,6 @@ async function runHandler(
   await handler.handle(parsed.data, discord);
 }
 
-async function enqueueRecurringFollowUp(envelope: TaskEnvelope, logger: Logger): Promise<void> {
-  if (!envelope.recurring) return;
-  const { delaySeconds, maxRepetitions, repetitionCount = 0 } = envelope.recurring;
-  const next = repetitionCount + 1;
-
-  if (maxRepetitions === undefined || next < maxRepetitions) {
-    await send(
-      TASK_TOPIC,
-      { ...envelope, recurring: { ...envelope.recurring, repetitionCount: next } },
-      { delaySeconds },
-    );
-    countMetric("task.recurring_enqueued", { name: envelope.task });
-    logger.set({
-      recurring: {
-        next_iteration: next,
-        max_repetitions: maxRepetitions,
-        delay_seconds: delaySeconds,
-      },
-    });
-    return;
-  }
-  countMetric("task.recurring_complete", { name: envelope.task });
-  logger.set({ recurring: { completed: true, max_repetitions: maxRepetitions } });
-}
-
 export const POST = handleCallback<TaskEnvelope>(
   async (envelope, metadata) => {
     return withSpan(
@@ -99,7 +73,6 @@ export const POST = handleCallback<TaskEnvelope>(
           dedupClaimed = true;
 
           await runHandler(envelope, createDiscordAPI(), logger, startTime);
-          await enqueueRecurringFollowUp(envelope, logger);
 
           countMetric("task.completed", { name: envelope.task });
           logger.emit({ outcome: "ok", duration_ms: Date.now() - startTime });

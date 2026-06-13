@@ -2,23 +2,43 @@
 
 The protocol layer is the thin boundary between Discord's over-the-wire format and the typed `Packet` values the rest of the codebase uses.
 
+## The event table
+
+`src/lib/protocol/events/` owns everything event-shaped. Each gateway event is one module created with `definePacketEvent`, declaring four things in one place:
+
+```ts
+// src/lib/protocol/events/message-delete.ts
+export const messageDeleteEvent = definePacketEvent({
+  type: "GATEWAY_MESSAGE_DELETE", // wire discriminator — never change on a live queue
+  kind: "messageDelete", //          handler-facing kind for defineEvent({ type: ... })
+  data: MessageDeleteData, //        zod schema for the packet's data field
+  dedupKey: (packet) => `del:${packet.data.id}`, // Discord-native IDs only — no wall-clock
+  bind: (client, publish) => {
+    /* discord.js listener + serialization */
+  },
+});
+```
+
+`events/index.ts` lists the modules in the `packetEvents` table and derives the rest: `getDedupKey` (used by the inbound consumer), `bindGatewayEvents` (used by the gateway route), `kindOfPacketType` (used by the router), and the `PacketEventKind`/`PacketForKind` types behind `defineEvent`.
+
+The union today:
+
+```
+GATEWAY_MESSAGE_CREATE            kind: message
+GATEWAY_MESSAGE_REACTION_ADD      kind: reactionAdd
+GATEWAY_MESSAGE_REACTION_REMOVE   kind: reactionRemove
+GATEWAY_MESSAGE_DELETE            kind: messageDelete
+```
+
+**Adding an event** means two new files: the protocol module above (plus its line in the `packetEvents` table) and a bot handler under `src/bot/handlers/events/` (plus its barrel line) — the schema union, dedup, gateway binding, and router kind all follow from the table. Compare with the seven files this used to take.
+
+**Dedup keys must come from Discord-native IDs.** A wall-clock component (relay time) makes every dual-leader duplicate look unique and defeats dedup entirely — that bug is why the old `MESSAGE_UPDATE`/`VOICE_STATE_UPDATE` packets were deleted rather than kept.
+
+**Wire compatibility:** in-flight queue messages from the previous deploy must still decode. New fields must be zod-optional; never rename `type` values. Removed packet types fail decode on the consumer, which drops them with a `discord.event.decode_failed` metric instead of retrying.
+
 ## Packets
 
-`src/lib/protocol/packets.ts` defines the `Packet` type as a Zod-validated discriminated union over event types. Each variant has a `type` (literal `"GATEWAY_*"`), a `timestamp` (`Date`), and a `data` field whose shape depends on the type.
-
-The union:
-
-```
-GATEWAY_MESSAGE_CREATE            MessageCreatePacket
-GATEWAY_MESSAGE_REACTION_ADD      MessageReactionAddPacket
-GATEWAY_MESSAGE_REACTION_REMOVE   MessageReactionRemovePacket
-GATEWAY_MESSAGE_DELETE            MessageDeletePacket
-GATEWAY_MESSAGE_UPDATE            MessageUpdatePacket
-GATEWAY_VOICE_STATE_UPDATE        VoiceStateUpdatePacket
-GATEWAY_THREAD_CREATE             ThreadCreatePacket
-```
-
-`PacketSchema` is the discriminated union, and `PacketCodec` is a `z.codec(z.string(), PacketSchema, ...)` that transparently handles the `timestamp` `Date` rehydration on decode:
+`src/lib/protocol/packets.ts` derives `PacketSchema` (a Zod discriminated union over the table's packet schemas) and `PacketCodec`, a `z.codec(z.string(), PacketSchema, ...)` that transparently handles the `timestamp` `Date` rehydration on decode:
 
 ```ts
 PacketCodec.encode(packet); // → JSON string
@@ -50,5 +70,6 @@ if (!result.valid) return c.json({ error: "Invalid signature" }, 401);
 ## Types and constants
 
 - `src/lib/protocol/types.ts` — the TypeScript types (`Packet`, `MessageCreatePacketType`, `DiscordInteraction`, …).
+- `src/lib/protocol/events/types.ts` — the event-table types (`PacketEventSpec`, `PacketEventKind`, `PacketForKind`).
 - `src/lib/protocol/constants.ts` — `InteractionType`, `InteractionResponseType`, `DISCORD_IDS`.
 - `src/lib/protocol/utils.ts` — small helpers (e.g. `isTextChannel`).

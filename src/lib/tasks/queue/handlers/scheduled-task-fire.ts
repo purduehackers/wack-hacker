@@ -1,5 +1,6 @@
 import type { API } from "@discordjs/core/http-only";
 
+import { DuplicateMessageError } from "@vercel/queue";
 import { z } from "zod";
 
 import type { ScheduledTaskRow } from "@/lib/tasks/types";
@@ -73,7 +74,7 @@ async function runFire(
   // and short-circuits here instead of running the action again.
   const claimed = await claimFire(taskId, targetIso);
   if (!claimed) {
-    logger.emit({ outcome: "skip_already_claimed" });
+    await healUnfinalizedClaim(taskId, targetIso, logger);
     return;
   }
 
@@ -114,6 +115,51 @@ function isSkippable(task: ScheduledTaskRow, targetIso: string, logger: Logger):
     return true;
   }
   return false;
+}
+
+/**
+ * A failed claim is normally a concurrent duplicate delivery — but it is also
+ * the signature of a dead chain: a prior delivery claimed `targetIso`, the
+ * action threw, and retries exhausted before reaching `finalizeFire`. Since
+ * `finalizeFire` is the only place the next occurrence is enqueued, no
+ * in-flight message exists and the row would sit `active` forever. Re-read
+ * the row to tell the two apart: if the schedule never advanced past
+ * `targetIso`, finalize WITHOUT re-running the action (claim-before-action
+ * stays the double-post guard) so recurring chains re-arm; one-time tasks are
+ * marked failed — never completed — because the action never verifiably ran.
+ */
+async function healUnfinalizedClaim(
+  taskId: string,
+  targetIso: string,
+  logger: Logger,
+): Promise<void> {
+  const row = await getScheduledTask(taskId);
+  const advanced =
+    !row ||
+    row.status !== ScheduledTaskStatus.Active ||
+    row.nextRunAt === null ||
+    row.nextRunAt > targetIso;
+  if (advanced) {
+    logger.emit({ outcome: "skip_already_claimed" });
+    return;
+  }
+
+  countMetric("scheduled_task.claim_healed", { schedule_type: row.scheduleType });
+
+  if (row.scheduleType === ScheduleType.Once) {
+    await updateScheduledTask(row.id, {
+      status: ScheduledTaskStatus.Failed,
+      nextRunAt: null,
+      queueMessageId: null,
+    });
+    logger.emit({ outcome: "once_failed_unfinalized" });
+    return;
+  }
+
+  logger.set({ heal: { unfinalized_claim: true } });
+  // No fire happened here, so there is no new drift to record — passing the
+  // stored max keeps finalize's `Math.max` from changing `maxDriftMs`.
+  await finalizeFire(row, targetIso, row.maxDriftMs ?? 0, logger);
 }
 
 async function rehydrateCheckpoint(
@@ -186,7 +232,19 @@ async function finalizeFire(
   }
 
   const delaySec = Math.max(0, Math.floor((next.getTime() - Date.now()) / 1000));
-  const { messageId } = await sendScheduledFire(task.id, next, delaySec);
+  let messageId: string | null;
+  try {
+    ({ messageId } = await sendScheduledFire(task.id, next, delaySec));
+  } catch (err) {
+    // A wake-up for `next` is already in flight — a heal retry after a
+    // partial write (send succeeded, row update lost) recomputes the same
+    // target while its idempotency key is still inside the dedup window.
+    // The goal state already holds, so advance the row instead of failing
+    // the delivery and burning its retries.
+    if (!(err instanceof DuplicateMessageError)) throw err;
+    messageId = null;
+    logger.set({ reschedule: { duplicate_in_flight: true } });
+  }
   await updateScheduledTask(task.id, {
     nextRunAt: next.toISOString(),
     queueMessageId: messageId,

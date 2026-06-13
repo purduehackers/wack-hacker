@@ -4,11 +4,13 @@ Next.js compiles each `route.ts` into its own Vercel Function. Fluid Compute reu
 
 ## Routes
 
-| Route                                 | What runs there                                                                                 |
-| ------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `src/app/api/[[...route]]/route.ts`   | Hono catch-all: mounts `/api/discord/gateway`, `/api/discord/interactions`, `/api/crons/:name`. |
-| `src/app/api/discord/events/route.ts` | Standalone queue consumer for `discord-events` (calls `processEvent` → `EventRouter`).          |
-| `src/app/api/tasks/route.ts`          | Standalone queue consumer for `tasks` (dispatches by `envelope.task` name).                     |
+| Route                                           | What runs there                                                                                                                                                                             |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/app/api/[[...route]]/route.ts`             | Hono catch-all: mounts `/api/discord/gateway`, `/api/discord/interactions`, `/api/crons/:name`.                                                                                             |
+| `src/app/api/discord/events/route.ts`           | Standalone queue consumer for `discord-events` (calls `processEvent` → `EventRouter`).                                                                                                      |
+| `src/app/api/tasks/route.ts`                    | Standalone queue consumer for `tasks` (dispatches by `envelope.task` name).                                                                                                                 |
+| `src/app/.well-known/workflow/v1/step/route.js` | Workflow DevKit step executor (generated at build, gitignored). Runs entire chat turns — pinned to `maxDuration: "max"` in `vercel.ts` so long turns aren't killed mid-stream and replayed. |
+| `src/app/.well-known/workflow/v1/flow/route.js` | Workflow DevKit orchestration handler (generated at build, gitignored). Also pinned to `"max"`.                                                                                             |
 
 ## Why two consumers exist as standalone files
 

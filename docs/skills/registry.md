@@ -9,25 +9,25 @@ const domainReg = new SkillRegistry(spec.subSkills); // subagent.ts
 
 ## API
 
-| Method                     | Purpose                                                                                      |
-| -------------------------- | -------------------------------------------------------------------------------------------- |
-| `getAvailableSkills(role)` | All skills whose `minRole` is ≤ the caller's role.                                           |
-| `loadSkill(name, role)`    | Returns the `SkillBundle` if it exists and `minRole` is satisfied; otherwise `null`.         |
-| `buildSkillMenu(role)`     | Renders the available skills as `<available_skills>` XML for injection into a system prompt. |
+| Method                     | Purpose                                                                                |
+| -------------------------- | -------------------------------------------------------------------------------------- |
+| `getAvailableSkills(role)` | All skills whose `minRole` is ≤ the caller's role.                                     |
+| `loadSkill(name, role)`    | Returns the `SkillBundle` if it exists and `minRole` is satisfied; otherwise `null`.   |
+| `buildSkillMenu(role)`     | Renders the available skills as `<sub_skills>` XML for injection into a system prompt. |
 
 The role hierarchy is `public(0) < organizer(1) < admin(2)`, set by `ROLE_LEVEL` at the top of the file.
 
 ## buildSkillMenu output
 
 ```xml
-<available_skills>
+<sub_skills>
 - issues: Manage Linear issues (use when: the user asks about creating, updating, or searching issues)
 - comments: Post and edit comments on Linear entities (use when: the user wants to leave a comment)
 - ...
-</available_skills>
+</sub_skills>
 ```
 
-This block is substituted into the top-level `SKILL.md` body wherever `{{SKILL_MENU}}` appears — usually just once, near the top of the subagent's system prompt. Skills above the caller's `minRole` are filtered out before rendering, so a non-admin simply never learns that the admin-only skills exist. (Individual tools are gated separately by their [`access()` descriptors](../agents/policy.md), which `applyPolicy` enforces the same way — by omission.)
+This block is substituted into the top-level `SKILL.md` body wherever `{{SKILL_MENU}}` appears — usually just once, near the top of the subagent's system prompt. The `loadSkill` tool's description points the model at the `<sub_skills>` tag, so the two must stay in sync. Skills above the caller's `minRole` are filtered out before rendering, so a non-admin simply never learns that the admin-only skills exist.
 
 ## loadSkill behavior
 

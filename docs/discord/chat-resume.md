@@ -19,15 +19,24 @@ Both the mention handler and the message handler can resume an existing `chatWor
 
 `src/server/routes/handlers.ts` (the anonymous `onMessage` handler registered from this file):
 
-1. **Short-circuits early on `isBotMention`** so the mention handler doesn't get double-routed. Also short-circuits on `packet.data.thread` — non-mention thread messages are ignored so the workflow isn't flooded by other people chatting in the thread.
+1. **Short-circuits early on `ctx.isBotMention`** (computed once in `EventRouter.dispatch`) so the mention handler doesn't get double-routed. Also short-circuits on `packet.data.thread` — non-mention thread messages are ignored so the workflow isn't flooded by other people chatting in the thread.
 2. Looks up the active `ConversationState`. If none, returns.
 3. Rebuilds per-turn context with `AgentContext.fromPacket(packet).toJSON()` and calls `resumeHook(existing.workflowRunId, { type: "message", content: packet.data.content, context })`. Touches the key on success.
 4. If `resumeHook` throws (workflow expired, etc.), deletes the stale state.
 
 This path **only resumes** — it never starts a new workflow. Starts are always triggered by a mention.
 
+## Ending a conversation with ✅
+
+`src/bot/handlers/events/conversation-done/index.ts` (`conversationDone`):
+
+1. Fires on a ✅ reaction. Ignores the bot's own reactions (it adds ✅ itself in the hack-night flow).
+2. Looks up the active `ConversationState` for the reaction's channel. If none, returns.
+3. Fetches the reacted message and requires it to be **bot-authored** — a stray ✅ on someone's message in the thread shouldn't kill the conversation.
+4. Calls `resumeHook(workflowRunId, { type: "done" })`, ending the workflow gracefully (cleanup + terminal telemetry) instead of waiting out the 55-minute idle timer. If `resumeHook` throws, the run already ended — the stale key is deleted so the next mention starts fresh.
+
 ## Why mentions are "double-routed"
 
 Because a mention message also satisfies `onMessage`, both mention and message handlers would normally fire for the same packet. The `EventRouter` runs `onMention` handlers first (see [EventRouter](./event-router.md)), but the mention handler calls `resumeHook` with the **stripped** content; if the message handler then ran as well, it would forward the **un-stripped** content into the conversation and cause a duplicate turn.
 
-The early `isBotMention` check in the message handler is what prevents this. The tradeoff is that two handlers both know about mention syntax — mention once, short-circuit once — but it keeps the stripping logic in exactly one place (the mention handler).
+The early `ctx.isBotMention` check in the message handler is what prevents this. The router computes the mention check once per packet and passes it through the context, so the mention syntax knowledge lives in exactly two places: `src/bot/mention.ts` (the matchers) and the mention handler (the stripping).

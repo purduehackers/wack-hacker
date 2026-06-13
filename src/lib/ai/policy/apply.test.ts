@@ -178,7 +178,7 @@ describe("applyPolicy — confirmation wrapping", () => {
     const wrapped = applyPolicy(tools, { context: contextFor("organizer"), audit });
 
     expect(wrapped.nuke).not.toBe(tools.nuke);
-    expect(wrapped.nuke!.description).toContain("Requires user approval");
+    expect(wrapped.nuke!.description).toContain("[approval]");
   });
 
   it("wraps legacy approval()-marked tools the same way", () => {
@@ -186,7 +186,7 @@ describe("applyPolicy — confirmation wrapping", () => {
     const tools = { legacy: approval(t) };
     const { audit } = fakeAudit();
     const wrapped = applyPolicy(tools, { context: contextFor("organizer"), audit });
-    expect(wrapped.legacy!.description).toContain("Requires user approval");
+    expect(wrapped.legacy!.description).toContain("[approval]");
   });
 
   it("approved round-trip: stores second-party mode, runs the tool, audits the lifecycle", async () => {

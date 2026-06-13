@@ -8,6 +8,12 @@ export interface HandlerContext {
   discord: API;
   store: ConversationStore;
   botUserId: string;
+  /**
+   * Set by `EventRouter.dispatch` for message packets: true when the message
+   * leads with an @-mention of the bot. Computed once in the router so
+   * handlers don't re-derive it.
+   */
+  isBotMention?: boolean;
 }
 
 export interface ConversationState {
@@ -30,22 +36,31 @@ export interface ToolDefSnapshot {
 }
 
 /**
- * Per-turn snapshot of everything the orchestrator receives. Written by the
- * chat workflow after each turn completes; read by the /Inspect Context message
- * command. Stored under a separate Redis key from `ConversationState` to keep
- * the hot-path state lean.
+ * The slice of a context snapshot the chat workflow persists after each turn.
+ * Only the cheap dynamic state lives in Redis; the expensive derived view
+ * (system prompt, materialized tool schemas) is rebuilt on demand by the
+ * /Inspect Context read path via `buildContextSnapshot`. Stored under a
+ * separate Redis key from `ConversationState` to keep the hot-path state lean.
  *
  * `totalUsage` is cumulative across every turn the workflow has run so far —
  * it answers "what has this conversation cost in total?" — not just the most
  * recent turn.
  */
-export interface ContextSnapshot {
-  model: string;
+export interface StoredContextSnapshot {
   context: SerializedAgentContext;
-  systemPrompt: string;
-  tools: ToolDefSnapshot[];
   messages: ChatMessage[];
   totalUsage: TurnUsage;
   turnCount: number;
   updatedAt: string;
+}
+
+/**
+ * Full per-turn snapshot of everything the orchestrator receives: the stored
+ * slice plus the orchestrator-derived view, rebuilt at read time with the
+ * same code paths the orchestrator runs with.
+ */
+export interface ContextSnapshot extends StoredContextSnapshot {
+  model: string;
+  systemPrompt: string;
+  tools: ToolDefSnapshot[];
 }
