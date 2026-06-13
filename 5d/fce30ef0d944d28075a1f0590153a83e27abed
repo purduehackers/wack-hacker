@@ -1,0 +1,21 @@
+src/lib/ai/subagent.test.ts
+  s_1d7c46430d8514::t_b93f7bd13b035b 524-535
+src/lib/ai/subagent.ts
+  s_1d7c46430d8514::t_13e8af41970003 264-266
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "5dfce30ef0d944d28075a1f0590153a83e27abed",
+  "prompts": {},
+  "sessions": {
+    "s_1d7c46430d8514": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "46492d35-d480-4e29-9b7c-cce9a445e37d",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
