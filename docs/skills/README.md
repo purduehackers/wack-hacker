@@ -9,7 +9,7 @@ A delegate domain like Linear or GitHub can easily expose 50+ tools. Putting the
 1. **Token bloat** — every tool's description ships with every step.
 2. **Decision paralysis** — the model spends compute deciding which of 50 tools to use when only 3 are relevant.
 
-Skills break a domain into sub-skills (e.g. `issues`, `pull-requests`, `actions`). The subagent starts with a small set of `baseToolNames` (typically search/discovery tools) plus a `loadSkill` tool. When the model decides it needs to do something specific, it calls `loadSkill("issues")`, reads the instructions, and only then sees the tools that skill unlocks.
+Skills break a domain into sub-skills (e.g. `issues`, `pull-requests`, `actions`). The subagent starts with a small set of base tools (the `baseTools` frontmatter in the domain's top-level `SKILL.md` — typically search/discovery tools) plus a `loadSkill` tool. When the model decides it needs to do something specific, it calls `loadSkill("issues")`, reads the instructions, and only then sees the tools that skill unlocks.
 
 ## Contents
 
@@ -23,12 +23,14 @@ Skills break a domain into sub-skills (e.g. `issues`, `pull-requests`, `actions`
 
 ## Where to look in the code
 
-| File                            | What it is                                                         |
-| ------------------------------- | ------------------------------------------------------------------ |
-| `src/lib/ai/skills/registry.ts` | `SkillRegistry`, `buildSkillMenu`, role gating                     |
-| `src/lib/ai/skills/loader.ts`   | `createLoadSkillTool` — the `loadSkill` tool used inside subagents |
-| `src/lib/ai/skills/runtime.ts`  | `computeActiveTools` — used by `prepareStep` to scan step history  |
-| `src/lib/ai/skills/admin.ts`    | `admin()` wrapper and `filterAdmin()`                              |
-| `src/lib/ai/skills/types.ts`    | `SkillMeta`, `SkillBundle`                                         |
-| `src/lib/ai/skills/generated/`  | Compiled manifests (regenerate with `compile-skills.ts`)           |
-| `scripts/compile-skills.ts`     | The compiler                                                       |
+| File                            | What it is                                                                                   |
+| ------------------------------- | -------------------------------------------------------------------------------------------- |
+| `src/lib/ai/skills/registry.ts` | `SkillRegistry`, `buildSkillMenu`, role gating                                               |
+| `src/lib/ai/skills/loader.ts`   | `createLoadSkillTool` — the `loadSkill` tool used inside subagents                           |
+| `src/lib/ai/skills/runtime.ts`  | `computeActiveTools` — used by `prepareStep` to scan step history                            |
+| `src/lib/ai/skills/admin.ts`    | `admin()` wrapper and `filterAdmin()`                                                        |
+| `src/lib/ai/skills/types.ts`    | `SkillMeta`, `SkillBundle`                                                                   |
+| `src/lib/ai/skills/generated/`  | Compiled manifests + domain registries (gitignored; regenerate with `compile-skills.ts`)     |
+| `generated/domains.ts`          | `DOMAINS` — full domain registry (tools + manifests + baseTools), consumed by `delegates.ts` |
+| `generated/subskills.ts`        | `DOMAIN_SUBSKILLS` — data-only manifest table, consumed by the context inspector             |
+| `scripts/compile-skills.ts`     | The compiler (also validates `{{SKILL_MENU}}`, `baseTools`, tool barrels)                    |

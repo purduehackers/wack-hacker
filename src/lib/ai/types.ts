@@ -148,7 +148,7 @@ export interface CategoryItem {
   estimatedTokens: number;
   /**
    * Loadable subskills nested under this item — populated only for delegate
-   * agents (subskills load on demand inside the subagent via `load_skill`).
+   * agents (subskills load on demand inside the subagent via `loadSkill`).
    * Not counted toward the orchestrator's input total.
    */
   skills?: CategoryItem[];

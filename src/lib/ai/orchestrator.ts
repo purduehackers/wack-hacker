@@ -7,7 +7,7 @@ import { wrapApprovalTools } from "./approvals/index.ts";
 import { addCacheControl } from "./cache-control.ts";
 import { ORCHESTRATOR_MODEL, SYSTEM_PROMPT } from "./constants.ts";
 import { AgentContext } from "./context.ts";
-import { buildDelegationTools } from "./delegates.ts";
+import { buildDelegateDocs, buildDelegationTools } from "./delegates.ts";
 import { documentation } from "./tools/docs/index.ts";
 import { resolve_organizer } from "./tools/roster/index.ts";
 import { createScheduleTask, list_scheduled_tasks, cancel_task } from "./tools/schedule/index.ts";
@@ -42,12 +42,28 @@ export function getOrchestratorTools(
   return wrapApprovalTools(tools, { context });
 }
 
+/**
+ * Render the orchestrator's full system prompt for the caller's context. The
+ * `{{DELEGATES}}` section is generated from the same registry that builds the
+ * delegation tools, so the prompt documents exactly the delegate tools the
+ * role has (and collapses to nothing for roles with none). The context
+ * inspector's snapshot uses this same function — keep it the single render
+ * path.
+ */
+export function buildSystemPrompt(context: AgentContext): string {
+  const docs = buildDelegateDocs(context.role);
+  const base = docs
+    ? SYSTEM_PROMPT.replace("{{DELEGATES}}", docs)
+    : SYSTEM_PROMPT.replace("\n\n{{DELEGATES}}", "");
+  return context.buildInstructions(base);
+}
+
 export function createOrchestrator(
   context: AgentContext,
   tracker: TurnUsageTracker,
   extraMetadata?: TelemetryMetadata,
 ) {
-  const instructions = context.buildInstructions(SYSTEM_PROMPT);
+  const instructions = buildSystemPrompt(context);
   // Cache-control on the tools block is applied once at construction:
   // `PrepareStepResult` in ai@6 has no `tools` field, so a per-step override
   // would be silently ignored — and the orchestrator's tool set never changes
