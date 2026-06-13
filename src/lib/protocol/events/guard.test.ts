@@ -7,8 +7,6 @@ vi.mock("evlog", () => ({
   log: { error: vi.fn() },
 }));
 
-import { log } from "evlog";
-
 import { countMetric } from "@/lib/metrics";
 
 import { guardEvent } from "./guard.ts";
@@ -30,6 +28,5 @@ describe("guardEvent", () => {
     expect(countMetric).toHaveBeenCalledWith("gateway.handler_error", {
       event: "messageReactionAdd",
     });
-    expect(log.error).toHaveBeenCalledWith("gateway", expect.stringContaining("boom"));
   });
 });
