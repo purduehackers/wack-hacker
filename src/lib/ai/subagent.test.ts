@@ -99,6 +99,23 @@ describe("createDelegationTool — execute() against MockLanguageModelV3", () =>
     expect(systemContent).not.toContain("{{SKILL_MENU}}");
   });
 
+  it("renders a role-filtered menu — public's differs from organizer's", async () => {
+    await drain(baseSpec, UserRole.Public);
+    await drain(baseSpec, UserRole.Organizer);
+    const [publicCall, organizerCall] = model.doStreamCalls;
+    const systemOf = (call: (typeof model.doStreamCalls)[number]) => {
+      const system = call!.prompt.find((m) => m.role === "system");
+      return typeof system?.content === "string" ? system.content : JSON.stringify(system?.content);
+    };
+    const registry = new SkillRegistry(TEST_SKILLS);
+    expect(systemOf(publicCall)).toContain(registry.buildSkillMenu(UserRole.Public));
+    expect(systemOf(organizerCall)).toContain(registry.buildSkillMenu(UserRole.Organizer));
+    // The organizer-gated "linear" fixture skill must be invisible to public.
+    expect(systemOf(publicCall)).not.toContain("linear");
+    expect(systemOf(organizerCall)).toContain("linear");
+    expect(systemOf(publicCall)).not.toEqual(systemOf(organizerCall));
+  });
+
   it("exposes the baseToolNames plus loadSkill to the model on the first call", async () => {
     await drain(baseSpec, UserRole.Admin);
     const call = model.doStreamCalls[0]!;

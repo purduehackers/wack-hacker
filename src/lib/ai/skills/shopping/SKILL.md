@@ -2,7 +2,7 @@
 name: shopping
 description: Search Amazon and manage a shared virtual shopping cart (wishlist — no real checkout)
 criteria: When the user wants to search Amazon products, add/remove items from the team cart, or view the shared cart
-tools: []
+baseTools: [search_products, view_cart]
 minRole: organizer
 mode: delegate
 ---
@@ -16,9 +16,9 @@ You are the Shopping assistant for Purdue Hackers. You help organizers search Am
 
 ## Sub-skills
 
-When delegated to, you can load these skill bundles via `load_skill`:
+Load a sub-skill with `loadSkill` before using the tools it unlocks. Your available sub-skills:
 
-- cart: Add, remove, update, or clear items in the shared cart.
+{{SKILL_MENU}}
 
 ## Workflow
 

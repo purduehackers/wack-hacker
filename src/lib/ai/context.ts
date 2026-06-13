@@ -20,6 +20,38 @@ export type {
 
 import { DEFAULT_TIMEZONE } from "../tasks/constants.ts";
 
+/**
+ * Minute-precision UTC instant. `nowISO` is interpolated into the system
+ * prompt; sub-minute precision would make every rendered prompt unique and
+ * defeat Anthropic prompt caching.
+ */
+function toMinuteISO(date: Date): string {
+  return `${date.toISOString().slice(0, 16)}:00Z`;
+}
+
+/**
+ * Cap on each rendered lead-in block (`<recent_*_messages>` /
+ * `<referenced_message_context>`). The lead-in is pinned into the system
+ * prompt for the conversation's lifetime, so an unbounded block from a busy
+ * channel would be re-billed on every step of every turn.
+ */
+const MAX_LEADIN_BLOCK_CHARS = 4000;
+
+/**
+ * Drop lines from the front until the block fits the budget. The most
+ * relevant lines live at the end of both lead-in blocks: newest messages for
+ * the recent tail, the reply anchor for referenced context.
+ */
+function capBlockLines(lines: string[], maxChars: number): string[] {
+  let total = lines.reduce((sum, entry) => sum + entry.length + 1, 0);
+  let start = 0;
+  while (start < lines.length - 1 && total > maxChars) {
+    total -= lines[start].length + 1;
+    start += 1;
+  }
+  return start === 0 ? lines : lines.slice(start);
+}
+
 export class AgentContext {
   readonly userId: string;
   readonly username: string;
@@ -44,7 +76,7 @@ export class AgentContext {
     this.date = data.date;
     // Default nowISO/timezone on deserialize so legacy serialized contexts
     // (written before these fields existed) still round-trip cleanly.
-    this.nowISO = data.nowISO ?? new Date().toISOString();
+    this.nowISO = data.nowISO ?? toMinuteISO(new Date());
     this.timezone = data.timezone ?? DEFAULT_TIMEZONE;
     this.attachments = data.attachments;
     this.memberRoles = data.memberRoles;
@@ -125,7 +157,7 @@ export class AgentContext {
         month: "long",
         day: "numeric",
       }),
-      nowISO: now.toISOString(),
+      nowISO: toMinuteISO(now),
       timezone: DEFAULT_TIMEZONE,
       attachments:
         data.attachments.length > 0
@@ -189,15 +221,17 @@ export class AgentContext {
     const fromThread = this.recentMessagesFromThread ?? Boolean(this.thread);
     const msgTag = fromThread ? "recent_thread_messages" : "recent_channel_messages";
     const recentMsgs = this.recentMessages?.length
-      ? `\n\n<${msgTag}>\n${this.recentMessages
-          .map((m) => `[${m.timestamp}] ${m.author}: ${m.content}`)
-          .join("\n")}\n</${msgTag}>`
+      ? `\n\n<${msgTag}>\n${capBlockLines(
+          this.recentMessages.map((m) => `[${m.timestamp}] ${m.author}: ${m.content}`),
+          MAX_LEADIN_BLOCK_CHARS,
+        ).join("\n")}\n</${msgTag}>`
       : "";
 
     const refMsgs = this.referencedContext?.length
-      ? `\n\n<referenced_message_context>\nThe user's mention was a reply to a message in this channel. Below is that message (last) plus the messages that immediately preceded it, in chronological order.\n${this.referencedContext
-          .map((m) => `[${m.timestamp}] ${m.author}: ${m.content}`)
-          .join("\n")}\n</referenced_message_context>`
+      ? `\n\n<referenced_message_context>\nThe user's mention was a reply to a message in this channel. Below is that message (last) plus the messages that immediately preceded it, in chronological order.\n${capBlockLines(
+          this.referencedContext.map((m) => `[${m.timestamp}] ${m.author}: ${m.content}`),
+          MAX_LEADIN_BLOCK_CHARS,
+        ).join("\n")}\n</referenced_message_context>`
       : "";
 
     return `<execution_context>

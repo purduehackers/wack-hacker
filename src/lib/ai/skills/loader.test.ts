@@ -9,6 +9,11 @@ import { SkillRegistry } from "./registry.ts";
 describe("createLoadSkillTool", () => {
   const registry = new SkillRegistry(TEST_SKILLS);
 
+  it("points the model at the <sub_skills> block the menu actually renders", () => {
+    const tool = createLoadSkillTool(registry, UserRole.Public);
+    expect(tool.description).toContain("<sub_skills>");
+  });
+
   it("returns skill instructions when accessible", async () => {
     const tool = createLoadSkillTool(registry, UserRole.Public);
     const result = await tool.execute!({ name: "scheduling" }, {} as never);

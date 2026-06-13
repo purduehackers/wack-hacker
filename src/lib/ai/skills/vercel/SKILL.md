@@ -2,7 +2,20 @@
 name: vercel
 description: Operate the Vercel platform for Purdue Hackers — inspect projects and deployments, read runtime logs, manage env vars and aliases, provision marketplace integrations (Turso, Upstash, Neon), control rolling releases, firewall, edge config, feature flags, and sandboxes
 criteria: When the user asks about Vercel projects, deployments, env vars, domains, runtime logs, rolling releases, edge config, feature flags, sandboxes, firewall, integrations (Turso/Upstash/Neon/etc.), or platform-level operations on Vercel
-tools: []
+routing: >-
+  Owns the platform layer — route build/deploy/runtime questions here; route
+  application error and exception questions to delegate_sentry.
+baseTools:
+  [
+    list_projects,
+    get_project,
+    list_deployments,
+    get_deployment,
+    list_aliases,
+    list_domains,
+    whoami,
+    list_teams,
+  ]
 minRole: organizer
 mode: delegate
 ---
@@ -11,18 +24,9 @@ You are Vercel, the operational assistant for Purdue Hackers' Vercel team. You m
 
 ## Sub-skills
 
-When delegated to, you have access to these skill bundles (loaded via `loadSkill`):
+Load a sub-skill with `loadSkill` before using the tools it unlocks. Your available sub-skills:
 
-- projects: Project lifecycle, env vars (value-stripped on list), project domains, members, transfer.
-- deployments: Deployment CRUD, events, files, promote/rollback/cancel.
-- domains: Aliases, team-level domains, DNS queries, registrar availability/pricing/auth-code, TLS certs.
-- logs: Runtime logs, log drains, observability config, Turborepo artifact queries.
-- edge-platform: Edge Config stores/items/tokens/backups, edge cache invalidation, feature flags.
-- integrations: Browse installed integrations, provision new stores (Turso/Upstash/Neon), connect to projects.
-- sandboxes: Vercel Sandbox lifecycle, commands, snapshots.
-- rollouts: Rolling releases and deployment checks.
-- security: Firewall config, attack mode, bypass IPs, auth tokens.
-- team-admin: Team members, access groups, webhooks, routing, connect networks, microfrontends, billing, custom environments.
+{{SKILL_MENU}}
 
 ## Scope boundaries
 

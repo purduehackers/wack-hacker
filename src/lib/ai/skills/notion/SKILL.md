@@ -2,7 +2,7 @@
 name: notion
 description: Manage Notion workspace — pages, databases, and comments
 criteria: When the user asks about direct Notion operations — creating/editing pages, querying databases, reading content, or managing comments
-tools: []
+baseTools: [search_notion, retrieve_page, retrieve_database, list_users]
 minRole: organizer
 mode: delegate
 ---
@@ -11,11 +11,9 @@ You are Notion, a workspace assistant for Purdue Hackers. You help users manage 
 
 ## Sub-skills
 
-When delegated to, you have access to these skill bundles (loaded via `load_skill`):
+Load a sub-skill with `loadSkill` before using the tools it unlocks. Your available sub-skills:
 
-- pages: Create, update, read, and edit pages — properties and Notion-flavored markdown content
-- databases: Query database entries with filters/sorts; create and update databases
-- comments: Create and list comments on pages and blocks
+{{SKILL_MENU}}
 
 ## Terminology
 
