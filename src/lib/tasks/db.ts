@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 
 import type { NewScheduledTask, ScheduledTaskPatch, ScheduledTaskRow } from "./types.ts";
 
@@ -49,6 +49,26 @@ export async function claimFire(id: string, targetIso: string): Promise<boolean>
     )
     .returning({ id: scheduledTasks.id });
   return rows.length > 0;
+}
+
+/**
+ * Active rows whose `nextRunAt` is stuck before `cutoffIso` — wake-ups the
+ * queue should have delivered already. These are dead chains: the fire
+ * message was lost (acked after retries, dropped checkpoint hop) and nothing
+ * will ever re-enqueue them. Served by `scheduled_tasks_status_next_run_idx`.
+ */
+export async function listOverdueActiveTasks(cutoffIso: string): Promise<ScheduledTaskRow[]> {
+  const rows = await getDb()
+    .select()
+    .from(scheduledTasks)
+    .where(
+      and(
+        eq(scheduledTasks.status, ScheduledTaskStatus.Active),
+        isNotNull(scheduledTasks.nextRunAt),
+        lt(scheduledTasks.nextRunAt, cutoffIso),
+      ),
+    );
+  return rows as ScheduledTaskRow[];
 }
 
 export async function listScheduledTasks(opts?: { userId?: string }): Promise<ScheduledTaskRow[]> {

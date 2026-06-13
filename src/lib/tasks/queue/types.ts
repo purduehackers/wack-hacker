@@ -10,9 +10,4 @@ export interface TaskHandler<T = unknown> {
 export interface TaskEnvelope {
   task: string;
   payload: unknown;
-  recurring?: {
-    delaySeconds: number;
-    maxRepetitions?: number;
-    repetitionCount?: number;
-  };
 }
