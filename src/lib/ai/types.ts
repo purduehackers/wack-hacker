@@ -188,9 +188,55 @@ export type SubagentPostFinish = (args: {
   agentContext: AgentContext;
   experimentalContext: unknown;
   lastAssistantText: string;
+  /**
+   * True when the step cap cut the run while the model was still issuing
+   * tool calls — the task did not complete and `lastAssistantText` is
+   * mid-task narration, not a final answer. Rare in practice: the forced
+   * wrap-up step usually converts a cap-hit into a text-only final step,
+   * which reports as `hitStepCap` instead.
+   */
+  exhausted: boolean;
+  /**
+   * True when the run used every step under its cap (`exhausted` implies
+   * this). Even with a clean forced wrap-up, a cap-hit run cannot be assumed
+   * complete — implementations own the final yielded message, so they must
+   * label outward-facing artifacts (commits, PRs, status messages) as
+   * potentially partial work when this is set.
+   */
+  hitStepCap: boolean;
 }) => AsyncGenerator<UIMessage, void, void>;
 
-export interface SubagentSpec {
+/**
+ * Maps the delegation tool's validated input to the prompt string handed to
+ * the nested agent. Paired with `inputSchema` in `SubagentPromptConfig`:
+ * specs that customize the input shape must say explicitly which field is the
+ * prompt — there is no field-guessing fallback.
+ */
+export type SubagentGetPrompt = (input: unknown) => string;
+
+/**
+ * Input/prompt pairing for a `SubagentSpec`: either keep the default
+ * `{ task: string }` schema (where `input.task` is the prompt), or supply a
+ * custom `inputSchema` *together with* a `getPrompt` that knows how to read
+ * it. The union makes a custom schema without `getPrompt` a type error.
+ */
+export type SubagentPromptConfig =
+  | {
+      inputSchema?: undefined;
+      getPrompt?: undefined;
+    }
+  | {
+      /**
+       * Override the default `{ task: z.string() }` input schema. Required
+       * when the delegation tool needs extra structured input (e.g. the code
+       * subagent takes `{ repo, task }`).
+       */
+      inputSchema: z.ZodType;
+      /** Extract the subagent prompt from the custom input shape. */
+      getPrompt: SubagentGetPrompt;
+    };
+
+export interface SubagentSpecBase {
   /** Stable identifier used for telemetry/tracing. */
   name: string;
   /** Short description shown to the orchestrator as the delegation tool's description. */
@@ -208,12 +254,6 @@ export interface SubagentSpec {
   /** Override the default `stepCountIs(15)` cap. */
   stopSteps?: number;
   /**
-   * Override the default `{ task: z.string() }` input schema. Required when
-   * the delegation tool needs extra structured input (e.g. the code subagent
-   * takes `{ repo, task }`).
-   */
-  inputSchema?: z.ZodType;
-  /**
    * Build the `experimental_context` passed to the subagent's
    * `ToolLoopAgent.stream()`. Invoked once per delegation call, before the
    * agent starts, with the tool's validated input + the orchestrator's
@@ -227,6 +267,20 @@ export interface SubagentSpec {
    * coding subagent to commit/push/open a PR and relay the result.
    */
   postFinish?: SubagentPostFinish;
+}
+
+export type SubagentSpec = SubagentSpecBase & SubagentPromptConfig;
+
+/**
+ * One entity from a subagent's final-response trailer (`name | type | id | url`).
+ * The trailer is the machine-readable handoff channel that lets canonical IDs
+ * survive delegation even though user-facing prose bans raw UUIDs.
+ */
+export interface HandoffEntity {
+  name: string;
+  type?: string;
+  id?: string;
+  url?: string;
 }
 
 /**

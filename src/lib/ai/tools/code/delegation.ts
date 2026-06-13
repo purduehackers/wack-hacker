@@ -12,6 +12,7 @@ import type { AgentContext } from "../../context.ts";
 import type { CodingSandboxContext } from "./utils.ts";
 
 import { env } from "../../../../env.ts";
+import { extractEntitiesTrailer } from "../../subagent.ts";
 import { octokit } from "../github/client.ts";
 
 /**
@@ -38,6 +39,14 @@ export const codeDelegationInputSchema = z.object({
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Prompt extractor paired with `codeDelegationInputSchema`: the subagent
+ * prompt is the verbatim task; `repo` rides along via experimental context.
+ */
+export function getCodeDelegationPrompt(input: unknown): string {
+  return codeDelegationInputSchema.parse(input).task;
 }
 
 export type { CodeDelegationInput } from "./types.ts";
@@ -79,12 +88,23 @@ export async function buildCodeExperimentalContext(
  * Post-finish: if the coding subagent left uncommitted changes on its branch,
  * commit them, push, and open (or leave alone) a PR. Yields a final
  * `UIMessage` so the PR URL shows up as the subagent's last visible output.
+ *
+ * When the run used every step under its cap (`hitStepCap` / `exhausted`),
+ * the work cannot be assumed complete: `lastAssistantText` may be stale
+ * narration, the diff may be partial, and every outward artifact (status
+ * message, PR title, PR body) is labeled as such. The forced wrap-up step
+ * means a cap-hit run usually still ends with clean text (`exhausted` false),
+ * so labeling keys off either flag. The machine-readable entities trailer is
+ * stripped up front — it's for the orchestrator only and must stay out of
+ * commit messages, PR bodies, and the relayed status text.
  */
 export async function* codePostFinish(args: {
   input?: unknown;
   agentContext?: unknown;
   experimentalContext: unknown;
   lastAssistantText: string;
+  exhausted?: boolean;
+  hitStepCap?: boolean;
 }): AsyncGenerator<UIMessage, void, void> {
   const ctx = args.experimentalContext as CodingSandboxContext | undefined;
   if (!ctx) {
@@ -94,34 +114,39 @@ export async function* codePostFinish(args: {
     });
     return;
   }
+  const cutAtCap = (args.exhausted ?? false) || (args.hitStepCap ?? false);
+  const exhaustionNote = cutAtCap
+    ? "⚠️ The coding agent hit its step cap — the work below may be incomplete.\n\n"
+    : "";
+  const finalText = extractEntitiesTrailer(args.lastAssistantText).text;
   const authorUsername = (args.agentContext as AgentContext | undefined)?.username;
   const { sandbox, repo, branch } = ctx;
   const logger = createWideLogger({
     op: "ai.code_delegate.post_finish",
-    code_delegate: { repo, branch, thread_key: ctx.threadKey },
+    code_delegate: { repo, branch, thread_key: ctx.threadKey, hit_step_cap: cutAtCap },
   });
 
   const status = await sandbox.exec("git status --porcelain", { cwd: ctx.repoDir });
   if (status.exitCode !== 0) {
     logger.emit({ outcome: "aborted", reason: "git_status_failed", exit_code: status.exitCode });
     yield statusMessage(
-      `Post-finish aborted: \`git status\` exited ${status.exitCode}. stderr: ${truncate(status.stderr)}`,
+      `${exhaustionNote}Post-finish aborted: \`git status\` exited ${status.exitCode}. stderr: ${truncate(status.stderr)}`,
     );
     return;
   }
   if (!status.stdout.trim()) {
     logger.emit({ outcome: "no_changes" });
-    yield statusMessage("No changes to commit. Nothing pushed; no PR opened.");
+    yield statusMessage(`${exhaustionNote}No changes to commit. Nothing pushed; no PR opened.`);
     return;
   }
 
-  const commitMessage = extractCommitMessage(args.lastAssistantText);
+  const commitMessage = extractCommitMessage(finalText);
 
   const addResult = await sandbox.exec("git add -A", { cwd: ctx.repoDir });
   if (addResult.exitCode !== 0) {
     logger.emit({ outcome: "staging_failed", exit_code: addResult.exitCode });
     yield statusMessage(
-      `Staging failed (exit ${addResult.exitCode}). stderr: ${truncate(addResult.stderr || addResult.stdout)}`,
+      `${exhaustionNote}Staging failed (exit ${addResult.exitCode}). stderr: ${truncate(addResult.stderr || addResult.stdout)}`,
     );
     return;
   }
@@ -132,7 +157,7 @@ export async function* codePostFinish(args: {
   if (commitResult.exitCode !== 0) {
     logger.emit({ outcome: "commit_failed", exit_code: commitResult.exitCode });
     yield statusMessage(
-      `Commit failed (exit ${commitResult.exitCode}). stderr: ${truncate(commitResult.stderr || commitResult.stdout)}`,
+      `${exhaustionNote}Commit failed (exit ${commitResult.exitCode}). stderr: ${truncate(commitResult.stderr || commitResult.stdout)}`,
     );
     return;
   }
@@ -144,7 +169,7 @@ export async function* codePostFinish(args: {
   if (push.exitCode !== 0) {
     logger.emit({ outcome: "push_failed", exit_code: push.exitCode });
     yield statusMessage(
-      `Push failed (exit ${push.exitCode}). stderr: ${truncate(push.stderr || push.stdout)}`,
+      `${exhaustionNote}Push failed (exit ${push.exitCode}). stderr: ${truncate(push.stderr || push.stdout)}`,
     );
     return;
   }
@@ -154,8 +179,8 @@ export async function* codePostFinish(args: {
     prUrl = await ensurePullRequest({
       repo,
       branch,
-      title: commitMessage,
-      body: buildPrBody(args.lastAssistantText, authorUsername),
+      title: cutAtCap ? `[partial] ${commitMessage}`.slice(0, 72) : commitMessage,
+      body: buildPrBody(finalText, authorUsername, cutAtCap),
       sandbox,
       repoDir: ctx.repoDir,
     });
@@ -163,14 +188,14 @@ export async function* codePostFinish(args: {
     logger.error(err as Error);
     logger.emit({ outcome: "pr_open_failed" });
     yield statusMessage(
-      `Branch \`${branch}\` pushed but opening the PR failed: ${err instanceof Error ? err.message : String(err)}`,
+      `${exhaustionNote}Branch \`${branch}\` pushed but opening the PR failed: ${err instanceof Error ? err.message : String(err)}`,
     );
     return;
   }
 
   countMetric("ai.code_delegate.pr_opened");
   logger.emit({ outcome: "pr_opened", pr_url: prUrl });
-  yield statusMessage(`${args.lastAssistantText.trim()}\n\n**PR**: ${prUrl}`.trim());
+  yield statusMessage(`${exhaustionNote}${finalText.trim()}\n\n**PR**: ${prUrl}`.trim());
 }
 
 async function mintInstallationToken(): Promise<string> {
@@ -239,8 +264,17 @@ function extractCommitMessage(lastText: string): string {
  * PR title), plus an attribution footer that names the Discord user who
  * asked. If the subagent didn't emit the expected structure we fall back to
  * the raw text so the PR is still useful — reviewers just won't see headers.
+ * Cap-hit runs get a partial-work warning up top so reviewers don't treat
+ * the diff as finished.
  */
-function buildPrBody(lastText: string, authorUsername: string | undefined): string {
+function buildPrBody(
+  lastText: string,
+  authorUsername: string | undefined,
+  cutAtCap = false,
+): string {
+  const warning = cutAtCap
+    ? "> [!WARNING]\n> The coding agent hit its step cap — this PR may contain partial work.\n\n"
+    : "";
   const withoutCommitLine = stripTrailingCommitLine(lastText);
   const safeAuthorUsername = sanitizeAuthorUsername(authorUsername);
   // `@username` sits in a code span so GitHub doesn't try to notify a
@@ -248,7 +282,7 @@ function buildPrBody(lastText: string, authorUsername: string | undefined): stri
   const attribution = safeAuthorUsername
     ? `Generated by \`@${safeAuthorUsername}\` using [Wack Hacker](https://github.com/purduehackers/wack-hacker)`
     : `Generated by [Wack Hacker](https://github.com/purduehackers/wack-hacker)`;
-  return `${withoutCommitLine}\n\n${attribution}`;
+  return `${warning}${withoutCommitLine}\n\n${attribution}`;
 }
 
 /**

@@ -3,7 +3,7 @@ import type { ToolSet } from "ai";
 import type { AgentContext } from "./context.ts";
 import type { SkillBundle } from "./skills/types.ts";
 import type { TurnUsageTracker } from "./turn-usage.ts";
-import type { SubagentSpec, TelemetryMetadata } from "./types.ts";
+import type { SubagentPromptConfig, SubagentSpecBase, TelemetryMetadata } from "./types.ts";
 
 import { DELEGATE_PREFIX, UserRole } from "./constants.ts";
 import { DOMAINS } from "./skills/generated/domains.ts";
@@ -14,25 +14,31 @@ import {
   buildCodeExperimentalContext,
   codeDelegationInputSchema,
   codePostFinish,
+  getCodeDelegationPrompt,
 } from "./tools/code/delegation.ts";
 
 /**
  * Per-domain overrides layered into the `SubagentSpec` before creating the
  * delegation tool. Today only `code` needs non-default values — stronger
- * model, more steps, custom input schema, sandbox context builder, and the
- * post-finish commit/push/PR step. Other domains use the defaults from the
- * generated `DOMAINS` registry. These reference runtime functions, so they
- * stay hand-written rather than compiler-emitted.
+ * model, more steps, custom input schema + prompt extractor, sandbox context
+ * builder, and the post-finish commit/push/PR step. Other domains use the
+ * defaults from the generated `DOMAINS` registry. These reference runtime
+ * functions, so they stay hand-written rather than compiler-emitted.
  *
  * Keys are plain strings (the generated `DOMAINS` is `Record<string, …>`), so
  * a stale key no longer fails typecheck — delegates.test.ts asserts the
- * override is observably applied instead.
+ * override is observably applied instead. The base fields are `Partial`, but
+ * `SubagentPromptConfig` is kept whole so an override can't introduce a custom
+ * `inputSchema` without its paired `getPrompt`.
  */
-const DOMAIN_SPEC_OVERRIDES: Partial<Record<string, Partial<SubagentSpec>>> = {
+const DOMAIN_SPEC_OVERRIDES: Partial<
+  Record<string, Partial<SubagentSpecBase> & SubagentPromptConfig>
+> = {
   code: {
     model: "anthropic/claude-opus-4.7",
     stopSteps: 60,
     inputSchema: codeDelegationInputSchema,
+    getPrompt: getCodeDelegationPrompt,
     buildExperimentalContext: buildCodeExperimentalContext,
     postFinish: codePostFinish,
   },

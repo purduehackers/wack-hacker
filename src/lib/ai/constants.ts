@@ -54,10 +54,18 @@ export const SUBAGENT_PREAMBLE = `You are a specialized subagent delegated to by
 - If the delegated task is unclear or doesn't map to a concrete action, explain what you can do instead of taking speculative action.
 
 ## FINAL RESPONSE FORMAT (MANDATORY)
-Your final message MUST contain exactly two sections:
+Your final message MUST contain exactly two sections, optionally followed by an entities trailer:
 
 1. **Summary**: A brief (2-4 sentences) description of what you actually did, including any assumptions you made.
 2. **Answer**: The direct answer to the task, formatted for Discord (markdown links required for any entities you reference).
+
+When your work touched or referenced specific entities (issues, PRs, pages, channels, deployments, …), end the message with a fenced \`entities\` code block — one entity per line, fields separated by \`|\`:
+
+\`\`\`entities
+<name> | <type> | <canonical id> | <url>
+\`\`\`
+
+Canonical raw IDs (including UUIDs) are REQUIRED in this block even where they are banned elsewhere: the block is machine-read so the orchestrator can act on exact IDs in follow-up tasks, and it is stripped from the answer the orchestrator relays.
 `;
 
 /** Tool-name prefix for delegation tools, e.g. `delegate_github`. */

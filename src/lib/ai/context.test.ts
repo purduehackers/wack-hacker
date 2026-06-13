@@ -302,6 +302,20 @@ describe("AgentContext.buildInstructions", () => {
   });
 });
 
+describe("AgentContext.contextBlock", () => {
+  it("escapes quotes in username and channel name", () => {
+    const ctx = AgentContext.fromPacket(
+      messagePacket("hello", {
+        author: { id: "u1", username: 'al"ice' },
+        channel: { id: "ch-1", name: 'gen"eral' },
+      }),
+    );
+    const result = ctx.contextBlock();
+    expect(result).toContain(`username: ${JSON.stringify('al"ice')}`);
+    expect(result).toContain(`name: ${JSON.stringify('#gen"eral')}`);
+  });
+});
+
 describe("AgentContext.contextBlock: lead-in caps", () => {
   it("caps the recent-messages block at 4,000 chars, dropping oldest lines first", () => {
     // 30 messages × ~280 chars ≈ 8.4k chars — well over the block cap.
@@ -351,5 +365,27 @@ describe("AgentContext.contextBlock: lead-in caps", () => {
     const result = ctx.buildInstructions("Base.");
     expect(result).toContain("[1:00 PM] bob: hey");
     expect(result).toContain("[1:01 PM] eve: yo");
+  });
+});
+
+describe("AgentContext.subagentContextBlock", () => {
+  it("carries the requesting user, channel, date, instant, and timezone", () => {
+    const ctx = AgentContext.fromPacket(
+      messagePacket("hello", { author: { id: "u1", username: "alice", nickname: "Ali" } }),
+    );
+    const block = ctx.subagentContextBlock();
+    expect(block).toContain("<execution_context>");
+    expect(block).toContain('requesting_user: "Ali" (discord id u1)');
+    expect(block).toContain('channel: "#general"');
+    expect(block).toContain(`date: ${ctx.date}`);
+    expect(block).toContain(`now: ${ctx.nowISO}`);
+    expect(block).toContain(`tz: ${ctx.timezone}`);
+  });
+
+  it("escapes quotes in the nickname", () => {
+    const ctx = AgentContext.fromPacket(
+      messagePacket("hello", { author: { id: "u1", username: "alice", nickname: 'A"li' } }),
+    );
+    expect(ctx.subagentContextBlock()).toContain(`requesting_user: ${JSON.stringify('A"li')}`);
   });
 });

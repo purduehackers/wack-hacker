@@ -93,6 +93,7 @@ export function octokitClass() {
     rest = {
       repos: { listForOrg: vi.fn(), get: vi.fn() },
       search: { code: vi.fn(), issuesAndPullRequests: vi.fn() },
+      pulls: { list: vi.fn(), create: vi.fn() },
     };
   };
 }
