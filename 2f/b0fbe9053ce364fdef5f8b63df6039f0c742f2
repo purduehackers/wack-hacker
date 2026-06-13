@@ -1,0 +1,22 @@
+src/lib/ai/tools/_shared/define-tool.ts
+  s_e947ebbd513117::t_343ee1699b1586 42-47
+  s_e947ebbd513117::t_46ee64be3a79c2 211-215,217,232-258,260-261
+src/lib/ai/tools/_shared/define-tool.test.ts
+  s_e947ebbd513117::t_aa2208605bb641 176-188
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "2fb0fbe9053ce364fdef5f8b63df6039f0c742f2",
+  "prompts": {},
+  "sessions": {
+    "s_e947ebbd513117": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bbc7243f-7d19-41f9-9d1d-97eedb0b6968",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
