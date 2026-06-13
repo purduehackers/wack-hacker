@@ -173,6 +173,19 @@ describe("defineTool — streaming error envelope", () => {
     });
   });
 
+  it("streams a plain function that returns an async iterable, not just async generators", async () => {
+    async function* gen() {
+      yield { id: "p1", role: "assistant", parts: [{ type: "text", text: "via-iterable" }] };
+    }
+    // A regular function (constructor.name === "Function", not
+    // "AsyncGeneratorFunction") that returns an AsyncIterable. Detection is by
+    // the returned value, so this still streams instead of being JSON-buffered.
+    const t = makeStreamingTool(() => gen());
+    const chunks = await drain(t);
+    expect(chunks).toHaveLength(1);
+    expect(toModelOutput({ output: chunks.at(-1) }).value).toBe("via-iterable");
+  });
+
   it("counts tool.error with the class on the streaming path", async () => {
     // eslint-disable-next-line require-yield -- intentional throw-only generator
     const t = makeStreamingTool(async function* () {

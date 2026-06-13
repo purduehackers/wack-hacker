@@ -39,6 +39,12 @@ export function getToolMeta(t: unknown): ToolMeta | null {
   return meta ? (meta as ToolMeta) : null;
 }
 
+function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
+  return (
+    value != null && typeof (value as AsyncIterable<unknown>)[Symbol.asyncIterator] === "function"
+  );
+}
+
 function extractStatus(err: unknown): number | null {
   if (!err || typeof err !== "object") return null;
   const e = err as { status?: unknown; statusCode?: unknown; response?: { status?: unknown } };
@@ -201,20 +207,17 @@ export function defineTool<I extends z.ZodObject>(spec: {
   execute: (input: z.output<I>, ctx: ToolCallOptions) => Promise<unknown> | AsyncIterable<unknown>;
 }) {
   const { name, domain, access: accessSpec, outputBudget = DEFAULT_OUTPUT_BUDGET } = spec;
-  const isStreaming = spec.execute.constructor.name === "AsyncGeneratorFunction";
 
-  const streamingExecute = async function* (input: z.output<I>, ctx: ToolCallOptions) {
-    countMetric("tool.called", { domain, tool: name });
+  // Stream the error envelope through a generator as a UIMessage text part, not
+  // a bare string: a streaming tool's `toModelOutput` reads the final chunk's
+  // `parts` (see `bash`), so a bare string would be dropped to its fallback and
+  // the model would never see the classified error.
+  const streamThrough = async function* (iterable: AsyncIterable<unknown>) {
     try {
-      yield* spec.execute(input, ctx) as AsyncIterable<unknown>;
+      yield* iterable;
     } catch (err) {
       const cls = classifyToolError(err);
       countMetric("tool.error", { domain, tool: name, class: cls });
-      // Yield the envelope as a UIMessage text part, not a bare string. A
-      // streaming tool's `toModelOutput` reads the final chunk's `parts`
-      // (see `bash`), so a bare string would be dropped to its fallback and
-      // the model would never see the classified error. This mirrors the
-      // UIMessage chunks streaming tools yield on their happy path.
       yield {
         id: `${name}-error`,
         role: "assistant",
@@ -223,28 +226,39 @@ export function defineTool<I extends z.ZodObject>(spec: {
     }
   };
 
-  const bufferedExecute = (input: z.output<I>, ctx: ToolCallOptions) =>
-    withSpan("tool.execute", { "tool.domain": domain, "tool.name": name }, async (span) => {
-      countMetric("tool.called", { domain, tool: name });
-      try {
-        const result = await (spec.execute(input, ctx) as Promise<unknown>);
-        const text =
-          typeof result === "string" ? result : (JSON.stringify(result) ?? String(result));
-        span.setAttribute("tool.outcome", "ok");
-        return enforceBudget(text, outputBudget);
-      } catch (err) {
-        const cls = classifyToolError(err);
-        countMetric("tool.error", { domain, tool: name, class: cls });
-        span.setAttribute("tool.outcome", "error");
-        span.setAttribute("tool.error_class", cls);
-        return errorEnvelope(name, cls, err);
-      }
-    });
-
   const wrapped = tool({
     description: spec.description,
     inputSchema: spec.input,
-    execute: isStreaming ? streamingExecute : bufferedExecute,
+    // Detect streaming by the returned value, not `execute.constructor.name`:
+    // an async generator AND a plain function returning an `AsyncIterable` both
+    // stream, and value-based detection can't silently mis-route under
+    // bundling/transpilation that rewrites function names.
+    execute: (input: z.output<I>, ctx: ToolCallOptions) => {
+      countMetric("tool.called", { domain, tool: name });
+      const invoked = spec.execute(input, ctx);
+      if (isAsyncIterable(invoked)) {
+        return streamThrough(invoked);
+      }
+      return withSpan(
+        "tool.execute",
+        { "tool.domain": domain, "tool.name": name },
+        async (span) => {
+          try {
+            const result = await invoked;
+            const text =
+              typeof result === "string" ? result : (JSON.stringify(result) ?? String(result));
+            span.setAttribute("tool.outcome", "ok");
+            return enforceBudget(text, outputBudget);
+          } catch (err) {
+            const cls = classifyToolError(err);
+            countMetric("tool.error", { domain, tool: name, class: cls });
+            span.setAttribute("tool.outcome", "error");
+            span.setAttribute("tool.error_class", cls);
+            return errorEnvelope(name, cls, err);
+          }
+        },
+      );
+    },
     ...(spec.toModelOutput ? { toModelOutput: spec.toModelOutput } : {}),
   });
 
