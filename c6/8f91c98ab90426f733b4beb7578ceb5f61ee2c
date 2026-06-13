@@ -1,0 +1,48 @@
+src/lib/ai/tools/code/list_dir.ts
+  s_e947ebbd513117::t_cdb8274a1cbba7 21,23-28
+src/lib/ai/tools/search/index.ts
+  s_e947ebbd513117::t_26ab6de182149a 87-101,103-104,106-117
+src/lib/ai/tools/code/read.ts
+  s_e947ebbd513117::t_395ae3d757ba59 28-29
+src/lib/ai/tools/code/glob.test.ts
+  s_e947ebbd513117::t_2b325f024c80dc 99-101
+src/lib/ai/tools/code/edit.ts
+  s_e947ebbd513117::t_92de2223b54e11 59
+  s_e947ebbd513117::t_042a6654b66f6c 30,32
+src/lib/ai/tools/code/glob.ts
+  s_e947ebbd513117::t_7579f34a89b21a 32
+src/lib/ai/tools/code/write.test.ts
+  s_e947ebbd513117::t_8be26a1bede1fe 46-47
+  s_e947ebbd513117::t_8173fae878780a 50-55
+src/lib/ai/tools/code/edit.test.ts
+  s_e947ebbd513117::t_2ceaf690c562e2 101-114
+src/lib/ai/tools/code/write.ts
+  s_e947ebbd513117::t_79c7b3f190ff17 39
+  s_e947ebbd513117::t_fe60c23cdceedf 20
+src/lib/ai/tools/code/grep.ts
+  s_e947ebbd513117::t_2809426a9fd4e9 36
+src/lib/ai/tools/code/list_dir.test.ts
+  s_e947ebbd513117::t_e0d9cd5e748d7b 55,58-59,65-66
+src/lib/ai/tools/code/grep.test.ts
+  s_e947ebbd513117::t_df7770d8ba30ff 137-138
+src/lib/ai/tools/code/read.test.ts
+  s_e947ebbd513117::t_88ae9fb8c188d4 47,49-51,54,56-58
+src/lib/ai/tools/search/index.test.ts
+  s_e947ebbd513117::t_10d22e0412e7c4 71,77-78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "c68f91c98ab90426f733b4beb7578ceb5f61ee2c",
+  "prompts": {},
+  "sessions": {
+    "s_e947ebbd513117": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bbc7243f-7d19-41f9-9d1d-97eedb0b6968",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
