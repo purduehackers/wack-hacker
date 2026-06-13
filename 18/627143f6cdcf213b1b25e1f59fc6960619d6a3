@@ -1,0 +1,23 @@
+src/lib/ai/tools/coverage-manifest.test.ts
+  s_e947ebbd513117::t_1b3490bf49a5f6 1,9
+  s_e947ebbd513117::t_4ec3e46a5ba36b 3-8,10-18
+  s_e947ebbd513117::t_18f34619dd4480 20,24-28,30-31,40,43,50-55,88-92,95,105,107-110,112-122
+  s_e947ebbd513117::t_94b0a05dd36708 94,96-104
+  s_e947ebbd513117::t_9c95d5922db93d 57-87
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "18627143f6cdcf213b1b25e1f59fc6960619d6a3",
+  "prompts": {},
+  "sessions": {
+    "s_e947ebbd513117": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bbc7243f-7d19-41f9-9d1d-97eedb0b6968",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
