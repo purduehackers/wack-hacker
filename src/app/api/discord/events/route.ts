@@ -4,9 +4,9 @@ import { countMetric, recordDuration } from "@/lib/metrics";
 import { withSpan } from "@/lib/otel/tracing";
 import { PacketCodec } from "@/lib/protocol/packets";
 import { handleCallback } from "@/lib/tasks/queue/client";
-import { processEvent } from "@/server/process-event";
-
-const MAX_RETRIES = 3;
+import { LockContentionError } from "@/server/errors";
+import { eventRetryPolicy, processEvent } from "@/server/process-event";
+import { router } from "@/server/routes/handlers";
 
 export const POST = handleCallback<string>(
   async (encoded, metadata) => {
@@ -27,12 +27,22 @@ export const POST = handleCallback<string>(
         countMetric("discord.event.callback_received", { type: packet.type });
         try {
           const store = new ConversationStore();
-          await processEvent(packet, store);
+          await processEvent(packet, store, (p, ctx) => router.dispatch(p, ctx));
           logger.emit({ outcome: "ok", duration_ms: Date.now() - startTime });
         } catch (err) {
-          countMetric("discord.event.callback_error", { type: packet.type });
-          logger.error(err as Error);
-          logger.emit({ outcome: "error", duration_ms: Date.now() - startTime });
+          // Contention is expected while a mention dispatch holds the channel
+          // lock; log it as a warning so it doesn't inflate error metrics.
+          // The retry policy redelivers it on a short fixed delay.
+          if (err instanceof LockContentionError) {
+            logger.warn("channel lock contended, deferring to redelivery", {
+              channel_id: err.channelId,
+            });
+            logger.emit({ outcome: "lock_contention", duration_ms: Date.now() - startTime });
+          } else {
+            countMetric("discord.event.callback_error", { type: packet.type });
+            logger.error(err as Error);
+            logger.emit({ outcome: "error", duration_ms: Date.now() - startTime });
+          }
           throw err;
         } finally {
           recordDuration("discord.event.callback_duration", Date.now() - startTime, {
@@ -43,9 +53,6 @@ export const POST = handleCallback<string>(
     );
   },
   {
-    retry: (_error, metadata) => {
-      if (metadata.deliveryCount >= MAX_RETRIES) return { acknowledge: true };
-      return { afterSeconds: Math.min(300, 2 ** metadata.deliveryCount * 5) };
-    },
+    retry: eventRetryPolicy,
   },
 );
