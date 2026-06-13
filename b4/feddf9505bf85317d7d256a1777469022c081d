@@ -1,0 +1,259 @@
+src/lib/ai/tools/linear/project-updates.ts
+  s_e947ebbd513117::t_ca7d753848d595 3,7-15,17-30,32-42,44-55,57-66,68-74
+src/lib/ai/tools/sentry/profiling.ts
+  s_e947ebbd513117::t_e8bbb105d3f0ab 5,9-21,23-31,34-51,53-70
+src/lib/ai/tools/notion/pages.ts
+  s_e947ebbd513117::t_49d7c4929b256f 92-100,102-111
+  s_e947ebbd513117::t_688da19978686e 148-160,162-181
+  s_e947ebbd513117::t_fd4cc2b0642d58 25-39,41-48,50-57
+  s_e947ebbd513117::t_775e2f7a1711ff 59-72,74-81,83-90
+  s_e947ebbd513117::t_f8fd6c22a6e0ce 11
+  s_e947ebbd513117::t_d974f30aa71da7 113-119,121-125
+  s_e947ebbd513117::t_a9f05ccf3afa16 127-146
+src/lib/ai/tools/figma/nodes.ts
+  s_e947ebbd513117::t_72888accc90280 9,12-21,23-29,31-46,48-57,59-66,68-72
+src/lib/ai/tools/cms/service_accounts.ts
+  s_e947ebbd513117::t_fd6730422bafd1 3,40-51,53-70,72-89,91-100,102-113,115-125,127-143,145-163
+src/lib/ai/tools/figma/versions.ts
+  s_e947ebbd513117::t_81a1149945e4ff 5,8-18,20-41
+src/lib/ai/tools/code/bash.ts
+  s_e947ebbd513117::t_0dd1ca7e6d4d5e 1-2,6
+  s_e947ebbd513117::t_94d65972a805f8 56
+  s_e947ebbd513117::t_52c9733a40ce45 171
+  s_e947ebbd513117::t_31e1c02cf97b54 34-38
+src/lib/ai/tools/sentry/members.ts
+  s_e947ebbd513117::t_084490735ca658 17,21-28,30-52,55-61,63-86,89-96,98-115,118-124,126-137,140-147,149-169,172-179,181-190,193-201,203-215,218-224,226-237,240-247,249-261,264-271,273-285,288-298,300-312
+src/lib/ai/tools/sales/schema.ts
+  s_e947ebbd513117::t_f85c0a032ceb65 3,11-34
+src/lib/ai/tools/linear/initiative-updates.ts
+  s_e947ebbd513117::t_ba8a77ebfd7c3e 3,7-14,16-29,31-41,43-54,56-65,67-73
+src/lib/ai/tools/search/index.ts
+  s_e947ebbd513117::t_c04e8a1686a55c 5,18-62,64-102,104-105,107-124
+src/lib/ai/tools/sales/companies.ts
+  s_e947ebbd513117::t_dcf1494e5a05c6 20-39,41-56,58-64,66-70,72-82,84-98,100-107,109-116,118-125,127-134,136-143,145-152,154-161,163-170,172-180,182-193
+  s_e947ebbd513117::t_d7456df8ee9665 6
+src/lib/ai/tools/code/list_dir.ts
+  s_e947ebbd513117::t_d411a8887cec2b 42
+  s_e947ebbd513117::t_7713775b6e3d70 3,6-9,12-13
+src/lib/ai/tools/linear/customer-requests.ts
+  s_e947ebbd513117::t_8fb556dedc93b5 3,6-17,19-25,27-38,40-44,46-58
+src/lib/ai/tools/sentry/performance.ts
+  s_e947ebbd513117::t_df095eb25b96a4 5,9-26,28-40,43-61,63-72,75-95,97-115
+src/lib/ai/tools/notion/blocks.ts
+  s_e947ebbd513117::t_277575dbb21b4e 92-107,109-123
+  s_e947ebbd513117::t_d6a59870639614 63-71,73-90
+  s_e947ebbd513117::t_71c22d14e2dad4 4
+  s_e947ebbd513117::t_7f14e25f950e98 7-14,16-20
+  s_e947ebbd513117::t_ce818c45bed303 22-33,35-43
+  s_e947ebbd513117::t_194891f0638244 45-52,54-61
+src/lib/ai/tools/cms/emails.ts
+  s_e947ebbd513117::t_02dc8141fbc8e8 3,39-50,52-69,71-85,87-96,98-109,111-121,123-139,141-155,157-176
+src/lib/ai/tools/cms/media.ts
+  s_e947ebbd513117::t_ad2b7ca679c9e9 3,49-58,60-81,83-97,99-127,129-136,138,140-141,143-178
+src/lib/ai/tools/schedule/index.test.ts
+  s_e947ebbd513117::t_450316f0074627 163-176
+src/lib/ai/tools/notion/base.ts
+  s_e947ebbd513117::t_2bfe064d6525dd 124-140
+  s_e947ebbd513117::t_33a37f948f2efd 142-156,162-167
+  s_e947ebbd513117::t_d3cbff507c671e 103-122
+  s_e947ebbd513117::t_768ff4b2b2c377 22-33,35-55
+  s_e947ebbd513117::t_a158333b79da5c 82-88,90-101
+  s_e947ebbd513117::t_b440b74288cb20 6
+  s_e947ebbd513117::t_7a9f9a659adc37 57-63,65-80
+src/lib/ai/tools/linear/users.ts
+  s_e947ebbd513117::t_14391faf904450 3,6-16,26-29,31-38,40-58,60-66,68-73,75-83,85-103,105-112,114-119,121-127,129-134,136-147,149-185,187-193,195-199
+src/lib/ai/tools/sentry/monitors.ts
+  s_e947ebbd513117::t_20b34810b4b3fe 125-147,149-157,159-175,178-184,186-197
+  s_e947ebbd513117::t_6fcd3efcd324f7 11,15-23,25-50,53-60,62-73,76-84,86-98,101-106
+src/lib/ai/tools/linear/issues.ts
+  s_e947ebbd513117::t_76e05652738b9a 3,7-17,19-34,36-45,47-62,64-75,77-88,90-100,102-122
+src/lib/ai/tools/linear/membership.ts
+  s_e947ebbd513117::t_7b4ad6b0643e4d 3,6-17,19-33,35-49,51-66
+src/lib/ai/tools/linear/documents.ts
+  s_e947ebbd513117::t_02edba89793d1f 3,6-19,21-27,29-40,42-48
+src/lib/ai/tools/code/todo_write.ts
+  s_e947ebbd513117::t_2b55cffc12bf6d 3,11-14,19-20
+  s_e947ebbd513117::t_8866543c06c5ad 38
+src/lib/ai/tools/linear/teams.ts
+  s_e947ebbd513117::t_918bd24f1b6bf4 3,6-13,15-29,31-39,41-54,56-68,70-74,76-79
+src/lib/ai/skills/loader.ts
+  s_e947ebbd513117::t_7cffbd4d2f5eae 6
+  s_e947ebbd513117::t_1f1bd64c0a86df 16-34,42-43
+src/lib/ai/tools/linear/labels.ts
+  s_e947ebbd513117::t_2c13b48bb35d2d 3,6-14,16-34,36-53,55-65,67-78,80-89,91-97,99-110
+src/lib/ai/tools/sales/outreach.ts
+  s_e947ebbd513117::t_7cace491ce6caa 3
+  s_e947ebbd513117::t_c0a0564e01380b 47-58,60-62,64-91,93-124
+src/lib/ai/tools/docs/index.ts
+  s_e947ebbd513117::t_c1e25ca3b3c38a 4,9-26,28-30,32-35
+src/lib/ai/tools/code/read.ts
+  s_e947ebbd513117::t_ef810f3ff18175 3,8-11,14-15
+  s_e947ebbd513117::t_3eed7b5a4a8eb8 70
+src/lib/ai/tools/schedule/index.ts
+  s_e947ebbd513117::t_588224cffac0be 81-87
+  s_e947ebbd513117::t_d85e160167b2dc 189-198,200-207
+  s_e947ebbd513117::t_46f086ac53eb2a 166-167,169-174
+src/lib/ai/tools/figma/dev-resources.ts
+  s_e947ebbd513117::t_de837885df7d10 11,14-22,24-33,35-52,54-64,66-74,76-85,87-94,96-100
+src/lib/ai/tools/cms/media.test.ts
+  s_e947ebbd513117::t_0b4eaea1cb5ee9 140,142-143,150-151
+src/lib/ai/tools/cms/shelter_projects.ts
+  s_e947ebbd513117::t_3bd959d8546d0e 3,42-50,52-69,71-88,90-102,104-115,117-129,131-145,147-164,166-184,186-204
+src/lib/ai/tools/code/preview_url.ts
+  s_e947ebbd513117::t_cfc751931f7770 3,8-11,14-17
+  s_e947ebbd513117::t_6e5970e003bec3 38
+src/lib/ai/tools/_shared/define-tool.ts
+  s_e947ebbd513117::t_3c076f0a13e28b 190-195
+  s_e947ebbd513117::t_b59774940e7238 234
+src/lib/ai/tools/code/edit.ts
+  s_e947ebbd513117::t_c8fb45b3703637 86
+  s_e947ebbd513117::t_9794704a57b1ec 3,6-9,12-13
+src/lib/ai/tools/cms/events.ts
+  s_e947ebbd513117::t_03cf0c1dba79b6 3,46-57,59-76,78-92,94-108,110-124,126-141,143-158,160-174,176-194,196-214,216-235
+src/lib/ai/tools/sentry/metrics.ts
+  s_e947ebbd513117::t_6f4ea42092a8bd 3,7-14,16-22,25-50,52-63,66-73,75-82,85-93,95-102
+src/lib/ai/tools/linear/issue-views.ts
+  s_e947ebbd513117::t_b961bac7097744 3,6-19,21-42
+src/lib/ai/tools/sentry/events.ts
+  s_e947ebbd513117::t_8286b074dba226 11,15-23,25-45,48-56,58-81,84-91,93-116,119-129,131-151
+src/lib/ai/tools/sales/enrichment.ts
+  s_e947ebbd513117::t_dd6896140eb1b0 3
+  s_e947ebbd513117::t_9bdc5b5241a00a 60-70,72-79,81-86,88-89,91,93-117,119-129
+src/lib/ai/tools/sales/contacts.ts
+  s_e947ebbd513117::t_06b1652cc7f796 6
+  s_e947ebbd513117::t_ef0ea5c4dae2d2 20-36,38-53,55-61,63-67,69-79,81-95,97-104,106-113,115-122,124-131,133-140,142-149,151-159,161-172
+src/lib/ai/tools/code/run_checks.ts
+  s_e947ebbd513117::t_b7eef8678e5d49 84
+  s_e947ebbd513117::t_8ad5369a3705dc 16-19,24-25
+  s_e947ebbd513117::t_1377dea81288c2 5
+src/lib/ai/tools/figma/variables.ts
+  s_e947ebbd513117::t_999fc2450deb98 10,13-20,22-28,30-37,39-45,47-66,68-75,77-79
+src/lib/ai/tools/figma/base.ts
+  s_e947ebbd513117::t_602320ef8456fd 111-124,126-140,144,146-148
+  s_e947ebbd513117::t_22bcf9d2eb1956 31-44,46-57
+  s_e947ebbd513117::t_ca44f2a7eb5c26 9
+  s_e947ebbd513117::t_da2a015f42fabf 76-83,85-89
+  s_e947ebbd513117::t_62d243a1bd9762 91-109
+  s_e947ebbd513117::t_f0f8dd409fdce7 59-74
+src/lib/ai/tools/roster/index.ts
+  s_e947ebbd513117::t_e53fd88276621e 5,9-24,26-29,31-44
+src/lib/ai/tools/audit/index.ts
+  s_e947ebbd513117::t_41ae6fb0fd0c69 7,11-32,34-39,41-44
+src/lib/ai/tools/linear/project-views.ts
+  s_e947ebbd513117::t_85a7ae8636de03 3,6-14,16-27
+src/lib/ai/tools/sales/deals.ts
+  s_e947ebbd513117::t_35968d0bca1422 10
+  s_e947ebbd513117::t_cc23fa6b33b88e 24-40,42-57,59-65,67-71,73-84,86-94,96-103,105-121,123-133,135-146
+src/lib/ai/tools/cms/rsvps.ts
+  s_e947ebbd513117::t_1363d92d2e5cf0 37-47,49
+  s_e947ebbd513117::t_f3c96f595a460f 50-71,73-87,89-98,100-116,118-129,131-145,147-162
+  s_e947ebbd513117::t_c61fcbff5032df 3
+src/lib/ai/tools/figma/components.ts
+  s_e947ebbd513117::t_d4227b806e18d4 55-62,64-78
+  s_e947ebbd513117::t_0d4b5232879912 110-118,120-134
+  s_e947ebbd513117::t_bb2f335dbda572 156-163,165-179
+  s_e947ebbd513117::t_0ef6a41cfb937f 197-203,205-209
+  s_e947ebbd513117::t_b9aef76e90153f 96-102,104-108
+  s_e947ebbd513117::t_cb45ea1ef8a674 17
+  s_e947ebbd513117::t_c4370a7e8f0a49 136-142,144-150
+  s_e947ebbd513117::t_0dd34f0f0c4382 181-187,189-195
+  s_e947ebbd513117::t_8762bc22df87b9 80-86,88-94
+src/lib/ai/tools/sales/emails.ts
+  s_e947ebbd513117::t_a84834c15c5f14 3,6-13,15-20,22-29,31-36
+src/lib/ai/tools/sentry/membership.ts
+  s_e947ebbd513117::t_2d91be94fbcc6f 4,7-27,29-51,53-60,62-73
+src/lib/ai/tools/sentry/alerts.ts
+  s_e947ebbd513117::t_2f81a533131d22 13,17-23,25-48,51-58,60-72,75-95,97-124,127-140,142-177,180-187,189-201,204-231,234-241,243-254
+src/lib/ai/tools/linear/cycles.ts
+  s_e947ebbd513117::t_eca908368283f6 3,6-14,16-21,29-32,34-53,55-66,68-79,81-91,93-116
+src/lib/ai/tools/sentry/issue-management.ts
+  s_e947ebbd513117::t_618506beab7deb 10,14-39,41-61,64-70,72-83,86-99,101-120,123-130,132-151,154-161,163-183
+src/lib/ai/tools/sentry/projects-management.ts
+  s_e947ebbd513117::t_a5b2dc844b91b6 13,16-26,28-40,42-57,59-71,73-80,82-93,95-102,104-115,117-124,126-145,147-154,156-168,170-178,180-192
+src/lib/ai/tools/sales/broadcasts.ts
+  s_e947ebbd513117::t_475674c185c3fe 3,6-18,20-26,28-33,35-51,53-66,68-79,81-88,90-96,98-103
+src/lib/ai/tools/notion/databases.ts
+  s_e947ebbd513117::t_fb9146dd10ae9e 59-71,73-78,80-87
+  s_e947ebbd513117::t_50866707175526 13-33,35-42,44-57
+  s_e947ebbd513117::t_24cf53cadd7846 118-125,127-137
+  s_e947ebbd513117::t_36e58ac67e4849 10
+  s_e947ebbd513117::t_e2a8a5facd733a 89-100,102-116
+src/lib/ai/tools/notion/comments.ts
+  s_e947ebbd513117::t_4779f47da512ac 6
+  s_e947ebbd513117::t_c48090a1f307d4 56-72,78-83
+  s_e947ebbd513117::t_ffd7ec4c8a42fe 9-33
+  s_e947ebbd513117::t_ea2f1ec4588360 35-42,44-54
+src/lib/ai/tools/cms/ugrants.ts
+  s_e947ebbd513117::t_386e52d51c2020 3,44-52,54-71,73-87,89-102,104-121,123-136,138-154,156-170,172-190,192-210
+src/lib/ai/policy/index.ts
+  s_e947ebbd513117::t_864381da668cb8 1
+src/lib/ai/tools/linear/reminders.ts
+  s_e947ebbd513117::t_d0307c3cca65c3 3,6-14,16-22
+src/lib/ai/tools/code/grep.ts
+  s_e947ebbd513117::t_27845c9b12dc13 72
+  s_e947ebbd513117::t_9c41e5437159a7 3,8-11,14-15
+src/lib/ai/tools/sentry/replays.ts
+  s_e947ebbd513117::t_618c00020b341c 5,9-21,23-25,27-56,59-66,68-79
+src/lib/ai/tools/linear/base.ts
+  s_e947ebbd513117::t_db897e3ff40eea 3,6-122,126-128,130-183,185-189,191-214,216-218,220-224,226-259,261-276,278-299,302-303,305-308
+src/lib/ai/tools/linear/projects.ts
+  s_e947ebbd513117::t_97c70baea55509 3,6-21,23-29,31-46,48-54,56-66,68-74,76-85,87-93,95-115,117-128,130-140,142-152,154-184
+src/lib/ai/tools/figma/comments.ts
+  s_e947ebbd513117::t_38e6a5cee6c682 50-62,64-75
+  s_e947ebbd513117::t_0c44b1e7e1c2d1 77-84,86-90
+  s_e947ebbd513117::t_973a815c397c1e 108-116,118-124
+  s_e947ebbd513117::t_0e1ff79dac5812 5
+  s_e947ebbd513117::t_2cf6075f97a848 92-100,102-106
+  s_e947ebbd513117::t_75585ee77e260b 29-40,42-48
+src/lib/ai/tools/sentry/traces.ts
+  s_e947ebbd513117::t_e97f3ad36ee52f 4,8-16,18-25,28-42,44-57
+src/lib/ai/tools/sales/domains.ts
+  s_e947ebbd513117::t_56d0d7a6e72b48 3,6-18,20-26,28-33,35-46,48-53,55-62,64-69,71-78,80-85
+src/lib/ai/tools/linear/comments.ts
+  s_e947ebbd513117::t_c5a5d05baeddfa 3,6-19,21-33,35-45
+src/lib/ai/tools/cms/hack_night_sessions.ts
+  s_e947ebbd513117::t_1b1765033471d8 3,35-43,45-62,64-81,83-95,97-113,115-121,123-152,154-165,167-184,186-224
+src/lib/ai/tools/code/write.ts
+  s_e947ebbd513117::t_b6b2878fbba07d 60
+  s_e947ebbd513117::t_276d2fd401dfa8 4,7-10,13-14
+src/lib/ai/tools/figma/webhooks.ts
+  s_e947ebbd513117::t_76726d9e59b27b 112-118,120-124
+  s_e947ebbd513117::t_40efd920fbff7c 34-44
+  s_e947ebbd513117::t_5969b70b044ad3 72-78,80-84
+  s_e947ebbd513117::t_1eff01803cdd8c 46-56,58-70
+  s_e947ebbd513117::t_5b056a8eee38cd 86-97,99-110
+  s_e947ebbd513117::t_db888b2e2281bc 11
+src/lib/ai/tools/sentry/releases.ts
+  s_e947ebbd513117::t_8a541d316ca4d1 12,16-25,27-50,53-59,61-72,75-85,87-101,104-110,112-123,126-137,139-156,159-165,167-186
+src/lib/ai/tools/code/glob.ts
+  s_e947ebbd513117::t_c1f345e3778697 72
+  s_e947ebbd513117::t_7ea1dc5402e1fe 4,9-12,15-16
+src/lib/ai/tools/sentry/stats.ts
+  s_e947ebbd513117::t_6cca35c5dffc57 8,12-35,37-52,55-70,72-92
+src/lib/ai/tools/linear/initiatives.ts
+  s_e947ebbd513117::t_a2cc55509db732 3,6-18,20-26,28-40,42-48,50-68,70-83
+src/lib/ai/tools/sentry/logs.ts
+  s_e947ebbd513117::t_a8587e9ce62368 9,13-31,33-51,54-70,72-87
+src/lib/ai/tools/sentry/base.ts
+  s_e947ebbd513117::t_83586d7287026c 11,15-39,42-49,51-62,65-76,78-107,110-117,119-148
+src/lib/ai/tools/cms/users.ts
+  s_e947ebbd513117::t_71a28706572f0e 3,38-46,48-65,67-84,86-95,97-108,110-119,121-136,138-156
+src/lib/ai/tools/sales/audiences.ts
+  s_e947ebbd513117::t_2d2f062f7552cc 3,6-18,20-26,28-33,35-41,43-48,50-57,59-64,66-73,75-80,82-92,94-105,107-116,118-128
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "b4feddf9505bf85317d7d256a1777469022c081d",
+  "prompts": {},
+  "sessions": {
+    "s_e947ebbd513117": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bbc7243f-7d19-41f9-9d1d-97eedb0b6968",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}

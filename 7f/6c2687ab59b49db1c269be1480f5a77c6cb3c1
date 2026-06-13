@@ -1,0 +1,27 @@
+src/lib/ai/tools/_shared/define-tool.ts
+  s_e947ebbd513117::t_cf58c33c2696ed 162-164,174-178,190,193-222,227,230-231,238
+src/lib/ai/tools/_shared/define-tool.test.ts
+  s_e947ebbd513117::t_5d83815ea7bc70 12
+  s_e947ebbd513117::t_4407f016eec00b 202,209
+src/lib/ai/tools/access-coverage.test.ts
+  s_e947ebbd513117::t_0346218e4e3d14 37,41-44
+  s_e947ebbd513117::t_948334bc1cdb8e 72
+src/lib/ai/policy/access.ts
+  s_e947ebbd513117::t_849e240aab4ede 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "7f6c2687ab59b49db1c269be1480f5a77c6cb3c1",
+  "prompts": {},
+  "sessions": {
+    "s_e947ebbd513117": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bbc7243f-7d19-41f9-9d1d-97eedb0b6968",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
