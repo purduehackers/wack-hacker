@@ -261,11 +261,9 @@ export function createDelegationTool(
           stepsObserved = message.parts.filter((p) => p.type === "step-start").length;
           yield message;
         }
-        if (streamError !== undefined) {
-          throw streamError instanceof Error
-            ? streamError
-            : new Error("Subagent stream errored", { cause: streamError });
-        }
+        // The SDK normalizes thrown values to `Error` before delivering them
+        // to onError, so this rethrows the original failure as-is.
+        if (streamError !== undefined) throw streamError;
 
         const [usage, steps] = await Promise.all([result.totalUsage, result.steps]);
         stepsObserved = steps.length;

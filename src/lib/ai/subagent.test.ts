@@ -521,6 +521,18 @@ describe("entities handoff helpers", () => {
     ]);
   });
 
+  it("skips trailer lines without a name and tolerates sparse fields", () => {
+    const text =
+      "Answer.\n\n```entities\n| ghost | id-1 | https://x.test/g\nPH-9 | | abc-123 |\n```";
+    const { entities } = extractEntitiesTrailer(text);
+    expect(entities).toEqual([{ name: "PH-9", type: undefined, id: "abc-123", url: undefined }]);
+  });
+
+  it("renders url-less entities as plain text in the appendix", () => {
+    const out = appendEntitiesAppendix("Done.\n\n```entities\nPH-9 | issue | abc-123 |\n```");
+    expect(out).toBe("Done.\n\nEntities: PH-9 (issue abc-123)");
+  });
+
   it("folds extra pipes into the entity name instead of shifting fields", () => {
     const text =
       "Answer.\n\n```entities\nHack Night | Week 3 | page | 1a2b-uuid | https://notion.so/abc\n```";
