@@ -102,10 +102,12 @@ describe("AgentContext.fromPacket", () => {
 });
 
 describe("AgentContext.fromPacket: scheduling fields", () => {
-  it("captures the current instant as ISO 8601", () => {
+  it("captures the current instant as minute-precision ISO 8601", () => {
+    // Minute precision, not milliseconds — nowISO lands in the system prompt,
+    // and sub-minute churn would bust the prompt cache every turn.
     const ctx = AgentContext.fromPacket(messagePacket("hello"));
-    expect(ctx.nowISO).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
-    expect(Math.abs(Date.now() - new Date(ctx.nowISO).getTime())).toBeLessThan(5_000);
+    expect(ctx.nowISO).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00Z$/);
+    expect(Math.abs(Date.now() - new Date(ctx.nowISO).getTime())).toBeLessThan(61_000);
   });
 
   it("defaults timezone to America/New_York", () => {
@@ -150,7 +152,8 @@ describe("AgentContext serialization", () => {
       date: "Monday, April 13, 2026",
     });
     expect(ctx.timezone).toBe("America/New_York");
-    expect(Math.abs(Date.now() - new Date(ctx.nowISO).getTime())).toBeLessThan(5_000);
+    expect(ctx.nowISO).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00Z$/);
+    expect(Math.abs(Date.now() - new Date(ctx.nowISO).getTime())).toBeLessThan(61_000);
   });
 });
 
@@ -296,5 +299,57 @@ describe("AgentContext.buildInstructions", () => {
     });
     const result = ctx.buildInstructions("Base.");
     expect(result).toContain("<recent_thread_messages>");
+  });
+});
+
+describe("AgentContext.contextBlock: lead-in caps", () => {
+  it("caps the recent-messages block at 4,000 chars, dropping oldest lines first", () => {
+    // 30 messages × ~280 chars ≈ 8.4k chars — well over the block cap.
+    const recentMessages = Array.from({ length: 30 }, (_, i) => ({
+      id: `m-${i}`,
+      author: `user${i}`,
+      content: `msg${i} ${"x".repeat(270)}`,
+      timestamp: "1:00 PM",
+    }));
+    const ctx = AgentContext.fromPacket(messagePacket("hello"), { recentMessages });
+    const result = ctx.buildInstructions("Base.");
+
+    const block = result.match(/<recent_channel_messages>\n([\s\S]*)\n<\/recent_channel_messages>/);
+    expect(block).not.toBeNull();
+    expect(block![1]!.length).toBeLessThanOrEqual(4_000);
+    // Newest messages survive; oldest are dropped.
+    expect(block![1]).toContain("msg29 ");
+    expect(block![1]).not.toContain("msg0 ");
+  });
+
+  it("caps the referenced block at 4,000 chars while keeping the anchor last", () => {
+    const referencedContext = Array.from({ length: 30 }, (_, i) => ({
+      id: `r-${i}`,
+      author: `user${i}`,
+      content: `ref${i} ${"x".repeat(270)}`,
+      timestamp: "12:55 PM",
+    }));
+    const ctx = AgentContext.fromPacket(messagePacket("hello"), { referencedContext });
+    const result = ctx.buildInstructions("Base.");
+
+    const block = result.match(
+      /<referenced_message_context>\n[\s\S]*?chronological order\.\n([\s\S]*)\n<\/referenced_message_context>/,
+    );
+    expect(block).not.toBeNull();
+    expect(block![1]!.length).toBeLessThanOrEqual(4_000);
+    // The reply anchor is the last entry and must survive the cap.
+    expect(block![1]!.trimEnd().endsWith(`ref29 ${"x".repeat(270)}`)).toBe(true);
+    expect(block![1]).not.toContain("ref0 ");
+  });
+
+  it("leaves a small lead-in block untouched", () => {
+    const recentMessages = [
+      { id: "m-bob", author: "bob", content: "hey", timestamp: "1:00 PM" },
+      { id: "m-eve", author: "eve", content: "yo", timestamp: "1:01 PM" },
+    ];
+    const ctx = AgentContext.fromPacket(messagePacket("hello"), { recentMessages });
+    const result = ctx.buildInstructions("Base.");
+    expect(result).toContain("[1:00 PM] bob: hey");
+    expect(result).toContain("[1:01 PM] eve: yo");
   });
 });

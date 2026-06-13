@@ -2,16 +2,7 @@
 name: issue-management
 description: Update, resolve, ignore, assign, delete, and tag issues.
 criteria: Use when the user wants to resolve, ignore, assign, delete issues, or inspect issue tags.
-tools:
-  [
-    update_issue,
-    delete_issue,
-    bulk_update_issues,
-    resolve_issue,
-    ignore_issue,
-    list_issue_tags,
-    get_issue_tag_values,
-  ]
+tools: [update_issue, delete_issue, bulk_update_issues, list_issue_tags, get_issue_tag_values]
 minRole: organizer
 mode: inline
 ---

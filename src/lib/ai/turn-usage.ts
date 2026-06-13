@@ -1,4 +1,4 @@
-import type { TurnUsage } from "./types.ts";
+import type { OrchestratorUsage, TurnUsage } from "./types.ts";
 
 /**
  * Shape of an AI SDK tool call entry on a step's `toolCalls`. Every call
@@ -23,6 +23,8 @@ export class TurnUsageTracker {
   private orchestratorInputTokens = 0;
   private orchestratorOutputTokens = 0;
   private orchestratorTotalTokens = 0;
+  private orchestratorCacheReadTokens = 0;
+  private orchestratorCacheWriteTokens = 0;
   private orchestratorToolCalls = 0;
   private stepCount = 0;
   private orchestratorToolNames: string[] = [];
@@ -41,12 +43,19 @@ export class TurnUsageTracker {
    * internal TurnUsage contract stays numeric.
    */
   recordOrchestrator(args: {
-    usage: { inputTokens?: number; outputTokens?: number; totalTokens?: number };
+    usage: OrchestratorUsage;
     steps: ReadonlyArray<{ toolCalls: ReadonlyArray<unknown> }>;
   }): void {
     this.orchestratorInputTokens = args.usage.inputTokens ?? 0;
     this.orchestratorOutputTokens = args.usage.outputTokens ?? 0;
     this.orchestratorTotalTokens = args.usage.totalTokens ?? 0;
+    // Ad-hoc cache accounting until plan 05's metrics work lands: the cache
+    // hit/write split is the verification signal for orchestrator prompt
+    // caching (cache reads > 0 on step 2+ proves the gateway forwards
+    // anthropic cacheControl). `cachedInputTokens` is the deprecated alias.
+    this.orchestratorCacheReadTokens =
+      args.usage.inputTokenDetails?.cacheReadTokens ?? args.usage.cachedInputTokens ?? 0;
+    this.orchestratorCacheWriteTokens = args.usage.inputTokenDetails?.cacheWriteTokens ?? 0;
     this.orchestratorToolCalls = args.steps.reduce((sum, step) => sum + step.toolCalls.length, 0);
     this.stepCount = args.steps.length;
     this.orchestratorToolNames = args.steps.flatMap((step) =>
@@ -55,6 +64,16 @@ export class TurnUsageTracker {
         return typeof name === "string" ? [name] : [];
       }),
     );
+  }
+
+  /** Orchestrator prompt-cache reads for the turn (0 when caching is cold or broken). */
+  get cacheReadTokens(): number {
+    return this.orchestratorCacheReadTokens;
+  }
+
+  /** Orchestrator prompt-cache writes for the turn. */
+  get cacheWriteTokens(): number {
+    return this.orchestratorCacheWriteTokens;
   }
 
   /** Convenience accessor for the post-stream tool-call total (orchestrator + subagent). */
