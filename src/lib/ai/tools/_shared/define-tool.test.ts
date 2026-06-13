@@ -9,7 +9,7 @@ vi.mock("@/lib/metrics", () => ({
 
 import { countMetric } from "@/lib/metrics";
 
-import { getAccessSpec } from "../../policy/index.ts";
+import { resolveAccessSpec } from "../../policy/access.ts";
 import { classifyToolError, defineTool, getToolMeta } from "./define-tool.ts";
 
 function makeTool(
@@ -199,14 +199,14 @@ describe("defineTool — output budget", () => {
 describe("defineTool — access", () => {
   it("stamps the access descriptor for applyPolicy to read", () => {
     const t = makeTool(async () => "ok", { access: { risk: "read" } });
-    expect(getAccessSpec(t)).toEqual({ risk: "read" });
+    expect(resolveAccessSpec(t)).toEqual({ risk: "read" });
   });
 
   it("carries a destructive descriptor with confirm + reason verbatim", () => {
     const t = makeTool(async () => "ok", {
       access: { risk: "destructive", confirm: "self", reason: "irreversible" },
     });
-    expect(getAccessSpec(t)).toEqual({
+    expect(resolveAccessSpec(t)).toEqual({
       risk: "destructive",
       confirm: "self",
       reason: "irreversible",

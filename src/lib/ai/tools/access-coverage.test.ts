@@ -34,8 +34,14 @@ vi.mock("@vercel/sandbox", () => ({
 // (and its import-time client construction) loads.
 const { AgentContext } = await import("@/lib/ai/context");
 const { access, getAccessSpec } = await import("@/lib/ai/policy");
+const { getToolMeta } = await import("./_shared/define-tool.ts");
 const { SkillRegistry, createLoadSkillTool } = await import("@/lib/ai/skills");
 const { createScheduleTask } = await import("./schedule/index.ts");
+
+/** Explicit access declaration from either authoring path (factory or marker). */
+function explicitSpec(value: unknown) {
+  return getToolMeta(value)?.access ?? getAccessSpec(value);
+}
 
 const TOOLS_DIR = import.meta.dirname;
 
@@ -63,7 +69,7 @@ function checkExports(moduleExports: Record<string, unknown>, relPath: string): 
   const out: Violation[] = [];
   for (const [name, value] of Object.entries(moduleExports)) {
     if (!isToolLike(value)) continue;
-    const spec = getAccessSpec(value);
+    const spec = explicitSpec(value);
     if (!spec || !RISKS.has(spec.risk)) {
       out.push({
         file: relPath,
@@ -120,14 +126,14 @@ describe("access declaration coverage", () => {
 describe("factory-built tools (invisible to the static walk)", () => {
   it("createScheduleTask output carries a self-confirmed write spec", () => {
     const t = createScheduleTask(AgentContext.fromPacket(messagePacket("hello")));
-    const spec = getAccessSpec(t);
+    const spec = explicitSpec(t);
     expect(spec?.risk).toBe("write");
     expect(spec?.confirm).toBe("self");
   });
 
   it("createLoadSkillTool output carries a public read spec", () => {
     const t = createLoadSkillTool(new SkillRegistry({}), "admin");
-    const spec = getAccessSpec(t);
+    const spec = explicitSpec(t);
     expect(spec?.risk).toBe("read");
     expect(spec?.minRole).toBe("public");
   });

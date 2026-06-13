@@ -6,8 +6,6 @@ import { withSpan } from "@/lib/otel/tracing";
 
 import type { AccessSpec } from "../../policy/types.ts";
 
-import { access } from "../../policy/index.ts";
-
 /**
  * `defineTool` declares a tool's access with plan 09's `AccessSpec`
  * (`{ risk, minRole?, confirm?, reason? }`) and stamps it via the policy
@@ -161,9 +159,9 @@ function enforceBudget(text: string, budget: number): string {
  * Uniform authoring surface for the tool catalog. Wraps the AI SDK's `tool()`
  * with the four cross-cutting behaviors every tool needs:
  *
- * 1. Access — stamps the policy `access()` descriptor from `access`, so
- *    `applyPolicy` gates/confirms the tool uniformly and call sites stop
- *    hand-wrapping exports.
+ * 1. Access — records the policy `AccessSpec` on the tool's metadata (the
+ *    single marker `applyPolicy` reads via `resolveAccessSpec`), so the tool
+ *    is gated/confirmed uniformly and call sites stop hand-wrapping exports.
  * 2. Error envelope — failures come back as a one-line, model-actionable
  *    string (classified not-found / permission / rate-limit / invalid-input /
  *    transient), never a stack. Counted as `tool.error{domain, tool, class}`.
@@ -172,6 +170,11 @@ function enforceBudget(text: string, budget: number): string {
  *    truncated with an explicit marker, item-aware for JSON list payloads.
  * 4. Telemetry — a `tool.execute` span (domain/tool/outcome attrs) plus
  *    `tool.called{domain, tool}`, cheap aggregates independent of sampling.
+ *
+ * `execute` may be a normal async function or an async generator. Streaming
+ * tools (e.g. the sandbox's `bash`) take the generator path: their chunks pass
+ * through untouched (no mid-stream budget truncation), with telemetry and a
+ * final error envelope still applied.
  *
  * Approval denials happen in `applyPolicy`, outside this wrapper, so the
  * envelope can never swallow them.
@@ -184,37 +187,53 @@ export function defineTool<I extends z.ZodObject>(spec: {
   access: AccessSpec;
   input: I;
   outputBudget?: number;
-  execute: (input: z.output<I>, ctx: ToolCallOptions) => Promise<unknown>;
+  execute: (input: z.output<I>, ctx: ToolCallOptions) => Promise<unknown> | AsyncIterable<unknown>;
 }) {
   const { name, domain, access: accessSpec, outputBudget = DEFAULT_OUTPUT_BUDGET } = spec;
+  const isStreaming = spec.execute.constructor.name === "AsyncGeneratorFunction";
+
+  const streamingExecute = async function* (input: z.output<I>, ctx: ToolCallOptions) {
+    countMetric("tool.called", { domain, tool: name });
+    try {
+      yield* spec.execute(input, ctx) as AsyncIterable<unknown>;
+    } catch (err) {
+      const cls = classifyToolError(err);
+      countMetric("tool.error", { domain, tool: name, class: cls });
+      yield errorEnvelope(name, cls, err);
+    }
+  };
+
+  const bufferedExecute = (input: z.output<I>, ctx: ToolCallOptions) =>
+    withSpan("tool.execute", { "tool.domain": domain, "tool.name": name }, async (span) => {
+      countMetric("tool.called", { domain, tool: name });
+      try {
+        const result = await (spec.execute(input, ctx) as Promise<unknown>);
+        const text =
+          typeof result === "string" ? result : (JSON.stringify(result) ?? String(result));
+        span.setAttribute("tool.outcome", "ok");
+        return enforceBudget(text, outputBudget);
+      } catch (err) {
+        const cls = classifyToolError(err);
+        countMetric("tool.error", { domain, tool: name, class: cls });
+        span.setAttribute("tool.outcome", "error");
+        span.setAttribute("tool.error_class", cls);
+        return errorEnvelope(name, cls, err);
+      }
+    });
 
   const wrapped = tool({
     description: spec.description,
     inputSchema: spec.input,
-    execute: (input: z.output<I>, ctx: ToolCallOptions) =>
-      withSpan("tool.execute", { "tool.domain": domain, "tool.name": name }, async (span) => {
-        countMetric("tool.called", { domain, tool: name });
-        try {
-          const result = await spec.execute(input, ctx);
-          const text =
-            typeof result === "string" ? result : (JSON.stringify(result) ?? String(result));
-          span.setAttribute("tool.outcome", "ok");
-          return enforceBudget(text, outputBudget);
-        } catch (err) {
-          const cls = classifyToolError(err);
-          countMetric("tool.error", { domain, tool: name, class: cls });
-          span.setAttribute("tool.outcome", "error");
-          span.setAttribute("tool.error_class", cls);
-          return errorEnvelope(name, cls, err);
-        }
-      }),
+    execute: isStreaming ? streamingExecute : bufferedExecute,
   });
 
+  // Single marker: the access spec lives only on the tool meta, read by
+  // `applyPolicy` via `resolveAccessSpec`. No separate `access()` stamp.
   (wrapped as unknown as Record<symbol, ToolMeta>)[TOOL_META] = {
     name,
     domain,
     access: accessSpec,
     outputBudget,
   };
-  return access(accessSpec, wrapped);
+  return wrapped;
 }

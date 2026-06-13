@@ -1,6 +1,7 @@
 import type { AccessSpec } from "./types.ts";
 
 import { getApprovalOptions } from "../approvals/index.ts";
+import { getToolMeta } from "../tools/_shared/define-tool.ts";
 
 const ACCESS_MARKER = Symbol("access");
 
@@ -18,14 +19,18 @@ export function getAccessSpec(t: unknown): AccessSpec | null {
 }
 
 /**
- * Resolve the effective access spec for a tool. Tools without an `access()`
- * marker fall back to behavior-preserving legacy semantics: a lingering
- * `approval()` marker maps to `confirm: "self"`, and unmarked tools stay
- * visible to everyone with no confirmation — exactly what they got before
- * the policy layer existed. This keeps meta-tools (loadSkill, delegates) and
- * any not-yet-migrated tool working while migration proceeds.
+ * Resolve the effective access spec for a tool. Precedence:
+ *   1. `defineTool`'s metadata (the canonical single marker, once a tool is
+ *      authored through the factory);
+ *   2. a standalone `access()` marker (tools not yet migrated to `defineTool`);
+ *   3. behavior-preserving legacy fallback — a lingering `approval()` marker
+ *      maps to `confirm: "self"`, and unmarked tools (the dynamically-built
+ *      `delegate_<domain>` tools, gated upstream by skill `minRole`) stay
+ *      visible with no confirmation, exactly as before the policy layer.
  */
 export function resolveAccessSpec(t: unknown): AccessSpec {
+  const meta = getToolMeta(t);
+  if (meta) return meta.access;
   const marked = getAccessSpec(t);
   if (marked) return marked;
   const legacyApproval = getApprovalOptions(t);
