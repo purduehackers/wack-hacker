@@ -1,0 +1,37 @@
+docs/agents/approvals.md
+  s_e947ebbd513117::t_c0c57d33880c10 40
+  s_e947ebbd513117::t_0ca5b56b92306d 5
+  s_e947ebbd513117::t_f2cf351186ab16 22-30,32-35
+docs/agents/policy.md
+  s_e947ebbd513117::t_d7bd4f640aebb7 3,7
+  s_e947ebbd513117::t_5a031e057b6c17 17,20,22-30,32-33
+docs/workflows/scheduling.md
+  s_e947ebbd513117::t_7fc4c36f3b6d79 28
+  s_e947ebbd513117::t_a5231b270c82ba 26
+docs/skills/adding.md
+  s_e947ebbd513117::t_da9a57bf9f449e 7
+  s_e947ebbd513117::t_91da928c9d45b0 9
+src/lib/ai/tools/_shared/define-tool.ts
+  s_e947ebbd513117::t_466e22668b1849 11-14
+docs/agents/adding-tools.md
+  s_e947ebbd513117::t_ff5f762869247e 7
+  s_e947ebbd513117::t_799aa84d635097 20,23,25-33,35-36
+docs/agents/orchestrator.md
+  s_e947ebbd513117::t_391962c6593eec 20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "d1ac437767bd0a075f376b1c1220d12c926e2019",
+  "prompts": {},
+  "sessions": {
+    "s_e947ebbd513117": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bbc7243f-7d19-41f9-9d1d-97eedb0b6968",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
