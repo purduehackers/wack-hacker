@@ -1,6 +1,6 @@
-import { tool } from "ai";
 import { z } from "zod";
 
+import { defineTool } from "../_shared/define-tool.ts";
 import { hcbGet, hcbOrgSlug, paginationQuery } from "./client.ts";
 import { paginationInputShape } from "./constants.ts";
 
@@ -27,10 +27,13 @@ function projectTransfer(t: HcbTransfer) {
 }
 
 /** Get a single inter-org transfer by ID. */
-export const get_transfer = tool({
+export const get_transfer = defineTool({
+  name: "get_transfer",
+  domain: "finance",
   description:
     "Get a single HCB inter-org transfer by ID — sender, receiver, amount_cents, status, and memo.",
-  inputSchema: z.object({
+  access: "open",
+  input: z.object({
     id: z.string().describe("Transfer ID"),
   }),
   execute: async ({ id }) => {
@@ -40,10 +43,13 @@ export const get_transfer = tool({
 });
 
 /** List inter-org transfers (disbursements between HCB orgs). */
-export const list_transfers = tool({
+export const list_transfers = defineTool({
+  name: "list_transfers",
+  domain: "finance",
   description:
     "List HCB inter-org transfers (disbursements) involving Purdue Hackers — sender, receiver, amount_cents, status, and memo.",
-  inputSchema: z.object(paginationInputShape),
+  access: "open",
+  input: z.object(paginationInputShape),
   execute: async (input) => {
     const data = await hcbGet<HcbTransfer[]>(
       `/organizations/${hcbOrgSlug()}/transfers`,

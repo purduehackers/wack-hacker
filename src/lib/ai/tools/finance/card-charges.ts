@@ -1,6 +1,6 @@
-import { tool } from "ai";
 import { z } from "zod";
 
+import { defineTool } from "../_shared/define-tool.ts";
 import { hcbGet, hcbOrgSlug, hcbPaginate, hcbTxnUrl, paginationQuery } from "./client.ts";
 import { paginationInputShape } from "./constants.ts";
 
@@ -34,10 +34,13 @@ function projectCharge(c: HcbCardCharge) {
 }
 
 /** List HCB card charges, optionally filtered by user. */
-export const list_card_charges = tool({
+export const list_card_charges = defineTool({
+  name: "list_card_charges",
+  domain: "finance",
   description:
     "List HCB card charges — merchant, user, amount_cents, and receipts summary {count, missing}. Supports an optional user filter (substring match on cardholder name or email) for microgrant recipient spend tracking.",
-  inputSchema: z.object({
+  access: "open",
+  input: z.object({
     user: z
       .string()
       .optional()

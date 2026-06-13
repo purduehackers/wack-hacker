@@ -1,15 +1,18 @@
-import { tool } from "ai";
 import { z } from "zod";
 
+import { defineTool } from "../_shared/define-tool.ts";
 import { searchAmazon } from "./client.ts";
 
 const DEFAULT_MAX_RESULTS = 5;
 const HARD_MAX_RESULTS = 10;
 
-export const search_products = tool({
+export const search_products = defineTool({
+  name: "search_products",
+  domain: "shopping",
   description:
     "Search Amazon for products matching a query. Returns a list of products with ASIN, title, price (USD), rating, image URL, and product URL. Use the ASIN when adding to the cart.",
-  inputSchema: z.object({
+  access: "open",
+  input: z.object({
     query: z
       .string()
       .min(1)

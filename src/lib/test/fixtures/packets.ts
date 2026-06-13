@@ -53,51 +53,10 @@ export function reactionPacket(
   };
 }
 
-export function messageUpdatePacket(): Packet {
-  return {
-    type: "GATEWAY_MESSAGE_UPDATE",
-    timestamp: new Date("2024-01-01"),
-    data: {
-      id: "msg-1",
-      channelId: "ch-1",
-      guildId: "guild-1",
-    },
-  };
-}
-
 export function deletePacket(): Packet {
   return {
     type: "GATEWAY_MESSAGE_DELETE",
     timestamp: new Date("2024-01-01"),
     data: { id: "msg-1", channelId: "ch-1", guildId: "guild-1" },
-  };
-}
-
-export function voiceStatePacket(channelId: string | null = "vc-1"): Packet {
-  return {
-    type: "GATEWAY_VOICE_STATE_UPDATE",
-    timestamp: new Date("2024-01-01"),
-    data: {
-      userId: "user-1",
-      guildId: "guild-1",
-      channelId,
-      sessionId: "sess-1",
-      selfMute: false,
-      selfDeaf: false,
-    },
-  };
-}
-
-export function threadCreatePacket(): Packet {
-  return {
-    type: "GATEWAY_THREAD_CREATE",
-    timestamp: new Date("2024-01-01"),
-    data: {
-      id: "thread-1",
-      name: "my-thread",
-      parentId: "ch-1",
-      guildId: "guild-1",
-      ownerId: "user-1",
-    },
   };
 }

@@ -8,6 +8,7 @@ import { env } from "@/env";
 import { createDiscordAPI } from "@/lib/discord/client";
 import { createWideLogger } from "@/lib/logging/wide";
 import { countMetric, recordDuration } from "@/lib/metrics";
+import { getDedupKey } from "@/lib/protocol/events";
 
 import { LockContentionError } from "./errors";
 
@@ -26,25 +27,6 @@ export function eventRetryPolicy(error: unknown, metadata: MessageMetadata): Ret
   }
   if (metadata.deliveryCount >= MAX_RETRIES) return { acknowledge: true };
   return { afterSeconds: Math.min(300, 2 ** metadata.deliveryCount * 5) };
-}
-
-function getDedupKey(packet: Packet): string {
-  switch (packet.type) {
-    case "GATEWAY_MESSAGE_CREATE":
-      return `msg:${packet.data.id}`;
-    case "GATEWAY_MESSAGE_REACTION_ADD":
-      return `react:${packet.data.messageId}:${packet.data.creator.id}:${packet.data.emoji.id ?? packet.data.emoji.name}`;
-    case "GATEWAY_MESSAGE_REACTION_REMOVE":
-      return `unreact:${packet.data.messageId}:${packet.data.creator.id}:${packet.data.emoji.id ?? packet.data.emoji.name}`;
-    case "GATEWAY_MESSAGE_DELETE":
-      return `del:${packet.data.id}`;
-    case "GATEWAY_MESSAGE_UPDATE":
-      return `upd:${packet.data.id}:${packet.timestamp.getTime()}`;
-    case "GATEWAY_VOICE_STATE_UPDATE":
-      return `voice:${packet.data.userId}:${packet.data.channelId ?? "left"}:${packet.timestamp.getTime()}`;
-    case "GATEWAY_THREAD_CREATE":
-      return `thread:${packet.data.id}`;
-  }
 }
 
 function getMessageChannelId(packet: Packet): string | null {

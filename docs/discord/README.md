@@ -34,5 +34,5 @@ Crons are a third path entirely: `vercel.ts` schedules `GET /api/crons/:name`, w
 - **Bot messages are filtered at the gateway** (`if (message.author.bot) return`). Handlers will never see them.
 - **At-least-once delivery**: the consumer dedupes packets globally before dispatch, but if your handler does its own work that should be idempotent across retries (e.g. writing to an external service), don't rely solely on the global dedup — Vercel will retry up to 3 times.
 - **Within a single packet type, handlers run in parallel** — don't write handlers that depend on each other's side effects. The one exception is `MESSAGE_CREATE`, where mention handlers complete before message handlers begin.
-- **Mentions are double-routed**: a mention also satisfies `onMessage`. The mention handler resumes/starts a workflow; the message handler short-circuits when it detects the mention prefix to avoid double-running.
-- **Per-channel locking is `MESSAGE_CREATE` only.** Reactions, deletions, voice-state updates, and thread-create packets dispatch without a lock.
+- **Mentions are double-routed**: a mention also satisfies the `"message"` kind. The mention handler resumes/starts a workflow; the message handler short-circuits on `ctx.isBotMention` to avoid double-running.
+- **Per-channel locking is `MESSAGE_CREATE` only.** Reaction and deletion packets dispatch without a lock.

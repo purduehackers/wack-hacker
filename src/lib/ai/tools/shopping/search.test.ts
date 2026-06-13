@@ -106,14 +106,24 @@ describe("search_products limits and errors", () => {
     expect(parsed.count).toBe(3);
   });
 
-  it("throws when SerpAPI responds with an error payload", async () => {
+  it("returns an error envelope when SerpAPI responds with an error payload", async () => {
     mockFetch.mockResolvedValueOnce(fetchResponse({ error: "Invalid API key" }));
-    await expect(runSearch()).rejects.toThrow("Invalid API key");
+    const raw = (await search_products.execute!(
+      { query: "q", max_results: 5 },
+      toolOpts,
+    )) as string;
+    expect(raw).toContain("search_products failed");
+    expect(raw).toContain("Invalid API key");
   });
 
-  it("throws when the HTTP response is not ok", async () => {
+  it("returns a transient error envelope when the HTTP response is not ok", async () => {
     mockFetch.mockResolvedValueOnce(fetchResponse({ error: "x" }, false, 500));
-    await expect(runSearch()).rejects.toThrow(/SerpAPI returned 500/);
+    const raw = (await search_products.execute!(
+      { query: "q", max_results: 5 },
+      toolOpts,
+    )) as string;
+    expect(raw).toContain("search_products failed (transient)");
+    expect(raw).toContain("SerpAPI returned 500");
   });
 
   it("returns an empty products array when SerpAPI has no organic_results", async () => {

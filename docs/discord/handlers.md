@@ -58,9 +58,9 @@ export const autoThread = defineEvent({
 });
 ```
 
-`defineEvent` is a discriminated union on `type`: `"message" | "reactionAdd" | "reactionRemove" | "messageDelete" | "messageUpdate" | "voiceStateUpdate" | "threadCreate"`. The `handle` function's first argument is typed to the matching `Packet`, the second is the shared `HandlerContext`.
+`defineEvent` is a discriminated union on `type`. The kinds derive from the protocol event table (`"message" | "reactionAdd" | "reactionRemove" | "messageDelete"`) plus the derived `"mention"` kind. The `handle` function's first argument is typed to the matching `Packet`, the second is the shared `HandlerContext`. To handle a Discord event with no packet type yet, first add a protocol event module — see [Protocol](./protocol.md).
 
-`src/server/routes/handlers.ts` walks every exported event handler from `@/bot/handlers/events` and seeds the `EventRouter` accordingly. Add a re-export to `src/bot/handlers/events/index.ts` for your new file.
+`src/server/routes/handlers.ts` walks every exported event handler from `@/bot/handlers/events` and seeds the `EventRouter` via `router.register(h)`. Add a re-export to `src/bot/handlers/events/index.ts` for your new file.
 
 ## Crons
 

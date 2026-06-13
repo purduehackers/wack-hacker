@@ -8,6 +8,12 @@ export interface HandlerContext {
   discord: API;
   store: ConversationStore;
   botUserId: string;
+  /**
+   * Set by `EventRouter.dispatch` for message packets: true when the message
+   * leads with an @-mention of the bot. Computed once in the router so
+   * handlers don't re-derive it.
+   */
+  isBotMention?: boolean;
 }
 
 export interface ConversationState {

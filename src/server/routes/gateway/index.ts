@@ -13,8 +13,8 @@ import { env } from "@/env";
 import { createWideLogger } from "@/lib/logging/wide";
 import { countMetric, recordDuration } from "@/lib/metrics";
 import { withSpan } from "@/lib/otel/tracing";
+import { bindGatewayEvents } from "@/lib/protocol/events";
 import { PacketCodec } from "@/lib/protocol/packets";
-import { isTextChannel } from "@/lib/protocol/utils";
 import { send } from "@/lib/tasks/queue/client";
 import { DISCORD_EVENT_TOPIC } from "@/lib/tasks/queue/constants";
 
@@ -57,16 +57,6 @@ async function relay(packet: Packet, oidcToken: string): Promise<void> {
 }
 
 type Publish = (packet: Packet) => Promise<void>;
-
-// discord.js does not await listeners, so a rejection inside one is an
-// unhandled rejection and the event is silently lost. Every listener body
-// runs through this guard so one bad event is logged and counted instead.
-function guard(event: string, run: () => Promise<void>): Promise<void> {
-  return run().catch((err) => {
-    countMetric("gateway.handler_error", { event });
-    log.error("gateway", `${event} handler error: ${String(err)}`);
-  });
-}
 
 async function releaseLease(redis: Redis, listenerId: string): Promise<void> {
   try {
@@ -199,186 +189,6 @@ async function startGatewayListener(client: Client): Promise<{ hold: Promise<voi
 
 const route = new Hono();
 
-export function bindMessageCreateHandler(client: Client, publish: Publish): void {
-  client.on(Events.MessageCreate, (message) =>
-    guard("messageCreate", async () => {
-      if (message.author.bot || !isTextChannel(message.channel)) return;
-
-      await publish({
-        type: "GATEWAY_MESSAGE_CREATE",
-        timestamp: new Date(),
-        data: {
-          id: message.id,
-          attachments: message.attachments.map((a) => ({
-            id: a.id,
-            url: a.url,
-            filename: a.name,
-            contentType: a.contentType ?? undefined,
-            size: a.size,
-            width: a.width ?? undefined,
-            height: a.height ?? undefined,
-          })),
-          author: {
-            id: message.author.id,
-            username: message.author.username,
-            nickname: message.author.displayName,
-            bot: message.author.bot,
-            avatarHash: message.author.avatar ?? undefined,
-          },
-          channel: { id: message.channel.id, name: message.channel.name },
-          thread:
-            message.channel.isThread() && message.channel.parent
-              ? {
-                  parentId: message.channel.parentId!,
-                  parentName: message.channel.parent.name,
-                }
-              : undefined,
-          content: message.content,
-          guildId: message.guildId!,
-          timestamp: message.createdAt.toISOString(),
-          memberRoles: [...(message.member?.roles.cache.keys() ?? [])],
-          flags: message.flags?.bitfield,
-          categoryId: message.channel.isThread()
-            ? undefined
-            : (message.channel.parentId ?? undefined),
-          forwardedSnapshots: (message as any).messageSnapshots?.map((s: any) => ({
-            content: s.content ?? undefined,
-            attachments: s.attachments?.map((a: any) => ({
-              id: a.id,
-              url: a.url,
-              filename: a.name,
-              contentType: a.contentType ?? undefined,
-              size: a.size,
-              width: a.width ?? undefined,
-              height: a.height ?? undefined,
-            })),
-          })),
-          mentions: [...message.mentions.users.keys()],
-          reference: message.reference?.messageId
-            ? {
-                messageId: message.reference.messageId,
-                channelId: message.reference.channelId ?? undefined,
-                authorId: message.mentions.repliedUser?.id,
-              }
-            : undefined,
-        },
-      });
-    }),
-  );
-}
-
-// The reaction packets only need ids, all present on the partial — fetching
-// the full message costs a REST round-trip per reaction and rejects when the
-// message was just deleted, which used to silently drop the event.
-export function bindReactionHandlers(client: Client, publish: Publish): void {
-  client.on(Events.MessageReactionAdd, (reaction, user) =>
-    guard("messageReactionAdd", async () => {
-      if (user.bot) return;
-
-      await publish({
-        type: "GATEWAY_MESSAGE_REACTION_ADD",
-        timestamp: new Date(),
-        data: {
-          messageId: reaction.message.id,
-          channelId: reaction.message.channelId,
-          guildId: reaction.message.guildId ?? "",
-          emoji: { id: reaction.emoji.id, name: reaction.emoji.name ?? "" },
-          creator: { id: user.id, username: user.username ?? "unknown" },
-        },
-      });
-    }),
-  );
-
-  client.on(Events.MessageReactionRemove, (reaction, user) =>
-    guard("messageReactionRemove", async () => {
-      if (user.bot) return;
-
-      await publish({
-        type: "GATEWAY_MESSAGE_REACTION_REMOVE",
-        timestamp: new Date(),
-        data: {
-          messageId: reaction.message.id,
-          channelId: reaction.message.channelId,
-          guildId: reaction.message.guildId ?? "",
-          emoji: { id: reaction.emoji.id, name: reaction.emoji.name ?? "" },
-          creator: { id: user.id, username: user.username ?? "unknown" },
-        },
-      });
-    }),
-  );
-}
-
-function bindGuildHandlers(client: Client, publish: Publish): void {
-  client.on(Events.MessageUpdate, (_old, message) =>
-    guard("messageUpdate", async () => {
-      if (!message.guildId || message.author?.bot) return;
-
-      await publish({
-        type: "GATEWAY_MESSAGE_UPDATE",
-        timestamp: new Date(),
-        data: {
-          id: message.id,
-          channelId: message.channelId,
-          guildId: message.guildId,
-        },
-      });
-    }),
-  );
-
-  client.on(Events.MessageDelete, (message) =>
-    guard("messageDelete", async () => {
-      if (!message.guildId) return;
-
-      await publish({
-        type: "GATEWAY_MESSAGE_DELETE",
-        timestamp: new Date(),
-        data: {
-          id: message.id,
-          channelId: message.channelId,
-          guildId: message.guildId,
-        },
-      });
-    }),
-  );
-
-  client.on(Events.VoiceStateUpdate, (_old, state) =>
-    guard("voiceStateUpdate", async () => {
-      if (!state.guild?.id) return;
-
-      await publish({
-        type: "GATEWAY_VOICE_STATE_UPDATE",
-        timestamp: new Date(),
-        data: {
-          userId: state.id,
-          guildId: state.guild.id,
-          channelId: state.channelId,
-          sessionId: state.sessionId ?? "",
-          selfMute: state.selfMute ?? false,
-          selfDeaf: state.selfDeaf ?? false,
-        },
-      });
-    }),
-  );
-
-  client.on(Events.ThreadCreate, (thread) =>
-    guard("threadCreate", async () => {
-      if (!thread.guildId || !thread.parentId) return;
-
-      await publish({
-        type: "GATEWAY_THREAD_CREATE",
-        timestamp: new Date(),
-        data: {
-          id: thread.id,
-          name: thread.name,
-          parentId: thread.parentId,
-          guildId: thread.guildId,
-          ownerId: thread.ownerId ?? "",
-        },
-      });
-    }),
-  );
-}
-
 route.get("/gateway", async (c) => {
   // Vercel crons attach `Authorization: Bearer ${CRON_SECRET}` on every
   // invocation. Reject anything else: lease acquisition below is an
@@ -405,7 +215,6 @@ route.get("/gateway", async (c) => {
       GatewayIntentBits.GuildMessages,
       GatewayIntentBits.MessageContent,
       GatewayIntentBits.GuildMessageReactions,
-      GatewayIntentBits.GuildVoiceStates,
     ],
     partials: [Partials.Message, Partials.Reaction, Partials.Channel],
     presence: {
@@ -442,9 +251,7 @@ route.get("/gateway", async (c) => {
     if (packet?.t) log.info("gateway", `raw dispatch t=${packet.t}`);
   });
 
-  bindMessageCreateHandler(client, publish);
-  bindReactionHandlers(client, publish);
-  bindGuildHandlers(client, publish);
+  bindGatewayEvents(client, publish);
 
   let hold: Promise<void>;
   try {

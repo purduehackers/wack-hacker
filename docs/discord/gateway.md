@@ -28,15 +28,15 @@ The route awaits the discord.js `ClientReady` event before responding, then uses
 
 ## What the client publishes
 
-`bindMessageCreateHandler`, `bindReactionHandlers`, and `bindGuildHandlers` subscribe to Discord events and translate them into `Packet` values, which are pushed to the `discord-events` queue via `send(DISCORD_EVENT_TOPIC, PacketCodec.encode(packet), { oidcToken })`.
+`bindGatewayEvents(client, publish)` (from `src/lib/protocol/events/`) iterates the protocol event table and attaches each event's discord.js listener. Listeners translate Discord events into `Packet` values, which are pushed to the `discord-events` queue via `send(DISCORD_EVENT_TOPIC, PacketCodec.encode(packet), { oidcToken })`. The serialization for each event lives in its protocol module, next to its schema and dedup key — the gateway route contains no per-event code. Each listener body is wrapped in `guardEvent` so one bad event is logged and counted rather than becoming an unhandled rejection.
 
 The events bound today:
 
 - `MessageCreate` (filtered to non-bot, text channels)
 - `MessageReactionAdd` / `MessageReactionRemove` (filtered to non-bots, published straight off the partial — no REST fetch, so reactions on just-deleted messages still relay)
-- `MessageUpdate` / `MessageDelete`
-- `VoiceStateUpdate`
-- `ThreadCreate`
+- `MessageDelete`
+
+The client intents follow the table: `Guilds`, `GuildMessages`, `MessageContent`, `GuildMessageReactions`. (`GuildVoiceStates` was removed along with the unused `VOICE_STATE_UPDATE` packet — re-add the intent in the gateway route if a voice event ever returns.)
 
 Every listener body runs through a `guard()` wrapper — discord.js doesn't await listeners, so without it a rejection is unhandled and the event silently lost. Guard failures are logged and counted as `gateway.handler_error`.
 
