@@ -206,6 +206,9 @@ export function wrapToolWithApproval(
 
       const promptError = await postApprovalPrompt({ state, store, ttlSeconds, timeoutMs });
       if (promptError) {
+        // Terminal row so the `requested` entry doesn't dangle unresolved —
+        // the user never saw a prompt and the tool never ran.
+        await audit?.record({ ...auditBase, decision: "failed" });
         yield promptError;
         return;
       }

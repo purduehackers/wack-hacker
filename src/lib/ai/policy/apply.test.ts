@@ -237,6 +237,23 @@ describe("applyPolicy — confirmation wrapping", () => {
   });
 });
 
+describe("applyPolicy — confirmation wrapping, prompt send failure", () => {
+  it("records a terminal 'failed' row and never runs the tool when the Discord prompt can't send", async () => {
+    const { tool: t, spy } = makeTool();
+    const tools = { nuke: access({ risk: "destructive" }, t) };
+    const { store } = fakeStore("approved", "user-1");
+    const { audit, entries } = fakeAudit();
+    const wrapped = applyPolicy(tools, { context: contextFor("organizer"), store, audit });
+
+    restPost.mockRejectedValueOnce(new Error("discord 500"));
+    const out = await drain(wrapped.nuke!, { name: "x", _reason: "because" });
+
+    expect(spy).not.toHaveBeenCalled();
+    expect(String(out.at(-1))).toContain("NOT run");
+    expect(entries.map((e) => e.decision)).toEqual(["requested", "failed"]);
+  });
+});
+
 describe("applyPolicy — confirmation wrapping, approved execution failure", () => {
   it("audits 'failed' and rethrows when the approved tool throws", async () => {
     const spy = vi.fn(async (): Promise<string> => {

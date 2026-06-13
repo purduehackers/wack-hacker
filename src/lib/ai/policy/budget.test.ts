@@ -49,6 +49,15 @@ describe("BudgetStore", () => {
     expect(await store.read("u1")).toBe(1_250);
   });
 
+  it("refreshes the TTL on every add (no first-write race)", async () => {
+    const client = createMemoryRedis();
+    const expireSpy = vi.spyOn(client, "expire");
+    const store = new BudgetStore(client);
+    await store.add("u1", 100);
+    await store.add("u1", 100);
+    expect(expireSpy).toHaveBeenCalledTimes(2);
+  });
+
   it("tracks users independently", async () => {
     const store = new BudgetStore(createMemoryRedis());
     await store.add("u1", 100);

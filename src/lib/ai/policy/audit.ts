@@ -10,6 +10,25 @@ import type { ActionAuditEntry, AuditLogLike } from "./types.ts";
 
 const PREVIEW_MAX_LEN = 300;
 
+/**
+ * Field names whose values must never reach the audit table — tool inputs for
+ * secret/env-var/credential tools carry plaintext material under these keys.
+ * Redaction happens before BOTH the preview and the hash: short secrets would
+ * otherwise be brute-forceable from a sha256 of the raw payload.
+ */
+const SENSITIVE_KEY_PATTERN = /secret|token|password|credential|api_key|auth|^value$/i;
+
+/** Deep-copy `input` with sensitive field values replaced by "[redacted]". */
+export function redactSensitive(input: unknown): unknown {
+  if (Array.isArray(input)) return input.map((item) => redactSensitive(item));
+  if (!input || typeof input !== "object") return input;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(input)) {
+    out[key] = SENSITIVE_KEY_PATTERN.test(key) ? "[redacted]" : redactSensitive(value);
+  }
+  return out;
+}
+
 /** Stable-enough content hash for correlating audit rows with identical inputs. */
 export function hashInput(input: unknown): string {
   let serialized: string;
@@ -56,8 +75,8 @@ export class AuditLog implements AuditLogLike {
         delegate: entry.delegate ?? null,
         tool: entry.tool,
         risk: entry.risk,
-        inputHash: hashInput(entry.input),
-        inputPreview: previewInput(entry.input),
+        inputHash: hashInput(redactSensitive(entry.input)),
+        inputPreview: previewInput(redactSensitive(entry.input)),
         reason: entry.reason ?? null,
         decision: entry.decision,
         decidedBy: entry.decidedBy ?? null,

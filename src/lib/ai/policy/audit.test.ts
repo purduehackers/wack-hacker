@@ -20,7 +20,7 @@ vi.mock("@libsql/client", async () => {
 
 const { buildDb, getDb } = await import("../../db/index.ts");
 const { actionAudit } = await import("../../db/schemas/action-audit.ts");
-const { AuditLog, hashInput, previewInput } = await import("./audit.ts");
+const { AuditLog, hashInput, previewInput, redactSensitive } = await import("./audit.ts");
 
 beforeAll(async () => {
   const migrationsDir = "./drizzle";
@@ -107,6 +107,45 @@ describe("AuditLog.record", () => {
     // table and record() must swallow it.
     const bare = buildDb(actual.createClient({ url: ":memory:" }));
     await expect(new AuditLog(bare).record(entry())).resolves.toBeUndefined();
+  });
+});
+
+describe("secret redaction", () => {
+  it("never persists sensitive field values in preview or hash", async () => {
+    await new AuditLog().record(
+      entry({
+        input: { secret_name: "DEPLOY_KEY", value: "s3cret-material", repo: "wack-hacker" },
+      }),
+    );
+
+    const rows = await getDb().select().from(actionAudit);
+    expect(rows[0]!.inputPreview).not.toContain("s3cret-material");
+    expect(rows[0]!.inputPreview).toContain("[redacted]");
+    expect(rows[0]!.inputPreview).toContain("wack-hacker");
+    // The hash is computed over the redacted payload, so two calls differing
+    // only in the secret value collide — short secrets can't be brute-forced
+    // from the stored hash.
+    expect(rows[0]!.inputHash).toBe(
+      hashInput(
+        redactSensitive({ secret_name: "DEPLOY_KEY", value: "other", repo: "wack-hacker" }),
+      ),
+    );
+  });
+
+  it("redacts nested objects, arrays, and credential-flavored keys", () => {
+    const redacted = redactSensitive({
+      api_key: "k",
+      nested: { token: "t", ok: "fine" },
+      list: [{ password: "p" }, "plain"],
+      keyword: "not-a-secret",
+    }) as Record<string, unknown>;
+
+    expect(redacted.api_key).toBe("[redacted]");
+    expect((redacted.nested as Record<string, unknown>).token).toBe("[redacted]");
+    expect((redacted.nested as Record<string, unknown>).ok).toBe("fine");
+    expect((redacted.list as unknown[])[0]).toEqual({ password: "[redacted]" });
+    expect((redacted.list as unknown[])[1]).toBe("plain");
+    expect(redacted.keyword).toBe("not-a-secret");
   });
 });
 

@@ -40,10 +40,12 @@ export class BudgetStore {
 
   async add(userId: string, tokens: number): Promise<void> {
     const key = this.key(userId);
-    const total = await this.client().incrby(key, tokens);
-    // First increment of the day creates the key — give it a TTL so stale
-    // day buckets clean themselves up.
-    if (total === tokens) await this.client().expire(key, TTL_SECONDS);
+    await this.client().incrby(key, tokens);
+    // Unconditional EXPIRE: detecting "first write of the day" via the incrby
+    // result races under concurrent adds and can leave the key TTL-less
+    // forever. Refreshing on every write costs one extra command and
+    // guarantees stale day buckets clean themselves up.
+    await this.client().expire(key, TTL_SECONDS);
   }
 }
 
