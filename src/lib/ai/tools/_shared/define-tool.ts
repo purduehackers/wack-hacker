@@ -1,4 +1,4 @@
-import { tool, type ToolCallOptions } from "ai";
+import { tool, type ToolCallOptions, type UIMessage } from "ai";
 import { z } from "zod";
 
 import { countMetric } from "@/lib/metrics";
@@ -174,7 +174,8 @@ function enforceBudget(text: string, budget: number): string {
  * `execute` may be a normal async function or an async generator. Streaming
  * tools (e.g. the sandbox's `bash`) take the generator path: their chunks pass
  * through untouched (no mid-stream budget truncation), with telemetry and a
- * final error envelope still applied.
+ * final error envelope still applied — yielded as a UIMessage text part so a
+ * streaming tool's `toModelOutput` surfaces it rather than dropping it.
  *
  * Approval denials happen in `applyPolicy`, outside this wrapper, so the
  * envelope can never swallow them.
@@ -205,7 +206,16 @@ export function defineTool<I extends z.ZodObject>(spec: {
     } catch (err) {
       const cls = classifyToolError(err);
       countMetric("tool.error", { domain, tool: name, class: cls });
-      yield errorEnvelope(name, cls, err);
+      // Yield the envelope as a UIMessage text part, not a bare string. A
+      // streaming tool's `toModelOutput` reads the final chunk's `parts`
+      // (see `bash`), so a bare string would be dropped to its fallback and
+      // the model would never see the classified error. This mirrors the
+      // UIMessage chunks streaming tools yield on their happy path.
+      yield {
+        id: `${name}-error`,
+        role: "assistant",
+        parts: [{ type: "text", text: errorEnvelope(name, cls, err) }],
+      } as unknown as UIMessage;
     }
   };
 
