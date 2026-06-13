@@ -236,6 +236,16 @@ describe.each([
       creator: { id: "user-1", username: "unknown" },
     });
   });
+
+  it("defaults guildId to empty string when the partial has none", async () => {
+    const { listeners, publish } = capture(event.bind as never);
+    await listeners.get(discordEvent)!(
+      { ...reaction, message: { ...reaction.message, guildId: null } },
+      { id: "user-1", username: "alice", bot: false },
+    );
+    const packet = PacketSchema.parse(publish.mock.calls[0]![0]);
+    expect(packet.data).toMatchObject({ guildId: "" });
+  });
 });
 
 describe("messageDeleteEvent.bind", () => {
