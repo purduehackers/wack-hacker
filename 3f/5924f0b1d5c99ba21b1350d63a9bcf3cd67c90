@@ -1,0 +1,51 @@
+src/lib/ai/models-dev.ts
+  s_e947ebbd513117::t_77325117e4f9fb 141-144,147
+  s_e947ebbd513117::t_66e01a22924245 116-140,145-146,148-184
+src/lib/tasks/queue/handlers/scheduled-task-fire.test.ts
+  s_e947ebbd513117::t_5dac8723bca206 43-48
+src/lib/ai/streaming.ts
+  s_e947ebbd513117::t_14183aa8e687fb 517
+  s_e947ebbd513117::t_7fedc88ca84d87 138-141
+  s_e947ebbd513117::t_038e9ad5cecad9 233,235-236
+  s_e947ebbd513117::t_b6bc39d2062e9a 26
+  s_e947ebbd513117::t_df1368ab1b60ba 257,271
+  s_e947ebbd513117::t_b42783b2126294 191-199,203,216
+  s_e947ebbd513117::t_f8c980871ed4a8 457-459,469,471,492-506
+src/lib/ai/streaming.test.ts
+  s_e947ebbd513117::t_23d447f7027e08 31-36
+src/lib/ai/turn-usage.ts
+  s_e947ebbd513117::t_a406be1665325c 34-41,45
+  s_e947ebbd513117::t_81a74c1f046ac0 87-91
+  s_e947ebbd513117::t_113b9a534329a1 23
+src/lib/ai/turn-usage.test.ts
+  s_e947ebbd513117::t_a653e733241e5d 93-104
+src/lib/ai/models-dev.test.ts
+  s_e947ebbd513117::t_389cb632685f80 1,3-12
+  s_e947ebbd513117::t_b2b62550884ce5 235-295
+src/lib/ai/subagent.test.ts
+  s_e947ebbd513117::t_bf7dda34532dff 20-24
+  s_e947ebbd513117::t_d945ec65685bdc 646
+  s_e947ebbd513117::t_199d8aff167a24 633
+  s_e947ebbd513117::t_74579778ace76b 587-588,595,605,612,620
+  s_e947ebbd513117::t_7e379592802e59 657-698
+src/lib/ai/subagent.ts
+  s_e947ebbd513117::t_348a0322d56c47 24
+  s_e947ebbd513117::t_46e345b68fa39c 69-70,75-76,81-85,92-97,100,105-107
+  s_e947ebbd513117::t_8d53a717ad37eb 283-288,290
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "3f5924f0b1d5c99ba21b1350d63a9bcf3cd67c90",
+  "prompts": {},
+  "sessions": {
+    "s_e947ebbd513117": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bbc7243f-7d19-41f9-9d1d-97eedb0b6968",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
