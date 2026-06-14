@@ -13,7 +13,8 @@ export default withSentryConfig(withWorkflow(nextConfig), {
   authToken: process.env.SENTRY_AUTH_TOKEN,
   silent: !process.env.CI,
   widenClientFileUpload: true,
-  webpack: {
-    automaticVercelMonitors: true,
-  },
+  // `automaticVercelMonitors` is intentionally omitted: it reads a `vercel.json`
+  // crons block that doesn't exist here (crons run via Hono routes, not Vercel
+  // Cron), and it's Pages-Router-only. Cron check-ins are wired explicitly with
+  // `Sentry.withMonitor` at the dispatch chokepoint instead.
 });
