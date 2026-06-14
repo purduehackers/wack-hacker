@@ -32,10 +32,15 @@ vi.mock("@vercel/edge-config", () => ({
   createClient: vi.fn(() => ({ getAll: vi.fn().mockResolvedValue({}) })),
 }));
 // Neutralize the cost-catalog warm-up so streamTurn never reaches out to
-// models.dev in tests; the cache stays cold so cost is simply omitted.
+// models.dev in tests. `estimateModelCostUsd` defaults to undefined (cold
+// cache); a cost test below flips it to exercise the priced path.
+const { estimateCostMock } = vi.hoisted(() => ({
+  estimateCostMock: vi.fn((): number | undefined => undefined),
+}));
 vi.mock("@/lib/ai/models-dev.ts", async (importActual) => ({
   ...(await importActual<typeof import("./models-dev.ts")>()),
   warmModelCatalog: vi.fn(),
+  estimateModelCostUsd: estimateCostMock,
 }));
 // The default turn-message index path builds a Redis client from env vars; back
 // it with the in-memory fake so finalize-time persistence never touches the
@@ -971,5 +976,30 @@ describe("streamTurn: feedback message index", () => {
     });
 
     expect(result.text).toBe("Done.");
+  });
+});
+
+describe("streamTurn: cost attribution", () => {
+  it("computes turn cost from the orchestrator usage when the model is priced", async () => {
+    // Catalog is mocked cold by default (cost omitted); flip it for this turn so
+    // the priced path — ai.turn.cost_usd metric + ai.cost_usd span/wide event —
+    // actually runs.
+    estimateCostMock.mockReturnValueOnce(1.5);
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+      createAgent: fakeOrchestrator(["Priced."]),
+    });
+
+    expect(result.text).toBe("Priced.");
+    // Cost is computed for the model that actually ran, from its token usage.
+    expect(estimateCostMock).toHaveBeenCalledWith(
+      result.model,
+      expect.objectContaining({
+        inputTokens: expect.any(Number),
+        outputTokens: expect.any(Number),
+      }),
+    );
   });
 });
