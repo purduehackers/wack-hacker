@@ -1,0 +1,28 @@
+src/lib/tasks/queue/handlers/scheduled-task-fire.ts
+  s_e947ebbd513117::t_8a1e98fee7c743 312-314
+  s_e947ebbd513117::t_38bf90631980c7 3
+  s_e947ebbd513117::t_9e5996e5a1e51b 63-72
+src/app/api/discord/events/route.ts
+  s_e947ebbd513117::t_02cdf3fc07ff7a 1-4,15-18
+  s_e947ebbd513117::t_45270f0c246f0f 31-45
+src/workflows/chat.ts
+  s_e947ebbd513117::t_f8edc408169acc 207-216
+src/server/routes/crons.ts
+  s_e947ebbd513117::t_79570b814a5ac0 34-36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "1761ce1e41d9b3671029f6fee1c4109d014315ed",
+  "prompts": {},
+  "sessions": {
+    "s_e947ebbd513117": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bbc7243f-7d19-41f9-9d1d-97eedb0b6968",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
