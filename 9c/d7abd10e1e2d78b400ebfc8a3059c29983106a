@@ -1,0 +1,43 @@
+src/bot/turn-message-store.test.ts
+  s_e947ebbd513117::t_33dddde036f532 1-60
+src/lib/tasks/queue/handlers/scheduled-task-fire.test.ts
+  s_e947ebbd513117::t_3476e2105ddc88 50-55
+  s_e947ebbd513117::t_662e8eb823aa7c 20
+src/lib/ai/types.ts
+  s_e947ebbd513117::t_0546c8fb228ebb 383-389
+  s_e947ebbd513117::t_17ad853d7264e7 4-5
+src/bot/turn-message-store.ts
+  s_e947ebbd513117::t_fbaf72fffe1ab9 1-33
+src/bot/handlers/events/feedback/index.test.ts
+  s_e947ebbd513117::t_cbe89b466b4f3a 1-99
+src/lib/ai/streaming.ts
+  s_e947ebbd513117::t_f81b090aca738a 7-9
+  s_e947ebbd513117::t_95a35a52ae4595 206-239,255-266,269,273-288
+src/lib/ai/streaming.test.ts
+  s_e947ebbd513117::t_f99ca762229130 939-975
+  s_e947ebbd513117::t_ee997938a7827d 40-45
+  s_e947ebbd513117::t_3c41589fbe083c 9
+  s_e947ebbd513117::t_40a8367a77a63e 3
+src/bot/types.ts
+  s_e947ebbd513117::t_d04405182d2a52 27-42
+src/bot/handlers/events/index.ts
+  s_e947ebbd513117::t_f04e9f36bb0d3f 11
+src/bot/handlers/events/feedback/index.ts
+  s_e947ebbd513117::t_9ea6c01f2335d9 1-50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "9cd7abd10e1e2d78b400ebfc8a3059c29983106a",
+  "prompts": {},
+  "sessions": {
+    "s_e947ebbd513117": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bbc7243f-7d19-41f9-9d1d-97eedb0b6968",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
