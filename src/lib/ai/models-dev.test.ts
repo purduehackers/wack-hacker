@@ -292,4 +292,13 @@ describe("cached catalog lookup", () => {
     warmModelCatalog(fetchImpl as unknown as typeof fetch);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
+
+  it("does not cache a failed catalog fetch (stays cold for a later retry)", async () => {
+    const failing = vi.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({}) });
+    warmModelCatalog(failing as unknown as typeof fetch);
+    await vi.waitFor(() => expect(failing).toHaveBeenCalledTimes(1));
+    // Let the fetch chain settle (the catalog is null → not cached).
+    await new Promise((resolve) => setTimeout(resolve, 1));
+    expect(lookupModelInfoCached("anthropic/claude-sonnet-4.6")).toBeNull();
+  });
 });
