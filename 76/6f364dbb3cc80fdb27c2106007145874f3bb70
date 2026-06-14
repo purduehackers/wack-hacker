@@ -1,0 +1,23 @@
+src/lib/ai/policy/apply.test.ts
+  s_e947ebbd513117::t_007cf7e02c8889 241,253-254
+src/lib/ai/policy/constants.ts
+  s_e947ebbd513117::t_0b245533ec41ad 46-48
+src/lib/ai/approvals/runtime.ts
+  s_e947ebbd513117::t_1c1ea47f6fdc5c 182-185
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "766f364dbb3cc80fdb27c2106007145874f3bb70",
+  "prompts": {},
+  "sessions": {
+    "s_e947ebbd513117": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bbc7243f-7d19-41f9-9d1d-97eedb0b6968",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
