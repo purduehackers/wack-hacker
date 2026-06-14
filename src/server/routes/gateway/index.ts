@@ -19,7 +19,7 @@ import { PacketCodec } from "@/lib/protocol/packets";
 import { send } from "@/lib/tasks/queue/client";
 import { DISCORD_EVENT_TOPIC } from "@/lib/tasks/queue/constants";
 
-import { HANDOFF_WAIT_MS, READY_TIMEOUT_MS } from "./constants";
+import { GATEWAY_KEEPALIVE_CRON, HANDOFF_WAIT_MS, READY_TIMEOUT_MS } from "./constants";
 
 const HOLD_MS = 10 * 60 * 1000;
 const LEADER_KEY = "gateway:leader";
@@ -281,7 +281,8 @@ route.get("/gateway", async (c) => {
     // deaf. The crontab mirrors the keepalive schedule that pings this route in
     // vercel.ts, so a missed check-in means an invocation didn't land.
     ({ hold } = await Sentry.withMonitor("discord-gateway", () => startGatewayListener(client), {
-      schedule: { type: "crontab", value: "*/9 * * * *" },
+      // Same schedule as the keepalive cron in vercel.ts (shared constant).
+      schedule: { type: "crontab", value: GATEWAY_KEEPALIVE_CRON },
       // The listener holds the lease ~10 min, so allow a longer runtime; a small
       // margin still catches a keepalive invocation that never lands.
       checkinMargin: 2,

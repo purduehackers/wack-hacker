@@ -1,13 +1,14 @@
 import { type VercelConfig } from "@vercel/config/v1";
 
 import { buildCronRoutes } from "@/bot/crons/config";
+import { GATEWAY_KEEPALIVE_CRON } from "@/server/routes/gateway/constants";
 
 export const config: VercelConfig = {
   framework: "nextjs",
   crons: [
     {
       path: "/api/discord/gateway",
-      schedule: "*/9 * * * *",
+      schedule: GATEWAY_KEEPALIVE_CRON,
     },
     ...buildCronRoutes(),
   ],

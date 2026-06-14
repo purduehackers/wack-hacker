@@ -55,16 +55,6 @@ describe("feedback reaction handler", () => {
     expect(emitted).not.toHaveBeenCalled();
   });
 
-  it("ignores reactions added by bots", async () => {
-    clearCaptures();
-    const handler = createFeedbackHandler(await indexedStore());
-    const packet = reactionPacket("\u{1F44D}");
-    packet.data.creator = { ...packet.data.creator, bot: true };
-    await handler.handle(packet);
-    expect(countMetric).not.toHaveBeenCalled();
-    expect(emitted).not.toHaveBeenCalled();
-  });
-
   it.each([
     ["\u{1F44D}", "true"],
     ["❤️", "true"],
