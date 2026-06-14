@@ -397,6 +397,28 @@ describe("MessageRenderer: finalize", () => {
     expect(body.content).toContain("-# 1.0s · 100 tokens");
   });
 
+  it("finalize surfaces a trailing tool failure instead of the empty-turn message", async () => {
+    const discord = createMockAPI();
+    const renderer = new MessageRenderer(asAPI(discord), "ch-1");
+    await renderer.init();
+    // Turn ends on a tool-error with no text after it: showToolFailed sets the
+    // activity line and nothing clears it. finalize must not blank it.
+    await renderer.showToolFailed("bash");
+
+    const meta: FooterMeta = {
+      elapsedMs: 1000,
+      totalTokens: 100,
+      toolCallCount: 1,
+      stepCount: 1,
+    };
+    await renderer.finalize(meta);
+
+    const edits = discord.callsTo("channels.editMessage");
+    const body = edits[edits.length - 1][2] as { content: string };
+    expect(body.content).toContain("`bash` failed.");
+    expect(body.content).not.toContain("I didn't have anything to say.");
+  });
+
   it("finalize creates additional messages for long text", async () => {
     const discord = createMockAPI();
     const renderer = new MessageRenderer(asAPI(discord), "ch-1");
