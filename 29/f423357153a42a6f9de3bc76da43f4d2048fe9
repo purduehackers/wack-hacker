@@ -1,0 +1,46 @@
+src/lib/otel/tracing.ts
+  s_e947ebbd513117::t_7d3063f5322908 43-61
+src/lib/tasks/types.ts
+  s_e947ebbd513117::t_bdb0c12a136d96 56-63
+src/lib/protocol/events/define.ts
+  s_e947ebbd513117::t_274c2641d18b32 7-12,23
+src/lib/otel/tracing.test.ts
+  s_e947ebbd513117::t_b6588cb5f16ba9 3-68,75,78,90,100,189-251
+src/lib/protocol/packets.test.ts
+  s_e947ebbd513117::t_be8243c21b6aff 142-154,156-167
+src/server/routes/gateway/index.ts
+  s_e947ebbd513117::t_5d36e64974379f 41-45,52-57
+  s_e947ebbd513117::t_f3e25d1f08f091 15
+src/lib/ai/tools/schedule/index.ts
+  s_e947ebbd513117::t_6834f088e49dad 147-152
+  s_e947ebbd513117::t_5fd02bdafc8e9f 6
+src/lib/tasks/queue/handlers/scheduled-task-fire.ts
+  s_e947ebbd513117::t_053aad54d71a5f 14
+  s_e947ebbd513117::t_943860ea88f015 35,37-39
+src/lib/tasks/queue/schedule-fire.test.ts
+  s_e947ebbd513117::t_eb1a6b1d91a13f 62-82
+src/lib/tasks/queue/handlers/scheduled-task-fire.test.ts
+  s_e947ebbd513117::t_5b6cabbe2a761d 1-9,11
+  s_e947ebbd513117::t_779eb3418125e7 595-707
+src/app/api/discord/events/route.ts
+  s_e947ebbd513117::t_f70aed05ee9e9e 14-15
+  s_e947ebbd513117::t_62870015b88915 4
+src/lib/tasks/queue/schedule-fire.ts
+  s_e947ebbd513117::t_759b1057fab560 30,33-37,40
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "29f423357153a42a6f9de3bc76da43f4d2048fe9",
+  "prompts": {},
+  "sessions": {
+    "s_e947ebbd513117": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bbc7243f-7d19-41f9-9d1d-97eedb0b6968",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
