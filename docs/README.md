@@ -12,6 +12,7 @@ Reference documentation for the Wack Hacker codebase. The top-level [README](../
 | [Skills](./skills/README.md)                    | `SKILL.md` format, the registry, progressive disclosure, admin gating, and adding skills or whole delegate domains. |
 | [Workflows & scheduling](./workflows/README.md) | `chatWorkflow` for multi-turn conversations, Vercel Queue + Turso for scheduled reminders.                          |
 | [Deployment](./deployment/README.md)            | `vercel.ts`, queue triggers, environment variables, build pipeline.                                                 |
+| [Observability](./observability.md)             | Sentry pipelines — errors, distributed traces, logs, cron monitors — plus cost attribution and feedback capture.    |
 | [Testing](./testing.md)                         | Vitest setup, unit vs integration suites, coverage thresholds.                                                      |
 
 ## Conventions
