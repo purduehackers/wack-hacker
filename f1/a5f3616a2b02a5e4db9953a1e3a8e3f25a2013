@@ -1,0 +1,21 @@
+docs/README.md
+  s_e947ebbd513117::t_643e6e3a7fe5ca 15
+docs/observability.md
+  s_e947ebbd513117::t_6772abfb9bd9b3 1-137
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "f1a5f3616a2b02a5e4db9953a1e3a8e3f25a2013",
+  "prompts": {},
+  "sessions": {
+    "s_e947ebbd513117": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bbc7243f-7d19-41f9-9d1d-97eedb0b6968",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
