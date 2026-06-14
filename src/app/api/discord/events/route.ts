@@ -1,3 +1,7 @@
+import * as Sentry from "@sentry/nextjs";
+
+import type { Packet } from "@/lib/protocol/types";
+
 import { ConversationStore } from "@/bot/store";
 import { createWideLogger } from "@/lib/logging/wide";
 import { countMetric, recordDuration } from "@/lib/metrics";
@@ -7,6 +11,11 @@ import { handleCallback } from "@/lib/tasks/queue/client";
 import { LockContentionError } from "@/server/errors";
 import { eventRetryPolicy, processEvent } from "@/server/process-event";
 import { router } from "@/server/routes/handlers";
+
+/** MESSAGE_CREATE nests the channel; reactions/deletes carry `channelId` flat. */
+function packetChannelId(packet: Packet): string {
+  return packet.type === "GATEWAY_MESSAGE_CREATE" ? packet.data.channel.id : packet.data.channelId;
+}
 
 export const POST = handleCallback<string>(
   async (encoded, metadata) => {
@@ -19,6 +28,21 @@ export const POST = handleCallback<string>(
         "delivery.count": metadata.deliveryCount,
       },
       async () => {
+        // Attach scope on the request's isolation scope so every span, log, and
+        // issue from this delivery is filterable. Low-cardinality values are
+        // tags; the channel id (high cardinality) goes in context instead.
+        Sentry.setTag("source", "discord");
+        Sentry.setTag("packet_type", packet.type);
+        Sentry.setTag("guild_id", packet.data.guildId);
+        Sentry.setTag("delivery_attempt", String(metadata.deliveryCount));
+        Sentry.setContext("packet", {
+          type: packet.type,
+          guild_id: packet.data.guildId,
+          channel_id: packetChannelId(packet),
+          delivery_count: metadata.deliveryCount,
+          queue_message_id: metadata.messageId,
+        });
+
         const logger = createWideLogger({
           op: "discord.event.callback",
           event: { type: packet.type },

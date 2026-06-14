@@ -1,5 +1,6 @@
 import type { API } from "@discordjs/core/http-only";
 
+import * as Sentry from "@sentry/nextjs";
 import { DuplicateMessageError } from "@vercel/queue";
 import { z } from "zod";
 
@@ -59,6 +60,16 @@ async function runFire(
     logger.emit({ outcome: "skip_missing_row" });
     return;
   }
+  // Enrich the request scope so every span/log/issue from this fire is
+  // attributable to the owning user and distinguishable from interactive work.
+  Sentry.setUser({ id: task.userId });
+  Sentry.setTag("source", "scheduled");
+  Sentry.setContext("task", {
+    id: taskId,
+    target_iso: targetIso,
+    schedule_type: task.scheduleType,
+    action_type: task.action.type,
+  });
   if (isSkippable(task, targetIso, logger)) return;
 
   const targetMs = new Date(targetIso).getTime();
@@ -298,6 +309,9 @@ async function executeAction(task: ScheduledTaskRow, discord: API): Promise<void
     source: "scheduled",
   });
 
+  // Group this scheduled agent turn under one conversation in AI Agents
+  // Insights, matching what the chat workflow does for interactive turns.
+  Sentry.setConversationId(task.id);
   try {
     await streamTurn(discord, channelId, [{ role: "user", content: prompt }], context.toJSON(), {
       taskId: task.id,

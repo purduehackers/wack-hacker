@@ -31,6 +31,9 @@ route.get("/crons/:name", async (c) => {
     return c.json({ error: `Unknown cron: ${name}` }, 404);
   }
 
+  Sentry.setTag("source", "cron");
+  Sentry.setTag("cron_name", name);
+
   const startTime = Date.now();
   try {
     // One withMonitor at the dispatch chokepoint gives every registered cron a
