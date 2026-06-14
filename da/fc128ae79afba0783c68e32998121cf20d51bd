@@ -1,0 +1,27 @@
+src/lib/ai/skills/vercel/skills/artifacts/SKILL.md
+  s_e947ebbd513117::t_eecb44be97651b 1-14
+src/lib/ai/skills/vercel/skills/observability/SKILL.md
+  s_e947ebbd513117::t_81ad2ae3481200 1-29
+src/lib/ai/skills/sentry/skills/log-search/SKILL.md
+  s_e947ebbd513117::t_8f1095fb75641f 1-20
+src/lib/ai/tools/coverage-manifest.test.ts
+  s_e947ebbd513117::t_85324f6a78582c 1-2,4
+  s_e947ebbd513117::t_15f3bfb224c30b 28-32,45,48-51,93,96-97
+  s_e947ebbd513117::t_cc0ab4d7b48a4d 58-79,91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "dafc128ae79afba0783c68e32998121cf20d51bd",
+  "prompts": {},
+  "sessions": {
+    "s_e947ebbd513117": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bbc7243f-7d19-41f9-9d1d-97eedb0b6968",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": null
+    }
+  }
+}
