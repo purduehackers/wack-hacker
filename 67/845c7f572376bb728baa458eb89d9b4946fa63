@@ -1,0 +1,19 @@
+CLAUDE.md
+  s_0dbcbdda242629::t_b248dc3ffc754b 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "67845c7f572376bb728baa458eb89d9b4946fa63",
+  "prompts": {},
+  "sessions": {
+    "s_0dbcbdda242629": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c2329b1e-577d-4b1b-927a-e17e722d6879",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
