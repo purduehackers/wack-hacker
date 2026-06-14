@@ -1,4 +1,4 @@
-# AGENTS.md
+# CLAUDE.md
 
 Wack Hacker is an AI-powered Discord bot for Purdue Hackers: a Next.js App Router +
 Hono app on Vercel, built on the AI SDK v6 and the Workflow DevKit, with an orchestrator
