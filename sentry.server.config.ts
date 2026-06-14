@@ -6,14 +6,29 @@ Sentry.init({
     process.env.SENTRY_DSN ??
     "https://23174d7cbef96f2fd9276db93bd566cf@o4510744753405952.ingest.us.sentry.io/4511219848904704",
 
-  tracesSampleRate: process.env.NODE_ENV === "development" ? 1.0 : 0.1,
+  // Capture everything: this bot runs at low volume (a single guild), so the
+  // marginal cost of full tracing is negligible and a sampled-out trace is a
+  // gap exactly when we're debugging a rare event. A flat 1.0 also means a
+  // distributed trace (gateway → queue → workflow → agent) is never partially
+  // sampled, so there is no `tracesSampler`/`parentSampled` bookkeeping to keep
+  // in sync as new roots are added.
+  tracesSampleRate: 1.0,
 
   sendDefaultPii: true,
   includeLocalVariables: true,
   enableLogs: true,
 
+  // Retry / control-flow signals, not failures: the queue redelivers on lock
+  // contention and dedupes duplicate sends, so these would otherwise create
+  // noise issues via Next's captureRequestError. They still surface as logs.
+  ignoreErrors: ["LockContentionError", "DuplicateMessageError"],
+
   integrations: [
-    Sentry.vercelAIIntegration({ recordInputs: true, recordOutputs: true }),
+    // `force: true` because the `ai` package is bundled by Next, so the
+    // integration's CJS require-hook never observes it and would otherwise skip
+    // registering its `ai.*` → `gen_ai.*` span processors — the spans that power
+    // the AI Agents Insights module and the per-turn conversation traces.
+    Sentry.vercelAIIntegration({ force: true, recordInputs: true, recordOutputs: true }),
     Sentry.anrIntegration({ captureStackTrace: true, anrThreshold: 5000 }),
   ],
 });

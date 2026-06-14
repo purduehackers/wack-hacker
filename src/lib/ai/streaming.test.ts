@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 
+import { TurnMessageStore } from "@/bot/turn-message-store";
+
 import type { ChatMessage } from "./types.ts";
 
 import {
   asAPI,
+  createMemoryRedis,
   createMockAPI,
   discordRESTClass,
   installMockProvider,
@@ -27,6 +30,23 @@ vi.mock("@notionhq/client", () => ({ Client: notionClientClass() }));
 vi.mock("resend", () => ({ Resend: resendClass() }));
 vi.mock("@vercel/edge-config", () => ({
   createClient: vi.fn(() => ({ getAll: vi.fn().mockResolvedValue({}) })),
+}));
+// Neutralize the cost-catalog warm-up so streamTurn never reaches out to
+// models.dev in tests. `estimateModelCostUsd` defaults to undefined (cold
+// cache); a cost test below flips it to exercise the priced path.
+const { estimateCostMock } = vi.hoisted(() => ({
+  estimateCostMock: vi.fn((): number | undefined => undefined),
+}));
+vi.mock("@/lib/ai/models-dev.ts", async (importActual) => ({
+  ...(await importActual<typeof import("./models-dev.ts")>()),
+  warmModelCatalog: vi.fn(),
+  estimateModelCostUsd: estimateCostMock,
+}));
+// The default turn-message index path builds a Redis client from env vars; back
+// it with the in-memory fake so finalize-time persistence never touches the
+// network (or needs real credentials) in tests.
+vi.mock("@upstash/redis", () => ({
+  Redis: { fromEnv: () => createMemoryRedis() },
 }));
 
 const { AgentContext } = await import("./context.ts");
@@ -919,5 +939,67 @@ describe("streamTurn: text-delta edge cases", () => {
     });
 
     expect(result.text).toBe("hello\n\n");
+  });
+});
+
+describe("streamTurn: feedback message index", () => {
+  it("persists the message → turn join for the primary reply and overflow chunks", async () => {
+    const store = new TurnMessageStore(createMemoryRedis());
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+
+    // ~3000 chars forces one overflow message at finalize.
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+      createAgent: fakeOrchestrator(["a".repeat(3000)]),
+      workflowRunId: "wf-run-1",
+      turnMessageStore: store,
+    });
+
+    const record = await store.get(result.discordMessageId);
+    expect(record).toMatchObject({ chatId: "wf-run-1", channelId: "ch-1", userId: "user-1" });
+    // The placeholder is msg-1 and the mock API hands out sequential ids, so the
+    // finalize-time overflow chunk is msg-2; it must resolve to the same turn.
+    expect(await store.get("msg-2")).toEqual(record);
+  });
+
+  it("does not fail the turn when the index write fails", async () => {
+    const redis = createMemoryRedis();
+    redis.set = async () => {
+      throw new Error("redis down");
+    };
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+      createAgent: fakeOrchestrator(["Done."]),
+      turnMessageStore: new TurnMessageStore(redis),
+    });
+
+    expect(result.text).toBe("Done.");
+  });
+});
+
+describe("streamTurn: cost attribution", () => {
+  it("computes turn cost from the orchestrator usage when the model is priced", async () => {
+    // Catalog is mocked cold by default (cost omitted); flip it for this turn so
+    // the priced path — ai.turn.cost_usd metric + ai.cost_usd span/wide event —
+    // actually runs.
+    estimateCostMock.mockReturnValueOnce(1.5);
+    const discord = createMockAPI();
+    const ctx = AgentContext.fromPacket(messagePacket("hello"));
+
+    const result = await streamTurn(asAPI(discord), "ch-1", userMsg("hello"), ctx.toJSON(), {
+      createAgent: fakeOrchestrator(["Priced."]),
+    });
+
+    expect(result.text).toBe("Priced.");
+    // Cost is computed for the model that actually ran, from its token usage.
+    expect(estimateCostMock).toHaveBeenCalledWith(
+      result.model,
+      expect.objectContaining({
+        inputTokens: expect.any(Number),
+        outputTokens: expect.any(Number),
+      }),
+    );
   });
 });

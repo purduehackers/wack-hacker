@@ -40,6 +40,25 @@ export async function withSpan<T>(
   });
 }
 
+/**
+ * Like `withSpan`, but the span is opened as a NEW ROOT, detached from the
+ * ambient context. Needed where a long-lived callback would otherwise inherit a
+ * stale request context: the discord.js client is constructed inside the
+ * `/gateway` request handler and held for ~10 minutes, so its socket callbacks
+ * run under that request's ALS context. Without detaching, every relayed event
+ * for the whole hold nests under one stale request trace. Detaching gives each
+ * relayed packet its own root trace, which `captureTraceparent` then propagates
+ * to the queue consumer.
+ */
+export async function withDetachedRootSpan<T>(
+  name: string,
+  attributes: Attributes,
+  fn: (span: Span) => Promise<T>,
+): Promise<T> {
+  const detachedCtx = trace.deleteSpan(otelContext.active());
+  return otelContext.with(detachedCtx, () => withSpan(name, attributes, fn));
+}
+
 /** Set attributes on whatever span is currently active. No-op if none. */
 export function setActiveSpanAttributes(attributes: Attributes): void {
   trace.getActiveSpan()?.setAttributes(attributes);

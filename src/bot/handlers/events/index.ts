@@ -8,3 +8,4 @@ export * from "./ship-scraper/delete";
 export * from "./hack-night-upload";
 export * from "./hack-night-reaction";
 export * from "./conversation-done";
+export * from "./feedback";

@@ -4,6 +4,9 @@ import { trace } from "@opentelemetry/api";
 import { isTextUIPart, type UIMessage } from "ai";
 import { FatalError } from "workflow";
 
+import type { TurnMessageRecord } from "@/bot/types";
+
+import { TurnMessageStore } from "@/bot/turn-message-store";
 import { createWideLogger } from "@/lib/logging/wide";
 import { countMetric, recordDistribution, recordDuration } from "@/lib/metrics";
 import { buildChatAttributes } from "@/lib/otel/chat-attributes";
@@ -23,6 +26,7 @@ import type {
 import { ORCHESTRATOR_FALLBACK_MODELS, ORCHESTRATOR_MODEL } from "./constants.ts";
 import { AgentContext } from "./context.ts";
 import { MessageRenderer } from "./message-renderer.ts";
+import { estimateModelCostUsd, warmModelCatalog } from "./models-dev.ts";
 import { createOrchestrator } from "./orchestrator.ts";
 import { readBudgetState, recordTurnTokens } from "./policy/index.ts";
 import { TurnUsageTracker } from "./turn-usage.ts";
@@ -97,6 +101,10 @@ export async function streamTurn(
   options: StreamTurnOptions = {},
 ): Promise<StreamTurnResult> {
   const { taskId, workflowRunId, turnIndex } = options;
+  // Warm the model-pricing catalog now so cost attribution at finalize reads
+  // from cache; fire-and-forget, so a cold-start turn never blocks on the
+  // network (cost is simply omitted until the catalog lands).
+  warmModelCatalog();
   const chatAttrs = workflowRunId
     ? buildChatAttributes({ workflowRunId, context: serializedContext, turnIndex })
     : undefined;
@@ -183,11 +191,53 @@ async function runStreamTurn(args: {
   // side-effectful turn.
   let finalizeResult: FinalizeResult;
   try {
-    finalizeResult = await finalizeTurn({ result, tracker, renderer, elapsedMs, logger, traceId });
+    finalizeResult = await finalizeTurn({
+      result,
+      tracker,
+      renderer,
+      elapsedMs,
+      logger,
+      traceId,
+      modelUsed,
+    });
   } catch (err) {
     throw await failTurn({ err, renderer, logger, traceId, startTime });
   }
-  const { metadataError, finalized } = finalizeResult;
+  return finishTurn({
+    finalizeResult,
+    tracker,
+    renderer,
+    logger,
+    elapsedMs,
+    modelUsed,
+    traceId,
+    userId: serializedContext.userId,
+    channelId,
+    workflowRunId,
+    turnMessageStore: options.turnMessageStore,
+  });
+}
+
+/**
+ * Post-stream tail of a successful turn: emit the metrics + span/wide-event
+ * totals, persist the message → turn index for feedback, and fold tokens into
+ * the daily budget. Split out so runStreamTurn stays focused on the stream.
+ */
+async function finishTurn(args: {
+  finalizeResult: FinalizeResult;
+  tracker: TurnUsageTracker;
+  renderer: MessageRenderer;
+  logger: ReturnType<typeof createWideLogger>;
+  elapsedMs: number;
+  modelUsed: string;
+  traceId: string | undefined;
+  userId: string;
+  channelId: string;
+  workflowRunId: string | undefined;
+  turnMessageStore: TurnMessageStore | undefined;
+}): Promise<StreamTurnResult> {
+  const { finalizeResult, tracker, renderer, logger, elapsedMs, modelUsed } = args;
+  const { metadataError, finalized, costUsd } = finalizeResult;
 
   countMetric("ai.turn.completed");
   recordDuration("ai.turn.duration", elapsedMs);
@@ -200,11 +250,42 @@ async function runStreamTurn(args: {
     modelUsed,
     messageId: finalized.messageId,
     metadataError,
+    costUsd,
   });
+
+  await indexTurnReplies({
+    store: args.turnMessageStore,
+    messageIds: [finalized.messageId, ...finalized.overflowIds],
+    record: {
+      chatId: args.workflowRunId,
+      traceId: args.traceId,
+      channelId: args.channelId,
+      userId: args.userId,
+    },
+  });
+
   // Fold this turn's tokens into the subject's daily budget counter for all
   // roles — enforcement is role-gated in decide(), but the data is universal.
-  await recordTurnTokens(agentCtx.userId, turnResult.usage.totalTokens);
+  await recordTurnTokens(args.userId, turnResult.usage.totalTokens);
   return turnResult;
+}
+
+/**
+ * Persist the message-id → turn join the feedback reaction handler reads — the
+ * primary reply and every overflow chunk map to the same turn. Non-fatal: the
+ * reply is already delivered, so an index failure must not fail the turn.
+ */
+async function indexTurnReplies(args: {
+  store: TurnMessageStore | undefined;
+  messageIds: string[];
+  record: TurnMessageRecord;
+}): Promise<void> {
+  try {
+    const store = args.store ?? new TurnMessageStore();
+    await Promise.all(args.messageIds.map((id) => store.set(id, args.record)));
+  } catch {
+    countMetric("ai.feedback.index_error");
+  }
 }
 
 /** Mirror per-turn totals onto the span + wide event and build the result. */
@@ -216,8 +297,10 @@ function emitTurnSuccess(args: {
   modelUsed: string;
   messageId: string;
   metadataError: unknown;
+  costUsd: number | undefined;
 }): StreamTurnResult {
-  const { tracker, renderer, logger, elapsedMs, modelUsed, messageId, metadataError } = args;
+  const { tracker, renderer, logger, elapsedMs, modelUsed, messageId, metadataError, costUsd } =
+    args;
   const usage = tracker.toTurnUsage();
   const { provider, model } = parseModelSlug(modelUsed);
 
@@ -233,11 +316,15 @@ function emitTurnSuccess(args: {
     "ai.output_tokens": usage.outputTokens,
     "ai.cache_read_tokens": tracker.cacheReadTokens,
     "ai.cache_write_tokens": tracker.cacheWriteTokens,
+    // Queryable cache-health signal: cache reads > 0 on a turn means the prompt
+    // cache landed (cold/misconfigured caching shows as cache_hit:false).
+    "ai.cache_hit": tracker.cacheReadTokens > 0,
     "ai.subagent_tokens": usage.subagentTokens,
     "ai.total_tokens": usage.totalTokens,
     "ai.tool_calls": usage.toolCallCount,
     "ai.steps": usage.stepCount,
     ...(usage.toolNames.length > 0 ? { "ai.tool_names": usage.toolNames } : {}),
+    ...(costUsd !== undefined ? { "ai.cost_usd": costUsd } : {}),
     "chat.discord_message_id": messageId,
   });
 
@@ -250,7 +337,9 @@ function emitTurnSuccess(args: {
     output_tokens: usage.outputTokens,
     cache_read_tokens: tracker.cacheReadTokens,
     cache_write_tokens: tracker.cacheWriteTokens,
+    cache_hit: tracker.cacheReadTokens > 0,
     subagent_tokens: usage.subagentTokens,
+    ...(costUsd !== undefined ? { cost_usd: costUsd } : {}),
     tool_calls: usage.toolCallCount,
     tool_names: usage.toolNames,
     steps: usage.stepCount,
@@ -290,6 +379,10 @@ async function failTurn(args: {
   const error = err as Error;
   countMetric("ai.turn.failed");
   await renderer.renderFailure(turnFailureNotice(traceId));
+  // Surface the failure as a Sentry issue (logger.error → captureException),
+  // not just an error-level wide event — a turn that dies is the single most
+  // important thing to see, and it was previously only a log.
+  logger.error(error);
   logger.emit({
     outcome: "error",
     duration_ms: Date.now() - startTime,
@@ -342,6 +435,10 @@ async function streamWithFallback(args: {
       const outcome = await renderStream(result.fullStream, renderer);
       toolCallSeen ||= outcome.toolCallSeen;
       if (outcome.terminalError !== undefined) throw outcome.terminalError;
+      // Record how many fallbacks it took to get a successful stream (0 = the
+      // primary model worked) on the chat.turn span — model_fallback counts the
+      // events, this shows the depth on the trace itself.
+      if (attempt > 0) setActiveSpanAttributes({ "ai.fallback_count": attempt });
       return { result, modelUsed };
     } catch (err) {
       const lastModel = attempt >= models.length - 1;
@@ -436,6 +533,9 @@ async function renderStream(
 interface FinalizeResult {
   metadataError: unknown;
   finalized: { messageId: string; overflowIds: string[] };
+  /** Whole-turn USD cost (orchestrator + subagents); undefined when the pricing
+   * catalog isn't warm yet or the orchestrator model isn't priced. */
+  costUsd: number | undefined;
 }
 
 async function finalizeTurn(args: {
@@ -445,8 +545,9 @@ async function finalizeTurn(args: {
   elapsedMs: number;
   logger: ReturnType<typeof createWideLogger>;
   traceId: string | undefined;
+  modelUsed: string;
 }): Promise<FinalizeResult> {
-  const { result, tracker, renderer, elapsedMs, logger, traceId } = args;
+  const { result, tracker, renderer, elapsedMs, logger, traceId, modelUsed } = args;
   try {
     const [totalUsage, steps] = await Promise.all([result.totalUsage, result.steps]);
     tracker.recordOrchestrator({
@@ -467,7 +568,21 @@ async function finalizeTurn(args: {
     recordDistribution("ai.turn.steps", tracker.totalSteps);
     recordDistribution("ai.turn.cache_read_tokens", tracker.cacheReadTokens);
     recordDistribution("ai.turn.cache_write_tokens", tracker.cacheWriteTokens);
-    return { metadataError: undefined, finalized };
+
+    // Whole-turn cost = orchestrator (priced at the model that actually ran,
+    // including a fallback) + each subagent's own-model cost summed in the
+    // tracker. Gated on the orchestrator price being known: that's the base of
+    // every turn, so omit the metric rather than report a subagent-only total.
+    const orchestratorUsage = tracker.toTurnUsage();
+    const orchestratorCostUsd = estimateModelCostUsd(modelUsed, {
+      inputTokens: orchestratorUsage.inputTokens,
+      outputTokens: orchestratorUsage.outputTokens,
+    });
+    const costUsd =
+      orchestratorCostUsd === undefined ? undefined : orchestratorCostUsd + tracker.subagentCostUsd;
+    if (costUsd !== undefined) recordDistribution("ai.turn.cost_usd", costUsd);
+
+    return { metadataError: undefined, finalized, costUsd };
   } catch (err) {
     countMetric("ai.turn.metadata_error");
     logger.warn("metadata collection failed", { reason: String(err) });
@@ -478,6 +593,6 @@ async function finalizeTurn(args: {
       stepCount: 0,
       traceId,
     });
-    return { metadataError: err, finalized };
+    return { metadataError: err, finalized, costUsd: undefined };
   }
 }

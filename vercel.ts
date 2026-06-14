@@ -7,6 +7,10 @@ export const config: VercelConfig = {
   crons: [
     {
       path: "/api/discord/gateway",
+      // Literal (not the GATEWAY_KEEPALIVE_CRON constant): Vercel evaluates this
+      // file with a TS loader that resolves the value of aliased const imports
+      // to `undefined`, which drops `schedule` and fails config validation. Keep
+      // this in sync with GATEWAY_KEEPALIVE_CRON in server/routes/gateway/constants.ts.
       schedule: "*/9 * * * *",
     },
     ...buildCronRoutes(),

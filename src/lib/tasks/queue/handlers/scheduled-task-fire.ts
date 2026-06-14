@@ -1,5 +1,6 @@
 import type { API } from "@discordjs/core/http-only";
 
+import * as Sentry from "@sentry/nextjs";
 import { DuplicateMessageError } from "@vercel/queue";
 import { z } from "zod";
 
@@ -11,7 +12,7 @@ import { AuditLog, roleAtLeast } from "@/lib/ai/policy";
 import { streamTurn } from "@/lib/ai/streaming.ts";
 import { createWideLogger } from "@/lib/logging/wide";
 import { countMetric, recordDistribution } from "@/lib/metrics";
-import { withSpan } from "@/lib/otel/tracing";
+import { withSpanFromParent } from "@/lib/otel/tracing";
 import { DISCORD_GUILD_ID } from "@/lib/protocol/constants";
 import { DEFAULT_TIMEZONE } from "@/lib/tasks/constants";
 import { nextOccurrence } from "@/lib/tasks/cron";
@@ -32,21 +33,23 @@ export const scheduledTaskFire = defineTask({
   schema: z.object({
     taskId: z.string(),
     targetIso: z.string(),
+    traceparent: z.string().optional(),
   }),
-  async handle({ taskId, targetIso }, discord) {
-    return withSpan(
+  async handle({ taskId, targetIso, traceparent }, discord) {
+    return withSpanFromParent(
+      traceparent,
       "scheduled_task.fire",
       { "task.id": taskId, "task.target_iso": targetIso },
-      () => runFire({ taskId, targetIso }, discord),
+      () => runFire({ taskId, targetIso, traceparent }, discord),
     );
   },
 });
 
 async function runFire(
-  payload: { taskId: string; targetIso: string },
+  payload: { taskId: string; targetIso: string; traceparent?: string },
   discord: API,
 ): Promise<void> {
-  const { taskId, targetIso } = payload;
+  const { taskId, targetIso, traceparent } = payload;
   const logger = createWideLogger({
     op: "scheduled_task.fire",
     task: { id: taskId, target_iso: targetIso },
@@ -57,6 +60,16 @@ async function runFire(
     logger.emit({ outcome: "skip_missing_row" });
     return;
   }
+  // Enrich the request scope so every span/log/issue from this fire is
+  // attributable to the owning user and distinguishable from interactive work.
+  Sentry.setUser({ id: task.userId });
+  Sentry.setTag("source", "scheduled");
+  Sentry.setContext("task", {
+    id: taskId,
+    target_iso: targetIso,
+    schedule_type: task.scheduleType,
+    action_type: task.action.type,
+  });
   if (isSkippable(task, targetIso, logger)) return;
 
   const targetMs = new Date(targetIso).getTime();
@@ -64,7 +77,7 @@ async function runFire(
   // Checkpoint hop: horizons > 6d enqueue at 6d out; on delivery we
   // re-enqueue the remaining delay. Idempotent on (taskId, targetIso).
   if (Date.now() < targetMs - CHECKPOINT_GUARD_MS) {
-    await rehydrateCheckpoint(taskId, targetMs, task.scheduleType, logger);
+    await rehydrateCheckpoint(taskId, targetMs, task.scheduleType, logger, traceparent);
     return;
   }
 
@@ -167,9 +180,19 @@ async function rehydrateCheckpoint(
   targetMs: number,
   scheduleType: ScheduleType,
   logger: Logger,
+  traceparent?: string,
 ): Promise<void> {
   const remainingSec = Math.floor((targetMs - Date.now()) / 1000);
-  const { messageId } = await sendScheduledFire(taskId, new Date(targetMs), remainingSec);
+  // Carry the creating turn's traceparent across the hop: a checkpoint chain is
+  // ONE task's journey to ONE fire (bounded by its target), so chaining keeps
+  // the eventual fire linked to the conversation that scheduled it. (Recurring
+  // re-fires in finalizeFire deliberately do NOT — that would be unbounded.)
+  const { messageId } = await sendScheduledFire(
+    taskId,
+    new Date(targetMs),
+    remainingSec,
+    traceparent,
+  );
   await updateScheduledTask(taskId, { queueMessageId: messageId });
   countMetric("scheduled_task.checkpoint_hop", { schedule_type: scheduleType });
   logger.emit({ outcome: "checkpoint_hop", task: { remaining_sec: remainingSec } });
@@ -296,6 +319,9 @@ async function executeAction(task: ScheduledTaskRow, discord: API): Promise<void
     source: "scheduled",
   });
 
+  // Group this scheduled agent turn under one conversation in AI Agents
+  // Insights, matching what the chat workflow does for interactive turns.
+  Sentry.setConversationId(task.id);
   try {
     await streamTurn(discord, channelId, [{ role: "user", content: prompt }], context.toJSON(), {
       taskId: task.id,

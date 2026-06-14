@@ -1,6 +1,7 @@
 import { tool, type Tool, type ToolSet } from "ai";
 
 import { isAsyncIterable } from "@/lib/async";
+import { countMetric } from "@/lib/metrics";
 
 import type {
   AccessSpec,
@@ -47,7 +48,7 @@ export function applyPolicy(tools: ToolSet, opts: ApplyPolicyOptions): ToolSet {
 
     if (decision.kind === "deny") {
       if (decision.code === "role") continue;
-      out[name] = budgetDenyStub(t as Tool, decision.message);
+      out[name] = budgetDenyStub(t as Tool, decision.message, name);
       continue;
     }
     if (decision.kind === "confirm" || decision.kind === "approve") {
@@ -82,11 +83,17 @@ export function applyPolicy(tools: ToolSet, opts: ApplyPolicyOptions): ToolSet {
  * spreading the original) so generator executes and `toModelOutput` hooks
  * don't ride along expecting output shapes the stub doesn't produce.
  */
-function budgetDenyStub(original: Tool, message: string): Tool {
+function budgetDenyStub(original: Tool, message: string, toolName: string): Tool {
   return tool({
     description: original.description ?? "",
     inputSchema: original.inputSchema,
-    execute: async () => message,
+    // Count at execute (when the model actually reaches for a budget-blocked
+    // tool) rather than at build time — that's the real "a turn hit the budget"
+    // signal, not the count of tools stubbed while over budget.
+    execute: async () => {
+      countMetric("ai.policy.budget_denied", { tool: toolName });
+      return message;
+    },
   });
 }
 

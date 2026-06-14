@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { Hono } from "hono";
 
 import type { CronHandler } from "@/bot/crons/types";
@@ -30,17 +31,35 @@ route.get("/crons/:name", async (c) => {
     return c.json({ error: `Unknown cron: ${name}` }, 404);
   }
 
+  Sentry.setTag("source", "cron");
+  Sentry.setTag("cron_name", name);
+
   const startTime = Date.now();
   try {
-    await runInstrumented(
+    // One withMonitor at the dispatch chokepoint gives every registered cron a
+    // Sentry check-in (monitor slug = cron name, schedule = its crontab), so a
+    // missed or failed run is alertable without per-handler wiring.
+    await Sentry.withMonitor(
+      name,
+      () =>
+        runInstrumented(
+          {
+            op: "cron.execute",
+            spanAttrs: { "cron.name": name },
+            loggerContext: { cron: { name } },
+          },
+          async () => {
+            await cron.handle(createDiscordAPI());
+            countMetric("cron.completed", { name });
+          },
+        ),
       {
-        op: "cron.execute",
-        spanAttrs: { "cron.name": name },
-        loggerContext: { cron: { name } },
-      },
-      async () => {
-        await cron.handle(createDiscordAPI());
-        countMetric("cron.completed", { name });
+        schedule: { type: "crontab", value: cron.schedule },
+        // Tolerate a few minutes of scheduler/deploy slack before flagging a
+        // missed check-in; flag a run that hasn't finished in 10 min as stuck.
+        checkinMargin: 5,
+        maxRuntime: 10,
+        timezone: "Etc/UTC",
       },
     );
     return c.json({ ok: true, cron: name });

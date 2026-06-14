@@ -24,6 +24,23 @@ export interface ConversationState {
 }
 
 /**
+ * Join from a Discord message id back to the turn that produced it. The turn's
+ * trace id is already printed in the reply footer and is a span attribute; this
+ * record is the reverse lookup, written at finalize time for the primary reply
+ * and every overflow chunk, and read by the feedback reaction handler to attach
+ * a reaction to the originating turn/trace.
+ */
+export interface TurnMessageRecord {
+  /** Chat workflow run id (`chat.id` on spans/wide events); absent outside chat workflows. */
+  chatId?: string;
+  /** OTEL trace id for the turn — the same id rendered in the reply footer. */
+  traceId?: string;
+  channelId: string;
+  /** Discord user id of the person whose message triggered the turn. */
+  userId: string;
+}
+
+/**
  * Serialized tool definition captured at snapshot time. Mirrors the tool-surface
  * shape the orchestrator exposes to the AI SDK (name, description, JSON-schema
  * input). Stored verbatim so the inspector can render and measure exactly what

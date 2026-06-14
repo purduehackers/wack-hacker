@@ -27,11 +27,17 @@ export async function sendScheduledFire(
   taskId: string,
   target: Date,
   delaySec: number,
+  traceparent?: string,
 ): Promise<{ messageId: string | null }> {
   const targetIso = target.toISOString();
+  const payload: ScheduledTaskFirePayload = { taskId, targetIso };
+  // Omit the key entirely (not `traceparent: undefined`) when absent so the
+  // payload is byte-identical to the legacy shape and the idempotency key /
+  // dedup behavior is unchanged.
+  if (traceparent) payload.traceparent = traceparent;
   const envelope: TaskEnvelope = {
     task: SCHEDULED_TASK_FIRE_TASK,
-    payload: { taskId, targetIso } satisfies ScheduledTaskFirePayload,
+    payload,
   };
   return send<TaskEnvelope>(TASK_TOPIC, envelope, {
     delaySeconds: clamp(Math.floor(delaySec), 0, CHECKPOINT_SECONDS),

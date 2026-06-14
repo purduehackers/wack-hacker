@@ -1,5 +1,15 @@
+import {
+  ROOT_CONTEXT,
+  context as otelContext,
+  propagation,
+  trace,
+  type Context,
+  type ContextManager,
+  type TextMapPropagator,
+} from "@opentelemetry/api";
 import { DuplicateMessageError } from "@vercel/queue";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ScheduledTaskRow } from "@/lib/tasks/types";
 
@@ -7,6 +17,7 @@ import { DISCORD_IDS } from "@/lib/protocol/constants";
 import { ScheduledTaskStatus, ScheduleType } from "@/lib/tasks/enums";
 import {
   asAPI,
+  createMemoryRedis,
   createMockAPI,
   discordRESTClass,
   installMockProvider,
@@ -29,6 +40,18 @@ vi.mock("@notionhq/client", () => ({ Client: notionClientClass() }));
 vi.mock("resend", () => ({ Resend: resendClass() }));
 vi.mock("@vercel/edge-config", () => ({
   createClient: vi.fn(() => ({ getAll: vi.fn().mockResolvedValue({}) })),
+}));
+// streamTurn (agent actions) warms the cost catalog; neutralize it so the test
+// never reaches out to models.dev.
+vi.mock("@/lib/ai/models-dev.ts", async (importActual) => ({
+  ...(await importActual<typeof import("@/lib/ai/models-dev.ts")>()),
+  warmModelCatalog: vi.fn(),
+}));
+// streamTurn's finalize indexes the reply → turn join via a Redis-backed store;
+// back it with the in-memory fake so the agent-action tests never touch the
+// network at finalize time.
+vi.mock("@upstash/redis", () => ({
+  Redis: { fromEnv: () => createMemoryRedis() },
 }));
 
 const hoisted = vi.hoisted(() => ({
@@ -180,6 +203,7 @@ describe("scheduled-task-fire: checkpoint hop", () => {
       "task-1",
       expect.any(Date),
       expect.any(Number),
+      undefined,
     );
     const [, , remainingSec] = hoisted.sendScheduledFire.mock.calls[0];
     expect(remainingSec).toBe(4 * 24 * 3600); // exactly 4 days remaining
@@ -187,6 +211,28 @@ describe("scheduled-task-fire: checkpoint hop", () => {
       queueMessageId: "msg-next",
     });
     expect(hoisted.recordDistribution).not.toHaveBeenCalled();
+  });
+
+  it("carries the creating turn's traceparent across the checkpoint hop", async () => {
+    // A checkpoint chain is one task's bounded journey to a single fire, so the
+    // traceparent IS forwarded (unlike recurring re-fires) to keep the eventual
+    // fire linked to the conversation that scheduled it.
+    const targetIso = "2026-05-03T13:00:00.000Z";
+    const traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+    vi.setSystemTime(new Date("2026-04-29T13:00:00.000Z"));
+    hoisted.getScheduledTask.mockResolvedValueOnce(makeRow({ nextRunAt: targetIso }));
+
+    await scheduledTaskFire.handle(
+      { taskId: "task-1", targetIso, traceparent },
+      asAPI(createMockAPI()),
+    );
+
+    expect(hoisted.sendScheduledFire).toHaveBeenCalledWith(
+      "task-1",
+      expect.any(Date),
+      expect.any(Number),
+      traceparent,
+    );
   });
 });
 
@@ -580,5 +626,118 @@ describe("scheduled-task-fire: role re-resolution at fire time", () => {
     );
 
     expect(discord.callsTo("guilds.getMember")).toEqual([]);
+  });
+});
+
+// --- trace propagation -------------------------------------------------------
+// Real @opentelemetry/api with a test ALS context manager + W3C-shaped
+// propagator registered. The NoopTracer reuses a valid parent span context from
+// the active context, so the trace id observed inside the handler is the
+// behavioral proof that `traceparent` was (or was not) joined.
+
+const PARENT_TRACE_ID = "4bf92f3577b34da6a3ce929d0e0e4736";
+const PARENT_TRACEPARENT = `00-${PARENT_TRACE_ID}-00f067aa0ba902b7-01`;
+const TRACEPARENT_RE = /^00-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$/;
+
+const contextStorage = new AsyncLocalStorage<Context>();
+const alsContextManager: ContextManager = {
+  active: () => contextStorage.getStore() ?? ROOT_CONTEXT,
+  with: (ctx, fn, thisArg, ...args) => contextStorage.run(ctx, () => fn.call(thisArg, ...args)),
+  bind: (_ctx, target) => target,
+  enable() {
+    return this;
+  },
+  disable() {
+    return this;
+  },
+};
+
+const w3cExtractPropagator: TextMapPropagator = {
+  inject: () => {},
+  extract(ctx, carrier, getter) {
+    const header = getter.get(carrier, "traceparent");
+    const value = Array.isArray(header) ? (header[0] ?? "") : (header ?? "");
+    const match = TRACEPARENT_RE.exec(value);
+    if (!match) return ctx;
+    return trace.setSpanContext(ctx, {
+      traceId: match[1],
+      spanId: match[2],
+      traceFlags: parseInt(match[3], 16),
+      isRemote: true,
+    });
+  },
+  fields: () => ["traceparent"],
+};
+
+describe("scheduled-task-fire: trace propagation", () => {
+  beforeAll(() => {
+    otelContext.setGlobalContextManager(alsContextManager);
+    propagation.setGlobalPropagator(w3cExtractPropagator);
+  });
+
+  afterAll(() => {
+    otelContext.disable();
+    propagation.disable();
+  });
+
+  function observeTraceIdViaRowLookup(): { traceId: () => string | undefined } {
+    let observed: string | undefined;
+    // The first thing runFire does inside the span is the row lookup — capture
+    // the active trace id there, then return null so the rest short-circuits.
+    hoisted.getScheduledTask.mockImplementationOnce(async () => {
+      observed = trace.getActiveSpan()?.spanContext().traceId;
+      return null;
+    });
+    return { traceId: () => observed };
+  }
+
+  it("accepts an optional string traceparent and rejects non-string values", () => {
+    const base = { taskId: "x", targetIso: "2026-01-01T00:00Z" };
+    expect(
+      scheduledTaskFire.schema.safeParse({ ...base, traceparent: PARENT_TRACEPARENT }).success,
+    ).toBe(true);
+    expect(scheduledTaskFire.schema.safeParse(base).success).toBe(true);
+    expect(scheduledTaskFire.schema.safeParse({ ...base, traceparent: 42 }).success).toBe(false);
+  });
+
+  it("runs the handler under the parent trace when the payload carries traceparent", async () => {
+    const observed = observeTraceIdViaRowLookup();
+    await scheduledTaskFire.handle(
+      { taskId: "task-1", targetIso: "2026-04-23T13:00:00.000Z", traceparent: PARENT_TRACEPARENT },
+      asAPI(createMockAPI()),
+    );
+    expect(observed.traceId()).toBe(PARENT_TRACE_ID);
+  });
+
+  it("opens a fresh span (not the parent trace) when the payload has no traceparent", async () => {
+    const observed = observeTraceIdViaRowLookup();
+    await scheduledTaskFire.handle(
+      { taskId: "task-1", targetIso: "2026-04-23T13:00:00.000Z" },
+      asAPI(createMockAPI()),
+    );
+    expect(observed.traceId()).toBeDefined();
+    expect(observed.traceId()).not.toBe(PARENT_TRACE_ID);
+  });
+
+  it("does not propagate traceparent through a recurring re-enqueue", async () => {
+    hoisted.getScheduledTask.mockResolvedValueOnce(
+      makeRow({
+        scheduleType: ScheduleType.Recurring,
+        runAt: null,
+        cron: "0 9 * * *",
+        timezone: null,
+      }),
+    );
+
+    await scheduledTaskFire.handle(
+      { taskId: "task-1", targetIso: "2026-04-23T13:00:00.000Z", traceparent: PARENT_TRACEPARENT },
+      asAPI(createMockAPI()),
+    );
+
+    // The re-enqueue must call sendScheduledFire with exactly 3 args (no
+    // traceparent) — re-propagating would chain a recurring task into one
+    // unbounded trace spanning weeks.
+    expect(hoisted.sendScheduledFire).toHaveBeenCalledTimes(1);
+    expect(hoisted.sendScheduledFire.mock.calls[0]).toHaveLength(3);
   });
 });

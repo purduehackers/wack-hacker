@@ -4,6 +4,8 @@ import { log } from "evlog";
 import { z } from "zod";
 
 import { isAsyncIterable } from "@/lib/async";
+import { createWideLogger } from "@/lib/logging/wide";
+import { countMetric, recordDuration } from "@/lib/metrics";
 
 import type { ActionAuditEntry, AuditLogLike } from "../policy/types.ts";
 import type {
@@ -188,7 +190,12 @@ export function wrapToolWithApproval(
       }
 
       const abortSignal = extractAbortSignal(runtime);
+      const waitStart = Date.now();
       const final = await store.waitFor(approvalId, { timeoutMs, signal: abortSignal });
+      // How long approvals sit waiting, and the approved/denied/timeout split —
+      // previously approvals were only visible in chat.turn traces.
+      recordDuration("ai.approval.wait_time_ms", Date.now() - waitStart, { risk: policy.risk });
+      countMetric("ai.approval.outcome", { outcome: final.status, risk: policy.risk });
       if (final.status !== "approved") {
         await convergeApprovalMessage(final);
         await audit?.record({
@@ -248,7 +255,11 @@ async function postApprovalPrompt(args: {
     return null;
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : "unknown error";
-    log.error("approval", `Failed to send approval prompt: ${errorMessage}`);
+    // Capture as an issue (not just a log): a failure to deliver the approval
+    // prompt means a gated tool silently couldn't run.
+    const logger = createWideLogger({ op: "approval.prompt_failed" });
+    logger.error(err as Error);
+    logger.emit({ outcome: "error" });
     return `Approval prompt failed to send (${errorMessage}). The tool was NOT run.`;
   }
 }

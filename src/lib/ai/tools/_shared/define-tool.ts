@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { textMessage } from "@/lib/ai/ui-message";
 import { isAsyncIterable } from "@/lib/async";
-import { countMetric } from "@/lib/metrics";
+import { countMetric, recordDuration } from "@/lib/metrics";
 import { withSpan } from "@/lib/otel/tracing";
 
 import type { AccessSpec } from "../../policy/types.ts";
@@ -231,6 +231,7 @@ export function defineTool<I extends z.ZodObject>(spec: {
       if (isAsyncIterable(invoked)) {
         return streamThrough(invoked);
       }
+      const startTime = Date.now();
       return withSpan(
         "tool.execute",
         { "tool.domain": domain, "tool.name": name },
@@ -240,12 +241,22 @@ export function defineTool<I extends z.ZodObject>(spec: {
             const text =
               typeof result === "string" ? result : (JSON.stringify(result) ?? String(result));
             span.setAttribute("tool.outcome", "ok");
+            recordDuration("tool.duration", Date.now() - startTime, {
+              domain,
+              tool: name,
+              outcome: "ok",
+            });
             return enforceBudget(text, outputBudget);
           } catch (err) {
             const cls = classifyToolError(err);
             countMetric("tool.error", { domain, tool: name, class: cls });
             span.setAttribute("tool.outcome", "error");
             span.setAttribute("tool.error_class", cls);
+            recordDuration("tool.duration", Date.now() - startTime, {
+              domain,
+              tool: name,
+              outcome: "error",
+            });
             return errorEnvelope(name, cls, err);
           }
         },

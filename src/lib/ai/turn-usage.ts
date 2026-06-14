@@ -20,6 +20,7 @@ interface ToolCallLike {
 export class TurnUsageTracker {
   private subagentTokens = 0;
   private subagentToolCalls = 0;
+  private subagentCostUsdTotal = 0;
   private orchestratorInputTokens = 0;
   private orchestratorOutputTokens = 0;
   private orchestratorTotalTokens = 0;
@@ -30,11 +31,18 @@ export class TurnUsageTracker {
   private orchestratorToolNames: string[] = [];
   private subagentToolNames: string[] = [];
 
-  /** Add a subagent delegation's contribution. */
-  addSubagent(delta: { tokens: number; toolCalls: number; toolNames: readonly string[] }): void {
+  /** Add a subagent delegation's contribution. `costUsd` is omitted when the
+   * delegation's model isn't priced (or the catalog isn't warm yet). */
+  addSubagent(delta: {
+    tokens: number;
+    toolCalls: number;
+    toolNames: readonly string[];
+    costUsd?: number;
+  }): void {
     this.subagentTokens += delta.tokens;
     this.subagentToolCalls += delta.toolCalls;
     this.subagentToolNames.push(...delta.toolNames);
+    this.subagentCostUsdTotal += delta.costUsd ?? 0;
   }
 
   /**
@@ -74,6 +82,11 @@ export class TurnUsageTracker {
   /** Orchestrator prompt-cache writes for the turn. */
   get cacheWriteTokens(): number {
     return this.orchestratorCacheWriteTokens;
+  }
+
+  /** Summed USD cost of every priced subagent delegation this turn. */
+  get subagentCostUsd(): number {
+    return this.subagentCostUsdTotal;
   }
 
   /** Convenience accessor for the post-stream tool-call total (orchestrator + subagent). */

@@ -6,7 +6,7 @@ import { ConversationStore } from "@/bot/store";
 import { createDiscordAPI } from "@/lib/discord/client";
 import { createWideLogger } from "@/lib/logging/wide";
 import { countMetric, recordDuration } from "@/lib/metrics";
-import { withSpan } from "@/lib/otel/tracing";
+import { withSpanFromParent } from "@/lib/otel/tracing";
 import { handleCallback } from "@/lib/tasks/queue/client";
 import { InvalidTaskPayloadError, UnknownTaskError } from "@/lib/tasks/queue/errors";
 import * as taskHandlers from "@/lib/tasks/queue/handlers";
@@ -46,7 +46,12 @@ async function runHandler(
 
 export const POST = handleCallback<TaskEnvelope>(
   async (envelope, metadata) => {
-    return withSpan(
+    // Join the origin trace when the payload carries a traceparent (scheduled
+    // fires do), so the dispatcher span shares the creating turn's trace instead
+    // of being orphaned in its own. Falls back to a root span otherwise.
+    const traceparent = (envelope.payload as { traceparent?: string } | undefined)?.traceparent;
+    return withSpanFromParent(
+      traceparent,
       "task.callback",
       {
         "task.name": envelope.task,
