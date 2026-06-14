@@ -1,4 +1,4 @@
-import { tool } from "ai";
+import { tool, type Tool, type ToolSet } from "ai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
@@ -6,9 +6,31 @@ import { SUBAGENT_PREAMBLE, SYSTEM_PROMPT } from "@/lib/ai/constants";
 import { AgentContext } from "@/lib/ai/context";
 import { createMemoryRedis, messagePacket } from "@/lib/test/fixtures";
 
-import { approval } from "./index.ts";
-import { wrapApprovalTools } from "./runtime.ts";
+import type { WrapApprovalOptions } from "./types.ts";
+
+import { approval, getApprovalOptions } from "./index.ts";
+import { wrapToolWithApproval } from "./runtime.ts";
 import { ApprovalStore } from "./store.ts";
+
+// Test driver. Production wraps tools via applyPolicy -> wrapToolWithApproval;
+// this maps a ToolSet the same way (reading the approval() marker the fixtures
+// set) so the scenarios below exercise the live wrapToolWithApproval flow that
+// `wrapApprovalTools` (removed as dead) used to provide.
+function wrapApprovalTools(tools: ToolSet, opts: WrapApprovalOptions): ToolSet {
+  const out: ToolSet = {};
+  for (const [name, t] of Object.entries(tools)) {
+    const markerOpts = getApprovalOptions(t);
+    out[name] = markerOpts
+      ? wrapToolWithApproval(
+          t as Tool,
+          name,
+          { confirmMode: "self", risk: "write", reason: markerOpts.reason },
+          opts,
+        )
+      : t;
+  }
+  return out;
+}
 
 // Mock the third-party Discord REST client at the module level so the wrapper
 // exercises its real `discord.post(...)` / `discord.patch(...)` paths

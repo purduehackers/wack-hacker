@@ -1,4 +1,4 @@
-import { tool, type Tool, type ToolSet } from "ai";
+import { tool, type Tool } from "ai";
 import { Routes } from "discord-api-types/v10";
 import { log } from "evlog";
 import { z } from "zod";
@@ -15,38 +15,12 @@ import type {
 
 import { discord } from "../tools/discord/client.ts";
 import { buildApprovalComponents, buildApprovalEmbed, buildDecisionEmbed } from "./helpers.ts";
-import { getApprovalOptions } from "./index.ts";
 import { ApprovalStore } from "./store.ts";
 
 const DEFAULT_TIMEOUT_MS = 240_000;
 const TTL_BUFFER_SECONDS = 60;
 
 type RuntimeExecuteFn = (input: unknown, runtime: unknown) => unknown;
-
-/**
- * Wrap every tool in a ToolSet that carries the approval marker. Unmarked
- * tools pass through unchanged. Pass `delegateName` from subagent call sites
- * so the approval prompt renders the full `delegate_<name>.<tool>(...)`
- * signature; omit it at the orchestrator layer.
- *
- * Legacy entry point — `applyPolicy` resolves an `access()` descriptor into
- * an `ApprovalPolicy` and calls `wrapToolWithApproval` directly.
- */
-export function wrapApprovalTools(tools: ToolSet, opts: WrapApprovalOptions): ToolSet {
-  const out: ToolSet = {};
-  for (const [name, t] of Object.entries(tools)) {
-    const markerOpts = getApprovalOptions(t);
-    out[name] = markerOpts
-      ? wrapToolWithApproval(
-          t as Tool,
-          name,
-          { confirmMode: "self", risk: "write", reason: markerOpts.reason },
-          opts,
-        )
-      : t;
-  }
-  return out;
-}
 
 // The approval protocol is stated once in the agent preambles (SYSTEM_PROMPT /
 // SUBAGENT_PREAMBLE); per-tool text is kept to a short marker + reason hint so

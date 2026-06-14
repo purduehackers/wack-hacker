@@ -55,7 +55,7 @@ export interface WaitForOptions {
 }
 
 /**
- * Injection points for `wrapApprovalTools()`. The `store` slot exists so tests
+ * Injection points for `wrapToolWithApproval()`. The `store` slot exists so tests
  * can swap in an `ApprovalStore` constructed against the in-memory Redis
  * fixture — Discord REST is mocked separately via `@discordjs/rest`.
  */
@@ -70,7 +70,7 @@ export interface WrapApprovalOptions {
 }
 
 /**
- * Minimal surface `wrapApprovalTools` needs from the store, so the concrete
+ * Minimal surface `wrapToolWithApproval` needs from the store, so the concrete
  * class can live in a non-types file without creating a cycle.
  */
 export interface ApprovalStoreLike {

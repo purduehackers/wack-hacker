@@ -16,9 +16,8 @@ import { AuditLog } from "./audit.ts";
 import { decide } from "./decide.ts";
 
 /**
- * The single enforcement point between a built ToolSet and the model.
- * Collapses the old `filterAdmin` + `wrapApprovalTools` pair: for each tool,
- * `decide()` is evaluated once and its outcome applied —
+ * The single enforcement point between a built ToolSet and the model. For each
+ * tool, `decide()` is evaluated once and its outcome applied —
  *
  * - deny (role):   the tool is omitted entirely (deny-by-absence — the model
  *                  never sees tools above the subject's role, so it can't
