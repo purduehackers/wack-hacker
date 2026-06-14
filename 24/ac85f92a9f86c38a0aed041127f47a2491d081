@@ -1,0 +1,21 @@
+src/lib/evlog.ts
+  s_e947ebbd513117::t_58cd16046721eb 3,6-79,82
+src/lib/evlog.test.ts
+  s_e947ebbd513117::t_7559a92726cd1a 1-116
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "24ac85f92a9f86c38a0aed041127f47a2491d081",
+  "prompts": {},
+  "sessions": {
+    "s_e947ebbd513117": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bbc7243f-7d19-41f9-9d1d-97eedb0b6968",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
