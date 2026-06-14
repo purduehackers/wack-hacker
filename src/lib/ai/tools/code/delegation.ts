@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import type { Sandbox } from "@/lib/sandbox/types";
 
+import { textMessage } from "@/lib/ai/ui-message";
 import { createWideLogger } from "@/lib/logging/wide";
 import { countMetric } from "@/lib/metrics";
 import { getOrCreateSession } from "@/lib/sandbox/session";
@@ -314,11 +315,7 @@ function sanitizeAuthorUsername(authorUsername: string | undefined): string | un
 }
 
 function statusMessage(text: string): UIMessage {
-  return {
-    id: `code-post-${Date.now()}`,
-    role: "assistant",
-    parts: [{ type: "text", text }],
-  } as unknown as UIMessage;
+  return textMessage(text, `code-post-${Date.now()}`);
 }
 
 function shellQuote(value: string): string {

@@ -1,6 +1,8 @@
-import { tool, type ToolCallOptions, type UIMessage } from "ai";
+import { tool, type ToolCallOptions } from "ai";
 import { z } from "zod";
 
+import { textMessage } from "@/lib/ai/ui-message";
+import { isAsyncIterable } from "@/lib/async";
 import { countMetric } from "@/lib/metrics";
 import { withSpan } from "@/lib/otel/tracing";
 
@@ -37,12 +39,6 @@ export function getToolMeta(t: unknown): ToolMeta | null {
   if (!t || typeof t !== "object") return null;
   const meta = (t as Record<symbol, unknown>)[TOOL_META];
   return meta ? (meta as ToolMeta) : null;
-}
-
-function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
-  return (
-    value != null && typeof (value as AsyncIterable<unknown>)[Symbol.asyncIterator] === "function"
-  );
 }
 
 function extractStatus(err: unknown): number | null {
@@ -218,11 +214,7 @@ export function defineTool<I extends z.ZodObject>(spec: {
     } catch (err) {
       const cls = classifyToolError(err);
       countMetric("tool.error", { domain, tool: name, class: cls });
-      yield {
-        id: `${name}-error`,
-        role: "assistant",
-        parts: [{ type: "text", text: errorEnvelope(name, cls, err) }],
-      } as unknown as UIMessage;
+      yield textMessage(errorEnvelope(name, cls, err), `${name}-error`);
     }
   };
 

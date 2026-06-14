@@ -3,6 +3,8 @@ import type { UIMessage } from "ai";
 import * as path from "node:path";
 import { z } from "zod";
 
+import { textMessage } from "@/lib/ai/ui-message";
+
 import { defineTool } from "../_shared/define-tool.ts";
 import { getSandboxContext, resolvePath } from "./utils.ts";
 
@@ -169,14 +171,6 @@ The command is run in the repo root by default; pass \`cwd\` (repo-relative) to 
     return { type: "text", value: last?.text ?? JSON.stringify({ error: "no bash output" }) };
   },
 });
-
-function textMessage(text: string): UIMessage {
-  return {
-    id: `bash-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    role: "assistant",
-    parts: [{ type: "text", text }],
-  } as unknown as UIMessage;
-}
 
 function appendBounded(buffer: string, addition: string): string {
   const next = buffer + addition;
