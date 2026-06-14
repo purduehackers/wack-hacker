@@ -28,6 +28,12 @@ vi.mock("resend", () => ({ Resend: resendClass() }));
 vi.mock("@vercel/edge-config", () => ({
   createClient: vi.fn(() => ({ getAll: vi.fn().mockResolvedValue({}) })),
 }));
+// Neutralize the cost-catalog warm-up so streamTurn never reaches out to
+// models.dev in tests; the cache stays cold so cost is simply omitted.
+vi.mock("@/lib/ai/models-dev.ts", async (importActual) => ({
+  ...(await importActual<typeof import("./models-dev.ts")>()),
+  warmModelCatalog: vi.fn(),
+}));
 
 const { AgentContext } = await import("./context.ts");
 const { buildUserMessage, parseModelSlug, streamTurn, turnFailureNotice } =

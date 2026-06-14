@@ -1,6 +1,15 @@
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 
-import { fetchCatalog, fetchModelInfo, matchModel } from "./models-dev.ts";
+import {
+  computeCostUsd,
+  estimateModelCostUsd,
+  fetchCatalog,
+  fetchModelInfo,
+  lookupModelInfoCached,
+  matchModel,
+  resetModelCatalogCacheForTests,
+  warmModelCatalog,
+} from "./models-dev.ts";
 
 const catalog = {
   anthropic: {
@@ -221,5 +230,66 @@ describe("matchModel: pickLatest date fallbacks", () => {
     const info = matchModel(dateless, "anthropic/claude-y");
     // With empty strings both compare equal — sort is stable, first one wins.
     expect(info?.id).toBe("claude-y-a");
+  });
+});
+
+describe("computeCostUsd", () => {
+  const info = {
+    id: "x",
+    provider: "openai",
+    cost: { input: 0.25, output: 2 },
+    limit: { context: 1, output: 1 },
+  };
+
+  it("prices input + output at per-MTok rates", () => {
+    expect(computeCostUsd(info, { inputTokens: 1_000_000, outputTokens: 1_000_000 })).toBeCloseTo(
+      2.25,
+      10,
+    );
+  });
+
+  it("is zero for zero usage", () => {
+    expect(computeCostUsd(info, { inputTokens: 0, outputTokens: 0 })).toBe(0);
+  });
+});
+
+describe("cached catalog lookup", () => {
+  beforeEach(() => resetModelCatalogCacheForTests());
+  afterEach(() => resetModelCatalogCacheForTests());
+
+  it("returns null/undefined before the catalog is warm and never fetches on its own", () => {
+    expect(lookupModelInfoCached("anthropic/claude-sonnet-4.6")).toBeNull();
+    expect(
+      estimateModelCostUsd("anthropic/claude-sonnet-4.6", { inputTokens: 1, outputTokens: 1 }),
+    ).toBeUndefined();
+  });
+
+  it("serves lookups + cost from the warmed catalog", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, json: async () => catalog });
+    warmModelCatalog(fetchImpl as unknown as typeof fetch);
+    await vi.waitFor(() =>
+      expect(lookupModelInfoCached("anthropic/claude-sonnet-4.6")).not.toBeNull(),
+    );
+    expect(lookupModelInfoCached("anthropic/claude-sonnet-4.6")?.id).toBe(
+      "claude-sonnet-4-6-20260301",
+    );
+    // sonnet 4.6: $3/M in, $15/M out → 1M in + 0.1M out = 3 + 1.5 = 4.5
+    expect(
+      estimateModelCostUsd("anthropic/claude-sonnet-4.6", {
+        inputTokens: 1_000_000,
+        outputTokens: 100_000,
+      }),
+    ).toBeCloseTo(4.5, 10);
+  });
+
+  it("warms at most once while a fetch is in flight or already cached", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, json: async () => catalog });
+    warmModelCatalog(fetchImpl as unknown as typeof fetch);
+    warmModelCatalog(fetchImpl as unknown as typeof fetch);
+    await vi.waitFor(() =>
+      expect(lookupModelInfoCached("anthropic/claude-sonnet-4.6")).not.toBeNull(),
+    );
+    warmModelCatalog(fetchImpl as unknown as typeof fetch);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 });

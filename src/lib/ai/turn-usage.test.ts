@@ -92,6 +92,20 @@ describe("TurnUsageTracker", () => {
   });
 });
 
+describe("TurnUsageTracker: cost accumulation", () => {
+  it("sums priced subagent costs and ignores delegations with no cost", () => {
+    const t = new TurnUsageTracker();
+    expect(t.subagentCostUsd).toBe(0);
+    t.addSubagent({ tokens: 100, toolCalls: 1, toolNames: [], costUsd: 0.25 });
+    t.addSubagent({ tokens: 200, toolCalls: 1, toolNames: [], costUsd: 1.5 });
+    // A delegation whose model isn't priced (or the catalog wasn't warm yet)
+    // contributes tokens but no cost.
+    t.addSubagent({ tokens: 50, toolCalls: 1, toolNames: [] });
+    expect(t.subagentCostUsd).toBeCloseTo(1.75, 10);
+    expect(t.toTurnUsage().subagentTokens).toBe(350);
+  });
+});
+
 describe("emptyTurnUsage", () => {
   it("returns a zeroed accumulator", () => {
     expect(emptyTurnUsage()).toEqual({

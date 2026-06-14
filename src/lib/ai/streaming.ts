@@ -23,6 +23,7 @@ import type {
 import { ORCHESTRATOR_FALLBACK_MODELS, ORCHESTRATOR_MODEL } from "./constants.ts";
 import { AgentContext } from "./context.ts";
 import { MessageRenderer } from "./message-renderer.ts";
+import { estimateModelCostUsd, warmModelCatalog } from "./models-dev.ts";
 import { createOrchestrator } from "./orchestrator.ts";
 import { readBudgetState, recordTurnTokens } from "./policy/index.ts";
 import { TurnUsageTracker } from "./turn-usage.ts";
@@ -97,6 +98,10 @@ export async function streamTurn(
   options: StreamTurnOptions = {},
 ): Promise<StreamTurnResult> {
   const { taskId, workflowRunId, turnIndex } = options;
+  // Warm the model-pricing catalog now so cost attribution at finalize reads
+  // from cache; fire-and-forget, so a cold-start turn never blocks on the
+  // network (cost is simply omitted until the catalog lands).
+  warmModelCatalog();
   const chatAttrs = workflowRunId
     ? buildChatAttributes({ workflowRunId, context: serializedContext, turnIndex })
     : undefined;
@@ -183,11 +188,19 @@ async function runStreamTurn(args: {
   // side-effectful turn.
   let finalizeResult: FinalizeResult;
   try {
-    finalizeResult = await finalizeTurn({ result, tracker, renderer, elapsedMs, logger, traceId });
+    finalizeResult = await finalizeTurn({
+      result,
+      tracker,
+      renderer,
+      elapsedMs,
+      logger,
+      traceId,
+      modelUsed,
+    });
   } catch (err) {
     throw await failTurn({ err, renderer, logger, traceId, startTime });
   }
-  const { metadataError, finalized } = finalizeResult;
+  const { metadataError, finalized, costUsd } = finalizeResult;
 
   countMetric("ai.turn.completed");
   recordDuration("ai.turn.duration", elapsedMs);
@@ -200,6 +213,7 @@ async function runStreamTurn(args: {
     modelUsed,
     messageId: finalized.messageId,
     metadataError,
+    costUsd,
   });
   // Fold this turn's tokens into the subject's daily budget counter for all
   // roles — enforcement is role-gated in decide(), but the data is universal.
@@ -216,8 +230,10 @@ function emitTurnSuccess(args: {
   modelUsed: string;
   messageId: string;
   metadataError: unknown;
+  costUsd: number | undefined;
 }): StreamTurnResult {
-  const { tracker, renderer, logger, elapsedMs, modelUsed, messageId, metadataError } = args;
+  const { tracker, renderer, logger, elapsedMs, modelUsed, messageId, metadataError, costUsd } =
+    args;
   const usage = tracker.toTurnUsage();
   const { provider, model } = parseModelSlug(modelUsed);
 
@@ -238,6 +254,7 @@ function emitTurnSuccess(args: {
     "ai.tool_calls": usage.toolCallCount,
     "ai.steps": usage.stepCount,
     ...(usage.toolNames.length > 0 ? { "ai.tool_names": usage.toolNames } : {}),
+    ...(costUsd !== undefined ? { "ai.cost_usd": costUsd } : {}),
     "chat.discord_message_id": messageId,
   });
 
@@ -251,6 +268,7 @@ function emitTurnSuccess(args: {
     cache_read_tokens: tracker.cacheReadTokens,
     cache_write_tokens: tracker.cacheWriteTokens,
     subagent_tokens: usage.subagentTokens,
+    ...(costUsd !== undefined ? { cost_usd: costUsd } : {}),
     tool_calls: usage.toolCallCount,
     tool_names: usage.toolNames,
     steps: usage.stepCount,
@@ -436,6 +454,9 @@ async function renderStream(
 interface FinalizeResult {
   metadataError: unknown;
   finalized: { messageId: string; overflowIds: string[] };
+  /** Whole-turn USD cost (orchestrator + subagents); undefined when the pricing
+   * catalog isn't warm yet or the orchestrator model isn't priced. */
+  costUsd: number | undefined;
 }
 
 async function finalizeTurn(args: {
@@ -445,8 +466,9 @@ async function finalizeTurn(args: {
   elapsedMs: number;
   logger: ReturnType<typeof createWideLogger>;
   traceId: string | undefined;
+  modelUsed: string;
 }): Promise<FinalizeResult> {
-  const { result, tracker, renderer, elapsedMs, logger, traceId } = args;
+  const { result, tracker, renderer, elapsedMs, logger, traceId, modelUsed } = args;
   try {
     const [totalUsage, steps] = await Promise.all([result.totalUsage, result.steps]);
     tracker.recordOrchestrator({
@@ -467,7 +489,21 @@ async function finalizeTurn(args: {
     recordDistribution("ai.turn.steps", tracker.totalSteps);
     recordDistribution("ai.turn.cache_read_tokens", tracker.cacheReadTokens);
     recordDistribution("ai.turn.cache_write_tokens", tracker.cacheWriteTokens);
-    return { metadataError: undefined, finalized };
+
+    // Whole-turn cost = orchestrator (priced at the model that actually ran,
+    // including a fallback) + each subagent's own-model cost summed in the
+    // tracker. Gated on the orchestrator price being known: that's the base of
+    // every turn, so omit the metric rather than report a subagent-only total.
+    const orchestratorUsage = tracker.toTurnUsage();
+    const orchestratorCostUsd = estimateModelCostUsd(modelUsed, {
+      inputTokens: orchestratorUsage.inputTokens,
+      outputTokens: orchestratorUsage.outputTokens,
+    });
+    const costUsd =
+      orchestratorCostUsd === undefined ? undefined : orchestratorCostUsd + tracker.subagentCostUsd;
+    if (costUsd !== undefined) recordDistribution("ai.turn.cost_usd", costUsd);
+
+    return { metadataError: undefined, finalized, costUsd };
   } catch (err) {
     countMetric("ai.turn.metadata_error");
     logger.warn("metadata collection failed", { reason: String(err) });
@@ -478,6 +514,6 @@ async function finalizeTurn(args: {
       stepCount: 0,
       traceId,
     });
-    return { metadataError: err, finalized };
+    return { metadataError: err, finalized, costUsd: undefined };
   }
 }

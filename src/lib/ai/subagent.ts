@@ -21,6 +21,7 @@ import type { HandoffEntity, SubagentSpec, TelemetryMetadata } from "./types.ts"
 
 import { addCacheControl } from "./cache-control.ts";
 import { SUBAGENT_MODEL, SUBAGENT_PREAMBLE, type UserRole } from "./constants.ts";
+import { estimateModelCostUsd } from "./models-dev.ts";
 import { applyPolicy, readBudgetState } from "./policy/index.ts";
 import { SkillRegistry, createLoadSkillTool, computeActiveTools } from "./skills/index.ts";
 import { TurnUsageTracker } from "./turn-usage.ts";
@@ -64,32 +65,48 @@ export function detectExhaustion(
  */
 export function recordSubagentMetrics(
   tracker: TurnUsageTracker,
-  spec: Pick<SubagentSpec, "name">,
-  usage: { totalTokens?: number },
+  spec: Pick<SubagentSpec, "name" | "model">,
+  usage: { totalTokens?: number; inputTokens?: number; outputTokens?: number },
   steps: SubagentSteps,
   outcome?: { hitStepCap: boolean; exhausted: boolean },
 ): void {
+  // Same resolution as createDelegationTool — the delegation ran on its own
+  // model (the code domain's Opus override, else the shared mini).
+  const model = spec.model ?? SUBAGENT_MODEL;
   const tokens = usage.totalTokens ?? 0;
+  const inputTokens = usage.inputTokens ?? 0;
+  const outputTokens = usage.outputTokens ?? 0;
   const toolCalls = steps.reduce((sum, s) => sum + s.toolCalls.length, 0);
   const toolNames = steps.flatMap((s) =>
     s.toolCalls.flatMap((call) => (typeof call.toolName === "string" ? [call.toolName] : [])),
   );
-  tracker.addSubagent({ tokens, toolCalls, toolNames });
+  // Priced at the delegation's own model — domains differ by orders of
+  // magnitude (the code domain runs Opus, others a mini). undefined until the
+  // catalog warms or for an unpriced model; folded into the turn total.
+  const costUsd = estimateModelCostUsd(model, { inputTokens, outputTokens });
+  tracker.addSubagent({ tokens, toolCalls, toolNames, costUsd });
   if (outcome?.hitStepCap) {
     countMetric("ai.subagent.step_cap_hit", { domain: spec.name });
   }
   if (!outcome?.exhausted) {
     countMetric("ai.subagent.completed", { domain: spec.name });
   }
-  recordDistribution("ai.subagent.tokens", tokens, { domain: spec.name });
-  recordDistribution("ai.subagent.tool_calls", toolCalls, { domain: spec.name });
+  const attrs = { domain: spec.name, model };
+  recordDistribution("ai.subagent.tokens", tokens, attrs);
+  recordDistribution("ai.subagent.tool_calls", toolCalls, attrs);
+  if (costUsd !== undefined) {
+    recordDistribution("ai.subagent.cost_usd", costUsd, attrs);
+  }
   createWideLogger({
     op: "ai.subagent",
-    subagent: { domain: spec.name },
+    subagent: { domain: spec.name, model },
   }).emit({
     outcome: outcome?.exhausted ? "exhausted" : "ok",
     hit_step_cap: outcome?.hitStepCap ?? false,
     tokens,
+    input_tokens: inputTokens,
+    output_tokens: outputTokens,
+    ...(costUsd !== undefined ? { cost_usd: costUsd } : {}),
     tool_calls: toolCalls,
     tool_names: toolNames,
     steps: steps.length,

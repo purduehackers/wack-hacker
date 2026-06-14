@@ -40,6 +40,12 @@ vi.mock("resend", () => ({ Resend: resendClass() }));
 vi.mock("@vercel/edge-config", () => ({
   createClient: vi.fn(() => ({ getAll: vi.fn().mockResolvedValue({}) })),
 }));
+// streamTurn (agent actions) warms the cost catalog; neutralize it so the test
+// never reaches out to models.dev.
+vi.mock("@/lib/ai/models-dev.ts", async (importActual) => ({
+  ...(await importActual<typeof import("@/lib/ai/models-dev.ts")>()),
+  warmModelCatalog: vi.fn(),
+}));
 
 const hoisted = vi.hoisted(() => ({
   sendScheduledFire: vi

@@ -113,3 +113,72 @@ export async function fetchModelInfo(
   if (!catalog) return null;
   return matchModel(catalog, gatewayModelId);
 }
+
+// In-memory catalog for the per-turn cost hot path. The catalog is a large,
+// slowly-changing document, so fetching it per turn would add a network round
+// trip to every reply. Cached once per process; a failed fetch is NOT cached so
+// a transient outage recovers on the next lookup.
+let catalogCache: RawCatalog | null = null;
+let catalogInFlight: Promise<void> | null = null;
+
+/**
+ * Kick off a background catalog fetch if one hasn't already loaded or started.
+ * Fire-and-forget: call it when a turn begins so the catalog is warm by the
+ * time the turn finalizes. Safe to call repeatedly.
+ */
+export function warmModelCatalog(fetchImpl: typeof fetch = fetch): void {
+  if (catalogCache || catalogInFlight) return;
+  catalogInFlight = fetchCatalog(fetchImpl)
+    .then((catalog) => {
+      if (catalog) catalogCache = catalog;
+    })
+    .finally(() => {
+      catalogInFlight = null;
+    });
+}
+
+/**
+ * Synchronous, non-blocking model lookup from the in-memory catalog. Returns
+ * null until the catalog is warm (call `warmModelCatalog` when a turn begins),
+ * so cost attribution never blocks or fails a turn and never fires a request on
+ * its own — the first turn after a cold start simply omits cost.
+ */
+export function lookupModelInfoCached(gatewayModelId: string): ModelInfo | null {
+  if (!catalogCache) return null;
+  return matchModel(catalogCache, gatewayModelId);
+}
+
+/**
+ * USD cost of `usage` at `modelInfo`'s list prices (per 1M tokens). Mirrors the
+ * input/output-only model in `ModelInfo.cost`: the models.dev catalog carries
+ * no cache-read rate, so cached input is priced at the full input rate (a
+ * slight over-estimate, consistent with the /inspect-context breakdown).
+ */
+export function computeCostUsd(
+  modelInfo: ModelInfo,
+  usage: { inputTokens: number; outputTokens: number },
+): number {
+  return (
+    (usage.inputTokens * modelInfo.cost.input + usage.outputTokens * modelInfo.cost.output) /
+    1_000_000
+  );
+}
+
+/**
+ * Estimate one model invocation's USD cost from the cached catalog. Returns
+ * undefined when the catalog isn't warm yet or the model isn't priced — callers
+ * omit the cost rather than emit a misleading zero.
+ */
+export function estimateModelCostUsd(
+  gatewayModelId: string,
+  usage: { inputTokens: number; outputTokens: number },
+): number | undefined {
+  const info = lookupModelInfoCached(gatewayModelId);
+  return info ? computeCostUsd(info, usage) : undefined;
+}
+
+/** Test-only: clear the in-memory catalog cache between cases. */
+export function resetModelCatalogCacheForTests(): void {
+  catalogCache = null;
+  catalogInFlight = null;
+}

@@ -17,6 +17,11 @@ import {
   uninstallMockProvider,
 } from "@/lib/test/fixtures";
 
+import {
+  lookupModelInfoCached,
+  resetModelCatalogCacheForTests,
+  warmModelCatalog,
+} from "./models-dev.ts";
 import { access } from "./policy/index.ts";
 import { SkillRegistry } from "./skills/index.ts";
 import {
@@ -646,6 +651,50 @@ describe("recordSubagentMetrics", () => {
     expect(Sentry.metrics.count).toHaveBeenCalledWith("ai.subagent.completed", 1, {
       attributes: { domain: "test" },
     });
+  });
+});
+
+describe("recordSubagentMetrics: cost attribution", () => {
+  // A models.dev-shaped catalog priced for gpt-5.4-mini ($0.25/M in, $2/M out).
+  const fakeCatalogFetch = (async () =>
+    new Response(
+      JSON.stringify({
+        openai: {
+          models: {
+            "gpt-5-4-mini": {
+              id: "gpt-5-4-mini",
+              cost: { input: 0.25, output: 2 },
+              limit: { context: 400_000, output: 16_000 },
+            },
+          },
+        },
+      }),
+      { status: 200 },
+    )) as unknown as typeof fetch;
+
+  it("prices the delegation at its own model and folds the cost into the tracker once warm", async () => {
+    const model = "openai/gpt-5.4-mini";
+    resetModelCatalogCacheForTests();
+    warmModelCatalog(fakeCatalogFetch);
+    await vi.waitFor(() => expect(lookupModelInfoCached(model)).not.toBeNull());
+    vi.mocked(Sentry.metrics.distribution).mockClear();
+
+    const tracker = new TurnUsageTracker();
+    recordSubagentMetrics(
+      tracker,
+      { name: "test", model },
+      { totalTokens: 2_000_000, inputTokens: 1_000_000, outputTokens: 1_000_000 },
+      [],
+    );
+
+    // 1M input * $0.25/M + 1M output * $2/M = 2.25
+    expect(tracker.subagentCostUsd).toBeCloseTo(2.25, 10);
+    expect(Sentry.metrics.distribution).toHaveBeenCalledWith(
+      "ai.subagent.cost_usd",
+      expect.closeTo(2.25, 5),
+      { attributes: { domain: "test", model } },
+    );
+    resetModelCatalogCacheForTests();
   });
 });
 
