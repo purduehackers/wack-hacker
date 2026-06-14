@@ -1,0 +1,23 @@
+vercel.ts
+  s_e947ebbd513117::t_689216b0c45add 4
+src/bot/crons/constants.ts
+  s_e947ebbd513117::t_45628bc5e4125d 1-11
+src/server/routes/gateway/index.ts
+  s_e947ebbd513117::t_8486c530920bd4 23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "0fd4d943502b5579635bf493d315a2b06b99fce7",
+  "prompts": {},
+  "sessions": {
+    "s_e947ebbd513117": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bbc7243f-7d19-41f9-9d1d-97eedb0b6968",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
