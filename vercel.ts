@@ -1,14 +1,17 @@
 import { type VercelConfig } from "@vercel/config/v1";
 
 import { buildCronRoutes } from "@/bot/crons/config";
-import { GATEWAY_KEEPALIVE_CRON } from "@/bot/crons/constants";
 
 export const config: VercelConfig = {
   framework: "nextjs",
   crons: [
     {
       path: "/api/discord/gateway",
-      schedule: GATEWAY_KEEPALIVE_CRON,
+      // Literal (not the GATEWAY_KEEPALIVE_CRON constant): Vercel evaluates this
+      // file with a TS loader that resolves the value of aliased const imports
+      // to `undefined`, which drops `schedule` and fails config validation. Keep
+      // this in sync with GATEWAY_KEEPALIVE_CRON in server/routes/gateway/constants.ts.
+      schedule: "*/9 * * * *",
     },
     ...buildCronRoutes(),
   ],

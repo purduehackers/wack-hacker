@@ -10,7 +10,6 @@ import { monotonicFactory } from "ulid";
 
 import type { Packet } from "@/lib/protocol/types";
 
-import { GATEWAY_KEEPALIVE_CRON } from "@/bot/crons/constants";
 import { env } from "@/env";
 import { createWideLogger } from "@/lib/logging/wide";
 import { countMetric, recordDuration } from "@/lib/metrics";
@@ -20,7 +19,7 @@ import { PacketCodec } from "@/lib/protocol/packets";
 import { send } from "@/lib/tasks/queue/client";
 import { DISCORD_EVENT_TOPIC } from "@/lib/tasks/queue/constants";
 
-import { HANDOFF_WAIT_MS, READY_TIMEOUT_MS } from "./constants";
+import { GATEWAY_KEEPALIVE_CRON, HANDOFF_WAIT_MS, READY_TIMEOUT_MS } from "./constants";
 
 const HOLD_MS = 10 * 60 * 1000;
 const LEADER_KEY = "gateway:leader";
