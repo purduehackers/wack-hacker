@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { isAsyncIterable } from "@/lib/async";
 import { createWideLogger } from "@/lib/logging/wide";
+import { countMetric, recordDuration } from "@/lib/metrics";
 
 import type { ActionAuditEntry, AuditLogLike } from "../policy/types.ts";
 import type {
@@ -189,7 +190,12 @@ export function wrapToolWithApproval(
       }
 
       const abortSignal = extractAbortSignal(runtime);
+      const waitStart = Date.now();
       const final = await store.waitFor(approvalId, { timeoutMs, signal: abortSignal });
+      // How long approvals sit waiting, and the approved/denied/timeout split —
+      // previously approvals were only visible in chat.turn traces.
+      recordDuration("ai.approval.wait_time_ms", Date.now() - waitStart, { risk: policy.risk });
+      countMetric("ai.approval.outcome", { outcome: final.status, risk: policy.risk });
       if (final.status !== "approved") {
         await convergeApprovalMessage(final);
         await audit?.record({

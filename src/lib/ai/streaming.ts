@@ -316,6 +316,9 @@ function emitTurnSuccess(args: {
     "ai.output_tokens": usage.outputTokens,
     "ai.cache_read_tokens": tracker.cacheReadTokens,
     "ai.cache_write_tokens": tracker.cacheWriteTokens,
+    // Queryable cache-health signal: cache reads > 0 on a turn means the prompt
+    // cache landed (cold/misconfigured caching shows as cache_hit:false).
+    "ai.cache_hit": tracker.cacheReadTokens > 0,
     "ai.subagent_tokens": usage.subagentTokens,
     "ai.total_tokens": usage.totalTokens,
     "ai.tool_calls": usage.toolCallCount,
@@ -334,6 +337,7 @@ function emitTurnSuccess(args: {
     output_tokens: usage.outputTokens,
     cache_read_tokens: tracker.cacheReadTokens,
     cache_write_tokens: tracker.cacheWriteTokens,
+    cache_hit: tracker.cacheReadTokens > 0,
     subagent_tokens: usage.subagentTokens,
     ...(costUsd !== undefined ? { cost_usd: costUsd } : {}),
     tool_calls: usage.toolCallCount,
@@ -431,6 +435,10 @@ async function streamWithFallback(args: {
       const outcome = await renderStream(result.fullStream, renderer);
       toolCallSeen ||= outcome.toolCallSeen;
       if (outcome.terminalError !== undefined) throw outcome.terminalError;
+      // Record how many fallbacks it took to get a successful stream (0 = the
+      // primary model worked) on the chat.turn span — model_fallback counts the
+      // events, this shows the depth on the trace itself.
+      if (attempt > 0) setActiveSpanAttributes({ "ai.fallback_count": attempt });
       return { result, modelUsed };
     } catch (err) {
       const lastModel = attempt >= models.length - 1;

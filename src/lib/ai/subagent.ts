@@ -200,7 +200,10 @@ async function buildSubagentAgent(args: {
     experimental_telemetry: {
       isEnabled: true,
       functionId: `subagent.${spec.name}`,
-      metadata: { role, subagent: spec.name, ...extraMetadata },
+      // `model` lets AI Agents Insights filter gen_ai spans by the delegation's
+      // actual model (the code domain runs Opus, others a mini); `subagent` is
+      // the domain.
+      metadata: { role, subagent: spec.name, model: resolvedModel, ...extraMetadata },
     },
   });
 }

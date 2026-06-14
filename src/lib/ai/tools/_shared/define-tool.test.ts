@@ -5,6 +5,7 @@ import { toolOpts } from "@/lib/test/fixtures";
 
 vi.mock("@/lib/metrics", () => ({
   countMetric: vi.fn(),
+  recordDuration: vi.fn(),
 }));
 
 import { countMetric } from "@/lib/metrics";
