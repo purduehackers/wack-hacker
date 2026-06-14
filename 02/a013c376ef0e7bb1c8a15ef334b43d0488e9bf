@@ -1,0 +1,23 @@
+sentry.edge.config.ts
+  s_e947ebbd513117::t_84101dc3df358e 8-9
+next.config.ts
+  s_e947ebbd513117::t_0e70682c193c6f 16-19
+sentry.server.config.ts
+  s_e947ebbd513117::t_2e72ef83bcf077 9-15,22-26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "02a013c376ef0e7bb1c8a15ef334b43d0488e9bf",
+  "prompts": {},
+  "sessions": {
+    "s_e947ebbd513117": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bbc7243f-7d19-41f9-9d1d-97eedb0b6968",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
