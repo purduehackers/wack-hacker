@@ -1,0 +1,42 @@
+src/app/api/tasks/route.ts
+  s_e947ebbd513117::t_7ab15fd3ce27f2 9
+  s_e947ebbd513117::t_57b7718ad04326 49-54
+src/bot/handlers/events/voice-transcription/index.ts
+  s_e947ebbd513117::t_3870e59317bba4 11
+  s_e947ebbd513117::t_231f2b9611bf6a 117-122,124-146,148-152,154-155
+src/lib/tasks/queue/handlers/scheduled-task-fire.test.ts
+  s_e947ebbd513117::t_7a7e3c8da0fe05 206,215-226,228-235
+src/server/routes/interactions/component.ts
+  s_e947ebbd513117::t_13860650354134 44-47,54
+  s_e947ebbd513117::t_11fd4c9547a596 10
+src/bot/handlers/crons/scheduled-task-sweep/index.ts
+  s_e947ebbd513117::t_48165e5f7553e4 6
+  s_e947ebbd513117::t_ce8cb17fbd1e3f 36-38,45
+src/lib/tasks/queue/handlers/scheduled-task-fire.ts
+  s_e947ebbd513117::t_57abd9e3ba898c 43
+  s_e947ebbd513117::t_aa71c7d97e8c06 49,52
+  s_e947ebbd513117::t_ed4039d54c3a2c 80
+  s_e947ebbd513117::t_2f0fcbe26c0f55 183,186-195
+src/bot/handlers/events/ship-scraper/index.ts
+  s_e947ebbd513117::t_cfd2565b6fc7ab 9
+  s_e947ebbd513117::t_53c894494444ce 61-99
+src/bot/turn-message-store.ts
+  s_e947ebbd513117::t_aba0989a95a8ae 3
+  s_e947ebbd513117::t_9e165782cb561e 28-30,34-36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "4f26d851f645a57873a0b771ec7c1088c7939929",
+  "prompts": {},
+  "sessions": {
+    "s_e947ebbd513117": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bbc7243f-7d19-41f9-9d1d-97eedb0b6968",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
