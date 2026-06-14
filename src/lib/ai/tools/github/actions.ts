@@ -72,7 +72,7 @@ export const list_workflow_runs = defineTool({
         repo,
         workflow_id,
         branch,
-        status: status as any,
+        status: status,
         per_page: per_page ?? 10,
         page: page ?? 1,
       });
@@ -95,7 +95,7 @@ export const list_workflow_runs = defineTool({
       owner: env.GITHUB_ORG,
       repo,
       branch,
-      status: status as any,
+      status: status,
       per_page: per_page ?? 10,
       page: page ?? 1,
     });

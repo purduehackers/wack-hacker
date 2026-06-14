@@ -238,7 +238,7 @@ describe("applyPolicy — confirmation wrapping", () => {
 });
 
 describe("applyPolicy — confirmation wrapping, prompt send failure", () => {
-  it("records a terminal 'failed' row and never runs the tool when the Discord prompt can't send", async () => {
+  it("records a terminal 'prompt_failed' row and never runs the tool when the Discord prompt can't send", async () => {
     const { tool: t, spy } = makeTool();
     const tools = { nuke: access({ risk: "destructive" }, t) };
     const { store } = fakeStore("approved", "user-1");
@@ -250,7 +250,8 @@ describe("applyPolicy — confirmation wrapping, prompt send failure", () => {
 
     expect(spy).not.toHaveBeenCalled();
     expect(String(out.at(-1))).toContain("NOT run");
-    expect(entries.map((e) => e.decision)).toEqual(["requested", "failed"]);
+    // Distinct from execution "failed": the prompt couldn't be delivered.
+    expect(entries.map((e) => e.decision)).toEqual(["requested", "prompt_failed"]);
   });
 });
 

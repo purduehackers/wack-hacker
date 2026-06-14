@@ -4,9 +4,8 @@ import { z } from "zod";
 import { getDb } from "@/lib/db/index.ts";
 import { actionAudit } from "@/lib/db/schemas/action-audit.ts";
 
+import { AuditDecision } from "../../policy/constants.ts";
 import { defineTool } from "../_shared/define-tool.ts";
-
-const DECISIONS = ["requested", "approved", "denied", "timeout", "executed", "failed"] as const;
 
 export const list_audit_log = defineTool({
   name: "list_audit_log",
@@ -20,9 +19,11 @@ export const list_audit_log = defineTool({
     user_id: z.string().optional().describe("Filter by the acting Discord user ID"),
     tool_name: z.string().optional().describe("Filter by tool name (e.g. 'delete_project')"),
     decision: z
-      .enum(DECISIONS)
+      // Derived from the AuditDecision source of truth so the filter can't drift
+      // out of sync with what's written (e.g. it includes `prompt_failed`).
+      .enum(AuditDecision)
       .optional()
-      .describe("Filter by lifecycle stage (e.g. 'denied', 'executed')"),
+      .describe("Filter by lifecycle stage (e.g. 'denied', 'executed', 'prompt_failed')"),
     limit: z.number().int().min(1).max(100).optional().describe("Max rows to return (default 25)"),
   }),
   execute: async ({ user_id, tool_name, decision, limit }) => {

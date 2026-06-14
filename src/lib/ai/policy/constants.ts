@@ -43,6 +43,9 @@ export const AuditDecision = {
   Timeout: "timeout",
   Executed: "executed",
   Failed: "failed",
+  /** The approval prompt could not be delivered, so the tool never ran — kept
+   *  distinct from `Failed` (the tool ran and threw) for the audit trail. */
+  PromptFailed: "prompt_failed",
 } as const;
 
 // eslint-disable-next-line @factory/constants-file-organization, @factory/types-file-organization
