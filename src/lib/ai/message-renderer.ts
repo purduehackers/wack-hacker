@@ -140,7 +140,10 @@ export class MessageRenderer {
     let footer = MessageRenderer.formatFooter(meta);
     if (this.taskId) footer += `\n-# Task: ${this.taskId}`;
 
-    const finalText = this.text || "I didn't have anything to say.";
+    // Fall back through the assembled body (e.g. a trailing `tool` failure line
+    // or a subagent preview) before the empty-turn message, so a turn that ends
+    // on a tool-error with no text isn't silently blanked.
+    const finalText = this.body() || "I didn't have anything to say.";
     const chunks = MessageRenderer.splitWithFooter(finalText, footer);
 
     // Edit the original message with the first chunk
@@ -277,15 +280,24 @@ export class MessageRenderer {
     }
   }
 
-  /** Compose components into a single Discord message string (mid-stream). */
-  private render(): string {
+  /**
+   * Assemble the visible body from activity + subagent previews + text, in the
+   * same order the live stream shows them. No fallback or truncation — callers
+   * supply the empty-state text and any length handling.
+   */
+  private body(): string {
     const parts: string[] = [];
     if (this.activity) parts.push(`-# ${this.activity}`);
     for (const preview of this.subagentPreviews.values()) {
       parts.push(`> ${preview.replaceAll("\n", "\n> ")}`);
     }
     if (this.text) parts.push(this.text);
-    const body = parts.join("\n\n") || "> Thinking...";
+    return parts.join("\n\n");
+  }
+
+  /** The live-stream view: body() plus the "Thinking..." placeholder and length cap. */
+  private render(): string {
+    const body = this.body() || "> Thinking...";
     return body.length > MAX_LENGTH ? body.slice(0, MAX_LENGTH - 1) + "…" : body;
   }
 }
