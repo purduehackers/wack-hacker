@@ -12,7 +12,7 @@ import type { Packet } from "@/lib/protocol/types";
 import { env } from "@/env";
 import { createWideLogger } from "@/lib/logging/wide";
 import { countMetric, recordDuration } from "@/lib/metrics";
-import { withSpan } from "@/lib/otel/tracing";
+import { captureTraceparent, withDetachedRootSpan } from "@/lib/otel/tracing";
 import { bindGatewayEvents } from "@/lib/protocol/events";
 import { PacketCodec } from "@/lib/protocol/packets";
 import { send } from "@/lib/tasks/queue/client";
@@ -38,14 +38,23 @@ end`;
 const ulid = monotonicFactory();
 
 async function relay(packet: Packet, oidcToken: string): Promise<void> {
-  return withSpan("gateway.relay", { "packet.type": packet.type }, async () => {
+  // Detached root: the discord.js client is held across the ~10-minute gateway
+  // hold, so its callbacks would otherwise nest every relayed packet under the
+  // one stale `/gateway` request trace. A fresh root per packet is what the
+  // captured traceparent then carries forward to the consumer.
+  return withDetachedRootSpan("gateway.relay", { "packet.type": packet.type }, async () => {
     const logger = createWideLogger({
       op: "gateway.relay",
       event: { type: packet.type },
     });
     const startTime = Date.now();
     try {
-      await send(DISCORD_EVENT_TOPIC, PacketCodec.encode(packet), { oidcToken });
+      // Serialize this root's context onto the packet so the queue consumer
+      // continues the same trace (gateway.relay → discord.event → handlers).
+      const traceparent = captureTraceparent();
+      await send(DISCORD_EVENT_TOPIC, PacketCodec.encode({ ...packet, traceparent }), {
+        oidcToken,
+      });
       countMetric("gateway.packet.relayed", { type: packet.type });
       logger.emit({ outcome: "ok", duration_ms: Date.now() - startTime });
     } catch (err) {

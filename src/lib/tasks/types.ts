@@ -53,4 +53,12 @@ export interface ScheduledTaskFirePayload {
   taskId: string;
   /** Original ISO target; unchanged across checkpoint hops. */
   targetIso: string;
+  /**
+   * W3C traceparent of the creating tool call. Set ONLY at task creation, never
+   * on internal re-enqueues (checkpoint hops / recurring re-fires / the sweep):
+   * the fire handler joins this trace via `withSpanFromParent`, which preserves
+   * the trace id — re-propagating on every re-enqueue would accumulate one
+   * unbounded trace spanning weeks for a recurring task.
+   */
+  traceparent?: string;
 }

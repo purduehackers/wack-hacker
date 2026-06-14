@@ -59,4 +59,25 @@ describe("sendScheduledFire", () => {
     const [, , options] = hoisted.send.mock.calls[0];
     expect(options.delaySeconds).toBe(59);
   });
+
+  it("includes traceparent in the payload when provided, without changing the idempotency key", async () => {
+    const target = new Date("2026-06-01T12:00:00.000Z");
+    const traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+    await sendScheduledFire("task-11", target, 60, traceparent);
+
+    const [, envelope, options] = hoisted.send.mock.calls[0];
+    expect(envelope.payload).toEqual({
+      taskId: "task-11",
+      targetIso: "2026-06-01T12:00:00.000Z",
+      traceparent,
+    });
+    expect(options.idempotencyKey).toBe("task-11:2026-06-01T12:00:00.000Z");
+  });
+
+  it("omits the traceparent key entirely when not provided", async () => {
+    await sendScheduledFire("task-12", new Date("2026-06-01T12:00:00.000Z"), 60);
+
+    const [, envelope] = hoisted.send.mock.calls[0];
+    expect("traceparent" in envelope.payload).toBe(false);
+  });
 });

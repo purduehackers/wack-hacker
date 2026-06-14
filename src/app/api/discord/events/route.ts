@@ -1,7 +1,7 @@
 import { ConversationStore } from "@/bot/store";
 import { createWideLogger } from "@/lib/logging/wide";
 import { countMetric, recordDuration } from "@/lib/metrics";
-import { withSpan } from "@/lib/otel/tracing";
+import { withSpanFromParent } from "@/lib/otel/tracing";
 import { PacketCodec } from "@/lib/protocol/packets";
 import { handleCallback } from "@/lib/tasks/queue/client";
 import { LockContentionError } from "@/server/errors";
@@ -11,7 +11,8 @@ import { router } from "@/server/routes/handlers";
 export const POST = handleCallback<string>(
   async (encoded, metadata) => {
     const packet = PacketCodec.decode(encoded);
-    return withSpan(
+    return withSpanFromParent(
+      packet.traceparent,
       "discord.event",
       {
         "packet.type": packet.type,

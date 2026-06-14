@@ -11,7 +11,7 @@ import { AuditLog, roleAtLeast } from "@/lib/ai/policy";
 import { streamTurn } from "@/lib/ai/streaming.ts";
 import { createWideLogger } from "@/lib/logging/wide";
 import { countMetric, recordDistribution } from "@/lib/metrics";
-import { withSpan } from "@/lib/otel/tracing";
+import { withSpanFromParent } from "@/lib/otel/tracing";
 import { DISCORD_GUILD_ID } from "@/lib/protocol/constants";
 import { DEFAULT_TIMEZONE } from "@/lib/tasks/constants";
 import { nextOccurrence } from "@/lib/tasks/cron";
@@ -32,9 +32,11 @@ export const scheduledTaskFire = defineTask({
   schema: z.object({
     taskId: z.string(),
     targetIso: z.string(),
+    traceparent: z.string().optional(),
   }),
-  async handle({ taskId, targetIso }, discord) {
-    return withSpan(
+  async handle({ taskId, targetIso, traceparent }, discord) {
+    return withSpanFromParent(
+      traceparent,
       "scheduled_task.fire",
       { "task.id": taskId, "task.target_iso": targetIso },
       () => runFire({ taskId, targetIso }, discord),

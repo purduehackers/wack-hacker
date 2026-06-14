@@ -139,3 +139,29 @@ describe("PacketSchema validation", () => {
     ).toBe(false);
   });
 });
+
+describe("PacketCodec - traceparent propagation", () => {
+  const TRACEPARENT = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01";
+
+  it("roundtrips traceparent on every packet variant", () => {
+    const variants = [
+      messagePacket("hello"),
+      reactionPacket("👋"),
+      reactionPacket("👋", "GATEWAY_MESSAGE_REACTION_REMOVE"),
+      deletePacket(),
+    ];
+    for (const packet of variants) {
+      const decoded = PacketCodec.decode(
+        PacketCodec.encode({ ...packet, traceparent: TRACEPARENT }),
+      );
+      expect(decoded.traceparent).toBe(TRACEPARENT);
+      expect(decoded.timestamp).toBeInstanceOf(Date);
+    }
+  });
+
+  it("still parses legacy payloads without traceparent and revives their timestamp", () => {
+    const decoded = PacketCodec.decode(PacketCodec.encode(messagePacket("hello")));
+    expect(decoded.traceparent).toBeUndefined();
+    expect(decoded.timestamp).toBeInstanceOf(Date);
+  });
+});

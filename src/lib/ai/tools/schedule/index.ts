@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import type { TaskAction } from "@/lib/tasks/types";
 
+import { captureTraceparent } from "@/lib/otel/tracing";
 import { DEFAULT_TIMEZONE } from "@/lib/tasks/constants";
 import { listScheduledTasks, saveScheduledTask, updateScheduledTask } from "@/lib/tasks/db";
 import { ScheduledTaskStatus, ScheduleType } from "@/lib/tasks/enums";
@@ -143,7 +144,12 @@ export function createScheduleTask(context: AgentContext) {
       // Send first: a failed send surfaces to the user immediately and
       // leaves no orphan DB row. If the save fails after a successful send,
       // the fire handler looks up a missing row and no-ops — no side effect.
-      const { messageId } = await sendScheduledFire(id, target, delaySec);
+      //
+      // Creation is the ONLY site that propagates the trace: the captured
+      // traceparent links the eventual fire back to the conversation turn that
+      // scheduled it. Internal re-enqueues deliberately omit it (see
+      // ScheduledTaskFirePayload.traceparent).
+      const { messageId } = await sendScheduledFire(id, target, delaySec, captureTraceparent());
       await saveScheduledTask({
         id,
         userId: user_id,
