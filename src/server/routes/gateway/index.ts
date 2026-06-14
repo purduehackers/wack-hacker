@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { Redis } from "@upstash/redis";
 import { waitUntil } from "@vercel/functions";
 import { getVercelOidcTokenSync } from "@vercel/functions/oidc";
@@ -264,7 +265,12 @@ route.get("/gateway", async (c) => {
 
   let hold: Promise<void>;
   try {
-    ({ hold } = await startGatewayListener(client));
+    // The bot's single ingestion point: if these check-ins stop, the bot is
+    // deaf. The crontab mirrors the keepalive schedule that pings this route in
+    // vercel.ts, so a missed check-in means an invocation didn't land.
+    ({ hold } = await Sentry.withMonitor("discord-gateway", () => startGatewayListener(client), {
+      schedule: { type: "crontab", value: "*/9 * * * *" },
+    }));
   } catch {
     return c.json({ error: "gateway failed to become ready" }, 500);
   }
