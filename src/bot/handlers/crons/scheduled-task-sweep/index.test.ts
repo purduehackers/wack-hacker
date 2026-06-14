@@ -82,9 +82,11 @@ describe("scheduled-task-sweep", () => {
 
     await scheduledTaskSweep.handle(asAPI(createMockAPI()));
 
+    // The 4th arg is the captured traceparent; undefined here since no OTEL span
+    // is active in the test (in prod it carries the sweep cron's trace).
     expect(hoisted.sendScheduledFire.mock.calls).toEqual([
-      ["task-1", new Date("2026-04-23T13:00:00.000Z"), 0],
-      ["task-2", new Date("2026-04-24T09:00:00.000Z"), 0],
+      ["task-1", new Date("2026-04-23T13:00:00.000Z"), 0, undefined],
+      ["task-2", new Date("2026-04-24T09:00:00.000Z"), 0, undefined],
     ]);
     expect(hoisted.countMetric).toHaveBeenCalledWith("scheduled_task.swept", {
       schedule_type: "recurring",

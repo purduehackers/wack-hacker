@@ -59,7 +59,22 @@ before the agent runs, so every `gen_ai` span inherits `gen_ai.conversation.id`.
 Re-setting the same `workflowRunId` on each followup turn groups a whole
 multi-turn conversation under one entry in AI Agents Insights. `workflowRunId`
 is also the `chat.id` span attribute, so a conversation is one trace-explorer
-query (`chat.id == <workflowRunId>`).
+query (`chat.id == <workflowRunId>`). Scheduled agent turns set the same on
+`task.id`. Subagent `gen_ai` spans carry `model` so they're filterable by the
+delegation's actual model.
+
+### Agent decision & health signals
+
+Metrics for the decisions and conditions inside the agent loop:
+
+- `ai.policy.budget_denied` (`{tool}`) — counted when the model actually calls a
+  budget-blocked tool. (Role denials are deny-by-absence — no countable event.)
+- `ai.approval.outcome` (`{outcome, risk}`) + `ai.approval.wait_time_ms` — the
+  approved/denied/timeout split and how long approvals wait.
+- `ai.cache_hit` (span attr + wide event) — true when prompt-cache reads landed.
+- `ai.fallback_count` (span attr) — how many fallbacks a turn took to stream.
+- `tool.duration` (`{domain, tool, outcome}`) — per-tool latency, alongside the
+  existing `tool.called` / `tool.error` counters and the `tool.execute` span.
 
 ### Wide events → Sentry Logs
 
@@ -88,6 +103,28 @@ Logs** by `op` (`ai.turn`, `gateway.relay`, `discord.event.callback`,
 - `automaticVercelMonitors` was removed from `next.config.ts` — it read a
   `vercel.json` crons block that doesn't exist (crons run via Hono routes) and
   is Pages-Router-only.
+- The cron and gateway monitors set `checkinMargin` / `maxRuntime` / `timezone`
+  so late, missed, and overrunning runs are alertable (the gateway gets a longer
+  `maxRuntime` for its ~10-minute lease hold).
+
+## Scope & attribution
+
+Each entry point enriches the Sentry **isolation scope** so identity and request
+context ride on every span, log, AND issue — not just on wide events:
+
+- `Sentry.setUser({ id })` on chat turns (`runTurn`) and scheduled fires, so
+  issues, logs, and AI Agents Insights are attributable to a user.
+- Tags (low cardinality, for filtering/grouping): `source`
+  (`discord` / `chat` / `scheduled` / `cron`), `packet_type`, `guild_id`,
+  `delivery_attempt`, `cron_name`.
+- `Sentry.setContext("packet" | "task" | "chat", …)` for the higher-cardinality
+  detail (channel id, target, schedule type) that belongs in the Issue context
+  panel rather than as a tag.
+
+`release` is set from `VERCEL_GIT_COMMIT_SHA` in `withSentryConfig` (one place,
+so the source-map upload and the runtime SDK can't drift), tying every
+issue/log to its deploy. `ignoreErrors` keeps the expected retry/dedup throws
+(`LockContentionError`, `DuplicateMessageError`) out of Issues.
 
 ## Cost attribution
 
