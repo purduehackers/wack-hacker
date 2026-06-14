@@ -17,6 +17,7 @@ import { DISCORD_IDS } from "@/lib/protocol/constants";
 import { ScheduledTaskStatus, ScheduleType } from "@/lib/tasks/enums";
 import {
   asAPI,
+  createMemoryRedis,
   createMockAPI,
   discordRESTClass,
   installMockProvider,
@@ -45,6 +46,12 @@ vi.mock("@vercel/edge-config", () => ({
 vi.mock("@/lib/ai/models-dev.ts", async (importActual) => ({
   ...(await importActual<typeof import("@/lib/ai/models-dev.ts")>()),
   warmModelCatalog: vi.fn(),
+}));
+// streamTurn's finalize indexes the reply → turn join via a Redis-backed store;
+// back it with the in-memory fake so the agent-action tests never touch the
+// network at finalize time.
+vi.mock("@upstash/redis", () => ({
+  Redis: { fromEnv: () => createMemoryRedis() },
 }));
 
 const hoisted = vi.hoisted(() => ({

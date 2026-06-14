@@ -1,6 +1,8 @@
 import type { ModelMessage, ToolSet, UIMessage } from "ai";
 import type { z } from "zod";
 
+import type { TurnMessageStore } from "@/bot/turn-message-store";
+
 import type { AgentContext } from "./context.ts";
 import type { BudgetState } from "./policy/types.ts";
 import type { SkillBundle } from "./skills/types.ts";
@@ -378,4 +380,11 @@ export interface StreamTurnOptions {
    * enqueuing the workflow so it's visible ahead of workflow cold-start.
    */
   placeholderMessageId?: string;
+  /**
+   * Dependency-injected message → turn index, written at finalize time so the
+   * feedback reaction handler can resolve a reaction on a bot reply back to the
+   * turn that produced it. Defaults to the Redis-backed store; tests inject one
+   * over an in-memory fake.
+   */
+  turnMessageStore?: TurnMessageStore;
 }

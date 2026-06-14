@@ -4,6 +4,9 @@ import { trace } from "@opentelemetry/api";
 import { isTextUIPart, type UIMessage } from "ai";
 import { FatalError } from "workflow";
 
+import type { TurnMessageRecord } from "@/bot/types";
+
+import { TurnMessageStore } from "@/bot/turn-message-store";
 import { createWideLogger } from "@/lib/logging/wide";
 import { countMetric, recordDistribution, recordDuration } from "@/lib/metrics";
 import { buildChatAttributes } from "@/lib/otel/chat-attributes";
@@ -200,6 +203,40 @@ async function runStreamTurn(args: {
   } catch (err) {
     throw await failTurn({ err, renderer, logger, traceId, startTime });
   }
+  return finishTurn({
+    finalizeResult,
+    tracker,
+    renderer,
+    logger,
+    elapsedMs,
+    modelUsed,
+    traceId,
+    userId: serializedContext.userId,
+    channelId,
+    workflowRunId,
+    turnMessageStore: options.turnMessageStore,
+  });
+}
+
+/**
+ * Post-stream tail of a successful turn: emit the metrics + span/wide-event
+ * totals, persist the message → turn index for feedback, and fold tokens into
+ * the daily budget. Split out so runStreamTurn stays focused on the stream.
+ */
+async function finishTurn(args: {
+  finalizeResult: FinalizeResult;
+  tracker: TurnUsageTracker;
+  renderer: MessageRenderer;
+  logger: ReturnType<typeof createWideLogger>;
+  elapsedMs: number;
+  modelUsed: string;
+  traceId: string | undefined;
+  userId: string;
+  channelId: string;
+  workflowRunId: string | undefined;
+  turnMessageStore: TurnMessageStore | undefined;
+}): Promise<StreamTurnResult> {
+  const { finalizeResult, tracker, renderer, logger, elapsedMs, modelUsed } = args;
   const { metadataError, finalized, costUsd } = finalizeResult;
 
   countMetric("ai.turn.completed");
@@ -215,10 +252,40 @@ async function runStreamTurn(args: {
     metadataError,
     costUsd,
   });
+
+  await indexTurnReplies({
+    store: args.turnMessageStore,
+    messageIds: [finalized.messageId, ...finalized.overflowIds],
+    record: {
+      chatId: args.workflowRunId,
+      traceId: args.traceId,
+      channelId: args.channelId,
+      userId: args.userId,
+    },
+  });
+
   // Fold this turn's tokens into the subject's daily budget counter for all
   // roles — enforcement is role-gated in decide(), but the data is universal.
-  await recordTurnTokens(agentCtx.userId, turnResult.usage.totalTokens);
+  await recordTurnTokens(args.userId, turnResult.usage.totalTokens);
   return turnResult;
+}
+
+/**
+ * Persist the message-id → turn join the feedback reaction handler reads — the
+ * primary reply and every overflow chunk map to the same turn. Non-fatal: the
+ * reply is already delivered, so an index failure must not fail the turn.
+ */
+async function indexTurnReplies(args: {
+  store: TurnMessageStore | undefined;
+  messageIds: string[];
+  record: TurnMessageRecord;
+}): Promise<void> {
+  try {
+    const store = args.store ?? new TurnMessageStore();
+    await Promise.all(args.messageIds.map((id) => store.set(id, args.record)));
+  } catch {
+    countMetric("ai.feedback.index_error");
+  }
 }
 
 /** Mirror per-turn totals onto the span + wide event and build the result. */
