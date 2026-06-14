@@ -1,0 +1,22 @@
+src/lib/ai/message-renderer.ts
+  s_e947ebbd513117::t_ac96e6a854a67f 284-289,296-300
+  s_e947ebbd513117::t_12c398d696da39 143-146
+src/lib/ai/message-renderer.test.ts
+  s_e947ebbd513117::t_7c5ce917a4d42b 400-421
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "0fd2d65d125dcdbeb9a839b6fd9b0c061ce20b54",
+  "prompts": {},
+  "sessions": {
+    "s_e947ebbd513117": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bbc7243f-7d19-41f9-9d1d-97eedb0b6968",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
