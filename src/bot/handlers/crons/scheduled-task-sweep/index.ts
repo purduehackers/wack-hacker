@@ -3,6 +3,7 @@ import { log } from "evlog";
 
 import { defineCron } from "@/bot/crons/define";
 import { countMetric } from "@/lib/metrics";
+import { captureTraceparent } from "@/lib/otel/tracing";
 import { listOverdueActiveTasks } from "@/lib/tasks/db";
 import { sendScheduledFire } from "@/lib/tasks/queue/schedule-fire";
 
@@ -32,13 +33,16 @@ export const scheduledTaskSweep = defineCron({
       return;
     }
 
+    // Link every re-enqueued fire back to this sweep run's trace (bounded — one
+    // sweep), so a recovered task shows it was resurrected here.
+    const traceparent = captureTraceparent();
     let swept = 0;
     let duplicates = 0;
     const failures: Error[] = [];
     for (const task of stale) {
       if (task.nextRunAt === null) continue;
       try {
-        await sendScheduledFire(task.id, new Date(task.nextRunAt), 0);
+        await sendScheduledFire(task.id, new Date(task.nextRunAt), 0, traceparent);
         countMetric("scheduled_task.swept", { schedule_type: task.scheduleType });
         swept += 1;
         log.info("scheduled-task-sweep", `Re-enqueued ${task.id} (target ${task.nextRunAt})`);

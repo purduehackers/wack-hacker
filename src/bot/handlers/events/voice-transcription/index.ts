@@ -8,6 +8,7 @@ import { log } from "evlog";
 import { defineEvent } from "@/bot/events/define";
 import { MessageRenderer } from "@/lib/ai/message-renderer";
 import { splitOggOpus } from "@/lib/audio/ogg-opus-splitter";
+import { withSpan } from "@/lib/otel/tracing";
 
 const TRANSCRIPTION_FAILED = "Sorry, I couldn't transcribe that audio message.";
 
@@ -113,36 +114,44 @@ export const voiceTranscription = defineEvent({
 
     await ctx.discord.channels.addMessageReaction(channel.id, messageId, "\u{1F399}\u{FE0F}");
 
-    try {
-      const response = await fetch(audio.url);
-      const buffer = new Uint8Array(await response.arrayBuffer());
-
-      let text: string;
-      let partCount: number;
-
-      if (buffer.byteLength > CHUNK_THRESHOLD) {
-        ({ text, partCount } = await transcribeChunked(buffer));
-      } else {
+    // Named span so transcription (fetch + Whisper, possibly chunked) is a
+    // distinct, labeled child of the discord.event trace.
+    await withSpan(
+      "voice_transcription",
+      { "voice.message_id": messageId, "voice.channel_id": channel.id },
+      async () => {
         try {
-          text = await transcribeOnce(buffer);
-          partCount = 1;
-        } catch (err) {
-          if (!TOO_LARGE_PATTERN.test(String(err))) throw err;
-          log.warn(
-            "voice-transcription",
-            "Fast path hit size error, falling back to chunked: " + String(err),
-          );
-          ({ text, partCount } = await transcribeChunked(buffer));
-        }
-      }
+          const response = await fetch(audio.url);
+          const buffer = new Uint8Array(await response.arrayBuffer());
 
-      await postTranscript(ctx.discord, channel.id, messageId, text, partCount);
-    } catch (err) {
-      log.warn("voice-transcription", "Failed: " + String(err));
-      await ctx.discord.channels.createMessage(channel.id, {
-        content: TRANSCRIPTION_FAILED,
-        message_reference: { message_id: messageId },
-      });
-    }
+          let text: string;
+          let partCount: number;
+
+          if (buffer.byteLength > CHUNK_THRESHOLD) {
+            ({ text, partCount } = await transcribeChunked(buffer));
+          } else {
+            try {
+              text = await transcribeOnce(buffer);
+              partCount = 1;
+            } catch (err) {
+              if (!TOO_LARGE_PATTERN.test(String(err))) throw err;
+              log.warn(
+                "voice-transcription",
+                "Fast path hit size error, falling back to chunked: " + String(err),
+              );
+              ({ text, partCount } = await transcribeChunked(buffer));
+            }
+          }
+
+          await postTranscript(ctx.discord, channel.id, messageId, text, partCount);
+        } catch (err) {
+          log.warn("voice-transcription", "Failed: " + String(err));
+          await ctx.discord.channels.createMessage(channel.id, {
+            content: TRANSCRIPTION_FAILED,
+            message_reference: { message_id: messageId },
+          });
+        }
+      },
+    );
   },
 });

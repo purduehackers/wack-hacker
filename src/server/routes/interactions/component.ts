@@ -7,6 +7,7 @@ import * as components from "@/bot/components";
 import { createWideLogger } from "@/lib/logging/wide";
 import { countMetric, recordDuration } from "@/lib/metrics";
 import { runInstrumented } from "@/lib/otel/instrumented";
+import { captureTraceparent } from "@/lib/otel/tracing";
 import { InteractionResponseType } from "@/lib/protocol/constants";
 
 import type { DispatcherResult } from "./types.ts";
@@ -40,12 +41,17 @@ export function handleMessageComponent(interaction: DiscordInteraction): Dispatc
   countMetric("interaction.component", { prefix });
   const discord = buildDiscord();
   const startTime = Date.now();
+  // Capture the interaction trace synchronously (we're still inside the route's
+  // span here) so the deferred handler — which runs in waitUntil after the ack —
+  // stays in the same trace instead of starting a detached root.
+  const traceparent = captureTraceparent();
   waitUntil(
     (async () => {
       try {
         await runInstrumented(
           {
             op: "interaction.component",
+            traceparent,
             spanAttrs: { "component.prefix": prefix },
             loggerContext: {
               component: { prefix, custom_id: customId },

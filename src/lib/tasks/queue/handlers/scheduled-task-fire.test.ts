@@ -203,6 +203,7 @@ describe("scheduled-task-fire: checkpoint hop", () => {
       "task-1",
       expect.any(Date),
       expect.any(Number),
+      undefined,
     );
     const [, , remainingSec] = hoisted.sendScheduledFire.mock.calls[0];
     expect(remainingSec).toBe(4 * 24 * 3600); // exactly 4 days remaining
@@ -210,6 +211,28 @@ describe("scheduled-task-fire: checkpoint hop", () => {
       queueMessageId: "msg-next",
     });
     expect(hoisted.recordDistribution).not.toHaveBeenCalled();
+  });
+
+  it("carries the creating turn's traceparent across the checkpoint hop", async () => {
+    // A checkpoint chain is one task's bounded journey to a single fire, so the
+    // traceparent IS forwarded (unlike recurring re-fires) to keep the eventual
+    // fire linked to the conversation that scheduled it.
+    const targetIso = "2026-05-03T13:00:00.000Z";
+    const traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+    vi.setSystemTime(new Date("2026-04-29T13:00:00.000Z"));
+    hoisted.getScheduledTask.mockResolvedValueOnce(makeRow({ nextRunAt: targetIso }));
+
+    await scheduledTaskFire.handle(
+      { taskId: "task-1", targetIso, traceparent },
+      asAPI(createMockAPI()),
+    );
+
+    expect(hoisted.sendScheduledFire).toHaveBeenCalledWith(
+      "task-1",
+      expect.any(Date),
+      expect.any(Number),
+      traceparent,
+    );
   });
 });
 

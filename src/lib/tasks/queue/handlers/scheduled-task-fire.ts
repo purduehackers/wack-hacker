@@ -40,16 +40,16 @@ export const scheduledTaskFire = defineTask({
       traceparent,
       "scheduled_task.fire",
       { "task.id": taskId, "task.target_iso": targetIso },
-      () => runFire({ taskId, targetIso }, discord),
+      () => runFire({ taskId, targetIso, traceparent }, discord),
     );
   },
 });
 
 async function runFire(
-  payload: { taskId: string; targetIso: string },
+  payload: { taskId: string; targetIso: string; traceparent?: string },
   discord: API,
 ): Promise<void> {
-  const { taskId, targetIso } = payload;
+  const { taskId, targetIso, traceparent } = payload;
   const logger = createWideLogger({
     op: "scheduled_task.fire",
     task: { id: taskId, target_iso: targetIso },
@@ -77,7 +77,7 @@ async function runFire(
   // Checkpoint hop: horizons > 6d enqueue at 6d out; on delivery we
   // re-enqueue the remaining delay. Idempotent on (taskId, targetIso).
   if (Date.now() < targetMs - CHECKPOINT_GUARD_MS) {
-    await rehydrateCheckpoint(taskId, targetMs, task.scheduleType, logger);
+    await rehydrateCheckpoint(taskId, targetMs, task.scheduleType, logger, traceparent);
     return;
   }
 
@@ -180,9 +180,19 @@ async function rehydrateCheckpoint(
   targetMs: number,
   scheduleType: ScheduleType,
   logger: Logger,
+  traceparent?: string,
 ): Promise<void> {
   const remainingSec = Math.floor((targetMs - Date.now()) / 1000);
-  const { messageId } = await sendScheduledFire(taskId, new Date(targetMs), remainingSec);
+  // Carry the creating turn's traceparent across the hop: a checkpoint chain is
+  // ONE task's journey to ONE fire (bounded by its target), so chaining keeps
+  // the eventual fire linked to the conversation that scheduled it. (Recurring
+  // re-fires in finalizeFire deliberately do NOT — that would be unbounded.)
+  const { messageId } = await sendScheduledFire(
+    taskId,
+    new Date(targetMs),
+    remainingSec,
+    traceparent,
+  );
   await updateScheduledTask(taskId, { queueMessageId: messageId });
   countMetric("scheduled_task.checkpoint_hop", { schedule_type: scheduleType });
   logger.emit({ outcome: "checkpoint_hop", task: { remaining_sec: remainingSec } });

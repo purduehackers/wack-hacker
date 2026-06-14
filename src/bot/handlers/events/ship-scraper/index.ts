@@ -6,6 +6,7 @@ import type { MessageCreatePacketType } from "@/lib/protocol/types";
 import { defineEvent } from "@/bot/events/define";
 import { ShipsClient } from "@/bot/integrations/ships";
 import { env } from "@/env";
+import { withSpan } from "@/lib/otel/tracing";
 import { DISCORD_IDS } from "@/lib/protocol/constants";
 
 const URL_PATTERN = /https?:\/\/\S+/i;
@@ -57,35 +58,44 @@ export const shipScraper = defineEvent({
 
     if (!URL_PATTERN.test(content) && attachments.length === 0) return;
 
-    const shipAttachments = attachments
-      .map(toShipAttachment)
-      .filter((a): a is ShipAttachmentInput => a !== null);
+    // Named span for the actual scrape so it's a distinct, labeled child of the
+    // discord.event trace rather than anonymous work.
+    await withSpan(
+      "ship_scraper",
+      { "ship.message_id": messageId, "ship.channel_id": channel.id },
+      async () => {
+        const shipAttachments = attachments
+          .map(toShipAttachment)
+          .filter((a): a is ShipAttachmentInput => a !== null);
 
-    const firstLine = content.split("\n")[0]?.trim() ?? "";
-    const title = firstLine.length > 100 ? firstLine.slice(0, 100) + "..." : firstLine || null;
-    const nickname = author.nickname ?? author.username;
-    const avatarUrl = author.avatarHash
-      ? `https://cdn.discordapp.com/avatars/${author.id}/${author.avatarHash}.png?size=128`
-      : `https://cdn.discordapp.com/embed/avatars/${Number(BigInt(author.id) >> 22n) % 6}.png`;
+        const firstLine = content.split("\n")[0]?.trim() ?? "";
+        const title = firstLine.length > 100 ? firstLine.slice(0, 100) + "..." : firstLine || null;
+        const nickname = author.nickname ?? author.username;
+        const avatarUrl = author.avatarHash
+          ? `https://cdn.discordapp.com/avatars/${author.id}/${author.avatarHash}.png?size=128`
+          : `https://cdn.discordapp.com/embed/avatars/${Number(BigInt(author.id) >> 22n) % 6}.png`;
 
-    const ships = new ShipsClient(env.SHIP_API_KEY);
+        const ships = new ShipsClient(env.SHIP_API_KEY);
 
-    try {
-      const result = await ships.createShip({
-        userId: author.id,
-        username: nickname,
-        avatarUrl,
-        messageId,
-        title,
-        content,
-        attachments: shipAttachments,
-      });
-      log.info(
-        "ship-scraper",
-        `Stored ship ${result.id} from ${nickname} (${shipAttachments.length} attachments${result.alreadyExists ? ", idempotent" : ""})`,
-      );
-    } catch (err) {
-      log.warn("ship-scraper", `Failed to store ship: ${String(err)}`);
-    }
+        try {
+          const result = await ships.createShip({
+            userId: author.id,
+            username: nickname,
+            avatarUrl,
+            messageId,
+            title,
+            content,
+            attachments: shipAttachments,
+          });
+          log.info(
+            "ship-scraper",
+            `Stored ship ${result.id} from ${nickname} (${shipAttachments.length} attachments${result.alreadyExists ? ", idempotent" : ""})`,
+          );
+        } catch (err) {
+          // Best-effort scrape: a store failure is a warning, not an issue.
+          log.warn("ship-scraper", `Failed to store ship: ${String(err)}`);
+        }
+      },
+    );
   },
 });

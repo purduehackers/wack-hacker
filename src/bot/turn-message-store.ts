@@ -1,5 +1,6 @@
 import type { RedisClient } from "@/lib/redis/client";
 
+import { withSpan } from "@/lib/otel/tracing";
 import { createRedis } from "@/lib/redis/client";
 
 import type { TurnMessageRecord } from "./types";
@@ -24,10 +25,14 @@ export class TurnMessageStore {
   }
 
   async get(messageId: string): Promise<TurnMessageRecord | null> {
-    return this.redis.get<TurnMessageRecord>(this.key(messageId));
+    return withSpan("redis.turn_message.get", { "redis.key_pattern": "turn-message" }, () =>
+      this.redis.get<TurnMessageRecord>(this.key(messageId)),
+    );
   }
 
   async set(messageId: string, record: TurnMessageRecord): Promise<void> {
-    await this.redis.set(this.key(messageId), record, { ex: TTL });
+    await withSpan("redis.turn_message.set", { "redis.key_pattern": "turn-message" }, () =>
+      this.redis.set(this.key(messageId), record, { ex: TTL }),
+    );
   }
 }
