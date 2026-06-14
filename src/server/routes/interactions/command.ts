@@ -68,6 +68,9 @@ async function runModalCommand(
           return response;
         }
         countMetric("interaction.command_error", { command: command.name });
+        // A command that returns nothing is a bug — capture it as an issue, not
+        // just an error-level log, so it surfaces like a thrown failure.
+        logger.error(new Error(`/${command.name} produced no response`));
         logger.emit({
           outcome: "error",
           duration_ms: Date.now() - startTime,

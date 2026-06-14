@@ -57,6 +57,9 @@ export function handleMessageComponent(interaction: DiscordInteraction): Dispatc
           },
         );
       } catch {
+        // runInstrumented already captured the error to Sentry; this catch only
+        // counts the metric and absorbs the rejection so it isn't an unhandled
+        // rejection inside waitUntil. Do NOT add another capture here.
         countMetric("interaction.component_error", { prefix });
       } finally {
         recordDuration("interaction.component_duration", Date.now() - startTime, { prefix });

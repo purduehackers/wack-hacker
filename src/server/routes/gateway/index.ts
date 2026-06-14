@@ -38,6 +38,18 @@ end`;
 
 const ulid = monotonicFactory();
 
+/**
+ * Capture a gateway-internal failure as a Sentry issue (logger.error →
+ * captureException) plus a structured wide event. Previously these were bare
+ * `log.error` calls — Sentry logs, not issues — so failures at the bot's only
+ * ingestion point were invisible in Issues.
+ */
+function reportGatewayError(op: string, err: unknown, context: Record<string, unknown> = {}): void {
+  const logger = createWideLogger({ op, ...context });
+  logger.error(err as Error);
+  logger.emit({ outcome: "error" });
+}
+
 async function relay(packet: Packet, oidcToken: string): Promise<void> {
   // Detached root: the discord.js client is held across the ~10-minute gateway
   // hold, so its callbacks would otherwise nest every relayed packet under the
@@ -81,7 +93,7 @@ async function releaseLease(redis: Redis, listenerId: string): Promise<void> {
     }
   } catch (err) {
     countMetric("gateway.lease.release_failed");
-    log.error("gateway", `lease release failed: ${String(err)}`);
+    reportGatewayError("gateway.lease_release", err, { listener: { id: listenerId } });
   }
 }
 
@@ -90,7 +102,7 @@ async function destroyClient(client: Client, listenerId: string): Promise<void> 
   try {
     await client.destroy();
   } catch (err) {
-    log.error("gateway", `destroy failed: ${String(err)}`);
+    reportGatewayError("gateway.client_destroy", err, { listener: { id: listenerId } });
   }
 }
 
@@ -214,7 +226,7 @@ route.get("/gateway", async (c) => {
   try {
     oidcToken = getVercelOidcTokenSync();
   } catch (err) {
-    log.error("gateway", `OIDC token unavailable at route entry: ${String(err)}`);
+    reportGatewayError("gateway.oidc_unavailable", err);
     return c.json({ error: "oidc unavailable" }, 500);
   }
   const publish: Publish = (packet) => relay(packet, oidcToken);
@@ -243,10 +255,10 @@ route.get("/gateway", async (c) => {
   });
 
   client.on(Events.Error, (err) => {
-    log.error("gateway", `client error: ${String(err)}`);
+    reportGatewayError("gateway.client_error", err);
   });
   client.on(Events.ShardError, (err, shardId) => {
-    log.error("gateway", `shard ${shardId} error: ${String(err)}`);
+    reportGatewayError("gateway.shard_error", err, { shard: { id: shardId } });
   });
   client.on(Events.ShardDisconnect, (event, shardId) => {
     log.warn("gateway", `shard ${shardId} disconnect code=${event.code} reason=${event.reason}`);
@@ -276,7 +288,10 @@ route.get("/gateway", async (c) => {
       maxRuntime: 15,
       timezone: "Etc/UTC",
     }));
-  } catch {
+  } catch (err) {
+    // Pre-listener failures (Redis lease, client login) were silently swallowed
+    // here — capture them so a gateway that never becomes ready is visible.
+    reportGatewayError("gateway.startup_failed", err);
     return c.json({ error: "gateway failed to become ready" }, 500);
   }
 

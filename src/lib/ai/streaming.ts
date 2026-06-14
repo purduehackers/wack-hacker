@@ -375,6 +375,10 @@ async function failTurn(args: {
   const error = err as Error;
   countMetric("ai.turn.failed");
   await renderer.renderFailure(turnFailureNotice(traceId));
+  // Surface the failure as a Sentry issue (logger.error → captureException),
+  // not just an error-level wide event — a turn that dies is the single most
+  // important thing to see, and it was previously only a log.
+  logger.error(error);
   logger.emit({
     outcome: "error",
     duration_ms: Date.now() - startTime,

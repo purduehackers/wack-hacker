@@ -4,6 +4,7 @@ import { log } from "evlog";
 import { z } from "zod";
 
 import { isAsyncIterable } from "@/lib/async";
+import { createWideLogger } from "@/lib/logging/wide";
 
 import type { ActionAuditEntry, AuditLogLike } from "../policy/types.ts";
 import type {
@@ -248,7 +249,11 @@ async function postApprovalPrompt(args: {
     return null;
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : "unknown error";
-    log.error("approval", `Failed to send approval prompt: ${errorMessage}`);
+    // Capture as an issue (not just a log): a failure to deliver the approval
+    // prompt means a gated tool silently couldn't run.
+    const logger = createWideLogger({ op: "approval.prompt_failed" });
+    logger.error(err as Error);
+    logger.emit({ outcome: "error" });
     return `Approval prompt failed to send (${errorMessage}). The tool was NOT run.`;
   }
 }
