@@ -1,0 +1,27 @@
+src/server/routes/crons.ts
+  s_e947ebbd513117::t_c8158d3d11cca3 56-63
+sentry.edge.config.ts
+  s_e947ebbd513117::t_b3cac64403ebf1 13-15
+sentry.server.config.ts
+  s_e947ebbd513117::t_bbc49d6f64a9c7 21-25
+src/server/routes/gateway/index.ts
+  s_e947ebbd513117::t_725188accadeb4 273-277
+next.config.ts
+  s_e947ebbd513117::t_76894129ed639c 16-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "1af3142c518e5294d8ebdb894f18dce7de7e395c",
+  "prompts": {},
+  "sessions": {
+    "s_e947ebbd513117": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bbc7243f-7d19-41f9-9d1d-97eedb0b6968",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
