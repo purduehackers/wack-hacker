@@ -12,4 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ping gateway endpoint
-        run: curl -fsSL https://wack.purduehackers.com/api/discord/gateway
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl -fsSL -H "Authorization: Bearer $CRON_SECRET" \
+            https://wack.purduehackers.com/api/discord/gateway
