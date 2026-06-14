@@ -1,0 +1,23 @@
+src/server/routes/crons.ts
+  s_e947ebbd513117::t_2d35adbc7dd388 1
+  s_e947ebbd513117::t_cbc1b33c8c7803 36-53
+src/server/routes/gateway/index.ts
+  s_e947ebbd513117::t_8c63a38674b8e3 1
+  s_e947ebbd513117::t_9d60920f017a56 268-273
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "16ffc76f21e5c8c60fb2ebfeb6a6391b78cb0ff2",
+  "prompts": {},
+  "sessions": {
+    "s_e947ebbd513117": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bbc7243f-7d19-41f9-9d1d-97eedb0b6968",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
