@@ -1,7 +1,7 @@
 import { type VercelConfig } from "@vercel/config/v1";
 
 import { buildCronRoutes } from "@/bot/crons/config";
-import { GATEWAY_KEEPALIVE_CRON } from "@/server/routes/gateway/constants";
+import { GATEWAY_KEEPALIVE_CRON } from "@/bot/crons/constants";
 
 export const config: VercelConfig = {
   framework: "nextjs",
