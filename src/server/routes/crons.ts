@@ -53,7 +53,14 @@ route.get("/crons/:name", async (c) => {
             countMetric("cron.completed", { name });
           },
         ),
-      { schedule: { type: "crontab", value: cron.schedule } },
+      {
+        schedule: { type: "crontab", value: cron.schedule },
+        // Tolerate a few minutes of scheduler/deploy slack before flagging a
+        // missed check-in; flag a run that hasn't finished in 10 min as stuck.
+        checkinMargin: 5,
+        maxRuntime: 10,
+        timezone: "Etc/UTC",
+      },
     );
     return c.json({ ok: true, cron: name });
   } catch (err) {

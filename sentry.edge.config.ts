@@ -10,4 +10,7 @@ Sentry.init({
 
   sendDefaultPii: true,
   enableLogs: true,
+
+  // See sentry.server.config.ts — keep expected retry/dedup throws out of Issues.
+  ignoreErrors: ["LockContentionError", "DuplicateMessageError"],
 });

@@ -18,6 +18,11 @@ Sentry.init({
   includeLocalVariables: true,
   enableLogs: true,
 
+  // Retry / control-flow signals, not failures: the queue redelivers on lock
+  // contention and dedupes duplicate sends, so these would otherwise create
+  // noise issues via Next's captureRequestError. They still surface as logs.
+  ignoreErrors: ["LockContentionError", "DuplicateMessageError"],
+
   integrations: [
     // `force: true` because the `ai` package is bundled by Next, so the
     // integration's CJS require-hook never observes it and would otherwise skip

@@ -270,6 +270,11 @@ route.get("/gateway", async (c) => {
     // vercel.ts, so a missed check-in means an invocation didn't land.
     ({ hold } = await Sentry.withMonitor("discord-gateway", () => startGatewayListener(client), {
       schedule: { type: "crontab", value: "*/9 * * * *" },
+      // The listener holds the lease ~10 min, so allow a longer runtime; a small
+      // margin still catches a keepalive invocation that never lands.
+      checkinMargin: 2,
+      maxRuntime: 15,
+      timezone: "Etc/UTC",
     }));
   } catch {
     return c.json({ error: "gateway failed to become ready" }, 500);
