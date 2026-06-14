@@ -1,4 +1,4 @@
-export { access, getAccessSpec } from "./access.ts";
+export { access, getAccessSpec, resolveAccessSpec } from "./access.ts";
 export { applyPolicy } from "./apply.ts";
 export { AuditLog } from "./audit.ts";
 export { readBudgetState, recordTurnTokens } from "./budget.ts";

@@ -4,9 +4,9 @@ Two common paths: extending an existing domain with a new sub-skill, or standing
 
 ## Adding a sub-skill to an existing domain
 
-1. **Add the tool**. Create or extend a tool file under `src/lib/ai/tools/<domain>/<group>.ts`. Export an AI SDK `tool({ description, inputSchema, execute })`. Add it to the domain's barrel `index.ts`.
+1. **Add the tool**. Create or extend a tool file under `src/lib/ai/tools/<domain>/<group>.ts`. Author it with `defineTool({ name, domain, description, access, input, execute })` and export it — `domain` matches the folder. Add it to the domain's barrel `index.ts`.
 2. **Create the sub-skill**. Make `src/lib/ai/skills/<domain>/skills/<sub-skill>/SKILL.md`. In the frontmatter, list your new tool name in the `tools` array. Pick the right `minRole` (usually `organizer`).
-3. **Access.** Every tool must declare `access({ risk, … })` — `risk: "destructive"` prompts for confirmation by default, and admin-only tools add `minRole: "admin"`. See [Access policy](../agents/policy.md); the `access-coverage` test fails any undeclared tool.
+3. **Access.** The `access: { risk, … }` field in `defineTool` is required — `risk: "destructive"` prompts for confirmation by default, and admin-only tools add `minRole: "admin"`. See [Access policy](../agents/policy.md); the `access-coverage` test fails any undeclared tool.
 4. **Recompile**. Run `bun scripts/compile-skills.ts` (or just `bun run build`).
 
 That's it — the new sub-skill will appear in the subagent's `{{SKILL_MENU}}` automatically, and `loadSkill("<sub-skill>")` will unlock the new tool when called.

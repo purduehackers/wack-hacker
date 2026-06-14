@@ -68,14 +68,14 @@ describe("web_search", () => {
     expect(result).toBe("No results found.");
   });
 
-  it("returns a 'Web search failed' string when Exa throws", async () => {
+  it("propagates Exa errors as a classified defineTool envelope", async () => {
     hoisted.searchAndContents.mockRejectedValueOnce(new Error("boom"));
 
     const result = await web_search.execute!({ query: "kaboom" } as never, toolOpts);
 
     expect(typeof result).toBe("string");
-    expect(result as string).toContain("Web search failed");
-    expect(result as string).toContain("boom");
+    expect(String(result)).toMatch(/web_search failed/);
+    expect(String(result)).toContain("boom");
   });
 
   it("forwards category and livecrawl params to the SDK", async () => {

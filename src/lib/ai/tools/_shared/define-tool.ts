@@ -1,19 +1,19 @@
 import { tool, type ToolCallOptions } from "ai";
 import { z } from "zod";
 
+import { textMessage } from "@/lib/ai/ui-message";
+import { isAsyncIterable } from "@/lib/async";
 import { countMetric } from "@/lib/metrics";
 import { withSpan } from "@/lib/otel/tracing";
 
 import type { AccessSpec } from "../../policy/types.ts";
 
-import { access } from "../../policy/index.ts";
-
 /**
  * `defineTool` declares a tool's access with plan 09's `AccessSpec`
- * (`{ risk, minRole?, confirm?, reason? }`) and stamps it via the policy
- * `access()` marker, so `applyPolicy` enforces defineTool'd tools and
- * hand-`access()`-wrapped tools through one path. Tool files declare intent
- * here instead of wrapping exports by hand.
+ * (`{ risk, minRole?, confirm?, reason? }`) and stamps it directly onto the
+ * tool's `TOOL_META` — the single marker `applyPolicy` reads (via
+ * `resolveAccessSpec`). `defineTool` is the one authoring path; tool files
+ * declare intent here instead of hand-wrapping exports.
  */
 type ToolErrorClass =
   | "not-found"
@@ -161,9 +161,9 @@ function enforceBudget(text: string, budget: number): string {
  * Uniform authoring surface for the tool catalog. Wraps the AI SDK's `tool()`
  * with the four cross-cutting behaviors every tool needs:
  *
- * 1. Access — stamps the policy `access()` descriptor from `access`, so
- *    `applyPolicy` gates/confirms the tool uniformly and call sites stop
- *    hand-wrapping exports.
+ * 1. Access — records the policy `AccessSpec` on the tool's metadata (the
+ *    single marker `applyPolicy` reads via `resolveAccessSpec`), so the tool
+ *    is gated/confirmed uniformly and call sites stop hand-wrapping exports.
  * 2. Error envelope — failures come back as a one-line, model-actionable
  *    string (classified not-found / permission / rate-limit / invalid-input /
  *    transient), never a stack. Counted as `tool.error{domain, tool, class}`.
@@ -172,6 +172,16 @@ function enforceBudget(text: string, budget: number): string {
  *    truncated with an explicit marker, item-aware for JSON list payloads.
  * 4. Telemetry — a `tool.execute` span (domain/tool/outcome attrs) plus
  *    `tool.called{domain, tool}`, cheap aggregates independent of sampling.
+ *    The streaming path emits the counters only (no `tool.execute` span):
+ *    a generator's open-ended lifetime doesn't fit `withSpan`'s scoped
+ *    callback. (`bash` never had a span either.)
+ *
+ * `execute` may be a normal async function or an async generator. Streaming
+ * tools (e.g. the sandbox's `bash`) take the generator path: their chunks pass
+ * through untouched (no mid-stream budget truncation), with the `tool.called`/
+ * `tool.error` counters and a final error envelope still applied — the envelope
+ * yielded as a UIMessage text part so a streaming tool's `toModelOutput`
+ * surfaces it rather than dropping it.
  *
  * Approval denials happen in `applyPolicy`, outside this wrapper, so the
  * envelope can never swallow them.
@@ -184,37 +194,73 @@ export function defineTool<I extends z.ZodObject>(spec: {
   access: AccessSpec;
   input: I;
   outputBudget?: number;
-  execute: (input: z.output<I>, ctx: ToolCallOptions) => Promise<unknown>;
+  /**
+   * Optional passthrough to the AI SDK's `tool().toModelOutput` — maps the
+   * yielded/returned value to the model-facing output. Streaming tools (e.g.
+   * `bash`) use it to pick the final text part out of their UIMessage stream.
+   */
+  toModelOutput?: (options: { output: unknown }) => { type: "text"; value: string };
+  execute: (input: z.output<I>, ctx: ToolCallOptions) => Promise<unknown> | AsyncIterable<unknown>;
 }) {
   const { name, domain, access: accessSpec, outputBudget = DEFAULT_OUTPUT_BUDGET } = spec;
+
+  // Stream the error envelope through a generator as a UIMessage text part, not
+  // a bare string: a streaming tool's `toModelOutput` reads the final chunk's
+  // `parts` (see `bash`), so a bare string would be dropped to its fallback and
+  // the model would never see the classified error.
+  const streamThrough = async function* (iterable: AsyncIterable<unknown>) {
+    try {
+      yield* iterable;
+    } catch (err) {
+      const cls = classifyToolError(err);
+      countMetric("tool.error", { domain, tool: name, class: cls });
+      yield textMessage(errorEnvelope(name, cls, err), `${name}-error`);
+    }
+  };
 
   const wrapped = tool({
     description: spec.description,
     inputSchema: spec.input,
-    execute: (input: z.output<I>, ctx: ToolCallOptions) =>
-      withSpan("tool.execute", { "tool.domain": domain, "tool.name": name }, async (span) => {
-        countMetric("tool.called", { domain, tool: name });
-        try {
-          const result = await spec.execute(input, ctx);
-          const text =
-            typeof result === "string" ? result : (JSON.stringify(result) ?? String(result));
-          span.setAttribute("tool.outcome", "ok");
-          return enforceBudget(text, outputBudget);
-        } catch (err) {
-          const cls = classifyToolError(err);
-          countMetric("tool.error", { domain, tool: name, class: cls });
-          span.setAttribute("tool.outcome", "error");
-          span.setAttribute("tool.error_class", cls);
-          return errorEnvelope(name, cls, err);
-        }
-      }),
+    // Detect streaming by the returned value, not `execute.constructor.name`:
+    // an async generator AND a plain function returning an `AsyncIterable` both
+    // stream, and value-based detection can't silently mis-route under
+    // bundling/transpilation that rewrites function names.
+    execute: (input: z.output<I>, ctx: ToolCallOptions) => {
+      countMetric("tool.called", { domain, tool: name });
+      const invoked = spec.execute(input, ctx);
+      if (isAsyncIterable(invoked)) {
+        return streamThrough(invoked);
+      }
+      return withSpan(
+        "tool.execute",
+        { "tool.domain": domain, "tool.name": name },
+        async (span) => {
+          try {
+            const result = await invoked;
+            const text =
+              typeof result === "string" ? result : (JSON.stringify(result) ?? String(result));
+            span.setAttribute("tool.outcome", "ok");
+            return enforceBudget(text, outputBudget);
+          } catch (err) {
+            const cls = classifyToolError(err);
+            countMetric("tool.error", { domain, tool: name, class: cls });
+            span.setAttribute("tool.outcome", "error");
+            span.setAttribute("tool.error_class", cls);
+            return errorEnvelope(name, cls, err);
+          }
+        },
+      );
+    },
+    ...(spec.toModelOutput ? { toModelOutput: spec.toModelOutput } : {}),
   });
 
+  // Single marker: the access spec lives only on the tool meta, read by
+  // `applyPolicy` via `resolveAccessSpec`. No separate `access()` stamp.
   (wrapped as unknown as Record<symbol, ToolMeta>)[TOOL_META] = {
     name,
     domain,
     access: accessSpec,
     outputBudget,
   };
-  return access(accessSpec, wrapped);
+  return wrapped;
 }

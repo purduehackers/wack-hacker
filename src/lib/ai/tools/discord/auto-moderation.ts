@@ -1,9 +1,8 @@
-import { tool } from "ai";
 import { Routes } from "discord-api-types/v10";
 import { z } from "zod";
 
 import { DISCORD_GUILD_ID } from "../../../protocol/constants.ts";
-import { access } from "../../policy/index.ts";
+import { defineTool } from "../_shared/define-tool.ts";
 import { discord } from "./client.ts";
 
 interface AutoModRule {
@@ -32,113 +31,113 @@ function summarize(rule: AutoModRule) {
   };
 }
 
-export const list_auto_mod_rules = access(
-  { risk: "read" },
-  tool({
-    description:
-      "List all auto-moderation rules in the Discord server. Returns rule ID, name, trigger type (keyword, spam, mention, etc.), actions, and enabled status.",
-    inputSchema: z.object({}),
-    execute: async () => {
-      const rules = (await discord.get(
-        Routes.guildAutoModerationRules(DISCORD_GUILD_ID),
-      )) as AutoModRule[];
-      return JSON.stringify(rules.map(summarize));
-    },
-  }),
-);
+export const list_auto_mod_rules = defineTool({
+  name: "list_auto_mod_rules",
+  domain: "discord",
+  access: { risk: "read" },
+  description:
+    "List all auto-moderation rules in the Discord server. Returns rule ID, name, trigger type (keyword, spam, mention, etc.), actions, and enabled status.",
+  input: z.object({}),
+  execute: async () => {
+    const rules = (await discord.get(
+      Routes.guildAutoModerationRules(DISCORD_GUILD_ID),
+    )) as AutoModRule[];
+    return JSON.stringify(rules.map(summarize));
+  },
+});
 
-export const get_auto_mod_rule = access(
-  { risk: "read" },
-  tool({
-    description: "Get full details for a single auto-moderation rule by ID.",
-    inputSchema: z.object({
-      rule_id: z.string().describe("Auto-moderation rule ID"),
-    }),
-    execute: async ({ rule_id }) => {
-      const rule = (await discord.get(
-        Routes.guildAutoModerationRule(DISCORD_GUILD_ID, rule_id),
-      )) as AutoModRule;
-      return JSON.stringify(summarize(rule));
-    },
+export const get_auto_mod_rule = defineTool({
+  name: "get_auto_mod_rule",
+  domain: "discord",
+  access: { risk: "read" },
+  description: "Get full details for a single auto-moderation rule by ID.",
+  input: z.object({
+    rule_id: z.string().describe("Auto-moderation rule ID"),
   }),
-);
+  execute: async ({ rule_id }) => {
+    const rule = (await discord.get(
+      Routes.guildAutoModerationRule(DISCORD_GUILD_ID, rule_id),
+    )) as AutoModRule;
+    return JSON.stringify(summarize(rule));
+  },
+});
 
-export const create_auto_mod_rule = access(
-  { risk: "destructive" },
-  tool({
-    description:
-      "Create an auto-moderation rule. trigger_type: 1=keyword, 3=spam, 4=keyword_preset, 5=mention_spam, 6=member_profile. event_type is 1=message_send or 2=member_update.",
-    inputSchema: z.object({
-      name: z.string().describe("Rule name"),
-      event_type: z.number().describe("Event type: 1=message_send, 2=member_update"),
-      trigger_type: z
-        .number()
-        .describe("1=keyword, 3=spam, 4=keyword_preset, 5=mention_spam, 6=member_profile"),
-      trigger_metadata: z
-        .record(z.string(), z.unknown())
-        .optional()
-        .describe("Trigger metadata (keywords, regex patterns, etc.)"),
-      actions: z
-        .array(
-          z.object({
-            type: z.number().describe("1=block_message, 2=send_alert, 3=timeout, 4=block_member"),
-            metadata: z.record(z.string(), z.unknown()).optional(),
-          }),
-        )
-        .describe("Actions to take when the rule triggers"),
-      enabled: z.boolean().optional(),
-      exempt_roles: z.array(z.string()).optional(),
-      exempt_channels: z.array(z.string()).optional(),
-    }),
-    execute: async (input) => {
-      const rule = (await discord.post(Routes.guildAutoModerationRules(DISCORD_GUILD_ID), {
-        body: input,
-      })) as AutoModRule;
-      return JSON.stringify(summarize(rule));
-    },
+export const create_auto_mod_rule = defineTool({
+  name: "create_auto_mod_rule",
+  domain: "discord",
+  access: { risk: "destructive" },
+  description:
+    "Create an auto-moderation rule. trigger_type: 1=keyword, 3=spam, 4=keyword_preset, 5=mention_spam, 6=member_profile. event_type is 1=message_send or 2=member_update.",
+  input: z.object({
+    name: z.string().describe("Rule name"),
+    event_type: z.number().describe("Event type: 1=message_send, 2=member_update"),
+    trigger_type: z
+      .number()
+      .describe("1=keyword, 3=spam, 4=keyword_preset, 5=mention_spam, 6=member_profile"),
+    trigger_metadata: z
+      .record(z.string(), z.unknown())
+      .optional()
+      .describe("Trigger metadata (keywords, regex patterns, etc.)"),
+    actions: z
+      .array(
+        z.object({
+          type: z.number().describe("1=block_message, 2=send_alert, 3=timeout, 4=block_member"),
+          metadata: z.record(z.string(), z.unknown()).optional(),
+        }),
+      )
+      .describe("Actions to take when the rule triggers"),
+    enabled: z.boolean().optional(),
+    exempt_roles: z.array(z.string()).optional(),
+    exempt_channels: z.array(z.string()).optional(),
   }),
-);
+  execute: async (input) => {
+    const rule = (await discord.post(Routes.guildAutoModerationRules(DISCORD_GUILD_ID), {
+      body: input,
+    })) as AutoModRule;
+    return JSON.stringify(summarize(rule));
+  },
+});
 
-export const update_auto_mod_rule = access(
-  { risk: "destructive" },
-  tool({
-    description: "Update an auto-moderation rule's name, trigger, actions, or enabled status.",
-    inputSchema: z.object({
-      rule_id: z.string().describe("Auto-moderation rule ID"),
-      name: z.string().optional(),
-      event_type: z.number().optional(),
-      trigger_metadata: z.record(z.string(), z.unknown()).optional(),
-      actions: z
-        .array(
-          z.object({
-            type: z.number(),
-            metadata: z.record(z.string(), z.unknown()).optional(),
-          }),
-        )
-        .optional(),
-      enabled: z.boolean().optional(),
-      exempt_roles: z.array(z.string()).optional(),
-      exempt_channels: z.array(z.string()).optional(),
-    }),
-    execute: async ({ rule_id, ...body }) => {
-      const rule = (await discord.patch(Routes.guildAutoModerationRule(DISCORD_GUILD_ID, rule_id), {
-        body,
-      })) as AutoModRule;
-      return JSON.stringify(summarize(rule));
-    },
+export const update_auto_mod_rule = defineTool({
+  name: "update_auto_mod_rule",
+  domain: "discord",
+  access: { risk: "destructive" },
+  description: "Update an auto-moderation rule's name, trigger, actions, or enabled status.",
+  input: z.object({
+    rule_id: z.string().describe("Auto-moderation rule ID"),
+    name: z.string().optional(),
+    event_type: z.number().optional(),
+    trigger_metadata: z.record(z.string(), z.unknown()).optional(),
+    actions: z
+      .array(
+        z.object({
+          type: z.number(),
+          metadata: z.record(z.string(), z.unknown()).optional(),
+        }),
+      )
+      .optional(),
+    enabled: z.boolean().optional(),
+    exempt_roles: z.array(z.string()).optional(),
+    exempt_channels: z.array(z.string()).optional(),
   }),
-);
+  execute: async ({ rule_id, ...body }) => {
+    const rule = (await discord.patch(Routes.guildAutoModerationRule(DISCORD_GUILD_ID, rule_id), {
+      body,
+    })) as AutoModRule;
+    return JSON.stringify(summarize(rule));
+  },
+});
 
-export const delete_auto_mod_rule = access(
-  { risk: "destructive" },
-  tool({
-    description: "Delete an auto-moderation rule. Cannot be undone.",
-    inputSchema: z.object({
-      rule_id: z.string().describe("Auto-moderation rule ID"),
-    }),
-    execute: async ({ rule_id }) => {
-      await discord.delete(Routes.guildAutoModerationRule(DISCORD_GUILD_ID, rule_id));
-      return JSON.stringify({ deleted: true, rule_id });
-    },
+export const delete_auto_mod_rule = defineTool({
+  name: "delete_auto_mod_rule",
+  domain: "discord",
+  access: { risk: "destructive" },
+  description: "Delete an auto-moderation rule. Cannot be undone.",
+  input: z.object({
+    rule_id: z.string().describe("Auto-moderation rule ID"),
   }),
-);
+  execute: async ({ rule_id }) => {
+    await discord.delete(Routes.guildAutoModerationRule(DISCORD_GUILD_ID, rule_id));
+    return JSON.stringify({ deleted: true, rule_id });
+  },
+});

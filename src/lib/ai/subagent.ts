@@ -12,6 +12,7 @@ import {
 } from "ai";
 import { z } from "zod";
 
+import { textMessage } from "@/lib/ai/ui-message";
 import { createWideLogger } from "@/lib/logging/wide";
 import { countMetric, recordDistribution } from "@/lib/metrics";
 
@@ -335,11 +336,7 @@ function exhaustionMessage(stepsUsed: number, lastAssistantText: string): UIMess
   const text =
     `Subagent stopped after ${stepsUsed} steps without completing the task.` +
     (progress ? ` Last progress: ${progress}` : "");
-  return {
-    id: "subagent-exhaustion",
-    role: "assistant",
-    parts: [{ type: "text", text }],
-  } as unknown as UIMessage;
+  return textMessage(text, "subagent-exhaustion");
 }
 
 /** Cap on appendix entries so a link-heavy answer can't bloat the orchestrator context. */

@@ -17,7 +17,7 @@ These are always present, regardless of role:
 
 - **`documentation`** — search and quote from [ask.purduehackers.com](https://ask.purduehackers.com).
 - **`resolve_organizer`** — authoritative name-to-platform-ID lookup for the Purdue Hackers organizer roster stored in Vercel Edge Config. Returns the caller's Discord/Linear/Notion/Sentry/GitHub/Figma IDs so the orchestrator can forward real IDs to delegates instead of free-text names. The `/identity` slash command is what writes into that roster. See `src/lib/protocol/organizers/` for the reader/writer.
-- **`schedule_task`**, **`list_scheduled_tasks`**, **`cancel_task`** — scheduling tools that publish to, read from, or cancel jobs in the `tasks` queue. `schedule_task` and `cancel_task` declare confirm-gated [`access()`](./policy.md) descriptors so the user confirms via Discord buttons (see [Approvals](./approvals.md)). See [Workflows § scheduled tasks](../workflows/scheduling.md).
+- **`schedule_task`**, **`list_scheduled_tasks`**, **`cancel_task`** — scheduling tools that publish to, read from, or cancel jobs in the `tasks` queue. `schedule_task` and `cancel_task` declare confirm-gated [`access`](./policy.md) specs so the user confirms via Discord buttons (see [Approvals](./approvals.md)). See [Workflows § scheduled tasks](../workflows/scheduling.md).
 
 ## Delegate tools
 

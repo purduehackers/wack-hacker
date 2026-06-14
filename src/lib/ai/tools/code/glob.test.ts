@@ -96,7 +96,8 @@ describe("glob tool", () => {
   it("refuses paths outside the repo", async () => {
     const sandbox = new InMemorySandbox();
     const raw = await call(makeCtx(sandbox), { pattern: "*", path: "../etc", max_results: 100 });
-    const parsed = JSON.parse(raw as string);
-    expect(parsed.error).toMatch(/outside the repo/);
+    // resolvePath throws and the failure now propagates to defineTool's envelope.
+    expect(String(raw)).toMatch(/glob failed/);
+    expect(String(raw)).toContain("outside the repo");
   });
 });

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { payloadSDKClass, toolOpts } from "@/lib/test/fixtures";
 
-import { getAccessSpec } from "../../policy/index.ts";
+import { resolveAccessSpec } from "../../policy/index.ts";
 
 const mocks = vi.hoisted(() => ({
   find: vi.fn(),
@@ -132,7 +132,7 @@ describe("update_event", () => {
 
 describe("delete_event", () => {
   it("is approval-gated", () => {
-    expect(getAccessSpec(delete_event)?.risk).toBe("destructive");
+    expect(resolveAccessSpec(delete_event)?.risk).toBe("destructive");
   });
 
   it("returns a delete confirmation", async () => {
@@ -167,7 +167,7 @@ describe("publish_event / unpublish_event", () => {
 
 describe("send_blast", () => {
   it("is approval-gated", () => {
-    expect(getAccessSpec(send_blast)?.risk).toBe("destructive");
+    expect(resolveAccessSpec(send_blast)?.risk).toBe("destructive");
   });
 
   it("flips send: true to trigger Payload's afterChange hook", async () => {

@@ -26,7 +26,7 @@ vi.mock("@/lib/tasks/db", () => ({
 }));
 
 const { AgentContext } = await import("../../context.ts");
-const { getAccessSpec } = await import("../../policy/index.ts");
+const { resolveAccessSpec } = await import("../../policy/index.ts");
 const { createScheduleTask, list_scheduled_tasks, cancel_task } = await import("./index.ts");
 
 type AgentContextInstance = Awaited<ReturnType<typeof AgentContext.fromPacket>>;
@@ -73,15 +73,15 @@ beforeEach(() => {
 
 describe("schedule_task: approval markers", () => {
   it("marks schedule_task with approval()", () => {
-    expect(getAccessSpec(createScheduleTask(contextWithRoles()))?.confirm).toBe("self");
+    expect(resolveAccessSpec(createScheduleTask(contextWithRoles()))?.confirm).toBe("self");
   });
 
   it("marks cancel_task with approval()", () => {
-    expect(getAccessSpec(cancel_task)?.risk).toBe("destructive");
+    expect(resolveAccessSpec(cancel_task)?.risk).toBe("destructive");
   });
 
   it("does not mark list_scheduled_tasks (read-only)", () => {
-    expect(getAccessSpec(list_scheduled_tasks)?.risk).toBe("read");
+    expect(resolveAccessSpec(list_scheduled_tasks)?.risk).toBe("read");
   });
 });
 
@@ -160,20 +160,20 @@ describe("schedule_task: successful scheduling", () => {
   it("does not insert a row when the queue send throws", async () => {
     hoisted.sendScheduledFire.mockRejectedValueOnce(new Error("queue down"));
     const schedule_task = createScheduleTask(contextWithRoles());
-    await expect(
-      schedule_task.execute!(
-        {
-          description: "Test",
-          action_type: "message",
-          channel_id: "ch-1",
-          content: "hi",
-          schedule_type: ScheduleType.Once,
-          run_at: futureISO(),
-          user_id: "user-1",
-        },
-        toolOpts,
-      ),
-    ).rejects.toThrow("queue down");
+    // defineTool returns a model-facing error envelope instead of throwing.
+    const result = await schedule_task.execute!(
+      {
+        description: "Test",
+        action_type: "message",
+        channel_id: "ch-1",
+        content: "hi",
+        schedule_type: ScheduleType.Once,
+        run_at: futureISO(),
+        user_id: "user-1",
+      },
+      toolOpts,
+    );
+    expect(String(result)).toContain("queue down");
     expect(hoisted.saveScheduledTask).not.toHaveBeenCalled();
   });
 });

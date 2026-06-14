@@ -9,7 +9,7 @@ vi.mock("@/lib/metrics", () => ({
 
 import { countMetric } from "@/lib/metrics";
 
-import { getAccessSpec } from "../../policy/index.ts";
+import { resolveAccessSpec } from "../../policy/access.ts";
 import { classifyToolError, defineTool, getToolMeta } from "./define-tool.ts";
 
 function makeTool(
@@ -101,6 +101,102 @@ describe("defineTool — error envelope", () => {
     const out = await run(t);
     expect(out).toContain("boom");
     expect(out).not.toContain("someFrame");
+  });
+});
+
+describe("defineTool — streaming error envelope", () => {
+  // Mirrors bash's toModelOutput: it reads the final chunk's text part, so a
+  // bare-string error envelope would be dropped to this fallback.
+  const toModelOutput = ({ output }: { output: unknown }) => {
+    const message = output as { parts?: { type: string; text?: string }[] } | undefined;
+    const last = message?.parts?.findLast((p) => p.type === "text");
+    return { type: "text" as const, value: last?.text ?? JSON.stringify({ error: "no output" }) };
+  };
+
+  function makeStreamingTool(execute: Parameters<typeof defineTool>[0]["execute"]) {
+    return defineTool({
+      name: "stream_tool",
+      domain: "testing",
+      description: "A streaming test tool.",
+      access: { risk: "read" },
+      input: z.object({ q: z.string().optional() }),
+      toModelOutput,
+      execute,
+    });
+  }
+
+  async function drain(t: ReturnType<typeof makeStreamingTool>) {
+    const chunks: unknown[] = [];
+    for await (const value of t.execute!({}, toolOpts) as AsyncIterable<unknown>) {
+      chunks.push(value);
+    }
+    return chunks;
+  }
+
+  it("yields the envelope as a UIMessage text part, surfaced by toModelOutput", async () => {
+    // eslint-disable-next-line require-yield -- models a throw before the first chunk (e.g. sandbox construction)
+    const t = makeStreamingTool(async function* () {
+      throw Object.assign(new Error("sandbox is gone"), { status: 503 });
+    });
+    const chunks = await drain(t);
+    const last = chunks.at(-1) as { parts?: { type: string; text?: string }[] };
+    // Regression: the final chunk is a UIMessage carrying the envelope, not a
+    // bare string the model-output mapping would discard.
+    expect(last.parts?.[0]?.text).toContain("stream_tool failed (transient)");
+    const surfaced = toModelOutput({ output: last });
+    expect(surfaced.value).toContain("sandbox is gone");
+    expect(surfaced.value).not.toContain("no output");
+  });
+
+  it("envelopes a throw that happens after earlier chunks", async () => {
+    const t = makeStreamingTool(async function* () {
+      yield { id: "p1", role: "assistant", parts: [{ type: "text", text: "progress" }] };
+      throw new Error("Repository 'x' not found");
+    });
+    const chunks = await drain(t);
+    expect(chunks).toHaveLength(2); // progress chunk + error envelope
+    expect(toModelOutput({ output: chunks.at(-1) }).value).toContain(
+      "stream_tool failed (not-found)",
+    );
+  });
+
+  it("passes happy-path chunks through untouched and counts tool.called", async () => {
+    const t = makeStreamingTool(async function* () {
+      yield { id: "p1", role: "assistant", parts: [{ type: "text", text: "done" }] };
+    });
+    const chunks = await drain(t);
+    expect(chunks).toHaveLength(1);
+    expect(toModelOutput({ output: chunks.at(-1) }).value).toBe("done");
+    expect(countMetric).toHaveBeenCalledWith("tool.called", {
+      domain: "testing",
+      tool: "stream_tool",
+    });
+  });
+
+  it("streams a plain function that returns an async iterable, not just async generators", async () => {
+    async function* gen() {
+      yield { id: "p1", role: "assistant", parts: [{ type: "text", text: "via-iterable" }] };
+    }
+    // A regular function (constructor.name === "Function", not
+    // "AsyncGeneratorFunction") that returns an AsyncIterable. Detection is by
+    // the returned value, so this still streams instead of being JSON-buffered.
+    const t = makeStreamingTool(() => gen());
+    const chunks = await drain(t);
+    expect(chunks).toHaveLength(1);
+    expect(toModelOutput({ output: chunks.at(-1) }).value).toBe("via-iterable");
+  });
+
+  it("counts tool.error with the class on the streaming path", async () => {
+    // eslint-disable-next-line require-yield -- intentional throw-only generator
+    const t = makeStreamingTool(async function* () {
+      throw Object.assign(new Error("rate limited"), { status: 429 });
+    });
+    await drain(t);
+    expect(countMetric).toHaveBeenCalledWith("tool.error", {
+      domain: "testing",
+      tool: "stream_tool",
+      class: "rate-limit",
+    });
   });
 });
 
@@ -199,14 +295,14 @@ describe("defineTool — output budget", () => {
 describe("defineTool — access", () => {
   it("stamps the access descriptor for applyPolicy to read", () => {
     const t = makeTool(async () => "ok", { access: { risk: "read" } });
-    expect(getAccessSpec(t)).toEqual({ risk: "read" });
+    expect(resolveAccessSpec(t)).toEqual({ risk: "read" });
   });
 
   it("carries a destructive descriptor with confirm + reason verbatim", () => {
     const t = makeTool(async () => "ok", {
       access: { risk: "destructive", confirm: "self", reason: "irreversible" },
     });
-    expect(getAccessSpec(t)).toEqual({
+    expect(resolveAccessSpec(t)).toEqual({
       risk: "destructive",
       confirm: "self",
       reason: "irreversible",

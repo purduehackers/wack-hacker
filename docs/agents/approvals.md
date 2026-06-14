@@ -2,7 +2,7 @@
 
 Approval prompts gate individual tool calls behind a Discord button prompt. A gated tool cannot run until someone clicks **Approve**; if they click **Deny** or ignore the prompt for too long, the tool returns a short diagnostic instead of executing.
 
-Whether a tool is gated — and who may click — is decided by the [access policy](policy.md): a tool's `access({ risk, confirm?, … })` descriptor resolves to a confirm mode of `"none"`, `"self"`, or `"second-party"`. Destructive tools default to `"self"`. The Discord flow itself lives in `src/lib/ai/approvals/`:
+Whether a tool is gated — and who may click — is decided by the [access policy](policy.md): a tool's `access: { risk, confirm?, … }` spec resolves to a confirm mode of `"none"`, `"self"`, or `"second-party"`. Destructive tools default to `"self"`. The Discord flow itself lives in `src/lib/ai/approvals/`:
 
 | File         | What it is                                                                                                |
 | ------------ | --------------------------------------------------------------------------------------------------------- |
@@ -17,27 +17,27 @@ Whether a tool is gated — and who may click — is decided by the [access poli
 Declare it in the tool's access descriptor — there is no separate wrapper to apply:
 
 ```ts
-import { access } from "@/lib/ai/policy";
-import { tool } from "ai";
 import { z } from "zod";
 
-export const wipe_channel = access(
-  { risk: "destructive", reason: "Wiping a channel deletes history permanently." },
-  tool({
-    description: "Delete every message in the current channel.",
-    inputSchema: z.object({
-      channel_id: z.string(),
-    }),
-    execute: async ({ channel_id }) => {
-      // ...
-    },
+import { defineTool } from "@/lib/ai/tools/_shared/define-tool";
+
+export const wipe_channel = defineTool({
+  name: "wipe_channel",
+  domain: "discord",
+  description: "Delete every message in the current channel.",
+  access: { risk: "destructive", reason: "Wiping a channel deletes history permanently." },
+  input: z.object({
+    channel_id: z.string(),
   }),
-);
+  execute: async ({ channel_id }) => {
+    // ...
+  },
+});
 ```
 
 `risk: "destructive"` defaults to `confirm: "self"`, so this tool prompts before every run. A write tool that should also prompt declares `confirm: "self"` explicitly; org-level destructive actions declare `confirm: "second-party"`. The optional `reason` becomes the fallback justification shown to the user when the agent doesn't supply one via `_reason`.
 
-`applyPolicy` (the enforcement choke point in both the orchestrator and subagents) calls `wrapToolWithApproval` for every tool whose resolved confirm mode is not `"none"`. The legacy `approval()` marker from before the policy layer still resolves to a self-confirmed write, but no tool uses it anymore — declare `access()` instead.
+`applyPolicy` (the enforcement choke point in both the orchestrator and subagents) calls `wrapToolWithApproval` for every tool whose resolved confirm mode is not `"none"`. The legacy `approval()` marker from before the policy layer still resolves to a self-confirmed write, but no tool uses it anymore — declare the `access` field in `defineTool` instead.
 
 ## What the agent sees
 

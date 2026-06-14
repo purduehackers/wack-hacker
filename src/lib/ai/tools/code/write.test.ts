@@ -43,8 +43,16 @@ describe("write tool", () => {
   it("refuses paths that escape the repo", async () => {
     const sandbox = new InMemorySandbox();
     const raw = await call(makeCtx(sandbox), { path: "../outside.txt", content: "x" });
-    const parsed = JSON.parse(raw as string);
-    expect(parsed.error).toMatch(/outside the repo/);
+    expect(String(raw)).toMatch(/write failed/);
+    expect(String(raw)).toContain("outside the repo directory");
+  });
+
+  it("surfaces a writeFile failure as a classified error envelope", async () => {
+    const sandbox = new InMemorySandbox();
+    await sandbox.stop();
+    const raw = await call(makeCtx(sandbox), { path: "NEW.md", content: "hello" });
+    expect(String(raw)).toMatch(/write failed/);
+    expect(String(raw)).toContain("Sandbox is stopped");
   });
 
   it("creates parent directories for deep paths", async () => {

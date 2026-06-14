@@ -98,7 +98,19 @@ describe("edit tool", () => {
       new_string: "b",
       replace_all: false,
     });
-    const parsed = JSON.parse(raw as string);
-    expect(parsed.error).toMatch(/outside the repo/);
+    expect(String(raw)).toMatch(/edit failed/);
+    expect(String(raw)).toContain("outside the repo");
+  });
+
+  it("surfaces a read failure as a classified error envelope", async () => {
+    const sandbox = new InMemorySandbox();
+    const raw = await call(makeCtx(sandbox), {
+      path: "missing.ts",
+      old_string: "a",
+      new_string: "b",
+      replace_all: false,
+    });
+    expect(String(raw)).toMatch(/edit failed/);
+    expect(String(raw)).toContain("no such file");
   });
 });

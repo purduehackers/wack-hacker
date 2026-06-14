@@ -3,6 +3,8 @@ import { Routes } from "discord-api-types/v10";
 import { log } from "evlog";
 import { z } from "zod";
 
+import { isAsyncIterable } from "@/lib/async";
+
 import type { ActionAuditEntry, AuditLogLike } from "../policy/types.ts";
 import type {
   ApprovalPolicy,
@@ -322,15 +324,6 @@ function extractAbortSignal(runtime: unknown): AbortSignal | undefined {
   if (!runtime || typeof runtime !== "object") return undefined;
   const sig = (runtime as { abortSignal?: unknown }).abortSignal;
   return sig instanceof AbortSignal ? sig : undefined;
-}
-
-/** Shared with `applyPolicy`'s destructive-execution wrapper. */
-export function isAsyncIterable(v: unknown): v is AsyncIterable<unknown> {
-  return (
-    !!v &&
-    typeof v === "object" &&
-    typeof (v as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === "function"
-  );
 }
 
 function denialMessage(

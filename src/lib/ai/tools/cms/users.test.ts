@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { payloadSDKClass, toolOpts } from "@/lib/test/fixtures";
 
-import { getAccessSpec } from "../../policy/index.ts";
+import { resolveAccessSpec } from "../../policy/index.ts";
 
 const mocks = vi.hoisted(() => ({
   find: vi.fn(),
@@ -31,7 +31,7 @@ describe("admin gating", () => {
   it("every exported user tool requires the admin role", () => {
     const tools = { list_users, get_user, create_user, update_user, delete_user };
     for (const [name, t] of Object.entries(tools)) {
-      expect(getAccessSpec(t)?.minRole, name).toBe("admin");
+      expect(resolveAccessSpec(t)?.minRole, name).toBe("admin");
     }
   });
 });
@@ -99,7 +99,7 @@ describe("update_user", () => {
 
 describe("delete_user", () => {
   it("is approval-gated and admin-marked", () => {
-    expect(getAccessSpec(delete_user)?.risk).toBe("destructive");
-    expect(getAccessSpec(delete_user)?.minRole).toBe("admin");
+    expect(resolveAccessSpec(delete_user)?.risk).toBe("destructive");
+    expect(resolveAccessSpec(delete_user)?.minRole).toBe("admin");
   });
 });

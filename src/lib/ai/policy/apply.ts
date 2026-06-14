@@ -1,5 +1,7 @@
 import { tool, type Tool, type ToolSet } from "ai";
 
+import { isAsyncIterable } from "@/lib/async";
+
 import type {
   AccessSpec,
   ApplyPolicyOptions,
@@ -8,7 +10,7 @@ import type {
   PolicySubject,
 } from "./types.ts";
 
-import { isAsyncIterable, wrapToolWithApproval } from "../approvals/runtime.ts";
+import { wrapToolWithApproval } from "../approvals/runtime.ts";
 import { resolveAccessSpec } from "./access.ts";
 import { AuditLog } from "./audit.ts";
 import { decide } from "./decide.ts";

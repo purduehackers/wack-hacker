@@ -1,9 +1,8 @@
-import { tool } from "ai";
 import { Routes } from "discord-api-types/v10";
 import { z } from "zod";
 
 import { DISCORD_GUILD_ID } from "../../../protocol/constants.ts";
-import { access } from "../../policy/index.ts";
+import { defineTool } from "../_shared/define-tool.ts";
 import { discord } from "./client.ts";
 
 // ---------------------------------------------------------------------------
@@ -41,129 +40,129 @@ function summarizeChannel(ch: any) {
 // Tools
 // ---------------------------------------------------------------------------
 
-export const get_server_info = access(
-  { risk: "read" },
-  tool({
-    description:
-      "Get Discord server overview: name, member count, channel count, role count, and basic settings. Use this to understand the server at a high level.",
-    inputSchema: z.object({}),
-    execute: async () => {
-      const guild = (await discord.get(Routes.guild(DISCORD_GUILD_ID), {
-        query: new URLSearchParams({ with_counts: "true" }),
-      })) as any;
-      return JSON.stringify({
-        id: guild.id,
-        name: guild.name,
-        memberCount: guild.approximate_member_count,
-        presenceCount: guild.approximate_presence_count,
-        ownerId: guild.owner_id,
-        description: guild.description,
-        icon: guild.icon ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png` : null,
-        banner: guild.banner
-          ? `https://cdn.discordapp.com/banners/${guild.id}/${guild.banner}.png`
-          : null,
-        boostLevel: guild.premium_tier,
-        boostCount: guild.premium_subscription_count,
-        verificationLevel: guild.verification_level,
-        createdAt: guild.id,
+export const get_server_info = defineTool({
+  name: "get_server_info",
+  domain: "discord",
+  access: { risk: "read" },
+  description:
+    "Get Discord server overview: name, member count, channel count, role count, and basic settings. Use this to understand the server at a high level.",
+  input: z.object({}),
+  execute: async () => {
+    const guild = (await discord.get(Routes.guild(DISCORD_GUILD_ID), {
+      query: new URLSearchParams({ with_counts: "true" }),
+    })) as any;
+    return JSON.stringify({
+      id: guild.id,
+      name: guild.name,
+      memberCount: guild.approximate_member_count,
+      presenceCount: guild.approximate_presence_count,
+      ownerId: guild.owner_id,
+      description: guild.description,
+      icon: guild.icon ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png` : null,
+      banner: guild.banner
+        ? `https://cdn.discordapp.com/banners/${guild.id}/${guild.banner}.png`
+        : null,
+      boostLevel: guild.premium_tier,
+      boostCount: guild.premium_subscription_count,
+      verificationLevel: guild.verification_level,
+      createdAt: guild.id,
+    });
+  },
+});
+
+export const list_channels = defineTool({
+  name: "list_channels",
+  domain: "discord",
+  access: { risk: "read" },
+  description:
+    "List all channels in the Discord server, organized by category. Returns channel IDs, names, types, topics, and positions. Use this to find the right channel before sending messages or performing channel operations.",
+  input: z.object({}),
+  execute: async () => {
+    const channels = (await discord.get(Routes.guildChannels(DISCORD_GUILD_ID))) as any[];
+
+    const nonThread = channels.filter((ch) => ![10, 11, 12].includes(ch.type));
+
+    const categories = nonThread
+      .filter((ch) => ch.type === 4)
+      .sort((a, b) => a.position - b.position);
+
+    const uncategorized = nonThread
+      .filter((ch) => ch.type !== 4 && !ch.parent_id)
+      .sort((a, b) => a.position - b.position);
+
+    const result: any[] = [];
+    for (const cat of categories) {
+      const children = nonThread
+        .filter((ch) => ch.parent_id === cat.id)
+        .sort((a, b) => a.position - b.position);
+      result.push({
+        category: { id: cat.id, name: cat.name, position: cat.position },
+        channels: children.map(summarizeChannel),
       });
-    },
+    }
+    if (uncategorized.length > 0) {
+      result.push({
+        category: null,
+        channels: uncategorized.map(summarizeChannel),
+      });
+    }
+    return JSON.stringify(result);
+  },
+});
+
+export const list_roles = defineTool({
+  name: "list_roles",
+  domain: "discord",
+  access: { risk: "read" },
+  description:
+    "List all roles in the Discord server with their colors, positions, and whether they are hoisted or mentionable. Use this to find role IDs before assigning or managing roles.",
+  input: z.object({}),
+  execute: async () => {
+    const roles = (await discord.get(Routes.guildRoles(DISCORD_GUILD_ID))) as any[];
+    const sorted = roles.sort((a, b) => b.position - a.position);
+    return JSON.stringify(
+      sorted.map((r) => ({
+        id: r.id,
+        name: r.name,
+        color: `#${r.color.toString(16).padStart(6, "0")}`,
+        position: r.position,
+        mentionable: r.mentionable,
+        hoist: r.hoist,
+        managed: r.managed,
+        isEveryone: r.id === DISCORD_GUILD_ID,
+      })),
+    );
+  },
+});
+
+export const search_members = defineTool({
+  name: "search_members",
+  domain: "discord",
+  access: { risk: "read" },
+  description:
+    "Search for server members by name, nickname, or user ID. Returns member info including roles, join date, and display name. Use this to find a user before performing member operations.",
+  input: z.object({
+    query: z
+      .string()
+      .describe("Search query (matches username, display name, nickname, or a user ID)"),
+    limit: z.number().max(100).default(10).describe("Max results (max 100)"),
   }),
-);
-
-export const list_channels = access(
-  { risk: "read" },
-  tool({
-    description:
-      "List all channels in the Discord server, organized by category. Returns channel IDs, names, types, topics, and positions. Use this to find the right channel before sending messages or performing channel operations.",
-    inputSchema: z.object({}),
-    execute: async () => {
-      const channels = (await discord.get(Routes.guildChannels(DISCORD_GUILD_ID))) as any[];
-
-      const nonThread = channels.filter((ch) => ![10, 11, 12].includes(ch.type));
-
-      const categories = nonThread
-        .filter((ch) => ch.type === 4)
-        .sort((a, b) => a.position - b.position);
-
-      const uncategorized = nonThread
-        .filter((ch) => ch.type !== 4 && !ch.parent_id)
-        .sort((a, b) => a.position - b.position);
-
-      const result: any[] = [];
-      for (const cat of categories) {
-        const children = nonThread
-          .filter((ch) => ch.parent_id === cat.id)
-          .sort((a, b) => a.position - b.position);
-        result.push({
-          category: { id: cat.id, name: cat.name, position: cat.position },
-          channels: children.map(summarizeChannel),
-        });
+  execute: async ({ query, limit }) => {
+    // If the query looks like a Discord user ID, fetch directly
+    if (/^\d{17,20}$/.test(query)) {
+      try {
+        const found = (await discord.get(Routes.guildMember(DISCORD_GUILD_ID, query))) as any;
+        return JSON.stringify([summarizeMember(found)]);
+      } catch {
+        return JSON.stringify([]);
       }
-      if (uncategorized.length > 0) {
-        result.push({
-          category: null,
-          channels: uncategorized.map(summarizeChannel),
-        });
-      }
-      return JSON.stringify(result);
-    },
-  }),
-);
-
-export const list_roles = access(
-  { risk: "read" },
-  tool({
-    description:
-      "List all roles in the Discord server with their colors, positions, and whether they are hoisted or mentionable. Use this to find role IDs before assigning or managing roles.",
-    inputSchema: z.object({}),
-    execute: async () => {
-      const roles = (await discord.get(Routes.guildRoles(DISCORD_GUILD_ID))) as any[];
-      const sorted = roles.sort((a, b) => b.position - a.position);
-      return JSON.stringify(
-        sorted.map((r) => ({
-          id: r.id,
-          name: r.name,
-          color: `#${r.color.toString(16).padStart(6, "0")}`,
-          position: r.position,
-          mentionable: r.mentionable,
-          hoist: r.hoist,
-          managed: r.managed,
-          isEveryone: r.id === DISCORD_GUILD_ID,
-        })),
-      );
-    },
-  }),
-);
-
-export const search_members = access(
-  { risk: "read" },
-  tool({
-    description:
-      "Search for server members by name, nickname, or user ID. Returns member info including roles, join date, and display name. Use this to find a user before performing member operations.",
-    inputSchema: z.object({
-      query: z
-        .string()
-        .describe("Search query (matches username, display name, nickname, or a user ID)"),
-      limit: z.number().max(100).default(10).describe("Max results (max 100)"),
-    }),
-    execute: async ({ query, limit }) => {
-      // If the query looks like a Discord user ID, fetch directly
-      if (/^\d{17,20}$/.test(query)) {
-        try {
-          const found = (await discord.get(Routes.guildMember(DISCORD_GUILD_ID, query))) as any;
-          return JSON.stringify([summarizeMember(found)]);
-        } catch {
-          return JSON.stringify([]);
-        }
-      }
-      const matches = (await discord.get(Routes.guildMembersSearch(DISCORD_GUILD_ID), {
-        query: new URLSearchParams({ query, limit: String(limit) }),
-      })) as any[];
-      return JSON.stringify(matches.map(summarizeMember));
-    },
-  }),
-);
+    }
+    const matches = (await discord.get(Routes.guildMembersSearch(DISCORD_GUILD_ID), {
+      query: new URLSearchParams({ query, limit: String(limit) }),
+    })) as any[];
+    return JSON.stringify(matches.map(summarizeMember));
+  },
+});
 
 // ---------------------------------------------------------------------------
 // Shared member helper (exported for use by other tool files)
