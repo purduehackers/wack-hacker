@@ -1,0 +1,28 @@
+src/lib/ai/approvals/runtime.ts
+  s_e947ebbd513117::t_2cf1c2fca47f51 1
+src/lib/ai/approvals/runtime.test.ts
+  s_e947ebbd513117::t_2b192868c95f47 1,9-12,15-33
+src/lib/ai/approvals/index.ts
+  s_e947ebbd513117::t_a27c606cd17e07 23
+src/lib/ai/policy/apply.ts
+  s_e947ebbd513117::t_db1a4b41f15843 19-20
+src/lib/ai/approvals/types.ts
+  s_e947ebbd513117::t_3cc367d8c3df45 73
+  s_e947ebbd513117::t_9c1d3a980b697a 58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "d23ed373703556c5ae58f8bf4a11dc358e06f9a3",
+  "prompts": {},
+  "sessions": {
+    "s_e947ebbd513117": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bbc7243f-7d19-41f9-9d1d-97eedb0b6968",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
