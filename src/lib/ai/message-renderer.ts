@@ -280,7 +280,6 @@ export class MessageRenderer {
     }
   }
 
-  /** Compose components into a single Discord message string (mid-stream). */
   /**
    * Assemble the visible body from activity + subagent previews + text, in the
    * same order the live stream shows them. No fallback or truncation — callers
@@ -296,6 +295,7 @@ export class MessageRenderer {
     return parts.join("\n\n");
   }
 
+  /** The live-stream view: body() plus the "Thinking..." placeholder and length cap. */
   private render(): string {
     const body = this.body() || "> Thinking...";
     return body.length > MAX_LENGTH ? body.slice(0, MAX_LENGTH - 1) + "…" : body;
