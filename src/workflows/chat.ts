@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { generateText } from "ai";
 import { createHook, FatalError, getWorkflowMetadata, sleep } from "workflow";
 
@@ -197,6 +198,12 @@ async function runTurn(args: RunTurnArgs): Promise<StreamTurnResult | TurnFailur
         },
       },
       async (logger) => {
+        // Group every gen_ai span in this conversation (across turns) under one
+        // conversation in Sentry's AI Agents Insights. workflowRunId is the
+        // conversation: stable across a conversation's turns, and already the
+        // chat.id on this span. Set on the isolation scope before the agent
+        // runs so its child gen_ai spans inherit gen_ai.conversation.id.
+        Sentry.setConversationId(workflowRunId);
         const discord = createDiscordAPI();
         const result = await streamTurn(discord, channelId, messages, serializedContext, {
           workflowRunId,
