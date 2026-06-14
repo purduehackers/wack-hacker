@@ -1,0 +1,37 @@
+src/lib/ai/streaming.ts
+  s_e947ebbd513117::t_d077e87b9553dc 378-381
+src/lib/ai/approvals/runtime.ts
+  s_e947ebbd513117::t_0039b3511050f5 252-256
+  s_e947ebbd513117::t_35cb86164011de 7
+src/server/routes/gateway/index.ts
+  s_e947ebbd513117::t_0f52cd06e6e081 41-52
+  s_e947ebbd513117::t_38fb79d591b1c9 96
+  s_e947ebbd513117::t_84120341bb0f48 105
+  s_e947ebbd513117::t_8f2ead8e367a09 229
+  s_e947ebbd513117::t_6f0328aba3a1ec 258,261
+  s_e947ebbd513117::t_ef11bc89026279 291-294
+src/lib/protocol/events/guard.ts
+  s_e947ebbd513117::t_5536f70e2f6c51 1,7-8,13-15
+src/server/routes/interactions/component.ts
+  s_e947ebbd513117::t_f82e5b23a36034 60-62
+src/server/routes/interactions/command.ts
+  s_e947ebbd513117::t_a001c27734005f 71-73
+src/lib/protocol/events/guard.test.ts
+  s_e947ebbd513117::t_02cc071b8e435c 3-4,8-15,29-30,33,40-43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "5dd20e22819ed9c4212b3706b8188f92d2804d3a",
+  "prompts": {},
+  "sessions": {
+    "s_e947ebbd513117": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bbc7243f-7d19-41f9-9d1d-97eedb0b6968",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
