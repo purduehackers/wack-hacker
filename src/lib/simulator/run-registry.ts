@@ -8,7 +8,12 @@ import { bootstrapSimulator } from "./bootstrap.ts";
 let current: SimConversation | undefined;
 
 export function getOrCreateSession(sessionId: string): SimConversation {
-  if (current?.id !== sessionId) current = bootstrapSimulator(sessionId);
+  if (current?.id !== sessionId) {
+    // Close the outgoing bus so any lingering SSE subscriber is released
+    // before the new session re-installs the process-global transports.
+    current?.bus.close();
+    current = bootstrapSimulator(sessionId);
+  }
   return current;
 }
 
@@ -18,5 +23,6 @@ export function getSession(sessionId: string): SimConversation | undefined {
 
 /** Drop the active session (tests / explicit reset). */
 export function resetSessions(): void {
+  current?.bus.close();
   current = undefined;
 }

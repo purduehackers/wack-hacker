@@ -189,4 +189,3 @@ src/app/.well-known/
 
 # Local simulator SQLite DB (dev-only)
 .sim/
-.env*

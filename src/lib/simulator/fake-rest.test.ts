@@ -15,6 +15,9 @@ import { VirtualGuild } from "./virtual-guild.ts";
 
 type ApprovalExecute = (input: unknown, runtime: unknown) => AsyncGenerator<unknown>;
 
+// The REST swap is gated on SIMULATOR_ENABLED (mirrors the route mount).
+process.env.SIMULATOR_ENABLED = "1";
+
 function setup() {
   const guild = new VirtualGuild({ guildId: "g1", botUserId: "bot1" });
   const bus = new SimEventBus("run1");

@@ -22,11 +22,12 @@ export function createRedis(): RedisClient {
 
 /**
  * Dev/simulator-only: route every `createRedis()` consumer at an injected
- * client — e.g. `createMemoryRedis()`. No-ops in production. Pass `null` to
- * restore the env-backed client.
+ * client — e.g. `createMemoryRedis()`. Gated on the same condition as the
+ * simulator route mount (`isSimEnabled`) so it can't override Redis on a
+ * non-production preview/staging deploy. Pass `null` to restore the env client.
  */
 export function __setRedisForSimulation(client: RedisClient | null): void {
-  if (process.env.NODE_ENV === "production") return;
+  if (process.env.NODE_ENV === "production" || process.env.SIMULATOR_ENABLED !== "1") return;
   override = client ?? undefined;
 }
 
