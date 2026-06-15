@@ -1,0 +1,289 @@
+src/app/simulator/page.tsx
+  s_4ec793375afff4::t_57fc36559f138e 30-36,38-41
+  s_4ec793375afff4::t_f1e3466cbd7693 51
+  s_4ec793375afff4::t_fd1a1b84d12d63 109,117-118
+  s_4ec793375afff4::t_cff3011e803934 98-102
+  s_4ec793375afff4::t_6f03d61c43bd7e 22-23,62-63,76,78,135-147,151-152
+  s_4ec793375afff4::t_9eeabac56baa52 5-11,13-20,26,66-68,73-75
+  s_4ec793375afff4::t_73ee988c388164 1-4,12,21,25,27,37,42-50,52-59,61,97,103-108,110-116,119-121,123-126,128-133,148-150,153-156
+  s_4ec793375afff4::t_499fae24974dc0 127
+  s_4ec793375afff4::t_d3e44089ff9ed0 24,28-29,60,64-65,69-72,77,79-96,134
+  s_4ec793375afff4::t_b236b7c166a3de 122
+src/app/simulator/components/code-block.module.css
+  s_4ec793375afff4::t_8e65c55066df90 1-30
+src/lib/simulator/fake-core-api.test.ts
+  s_4ec793375afff4::t_2f90e49d52ed3c 1-23,27-29,33-66,68-82,84-89,92-96,102-105,110-111
+  s_4ec793375afff4::t_9eeabac56baa52 24-26,30-32,97-101,106-109
+  s_4ec793375afff4::t_f9420e35c02518 67
+  s_4ec793375afff4::t_838f1ac6a773a8 83,90-91
+src/lib/ai/tools/discord/client.ts
+  s_4ec793375afff4::t_ce127e4cfd4908 5-18,20-25
+  s_4ec793375afff4::t_650cd069292a60 19,26-28
+src/app/simulator/components/MessageGroup.tsx
+  s_4ec793375afff4::t_70ca9e8fe0ed0b 53
+  s_4ec793375afff4::t_793e67a3cc4cc0 54,93,102-104
+  s_4ec793375afff4::t_4b119ee5deaf0c 58-59,68-74,85-87,91-92
+  s_4ec793375afff4::t_5e25e7aca6202c 26,31-37
+  s_4ec793375afff4::t_c7a5813269bee3 105-109
+  s_4ec793375afff4::t_9eeabac56baa52 6-7,9,27-30,60-67,75-84,88-90,113
+  s_4ec793375afff4::t_75589cc915267f 1-5,8,10-25,38-52,55-57,94-101,110-112,114-118
+src/app/simulator/components/message-list.module.css
+  s_4ec793375afff4::t_1f39d3e19b004d 43,47-51
+  s_4ec793375afff4::t_171f2f24662c6f 11-12,15,20-23,25-28,30-31,33,37-38
+  s_4ec793375afff4::t_2570fcf390b0c0 16-19,24
+  s_4ec793375afff4::t_9c292061688831 4-5
+  s_4ec793375afff4::t_ef523efb55e068 42,52-67
+  s_4ec793375afff4::t_749717680d8ea4 1-3,6-10,13-14,29,32,34-36,39-41
+src/app/simulator/components/ChatColumn.tsx
+  s_4ec793375afff4::t_1e028779aaffbf 1-5,8-79,86-89
+  s_4ec793375afff4::t_9eeabac56baa52 6-7,80-85
+src/app/simulator/discord-markdown.module.css
+  s_4ec793375afff4::t_f6f415c10d8742 1-121
+src/lib/simulator/conversation.test.ts
+  s_4ec793375afff4::t_9eeabac56baa52 66-71
+  s_4ec793375afff4::t_fd119510a0d79e 1-9,11-24,26
+  s_4ec793375afff4::t_398962e9ec9008 10,29-39,46-47,49-54,74-75
+  s_4ec793375afff4::t_6913b4753dbb1a 25,27-28
+  s_4ec793375afff4::t_603aad6c05b09a 40-45,48
+  s_4ec793375afff4::t_5e9947480e1f44 55-65,72-73
+src/app/simulator/components/Message.tsx
+  s_4ec793375afff4::t_9eeabac56baa52 6-7,10
+  s_4ec793375afff4::t_e2ed8cdcaf9b98 1-5,8-9,11-56
+src/app/simulator/avatar.ts
+  s_4ec793375afff4::t_de9f4308f011d7 1-13
+src/app/simulator/components/TraceInspector.tsx
+  s_4ec793375afff4::t_9eeabac56baa52 4,26-28
+  s_4ec793375afff4::t_12b5d3bc834ec1 1-3,5-25,29-43
+src/app/simulator/components/Composer.tsx
+  s_4ec793375afff4::t_0abdd1a14aa911 231-232,236-242
+  s_4ec793375afff4::t_530ffe03206e32 1-2,4,9-13,15-17,104,118-123,143-145,169-176,213,217,219-223,228-229,252-255
+  s_4ec793375afff4::t_f98ffd44ae2094 8
+  s_4ec793375afff4::t_ecf35fb1105708 3,7,14,18-64,68-103,105-117,124-142,146-168,177-190,197-212,214-216,218,224-227,230,251
+  s_4ec793375afff4::t_9eeabac56baa52 5-6,65-67,191-196,233-235
+  s_4ec793375afff4::t_325779890f27cb 243-250
+src/app/globals.css
+  s_4ec793375afff4::t_a2bb969bd435bf 19-26
+  s_4ec793375afff4::t_e151fe13d4905e 58
+  s_4ec793375afff4::t_9eeabac56baa52 59-60
+  s_4ec793375afff4::t_a9c060c1db8021 5-18
+  s_4ec793375afff4::t_7a34b255f9d062 1-4,27-57,61-119
+src/lib/simulator/types.ts
+  s_4ec793375afff4::t_a888ab23abcdb4 10
+  s_4ec793375afff4::t_76748251701b59 239-247
+  s_4ec793375afff4::t_9f91fe4e76d6ce 9,11
+  s_4ec793375afff4::t_08bea6acdf9f93 1-8,12-128,155-215,218-238,248-252
+  s_4ec793375afff4::t_e9c7215be4803f 216-217
+  s_4ec793375afff4::t_bee9e0a9f0bfc2 129-133,135-154
+  s_4ec793375afff4::t_f6e0e6bdaca700 262-272
+  s_4ec793375afff4::t_85ecdba699fd22 253-261,273-282
+  s_4ec793375afff4::t_fb642154b55efb 134
+src/lib/simulator/virtual-guild.ts
+  s_4ec793375afff4::t_5265659d773802 1-205
+src/lib/simulator/route-dispatch.ts
+  s_4ec793375afff4::t_eba63a23fe7963 1-17,19,22-30,34-55,58-174,176-177,182-189,193,205,209-213,215-230
+  s_4ec793375afff4::t_d958cc5689ed81 56-57
+  s_4ec793375afff4::t_baa981a8f1a06f 18,20-21
+  s_4ec793375afff4::t_9eeabac56baa52 191-192,200-204
+  s_4ec793375afff4::t_2fb4a92fc4a7c1 31-33
+  s_4ec793375afff4::t_01bd09b75d8d4d 175,178-181,190,194-199,206-208
+  s_4ec793375afff4::t_4eb7ec458b3236 214
+src/lib/simulator/fake-rest.ts
+  s_4ec793375afff4::t_64f18cd10b8d24 12
+  s_4ec793375afff4::t_0f2c342067326a 1-11,13-42
+src/app/layout.tsx
+  s_4ec793375afff4::t_2ac084a9f61301 19-29
+  s_4ec793375afff4::t_5186ae14f140cc 1-4,11-18,30-32
+  s_4ec793375afff4::t_b9877cbb4925b2 5-10
+src/app/simulator/use-simulator-stream.ts
+  s_4ec793375afff4::t_12dd0f9fe47c99 145
+  s_4ec793375afff4::t_9eeabac56baa52 8-9,76-115,117-121
+  s_4ec793375afff4::t_eb8e851e4e6c15 15-16,31-35,47-59,61
+  s_4ec793375afff4::t_3adccc36d639b1 133-134
+  s_4ec793375afff4::t_91a804e2f89cfe 28
+  s_4ec793375afff4::t_f162b41af117ee 1-6,10-14,17-27,29-30,36-46,60,62-75,116,122,127-132,135-144,146
+  s_4ec793375afff4::t_4de2f78d94ad18 123-126
+  s_4ec793375afff4::t_3536672f71928a 7
+src/lib/simulator/run-registry.ts
+  s_4ec793375afff4::t_04aeb27a9c47a3 1-22
+src/app/simulator/icons.tsx
+  s_4ec793375afff4::t_52775b9578b7c7 1-41
+  s_4ec793375afff4::t_c6f3abe4deb045 42-48
+  s_4ec793375afff4::t_9eeabac56baa52 49
+src/app/simulator/discord-markdown.test.ts
+  s_4ec793375afff4::t_13175a0e6a0149 1-5,8,11-97,99-106
+  s_4ec793375afff4::t_9eeabac56baa52 6-7,9-10,98
+src/app/simulator/components/components.module.css
+  s_4ec793375afff4::t_463b912f9662d0 1-182,184-186,188-191,224-270,272-277,283-304
+  s_4ec793375afff4::t_4fced44ba0295a 183,187,192-223
+  s_4ec793375afff4::t_57de6318fdb34c 271,278-282
+src/app/simulator/message-store.ts
+  s_4ec793375afff4::t_e1e4f6aa7d5927 243-247,250,253-255
+  s_4ec793375afff4::t_892f41e3c47755 3,12
+  s_4ec793375afff4::t_453db0290ebe7c 100
+  s_4ec793375afff4::t_838f3fb3da40c0 133-141,143,151-163,178-181,185,218-221,223-229,231-237
+  s_4ec793375afff4::t_c09e206ee0beee 2,4-5,15-29,31-78,80-81,131-132,164,168,173,177,186,197,208,210,212,214,216,222,230,238-240,256
+  s_4ec793375afff4::t_63c24f25d8d6dd 1,6-9,11,13-14,30,79,82-99,101-118,130,165-167,169-172,174-176,209,211,213,215,217,241-242,248-249,251-252
+  s_4ec793375afff4::t_e315eace91d0c6 119-129
+  s_4ec793375afff4::t_82289f2318d679 142
+  s_4ec793375afff4::t_e5629b7fb75601 10
+  s_4ec793375afff4::t_9eeabac56baa52 144-150,182-184,187-196,198-207
+src/app/simulator/components/Button.tsx
+  s_4ec793375afff4::t_a390ca2d1d6dd0 1-46,48-60
+  s_4ec793375afff4::t_9eeabac56baa52 47
+src/lib/simulator/fake-rest.test.ts
+  s_4ec793375afff4::t_5aaee6cad11e85 1-3,5-61,65-99
+  s_4ec793375afff4::t_9eeabac56baa52 4,62-64
+src/server/routes/simulator.ts
+  s_4ec793375afff4::t_b54fd3f5a3c027 1-24,26-53
+src/app/simulator/components/composer.module.css
+  s_4ec793375afff4::t_d85eaea4f77d6d 1,3-8,11-16,19,35-38,40-43,46-51,53-56,154
+  s_4ec793375afff4::t_95ecbcb04bf896 2,9-10,17,22,27-33,39,44-45,52,57-153
+  s_4ec793375afff4::t_c48f57f92d54f8 18,20-21,23-26,34
+src/app/simulator/components/control-panel.module.css
+  s_4ec793375afff4::t_8549988e304a3b 1-89
+src/lib/simulator/conversation.ts
+  s_4ec793375afff4::t_388eb531ff6e6e 242-243
+  s_4ec793375afff4::t_615ad68b548d83 244
+  s_4ec793375afff4::t_a6687d8737706e 336,358-367
+  s_4ec793375afff4::t_25d221791a03ee 4,14,17-19,25,37-38,46,92-113,117-123,129-133,137-142,150,156-157,164,180-183,185-186,193-206,211-214,218-224,229-230,237,241,247,268-297,299,305-312,357
+  s_4ec793375afff4::t_4fa90bb1fa46f7 184,216-217,226-228,232
+  s_4ec793375afff4::t_a6cf74ab327961 251-253
+  s_4ec793375afff4::t_c724aa5d486814 337-356
+  s_4ec793375afff4::t_998c3c234a3c6a 3,21-22,28-34
+  s_4ec793375afff4::t_9eeabac56baa52 6-13,27,114-116,124-128,233,300-304
+  s_4ec793375afff4::t_55921247867f4c 1-2,5,15-16,20,23-24,26,35-36,40-45,47-70,134-136,143-149,151-155,158-163,165-179,187-192,215,225,231,234-236,238-240,245-246,248-250,254-267,298,313-335,368
+  s_4ec793375afff4::t_9cb2cc77adc9c4 39
+  s_4ec793375afff4::t_966f869d90fa6b 83
+  s_4ec793375afff4::t_bcae1dc3e89819 207-210
+  s_4ec793375afff4::t_bc28b0dd4c4e07 71-82,84-91
+src/lib/simulator/trace-orchestrator.test.ts
+  s_4ec793375afff4::t_9eeabac56baa52 3-6,88-90
+  s_4ec793375afff4::t_b1a89a3af4c1aa 2,27,30-79,100-131
+  s_4ec793375afff4::t_d6b5e804ce4262 80-87,91-99
+  s_4ec793375afff4::t_074df682fdda42 1,7-26,28-29
+src/app/simulator/discord-markdown.tsx
+  s_4ec793375afff4::t_85e69529752ede 1
+  s_4ec793375afff4::t_a3a10135198920 230,232-241
+  s_4ec793375afff4::t_9eeabac56baa52 4-5,420-439
+  s_4ec793375afff4::t_fc2af58962cc4c 370
+  s_4ec793375afff4::t_89a43059a73fc3 398
+  s_4ec793375afff4::t_562989cacca4ce 2-3,6-229,231,242-272,342-347,350-352,355-369,371-397,399-419,440-473
+  s_4ec793375afff4::t_171b7b100922ca 273-341,348-349,353-354
+src/server/index.ts
+  s_4ec793375afff4::t_ac96bd60942942 5-6,10,21-26
+src/app/simulator/components/ControlPanel.tsx
+  s_4ec793375afff4::t_72f390a907e814 1-5,7-20,60-81,97,103,109-110,113-116
+  s_4ec793375afff4::t_772ea23e576aed 59
+  s_4ec793375afff4::t_9eeabac56baa52 6
+  s_4ec793375afff4::t_3ed81beba272db 21-58
+  s_4ec793375afff4::t_f59b542b16574d 82-96,98,102
+  s_4ec793375afff4::t_6f97caead7b9d7 111-112
+  s_4ec793375afff4::t_fc9577f2651b98 99-101
+  s_4ec793375afff4::t_1b080914103628 104-108
+src/app/simulator/simulator.module.css
+  s_4ec793375afff4::t_ac93129c9f67a3 5-6,11,13-14,17-18,20,22-23,26-27,30,35-38,46-47,53-54,56,58-59,61-64,67,73-74,76,79-80,82-83,88-90,92,95-96,99-101,103,112,118-119
+  s_4ec793375afff4::t_8c4e84f3460989 1-4,7-8,12,15-16,19,21,24-25,28-29,31-34,39,45,48-52,55,57,60,65-66,68-72,75,77-78,81,84-87,91,93-94,97-98,102,104,107-108,110-111,113-117,120-123
+  s_4ec793375afff4::t_1e15fef280a7d2 40-44
+  s_4ec793375afff4::t_ebb4a2ccaf7c4a 9-10,124
+  s_4ec793375afff4::t_a17ca8d10cbe2b 105-106,109
+src/app/simulator/components/Embed.tsx
+  s_4ec793375afff4::t_9eeabac56baa52 6-7
+  s_4ec793375afff4::t_c90710d815d48b 1-5,8-77
+src/lib/ai/constants.ts
+  s_4ec793375afff4::t_4396f7feb031c8 74-82
+src/workflows/chat.ts
+  s_4ec793375afff4::t_2d41f093a5368a 55-60,63
+  s_4ec793375afff4::t_c6efe3e4fa9dc4 13
+  s_4ec793375afff4::t_12cf5fde442657 14-19
+  s_4ec793375afff4::t_b5f87ac54ab75a 405
+src/app/simulator/components/InspectorPanel.tsx
+  s_4ec793375afff4::t_42fe2cbcef21f5 34
+  s_4ec793375afff4::t_9eeabac56baa52 8-9
+  s_4ec793375afff4::t_8129ec87551e59 1-7,10-33,35-54,56-62
+  s_4ec793375afff4::t_fa2ff5a7772d69 55
+src/lib/simulator/fake-core-api.ts
+  s_4ec793375afff4::t_aa97907441f6ad 1-15,41-49,51-67,69-72,74-76,78,80-86,88-111,113,123-129,131-134
+  s_4ec793375afff4::t_0ff52edab1f693 79,87
+  s_4ec793375afff4::t_9eeabac56baa52 118-122
+  s_4ec793375afff4::t_1283031d45410f 16-40,50,68,73,77,112,114-117,130,135-149
+src/lib/simulator/trace-orchestrator.ts
+  s_4ec793375afff4::t_9eeabac56baa52 1-2,48-55
+  s_4ec793375afff4::t_346338664eb180 3,17-28,30-31,44,46,57
+  s_4ec793375afff4::t_5cde48be195572 4-16,29,32-43,45,47,56,58-67,72,77,79-86
+  s_4ec793375afff4::t_648938e44fa631 68-71,73-76,78
+src/bot/handlers/events/mention/index.ts
+  s_4ec793375afff4::t_8570ebb6018668 9,22-30
+  s_4ec793375afff4::t_4ce6cfce74555b 204-208,210,216-217,241,247-273,281,290-291
+  s_4ec793375afff4::t_7d30948015bac5 175
+src/lib/simulator/event-bus.ts
+  s_4ec793375afff4::t_471305f84ee859 1-11,14-44,53-79,83,87-91,93-96,98-110
+  s_4ec793375afff4::t_796a37286ac31b 12-13
+  s_4ec793375afff4::t_4c54c7c13d8442 84-86,97
+  s_4ec793375afff4::t_2486a9caca5107 45-52
+  s_4ec793375afff4::t_9eeabac56baa52 80-82
+  s_4ec793375afff4::t_ad1cdf49958fc4 92
+src/app/simulator/types.ts
+  s_4ec793375afff4::t_ae4a4292caefc8 3,12-20,23
+  s_4ec793375afff4::t_66646f7b6f9110 5,8,24-29,37,42-43
+  s_4ec793375afff4::t_787cff2bb7d015 30-36,44-46
+  s_4ec793375afff4::t_be17b9baad5a27 21-22
+  s_4ec793375afff4::t_18e2d4cd67e94f 1
+  s_4ec793375afff4::t_85bc647bde833f 38-41
+  s_4ec793375afff4::t_6107347c97200e 67-68
+  s_4ec793375afff4::t_58d1a02c17df26 2,6-7,9-11,47-59
+  s_4ec793375afff4::t_98efe83cfd1328 60-66,69-71
+src/app/simulator/components/inspector.module.css
+  s_4ec793375afff4::t_ba1bf1385d1fbd 1-311
+src/lib/simulator/bootstrap.ts
+  s_4ec793375afff4::t_9eeabac56baa52 1-2,5
+  s_4ec793375afff4::t_dcf78db95c3f47 3-4,6-52,54-57
+  s_4ec793375afff4::t_61bb6f5c61fda8 53
+src/app/simulator/message-store.test.ts
+  s_4ec793375afff4::t_9eeabac56baa52 4-5
+  s_4ec793375afff4::t_a282be801f1739 1-3,6-198
+src/app/simulator/components/ContextInspector.tsx
+  s_4ec793375afff4::t_73271fa4fdb133 1-143
+.env.example
+  s_4ec793375afff4::t_96668932c75acb 1-8
+src/lib/redis/client.ts
+  s_4ec793375afff4::t_51b29ceb109e02 8,14-16,19,23-32,36
+src/lib/ai/conversation-turn.ts
+  s_4ec793375afff4::t_9be8c667a6c67c 1-7,9-13,15-16,18-85
+  s_4ec793375afff4::t_d3dc549f12af0b 8,14,17
+src/lib/simulator/context.ts
+  s_4ec793375afff4::t_02e296bbbc17b7 1-14
+src/app/simulator/components/ActionRow.tsx
+  s_4ec793375afff4::t_a9a87cf0b88a6f 1-21
+src/app/simulator/components/MessageList.tsx
+  s_4ec793375afff4::t_9eeabac56baa52 8-9,11,18-22
+  s_4ec793375afff4::t_dd4f44fc691752 68
+  s_4ec793375afff4::t_917f9b7d99758e 72-86
+  s_4ec793375afff4::t_b00ebaa060bc20 50
+  s_4ec793375afff4::t_5109bf30f4ffb9 63-65
+  s_4ec793375afff4::t_ed6c5addc3afe3 66,69
+  s_4ec793375afff4::t_db12a40dcc5c67 3,12-17,23
+  s_4ec793375afff4::t_b6a55d00214c0e 28
+  s_4ec793375afff4::t_8e9a0b846ac553 1-2,4-7,10,24-27,29-49,51-62,70-71,87-91
+src/lib/simulator/guard.ts
+  s_4ec793375afff4::t_28e1951001c560 1-16
+src/app/simulator/components/CodeBlock.tsx
+  s_4ec793375afff4::t_9e77f7083b01c8 1-25
+src/lib/simulator/constants.ts
+  s_4ec793375afff4::t_0b26be5f98007c 1-17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.7",
+  "base_commit_sha": "62986ad18538d5c968adb975a023667b7080181f",
+  "prompts": {},
+  "sessions": {
+    "s_4ec793375afff4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "24f30b26-20b9-4767-88e5-36b867a893a8",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
