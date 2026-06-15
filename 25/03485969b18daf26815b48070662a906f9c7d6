@@ -1,0 +1,25 @@
+src/lib/simulator/run-registry.ts
+  s_4ec793375afff4::t_6b69de4b8e9e7e 11-16,26
+src/lib/ai/tools/discord/client.ts
+  s_4ec793375afff4::t_76843bc2f441ba 10-14,17
+src/lib/redis/client.ts
+  s_4ec793375afff4::t_e3f3937e529a11 25-27,30
+src/lib/simulator/fake-rest.test.ts
+  s_4ec793375afff4::t_e1fbb3cc94af0b 18-20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.7",
+  "base_commit_sha": "2503485969b18daf26815b48070662a906f9c7d6",
+  "prompts": {},
+  "sessions": {
+    "s_4ec793375afff4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "24f30b26-20b9-4767-88e5-36b867a893a8",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
