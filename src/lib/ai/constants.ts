@@ -71,6 +71,15 @@ Canonical raw IDs (including UUIDs) are REQUIRED in this block even where they a
 /** Tool-name prefix for delegation tools, e.g. `delegate_github`. */
 export const DELEGATE_PREFIX = "delegate_";
 
+/**
+ * Followup turns past this count drop the scraped lead-in blocks from the
+ * system prompt — by then the model has real conversation history and the
+ * lead-in is just pinned token weight. Dropping it changes the prompt once
+ * (one cache miss at the boundary turn), after which it is stable again.
+ * Shared by `workflows/chat.ts` and the chat simulator's turn loop.
+ */
+export const LEADIN_TURN_LIMIT = 3;
+
 export const SUBAGENT_MODEL = "openai/gpt-5.4-mini";
 
 export const ORCHESTRATOR_MODEL = "anthropic/claude-sonnet-4.6";

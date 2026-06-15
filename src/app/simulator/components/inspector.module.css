@@ -1,0 +1,311 @@
+/* Shared styling for the read-only inspector tabs (Context + Trace). */
+
+.empty {
+  padding: 24px 16px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.body {
+  padding: 12px 14px 32px;
+  font-size: 0.8125rem;
+  color: var(--text-normal);
+}
+
+/* ----------------------------------------------------------- key/value grid */
+.kvGrid {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  margin: 0 0 12px;
+}
+
+.k {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.v {
+  margin: 0;
+  color: var(--text-bright);
+  word-break: break-word;
+}
+
+.h3 {
+  margin: 16px 0 6px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-faint);
+}
+
+/* ---------------------------------------------------------- context budget */
+.bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.barRow {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.barHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.barNum {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.barTrack {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-rail);
+  overflow: hidden;
+}
+
+.barFill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--brand);
+}
+
+.subItems {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0 0 0 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.subItems li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+/* -------------------------------------------------------------- collapsibles */
+.details {
+  margin-top: 12px;
+  border: 1px solid var(--surface-rail);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.summary {
+  padding: 8px 10px;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text-bright);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+}
+
+.summary:hover {
+  background: var(--surface-hover);
+}
+
+.count {
+  color: var(--text-muted);
+  font-weight: 400;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+
+.pre {
+  margin: 0;
+  padding: 10px;
+  max-height: 360px;
+  overflow: auto;
+  border-top: 1px solid var(--surface-rail);
+  background: var(--surface-code);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* -------------------------------------------------------------------- tools */
+.toolList {
+  list-style: none;
+  margin: 0;
+  padding: 6px 10px;
+  border-top: 1px solid var(--surface-rail);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.toolItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.toolName {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--accent-green);
+}
+
+.toolDesc {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+/* ------------------------------------------------------------- conversation */
+.msgList {
+  list-style: none;
+  margin: 0;
+  padding: 8px 10px;
+  border-top: 1px solid var(--surface-rail);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.msgRow {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.roleTag {
+  align-self: flex-start;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.roleUser {
+  background: rgba(88, 101, 242, 0.18);
+  color: #c4caff;
+}
+
+.roleAssistant {
+  background: rgba(52, 211, 153, 0.16);
+  color: #8ee9c4;
+}
+
+.msgContent {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-normal);
+}
+
+/* --------------------------------------------------------------- trace timeline */
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 12px 14px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tlRow {
+  display: grid;
+  grid-template-columns: 12px 44px 1fr;
+  gap: 8px;
+  align-items: start;
+  padding: 4px 0;
+}
+
+.tlDot {
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+
+.tl_turn {
+  background: var(--brand);
+}
+
+.tl_tool {
+  background: var(--accent-amber, #ffaa00);
+}
+
+.tl_tool_done {
+  background: var(--accent-green);
+}
+
+.tl_tool_error,
+.tl_error {
+  background: #ef4444;
+}
+
+.tl_approval {
+  background: #ffaa00;
+}
+
+.tl_decision {
+  background: #9ca3af;
+}
+
+.tl_finish {
+  background: var(--accent-green);
+}
+
+.tlTime {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-faint);
+  text-align: right;
+}
+
+.tlBody {
+  min-width: 0;
+}
+
+.tlLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8125rem;
+  color: var(--text-bright);
+  word-break: break-word;
+}
+
+.tlDur {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  background: var(--surface-rail);
+  border-radius: 3px;
+  padding: 0 5px;
+}
+
+.tlDetail {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+  word-break: break-word;
+}

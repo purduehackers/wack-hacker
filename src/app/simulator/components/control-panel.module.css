@@ -1,0 +1,89 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  padding: 16px;
+  background: var(--surface-sidebar);
+}
+
+.statusRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.statusDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.status_idle {
+  background: var(--text-muted);
+}
+
+.status_streaming {
+  background: var(--accent-amber);
+}
+
+.status_done {
+  background: var(--accent-green);
+}
+
+.status_error {
+  background: var(--accent-red);
+}
+
+.statusLabel {
+  font-size: 0.8125rem;
+  text-transform: capitalize;
+  color: var(--text-normal);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.select,
+.input {
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--surface-rail);
+  border: 1px solid #1e1f22;
+  border-radius: 4px;
+  color: var(--text-normal);
+  font-size: 0.875rem;
+}
+
+.select:focus,
+.input:focus {
+  outline: none;
+  border-color: #5865f2;
+}
+
+.checkboxRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+  color: var(--text-normal);
+}
+
+.hint {
+  margin: 4px 0 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+}

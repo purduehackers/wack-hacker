@@ -1,0 +1,121 @@
+.markdown {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+}
+
+.paragraph {
+  margin: 0;
+}
+
+.paragraph + .paragraph {
+  margin-top: 0.25rem;
+}
+
+.subtext {
+  font-size: 0.8125rem;
+  line-height: 1.3;
+  color: var(--text-muted);
+}
+
+.h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.375;
+  margin: 0.5rem 0 0;
+  color: var(--text-bright);
+}
+
+.h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.375;
+  margin: 0.5rem 0 0;
+  color: var(--text-bright);
+}
+
+.h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.375;
+  margin: 0.5rem 0 0;
+  color: var(--text-bright);
+}
+
+.blockquote {
+  margin: 0.125rem 0;
+  padding: 0 0.75rem;
+  border-left: 4px solid #4e5058;
+  color: var(--text-normal);
+}
+
+.inlineCode {
+  background: var(--surface-rail);
+  border-radius: 4px;
+  padding: 0.1em 0.3em;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  white-space: pre-wrap;
+}
+
+.list {
+  margin: 0.125rem 0;
+  padding-left: 1.5rem;
+}
+
+.list li {
+  margin: 0.0625rem 0;
+}
+
+.underline {
+  text-decoration: underline;
+}
+
+.mention {
+  background: var(--mention-bg);
+  color: var(--mention-text);
+  border-radius: 4px;
+  padding: 0 2px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.mention:hover {
+  background: var(--mention-hover-bg);
+  color: var(--text-on-accent);
+}
+
+.roleMention {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  border-radius: 4px;
+  padding: 0 2px;
+  font-weight: 500;
+}
+
+.timestamp {
+  background: var(--mention-bg);
+  border-radius: 4px;
+  padding: 0 2px;
+}
+
+.emoji {
+  width: 1.375em;
+  height: 1.375em;
+  vertical-align: bottom;
+  object-fit: contain;
+}
+
+.spoiler {
+  background: var(--spoiler-bg);
+  border-radius: 4px;
+  padding: 0 2px;
+  cursor: pointer;
+  color: transparent;
+  transition: color 0.1s ease;
+}
+
+.spoiler:hover,
+.spoiler:focus,
+.spoiler[data-revealed="true"] {
+  color: var(--text-normal);
+}

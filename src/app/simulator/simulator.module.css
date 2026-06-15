@@ -1,0 +1,124 @@
+/* Two-pane simulator shell: a high-fidelity Discord chat column on the left,
+   a tabbed dev inspector (controls / context / trace) on the right. The full
+   Discord client chrome (server rail, channel sidebar, member list) is gone on
+   purpose — this is a message-UX + context playground, not a Discord clone. */
+
+.app {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--inspector-w, 420px);
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background: var(--surface-channel);
+}
+
+/* ----------------------------------------------------------------- chat pane */
+.chat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  background: var(--surface-channel);
+}
+
+/* breadcrumb header: `# parent › ⟂ thread`, with a clickable parent crumb */
+.crumbBar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 48px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--surface-rail);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-bright);
+}
+
+.crumbGlyph {
+  color: var(--text-faint);
+  display: flex;
+  align-items: center;
+}
+
+.crumbLink {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--text-muted);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.crumbLink:hover {
+  color: var(--text-bright);
+  text-decoration: underline;
+}
+
+.crumbSep {
+  color: var(--text-faint);
+  font-weight: 400;
+}
+
+/* ------------------------------------------------------------ inspector pane */
+.inspector {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--surface-sidebar);
+  border-left: 1px solid var(--surface-rail);
+}
+
+.tabBar {
+  display: flex;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--surface-rail);
+}
+
+.tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 8px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.tab:hover {
+  color: var(--text-normal);
+  background: var(--surface-hover);
+}
+
+.tabActive {
+  color: var(--text-bright);
+  border-bottom-color: var(--brand);
+}
+
+.tabCount {
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--surface-rail);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+}
+
+.tabBody {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}

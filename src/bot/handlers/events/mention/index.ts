@@ -6,6 +6,7 @@ import type { HandlerContext } from "@/bot/types";
 import type { RecentMessage } from "@/lib/ai/types";
 import type { MessageCreatePacketType } from "@/lib/protocol/types";
 import type { ChatHookEvent } from "@/workflows/chat";
+import type { ChatPayload } from "@/workflows/chat";
 
 import { stripBotMention } from "@/bot/mention";
 import { fetchRecentMessages, fetchReferencedMessageContext } from "@/bot/recent-messages";
@@ -17,6 +18,16 @@ import { chatWorkflow } from "@/workflows/chat";
 
 type MessageData = MessageCreatePacketType["data"];
 type WideLogger = ReturnType<typeof createWideLogger>;
+
+const EMPTY_MENTION_REPLY = "Hey! What can I help you with?";
+
+/**
+ * Reply to a bare @mention that carried no content. Extracted so the chat
+ * simulator answers empty mentions through the exact same bot code path.
+ */
+export async function replyEmptyMention(discord: API, channelId: string): Promise<void> {
+  await discord.channels.createMessage(channelId, { content: EMPTY_MENTION_REPLY });
+}
 
 async function fetchLeadInMessages(
   discord: API,
@@ -161,9 +172,7 @@ export async function handleMention(
 
       if (!content) {
         countMetric("chat.mention.empty");
-        await ctx.discord.channels.createMessage(sourceChannelId, {
-          content: "Hey! What can I help you with?",
-        });
+        await replyEmptyMention(ctx.discord, sourceChannelId);
         logger.emit({ outcome: "empty", duration_ms: Date.now() - startTime });
         return;
       }
@@ -192,19 +201,20 @@ export async function handleMention(
 }
 
 /**
- * Start a fresh chat workflow for a mention that didn't have a live resume
- * target. Creates a thread (best-effort), fetches lead-in context, kicks off
- * `chatWorkflow`, and emits the final wide event.
+ * Run the Discord-side prep for a fresh mention turn: create the thread
+ * (best-effort), fetch lead-in context, pre-create the "> Thinking..."
+ * placeholder, and build the serialized `AgentContext`. Returns the payload
+ * the chat workflow runs on. Exported so the chat simulator drives the exact
+ * same plumbing instead of reimplementing thread/placeholder/lead-in logic.
  */
-async function startFreshWorkflow(args: {
+export async function prepareFreshTurn(args: {
   packet: MessageCreatePacketType;
   ctx: HandlerContext;
   content: string;
   routing: MentionRouting;
   logger: WideLogger;
-  startTime: number;
-}): Promise<void> {
-  const { packet, ctx, content, routing, logger, startTime } = args;
+}): Promise<ChatPayload> {
+  const { packet, ctx, content, routing, logger } = args;
   const { data } = packet;
   // Thread creation and lead-in fetch are independent — they only converge
   // when we build turnContext below. Parallelizing saves one Discord RTT on
@@ -228,22 +238,39 @@ async function startFreshWorkflow(args: {
       return undefined;
     });
 
-  const turnContext = AgentContext.fromPacket(packet, {
+  const context = AgentContext.fromPacket(packet, {
     threadOverride: createdThread,
     recentMessages,
     referencedContext,
   }).toJSON();
 
-  const run = await start(chatWorkflow, [
-    {
-      channelId: conversationChannelId,
-      threadId: conversationThreadId,
-      content,
-      context: turnContext,
-      traceparent: captureTraceparent(),
-      placeholderMessageId: placeholder?.id,
-    },
-  ]);
+  return {
+    channelId: conversationChannelId,
+    threadId: conversationThreadId,
+    content,
+    context,
+    traceparent: captureTraceparent(),
+    placeholderMessageId: placeholder?.id,
+  };
+}
+
+/**
+ * Start a fresh chat workflow for a mention that didn't have a live resume
+ * target. Runs the Discord-side prep, kicks off `chatWorkflow`, and emits the
+ * final wide event.
+ */
+async function startFreshWorkflow(args: {
+  packet: MessageCreatePacketType;
+  ctx: HandlerContext;
+  content: string;
+  routing: MentionRouting;
+  logger: WideLogger;
+  startTime: number;
+}): Promise<void> {
+  const { ctx, routing, logger, startTime } = args;
+  const payload = await prepareFreshTurn(args);
+
+  const run = await start(chatWorkflow, [payload]);
 
   setActiveSpanAttributes({ "chat.id": run.runId });
   countMetric("chat.workflow.started");
@@ -251,7 +278,7 @@ async function startFreshWorkflow(args: {
   await ctx.store.set({
     workflowRunId: run.runId,
     channelId: routing.sourceChannelId,
-    threadId: conversationThreadId,
+    threadId: payload.threadId,
     startedAt: new Date().toISOString(),
   });
 
@@ -260,8 +287,8 @@ async function startFreshWorkflow(args: {
     duration_ms: Date.now() - startTime,
     chat: {
       id: run.runId,
-      lead_in_count: recentMessages?.length ?? 0,
-      referenced_count: referencedContext?.length ?? 0,
+      lead_in_count: payload.context.recentMessages?.length ?? 0,
+      referenced_count: payload.context.referencedContext?.length ?? 0,
     },
   });
 }

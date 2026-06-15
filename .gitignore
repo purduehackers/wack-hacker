@@ -186,3 +186,7 @@ src/lib/ai/skills/generated/
 
 # workflow devkit generated routes
 src/app/.well-known/
+
+# Local simulator SQLite DB (dev-only)
+.sim/
+.env*

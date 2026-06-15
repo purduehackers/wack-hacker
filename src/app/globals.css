@@ -1,0 +1,119 @@
+/* Discord dark-theme tokens + a light reset. Surface/text/accent values mirror
+   the real client so the simulator reads as a faithful channel. */
+
+:root {
+  /* Surfaces — modern (2025) high-contrast dark theme: darker, with the
+     rail/titlebar near-black and chat a touch lighter than the sidebar. */
+  --surface-titlebar: #161719;
+  --surface-rail: #161719;
+  --surface-sidebar: #1e1f22;
+  --surface-channel: #27292d;
+  --surface-input: #313338;
+  --surface-hover: #2c2e33;
+  --surface-active: #3b3e45;
+  --surface-userpanel: #121315;
+  --surface-message-hover: #2a2c31;
+  --surface-code: #1c1d20;
+  --surface-embed: #1c1d20;
+  --border-subtle: #2c2e33;
+
+  /* Brand + status */
+  --brand: #5865f2;
+  --status-online: #23a55a;
+
+  /* Channel-list text tiers */
+  --text-channel: #949ba4;
+  --text-faint: #80848e;
+
+  /* Text */
+  --text-normal: #dbdee1;
+  --text-muted: #949ba4;
+  --text-link: #00a8fc;
+  --text-bright: #f2f3f5;
+  --text-on-accent: #ffffff;
+
+  /* Mentions */
+  --mention-bg: #3c4270;
+  --mention-text: #c9cdfb;
+  --mention-hover-bg: #5865f2;
+
+  /* Buttons */
+  --btn-green: #248046;
+  --btn-green-hover: #1a6334;
+  --btn-red: #da373c;
+  --btn-red-hover: #a12828;
+  --btn-grey: #4e5058;
+  --btn-grey-hover: #6d6f78;
+
+  /* Embed accents */
+  --accent-amber: #ffaa00;
+  --accent-green: #34d399;
+  --accent-red: #ef4444;
+  --accent-grey: #9ca3af;
+
+  /* Misc */
+  --spoiler-bg: #1e1f22;
+  --app-badge-bg: #5865f2;
+
+  --font-gg: "gg sans", "Noto Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono:
+    "gg mono", Consolas, "Andale Mono WT", "Andale Mono", "Lucida Console",
+    "Lucida Sans Typewriter", monospace;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--surface-channel);
+  color: var(--text-normal);
+  font-family: var(--font-gg);
+  font-size: 16px;
+  line-height: 1.375;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+input,
+textarea {
+  font-family: inherit;
+}
+
+a {
+  color: var(--text-link);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+::-webkit-scrollbar {
+  width: 16px;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--surface-rail);
+  border: 4px solid transparent;
+  background-clip: padding-box;
+  border-radius: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background-color: transparent;
+}

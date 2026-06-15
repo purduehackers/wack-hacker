@@ -1,5 +1,4 @@
 import * as Sentry from "@sentry/nextjs";
-import { generateText } from "ai";
 import { createHook, FatalError, getWorkflowMetadata, sleep } from "workflow";
 
 import type {
@@ -11,6 +10,13 @@ import type {
 
 import { ContextSnapshotStore } from "@/bot/context-snapshot";
 import { ConversationStore } from "@/bot/store";
+import { LEADIN_TURN_LIMIT } from "@/lib/ai/constants";
+import {
+  capHistory,
+  stampCurrentTime,
+  summarizeDroppedHistory,
+  truncateForHistory,
+} from "@/lib/ai/conversation-turn";
 import { streamTurn } from "@/lib/ai/streaming";
 import { addTurnUsage, emptyTurnUsage } from "@/lib/ai/turn-usage";
 import { createDiscordAPI } from "@/lib/discord/client";
@@ -23,18 +29,6 @@ import { releaseSession } from "@/lib/sandbox/session";
 import type { ChatHookEvent, ChatPayload } from "./types";
 
 export type { ChatHookEvent, ChatPayload } from "./types";
-
-/** Cap on accumulated user+assistant turns — 25 exchanges. */
-const MAX_HISTORY_MESSAGES = 50;
-
-/**
- * Stored assistant turns are clipped to this many chars. The full text was
- * already delivered to Discord; history only needs enough for continuity.
- */
-const MAX_STORED_ASSISTANT_CHARS = 4000;
-
-/** Cheap model that compacts dropped history into one summary message. */
-const HISTORY_SUMMARY_MODEL = "openai/gpt-5.4-mini";
 
 /**
  * How long the hook loop waits for a follow-up before ending the
@@ -58,52 +52,17 @@ const IDLE = "idle-timeout";
  */
 const DRAIN_GRACE = "10s";
 
-function truncateForHistory(text: string): string {
-  if (text.length <= MAX_STORED_ASSISTANT_CHARS) return text;
-  return `${text.slice(0, MAX_STORED_ASSISTANT_CHARS)}\n[truncated]`;
-}
-
+/**
+ * Durable wrapper around {@link summarizeDroppedHistory}: the `"use step"`
+ * directive makes the summary a retryable workflow step so a cap that lands
+ * mid-conversation isn't re-billed on replay. Passed into `capHistory` so the
+ * shared capping logic stays byte-identical to the simulator's.
+ */
 async function summarizeHistory(dropped: ChatMessage[]): Promise<string> {
   "use step";
-  const transcript = dropped.map((m) => `${m.role}: ${m.content}`).join("\n\n");
-  const { text } = await generateText({
-    model: HISTORY_SUMMARY_MODEL,
-    prompt:
-      "Summarize this conversation excerpt in under 200 words. Preserve concrete facts, decisions, names, links, and any commitments the assistant made. Write it as context the assistant will rely on to continue the conversation.\n\n" +
-      transcript,
-  });
-  return text;
+  return summarizeDroppedHistory(dropped);
 }
 summarizeHistory.maxRetries = 1;
-
-/**
- * Keep history under the cap by replacing the dropped prefix with one
- * cheap-model summary message. Falls back to plain dropping when the summary
- * step fails — losing old context beats failing the conversation.
- */
-async function capHistory(messages: ChatMessage[]): Promise<void> {
-  if (messages.length <= MAX_HISTORY_MESSAGES) return;
-  // +1 reserves room for the summary message itself; then advance to the next
-  // user message so the retained history starts with a user turn. (The
-  // summary is also user-role, so the model may see two consecutive user
-  // messages — the AI SDK provider conversion merges those into one.) Never
-  // drop the latest exchange, even on a degenerate non-alternating tail —
-  // otherwise a failed summary could wipe the entire history.
-  const maxDrop = messages.length - 2;
-  let dropCount = Math.min(messages.length - MAX_HISTORY_MESSAGES + 1, maxDrop);
-  while (dropCount < maxDrop && messages[dropCount].role !== "user") dropCount += 1;
-  const dropped = messages.slice(0, dropCount);
-  try {
-    const summary = await summarizeHistory(dropped);
-    messages.splice(0, dropCount, {
-      role: "user",
-      content: `[Summary of ${dropped.length} earlier messages, compacted to save space]\n${summary}`,
-    });
-  } catch {
-    countMetric("workflow.chat.history_summary_failed");
-    messages.splice(0, dropCount);
-  }
-}
 
 interface RunTurnArgs {
   channelId: string;
@@ -402,25 +361,6 @@ interface StableScope {
 }
 
 /**
- * Followup turns past this count drop the scraped lead-in blocks from the
- * system prompt — by then the model has real conversation history and the
- * lead-in is just pinned token weight. Dropping it changes the prompt once
- * (one cache miss at the boundary turn), after which it is stable again.
- */
-const LEADIN_TURN_LIMIT = 3;
-
-/**
- * Append the turn's wall-clock time to a followup user message. The system
- * prompt's `{{NOW_ISO}}`/`{{DATE}}` are pinned to the first turn so the
- * prompt stays byte-stable across turns; this stamp is how later turns learn
- * the real current time. It is persisted into conversation history so the
- * replayed prefix stays byte-stable too.
- */
-function stampCurrentTime(content: string, nowISO: string | undefined): string {
-  return nowISO ? `${content}\n\n[current time: ${nowISO}]` : content;
-}
-
-/**
  * Run one conversation turn: push the user message, execute the turn step,
  * and fold the assistant reply into history. On failure (sentinel or a step
  * error after retries) the pushed user message is popped so the failed turn
@@ -462,7 +402,7 @@ async function runConversationTurn(args: {
     return;
   }
   state.messages.push({ role: "assistant", content: truncateForHistory(turn.text) });
-  await capHistory(state.messages);
+  await capHistory(state.messages, summarizeHistory);
   state.turnCount += 1;
   state.totalUsage = addTurnUsage(state.totalUsage, turn.usage);
 }

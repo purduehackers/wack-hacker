@@ -1,0 +1,67 @@
+.list {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding-bottom: 24px;
+}
+
+.empty {
+  padding: 16px 16px 24px;
+  margin-top: auto;
+}
+
+.emptyIcon {
+  width: 80px;
+  height: 80px;
+  border-radius: 28px;
+  background: var(--surface-active);
+  color: var(--text-bright);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.75rem;
+  font-weight: 400;
+  margin-bottom: 8px;
+}
+
+.emptyTitle {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--text-bright);
+  line-height: 1.25;
+}
+
+.emptyBody {
+  margin-top: 4px;
+  font-size: 1rem;
+  color: var(--text-muted);
+  max-width: 440px;
+}
+
+.emptyEdit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 0.95rem;
+  color: var(--text-link);
+}
+
+.dateDivider {
+  display: flex;
+  align-items: center;
+  margin: 24px 16px 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.dateDividerLabel {
+  margin: 0 auto;
+  transform: translateY(-50%);
+  padding: 0 8px;
+  background: var(--surface-channel);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}

@@ -1,0 +1,30 @@
+.block {
+  margin: 0.25rem 0;
+  background: var(--surface-code);
+  border: 1px solid var(--surface-rail);
+  border-radius: 4px;
+  overflow: hidden;
+  max-width: 100%;
+}
+
+.header {
+  padding: 2px 10px;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  background: rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid var(--surface-rail);
+}
+
+.pre {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+
+.pre code {
+  font-family: inherit;
+}

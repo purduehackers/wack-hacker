@@ -1,0 +1,154 @@
+.composer {
+  position: relative;
+  padding: 0 16px 24px;
+  flex-shrink: 0;
+}
+
+.inputWrap {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  background: var(--surface-input);
+  border-radius: 8px;
+  padding: 0 16px;
+}
+
+.plus {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 24px;
+  height: 24px;
+  margin-right: 4px;
+  border: none;
+  border-radius: 50%;
+  background: var(--text-muted);
+  color: var(--surface-input);
+  font-size: 1.25rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.plus:hover {
+  background: var(--text-normal);
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  resize: none;
+  padding: 11px 8px;
+  max-height: 200px;
+  font-size: 1rem;
+  line-height: 1.375;
+  color: var(--text-normal);
+}
+
+.input::placeholder {
+  color: var(--text-faint);
+}
+
+.input:disabled {
+  cursor: not-allowed;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  height: 44px;
+}
+
+.actionBtn {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  font-weight: 700;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+}
+
+.actionBtn:hover {
+  color: var(--text-normal);
+}
+
+/* ----------------------------------------------------------- autocomplete */
+.autocomplete {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: calc(100% - 16px);
+  background: var(--surface-rail);
+  border-radius: 8px;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.24);
+  overflow: hidden;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.autocompleteHeader {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 8px 12px 4px;
+}
+
+.suggestion {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 12px;
+  border: none;
+  background: none;
+  text-align: left;
+  color: var(--text-channel);
+}
+
+.suggestionActive {
+  background: var(--brand);
+  color: var(--text-bright);
+}
+
+.suggestionGlyph {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-bright);
+  background: var(--surface-hover);
+}
+
+.suggestionImg {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.suggestionLabel {
+  font-weight: 500;
+}
+
+.suggestionDetail {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.suggestionActive .suggestionDetail {
+  color: var(--mention-text);
+}
