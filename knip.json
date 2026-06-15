@@ -3,12 +3,14 @@
   "tags": ["-lintignore"],
   "entry": [
     "src/app/**/route.ts",
+    "src/app/**/page.tsx",
+    "src/app/**/layout.tsx",
     "src/server/**/*.ts",
     "src/bot/handlers/**/*.ts",
     "scripts/*.ts",
     "vercel.ts"
   ],
-  "project": ["src/**/*.ts", "scripts/**/*.ts"],
+  "project": ["src/**/*.{ts,tsx}", "scripts/**/*.ts"],
   "ignoreExportsUsedInFile": true,
   "ignore": ["src/lib/ai/tools/**"],
   "drizzle": false

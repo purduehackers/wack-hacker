@@ -10,8 +10,5 @@ export const SIM_USER_ID = "920000000000000010";
 /** Default second-party reviewer used when the UI doesn't specify a clicker. */
 export const SIM_REVIEWER_ID = "920000000000000011";
 
-/** Mirrors the workflow default (`AgentContext`); pinned for prompt stability. */
-export const SIM_DEFAULT_TIMEZONE = "America/New_York";
-
 /** Default channel a fresh simulator session opens in. */
 export const SIM_DEFAULT_CHANNEL = "general";
