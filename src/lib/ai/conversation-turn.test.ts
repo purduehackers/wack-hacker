@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ChatMessage } from "./types.ts";
 
@@ -13,6 +13,8 @@ const generateText = vi.hoisted(() =>
   vi.fn(async (_opts: { model: string; prompt: string }) => ({ text: "MODEL SUMMARY" })),
 );
 vi.mock("ai", () => ({ generateText }));
+
+beforeEach(() => generateText.mockClear());
 
 /** Alternating user/assistant turns (even index = user). */
 function makeHistory(n: number): ChatMessage[] {
@@ -71,6 +73,13 @@ describe("capHistory", () => {
     expect(msgs.length).toBeLessThan(60);
     expect(msgs.some((m) => m.content.startsWith("[Summary"))).toBe(false);
     expect(msgs.at(-1)?.content).toBe("m59");
+  });
+
+  it("defaults to summarizeDroppedHistory when no summarizer is injected", async () => {
+    const msgs = makeHistory(60);
+    await capHistory(msgs); // exercises the default-parameter path
+    expect(msgs[0].content).toContain("MODEL SUMMARY");
+    expect(generateText).toHaveBeenCalled();
   });
 
   it("advances past a non-user tail to the cap, never dropping the latest exchange", async () => {
