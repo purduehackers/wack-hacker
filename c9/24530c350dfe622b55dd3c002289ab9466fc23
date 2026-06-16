@@ -1,0 +1,22 @@
+src/lib/ai/conversation-turn.test.ts
+  s_4ec793375afff4::t_7fd412bf840b69 12-14
+  s_4ec793375afff4::t_c9b69579fc6b93 97
+  s_4ec793375afff4::t_7508466e990702 75-96,98-100
+  s_4ec793375afff4::t_feed000343c12a 1,5-11,15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.7",
+  "base_commit_sha": "c924530c350dfe622b55dd3c002289ab9466fc23",
+  "prompts": {},
+  "sessions": {
+    "s_4ec793375afff4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "24f30b26-20b9-4767-88e5-36b867a893a8",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
