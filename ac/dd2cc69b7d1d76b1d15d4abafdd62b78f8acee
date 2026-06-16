@@ -1,0 +1,19 @@
+src/app/simulator/layout.tsx
+  s_4ec793375afff4::t_aca9ff94148615 1-17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.7",
+  "base_commit_sha": "acdd2cc69b7d1d76b1d15d4abafdd62b78f8acee",
+  "prompts": {},
+  "sessions": {
+    "s_4ec793375afff4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "24f30b26-20b9-4767-88e5-36b867a893a8",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
