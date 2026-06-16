@@ -42,6 +42,10 @@ export default defineConfig({
         "src/lib/ai/tools/**",
         "src/lib/evlog.ts",
         "src/lib/db/**",
+        // Dev-only, gated chat simulator (never runs in production). Its load-
+        // bearing pure logic keeps its own unit tests; the orchestration glue
+        // is exercised in-browser, so unit coverage here isn't meaningful.
+        "src/lib/simulator/**",
         // Thin wrappers around @vercel/sandbox / factory wiring. Covered by
         // hooks.ts + integration tests — unit coverage here would be 90%
         // SDK-glue assertions against mocks.
