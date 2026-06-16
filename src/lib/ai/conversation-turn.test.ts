@@ -1,8 +1,18 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { ChatMessage } from "./types.ts";
 
-import { capHistory, stampCurrentTime, truncateForHistory } from "./conversation-turn.ts";
+import {
+  capHistory,
+  stampCurrentTime,
+  summarizeDroppedHistory,
+  truncateForHistory,
+} from "./conversation-turn.ts";
+
+const generateText = vi.hoisted(() =>
+  vi.fn(async (_opts: { model: string; prompt: string }) => ({ text: "MODEL SUMMARY" })),
+);
+vi.mock("ai", () => ({ generateText }));
 
 /** Alternating user/assistant turns (even index = user). */
 function makeHistory(n: number): ChatMessage[] {
@@ -61,5 +71,31 @@ describe("capHistory", () => {
     expect(msgs.length).toBeLessThan(60);
     expect(msgs.some((m) => m.content.startsWith("[Summary"))).toBe(false);
     expect(msgs.at(-1)?.content).toBe("m59");
+  });
+
+  it("advances past a non-user tail to the cap, never dropping the latest exchange", async () => {
+    // All-assistant turns: the user-boundary scan walks all the way to the cap
+    // (the degenerate-tail guard) instead of finding a user message to stop at.
+    const msgs: ChatMessage[] = Array.from({ length: 60 }, (_, i) => ({
+      role: "assistant",
+      content: `a${i}`,
+    }));
+    await capHistory(msgs, async () => "SUMMARY");
+    expect(msgs.at(-1)?.content).toBe("a59");
+    expect(msgs.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("summarizeDroppedHistory", () => {
+  it("sends the transcript to the summary model and returns its text", async () => {
+    const out = await summarizeDroppedHistory([
+      { role: "user", content: "ship it?" },
+      { role: "assistant", content: "shipped" },
+    ]);
+    expect(out).toBe("MODEL SUMMARY");
+    expect(generateText).toHaveBeenCalledTimes(1);
+    const { prompt } = generateText.mock.calls[0][0];
+    expect(prompt).toContain("user: ship it?");
+    expect(prompt).toContain("assistant: shipped");
   });
 });
