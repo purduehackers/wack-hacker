@@ -1,0 +1,20 @@
+src/lib/redis/client.test.ts
+  s_4ec793375afff4::t_952424836ec826 3,5,28-47
+  s_4ec793375afff4::t_44e7f09e0c10b5 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.7",
+  "base_commit_sha": "0dfd0b670909954398cf117bf40d45549a6a3cfe",
+  "prompts": {},
+  "sessions": {
+    "s_4ec793375afff4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "24f30b26-20b9-4767-88e5-36b867a893a8",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
