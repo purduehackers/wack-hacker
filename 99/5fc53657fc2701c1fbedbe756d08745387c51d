@@ -1,0 +1,21 @@
+src/lib/ai/conversation-turn.test.ts
+  s_4ec793375afff4::t_e91073b31216f0 1
+  s_4ec793375afff4::t_04d9dc08653b7d 17-18
+  s_4ec793375afff4::t_66c4e84af72fba 78-84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.7",
+  "base_commit_sha": "995fc53657fc2701c1fbedbe756d08745387c51d",
+  "prompts": {},
+  "sessions": {
+    "s_4ec793375afff4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "24f30b26-20b9-4767-88e5-36b867a893a8",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rayhan Noufal Arayilakath <me@rayhanadev.com>"
+    }
+  }
+}
