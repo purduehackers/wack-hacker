@@ -69,24 +69,45 @@ export function lightningNow(at: Date): string {
  * No role ping on purpose: the Friday announcement already pings
  * `HACK_NIGHT_PING`, and twice in one evening is how a role gets muted.
  */
-export function upcomingMessage(at: Date): string {
-  return [
-    "**countdown** in two minutes!! ⚡",
-    "",
-    `it's \`${lightningNow(at)}\` — once we hit \`${FINAL_SPARK}\` the charges tick`,
-    "`0` → `f` and then it's a whole new day :D",
-  ].join("\n");
+export const UPCOMING_MESSAGE = "countdown is in two minutes!! ⚡⚡";
+
+/**
+ * The live message during the countdown.
+ *
+ * The second line is the clock as it actually reads, not a fixed label: it
+ * starts at `f~f~f|0`, ticks up through `f~f~f|f`, and lands on `0~0~0|0`. That
+ * ticking *is* the countdown, which is why this message is re-edited on every
+ * charge rather than written once.
+ */
+export function happeningMessage(at: Date): string {
+  return `**countdown is happening!!** ⚡⚡\n\`${lightningNow(at)}\``;
 }
 
-/** The edit, once the final spark has actually started. */
-export function happeningMessage(): string {
-  return [
-    "**countdown is happening!!** ⚡⚡",
-    "",
-    `\`${FINAL_SPARK}\` → \`0~0~0|0\``,
-    "",
-    "count 'em down!! :D",
-  ].join("\n");
+/** A charge is a sixteenth of a spark: 1318.359375 ms. */
+const CHARGE_MS = SPARK_MS / 16;
+
+/** 16 charges tick during the final spark, then the day rolls over. */
+const CHARGES_PER_SPARK = 16;
+
+/**
+ * Every instant the message should be re-rendered: each of the 16 charge
+ * boundaries in the final spark, then midnight itself.
+ *
+ * Absolute instants rather than repeated fixed sleeps, so a slow edit cannot
+ * make the clock drift behind the real time it is displaying.
+ */
+export function countdownTicks(at: Date): readonly Date[] {
+  const midnight = new Date(at);
+  midnight.setHours(24, 0, 0, 0);
+  const sparkStart = midnight.getTime() - SPARK_MS;
+
+  const ticks: Date[] = [];
+  for (let charge = 0; charge < CHARGES_PER_SPARK; charge += 1) {
+    ticks.push(new Date(Math.ceil(sparkStart + charge * CHARGE_MS)));
+  }
+  // The payoff: 0~0~0|0.
+  ticks.push(midnight);
+  return ticks;
 }
 
 export interface CountdownDeps {
@@ -112,17 +133,24 @@ export function hackNightCountdown(deps: CountdownDeps = {}) {
             throw new Error("hack night channel is not a guild text channel");
           }
 
-          const posted = await channel.send(upcomingMessage(now()));
+          const posted = await channel.send(UPCOMING_MESSAGE);
 
-          // Wait for the final spark rather than assuming two minutes exactly:
-          // the cron fires on the minute, the spark starts at 23:59:38.9.
-          const waitMs = finalSparkAt(now()).getTime() - now().getTime();
-          if (waitMs > 0) await sleep(waitMs);
+          // Absolute instants, so a slow edit shortens the next wait instead of
+          // pushing the whole countdown late. The cron fires on the minute; the
+          // first tick is at 23:59:38.907.
+          for (const tick of countdownTicks(now())) {
+            const waitMs = tick.getTime() - now().getTime();
+            if (waitMs > 0) await sleep(waitMs);
 
-          // If the process restarts during the wait the edit is simply lost,
-          // leaving the heads-up in place. That is the right failure for a
-          // cosmetic message — better a stale "in two minutes" than a duplicate.
-          await posted.edit(happeningMessage());
+            try {
+              await posted.edit(happeningMessage(tick));
+            } catch (cause) {
+              // A dropped or rate-limited edit loses one frame. Abandoning the
+              // countdown over it would leave the message frozen mid-tick, so
+              // keep going and let the next charge catch up.
+              console.warn("countdown edit failed", cause);
+            }
+          }
           return undefined;
         },
         catch: (cause) =>
