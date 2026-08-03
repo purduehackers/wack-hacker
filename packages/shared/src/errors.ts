@@ -180,6 +180,28 @@ export function tagOf(value: unknown): string {
   return "Defect";
 }
 
+/**
+ * Reads an HTTP status off an unknown thrown value.
+ *
+ * SDKs disagree on where they put it — discord.js and Octokit use `status`,
+ * others use `statusCode` — and none of them narrow to a useful type. This is
+ * the one place that guesswork lives, so mapping an upstream throw onto
+ * `UpstreamError` or `RateLimited` does not re-derive it at every call site.
+ */
+export function httpStatusOf(value: unknown): number | undefined {
+  if (typeof value !== "object" || value === undefined) return undefined;
+  // oxlint-disable-next-line unicorn/no-null -- narrowing an unknown thrown value, which may be null
+  if (value === null) return undefined;
+
+  for (const key of ["status", "statusCode"] as const) {
+    if (key in value) {
+      const candidate = Number(Reflect.get(value, key));
+      if (Number.isInteger(candidate) && candidate >= 100 && candidate <= 599) return candidate;
+    }
+  }
+  return undefined;
+}
+
 /** Wire-safe projection of an error. Flat, JSON-safe, and free of stack traces. */
 export interface SerializedError {
   readonly tag: string;

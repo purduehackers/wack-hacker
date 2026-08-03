@@ -7,11 +7,13 @@
     "start": "bun run src/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "register-commands": "bun run src/commands/register.ts"
   },
   "dependencies": {
     "@repo/shared": "workspace:*",
     "@t3-oss/env-core": "^0.13.11",
+    "discord.js": "^14.27.0",
     "zod": "4.4.3"
   },
   "devDependencies": {
