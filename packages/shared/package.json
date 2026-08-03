@@ -10,7 +10,8 @@
     "./result/retry": "./src/result/retry.ts",
     "./discord": "./src/discord/index.ts",
     "./db": "./src/db/index.ts",
-    "./redis": "./src/redis/client.ts"
+    "./redis": "./src/redis/client.ts",
+    "./wire": "./src/wire.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -24,7 +25,8 @@
     "@libsql/client": "^0.17.4",
     "@upstash/redis": "^1.38.1",
     "better-result": "^1.0.0",
-    "drizzle-orm": "^0.45.2"
+    "drizzle-orm": "^0.45.2",
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@types/bun": "latest",
