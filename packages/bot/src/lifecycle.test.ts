@@ -1,4 +1,4 @@
-import { beforeEach, expect, test } from "bun:test";
+import { beforeEach, expect, test } from "vitest";
 
 import { onShutdown, resetLifecycleForTest, shutdown } from "./lifecycle.ts";
 
@@ -34,7 +34,7 @@ test("a failing handler does not strand the handlers behind it", async () => {
 test("awaits async handlers before moving on", async () => {
   const ran: string[] = [];
   onShutdown("slow", async () => {
-    await Bun.sleep(5);
+    await new Promise((resolve) => setTimeout(resolve, 5));
     ran.push("slow");
   });
   onShutdown("fast", () => void ran.push("fast"));
