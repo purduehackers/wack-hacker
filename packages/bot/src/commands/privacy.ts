@@ -17,6 +17,7 @@ import { Result } from "@repo/shared/result";
 import { MessageFlags, SlashCommandBuilder } from "discord.js";
 import type { ChatInputCommandInteraction } from "discord.js";
 
+import { defineCommand } from "../framework/commands.ts";
 import {
   MODE_LABELS,
   PROJECT_LABELS,
@@ -26,7 +27,6 @@ import {
   isPrivacyProject,
 } from "../integrations/privacy.ts";
 import type { PrivacyClient, PrivacyError } from "../integrations/privacy.ts";
-import { defineCommand } from "./define.ts";
 
 const MODE_CHOICES = [
   { name: MODE_LABELS[PrivacyMode.OptIn], value: PrivacyMode.OptIn },

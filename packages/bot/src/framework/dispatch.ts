@@ -19,7 +19,7 @@ import type { Reporter } from "@repo/shared/result/observe";
 import { MessageFlags } from "discord.js";
 import type { ChatInputCommandInteraction, Interaction } from "discord.js";
 
-import type { SlashCommand } from "./define.ts";
+import type { SlashCommand } from "./commands.ts";
 
 export interface DispatchDeps {
   readonly commands: readonly SlashCommand[];

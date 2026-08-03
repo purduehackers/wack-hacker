@@ -18,10 +18,10 @@ import { UpstreamError, httpStatusOf, serializeError } from "@repo/shared/errors
 import { Result } from "@repo/shared/result";
 import { REST, Routes } from "discord.js";
 
+import { buildCommands } from "../commands/index.ts";
 import { env } from "../env.ts";
-import { toRegistrationBody } from "./define.ts";
-import type { SlashCommand } from "./define.ts";
-import { buildCommands } from "./index.ts";
+import { toRegistrationBody } from "./commands.ts";
+import type { SlashCommand } from "./commands.ts";
 
 export async function registerCommands(deps: {
   readonly token: string;

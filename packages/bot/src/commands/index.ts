@@ -14,9 +14,9 @@
 import type { UpstreamError } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 
+import type { SlashCommand } from "../framework/commands.ts";
 import { createDashboardWriter } from "../integrations/dashboard.ts";
 import { createPrivacyClient } from "../integrations/privacy.ts";
-import type { SlashCommand } from "./define.ts";
 import { hackNightCommand } from "./hack-night.ts";
 import { ping } from "./ping.ts";
 import { privacyCommand } from "./privacy.ts";
@@ -49,4 +49,4 @@ export function buildCommands(deps: CommandDeps): Result<readonly SlashCommand[]
 }
 
 export { ping };
-export type { SlashCommand } from "./define.ts";
+export type { SlashCommand } from "../framework/commands.ts";

@@ -21,8 +21,8 @@ import { Result } from "@repo/shared/result";
 import { MessageFlags, SlashCommandBuilder } from "discord.js";
 import type { ChatInputCommandInteraction } from "discord.js";
 
+import { defineCommand } from "../framework/commands.ts";
 import { roleOf } from "../utils/roles.ts";
-import { defineCommand } from "./define.ts";
 
 /** 🌙 — the channel's resting state between hack nights. */
 const DEFAULT_EMOJI = "\u{1F319}";

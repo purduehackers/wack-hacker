@@ -9,9 +9,11 @@
     "register-commands": "bun run src/commands/register.ts"
   },
   "dependencies": {
+    "@payloadcms/sdk": "^3.87.0",
     "@repo/shared": "workspace:*",
     "@t3-oss/env-core": "^0.13.11",
     "@vercel/edge-config": "^1.5.0",
+    "croner": "^10.0.1",
     "discord.js": "^14.27.0",
     "zod": "4.4.3"
   },

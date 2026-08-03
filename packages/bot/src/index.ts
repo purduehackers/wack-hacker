@@ -12,19 +12,29 @@
  * of leaving a bot that is running and receiving nothing. Exiting is deliberate:
  * every host this runs on restarts a failed container with backoff, which is a
  * better outcome than a live process that silently does nothing.
+ *
+ * Event handlers and schedules attach only *after* readiness, because both need
+ * a `Client<true>` — and because a schedule firing mid-login would act on a
+ * gateway that cannot yet send anything.
  */
 
 import { serializeError } from "@repo/shared/errors";
+import { getRedis } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
 import { Events } from "discord.js";
 
-import { dispatchInteraction } from "./commands/dispatch.ts";
 import { buildCommands } from "./commands/index.ts";
 import { env } from "./env.ts";
-import { connect, createClient } from "./gateway.ts";
-import { installSignalHandlers, shutdown } from "./lifecycle.ts";
-import { consoleReporter } from "./observability.ts";
-import { startServer } from "./server.ts";
+import { buildEventHandlers } from "./events/index.ts";
+import { createDeduplicator } from "./framework/dedup.ts";
+import { dispatchInteraction } from "./framework/dispatch.ts";
+import { attachEventRouter } from "./framework/events.ts";
+import { connect, createClient } from "./framework/gateway.ts";
+import { installSignalHandlers, onShutdown, shutdown } from "./framework/lifecycle.ts";
+import { consoleReporter } from "./framework/observability.ts";
+import { startScheduler } from "./framework/schedules.ts";
+import { startServer } from "./framework/server.ts";
+import { buildSchedules } from "./schedules/index.ts";
 
 async function main(): Promise<void> {
   installSignalHandlers();
@@ -61,8 +71,36 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  const ready = connected.value;
+
+  // One client, shared by dedup and the hack night slug store.
+  const redis = getRedis({
+    url: env.UPSTASH_REDIS_REST_URL,
+    token: env.UPSTASH_REDIS_REST_TOKEN,
+  });
+
+  const handlers = buildEventHandlers();
+  attachEventRouter(ready, {
+    handlers,
+    reporter: consoleReporter,
+    dedup: createDeduplicator(redis),
+  });
+
+  const scheduler = startScheduler({
+    schedules: buildSchedules({ redis, cmsApiKey: env.PAYLOAD_CMS_API_KEY }),
+    client: ready,
+    reporter: consoleReporter,
+  });
+  onShutdown("scheduler", () => scheduler.stop());
+
+  const upcoming = [...scheduler.nextRuns]
+    .map(([name, next]) => `${name}=${next?.toISOString() ?? "never"}`)
+    .join(" ");
+
+  console.info(`logged in as ${ready.user.tag}`);
   console.info(
-    `logged in as ${connected.value.user.tag} with ${commands.length} command handler(s)`,
+    `${commands.length} command(s), ${handlers.length} event handler(s), ` +
+      `${scheduler.nextRuns.size} schedule(s)${upcoming === "" ? "" : `: ${upcoming}`}`,
   );
 }
 

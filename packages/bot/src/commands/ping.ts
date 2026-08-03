@@ -2,7 +2,7 @@ import { NotFound } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { SlashCommandBuilder } from "discord.js";
 
-import { defineCommand } from "./define.ts";
+import { defineCommand } from "../framework/commands.ts";
 
 /** Discord's epoch, the offset every snowflake timestamp is relative to. */
 const DISCORD_EPOCH = 1_420_070_400_000n;

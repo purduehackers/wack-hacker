@@ -50,6 +50,9 @@ export const env = createEnv({
     VERCEL_API_TOKEN: secret,
     DASHBOARD_EDGE_CONFIG: secret,
 
+    /** The hack night photo archive in Payload CMS. */
+    PAYLOAD_CMS_API_KEY: secret,
+
     SENTRY_DSN: z.string().url().optional(),
   },
   runtimeEnv: process.env,
