@@ -1,0 +1,20 @@
+{
+  "name": "@repo/agents",
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "eve build",
+    "dev": "eve dev",
+    "start": "eve start"
+  },
+  "dependencies": {
+    "@vercel/connect": "0.4.3",
+    "ai": "^7.0.38",
+    "eve": "^0.29.5",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "24.x",
+    "typescript": "7.0.2"
+  }
+}

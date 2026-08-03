@@ -1,16 +1,10 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "jsPlugins": ["@factory/eslint-plugin", "oxclippy"],
+  "plugins": ["typescript", "unicorn", "oxc"],
+  "categories": {
+    "correctness": "error"
+  },
   "rules": {
-    "@factory/no-exported-string-union-types": "error",
-    "@factory/enum-file-organization": "error",
-    "@factory/types-file-organization": "error",
-    "@factory/constants-file-organization": "error",
-    "@factory/errors-file-organization": "error",
-    "@factory/test-utils-organization": "off",
-    "@factory/test-file-location": "error",
-    "@factory/no-exported-function-expressions": "error",
-    "@factory/no-log-exception-with-throw": "error",
     "oxclippy/needless-bool": "warn",
     "oxclippy/collapsible-if": "warn",
     "oxclippy/neg-multiply": "warn",
@@ -64,24 +58,12 @@
     "oxclippy/unreadable-literal": "warn",
     "oxclippy/bool-to-int-with-if": "warn"
   },
-  "settings": {
-    "jsdoc": {
-      "ignorePrivate": false,
-      "ignoreInternal": false,
-      "ignoreReplacesDocs": true,
-      "overrideReplacesDocs": true,
-      "augmentsExtendsReplacesDocs": false,
-      "implementsReplacesDocs": false,
-      "exemptDestructuredRootsFromChecks": false,
-      "tagNamePreference": {}
-    },
-    "vitest": {
-      "typecheck": true
-    }
-  },
   "env": {
     "builtin": true
   },
-  "globals": {},
-  "ignorePatterns": ["node_modules", "dist", "coverage", "vercel.ts", "_archive/**"]
+  "jsPlugins": ["oxclippy"],
+  "options": {
+    "typeAware": true,
+    "typeCheck": true
+  }
 }
