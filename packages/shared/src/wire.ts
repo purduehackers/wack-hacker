@@ -202,9 +202,9 @@ function decode<T>(schema: z.ZodType<T>, subject: string, input: unknown): Resul
 
   // Every failing path, not just the first — a caller fixing a payload should
   // not have to round-trip once per field.
-  const issues = parsed.error.issues.map((issue) => {
-    const path = issue.path.join(".");
-    return path === "" ? issue.message : `${path}: ${issue.message}`;
+  const issues = parsed.error.issues.map((failure) => {
+    const path = failure.path.join(".");
+    return path === "" ? failure.message : `${path}: ${failure.message}`;
   });
   return Result.err(new InvalidInput({ subject, issues }));
 }

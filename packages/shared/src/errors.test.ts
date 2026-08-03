@@ -1,4 +1,4 @@
-import { TaggedError, UnhandledException } from "better-result";
+import { Panic, UnhandledException, matchError, panic } from "better-result";
 import { expect, test } from "vitest";
 
 import {
@@ -8,7 +8,6 @@ import {
   NotFound,
   RateLimited,
   Transient,
-  isAppError,
   isDefect,
   isRetryable,
   retryAfterMs,
@@ -16,40 +15,64 @@ import {
   tagOf,
 } from "./errors.ts";
 
+test("props are readable as direct fields", () => {
+  const error = new NotFound({ kind: "skill", id: "issues" });
+
+  expect(error.kind).toBe("skill");
+  expect(error.id).toBe("issues");
+  expect(error._tag).toBe("NotFound");
+});
+
+test("messages are derived, so the same failure always reads the same way", () => {
+  expect(new NotFound({ kind: "skill", id: "issues" }).message).toBe("skill not found: issues");
+  expect(new InvalidInput({ subject: "cron", issues: ["a", "b"] }).message).toBe(
+    "invalid cron: a; b",
+  );
+  expect(
+    new Forbidden({ required: "admin", actual: "public", subject: "list_audit_log" }).message,
+  ).toBe('list_audit_log requires role "admin" but caller has "public"');
+});
+
 test("errors survive JSON, which a bare Error does not", () => {
-  // The trap this guards: Error#message and #stack are non-enumerable, so a
-  // TaggedError placed in an Err and stringified would arrive empty.
+  // The trap this guards: Error#message and #stack are non-enumerable, so an
+  // untagged error placed in an Err and stringified would arrive empty.
   expect(JSON.stringify(new Error("gone"))).toBe("{}");
 
-  // oxlint-disable-next-line oxclippy/prefer-structured-clone -- structuredClone bypasses toJSON, which is exactly what this test exercises
+  // oxlint-disable-next-line oxclippy/prefer-structured-clone -- structuredClone bypasses toJSON, which is exactly what this exercises
   const round = JSON.parse(JSON.stringify(new NotFound({ kind: "skill", id: "issues" })));
-  expect(round).toEqual({
-    _tag: "NotFound",
-    message: "skill not found: issues",
-    props: { kind: "skill", id: "issues" },
-  });
+  expect(round._tag).toBe("NotFound");
+  expect(round.message).toBe("skill not found: issues");
+  expect(round.kind).toBe("skill");
+  expect(round.id).toBe("issues");
 });
 
-test("props are frozen so an error cannot be mutated after the fact", () => {
-  const error = new RateLimited({ service: "linear", retryAfterMs: 1_000 });
-  expect(() => {
-    Object.assign(error.props, { retryAfterMs: 0 });
-  }).toThrow();
-  expect(error.props.retryAfterMs).toBe(1_000);
+test("the static guard narrows to the concrete class", () => {
+  const error: unknown = new RateLimited({ service: "linear", retryAfterMs: 1_000 });
+
+  expect(RateLimited.is(error)).toBe(true);
+  expect(NotFound.is(error)).toBe(false);
+  if (RateLimited.is(error)) expect(error.retryAfterMs).toBe(1_000);
 });
 
-test("tagged errors are matched exhaustively on _tag", () => {
+test("matchError is exhaustive over a tagged union", () => {
   const describe = (error: NotFound | Forbidden): string =>
-    TaggedError.match(error, {
-      NotFound: (e) => `missing ${e.props.kind}`,
-      Forbidden: (e) => `need ${e.props.required}`,
+    matchError(error, {
+      NotFound: (e) => `missing ${e.kind}`,
+      Forbidden: (e) => `need ${e.required}`,
     });
 
   expect(describe(new NotFound({ kind: "ship", id: "1" }))).toBe("missing ship");
-  expect(describe(new Forbidden({ required: "admin", actual: "public" }))).toBe("need admin");
+  expect(describe(new Forbidden({ required: "admin", actual: "public", subject: "tool" }))).toBe(
+    "need admin",
+  );
 });
 
-test("expected failures are not defects; bugs and raw throws are", () => {
+test("an error is directly yieldable, so it composes in Result.gen", () => {
+  // TaggedError implements Symbol.iterator for exactly this.
+  expect(typeof new NotFound({ kind: "a", id: "b" })[Symbol.iterator]).toBe("function");
+});
+
+test("expected failures are not defects; bugs, panics, and raw throws are", () => {
   expect(isDefect(new NotFound({ kind: "ship", id: "1" }))).toBe(false);
   expect(isDefect(new Transient({ operation: "fetch", detail: "reset" }))).toBe(false);
 
@@ -57,10 +80,22 @@ test("expected failures are not defects; bugs and raw throws are", () => {
   expect(isDefect(new InvariantViolated({ invariant: "lease-owner", detail: "mismatch" }))).toBe(
     true,
   );
-  // Uncaught throw funnelled through better-result.
   expect(isDefect(new UnhandledException({ cause: new Error("boom") }))).toBe(true);
   expect(isDefect(new Error("raw"))).toBe(true);
   expect(isDefect("string failure")).toBe(true);
+});
+
+test("a Panic is a defect", () => {
+  let thrown: unknown;
+  try {
+    panic("unreachable");
+  } catch (error) {
+    thrown = error;
+  }
+
+  expect(thrown).toBeInstanceOf(Panic);
+  expect(isDefect(thrown)).toBe(true);
+  expect(tagOf(thrown)).toBe("Panic");
 });
 
 test("only rate limits and transients are retryable", () => {
@@ -81,14 +116,17 @@ test("tagOf collapses unknown values so metric dimensions stay bounded", () => {
   expect(tagOf({ weird: true })).toBe("Defect");
 });
 
+test("serializeError withholds the stack that toJSON would emit", () => {
+  const error = new NotFound({ kind: "skill", id: "issues" });
+
+  // toJSON is fine locally; it carries stack and cause. Anything crossing to
+  // another service — or reaching a Discord message — must not.
+  expect(JSON.stringify(error)).toContain("stack");
+  expect(serializeError(error)).toEqual({ tag: "NotFound", message: "skill not found: issues" });
+});
+
 test("serializeError never throws, whatever it is handed", () => {
   expect(serializeError(new Error("boom")).message).toBe("boom");
   expect(serializeError("plain").message).toBe("plain");
-  expect(serializeError(undefined)._tag).toBe("Defect");
-  expect(isAppError(new Error("boom"))).toBe(false);
-});
-
-test("InvalidInput lists every issue so the model can correct itself", () => {
-  const error = new InvalidInput({ subject: "wire payload", issues: ["channel.id", "principal"] });
-  expect(error.message).toBe("invalid wire payload: channel.id; principal");
+  expect(serializeError(undefined).tag).toBe("Defect");
 });

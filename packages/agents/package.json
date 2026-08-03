@@ -11,13 +11,13 @@
   "dependencies": {
     "@repo/shared": "workspace:*",
     "@t3-oss/env-core": "^0.13.11",
-    "@vercel/connect": "0.4.3",
-    "ai": "^7.0.38",
+    "@vercel/connect": "^0.6.0",
+    "ai": "^7.0.49",
     "eve": "^0.29.5",
     "zod": "4.4.3"
   },
   "devDependencies": {
-    "@types/node": "24.x",
+    "@types/node": "^26.1.2",
     "typescript": "7.0.2"
   }
 }

@@ -17,7 +17,7 @@
 
 import { isDefect, serializeError, tagOf } from "../errors.ts";
 import type { Result } from "./index.ts";
-import { tapError } from "./index.ts";
+import { Result as ResultOps } from "./index.ts";
 
 /** One wide event per unit of work, matching the legacy `evlog` discipline. */
 export interface WideEvent {
@@ -49,7 +49,7 @@ export const silentReporter: Reporter = {
  * `InvariantViolated` — is additionally captured as an issue.
  */
 export function observe<T, E>(op: string, reporter: Reporter, result: Result<T, E>): Result<T, E> {
-  return tapError(result, (error) => {
+  return ResultOps.tapError(result, (error) => {
     const defect = isDefect(error);
     if (defect) reporter.captureDefect(error, { op });
     reporter.emit({

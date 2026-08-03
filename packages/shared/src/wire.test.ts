@@ -53,7 +53,7 @@ test("decode reports every failing path at once, not just the first", () => {
   expect(Result.isError(decoded)).toBe(true);
   if (!Result.isError(decoded)) return;
 
-  const { issues } = decoded.error.props;
+  const { issues } = decoded.error;
   // A caller fixing a payload should not have to round-trip once per field.
   expect(issues.length).toBeGreaterThan(2);
   expect(issues.join("\n")).toContain("continuationKey");
@@ -146,6 +146,7 @@ test("continuationKeyFor prefers the thread so parallel threads never collide", 
 test("a decoded payload survives a JSON round trip unchanged", () => {
   const payload = mention({ recentMessages: ["a"] });
   const first = decodeMessagePayload(payload);
+  // oxlint-disable-next-line oxclippy/prefer-structured-clone -- the point is the JSON hop the wire actually performs
   const second = decodeMessagePayload(JSON.parse(JSON.stringify(payload)));
 
   expect(Result.isOk(first) && Result.isOk(second) && first.value).toEqual(

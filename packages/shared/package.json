@@ -24,7 +24,7 @@
   "dependencies": {
     "@libsql/client": "^0.17.4",
     "@upstash/redis": "^1.38.1",
-    "better-result": "^1.0.0",
+    "better-result": "^3.0.0",
     "drizzle-orm": "^0.45.2",
     "zod": "4.4.3"
   },

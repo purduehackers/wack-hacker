@@ -22,8 +22,8 @@
     "@types/bun": "latest",
     "@vitest/coverage-istanbul": "4.1.10",
     "oxclippy": "^0.2.0",
-    "oxfmt": "^0.61.0",
-    "oxlint": "^1.76.0",
+    "oxfmt": "^0.62.0",
+    "oxlint": "^1.77.0",
     "oxlint-tsgolint": "^7.0.2001",
     "vitest": "4.1.10"
   },
