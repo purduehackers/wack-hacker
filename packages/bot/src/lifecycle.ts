@@ -65,9 +65,3 @@ export function installSignalHandlers(graceMs = 20_000): void {
     });
   }
 }
-
-/** Test seam: drops registered handlers and re-arms `shutdown`. */
-export function resetLifecycleForTest(): void {
-  handlers.length = 0;
-  shuttingDown = false;
-}

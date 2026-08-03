@@ -6,9 +6,9 @@
  * meant a forgotten re-export silently unregistered a command. A literal list
  * is one line longer and cannot do that.
  *
- * Dependencies are passed in rather than read from module-level singletons, so a
- * test can build the list against fakes and the registration script can build it
- * without credentials for the services those commands call.
+ * Dependencies are passed in rather than read from module-level singletons, so
+ * construction failures surface at one call site and the registration script
+ * builds the same list the running bot does.
  */
 
 import type { UpstreamError } from "@repo/shared/errors";

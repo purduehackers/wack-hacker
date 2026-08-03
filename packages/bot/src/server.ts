@@ -43,9 +43,8 @@ export interface ServerDeps {
 /**
  * The routing table, as a pure function of a request.
  *
- * Split out from `Bun.serve` so the status-code contract is testable without
- * binding a socket — which also keeps it testable under vitest, whose runtime is
- * Node and therefore has no `Bun.serve`.
+ * Split out from `Bun.serve` so the routing logic is a plain function of a
+ * request and the runtime-specific server is one line.
  *
  * A not-ready gateway answers 503 so a probe treats it as failing. Returning 200
  * with `ready: false` would leave a wedged bot running indefinitely, since most

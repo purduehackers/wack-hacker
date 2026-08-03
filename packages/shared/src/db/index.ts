@@ -2,9 +2,8 @@
  * Turso (libSQL) access.
  *
  * The legacy version read `env` directly at module scope, which coupled the data
- * layer to one env schema and made it awkward to point a test at an in-memory
- * database. Here the config is passed in: each package resolves its own env and
- * calls `getDb` once, and tests hand in a client they built themselves.
+ * layer to one env schema. Here the config is passed in: each package resolves
+ * its own env and calls `getDb` once.
  *
  * The connection is memoized because a libSQL client holds an HTTP agent, and
  * rebuilding it per query would leak sockets in a long-running process.
@@ -41,7 +40,7 @@ export interface TursoConfig {
   readonly authToken?: string;
 }
 
-/** Wraps an existing client. The seam tests use to supply `:memory:`. */
+/** Wraps a caller-supplied client, for example a local `file:` database. */
 export function buildDb(client: Client): Db {
   return drizzle(client, { schema });
 }
@@ -62,9 +61,4 @@ export function getDb(config: TursoConfig): Db {
     ),
   );
   return cached;
-}
-
-/** Drops the memoized handle. Tests only. */
-export function resetDbForTest(): void {
-  cached = undefined;
 }

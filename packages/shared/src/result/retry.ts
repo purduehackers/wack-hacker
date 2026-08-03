@@ -21,9 +21,9 @@ import { isRetryable, retryAfterMs } from "../errors.ts";
 
 /**
  * Mirrors better-result's `RetryConfig`, which the package declares but does not
- * export. `retry.test.ts` passes every policy below to a real
- * `Result.tryPromise` call, so if the upstream shape changes this stops
- * compiling rather than drifting silently.
+ * export. Because the policies below are passed straight to
+ * `Result.tryPromise`, an upstream shape change surfaces as a compile error at
+ * the call site rather than drifting silently.
  */
 export interface RetryPolicy<E> {
   /** Forwarded unchanged to every attempt and retry decision. */

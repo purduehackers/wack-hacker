@@ -4,8 +4,8 @@
  * `RedisClient` is a `Pick` of the upstream `Redis` surface rather than a
  * hand-written "redis-like" interface, so a signature change in
  * `@upstash/redis` is a compile error here instead of a runtime failure in
- * production. Tests implement this same type with an in-memory fake — no
- * module mocking required, which is the doctrine the legacy suite enforced.
+ * production, and any in-memory stand-in satisfies the same type without
+ * module mocking.
  *
  * `eval` is in the set because two operations need atomicity that plain
  * commands cannot express: releasing a lock only if we still hold it, and the
@@ -39,9 +39,4 @@ let cached: RedisClient | undefined;
 export function getRedis(config: RedisConfig): RedisClient {
   cached ??= new Redis({ url: config.url, token: config.token });
   return cached;
-}
-
-/** Drops the memoized client. Tests only. */
-export function resetRedisForTest(): void {
-  cached = undefined;
 }

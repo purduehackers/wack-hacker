@@ -58,6 +58,6 @@ export const env = createEnv({
    * blank line in a .env file silently satisfies a required secret.
    */
   emptyStringAsUndefined: true,
-  /** Tests exercise handlers directly and never need real credentials. */
+  /** Escape hatch for tooling that loads the module without credentials. */
   skipValidation: process.env["SKIP_ENV_VALIDATION"] === "1",
 });

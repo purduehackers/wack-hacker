@@ -6,8 +6,6 @@
     "dev": "bun --watch run src/index.ts",
     "start": "bun run src/index.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:coverage": "vitest run --coverage",
     "register-commands": "bun run src/commands/register.ts"
   },
   "dependencies": {

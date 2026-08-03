@@ -10,9 +10,8 @@
  * to a `logger.error`, which double-reports.
  *
  * `Reporter` is an interface rather than a direct Sentry import so this package
- * stays dependency-light and testable by injection — the same doctrine the
- * legacy test suite enforced (never mock internal modules; pass a fake in).
- * The bot wires it to `@sentry/bun`; the agent wires it to eve instrumentation.
+ * stays dependency-light and each deployable chooses its own backend. The bot
+ * wires it to `@sentry/bun`; the agent wires it to eve instrumentation.
  */
 
 import { isDefect, serializeError, tagOf } from "../errors.ts";
@@ -35,7 +34,7 @@ export interface Reporter {
   readonly captureDefect: (error: unknown, context: { readonly op: string }) => void;
 }
 
-/** Discards everything. For tests and for code paths that must not report. */
+/** Discards everything. For code paths that must not report. */
 export const silentReporter: Reporter = {
   emit: () => {},
   captureDefect: () => {},
@@ -68,8 +67,7 @@ export function observeWith(op: string, reporter: Reporter) {
 
 /**
  * Wraps a unit of work so it emits exactly one wide event either way, with a
- * duration. `now` is injected so tests are deterministic rather than timing
- * dependent.
+ * duration. `now` is injected so a caller can supply a monotonic clock.
  */
 export async function instrument<T, E>(
   op: string,
