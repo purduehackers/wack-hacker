@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@payloadcms/sdk": "^3.87.0",
+    "@purduehackers/time": "^0.7.0",
     "@repo/shared": "workspace:*",
     "@t3-oss/env-core": "^0.13.11",
     "@vercel/edge-config": "^1.5.0",

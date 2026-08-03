@@ -25,7 +25,7 @@ export function buildSchedules(deps: ScheduleDeps): readonly Schedule[] {
   const cms = createCmsClient({ apiKey: deps.cmsApiKey });
 
   return [
-    hackNightCountdown,
+    hackNightCountdown(),
     hackNightPhotographyThread({ slugStore }),
     hackNightCleanup({ slugStore, cms }),
   ];
