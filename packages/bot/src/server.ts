@@ -41,25 +41,38 @@ export interface ServerDeps {
 }
 
 /**
- * Starts the health server and registers its own shutdown.
+ * The routing table, as a pure function of a request.
+ *
+ * Split out from `Bun.serve` so the status-code contract is testable without
+ * binding a socket — which also keeps it testable under vitest, whose runtime is
+ * Node and therefore has no `Bun.serve`.
  *
  * A not-ready gateway answers 503 so a probe treats it as failing. Returning 200
  * with `ready: false` would leave a wedged bot running indefinitely, since most
  * probes only look at the status code.
  */
-export function startServer(deps: ServerDeps): { readonly stop: () => Promise<void> } {
+export function handleRequest(request: Request, client: Client): Response {
+  const { pathname } = new URL(request.url);
+
+  if (pathname === BOT_ROUTES.health) {
+    const report = healthOf(client);
+    return Response.json(report, { status: report.ready ? 200 : 503 });
+  }
+
+  return new Response("not found", { status: 404 });
+}
+
+export interface RunningServer {
+  /** The bound port. Differs from the requested one when asking for port 0. */
+  readonly port: number;
+  readonly stop: () => Promise<void>;
+}
+
+/** Starts the health server and registers its own shutdown. */
+export function startServer(deps: ServerDeps): RunningServer {
   const server = Bun.serve({
     port: deps.port,
-    fetch: (request) => {
-      const { pathname } = new URL(request.url);
-
-      if (pathname === BOT_ROUTES.health) {
-        const report = healthOf(deps.client);
-        return Response.json(report, { status: report.ready ? 200 : 503 });
-      }
-
-      return new Response("not found", { status: 404 });
-    },
+    fetch: (request) => handleRequest(request, deps.client),
   });
 
   const stop = async () => {
@@ -67,6 +80,9 @@ export function startServer(deps: ServerDeps): { readonly stop: () => Promise<vo
   };
   onShutdown("http-server", stop);
 
-  console.info(`health server listening on :${deps.port}${BOT_ROUTES.health}`);
-  return { stop };
+  // Bun types `port` as optional because a server can bind a unix socket; this
+  // one always binds TCP, so the requested port is a sound fallback.
+  const port = server.port ?? deps.port;
+  console.info(`health server listening on :${port}${BOT_ROUTES.health}`);
+  return { port, stop };
 }

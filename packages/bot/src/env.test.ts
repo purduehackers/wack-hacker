@@ -8,6 +8,9 @@ const COMPLETE = {
   BOT_INGRESS_SECRET: "outbound",
   UPSTASH_REDIS_REST_URL: "https://redis.example.com",
   UPSTASH_REDIS_REST_TOKEN: "redis-token",
+  PRIVACY_DB_API_KEY: "privacy-key",
+  VERCEL_API_TOKEN: "vercel-token",
+  DASHBOARD_EDGE_CONFIG: "https://edge-config.vercel.com/ecfg_abc?token=tok",
 } as const;
 
 /** Loads a fresh copy of the module against a stubbed environment. */

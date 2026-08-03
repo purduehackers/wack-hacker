@@ -20,15 +20,17 @@ import { REST, Routes } from "discord.js";
 
 import { env } from "../env.ts";
 import { toRegistrationBody } from "./define.ts";
-import { COMMANDS } from "./index.ts";
+import type { SlashCommand } from "./define.ts";
+import { buildCommands } from "./index.ts";
 
 export async function registerCommands(deps: {
   readonly token: string;
   readonly applicationId: string;
   readonly guildId: string;
+  readonly commands: readonly SlashCommand[];
 }): Promise<Result<number, UpstreamError>> {
   const rest = new REST({ version: "10" }).setToken(deps.token);
-  const body = COMMANDS.map(toRegistrationBody);
+  const body = deps.commands.map(toRegistrationBody);
 
   return Result.tryPromise({
     try: async () => {
@@ -44,10 +46,22 @@ export async function registerCommands(deps: {
   });
 }
 
+const built = buildCommands({
+  privacyApiKey: env.PRIVACY_DB_API_KEY,
+  vercelToken: env.VERCEL_API_TOKEN,
+  dashboardEdgeConfig: env.DASHBOARD_EDGE_CONFIG,
+});
+
+if (Result.isError(built)) {
+  console.error(`cannot build commands: ${serializeError(built.error).message}`);
+  process.exit(1);
+}
+
 const outcome = await registerCommands({
   token: env.DISCORD_BOT_TOKEN,
   applicationId: env.DISCORD_BOT_CLIENT_ID,
   guildId: DISCORD_GUILD_ID,
+  commands: built.value,
 });
 
 if (Result.isError(outcome)) {

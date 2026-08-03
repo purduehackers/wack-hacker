@@ -1,7 +1,7 @@
 import type { Client } from "discord.js";
 import { expect, test } from "vitest";
 
-import { healthOf } from "./server.ts";
+import { handleRequest, healthOf } from "./server.ts";
 import { asDouble } from "./test/double.ts";
 
 /**
@@ -39,4 +39,33 @@ test("uptime is measured from ready, not from process start", () => {
 test("ping is rounded so the payload stays stable across heartbeats", () => {
   expect(healthOf(fakeClient(1, 0.4)).websocketPingMs).toBe(0);
   expect(healthOf(fakeClient(1, 99.5)).websocketPingMs).toBe(100);
+});
+
+test("a connecting gateway answers 503 so a probe treats the bot as failing", async () => {
+  const response = handleRequest(
+    new Request("http://127.0.0.1/health"),
+    fakeClient(JSON.parse("null"), -1),
+  );
+
+  // 200 with ready:false would leave a wedged bot running forever, because most
+  // probes only look at the status code.
+  expect(response.status).toBe(503);
+  expect(await response.json()).toMatchObject({ ready: false });
+});
+
+test("a connected gateway answers 200 with its report", async () => {
+  const response = handleRequest(new Request("http://127.0.0.1/health"), fakeClient(1_000, 12));
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ ready: true, websocketPingMs: 12 });
+});
+
+test("anything else is a 404, so the bot exposes no accidental surface", () => {
+  const client = fakeClient(1_000, 12);
+
+  expect(handleRequest(new Request("http://127.0.0.1/"), client).status).toBe(404);
+  // Reserved by the wire contract but not implemented until the seam lands.
+  expect(handleRequest(new Request("http://127.0.0.1/internal/agent/parked"), client).status).toBe(
+    404,
+  );
 });

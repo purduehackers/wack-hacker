@@ -43,6 +43,13 @@ export const env = createEnv({
      */
     PORT: z.coerce.number().int().positive().default(8080),
 
+    /** `/privacy`, backed by pdb.purduehackers.com. */
+    PRIVACY_DB_API_KEY: secret,
+
+    /** `/hack-night` bumps the dashboard's Edge Config `version` key. */
+    VERCEL_API_TOKEN: secret,
+    DASHBOARD_EDGE_CONFIG: secret,
+
     SENTRY_DSN: z.string().url().optional(),
   },
   runtimeEnv: process.env,

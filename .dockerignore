@@ -1,0 +1,14 @@
+# Build context hygiene. Without this the legacy tree and every node_modules
+# directory get uploaded to the daemon on each build.
+node_modules
+**/node_modules
+old
+.git
+.turbo
+.eve
+.vercel
+coverage
+*.log
+.env
+.env.*
+!.env.example

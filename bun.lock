@@ -41,6 +41,7 @@
       "dependencies": {
         "@repo/shared": "workspace:*",
         "@t3-oss/env-core": "^0.13.11",
+        "@vercel/edge-config": "^1.5.0",
         "discord.js": "^14.27.0",
         "zod": "4.4.3",
       },
@@ -478,6 +479,10 @@
     "@vercel/cli-exec": ["@vercel/cli-exec@1.0.0", "", { "dependencies": { "execa": "5.1.1" } }, "sha512-kQF8LGie/Hbdq9/psJxLE7owRTcqMQMhgybU04gCeR7cbQAr5t8OrjefDNColJv1QSSucFt4pLwRiARVmlOnug=="],
 
     "@vercel/connect": ["@vercel/connect@0.6.0", "", { "dependencies": { "@vercel/oidc": "3.8.1" }, "peerDependencies": { "@ai-sdk/mcp": "^1 || ^2", "@auth/core": ">=0.37.0", "@chat-adapter/slack": "^4.0.0", "ai": "^6 || ^7.0.0-beta.0", "better-auth": ">=1.5.0", "eve": ">=0.13.7" }, "optionalPeers": ["@ai-sdk/mcp", "@auth/core", "@chat-adapter/slack", "ai", "better-auth", "eve"] }, "sha512-+v9zc5kzvIw2l/UmHotLFw7DugttvhNAXCRrTdsJNZP6E0OiCcqfTRtx9GvFotFxPBj2k6BVZf7BlF7KmjytXw=="],
+
+    "@vercel/edge-config": ["@vercel/edge-config@1.5.0", "", { "dependencies": { "@vercel/edge-config-fs": "0.1.0" }, "peerDependencies": { "@opentelemetry/api": "^1.7.0", "next": ">=1" }, "optionalPeers": ["@opentelemetry/api", "next"] }, "sha512-d3DohCm+DwWNuigOGCxE7+4NfuL3DT+yuOvW0jGe2wqA5vJ6q7OwB7G2UHbDPrk5ePmY1Qxc5urXHHWLCNzY7w=="],
+
+    "@vercel/edge-config-fs": ["@vercel/edge-config-fs@0.1.0", "", {}, "sha512-NRIBwfcS0bUoUbRWlNGetqjvLSwgYH/BqKqDN7vK1g32p7dN96k0712COgaz6VFizAm9b0g6IG6hR6+hc0KCPg=="],
 
     "@vercel/oidc": ["@vercel/oidc@3.8.1", "", { "dependencies": { "@vercel/cli-config": "0.2.1", "@vercel/cli-exec": "1.0.0", "jose": "^5.9.6" } }, "sha512-ufdalm2MWOYksyj8KVpWjoOFPJO6zoYpuyvIggIQ2bB0CFCjTCiTkGXHqAKwG77GVRjOaN3/8S5ITlZpXWmqOw=="],
 
