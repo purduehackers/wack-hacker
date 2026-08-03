@@ -24,6 +24,8 @@
       "name": "@repo/agents",
       "version": "0.0.0",
       "dependencies": {
+        "@repo/shared": "workspace:*",
+        "@t3-oss/env-core": "^0.13.11",
         "@vercel/connect": "0.4.3",
         "ai": "^7.0.38",
         "eve": "^0.29.5",
@@ -36,6 +38,11 @@
     },
     "packages/bot": {
       "name": "@repo/bot",
+      "dependencies": {
+        "@repo/shared": "workspace:*",
+        "@t3-oss/env-core": "^0.13.11",
+        "zod": "4.4.3",
+      },
       "devDependencies": {
         "@types/bun": "latest",
       },
@@ -376,6 +383,8 @@
     "@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.1", "", {}, "sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw=="],
 
     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
+
+    "@t3-oss/env-core": ["@t3-oss/env-core@0.13.11", "", { "peerDependencies": { "arktype": "^2.1.0", "typescript": ">=5.0.0", "valibot": "^1.0.0-beta.7 || ^1.0.0", "zod": "^3.24.0 || ^4.0.0" }, "optionalPeers": ["arktype", "typescript", "valibot", "zod"] }, "sha512-sM7GYY+KL7H/Hl0BE0inWfk3nRHZOLhmVn7sHGxaZt9FAR6KqREXAE+6TqKfiavfXmpRxO/OZ2QgKRd+oiBYRQ=="],
 
     "@turbo/darwin-64": ["@turbo/darwin-64@2.10.8", "", { "os": "darwin", "cpu": "x64" }, "sha512-po+7rfJfUnFXjWlcoN2RwhErgzCdRtBc1T26vYPcywHlggmCQiQe1uWaE4j+BibI2uY9/2pDoFzMN0rmSaPFOw=="],
 

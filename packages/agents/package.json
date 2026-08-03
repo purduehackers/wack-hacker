@@ -9,6 +9,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@repo/shared": "workspace:*",
+    "@t3-oss/env-core": "^0.13.11",
     "@vercel/connect": "0.4.3",
     "ai": "^7.0.38",
     "eve": "^0.29.5",

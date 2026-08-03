@@ -9,6 +9,11 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
   },
+  "dependencies": {
+    "@repo/shared": "workspace:*",
+    "@t3-oss/env-core": "^0.13.11",
+    "zod": "4.4.3"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },
