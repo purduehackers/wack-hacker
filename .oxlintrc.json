@@ -5,6 +5,16 @@
     "correctness": "error"
   },
   "rules": {
+    // Hard project requirements. No `any`, no unchecked assertions, no `null`
+    // in our own code, and every invariant explicit. An exception must be an
+    // inline `oxlint-disable-next-line <rule> -- <why>`, so it is documented
+    // at the site rather than waived wholesale in this file.
+    "typescript/no-explicit-any": "error",
+    "typescript/no-non-null-assertion": "error",
+    "typescript/no-unnecessary-type-assertion": "error",
+    "typescript/consistent-type-assertions": ["error", { "assertionStyle": "never" }],
+    "unicorn/no-null": "error",
+
     "oxclippy/needless-bool": "warn",
     "oxclippy/collapsible-if": "warn",
     "oxclippy/neg-multiply": "warn",

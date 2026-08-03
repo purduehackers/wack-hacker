@@ -5,7 +5,9 @@
   "scripts": {
     "build": "eve build",
     "dev": "eve dev",
-    "start": "eve start"
+    "start": "eve start",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
   },
   "dependencies": {
     "@vercel/connect": "0.4.3",

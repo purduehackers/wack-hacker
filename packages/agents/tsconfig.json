@@ -1,13 +1,10 @@
 {
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "esnext",
-    "moduleResolution": "bundler",
+    // eve builds on Nitro and runs on Node, not Bun.
     "types": ["node"],
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "noEmit": true
+    "module": "esnext",
+    "esModuleInterop": true
   },
-  "include": ["agent/**/*.ts", "evals/**/*.ts", "agent/subagents/code/agent", "agent/subagents/code/agent", "agent/subagents/shopping/agent"]
+  "include": ["agent/**/*.ts", "evals/**/*.ts"]
 }

@@ -3,9 +3,10 @@
   "type": "module",
   "module": "src/index.ts",
   "scripts": {
-    "dev": "bun run src/index.ts",
+    "dev": "bun --watch run src/index.ts",
     "start": "bun run src/index.ts",
-    "test": ""
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
   },
   "devDependencies": {
     "@types/bun": "latest"

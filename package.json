@@ -10,8 +10,10 @@
     "dev": "turbo dev",
     "start": "turbo start",
     "test": "turbo test",
+    "typecheck": "turbo typecheck",
     "lint": "oxlint",
-    "format": "oxfmt"
+    "format": "oxfmt",
+    "validate": "bun run typecheck && bun run lint && bun run test"
   },
   "dependencies": {
     "turbo": "^2.10.8"
