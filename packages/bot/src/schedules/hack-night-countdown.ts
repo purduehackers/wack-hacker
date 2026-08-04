@@ -110,6 +110,43 @@ export function countdownTicks(at: Date): readonly Date[] {
   return ticks;
 }
 
+/**
+ * How much of the newest latency sample folds into the running estimate.
+ *
+ * Half. High enough to track a genuine change in round-trip time within a
+ * couple of charges, low enough that one slow request does not yank the whole
+ * countdown early.
+ */
+const LEAD_SMOOTHING = 0.5;
+
+/**
+ * Ceiling on how far ahead of a boundary an edit may be sent.
+ *
+ * Half a charge. Beyond that a pathological round-trip would have us rendering
+ * the next value before the previous one had finished being true, which is a
+ * worse failure than being slightly late.
+ */
+const MAX_LEAD_MS = CHARGE_MS / 2;
+
+/**
+ * Folds a new round-trip measurement into the lead estimate.
+ *
+ * Exported because the arithmetic is the whole mechanism: send at
+ * `boundary - lead` so the edit *lands* on the boundary, rather than starting
+ * there and arriving a round-trip late.
+ */
+export function nextLead(current: number, sampleMs: number): number {
+  const blended =
+    current === 0 ? sampleMs : current * (1 - LEAD_SMOOTHING) + sampleMs * LEAD_SMOOTHING;
+
+  // A negative sample should be impossible, but an NTP step during the
+  // countdown could produce one, and leading by a negative amount would send
+  // late on purpose.
+  if (blended < 0) return 0;
+  if (blended > MAX_LEAD_MS) return MAX_LEAD_MS;
+  return blended;
+}
+
 export interface CountdownDeps {
   readonly now?: () => Date;
   readonly sleep?: (ms: number) => Promise<void>;
@@ -133,21 +170,34 @@ export function hackNightCountdown(deps: CountdownDeps = {}) {
             throw new Error("hack night channel is not a guild text channel");
           }
 
+          // The initial post is the same shape of round trip as an edit, so it
+          // seeds the lead estimate — the first charge is compensated too,
+          // rather than being the one frame that arrives late.
+          const postStartedAt = now().getTime();
           const posted = await channel.send(UPCOMING_MESSAGE);
+          let lead = nextLead(0, now().getTime() - postStartedAt);
 
           // Absolute instants, so a slow edit shortens the next wait instead of
           // pushing the whole countdown late. The cron fires on the minute; the
           // first tick is at 23:59:38.907.
           for (const tick of countdownTicks(now())) {
-            const waitMs = tick.getTime() - now().getTime();
+            // Send early by the measured round trip so the edit *lands* on the
+            // boundary. Waiting until the boundary and then sending puts every
+            // frame a round trip behind the clock it is displaying.
+            const waitMs = tick.getTime() - lead - now().getTime();
             if (waitMs > 0) await sleep(waitMs);
 
+            const editStartedAt = now().getTime();
             try {
+              // Rendered for `tick`, not for the send time: the content is what
+              // the clock will read when the edit arrives.
               await posted.edit(happeningMessage(tick));
+              lead = nextLead(lead, now().getTime() - editStartedAt);
             } catch (cause) {
               // A dropped or rate-limited edit loses one frame. Abandoning the
               // countdown over it would leave the message frozen mid-tick, so
-              // keep going and let the next charge catch up.
+              // keep going and let the next charge catch up. The failed
+              // request's timing is discarded rather than skewing the estimate.
               console.warn("countdown edit failed", cause);
             }
           }
