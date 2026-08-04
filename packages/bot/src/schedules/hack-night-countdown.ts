@@ -111,40 +111,86 @@ export function countdownTicks(at: Date): readonly Date[] {
 }
 
 /**
- * How much of the newest latency sample folds into the running estimate.
- *
- * Half. High enough to track a genuine change in round-trip time within a
- * couple of charges, low enough that one slow request does not yank the whole
- * countdown early.
- */
-const LEAD_SMOOTHING = 0.5;
-
-/**
  * Ceiling on how far ahead of a boundary an edit may be sent.
  *
- * Half a charge. Beyond that a pathological round-trip would have us rendering
- * the next value before the previous one had finished being true, which is a
- * worse failure than being slightly late.
+ * A quarter of a charge. Beyond that a slow measurement would have us rendering
+ * the next value well before the previous one stopped being true.
  */
-const MAX_LEAD_MS = CHARGE_MS / 2;
+const MAX_LEAD_MS = CHARGE_MS / 4;
 
 /**
- * Folds a new round-trip measurement into the lead estimate.
+ * How far ahead of each boundary to send, so the edit *lands* on the beat
+ * rather than a round trip after it.
  *
- * Exported because the arithmetic is the whole mechanism: send at
- * `boundary - lead` so the edit *lands* on the boundary, rather than starting
- * there and arriving a round-trip late.
+ * Measured once and then held constant for the whole countdown. An earlier
+ * version re-estimated it after every edit with a moving average, and that was
+ * measurably worse: round-trip time to Discord is jitter, not a trend, so
+ * chasing it adds the variance of the estimate on top of the variance of the
+ * network — roughly doubling the spread in when frames actually land. A live
+ * run showed one 1037ms request inflate the lead to 607ms, which then fired the
+ * next two frames 201ms and 261ms early.
+ *
+ * Even spacing matters more than absolute alignment here. A clock that is
+ * uniformly a little late still reads as a smooth countdown; one that is
+ * centred but jittery reads as skipping.
  */
-export function nextLead(current: number, sampleMs: number): number {
-  const blended =
-    current === 0 ? sampleMs : current * (1 - LEAD_SMOOTHING) + sampleMs * LEAD_SMOOTHING;
+export function leadFrom(samplesMs: readonly number[]): number {
+  const usable = samplesMs.filter((sample) => Number.isFinite(sample) && sample >= 0);
+  if (usable.length === 0) return 0;
 
-  // A negative sample should be impossible, but an NTP step during the
-  // countdown could produce one, and leading by a negative amount would send
-  // late on purpose.
-  if (blended < 0) return 0;
-  if (blended > MAX_LEAD_MS) return MAX_LEAD_MS;
-  return blended;
+  // Median, not mean: one slow sample should not shift the estimate, and with
+  // three probes the median is simply the middle one.
+  const sorted = [...usable].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)] ?? 0;
+  return Math.min(median, MAX_LEAD_MS);
+}
+
+/** How many latency probes to take before the countdown starts. */
+const LEAD_SAMPLES = 3;
+const LEAD_SAMPLE_GAP_MS = 250;
+
+/** How long before the first charge to start probing. Covers the probe run. */
+export const LEAD_WARMUP_MS = 2_000;
+
+/**
+ * Measures round-trip time to Discord's REST API, and warms the connection.
+ *
+ * Both jobs matter, and the timing is what makes them work. This runs in the
+ * couple of seconds *before* the first charge, not right after the heads-up
+ * post, for two reasons drawn from live runs:
+ *
+ * - The first request of a run pays for connection setup. Measuring the post
+ *   gave 330ms against a 180ms steady state, which left every frame landing
+ *   about 140ms early.
+ * - Roughly a hundred seconds pass between the heads-up and the first charge,
+ *   which is far longer than undici's idle keep-alive. Without a probe run
+ *   immediately beforehand, the first edit pays for a fresh connection and
+ *   arrives noticeably late — the one frame nobody wants late.
+ *
+ * `GET /users/@me` has no side effects and travels the same path as the edits
+ * it stands in for. It is a read, and writes cost a little more, so the
+ * estimate runs slightly short and frames land a touch late rather than early.
+ * That is the better direction to miss in: uniformly late reads as smooth,
+ * early reads as the clock jumping ahead of itself.
+ */
+export async function measureLead(
+  rest: { readonly get: (route: `/${string}`) => Promise<unknown> },
+  deps: { readonly now: () => Date; readonly sleep: (ms: number) => Promise<void> },
+): Promise<number> {
+  const samples: number[] = [];
+
+  for (let probe = 0; probe < LEAD_SAMPLES; probe += 1) {
+    const startedAt = deps.now().getTime();
+    try {
+      await rest.get("/users/@me");
+      samples.push(deps.now().getTime() - startedAt);
+    } catch {
+      // A failed probe tells us nothing about latency; the median covers it.
+    }
+    if (probe < LEAD_SAMPLES - 1) await deps.sleep(LEAD_SAMPLE_GAP_MS);
+  }
+
+  return leadFrom(samples);
 }
 
 export interface CountdownDeps {
@@ -170,34 +216,38 @@ export function hackNightCountdown(deps: CountdownDeps = {}) {
             throw new Error("hack night channel is not a guild text channel");
           }
 
-          // The initial post is the same shape of round trip as an edit, so it
-          // seeds the lead estimate — the first charge is compensated too,
-          // rather than being the one frame that arrives late.
-          const postStartedAt = now().getTime();
           const posted = await channel.send(UPCOMING_MESSAGE);
-          let lead = nextLead(0, now().getTime() - postStartedAt);
+
+          const schedule = countdownTicks(now());
+          const firstTick = schedule[0];
+          if (firstTick === undefined) throw new Error("countdown produced no ticks");
+
+          // Idle out the ninety-odd seconds, then probe just before the first
+          // charge — which both measures latency and warms the connection that
+          // the ninety seconds of silence let go cold.
+          const untilWarmup = firstTick.getTime() - LEAD_WARMUP_MS - now().getTime();
+          if (untilWarmup > 0) await sleep(untilWarmup);
+
+          const lead = await measureLead(client.rest, { now, sleep });
 
           // Absolute instants, so a slow edit shortens the next wait instead of
           // pushing the whole countdown late. The cron fires on the minute; the
           // first tick is at 23:59:38.907.
-          for (const tick of countdownTicks(now())) {
+          for (const tick of schedule) {
             // Send early by the measured round trip so the edit *lands* on the
             // boundary. Waiting until the boundary and then sending puts every
             // frame a round trip behind the clock it is displaying.
             const waitMs = tick.getTime() - lead - now().getTime();
             if (waitMs > 0) await sleep(waitMs);
 
-            const editStartedAt = now().getTime();
             try {
               // Rendered for `tick`, not for the send time: the content is what
               // the clock will read when the edit arrives.
               await posted.edit(happeningMessage(tick));
-              lead = nextLead(lead, now().getTime() - editStartedAt);
             } catch (cause) {
               // A dropped or rate-limited edit loses one frame. Abandoning the
               // countdown over it would leave the message frozen mid-tick, so
-              // keep going and let the next charge catch up. The failed
-              // request's timing is discarded rather than skewing the estimate.
+              // keep going and let the next charge catch up.
               console.warn("countdown edit failed", cause);
             }
           }
