@@ -41,6 +41,14 @@ export interface UploadImageInput {
   readonly discordMessageId: string;
   readonly discordUserId: string;
   readonly filename: string;
+  readonly contentType: string;
+}
+
+/** Discord CDN is usually quick; a slow host must not wedge the handler. */
+const FETCH_TIMEOUT_MS = 15_000;
+
+function altTextFor(slug: string, filename: string): string {
+  return `Hack Night ${slug.replace(/^hack-night-/, "")} photo — ${filename}`;
 }
 
 export type CmsError = Transient | UpstreamError;
@@ -119,6 +127,49 @@ export function createCmsClient(deps: CmsDeps) {
         },
         upstreamRetry,
       ),
+
+    /**
+     * Downloads an attachment from Discord and files it under the event slug.
+     *
+     * Two hops, and the first is the fragile one: the image is pulled from the
+     * Discord CDN before being uploaded, so a slow or unreachable host is bounded
+     * by an explicit timeout rather than hanging the handler.
+     */
+    uploadImage: async (input: UploadImageInput): Promise<Result<HackNightImage, CmsError>> =>
+      Result.tryPromise({
+        try: async () => {
+          const response = await fetch(input.url, {
+            signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+          });
+          if (!response.ok) {
+            throw new UpstreamError({
+              service: "discord-cdn",
+              status: response.status,
+              detail: `could not fetch ${input.filename}`,
+            });
+          }
+
+          const blob = await response.blob();
+          const file = new File([blob], input.filename, {
+            type: blob.type.length > 0 ? blob.type : input.contentType,
+          });
+
+          const created = await payload.create({
+            collection: COLLECTION,
+            data: {
+              alt: altTextFor(input.slug, input.filename),
+              source: SOURCE,
+              batchId: input.slug,
+              discordMessageId: input.discordMessageId,
+              discordUserId: input.discordUserId,
+            },
+            file,
+          });
+          return project(created.doc);
+        },
+        catch: (cause) =>
+          cause instanceof UpstreamError ? cause : toCmsError("upload hack night image")(cause),
+      }),
 
     /** True when a photo for this Discord message is already filed. */
     hasImageForMessage: async (

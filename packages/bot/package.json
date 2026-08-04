@@ -9,13 +9,21 @@
     "register-commands": "bun run src/commands/register.ts"
   },
   "dependencies": {
+    "@ai-sdk/groq": "^4.0.20",
     "@payloadcms/sdk": "^3.87.0",
+    "@purduehackers/discord-markdown-utils": "^0.0.4",
     "@purduehackers/time": "^0.7.0",
     "@repo/shared": "workspace:*",
     "@t3-oss/env-core": "^0.13.11",
     "@vercel/edge-config": "^1.5.0",
+    "ai": "^7.0.50",
+    "codec-parser": "^2.5.0",
     "croner": "^10.0.1",
     "discord.js": "^14.27.0",
+    "rehype-stringify": "^10.0.1",
+    "remark-parse": "^11.0.0",
+    "remark-rehype": "^11.1.2",
+    "unified": "^11.0.5",
     "zod": "4.4.3"
   },
   "devDependencies": {

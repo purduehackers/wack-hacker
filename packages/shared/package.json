@@ -11,7 +11,8 @@
     "./discord": "./src/discord/index.ts",
     "./db": "./src/db/index.ts",
     "./redis": "./src/redis/client.ts",
-    "./wire": "./src/wire.ts"
+    "./wire": "./src/wire.ts",
+    "./text": "./src/text.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

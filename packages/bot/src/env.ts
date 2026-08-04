@@ -53,6 +53,15 @@ export const env = createEnv({
     /** The hack night photo archive in Payload CMS. */
     PAYLOAD_CMS_API_KEY: secret,
 
+    /** Mirroring #ship posts to ships.purduehackers.com. */
+    SHIP_API_KEY: secret,
+
+    /** Mirroring public messages to the dashboard at api.purduehackers.com. */
+    PHACK_API_TOKEN: secret,
+
+    /** Voice-message transcription via Groq whisper-large-v3. */
+    GROQ_API_KEY: secret,
+
     SENTRY_DSN: z.string().url().optional(),
   },
   runtimeEnv: process.env,

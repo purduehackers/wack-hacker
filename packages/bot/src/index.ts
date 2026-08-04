@@ -79,7 +79,13 @@ async function main(): Promise<void> {
     token: env.UPSTASH_REDIS_REST_TOKEN,
   });
 
-  const handlers = buildEventHandlers();
+  const handlers = buildEventHandlers({
+    redis,
+    cmsApiKey: env.PAYLOAD_CMS_API_KEY,
+    shipApiKey: env.SHIP_API_KEY,
+    dashboardApiToken: env.PHACK_API_TOKEN,
+    groqApiKey: env.GROQ_API_KEY,
+  });
   attachEventRouter(ready, {
     handlers,
     reporter: consoleReporter,
