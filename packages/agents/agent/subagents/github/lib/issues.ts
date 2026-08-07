@@ -1,14 +1,12 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { octokit } from "./client.ts";
 import { env } from "./config.ts";
 import { paginationInputShape } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 /** Create a new issue in a repository. */
 export const create_issue = defineTool({
-  name: "create_issue",
-  domain: "github",
   description: `Create a new issue in a repository. Supports Markdown body, assignees, labels, and milestone. Returns the issue number, title, URL, and state.`,
   access: { risk: "write" },
   input: z.object({
@@ -40,8 +38,6 @@ export const create_issue = defineTool({
 
 /** Update an existing issue's title, body, state, assignees, labels, or milestone. */
 export const update_issue = defineTool({
-  name: "update_issue",
-  domain: "github",
   description: `Update an existing issue. Can change its title, body, state (open/closed), assignees, labels, or milestone. Returns the updated issue summary.`,
   access: { risk: "write" },
   input: z.object({
@@ -77,8 +73,6 @@ export const update_issue = defineTool({
 
 /** Lock an issue's conversation. */
 export const lock_issue = defineTool({
-  name: "lock_issue",
-  domain: "github",
   description:
     "Lock the conversation on an issue or PR so only collaborators can comment. Useful for derailed threads.",
   access: { risk: "write", confirm: "self" },
@@ -103,8 +97,6 @@ export const lock_issue = defineTool({
 
 /** Unlock an issue's conversation. */
 export const unlock_issue = defineTool({
-  name: "unlock_issue",
-  domain: "github",
   description: "Unlock a previously locked issue or PR conversation.",
   access: { risk: "write" },
   input: z.object({
@@ -123,8 +115,6 @@ export const unlock_issue = defineTool({
 
 /** Add assignees to an issue or PR. */
 export const add_assignees = defineTool({
-  name: "add_assignees",
-  domain: "github",
   description: "Add assignees to an issue or PR. Up to 10 assignees.",
   access: { risk: "write" },
   input: z.object({
@@ -148,8 +138,6 @@ export const add_assignees = defineTool({
 
 /** Remove assignees from an issue or PR. */
 export const remove_assignees = defineTool({
-  name: "remove_assignees",
-  domain: "github",
   description: "Remove assignees from an issue or PR.",
   access: { risk: "write", confirm: "self" },
   input: z.object({
@@ -173,8 +161,6 @@ export const remove_assignees = defineTool({
 
 /** List comments on an issue with pagination. */
 export const list_issue_comments = defineTool({
-  name: "list_issue_comments",
-  domain: "github",
   description: `List comments on an issue. Returns each comment's ID, body, author, timestamps, and URL. Useful for understanding discussion history.`,
   access: { risk: "read" },
   input: z.object({
@@ -205,8 +191,6 @@ export const list_issue_comments = defineTool({
 
 /** Add a comment to an issue. */
 export const create_issue_comment = defineTool({
-  name: "create_issue_comment",
-  domain: "github",
   description: `Add a new comment to an issue. Supports Markdown. Returns the comment ID and URL.`,
   access: { risk: "write" },
   input: z.object({
@@ -227,8 +211,6 @@ export const create_issue_comment = defineTool({
 
 /** Edit an existing issue comment. */
 export const update_issue_comment = defineTool({
-  name: "update_issue_comment",
-  domain: "github",
   description: `Edit an existing issue comment by its ID. Replaces the entire body with the new Markdown content. Returns the comment ID and URL.`,
   access: { risk: "write" },
   input: z.object({
@@ -249,8 +231,6 @@ export const update_issue_comment = defineTool({
 
 /** Delete an issue comment. */
 export const delete_issue_comment = defineTool({
-  name: "delete_issue_comment",
-  domain: "github",
   description: `Permanently delete an issue comment by its ID. This action cannot be undone.`,
   access: { risk: "destructive" },
   input: z.object({
@@ -269,8 +249,6 @@ export const delete_issue_comment = defineTool({
 
 /** Create, update, or delete a label in a repository. */
 export const manage_labels = defineTool({
-  name: "manage_labels",
-  domain: "github",
   description: `Create, update, or delete a label in a repository. For 'create' and 'update', you can set name, color (hex without #), and description. For 'update', use new_name to rename. Returns the label name and color on success.`,
   access: { risk: "destructive" },
   input: z.object({
@@ -317,8 +295,6 @@ export const manage_labels = defineTool({
 
 /** Create, update, or delete a milestone in a repository. */
 export const manage_milestones = defineTool({
-  name: "manage_milestones",
-  domain: "github",
   description: `Create, update, or delete a milestone in a repository. For 'create', title is required. For 'update' and 'delete', milestone_number is required. Supports setting description, state, and due date.`,
   access: { risk: "destructive" },
   input: z.object({

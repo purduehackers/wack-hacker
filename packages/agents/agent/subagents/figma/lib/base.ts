@@ -5,8 +5,8 @@ import type {
 } from "@figma/rest-api-spec";
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { figma, figmaFileUrl } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -28,8 +28,6 @@ function summarizeFile(f: GetProjectFilesResponse["files"][number], projectName?
 // ---------------------------------------------------------------------------
 
 export const get_file = defineTool({
-  name: "get_file",
-  domain: "figma",
   description:
     "Get a Figma file's metadata and document structure. Use depth to control how deep the node tree goes (default 1 = pages only). Large files can be enormous — start shallow.",
   access: { risk: "read" },
@@ -56,8 +54,6 @@ export const get_file = defineTool({
 });
 
 export const list_projects = defineTool({
-  name: "list_projects",
-  domain: "figma",
   description: "List all projects in the team. Returns project IDs and names.",
   access: { risk: "read" },
   input: z.object({}),
@@ -71,8 +67,6 @@ export const list_projects = defineTool({
 });
 
 export const list_project_files = defineTool({
-  name: "list_project_files",
-  domain: "figma",
   description:
     "List files in a specific project. Returns file keys, names, last modified times, and thumbnail URLs.",
   access: { risk: "read" },
@@ -86,8 +80,6 @@ export const list_project_files = defineTool({
 });
 
 export const search_files = defineTool({
-  name: "search_files",
-  domain: "figma",
   description:
     "Search for files by name across all team projects. Fetches all projects and their files, then filters by query. May be slow for large teams.",
   access: { risk: "read" },

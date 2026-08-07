@@ -1,14 +1,12 @@
 import { queryExploreEventsInTableFormat, unwrapResult } from "@sentry/api";
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { escapeQuery, sentryGet, sentryOpts, sentryOrg, sentryProjectId } from "./client.ts";
 import { perPageField } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 /** List transactions with performance metrics using the Discover API. */
 export const list_transactions = defineTool({
-  name: "list_transactions",
-  domain: "sentry",
   description:
     "List transaction events with performance metrics. Common fields: 'transaction', 'count()', 'p50(transaction.duration)', 'p95(transaction.duration)', 'avg(transaction.duration)'.",
   access: { risk: "read" },
@@ -41,8 +39,6 @@ export const list_transactions = defineTool({
 
 /** Get aggregated performance stats for a transaction over time. */
 export const get_transaction_summary = defineTool({
-  name: "get_transaction_summary",
-  domain: "sentry",
   description:
     "Get time-series performance data for a specific transaction. Useful for spotting regressions or trends.",
   access: { risk: "read" },
@@ -73,8 +69,6 @@ export const get_transaction_summary = defineTool({
 
 /** Query span-level performance data. */
 export const list_spans = defineTool({
-  name: "list_spans",
-  domain: "sentry",
   description:
     "Query span-level data for deeper performance analysis. Useful for finding slow database queries, HTTP calls, or specific operations.",
   access: { risk: "read" },

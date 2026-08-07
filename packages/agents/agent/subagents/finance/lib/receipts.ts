@@ -1,7 +1,7 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { hcbGet, hcbOrgSlug, hcbPaginate, hcbTxnUrl } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 
 const hcbTransactionSchema = z.object({
   id: z.string().optional(),
@@ -23,8 +23,6 @@ type HcbTransaction = z.infer<typeof hcbTransactionSchema>;
  * viewing actual receipt files still requires the HCB web UI.
  */
 export const list_missing_receipts = defineTool({
-  name: "list_missing_receipts",
-  domain: "finance",
   description:
     "List HCB transactions flagged as missing a receipt. Note: only HCB card charges and HCB reimbursements are tracked here — org-wide reimbursements through Purdue's BOSO portal are NOT in HCB. The HCB API does not expose receipt files themselves — only whether one is attached. Link users to hcb.hackclub.com/hcb/{id} to upload/view files.",
   access: { risk: "read" },
@@ -54,8 +52,6 @@ export const list_missing_receipts = defineTool({
 
 /** Report whether a given transaction has a receipt attached. */
 export const get_receipt_status = defineTool({
-  name: "get_receipt_status",
-  domain: "finance",
   description:
     "Report whether a given HCB transaction has a receipt attached — returns { id, receipts: { count, missing }, href }. The HCB API does not expose the receipt file itself; to upload or view the actual image/PDF, visit hcb.hackclub.com/hcb/{id}.",
   access: { risk: "read" },

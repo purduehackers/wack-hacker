@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import {
   addCartItem,
   clearCart,
@@ -7,7 +8,6 @@ import {
   removeCartItem,
   setCartItemQuantity,
 } from "./cart-store.ts";
-import { defineTool } from "./define-tool.ts";
 import type { CartItem, PublicCartItem } from "./shopping-types.ts";
 
 const PAGE_SIZE = 10;
@@ -33,8 +33,6 @@ function summarize(items: CartItem[]) {
 }
 
 export const add_to_cart = defineTool({
-  name: "add_to_cart",
-  domain: "shopping",
   description:
     "Add a product to the shared cart. If the ASIN is already in the cart, the quantity is increased. Use search_products first to get the ASIN, title, and price.",
   access: { risk: "write" },
@@ -56,8 +54,6 @@ export const add_to_cart = defineTool({
 });
 
 export const remove_from_cart = defineTool({
-  name: "remove_from_cart",
-  domain: "shopping",
   description: "Remove a product from the cart by ASIN.",
   access: { risk: "write", confirm: "self" },
   input: z.object({
@@ -74,8 +70,6 @@ export const remove_from_cart = defineTool({
 });
 
 export const update_quantity = defineTool({
-  name: "update_quantity",
-  domain: "shopping",
   description:
     "Set the quantity of an item in the cart. Quantity of 0 removes the item. Item must already be in the cart.",
   access: { risk: "write" },
@@ -91,8 +85,6 @@ export const update_quantity = defineTool({
 });
 
 export const view_cart = defineTool({
-  name: "view_cart",
-  domain: "shopping",
   description:
     "View the shared cart. Items are paginated to keep Discord messages short — pass `page` (1-indexed) to navigate when there are many items.",
   access: { risk: "read" },
@@ -121,8 +113,6 @@ export const view_cart = defineTool({
 });
 
 export const clear_cart = defineTool({
-  name: "clear_cart",
-  domain: "shopping",
   description:
     "Remove every item from the shared cart. This is irreversible — always confirm with the user before calling.",
   access: { risk: "write", confirm: "self" },

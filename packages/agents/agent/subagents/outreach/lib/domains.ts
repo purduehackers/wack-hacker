@@ -1,11 +1,9 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { resend } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 
 export const list_domains = defineTool({
-  name: "list_domains",
-  domain: "outreach",
   description:
     "List verified sending domains on Resend. Returns domain name, region, status (pending, verified, failed), and created date.",
   access: { risk: "read" },
@@ -18,8 +16,6 @@ export const list_domains = defineTool({
 });
 
 export const get_domain = defineTool({
-  name: "get_domain",
-  domain: "outreach",
   description: "Get a single Resend domain by ID, including DNS records and verification status.",
   access: { risk: "read" },
   input: z.object({
@@ -33,8 +29,6 @@ export const get_domain = defineTool({
 });
 
 export const create_domain = defineTool({
-  name: "create_domain",
-  domain: "outreach",
   description:
     "Register a new sending domain on Resend. Returns the DNS records that must be added at the registrar before the domain can be verified.",
   access: { risk: "destructive", minRole: "admin" },
@@ -56,8 +50,6 @@ export const create_domain = defineTool({
 });
 
 export const verify_domain = defineTool({
-  name: "verify_domain",
-  domain: "outreach",
   description:
     "Kick off verification for a Resend domain. DNS records must already be added; this tells Resend to re-check them.",
   access: { risk: "destructive", minRole: "admin" },
@@ -72,8 +64,6 @@ export const verify_domain = defineTool({
 });
 
 export const delete_domain = defineTool({
-  name: "delete_domain",
-  domain: "outreach",
   description:
     "Permanently delete a Resend domain. All sending from that domain stops immediately.",
   access: { risk: "destructive", minRole: "admin" },

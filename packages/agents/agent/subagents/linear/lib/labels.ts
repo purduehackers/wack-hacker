@@ -1,12 +1,10 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { linear } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 import { sdkInput } from "./sdk-input.ts";
 
 export const list_labels = defineTool({
-  name: "list_labels",
-  domain: "linear",
   description:
     "List issue labels across the Linear workspace. Optionally filter by team. Returns ID, name, color, and team.",
   access: { risk: "read" },
@@ -37,8 +35,6 @@ export const list_labels = defineTool({
 });
 
 export const get_label = defineTool({
-  name: "get_label",
-  domain: "linear",
   description: "Get details for a single label by ID.",
   access: { risk: "read" },
   input: z.object({ id: z.string().describe("Label UUID") }),
@@ -58,8 +54,6 @@ export const get_label = defineTool({
 });
 
 export const create_label = defineTool({
-  name: "create_label",
-  domain: "linear",
   description:
     "Create a new issue label. Scope to a team by passing team_id, otherwise creates a workspace-wide label.",
   access: { risk: "write" },
@@ -85,8 +79,6 @@ export const create_label = defineTool({
 });
 
 export const update_label = defineTool({
-  name: "update_label",
-  domain: "linear",
   description: "Update a label's name, color, or description.",
   access: { risk: "write" },
   input: z.object({
@@ -107,8 +99,6 @@ export const update_label = defineTool({
 });
 
 export const delete_label = defineTool({
-  name: "delete_label",
-  domain: "linear",
   description:
     "Delete a label. This removes it from all issues. Irreversible — always confirm with the user.",
   access: { risk: "destructive" },

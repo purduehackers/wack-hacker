@@ -1,12 +1,10 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { notion } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 import { cursorPaginationInputShape } from "./shared-constants.ts";
 
 export const create_comment = defineTool({
-  name: "create_comment",
-  domain: "notion",
   description: `Add a comment to a page or reply in an existing discussion thread. For new comments, use parent_type "page_id". For replies, use "discussion_id" (get the ID from list_comments).`,
   access: { risk: "write" },
   input: z.object({
@@ -31,8 +29,6 @@ export const create_comment = defineTool({
 });
 
 export const retrieve_comment = defineTool({
-  name: "retrieve_comment",
-  domain: "notion",
   description:
     "Get a single Notion comment by ID. Returns text, author, discussion thread ID, and timestamp.",
   access: { risk: "read" },
@@ -52,8 +48,6 @@ export const retrieve_comment = defineTool({
 });
 
 export const list_comments = defineTool({
-  name: "list_comments",
-  domain: "notion",
   description: `List comments on a page. Returns comment text, author, timestamp, and discussion thread ID (for replies). Paginated.`,
   access: { risk: "read" },
   input: z.object({

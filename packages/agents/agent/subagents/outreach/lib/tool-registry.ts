@@ -1,9 +1,9 @@
+import type { DomainToolSpec } from "../../../lib/policy/domain-tools.ts";
 import * as m_audiences from "./audiences.ts";
 import * as m_broadcasts from "./broadcasts.ts";
 import * as m_companies from "./companies.ts";
 import * as m_contacts from "./contacts.ts";
 import * as m_deals from "./deals.ts";
-import type { OutreachToolSpec } from "./define-tool.ts";
 import * as m_domains from "./domains.ts";
 import * as m_emails from "./emails.ts";
 import * as m_enrichment from "./enrichment.ts";
@@ -52,6 +52,6 @@ export const OUTREACH_TOOLS = {
   update_deal_stage: m_deals.update_deal_stage,
   verify_domain: m_domains.verify_domain,
   verify_email: m_enrichment.verify_email,
-} as const satisfies Record<string, OutreachToolSpec>;
+} as const satisfies Record<string, DomainToolSpec>;
 
 export type OutreachToolName = keyof typeof OUTREACH_TOOLS;

@@ -7,9 +7,9 @@ import type {
 } from "@notionhq/client/build/src/api-endpoints";
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { notion } from "./client.ts";
 import { COMPANIES_DATA_SOURCE_ID } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 import { isCreateProperties, isQueryFilter, isQuerySorts } from "./notion-input.ts";
 import { cursorPaginationInputShape } from "./shared-constants.ts";
 
@@ -26,8 +26,6 @@ function summarizePage(page: CrmPage): Record<string, unknown> {
 }
 
 export const list_companies = defineTool({
-  name: "list_companies",
-  domain: "outreach",
   description: `List Company pages in the CRM. Supports Notion filters/sorts against the Companies data source. Call retrieve_crm_schema first to get the exact property names and select options.`,
   access: { risk: "read" },
   input: z.object({
@@ -70,8 +68,6 @@ export const list_companies = defineTool({
 });
 
 export const get_company = defineTool({
-  name: "get_company",
-  domain: "outreach",
   description: `Retrieve a single Company page by its Notion page ID. Returns every property including outreach tracking state.`,
   access: { risk: "read" },
   input: z.object({
@@ -84,8 +80,6 @@ export const get_company = defineTool({
 });
 
 export const create_company = defineTool({
-  name: "create_company",
-  domain: "outreach",
   description: `Create a new Company row in the CRM. Provide at least the company name; other properties should match the Companies data source schema (call retrieve_crm_schema first if unsure).`,
   access: { risk: "write" },
   input: z.object({
@@ -116,8 +110,6 @@ export const create_company = defineTool({
 });
 
 export const archive_company = defineTool({
-  name: "archive_company",
-  domain: "outreach",
   description:
     "Archive (soft-delete) a Company CRM row. The Notion page is marked archived and drops out of lists but can be restored from the Notion UI.",
   access: { risk: "destructive" },
@@ -134,8 +126,6 @@ export const archive_company = defineTool({
 });
 
 export const update_company_status = defineTool({
-  name: "update_company_status",
-  domain: "outreach",
   description: `Set the Company Status property. Use an option that matches the data source schema (e.g. "Not Contacted", "Contacted", "Awaiting Response", "Donated"). Call retrieve_crm_schema first if unsure.`,
   access: { risk: "write" },
   input: z.object({
@@ -152,8 +142,6 @@ export const update_company_status = defineTool({
 });
 
 export const update_company_email = defineTool({
-  name: "update_company_email",
-  domain: "outreach",
   description: `Set the Company Email property. Use after verifying an address via verify_email.`,
   access: { risk: "write" },
   input: z.object({
@@ -170,8 +158,6 @@ export const update_company_email = defineTool({
 });
 
 export const update_company_next_followup = defineTool({
-  name: "update_company_next_followup",
-  domain: "outreach",
   description: `Set the Company "Next Follow-up" date property. Pass an ISO date string (YYYY-MM-DD) or null to clear it.`,
   access: { risk: "write" },
   input: z.object({

@@ -1,8 +1,8 @@
 import type { SearchParameters, SearchResponse } from "@notionhq/client/build/src/api-endpoints";
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { firstDataSourceId, notion, richTextToPlain } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 import { cursorPaginationInputShape } from "./shared-constants.ts";
 
 /** Extract a title string from an SDK search result (page or data source). */
@@ -18,8 +18,6 @@ function extractTitle(result: SearchResult) {
 }
 
 export const search_notion = defineTool({
-  name: "search_notion",
-  domain: "notion",
   description: `Search the Notion workspace by keyword. Returns matching pages and databases with title, URL, and last edited time. Use type filter to narrow results.`,
   access: { risk: "read" },
   input: z.object({
@@ -53,8 +51,6 @@ export const search_notion = defineTool({
 });
 
 export const retrieve_page = defineTool({
-  name: "retrieve_page",
-  domain: "notion",
   description: `Get a page's properties and metadata — title, URL, parent, timestamps, icon, cover, and all property values. Use to inspect a page before modifying it.`,
   access: { risk: "read" },
   input: z.object({
@@ -78,8 +74,6 @@ export const retrieve_page = defineTool({
 });
 
 export const retrieve_database = defineTool({
-  name: "retrieve_database",
-  domain: "notion",
   description: `Get a database's schema — title, property definitions (types, options), and URL. Always call this before querying or creating entries to understand the schema.`,
   access: { risk: "read" },
   input: z.object({
@@ -103,8 +97,6 @@ export const retrieve_database = defineTool({
 });
 
 export const retrieve_user = defineTool({
-  name: "retrieve_user",
-  domain: "notion",
   description:
     "Get a single Notion user by ID. Returns name, email (for people), type (person or bot), and avatar URL.",
   access: { risk: "read" },
@@ -124,8 +116,6 @@ export const retrieve_user = defineTool({
 });
 
 export const retrieve_bot_user = defineTool({
-  name: "retrieve_bot_user",
-  domain: "notion",
   description:
     "Get info about the bot user backing this integration — useful for confirming which workspace and user the integration is acting as.",
   access: { risk: "read" },
@@ -142,8 +132,6 @@ export const retrieve_bot_user = defineTool({
 });
 
 export const list_users = defineTool({
-  name: "list_users",
-  domain: "notion",
   description: `List workspace users. Returns name, email, type (person or bot), and avatar URL. Use to resolve user names to IDs for people properties.`,
   access: { risk: "read" },
   input: z.object({

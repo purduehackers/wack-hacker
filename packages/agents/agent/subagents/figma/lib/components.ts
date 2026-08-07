@@ -13,8 +13,8 @@ import type {
 } from "@figma/rest-api-spec";
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { figma } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -52,8 +52,6 @@ function summarizeStyle(s: PublishedStyle) {
 // ---------------------------------------------------------------------------
 
 export const list_team_components = defineTool({
-  name: "list_team_components",
-  domain: "figma",
   description: "List published components across the team. Paginated.",
   access: { risk: "read" },
   input: z.object({
@@ -77,8 +75,6 @@ export const list_team_components = defineTool({
 });
 
 export const list_file_components = defineTool({
-  name: "list_file_components",
-  domain: "figma",
   description: "List components in a specific Figma file.",
   access: { risk: "read" },
   input: z.object({
@@ -93,8 +89,6 @@ export const list_file_components = defineTool({
 });
 
 export const get_component = defineTool({
-  name: "get_component",
-  domain: "figma",
   description: "Get full details of a published component by its key.",
   access: { risk: "read" },
   input: z.object({
@@ -107,8 +101,6 @@ export const get_component = defineTool({
 });
 
 export const list_team_component_sets = defineTool({
-  name: "list_team_component_sets",
-  domain: "figma",
   description:
     "List published component sets (variant groups) across the team. A component set groups variants of the same component.",
   access: { risk: "read" },
@@ -133,8 +125,6 @@ export const list_team_component_sets = defineTool({
 });
 
 export const get_component_set = defineTool({
-  name: "get_component_set",
-  domain: "figma",
   description: "Get full details of a published component set by its key.",
   access: { risk: "read" },
   input: z.object({
@@ -153,8 +143,6 @@ export const get_component_set = defineTool({
 // ---------------------------------------------------------------------------
 
 export const list_team_styles = defineTool({
-  name: "list_team_styles",
-  domain: "figma",
   description: "List published styles (colors, text, effects, grids) across the team. Paginated.",
   access: { risk: "read" },
   input: z.object({
@@ -178,8 +166,6 @@ export const list_team_styles = defineTool({
 });
 
 export const list_file_styles = defineTool({
-  name: "list_file_styles",
-  domain: "figma",
   description: "List styles in a specific Figma file.",
   access: { risk: "read" },
   input: z.object({
@@ -194,8 +180,6 @@ export const list_file_styles = defineTool({
 });
 
 export const get_style = defineTool({
-  name: "get_style",
-  domain: "figma",
   description: "Get full details of a published style by its key.",
   access: { risk: "read" },
   input: z.object({

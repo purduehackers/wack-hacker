@@ -1,14 +1,12 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { octokit } from "./client.ts";
 import { env } from "./config.ts";
 import { paginationInputShape } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 /** List deployments for a repository. */
 export const list_deployments = defineTool({
-  name: "list_deployments",
-  domain: "github",
   description: `List deployments for a repository. Optionally filter by environment name or ref (branch/tag/SHA). Returns deployment ID, ref, environment, description, creator, and timestamps.`,
   access: { risk: "read" },
   input: z.object({
@@ -42,8 +40,6 @@ export const list_deployments = defineTool({
 
 /** Create a new deployment for a repository. */
 export const create_deployment = defineTool({
-  name: "create_deployment",
-  domain: "github",
   description: `Create a new deployment for a repository. Specify the ref (branch/tag/SHA) to deploy and optionally the target environment. Returns the deployment ID and details, or a message if required status checks haven't passed.`,
   access: { risk: "destructive" },
   input: z.object({
@@ -78,8 +74,6 @@ export const create_deployment = defineTool({
 
 /** Create a status update for an existing deployment. */
 export const create_deployment_status = defineTool({
-  name: "create_deployment_status",
-  domain: "github",
   description: `Create a status update for an existing deployment. Set the state (success, failure, in_progress, etc.) and optionally provide the deployed environment URL and log URL.`,
   access: { risk: "write" },
   input: z.object({
@@ -112,8 +106,6 @@ export const create_deployment_status = defineTool({
 
 /** Get GitHub Pages configuration for a repository. */
 export const get_pages_info = defineTool({
-  name: "get_pages_info",
-  domain: "github",
   description: `Get the GitHub Pages configuration for a repository, including the published URL, status, source branch/path, and HTTPS enforcement. Returns a message if Pages is not enabled.`,
   access: { risk: "read" },
   input: z.object({
@@ -145,8 +137,6 @@ export const get_pages_info = defineTool({
 
 /** List GitHub Pages builds for a repository. */
 export const list_pages_builds = defineTool({
-  name: "list_pages_builds",
-  domain: "github",
   description: `List GitHub Pages builds for a repository. Returns each build's status, error info, timestamps, and duration. Useful for debugging Pages deployment issues.`,
   access: { risk: "read" },
   input: z.object({
@@ -174,8 +164,6 @@ export const list_pages_builds = defineTool({
 
 /** Request a GitHub Pages build. */
 export const trigger_pages_build = defineTool({
-  name: "trigger_pages_build",
-  domain: "github",
   description: `Manually trigger a GitHub Pages build for a repository. Returns the build status and URL. Only works for repos with Pages enabled.`,
   access: { risk: "destructive" },
   input: z.object({

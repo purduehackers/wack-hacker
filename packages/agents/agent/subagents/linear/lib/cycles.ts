@@ -1,12 +1,10 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { linear } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 import { sdkInput } from "./sdk-input.ts";
 
 export const list_cycles = defineTool({
-  name: "list_cycles",
-  domain: "linear",
   description:
     "List cycles (sprints) for a team or across the workspace. Returns ID, name, number, start/end dates, and completion stats.",
   access: { risk: "read" },
@@ -33,8 +31,6 @@ export const list_cycles = defineTool({
 });
 
 export const get_cycle = defineTool({
-  name: "get_cycle",
-  domain: "linear",
   description: "Get a single cycle's full details by ID.",
   access: { risk: "read" },
   input: z.object({ id: z.string().describe("Cycle UUID") }),
@@ -54,8 +50,6 @@ export const get_cycle = defineTool({
 });
 
 export const create_cycle = defineTool({
-  name: "create_cycle",
-  domain: "linear",
   description:
     "Create a new cycle for a team. Dates are ISO 8601. Name is optional and defaults to a generated name.",
   access: { risk: "write" },
@@ -82,8 +76,6 @@ export const create_cycle = defineTool({
 });
 
 export const update_cycle = defineTool({
-  name: "update_cycle",
-  domain: "linear",
   description: "Update a cycle's name, description, or dates.",
   access: { risk: "write" },
   input: z.object({
@@ -109,8 +101,6 @@ export const update_cycle = defineTool({
 });
 
 export const archive_cycle = defineTool({
-  name: "archive_cycle",
-  domain: "linear",
   description:
     "Archive a cycle. Cycles cannot be hard-deleted in Linear — archiving is the closest equivalent.",
   access: { risk: "destructive" },

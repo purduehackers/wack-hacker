@@ -6,8 +6,8 @@ import type {
 } from "@figma/rest-api-spec";
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { figma } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 
 type VariableCollectionChange = NonNullable<
   PostVariablesRequestBody["variableCollections"]
@@ -199,8 +199,6 @@ const variableChangeSchema = variableChangeInputSchema.transform((change): Varia
 }) satisfies z.ZodType<VariableChange>;
 
 export const get_local_variables = defineTool({
-  name: "get_local_variables",
-  domain: "figma",
   description:
     "Get all local variables and variable collections in a Figma file, including unpublished ones. Variables have modes (e.g., Light/Dark) with per-mode values.",
   access: { risk: "read" },
@@ -216,8 +214,6 @@ export const get_local_variables = defineTool({
 });
 
 export const get_published_variables = defineTool({
-  name: "get_published_variables",
-  domain: "figma",
   description:
     "Get published variables and variable collections in a Figma file. Only returns variables that have been published and are visible to consumers.",
   access: { risk: "read" },
@@ -233,8 +229,6 @@ export const get_published_variables = defineTool({
 });
 
 export const modify_variables = defineTool({
-  name: "modify_variables",
-  domain: "figma",
   description:
     'Bulk create, update, or delete variables and variable collections in a Figma file. Each entry specifies an action ("CREATE", "UPDATE", or "DELETE"). Read current variables first before modifying.',
   access: { risk: "destructive" },

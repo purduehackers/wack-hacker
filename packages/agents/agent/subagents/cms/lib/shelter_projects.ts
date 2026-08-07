@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import {
   cmsAdminUrl,
   paginationQuery,
@@ -8,7 +9,6 @@ import {
   wrapPayloadError,
 } from "./client.ts";
 import { paginationInputShape } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 const COLLECTION = "shelter-projects";
 
@@ -36,8 +36,6 @@ function projectShelter(s: PayloadShelterProject) {
 }
 
 export const list_shelter_projects = defineTool({
-  name: "list_shelter_projects",
-  domain: "cms",
   description:
     "List shelter wall project showcase entries. Each has name, last_division, last_owner, description, and a `visible` flag (true = shown publicly).",
   access: { risk: "read" },
@@ -65,8 +63,6 @@ export const list_shelter_projects = defineTool({
 });
 
 export const get_shelter_project = defineTool({
-  name: "get_shelter_project",
-  domain: "cms",
   description: "Fetch a single shelter project by ID.",
   access: { risk: "read" },
   input: z.object({ id: z.union([z.string(), z.number()]) }),
@@ -84,8 +80,6 @@ export const get_shelter_project = defineTool({
 });
 
 export const create_shelter_project = defineTool({
-  name: "create_shelter_project",
-  domain: "cms",
   description:
     "Create a new shelter project. `image_id` must point at an existing media asset (upload via `upload_media` first). Defaults to visible: false — flip with `publish_shelter_project` when ready.",
   access: { risk: "write" },
@@ -111,8 +105,6 @@ export const create_shelter_project = defineTool({
 });
 
 export const update_shelter_project = defineTool({
-  name: "update_shelter_project",
-  domain: "cms",
   description: "Update a shelter project. Only fields you pass are changed.",
   access: { risk: "write" },
   input: z.object({
@@ -141,8 +133,6 @@ export const update_shelter_project = defineTool({
 });
 
 export const delete_shelter_project = defineTool({
-  name: "delete_shelter_project",
-  domain: "cms",
   description: "Delete a shelter project permanently.",
   access: { risk: "destructive" },
   input: z.object({ id: z.union([z.string(), z.number()]) }),
@@ -160,8 +150,6 @@ export const delete_shelter_project = defineTool({
 });
 
 export const publish_shelter_project = defineTool({
-  name: "publish_shelter_project",
-  domain: "cms",
   description: "Make a shelter project visible on the public showcase (visible: true).",
   access: { risk: "destructive" },
   input: z.object({ id: z.union([z.string(), z.number()]) }),
@@ -180,8 +168,6 @@ export const publish_shelter_project = defineTool({
 });
 
 export const unpublish_shelter_project = defineTool({
-  name: "unpublish_shelter_project",
-  domain: "cms",
   description: "Hide a shelter project from the public showcase (visible: false).",
   access: { risk: "destructive" },
   input: z.object({ id: z.union([z.string(), z.number()]) }),

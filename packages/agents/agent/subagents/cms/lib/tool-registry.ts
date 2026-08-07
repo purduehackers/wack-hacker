@@ -1,4 +1,4 @@
-import type { CmsToolSpec } from "./define-tool.ts";
+import type { DomainToolSpec } from "../../../lib/policy/domain-tools.ts";
 import * as m_emails from "./emails.ts";
 import * as m_events from "./events.ts";
 import * as m_hack_night_sessions from "./hack_night_sessions.ts";
@@ -64,6 +64,6 @@ export const CMS_TOOLS = {
   create_service_account: m_service_accounts.create_service_account,
   update_service_account: m_service_accounts.update_service_account,
   delete_service_account: m_service_accounts.delete_service_account,
-} as const satisfies Record<string, CmsToolSpec>;
+} as const satisfies Record<string, DomainToolSpec>;
 
 export type CmsToolName = keyof typeof CMS_TOOLS;

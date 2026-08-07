@@ -1,11 +1,9 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { linear, issueFilter } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 
 export const search_entities = defineTool({
-  name: "search_entities",
-  domain: "linear",
   description:
     "Search Linear entities by keyword. Use for finding issues, projects, documents, initiatives, users, teams, customers, or labels. Returns IDs, names/identifiers, and URLs. Use entityType 'User' to resolve a person's name to their Linear user ID.",
   access: { risk: "read" },
@@ -91,8 +89,6 @@ export const search_entities = defineTool({
 });
 
 export const retrieve_entities = defineTool({
-  name: "retrieve_entities",
-  domain: "linear",
   description:
     "Fetch full details for one or more entities by ID, identifier (e.g. TEAM-123), or URL. Returns all fields including description, state, assignee, labels, relations, and URLs. Use this to get the full picture of an entity before acting on it.",
   access: { risk: "read" },
@@ -189,8 +185,6 @@ export const retrieve_entities = defineTool({
 });
 
 export const suggest_property_values = defineTool({
-  name: "suggest_property_values",
-  domain: "linear",
   description:
     "Resolve human-readable names to Linear UUIDs for entity fields. MUST be called before create/update to get valid IDs for assignee, team, status, project, cycle, labels, or milestone. Use field 'Issue.assigneeId' with a name query to find a user's ID.",
   access: { risk: "read" },
@@ -259,8 +253,6 @@ export const suggest_property_values = defineTool({
 });
 
 export const aggregate_issues = defineTool({
-  name: "aggregate_issues",
-  domain: "linear",
   description:
     "Get aggregated issue counts grouped by status, assignee, label, priority, project, or team. Returns CSV. Use for 'how many issues...', 'break down by...', or distribution questions. Supports optional filters by team, project, assignee, or state.",
   access: { risk: "read" },

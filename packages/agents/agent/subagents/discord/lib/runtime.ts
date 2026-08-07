@@ -14,6 +14,7 @@ import type { z } from "zod";
 
 import { assertToolOutput } from "../../../lib/core/serialization.ts";
 import { env } from "../../../lib/env.ts";
+import type { DomainToolSpec } from "../../../lib/policy/domain-tools.ts";
 import { resolveExecutionAuthority } from "../../../lib/policy/execution-authority.ts";
 import {
   ApprovalPolicyStore,
@@ -25,7 +26,6 @@ import {
   type PolicyEvaluationContext,
   type PolicyPrincipal,
 } from "../../../lib/policy/index.ts";
-import type { DiscordToolSpec } from "./define-tool.ts";
 import { descriptorForTool, isDiscordToolName } from "./descriptors.ts";
 import { DISCORD_TOOLS, type DiscordToolName } from "./tool-registry.ts";
 
@@ -204,7 +204,7 @@ export async function executeDiscordTool(
   }
 
   // oxlint-disable-next-line typescript/consistent-type-assertions -- normalize the catalog union after validated name lookup.
-  const spec = DISCORD_TOOLS[name] as DiscordToolSpec<z.ZodType>;
+  const spec = DISCORD_TOOLS[name] as DomainToolSpec<z.ZodType>;
   const parsed = spec.input.safeParse(input);
   if (!parsed.success) {
     return {

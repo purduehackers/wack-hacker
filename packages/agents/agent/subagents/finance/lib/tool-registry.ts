@@ -1,6 +1,6 @@
+import type { DomainToolSpec } from "../../../lib/policy/domain-tools.ts";
 import * as m_base from "./base.ts";
 import * as m_card_charges from "./card-charges.ts";
-import type { FinanceToolSpec } from "./define-tool.ts";
 import * as m_donations from "./donations.ts";
 import * as m_invoices from "./invoices.ts";
 import * as m_receipts from "./receipts.ts";
@@ -24,6 +24,6 @@ export const FINANCE_TOOLS = {
   list_open_invoices: m_invoices.list_open_invoices,
   list_transactions: m_transactions.list_transactions,
   list_transfers: m_transfers.list_transfers,
-} as const satisfies Record<string, FinanceToolSpec>;
+} as const satisfies Record<string, DomainToolSpec>;
 
 export type FinanceToolName = keyof typeof FINANCE_TOOLS;

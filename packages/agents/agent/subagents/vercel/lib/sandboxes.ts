@@ -1,16 +1,14 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { vercel } from "./client.ts";
 import { VERCEL_TEAM_ID, VERCEL_TEAM_SLUG } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 const TEAM = { teamId: VERCEL_TEAM_ID, slug: VERCEL_TEAM_SLUG } as const;
 
 // ──────────────── SANDBOX LIFECYCLE ────────────────
 
 export const list_sandboxes = defineTool({
-  name: "list_sandboxes",
-  domain: "vercel",
   description: "List every active Vercel Sandbox in the team.",
   access: { risk: "read" },
   input: z.object({
@@ -25,8 +23,6 @@ export const list_sandboxes = defineTool({
 });
 
 export const get_sandbox = defineTool({
-  name: "get_sandbox",
-  domain: "vercel",
   description: "Retrieve a Vercel Sandbox by id.",
   access: { risk: "read" },
   input: z.object({ sandbox_id: z.string() }),
@@ -37,8 +33,6 @@ export const get_sandbox = defineTool({
 });
 
 export const stop_sandbox = defineTool({
-  name: "stop_sandbox",
-  domain: "vercel",
   description: "Stop a running Vercel Sandbox. Files and state within the sandbox are lost.",
   access: { risk: "destructive" },
   input: z.object({ sandbox_id: z.string() }),
@@ -52,8 +46,6 @@ export const stop_sandbox = defineTool({
 });
 
 export const extend_sandbox_timeout = defineTool({
-  name: "extend_sandbox_timeout",
-  domain: "vercel",
   description:
     "Extend a sandbox's maximum runtime by an additional `duration` (seconds). Costs additional compute.",
   access: { risk: "write", confirm: "self" },
@@ -74,8 +66,6 @@ export const extend_sandbox_timeout = defineTool({
 // ──────────────── COMMANDS ────────────────
 
 export const list_sandbox_commands = defineTool({
-  name: "list_sandbox_commands",
-  domain: "vercel",
   description: "List commands that have been run inside a sandbox.",
   access: { risk: "read" },
   input: z.object({
@@ -91,8 +81,6 @@ export const list_sandbox_commands = defineTool({
 });
 
 export const get_sandbox_command = defineTool({
-  name: "get_sandbox_command",
-  domain: "vercel",
   description: "Retrieve a command by id.",
   access: { risk: "read" },
   input: z.object({
@@ -110,8 +98,6 @@ export const get_sandbox_command = defineTool({
 });
 
 export const get_sandbox_command_logs = defineTool({
-  name: "get_sandbox_command_logs",
-  domain: "vercel",
   description: "Fetch stdout/stderr of a sandbox command.",
   access: { risk: "read" },
   input: z.object({
@@ -129,8 +115,6 @@ export const get_sandbox_command_logs = defineTool({
 });
 
 export const kill_sandbox_command = defineTool({
-  name: "kill_sandbox_command",
-  domain: "vercel",
   description: "Terminate a running sandbox command.",
   access: { risk: "destructive" },
   input: z.object({
@@ -150,8 +134,6 @@ export const kill_sandbox_command = defineTool({
 // ──────────────── SNAPSHOTS ────────────────
 
 export const list_sandbox_snapshots = defineTool({
-  name: "list_sandbox_snapshots",
-  domain: "vercel",
   description: "List snapshots captured across the team's sandboxes.",
   access: { risk: "read" },
   input: z.object({
@@ -166,8 +148,6 @@ export const list_sandbox_snapshots = defineTool({
 });
 
 export const get_sandbox_snapshot = defineTool({
-  name: "get_sandbox_snapshot",
-  domain: "vercel",
   description: "Retrieve a sandbox snapshot by id.",
   access: { risk: "read" },
   input: z.object({ snapshot_id: z.string() }),
@@ -181,8 +161,6 @@ export const get_sandbox_snapshot = defineTool({
 });
 
 export const delete_sandbox_snapshot = defineTool({
-  name: "delete_sandbox_snapshot",
-  domain: "vercel",
   description: "Delete a sandbox snapshot.",
   access: { risk: "destructive" },
   input: z.object({ snapshot_id: z.string() }),

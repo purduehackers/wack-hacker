@@ -2,12 +2,10 @@
 import type { PageObjectResponse } from "@notionhq/client/build/src/api-endpoints";
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { notion } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 
 export const get_email_status = defineTool({
-  name: "get_email_status",
-  domain: "outreach",
   description: `Read the outreach tracking properties off a Company or Contact page. Returns Last Outreach ID, Outreach Status, Outreach Last Event At, Do Not Contact. The Resend webhook keeps these authoritative.`,
   access: { risk: "read" },
   input: z.object({

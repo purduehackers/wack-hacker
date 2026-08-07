@@ -1,13 +1,11 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { linear, applyIssueRelations } from "./client.ts";
 import { issueFields, issueRelationSchema } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 import { sdkInput } from "./sdk-input.ts";
 
 export const create_issue = defineTool({
-  name: "create_issue",
-  domain: "linear",
   description:
     "Create a new issue. Requires title and teamId. Supports setting assignee, status, priority, labels, project, due date, parent (sub-issue via parentId), and relations to other issues. Returns the issue identifier, title, and URL.",
   access: { risk: "write" },
@@ -37,8 +35,6 @@ export const create_issue = defineTool({
 });
 
 export const update_issue = defineTool({
-  name: "update_issue",
-  domain: "linear",
   description:
     "Update an existing issue by ID. Only include the fields you want to change — omitted fields are left unchanged. Supports changing assignee, status, priority, labels, project, due date, parent, and relations.",
   access: { risk: "write" },
@@ -68,8 +64,6 @@ export const update_issue = defineTool({
 });
 
 export const delete_issue = defineTool({
-  name: "delete_issue",
-  domain: "linear",
   description:
     "Permanently delete an issue by ID. Only use when the user explicitly asks to delete.",
   access: { risk: "destructive" },
@@ -81,8 +75,6 @@ export const delete_issue = defineTool({
 });
 
 export const archive_issue = defineTool({
-  name: "archive_issue",
-  domain: "linear",
   description:
     "Archive an issue. Archived issues are hidden from default views but preserved. Prefer this over delete_issue for most cases.",
   access: { risk: "destructive" },
@@ -94,8 +86,6 @@ export const archive_issue = defineTool({
 });
 
 export const unarchive_issue = defineTool({
-  name: "unarchive_issue",
-  domain: "linear",
   description: "Restore an archived issue back to its previous state.",
   access: { risk: "write" },
   input: z.object({ id: z.string().describe("Issue UUID") }),
@@ -106,8 +96,6 @@ export const unarchive_issue = defineTool({
 });
 
 export const query_issue_activity = defineTool({
-  name: "query_issue_activity",
-  domain: "linear",
   description:
     "Fetch an issue's field change history and comment thread. Use 'history' for who/when of changes, 'comments' for discussion context.",
   access: { risk: "read" },

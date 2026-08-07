@@ -1,14 +1,12 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { octokit } from "./client.ts";
 import { env } from "./config.ts";
 import { paginationInputShape } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 /** Create a new pull request. */
 export const create_pull_request = defineTool({
-  name: "create_pull_request",
-  domain: "github",
   description: `Create a new pull request in a repository. Specify the head branch (with changes) and base branch (to merge into). Supports draft PRs and Markdown body. Returns the PR number, title, URL, and state.`,
   access: { risk: "write" },
   input: z.object({
@@ -41,8 +39,6 @@ export const create_pull_request = defineTool({
 
 /** Update an existing pull request's title, body, state, or base branch. */
 export const update_pull_request = defineTool({
-  name: "update_pull_request",
-  domain: "github",
   description: `Update an existing pull request. Can change its title, body, state (open/closed), or base branch. Returns the updated PR summary.`,
   access: { risk: "write" },
   input: z.object({
@@ -74,8 +70,6 @@ export const update_pull_request = defineTool({
 
 /** Merge a pull request using merge, squash, or rebase. */
 export const merge_pull_request = defineTool({
-  name: "merge_pull_request",
-  domain: "github",
   description: `Merge a pull request. Supports merge commit, squash, and rebase strategies. Optionally set a custom commit title and message. Returns whether the merge succeeded and the resulting SHA.`,
   access: { risk: "destructive" },
   input: z.object({
@@ -104,8 +98,6 @@ export const merge_pull_request = defineTool({
 
 /** Close a pull request without merging. */
 export const close_pull_request = defineTool({
-  name: "close_pull_request",
-  domain: "github",
   description:
     "Close a pull request without merging. Does not delete the branch. Use update_pull_request with state='open' to reopen.",
   access: { risk: "write", confirm: "self" },
@@ -126,8 +118,6 @@ export const close_pull_request = defineTool({
 
 /** Request reviewers on a pull request. */
 export const request_reviewers = defineTool({
-  name: "request_reviewers",
-  domain: "github",
   description: "Request reviewers on a pull request. Can request individual users and/or teams.",
   access: { risk: "write" },
   input: z.object({
@@ -154,8 +144,6 @@ export const request_reviewers = defineTool({
 
 /** Remove requested reviewers from a pull request. */
 export const remove_requested_reviewers = defineTool({
-  name: "remove_requested_reviewers",
-  domain: "github",
   description: "Remove previously-requested reviewers from a pull request.",
   access: { risk: "destructive" },
   input: z.object({
@@ -181,8 +169,6 @@ export const remove_requested_reviewers = defineTool({
 
 /** List reviews on a pull request. */
 export const list_pr_reviews = defineTool({
-  name: "list_pr_reviews",
-  domain: "github",
   description: `List reviews on a pull request. Returns each review's ID, author, state (APPROVED, CHANGES_REQUESTED, COMMENTED, etc.), body, and timestamp. Useful for checking approval status.`,
   access: { risk: "read" },
   input: z.object({
@@ -213,8 +199,6 @@ export const list_pr_reviews = defineTool({
 
 /** Submit a review on a pull request (approve, request changes, or comment). */
 export const create_pr_review = defineTool({
-  name: "create_pr_review",
-  domain: "github",
   description: `Submit a review on a pull request. Can APPROVE, REQUEST_CHANGES, or leave a COMMENT. Include a body with your review feedback.`,
   access: { risk: "write" },
   input: z.object({
@@ -241,8 +225,6 @@ export const create_pr_review = defineTool({
 
 /** List files changed in a pull request. */
 export const list_pr_files = defineTool({
-  name: "list_pr_files",
-  domain: "github",
   description: `List files changed in a pull request. Returns each file's name, status (added/modified/removed), lines added/deleted, and a truncated patch preview. Useful for understanding the scope of changes.`,
   access: { risk: "read" },
   input: z.object({
@@ -273,8 +255,6 @@ export const list_pr_files = defineTool({
 
 /** List review comments (inline code comments) on a pull request. */
 export const list_pr_comments = defineTool({
-  name: "list_pr_comments",
-  domain: "github",
   description: `List review comments (inline code comments) on a pull request. Returns each comment's ID, body, file path, line number, author, and timestamp. Different from issue comments -- these are tied to specific lines of code.`,
   access: { risk: "read" },
   input: z.object({

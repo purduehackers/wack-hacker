@@ -1,11 +1,9 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { linear } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 
 export const create_comment = defineTool({
-  name: "create_comment",
-  domain: "linear",
   description:
     "Post a Markdown comment on an issue. Requires the issue's UUID (resolve via search_entities first).",
   access: { risk: "write" },
@@ -19,8 +17,6 @@ export const create_comment = defineTool({
 });
 
 export const edit_comment = defineTool({
-  name: "edit_comment",
-  domain: "linear",
   description: "Edit an existing comment's body by comment ID. Replaces the full body.",
   access: { risk: "write" },
   input: z.object({ id: z.string(), body: z.string() }),
@@ -33,8 +29,6 @@ export const edit_comment = defineTool({
 });
 
 export const delete_comment = defineTool({
-  name: "delete_comment",
-  domain: "linear",
   description: "Delete a comment by ID. Only use when explicitly asked.",
   access: { risk: "destructive" },
   input: z.object({ id: z.string() }),

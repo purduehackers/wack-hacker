@@ -5,12 +5,10 @@ import type {
 } from "@figma/rest-api-spec";
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { figma } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 
 export const get_file_nodes = defineTool({
-  name: "get_file_nodes",
-  domain: "figma",
   description:
     "Get specific nodes from a Figma file by their IDs. Returns the full node subtree with properties. Use get_file first to discover node IDs.",
   access: { risk: "read" },
@@ -30,8 +28,6 @@ export const get_file_nodes = defineTool({
 });
 
 export const get_images = defineTool({
-  name: "get_images",
-  domain: "figma",
   description:
     "Export nodes from a Figma file as images. Returns temporary download URLs (valid ~14 days). Supported formats: png, svg, jpg, pdf.",
   access: { risk: "read" },
@@ -58,8 +54,6 @@ export const get_images = defineTool({
 });
 
 export const get_image_fills = defineTool({
-  name: "get_image_fills",
-  domain: "figma",
   description:
     "Get download URLs for all images used as fills in a Figma file (photos, textures, etc.).",
   access: { risk: "read" },

@@ -7,8 +7,8 @@ import {
 } from "@sentry/api";
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { sentryOpts, sentryOrg, sentryProjectId, sentryPut } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 
 const monitorProjectionSchema = z.looseObject({
   lastCheckIn: z.string().nullish(),
@@ -17,8 +17,6 @@ const monitorProjectionSchema = z.looseObject({
 
 /** List cron monitors for the organization. */
 export const list_monitors = defineTool({
-  name: "list_monitors",
-  domain: "sentry",
   description:
     "List cron monitors (scheduled jobs) in the Sentry organization. Returns name, status, schedule, and last/next check-in times.",
   access: { risk: "read" },
@@ -59,8 +57,6 @@ export const list_monitors = defineTool({
 
 /** Get full details for a cron monitor. */
 export const get_monitor = defineTool({
-  name: "get_monitor",
-  domain: "sentry",
   description:
     "Get full details for a Sentry cron monitor — schedule config, margins, runtime limits, and check-in history.",
   access: { risk: "read" },
@@ -82,8 +78,6 @@ export const get_monitor = defineTool({
 
 /** List check-ins for a cron monitor. */
 export const list_monitor_checkins = defineTool({
-  name: "list_monitor_checkins",
-  domain: "sentry",
   description:
     "List check-ins for a cron monitor. Shows status (ok, missed, error, in_progress), duration, and timestamps.",
   access: { risk: "read" },
@@ -107,8 +101,6 @@ export const list_monitor_checkins = defineTool({
 
 /** Update a cron monitor's configuration. */
 export const update_monitor = defineTool({
-  name: "update_monitor",
-  domain: "sentry",
   description: "Update a Sentry cron monitor's name, schedule, or runtime configuration.",
   access: { risk: "write" },
   input: z.object({
@@ -181,8 +173,6 @@ export const update_monitor = defineTool({
 
 /** Delete a cron monitor. */
 export const delete_monitor = defineTool({
-  name: "delete_monitor",
-  domain: "sentry",
   description: "Permanently delete a Sentry cron monitor. This action cannot be undone.",
   access: { risk: "destructive", minRole: "admin" },
   input: z.object({

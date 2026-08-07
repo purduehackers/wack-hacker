@@ -1,16 +1,14 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { octokit } from "./client.ts";
 import { env } from "./config.ts";
-import { defineTool } from "./define-tool.ts";
 
 const reactionSchema = z
   .enum(["+1", "-1", "laugh", "confused", "heart", "hooray", "rocket", "eyes"])
   .describe("Reaction emoji");
 
 export const add_issue_reaction = defineTool({
-  name: "add_issue_reaction",
-  domain: "github",
   description: "Add a reaction emoji to an issue. Returns the reaction ID for later removal.",
   access: { risk: "write" },
   input: z.object({
@@ -30,8 +28,6 @@ export const add_issue_reaction = defineTool({
 });
 
 export const remove_issue_reaction = defineTool({
-  name: "remove_issue_reaction",
-  domain: "github",
   description: "Remove a reaction from an issue by reaction ID.",
   access: { risk: "destructive" },
   input: z.object({
@@ -51,8 +47,6 @@ export const remove_issue_reaction = defineTool({
 });
 
 export const add_comment_reaction = defineTool({
-  name: "add_comment_reaction",
-  domain: "github",
   description: "Add a reaction to an issue or PR comment.",
   access: { risk: "write" },
   input: z.object({
@@ -72,8 +66,6 @@ export const add_comment_reaction = defineTool({
 });
 
 export const remove_comment_reaction = defineTool({
-  name: "remove_comment_reaction",
-  domain: "github",
   description: "Remove a reaction from an issue or PR comment by reaction ID.",
   access: { risk: "destructive" },
   input: z.object({

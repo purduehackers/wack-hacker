@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import {
   cmsAdminUrl,
   paginationQuery,
@@ -8,7 +9,6 @@ import {
   wrapPayloadError,
 } from "./client.ts";
 import { paginationInputShape } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 import { richTextParagraph } from "./richtext.ts";
 
 const COLLECTION = "events";
@@ -35,8 +35,6 @@ function projectEvent(e: PayloadEvent) {
 }
 
 export const list_events = defineTool({
-  name: "list_events",
-  domain: "cms",
   description:
     "List events from the CMS. Supports pagination and sort (prefix field with '-' for descending, e.g. '-start'). Includes published flag, start/end, location, and email-send status.",
   access: { risk: "read" },
@@ -67,8 +65,6 @@ export const list_events = defineTool({
 });
 
 export const get_event = defineTool({
-  name: "get_event",
-  domain: "cms",
   description: "Fetch a single event by ID.",
   access: { risk: "read" },
   input: z.object({ id: z.union([z.string(), z.number()]).describe("Event ID") }),
@@ -83,8 +79,6 @@ export const get_event = defineTool({
 });
 
 export const create_event = defineTool({
-  name: "create_event",
-  domain: "cms",
   description:
     "Create a new event. `description` accepts plain text and is wrapped as a single Lexical paragraph. Set `published: true` only when the event is ready to appear on the website.",
   access: { risk: "write" },
@@ -115,8 +109,6 @@ export const create_event = defineTool({
 });
 
 export const update_event = defineTool({
-  name: "update_event",
-  domain: "cms",
   description:
     "Update an event by ID. Only fields you pass are changed. `description` (if set) is wrapped as a single Lexical paragraph — omit it when you don't want to overwrite existing richText.",
   access: { risk: "write" },
@@ -149,8 +141,6 @@ export const update_event = defineTool({
 });
 
 export const delete_event = defineTool({
-  name: "delete_event",
-  domain: "cms",
   description: "Delete an event permanently. Also detaches RSVPs and sent-email records.",
   access: { risk: "destructive" },
   input: z.object({ id: z.union([z.string(), z.number()]) }),
@@ -165,8 +155,6 @@ export const delete_event = defineTool({
 });
 
 export const publish_event = defineTool({
-  name: "publish_event",
-  domain: "cms",
   description: "Mark an event as published (visible on the website).",
   access: { risk: "destructive" },
   input: z.object({ id: z.union([z.string(), z.number()]) }),
@@ -185,8 +173,6 @@ export const publish_event = defineTool({
 });
 
 export const unpublish_event = defineTool({
-  name: "unpublish_event",
-  domain: "cms",
   description: "Mark an event as unpublished (hidden from the website).",
   access: { risk: "destructive" },
   input: z.object({ id: z.union([z.string(), z.number()]) }),
@@ -205,8 +191,6 @@ export const unpublish_event = defineTool({
 });
 
 export const send_blast = defineTool({
-  name: "send_blast",
-  domain: "cms",
   description:
     "Fire the email blast for this event to all active RSVPs (sets `send: true`). Payload's afterChange hook sends real emails via Resend and resets `send` to false afterwards. Destructive external side effect — use only after explicit confirmation.",
   access: { risk: "destructive" },

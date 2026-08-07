@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import {
   cmsAdminUrl,
   paginationQuery,
@@ -8,7 +9,6 @@ import {
   wrapPayloadError,
 } from "./client.ts";
 import { paginationInputShape } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 const COLLECTION = "media";
 const UPLOAD_FETCH_TIMEOUT_MS = 15_000;
@@ -37,8 +37,6 @@ function projectMedia(m: PayloadMedia) {
 }
 
 export const list_media = defineTool({
-  name: "list_media",
-  domain: "cms",
   description:
     "List media assets uploaded to Payload CMS. Supports filtering by `source` ('manual' / 'hack-night') and `batch_id` (to group hack-night uploads).",
   access: { risk: "read" },
@@ -71,8 +69,6 @@ export const list_media = defineTool({
 });
 
 export const get_media = defineTool({
-  name: "get_media",
-  domain: "cms",
   description: "Fetch a single media asset by ID.",
   access: { risk: "read" },
   input: z.object({ id: z.union([z.string(), z.number()]) }),
@@ -87,8 +83,6 @@ export const get_media = defineTool({
 });
 
 export const upload_media = defineTool({
-  name: "upload_media",
-  domain: "cms",
   description:
     "Upload an image from a public URL to the CMS media library. Fetches the URL, then posts to Payload's media collection with the given alt text. Returns the created media record (including its new `id` and `url`).",
   access: { risk: "write" },
@@ -151,8 +145,6 @@ export const upload_media = defineTool({
 });
 
 export const delete_media = defineTool({
-  name: "delete_media",
-  domain: "cms",
   description:
     "Delete a media asset permanently. Referenced pages/posts will lose their image until relinked.",
   access: { risk: "destructive" },

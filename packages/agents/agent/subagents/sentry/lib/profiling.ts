@@ -1,14 +1,12 @@
 import { queryExploreEventsInTableFormat, unwrapResult } from "@sentry/api";
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { escapeQuery, sentryGet, sentryOpts, sentryOrg } from "./client.ts";
 import { perPageField } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 /** Get flamegraph profiling data for a transaction. */
 export const get_flamegraph = defineTool({
-  name: "get_flamegraph",
-  domain: "sentry",
   description:
     "Get flamegraph profiling data for a transaction. Shows CPU time distribution across function calls. Useful for identifying performance bottlenecks.",
   access: { risk: "read" },
@@ -32,8 +30,6 @@ export const get_flamegraph = defineTool({
 
 /** List slowest profiled functions. */
 export const list_profiled_functions = defineTool({
-  name: "list_profiled_functions",
-  domain: "sentry",
   description:
     "List the slowest profiled functions. Shows function name, package, self-time, and total-time. Useful for finding CPU-heavy code.",
   access: { risk: "read" },

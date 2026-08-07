@@ -4,8 +4,8 @@ import type {
 } from "@notionhq/client/build/src/api-endpoints";
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { notion, resolveDataSourceId } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 import { isCreatePageProperties, isUpdatePageProperties } from "./notion-input.ts";
 import { cursorPaginationInputShape } from "./shared-constants.ts";
 
@@ -21,8 +21,6 @@ function parseCover(cover: string | undefined): CreatePageParameters["cover"] {
 }
 
 export const create_page = defineTool({
-  name: "create_page",
-  domain: "notion",
   description: `Create a new Notion page. Can be a subpage of another page, or a new entry in a database. Pass markdown for the page body — the first # heading becomes the title if properties.title is omitted. For database entries, set properties matching the database schema (use retrieve_database first).`,
   access: { risk: "write" },
   input: z.object({
@@ -65,8 +63,6 @@ export const create_page = defineTool({
 });
 
 export const update_page = defineTool({
-  name: "update_page",
-  domain: "notion",
   description: `Update a page's properties, icon, cover, or archived status. Only include fields to change. For database entries, properties must match the database schema. Set archived: true to soft-delete.`,
   access: { risk: "destructive" },
   input: z.object({
@@ -103,8 +99,6 @@ export const update_page = defineTool({
 });
 
 export const retrieve_page_property = defineTool({
-  name: "retrieve_page_property",
-  domain: "notion",
   description: `Get a single property value from a page, with pagination for large values (relations, rollups, rich_text). Use retrieve_page first to see all property IDs.`,
   access: { risk: "read" },
   input: z.object({
@@ -123,8 +117,6 @@ export const retrieve_page_property = defineTool({
 });
 
 export const read_page_content = defineTool({
-  name: "read_page_content",
-  domain: "notion",
   description: `Read a page's full body content as markdown. Returns the complete page content including headings, lists, code blocks, etc. Use this to see what's on a page before editing.`,
   access: { risk: "read" },
   input: z.object({
@@ -137,8 +129,6 @@ export const read_page_content = defineTool({
 });
 
 export const archive_page = defineTool({
-  name: "archive_page",
-  domain: "notion",
   description:
     "Archive (soft-delete) a Notion page. Equivalent to update_page with archived=true, but as an explicit intent.",
   access: { risk: "destructive" },
@@ -158,8 +148,6 @@ export const archive_page = defineTool({
 });
 
 export const update_page_content = defineTool({
-  name: "update_page_content",
-  domain: "notion",
   description: `Update a page's body content using markdown. Two modes: "replace_content" replaces the entire page body, or "update_content" does search-and-replace on specific text. Use read_page_content first to see current content.`,
   access: { risk: "write" },
   input: z.object({

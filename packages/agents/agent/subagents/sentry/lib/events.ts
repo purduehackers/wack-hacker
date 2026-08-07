@@ -7,14 +7,12 @@ import {
 } from "@sentry/api";
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { sentryOpts, sentryOrg } from "./client.ts";
 import { perPageField } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 /** List events (occurrences) for a Sentry issue. */
 export const list_issue_events = defineTool({
-  name: "list_issue_events",
-  domain: "sentry",
   description:
     "List events (occurrences) for a Sentry issue. Returns event ID, title, timestamp, and tags.",
   access: { risk: "read" },
@@ -46,8 +44,6 @@ export const list_issue_events = defineTool({
 
 /** Get full event detail including stack trace, breadcrumbs, and contexts. */
 export const get_event = defineTool({
-  name: "get_event",
-  domain: "sentry",
   description:
     "Get full event detail including stack trace, breadcrumbs, and contexts. Requires both project slug and event ID.",
   access: { risk: "read" },
@@ -82,8 +78,6 @@ export const get_event = defineTool({
 
 /** Get the most recent event for a Sentry issue. */
 export const get_latest_event = defineTool({
-  name: "get_latest_event",
-  domain: "sentry",
   description:
     "Get the most recent event for a Sentry issue. Returns full event detail including stack trace and breadcrumbs.",
   access: { risk: "read" },
@@ -117,8 +111,6 @@ export const get_latest_event = defineTool({
 
 /** List recent events for a project. */
 export const list_project_events = defineTool({
-  name: "list_project_events",
-  domain: "sentry",
   description:
     "List recent events for a Sentry project. Returns event ID, title, timestamp, and tags.",
   access: { risk: "read" },

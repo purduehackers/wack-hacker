@@ -10,16 +10,14 @@ import {
 } from "@sentry/api";
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { sentryOpts, sentryOrg } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 
 const metricAlertProjectionSchema = z.looseObject({ status: z.string().nullish() });
 const issueAlertActionMatchSchema = z.enum(["all", "any", "none"]);
 
 /** List issue alert rules for a project. */
 export const list_alert_rules = defineTool({
-  name: "list_alert_rules",
-  domain: "sentry",
   description: "List issue alert rules for a Sentry project.",
   access: { risk: "read" },
   input: z.object({
@@ -52,8 +50,6 @@ export const list_alert_rules = defineTool({
 
 /** Get full details for an issue alert rule. */
 export const get_alert_rule = defineTool({
-  name: "get_alert_rule",
-  domain: "sentry",
   description: "Get full details for a Sentry issue alert rule, including conditions and actions.",
   access: { risk: "read" },
   input: z.object({
@@ -76,8 +72,6 @@ export const get_alert_rule = defineTool({
 
 /** Create a new issue alert rule. */
 export const create_alert_rule = defineTool({
-  name: "create_alert_rule",
-  domain: "sentry",
   description:
     "Create a new Sentry issue alert rule. Requires project slug, name, conditions, actions, and frequency.",
   access: { risk: "write" },
@@ -128,8 +122,6 @@ export const create_alert_rule = defineTool({
 
 /** Update an existing issue alert rule. */
 export const update_alert_rule = defineTool({
-  name: "update_alert_rule",
-  domain: "sentry",
   description: "Update an existing Sentry issue alert rule.",
   access: { risk: "write" },
   input: z.object({
@@ -180,8 +172,6 @@ export const update_alert_rule = defineTool({
 
 /** Delete an issue alert rule. */
 export const delete_alert_rule = defineTool({
-  name: "delete_alert_rule",
-  domain: "sentry",
   description: "Permanently delete a Sentry issue alert rule. This action cannot be undone.",
   access: { risk: "destructive", minRole: "admin" },
   input: z.object({
@@ -204,8 +194,6 @@ export const delete_alert_rule = defineTool({
 
 /** List metric alert rules for the organization. */
 export const list_metric_alert_rules = defineTool({
-  name: "list_metric_alert_rules",
-  domain: "sentry",
   description:
     "List metric alert rules for the Sentry organization. Metric alerts trigger on aggregate data like error count or latency.",
   access: { risk: "read" },
@@ -234,8 +222,6 @@ export const list_metric_alert_rules = defineTool({
 
 /** Get full details for a metric alert rule. */
 export const get_metric_alert_rule = defineTool({
-  name: "get_metric_alert_rule",
-  domain: "sentry",
   description:
     "Get full details for a Sentry metric alert rule, including triggers and thresholds.",
   access: { risk: "read" },

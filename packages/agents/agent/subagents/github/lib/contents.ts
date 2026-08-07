@@ -1,14 +1,12 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { octokit } from "./client.ts";
 import { env } from "./config.ts";
 import { paginationInputShape } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 /** Get the content of a file or list a directory in a repository. */
 export const get_file_content = defineTool({
-  name: "get_file_content",
-  domain: "github",
   description: `Get the content of a file or list entries in a directory. For files, returns the decoded content (truncated at 50k chars), SHA, and URL. For directories, returns a list of entries with name, path, type, and size. Use the 'ref' param to read from a specific branch or tag.`,
   access: { risk: "read" },
   input: z.object({
@@ -55,8 +53,6 @@ export const get_file_content = defineTool({
 
 /** Create or update a file in a repository via a commit. */
 export const create_or_update_file = defineTool({
-  name: "create_or_update_file",
-  domain: "github",
   description: `Create or update a file in a repository. The content is provided as plain text and will be base64-encoded automatically. For updates, you must provide the current file's SHA (get it from get_file_content). Returns the file path, new SHA, URL, and commit SHA.`,
   access: { risk: "write" },
   input: z.object({
@@ -88,8 +84,6 @@ export const create_or_update_file = defineTool({
 
 /** Delete a file from a repository via a commit. */
 export const delete_file = defineTool({
-  name: "delete_file",
-  domain: "github",
   description: `Delete a file from a repository by creating a commit that removes it. Requires the file's current SHA (get it from get_file_content).`,
   access: { risk: "destructive" },
   input: z.object({
@@ -114,8 +108,6 @@ export const delete_file = defineTool({
 
 /** Get the full recursive directory tree of a repository. */
 export const get_directory_tree = defineTool({
-  name: "get_directory_tree",
-  domain: "github",
   description: `Get the full recursive directory tree of a repository. Returns all file and directory paths with their types and sizes. Useful for understanding project structure. May be truncated for very large repos.`,
   access: { risk: "read" },
   input: z.object({
@@ -144,8 +136,6 @@ export const get_directory_tree = defineTool({
 
 /** List commits for a repository or specific file path. */
 export const list_commits = defineTool({
-  name: "list_commits",
-  domain: "github",
   description: `List commits for a repository, optionally filtered by branch, file path, or date range. Returns abbreviated SHA, message, author, date, and URL for each commit.`,
   access: { risk: "read" },
   input: z.object({
@@ -181,8 +171,6 @@ export const list_commits = defineTool({
 
 /** Get details for a single commit including changed files. */
 export const get_commit = defineTool({
-  name: "get_commit",
-  domain: "github",
   description: `Get full details for a single commit, including message, author, date, stats (additions/deletions), and a list of changed files with their status and line counts.`,
   access: { risk: "read" },
   input: z.object({
@@ -214,8 +202,6 @@ export const get_commit = defineTool({
 
 /** Compare two commits, branches, or tags. */
 export const compare_commits = defineTool({
-  name: "compare_commits",
-  domain: "github",
   description: `Compare two commits, branches, or tags. Returns the comparison status (ahead/behind/diverged), commit count, a list of commits between them, and changed files with their diffs. Useful for understanding what changed between releases or branches.`,
   access: { risk: "read" },
   input: z.object({

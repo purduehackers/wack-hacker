@@ -1,8 +1,8 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { octokit } from "./client.ts";
 import { env } from "./config.ts";
-import { defineTool } from "./define-tool.ts";
 
 const pageInfoSchema = z
   .object({
@@ -122,8 +122,6 @@ const createProjectItemResponseSchema = z
 
 /** List GitHub Projects v2 in the organization. */
 export const list_org_projects = defineTool({
-  name: "list_org_projects",
-  domain: "github",
   description: `List GitHub Projects v2 in the purduehackers organization. Returns each project's node ID, title, number, URL, closed status, and description. Supports cursor-based pagination.`,
   access: { risk: "read" },
   input: z.object({
@@ -153,8 +151,6 @@ export const list_org_projects = defineTool({
 
 /** Get details for a specific GitHub Project v2 by number. */
 export const get_project = defineTool({
-  name: "get_project",
-  domain: "github",
   description: `Get detailed information about a GitHub Project v2 by its number. Returns the project's node ID, title, URL, description, readme, and all field definitions (ID, name, data type). Use field IDs when updating project items.`,
   access: { risk: "read" },
   input: z.object({
@@ -182,8 +178,6 @@ export const get_project = defineTool({
 
 /** List items in a GitHub Project v2. */
 export const list_project_items = defineTool({
-  name: "list_project_items",
-  domain: "github",
   description: `List items in a GitHub Project v2. Returns each item's node ID, type (ISSUE, PULL_REQUEST, DRAFT_ISSUE), linked content (title, number, URL), and field values. Supports cursor-based pagination.`,
   access: { risk: "read" },
   input: z.object({
@@ -252,8 +246,6 @@ export const list_project_items = defineTool({
 
 /** Add an issue or pull request to a GitHub Project v2. */
 export const create_project_item = defineTool({
-  name: "create_project_item",
-  domain: "github",
   description: `Add an existing issue or pull request to a GitHub Project v2. Requires the project's node ID (from list_org_projects or get_project) and the issue/PR's node ID. Returns the new project item's ID.`,
   access: { risk: "write" },
   input: z.object({
@@ -277,8 +269,6 @@ export const create_project_item = defineTool({
 
 /** Update a field value on a project item. */
 export const update_project_item = defineTool({
-  name: "update_project_item",
-  domain: "github",
   description: `Update a field value on a project item in a GitHub Project v2. Use get_project to find field IDs. Value must match the field type: text, number, date (ISO 8601), or singleSelectOptionId.`,
   access: { risk: "write" },
   input: z.object({
@@ -309,8 +299,6 @@ export const update_project_item = defineTool({
 
 /** Remove an item from a GitHub Project v2. */
 export const delete_project_item = defineTool({
-  name: "delete_project_item",
-  domain: "github",
   description: `Remove an item from a GitHub Project v2. This only removes it from the project board -- it does not delete the underlying issue or pull request.`,
   access: { risk: "destructive" },
   input: z.object({

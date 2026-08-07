@@ -1,12 +1,10 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { vercel } from "./client.ts";
 import { VERCEL_TEAM_ID, VERCEL_TEAM_SLUG } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 export const whoami = defineTool({
-  name: "whoami",
-  domain: "vercel",
   description:
     "Return the authenticated Vercel user and the active Purdue Hackers team context. Useful as a debug smoke test.",
   access: { risk: "read" },
@@ -21,8 +19,6 @@ export const whoami = defineTool({
 });
 
 export const list_teams = defineTool({
-  name: "list_teams",
-  domain: "vercel",
   description:
     "List every Vercel team the authenticated account belongs to. Returns id, slug, name, createdAt. Paginated via `limit` / `since` / `until`.",
   access: { risk: "read" },
@@ -38,8 +34,6 @@ export const list_teams = defineTool({
 });
 
 export const list_user_events = defineTool({
-  name: "list_user_events",
-  domain: "vercel",
   description:
     "List recent audit events for the authenticated user scoped to the active Vercel team — useful for investigating who ran what (e.g. promotions, env var edits, member changes).",
   access: { risk: "read" },
@@ -72,8 +66,6 @@ export const list_user_events = defineTool({
 });
 
 export const list_event_types = defineTool({
-  name: "list_event_types",
-  domain: "vercel",
   description:
     "List every user-facing event type the audit log recognises. Use this before calling list_user_events with a specific `types` filter.",
   access: { risk: "read" },

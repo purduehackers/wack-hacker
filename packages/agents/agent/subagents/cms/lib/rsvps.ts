@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import {
   cmsAdminUrl,
   paginationQuery,
@@ -8,7 +9,6 @@ import {
   wrapPayloadError,
 } from "./client.ts";
 import { paginationInputShape } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 const COLLECTION = "rsvps";
 
@@ -33,8 +33,6 @@ function projectRsvp(r: PayloadRsvp) {
 }
 
 export const list_rsvps = defineTool({
-  name: "list_rsvps",
-  domain: "cms",
   description:
     "List RSVPs across events. Optionally filter by event_id, email, or unsubscribed flag. Useful for attendance reports and unsubscribe audits.",
   access: { risk: "read" },
@@ -69,8 +67,6 @@ export const list_rsvps = defineTool({
 });
 
 export const get_rsvp = defineTool({
-  name: "get_rsvp",
-  domain: "cms",
   description: "Fetch a single RSVP by ID.",
   access: { risk: "read" },
   input: z.object({ id: z.union([z.string(), z.number()]) }),
@@ -85,8 +81,6 @@ export const get_rsvp = defineTool({
 });
 
 export const create_rsvp = defineTool({
-  name: "create_rsvp",
-  domain: "cms",
   description: "Create an RSVP for an event on behalf of a user.",
   access: { risk: "write" },
   input: z.object({
@@ -114,8 +108,6 @@ export const create_rsvp = defineTool({
 });
 
 export const update_rsvp = defineTool({
-  name: "update_rsvp",
-  domain: "cms",
   description:
     "Update an RSVP. Commonly used to toggle `unsubscribed: true` when someone asks off the list.",
   access: { risk: "write" },
@@ -143,8 +135,6 @@ export const update_rsvp = defineTool({
 });
 
 export const delete_rsvp = defineTool({
-  name: "delete_rsvp",
-  domain: "cms",
   description:
     "Delete an RSVP permanently. Prefer `update_rsvp({ unsubscribed: true })` when the user just wants to opt out — deletion loses the audit trail.",
   access: { risk: "destructive" },

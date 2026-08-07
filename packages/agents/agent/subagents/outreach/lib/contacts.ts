@@ -6,9 +6,9 @@ import type {
 } from "@notionhq/client/build/src/api-endpoints";
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { notion } from "./client.ts";
 import { CONTACTS_DATA_SOURCE_ID } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 import { isCreateProperties, isQueryFilter, isQuerySorts } from "./notion-input.ts";
 import { cursorPaginationInputShape } from "./shared-constants.ts";
 
@@ -25,8 +25,6 @@ function summarizePage(page: CrmPage): Record<string, unknown> {
 }
 
 export const list_contacts = defineTool({
-  name: "list_contacts",
-  domain: "outreach",
   description: `List Contact pages in the CRM. Supports Notion filters/sorts against the Contacts data source. Call retrieve_crm_schema first to get exact property names and select options.`,
   access: { risk: "read" },
   input: z.object({
@@ -66,8 +64,6 @@ export const list_contacts = defineTool({
 });
 
 export const get_contact = defineTool({
-  name: "get_contact",
-  domain: "outreach",
   description: `Retrieve a single Contact page by its Notion page ID. Returns every property including outreach tracking state.`,
   access: { risk: "read" },
   input: z.object({
@@ -80,8 +76,6 @@ export const get_contact = defineTool({
 });
 
 export const create_contact = defineTool({
-  name: "create_contact",
-  domain: "outreach",
   description: `Create a new Contact row in the CRM. Provide at least a name; optionally link to a Company via the Company relation property and set any other schema properties.`,
   access: { risk: "write" },
   input: z.object({
@@ -112,8 +106,6 @@ export const create_contact = defineTool({
 });
 
 export const archive_contact = defineTool({
-  name: "archive_contact",
-  domain: "outreach",
   description:
     "Archive (soft-delete) a Contact CRM row. The Notion page is marked archived and drops out of lists.",
   access: { risk: "destructive" },
@@ -130,8 +122,6 @@ export const archive_contact = defineTool({
 });
 
 export const update_contact_status = defineTool({
-  name: "update_contact_status",
-  domain: "outreach",
   description: `Set the Contact Status property. Options: "New", "Nurturing", "Active", "Inactive". Call retrieve_crm_schema first if unsure.`,
   access: { risk: "write" },
   input: z.object({
@@ -148,8 +138,6 @@ export const update_contact_status = defineTool({
 });
 
 export const update_contact_email = defineTool({
-  name: "update_contact_email",
-  domain: "outreach",
   description: `Set the Contact Email property. Use after verifying the address via verify_email.`,
   access: { risk: "write" },
   input: z.object({

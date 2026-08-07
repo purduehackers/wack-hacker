@@ -1,7 +1,7 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { hcbGet, hcbOrgSlug } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 
 const hcbOrganizationSchema = z.object({
   id: z.string().optional(),
@@ -24,8 +24,6 @@ type HcbOrganization = z.infer<typeof hcbOrganizationSchema>;
 
 /** Get the Purdue Hackers HCB organization profile. */
 export const get_organization = defineTool({
-  name: "get_organization",
-  domain: "finance",
   description:
     "Get the Hack Club Bank organization profile — name, slug, website, description, and whether Transparency Mode is enabled. Amounts are in cents.",
   access: { risk: "read" },
@@ -54,8 +52,6 @@ export const get_organization = defineTool({
 
 /** Get the current HCB account balance summary. */
 export const get_balance = defineTool({
-  name: "get_balance",
-  domain: "finance",
   description:
     "Get the current Hack Club Bank balance summary for Purdue Hackers — cleared balance, incoming (pending) balance, fee balance, and total raised. All amounts in cents (negative = outflow).",
   access: { risk: "read" },

@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import {
   cmsAdminUrl,
   paginationQuery,
@@ -8,7 +9,6 @@ import {
   wrapPayloadError,
 } from "./client.ts";
 import { paginationInputShape } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 import { richTextParagraph } from "./richtext.ts";
 
 const COLLECTION = "hack-night-sessions";
@@ -29,8 +29,6 @@ function projectSession(s: PayloadHackNightSession) {
 }
 
 export const list_hack_night_sessions = defineTool({
-  name: "list_hack_night_sessions",
-  domain: "cms",
   description:
     "List hack night session records. Each has a title, date, host {preferred_name, discord_id}, and published flag.",
   access: { risk: "read" },
@@ -58,8 +56,6 @@ export const list_hack_night_sessions = defineTool({
 });
 
 export const get_hack_night_session = defineTool({
-  name: "get_hack_night_session",
-  domain: "cms",
   description: "Fetch a single hack night session by ID.",
   access: { risk: "read" },
   input: z.object({ id: z.union([z.string(), z.number()]) }),
@@ -77,8 +73,6 @@ export const get_hack_night_session = defineTool({
 });
 
 export const create_hack_night_session = defineTool({
-  name: "create_hack_night_session",
-  domain: "cms",
   description:
     "Create a new hack night session entry. Pass host as { preferred_name, discord_id }.",
   access: { risk: "write" },
@@ -117,8 +111,6 @@ export const create_hack_night_session = defineTool({
 });
 
 export const update_hack_night_session = defineTool({
-  name: "update_hack_night_session",
-  domain: "cms",
   description:
     "Update a hack night session. Only fields you pass are changed. If updating host, pass both host_preferred_name and host_discord_id (Payload treats the host group as a replace-on-write object; a partial patch would clobber the other subfield). Description (if provided) is wrapped as a single Lexical paragraph.",
   access: { risk: "write" },
@@ -161,8 +153,6 @@ export const update_hack_night_session = defineTool({
 });
 
 export const delete_hack_night_session = defineTool({
-  name: "delete_hack_night_session",
-  domain: "cms",
   description: "Delete a hack night session record permanently.",
   access: { risk: "destructive" },
   input: z.object({ id: z.union([z.string(), z.number()]) }),
@@ -180,8 +170,6 @@ export const delete_hack_night_session = defineTool({
 });
 
 export const publish_hack_night_session = defineTool({
-  name: "publish_hack_night_session",
-  domain: "cms",
   description: "Publish a hack night session (makes it visible on the hack night dashboard).",
   access: { risk: "destructive" },
   input: z.object({ id: z.union([z.string(), z.number()]) }),
@@ -200,8 +188,6 @@ export const publish_hack_night_session = defineTool({
 });
 
 export const unpublish_hack_night_session = defineTool({
-  name: "unpublish_hack_night_session",
-  domain: "cms",
   description: "Unpublish a hack night session.",
   access: { risk: "destructive" },
   input: z.object({ id: z.union([z.string(), z.number()]) }),

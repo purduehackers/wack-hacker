@@ -1,8 +1,8 @@
+import type { DomainToolSpec } from "../../../lib/policy/domain-tools.ts";
 import * as m_base from "./base.ts";
 import * as m_blocks from "./blocks.ts";
 import * as m_comments from "./comments.ts";
 import * as m_databases from "./databases.ts";
-import type { NotionToolSpec } from "./define-tool.ts";
 import * as m_pages from "./pages.ts";
 
 export const NOTION_TOOLS = {
@@ -30,6 +30,6 @@ export const NOTION_TOOLS = {
   update_database: m_databases.update_database,
   update_page: m_pages.update_page,
   update_page_content: m_pages.update_page_content,
-} as const satisfies Record<string, NotionToolSpec>;
+} as const satisfies Record<string, DomainToolSpec>;
 
 export type NotionToolName = keyof typeof NOTION_TOOLS;

@@ -1,13 +1,11 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { octokit } from "./client.ts";
 import { env } from "./config.ts";
 import { perPageField } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 export const list_collaborators = defineTool({
-  name: "list_collaborators",
-  domain: "github",
   description:
     "List collaborators with direct access to a repository. Returns login, permissions, and role.",
   access: { risk: "read" },
@@ -34,8 +32,6 @@ export const list_collaborators = defineTool({
 });
 
 export const add_collaborator = defineTool({
-  name: "add_collaborator",
-  domain: "github",
   description:
     "Add a user as a direct collaborator on a repository. Permission defaults to 'push' (write). Options: pull, triage, push, maintain, admin.",
   access: { risk: "destructive", minRole: "admin" },
@@ -63,8 +59,6 @@ export const add_collaborator = defineTool({
 });
 
 export const remove_collaborator = defineTool({
-  name: "remove_collaborator",
-  domain: "github",
   description: "Remove a collaborator from a repository. Revokes their direct access.",
   access: { risk: "destructive", minRole: "admin" },
   input: z.object({
@@ -82,8 +76,6 @@ export const remove_collaborator = defineTool({
 });
 
 export const list_repo_invitations = defineTool({
-  name: "list_repo_invitations",
-  domain: "github",
   description:
     "List pending collaborator invitations for a repository. Returns inviter, invitee, permission, and URL.",
   access: { risk: "read", minRole: "admin" },
@@ -111,8 +103,6 @@ export const list_repo_invitations = defineTool({
 });
 
 export const cancel_repo_invitation = defineTool({
-  name: "cancel_repo_invitation",
-  domain: "github",
   description: "Revoke a pending collaborator invitation by ID.",
   access: { risk: "destructive", minRole: "admin" },
   input: z.object({

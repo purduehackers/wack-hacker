@@ -1,12 +1,10 @@
 import type { GetFileVersionsResponse } from "@figma/rest-api-spec";
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { figma } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 
 export const list_versions = defineTool({
-  name: "list_versions",
-  domain: "figma",
   description:
     "List version history of a Figma file. Returns version IDs, labels, descriptions, timestamps, and the user who created each version.",
   access: { risk: "read" },

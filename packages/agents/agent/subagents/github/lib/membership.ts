@@ -1,12 +1,10 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { octokit } from "./client.ts";
 import { env } from "./config.ts";
-import { defineTool } from "./define-tool.ts";
 
 export const add_member_to_platform = defineTool({
-  name: "add_member_to_platform",
-  domain: "github",
   description:
     "Invite a GitHub user to the purduehackers organization. Default role is 'member'. If the user already belongs, updates their role instead. Returns state (active or pending).",
   access: { risk: "destructive", minRole: "admin" },
@@ -29,8 +27,6 @@ export const add_member_to_platform = defineTool({
 });
 
 export const remove_member_from_platform = defineTool({
-  name: "remove_member_from_platform",
-  domain: "github",
   description:
     "Remove a user from the purduehackers organization. Revokes all their access to org repos. This does not delete their GitHub account, only their org membership.",
   access: { risk: "destructive", minRole: "admin" },

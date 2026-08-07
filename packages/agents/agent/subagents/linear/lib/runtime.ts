@@ -15,6 +15,7 @@ import type { z } from "zod";
 
 import { assertToolOutput } from "../../../lib/core/serialization.ts";
 import { env } from "../../../lib/env.ts";
+import type { DomainToolSpec } from "../../../lib/policy/domain-tools.ts";
 import { resolveExecutionAuthority } from "../../../lib/policy/execution-authority.ts";
 import {
   ApprovalPolicyStore,
@@ -26,7 +27,6 @@ import {
   type PolicyEvaluationContext,
   type PolicyPrincipal,
 } from "../../../lib/policy/index.ts";
-import type { LinearToolSpec } from "./define-tool.ts";
 import { descriptorForTool, isLinearToolName } from "./descriptors.ts";
 import { LINEAR_TOOLS, type LinearToolName } from "./tool-registry.ts";
 
@@ -208,7 +208,7 @@ export async function executeLinearTool(
   }
 
   // oxlint-disable-next-line typescript/consistent-type-assertions -- normalize the catalog union after name lookup
-  const spec = LINEAR_TOOLS[name] as LinearToolSpec<z.ZodType>;
+  const spec = LINEAR_TOOLS[name] as DomainToolSpec<z.ZodType>;
   const parsed = spec.input.safeParse(input);
   if (!parsed.success) {
     return {

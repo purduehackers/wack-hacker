@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import {
   cmsAdminUrl,
   paginationQuery,
@@ -8,7 +9,6 @@ import {
   wrapPayloadError,
 } from "./client.ts";
 import { paginationInputShape } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 const COLLECTION = "ugrants";
 
@@ -37,8 +37,6 @@ function projectUgrant(u: PayloadUgrant) {
 }
 
 export const list_ugrants = defineTool({
-  name: "list_ugrants",
-  domain: "cms",
   description:
     'List microgrant ("ugrant") showcase entries. Each has name, author, description, project/author URLs, and a `visible` flag (true = shown publicly).',
   access: { risk: "read" },
@@ -66,8 +64,6 @@ export const list_ugrants = defineTool({
 });
 
 export const get_ugrant = defineTool({
-  name: "get_ugrant",
-  domain: "cms",
   description: "Fetch a single ugrant by ID.",
   access: { risk: "read" },
   input: z.object({ id: z.union([z.string(), z.number()]) }),
@@ -82,8 +78,6 @@ export const get_ugrant = defineTool({
 });
 
 export const create_ugrant = defineTool({
-  name: "create_ugrant",
-  domain: "cms",
   description:
     "Create a new ugrant showcase entry. `image_id` must point at an existing media asset (upload via `upload_media` first). Defaults to visible: false — flip with `publish_ugrant` when ready.",
   access: { risk: "write" },
@@ -116,8 +110,6 @@ export const create_ugrant = defineTool({
 });
 
 export const update_ugrant = defineTool({
-  name: "update_ugrant",
-  domain: "cms",
   description: "Update a ugrant. Only fields you pass are changed.",
   access: { risk: "write" },
   input: z.object({
@@ -149,8 +141,6 @@ export const update_ugrant = defineTool({
 });
 
 export const delete_ugrant = defineTool({
-  name: "delete_ugrant",
-  domain: "cms",
   description: "Delete a ugrant permanently.",
   access: { risk: "destructive" },
   input: z.object({ id: z.union([z.string(), z.number()]) }),
@@ -165,8 +155,6 @@ export const delete_ugrant = defineTool({
 });
 
 export const publish_ugrant = defineTool({
-  name: "publish_ugrant",
-  domain: "cms",
   description: "Make a ugrant visible on the public showcase (visible: true).",
   access: { risk: "destructive" },
   input: z.object({ id: z.union([z.string(), z.number()]) }),
@@ -185,8 +173,6 @@ export const publish_ugrant = defineTool({
 });
 
 export const unpublish_ugrant = defineTool({
-  name: "unpublish_ugrant",
-  domain: "cms",
   description: "Hide a ugrant from the public showcase (visible: false).",
   access: { risk: "destructive" },
   input: z.object({ id: z.union([z.string(), z.number()]) }),

@@ -1,13 +1,11 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { sentryGet, sentryOrg } from "./client.ts";
 import { perPageField } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 /** Get a full distributed trace by trace ID. */
 export const get_trace = defineTool({
-  name: "get_trace",
-  domain: "sentry",
   description:
     "Get a full distributed trace by trace ID. Returns the complete trace waterfall with all transactions, spans, errors, and performance issues.",
   access: { risk: "read" },
@@ -26,8 +24,6 @@ export const get_trace = defineTool({
 
 /** List traces matching a query. */
 export const list_traces = defineTool({
-  name: "list_traces",
-  domain: "sentry",
   description:
     "Search for traces in the organization. Returns trace IDs with summary info like duration, span count, and root transaction.",
   access: { risk: "read" },

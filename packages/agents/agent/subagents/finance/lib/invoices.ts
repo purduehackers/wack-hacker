@@ -1,8 +1,8 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { hcbGet, hcbOrgSlug, hcbPaginate, paginationQuery } from "./client.ts";
 import { paginationInputShape } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 const CLOSED_INVOICE_STATUSES = new Set(["paid", "void", "voided", "deposited"]);
 
@@ -40,8 +40,6 @@ function projectInvoice(i: HcbInvoice) {
 
 /** List all invoices. */
 export const list_invoices = defineTool({
-  name: "list_invoices",
-  domain: "finance",
   description:
     "List invoices sent by the org — sponsor name, amount_cents, status (open/paid/void), due/paid dates, and memo.",
   access: { risk: "read" },
@@ -58,8 +56,6 @@ export const list_invoices = defineTool({
 
 /** Get a single invoice by ID. */
 export const get_invoice = defineTool({
-  name: "get_invoice",
-  domain: "finance",
   description:
     "Get a single invoice by ID — sponsor name, amount_cents, status, due/paid dates, and memo.",
   access: { risk: "read" },
@@ -74,8 +70,6 @@ export const get_invoice = defineTool({
 
 /** List outstanding (unpaid) invoices. */
 export const list_open_invoices = defineTool({
-  name: "list_open_invoices",
-  domain: "finance",
   description:
     "List outstanding (unpaid) invoices only — drives fundraising follow-ups with sponsors. Paginates through all invoices and filters to statuses that aren't paid/void.",
   access: { risk: "read" },

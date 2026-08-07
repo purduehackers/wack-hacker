@@ -5,13 +5,11 @@ import {
 } from "@sentry/api";
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { sentryOpts, sentryOrg } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 
 /** Get organization usage stats over time. */
 export const get_org_stats = defineTool({
-  name: "get_org_stats",
-  domain: "sentry",
   description:
     "Get organization-level usage statistics — events received, dropped, filtered, and more. Useful for understanding Sentry quota usage and event volume.",
   access: { risk: "read" },
@@ -53,8 +51,6 @@ export const get_org_stats = defineTool({
 
 /** Get project-level event stats. */
 export const get_project_stats = defineTool({
-  name: "get_project_stats",
-  domain: "sentry",
   description:
     "Get event statistics for a specific Sentry project — volume over time broken down by outcome.",
   access: { risk: "read" },

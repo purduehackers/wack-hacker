@@ -1,16 +1,14 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { vercel } from "./client.ts";
 import { VERCEL_TEAM_ID, VERCEL_TEAM_SLUG } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 const TEAM = { teamId: VERCEL_TEAM_ID, slug: VERCEL_TEAM_SLUG } as const;
 
 // ──────────────── ROLLING RELEASES ────────────────
 
 export const get_rolling_release = defineTool({
-  name: "get_rolling_release",
-  domain: "vercel",
   description: "Get the current rolling release (if any) for a project.",
   access: { risk: "read" },
   input: z.object({ project_id_or_name: z.string() }),
@@ -24,8 +22,6 @@ export const get_rolling_release = defineTool({
 });
 
 export const get_rolling_release_config = defineTool({
-  name: "get_rolling_release_config",
-  domain: "vercel",
   description: "Get the rolling release configuration (stages, thresholds) for a project.",
   access: { risk: "read" },
   input: z.object({ project_id_or_name: z.string() }),
@@ -39,8 +35,6 @@ export const get_rolling_release_config = defineTool({
 });
 
 export const get_rolling_release_billing_status = defineTool({
-  name: "get_rolling_release_billing_status",
-  domain: "vercel",
   description: "Check whether a project is eligible to use rolling releases (plan-gated).",
   access: { risk: "read" },
   input: z.object({ project_id_or_name: z.string() }),
@@ -54,8 +48,6 @@ export const get_rolling_release_billing_status = defineTool({
 });
 
 export const delete_rolling_release_config = defineTool({
-  name: "delete_rolling_release_config",
-  domain: "vercel",
   description: "Delete the rolling release configuration.",
   access: { risk: "destructive" },
   input: z.object({ project_id_or_name: z.string() }),
@@ -69,8 +61,6 @@ export const delete_rolling_release_config = defineTool({
 });
 
 export const approve_rolling_release_stage = defineTool({
-  name: "approve_rolling_release_stage",
-  domain: "vercel",
   description: "Advance an in-flight rolling release to the next stage. Shifts production traffic.",
   access: { risk: "destructive" },
   input: z.object({
@@ -89,8 +79,6 @@ export const approve_rolling_release_stage = defineTool({
 });
 
 export const complete_rolling_release = defineTool({
-  name: "complete_rolling_release",
-  domain: "vercel",
   description: "Complete a rolling release — route 100% of traffic to the new deployment.",
   access: { risk: "destructive" },
   input: z.object({
@@ -110,8 +98,6 @@ export const complete_rolling_release = defineTool({
 // ──────────────── DEPLOYMENT CHECKS (v2) ────────────────
 
 export const list_project_checks = defineTool({
-  name: "list_project_checks",
-  domain: "vercel",
   description: "List deployment checks configured on a project.",
   access: { risk: "read" },
   input: z.object({
@@ -131,8 +117,6 @@ export const list_project_checks = defineTool({
 });
 
 export const get_project_check = defineTool({
-  name: "get_project_check",
-  domain: "vercel",
   description: "Get a deployment check by id.",
   access: { risk: "read" },
   input: z.object({
@@ -150,8 +134,6 @@ export const get_project_check = defineTool({
 });
 
 export const delete_project_check = defineTool({
-  name: "delete_project_check",
-  domain: "vercel",
   description: "Delete a deployment check and all its runs.",
   access: { risk: "destructive" },
   input: z.object({
@@ -169,8 +151,6 @@ export const delete_project_check = defineTool({
 });
 
 export const list_check_runs = defineTool({
-  name: "list_check_runs",
-  domain: "vercel",
   description: "List runs for a specific check.",
   access: { risk: "read" },
   input: z.object({
@@ -188,8 +168,6 @@ export const list_check_runs = defineTool({
 });
 
 export const list_deployment_check_runs = defineTool({
-  name: "list_deployment_check_runs",
-  domain: "vercel",
   description: "List all check runs for a deployment.",
   access: { risk: "read" },
   input: z.object({
@@ -205,8 +183,6 @@ export const list_deployment_check_runs = defineTool({
 });
 
 export const get_deployment_check_run = defineTool({
-  name: "get_deployment_check_run",
-  domain: "vercel",
   description: "Get a check run's details.",
   access: { risk: "read" },
   input: z.object({

@@ -1,13 +1,11 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { octokit } from "./client.ts";
 import { env } from "./config.ts";
 import { paginationInputShape } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 export const list_environments = defineTool({
-  name: "list_environments",
-  domain: "github",
   description:
     "List deployment environments for a repository. Returns name, URL, protection rules, and timestamps.",
   access: { risk: "read" },
@@ -38,8 +36,6 @@ export const list_environments = defineTool({
 });
 
 export const get_environment = defineTool({
-  name: "get_environment",
-  domain: "github",
   description: "Get details for a single deployment environment, including protection rules.",
   access: { risk: "read" },
   input: z.object({
@@ -64,8 +60,6 @@ export const get_environment = defineTool({
 });
 
 export const create_or_update_environment = defineTool({
-  name: "create_or_update_environment",
-  domain: "github",
   description:
     "Create or update a deployment environment. Optionally configure wait timers and required reviewers (by user IDs or team IDs).",
   access: { risk: "destructive" },
@@ -108,8 +102,6 @@ export const create_or_update_environment = defineTool({
 });
 
 export const delete_environment = defineTool({
-  name: "delete_environment",
-  domain: "github",
   description: "Delete a deployment environment. Associated deployments become unenvironmented.",
   access: { risk: "destructive" },
   input: z.object({

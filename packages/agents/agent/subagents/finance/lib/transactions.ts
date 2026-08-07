@@ -1,8 +1,8 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { hcbGet, hcbOrgSlug, hcbPaginate, hcbTxnUrl, paginationQuery } from "./client.ts";
 import { paginationInputShape } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 const hcbReceiptsSummarySchema = z.object({
   count: z.number().optional(),
@@ -34,8 +34,6 @@ function projectTransaction(t: HcbTransaction) {
 
 /** List the most recent transactions. */
 export const list_transactions = defineTool({
-  name: "list_transactions",
-  domain: "finance",
   description:
     "List recent HCB transactions for Purdue Hackers — newest first. Each transaction includes id, date, amount_cents (negative = outflow), memo, type, pending flag, and a receipts summary {count, missing}. Receipt files themselves are NOT available via HCB's API; only whether a receipt is attached.",
   access: { risk: "read" },
@@ -52,8 +50,6 @@ export const list_transactions = defineTool({
 
 /** Get a single transaction by id. */
 export const get_transaction = defineTool({
-  name: "get_transaction",
-  domain: "finance",
   description:
     "Get a single HCB transaction by id. Returns a compact summary with id, date, amount_cents (negative = outflow), memo, type, pending flag, receipts summary {count, missing}, and href. Receipt files themselves are NOT available via HCB's API; only whether a receipt is attached — visit hcb.hackclub.com/hcb/{id} for the actual file.",
   access: { risk: "read" },
@@ -88,8 +84,6 @@ const findTransactionsInput = z.object({
 });
 
 export const find_transactions = defineTool({
-  name: "find_transactions",
-  domain: "finance",
   description:
     "Search HCB transactions by memo substring, amount range (in cents), and/or ISO date range. Client-side filter over paginated results (capped). Useful for answering 'find the $42 charge for badges' or 'what did we spend on food last month?'.",
   access: { risk: "read" },

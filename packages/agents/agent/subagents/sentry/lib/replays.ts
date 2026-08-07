@@ -1,16 +1,14 @@
 import { listAnOrganization_sReplays, retrieveAReplayInstance, unwrapResult } from "@sentry/api";
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { sentryOpts, sentryOrg, sentryProjectId } from "./client.ts";
 import { perPageField } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 const replayProjectionSchema = z.looseObject({ title: z.string().nullish() });
 
 /** List session replays. */
 export const list_replays = defineTool({
-  name: "list_replays",
-  domain: "sentry",
   description:
     "List session replays for the organization. Returns replay ID, duration, error count, URLs visited, user info, and browser/OS.",
   access: { risk: "read" },
@@ -60,8 +58,6 @@ export const list_replays = defineTool({
 
 /** Get details for a specific session replay. */
 export const get_replay = defineTool({
-  name: "get_replay",
-  domain: "sentry",
   description:
     "Get full details for a session replay — duration, error count, URLs, user info, browser/OS, and segment count.",
   access: { risk: "read" },

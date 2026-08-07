@@ -1,13 +1,11 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { octokit } from "./client.ts";
 import { env } from "./config.ts";
 import { paginationInputShape, perPageField } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 export const list_releases = defineTool({
-  name: "list_releases",
-  domain: "github",
   description:
     "List releases for a repository, newest first. Returns tag name, title, draft/prerelease flags, created/published timestamps, and URL.",
   access: { risk: "read" },
@@ -38,8 +36,6 @@ export const list_releases = defineTool({
 });
 
 export const get_release = defineTool({
-  name: "get_release",
-  domain: "github",
   description: "Get full details for a release including its body, assets, author, and timestamps.",
   access: { risk: "read" },
   input: z.object({
@@ -74,8 +70,6 @@ export const get_release = defineTool({
 });
 
 export const create_release = defineTool({
-  name: "create_release",
-  domain: "github",
   description:
     "Create a new release for a repository. Requires tag_name; will auto-create the tag if it doesn't exist. Supports draft releases and prereleases.",
   access: { risk: "write" },
@@ -123,8 +117,6 @@ export const create_release = defineTool({
 });
 
 export const update_release = defineTool({
-  name: "update_release",
-  domain: "github",
   description:
     "Update an existing release's tag name, title, body, draft/prerelease status, or target branch.",
   access: { risk: "write" },
@@ -169,8 +161,6 @@ export const update_release = defineTool({
 });
 
 export const delete_release = defineTool({
-  name: "delete_release",
-  domain: "github",
   description: "Delete a release by ID. The associated tag is not deleted automatically.",
   access: { risk: "destructive" },
   input: z.object({
@@ -188,8 +178,6 @@ export const delete_release = defineTool({
 });
 
 export const list_release_assets = defineTool({
-  name: "list_release_assets",
-  domain: "github",
   description:
     "List assets (attached files) on a release. Returns name, size, download count, and download URL.",
   access: { risk: "read" },

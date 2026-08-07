@@ -1,13 +1,11 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { octokit } from "./client.ts";
 import { env } from "./config.ts";
 import { paginationInputShape, perPageField } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 export const list_tags = defineTool({
-  name: "list_tags",
-  domain: "github",
   description: "List tags for a repository. Returns tag name, commit SHA, and commit URL.",
   access: { risk: "read" },
   input: z.object({
@@ -32,8 +30,6 @@ export const list_tags = defineTool({
 });
 
 export const list_refs = defineTool({
-  name: "list_refs",
-  domain: "github",
   description:
     "List git refs (branches or tags) matching a prefix. Use 'heads/' for branches, 'tags/' for tags. Returns ref names and their target SHAs.",
   access: { risk: "read" },
@@ -60,8 +56,6 @@ export const list_refs = defineTool({
 });
 
 export const get_ref = defineTool({
-  name: "get_ref",
-  domain: "github",
   description: "Get a single git ref (branch or tag) by its full name (e.g. 'heads/main').",
   access: { risk: "read" },
   input: z.object({
@@ -79,8 +73,6 @@ export const get_ref = defineTool({
 });
 
 export const create_ref = defineTool({
-  name: "create_ref",
-  domain: "github",
   description:
     "Create a new branch or tag. For branches use ref='refs/heads/my-branch'; for tags use 'refs/tags/v1.0.0'. Requires the target commit SHA.",
   access: { risk: "write" },
@@ -101,8 +93,6 @@ export const create_ref = defineTool({
 });
 
 export const update_ref = defineTool({
-  name: "update_ref",
-  domain: "github",
   description:
     "Update a ref to point to a different commit SHA. For branches, equivalent to a fast-forward or force-push (set force=true for non-fast-forward).",
   access: { risk: "destructive" },
@@ -125,8 +115,6 @@ export const update_ref = defineTool({
 });
 
 export const delete_ref = defineTool({
-  name: "delete_ref",
-  domain: "github",
   description:
     "Delete a git ref (branch or tag). Irreversible. Ref path without 'refs/' prefix (e.g. 'heads/old-branch').",
   access: { risk: "destructive" },

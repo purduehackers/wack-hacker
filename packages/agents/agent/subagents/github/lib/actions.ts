@@ -1,14 +1,12 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { octokit } from "./client.ts";
 import { env } from "./config.ts";
 import { paginationInputShape } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 /** List workflow definitions in a repository. */
 export const list_workflows = defineTool({
-  name: "list_workflows",
-  domain: "github",
   description: `List CI/CD workflows defined in a repository's .github/workflows directory. Returns each workflow's ID, name, file path, state, and URL.`,
   access: { risk: "read" },
   input: z.object({
@@ -37,8 +35,6 @@ export const list_workflows = defineTool({
 
 /** List workflow runs for a repository or specific workflow. */
 export const list_workflow_runs = defineTool({
-  name: "list_workflow_runs",
-  domain: "github",
   description: `List workflow runs for a repository. Optionally filter by workflow ID/filename, branch, or status. Returns run ID, name, status, conclusion, branch, and timestamps. If no workflow_id is given, lists runs across all workflows.`,
   access: { risk: "read" },
   input: z.object({
@@ -117,8 +113,6 @@ export const list_workflow_runs = defineTool({
 
 /** Get details for a specific workflow run. */
 export const get_workflow_run = defineTool({
-  name: "get_workflow_run",
-  domain: "github",
   description: `Get detailed information about a specific workflow run, including its status, conclusion, triggering event, branch, commit SHA, and timing information.`,
   access: { risk: "read" },
   input: z.object({
@@ -150,8 +144,6 @@ export const get_workflow_run = defineTool({
 
 /** Trigger a workflow dispatch event to manually run a workflow. */
 export const trigger_workflow = defineTool({
-  name: "trigger_workflow",
-  domain: "github",
   description: `Trigger a workflow_dispatch event to manually run a workflow. The workflow must have a workflow_dispatch trigger defined. Specify the branch/tag to run on and optional input parameters.`,
   access: { risk: "destructive" },
   input: z.object({
@@ -176,8 +168,6 @@ export const trigger_workflow = defineTool({
 
 /** Cancel a workflow run that is in progress. */
 export const cancel_workflow_run = defineTool({
-  name: "cancel_workflow_run",
-  domain: "github",
   description: `Cancel a workflow run that is currently in progress or queued. Returns confirmation of cancellation.`,
   access: { risk: "destructive" },
   input: z.object({
@@ -196,8 +186,6 @@ export const cancel_workflow_run = defineTool({
 
 /** Re-run a completed workflow run. */
 export const rerun_workflow = defineTool({
-  name: "rerun_workflow",
-  domain: "github",
   description: `Re-run a completed workflow run. This creates a new attempt of the same run. Useful for retrying failed builds or deployments.`,
   access: { risk: "destructive" },
   input: z.object({
@@ -216,8 +204,6 @@ export const rerun_workflow = defineTool({
 
 /** List jobs for a workflow run with their steps and statuses. */
 export const list_workflow_jobs = defineTool({
-  name: "list_workflow_jobs",
-  domain: "github",
   description: `List jobs for a workflow run. Returns each job's ID, name, status, conclusion, timing, and individual step details. Use 'latest' filter for the most recent attempt or 'all' for every attempt.`,
   access: { risk: "read" },
   input: z.object({
@@ -258,8 +244,6 @@ export const list_workflow_jobs = defineTool({
 
 /** Get the download URL for a workflow artifact. */
 export const download_artifact = defineTool({
-  name: "download_artifact",
-  domain: "github",
   description: `Get the download URL for a workflow artifact by its ID. Returns a URL that can be used to download the artifact as a zip file.`,
   access: { risk: "read" },
   input: z.object({

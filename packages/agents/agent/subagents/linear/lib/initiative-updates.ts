@@ -7,14 +7,12 @@ const HEALTH: Record<"onTrack" | "atRisk" | "offTrack", InitiativeUpdateHealthTy
   offTrack: InitiativeUpdateHealthType.OffTrack,
 };
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { linear } from "./client.ts";
 import { healthSchema } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 import { sdkInput } from "./sdk-input.ts";
 
 export const query_initiative_updates = defineTool({
-  name: "query_initiative_updates",
-  domain: "linear",
   description: "List recent initiative status updates with body, health, date, and URL.",
   access: { risk: "read" },
   input: z.object({
@@ -37,8 +35,6 @@ export const query_initiative_updates = defineTool({
 });
 
 export const create_initiative_update = defineTool({
-  name: "create_initiative_update",
-  domain: "linear",
   description:
     "Create an initiative status update with Markdown body and health (onTrack/atRisk/offTrack). For cross-project reporting.",
   access: { risk: "write" },
@@ -64,8 +60,6 @@ export const create_initiative_update = defineTool({
 });
 
 export const update_initiative_update = defineTool({
-  name: "update_initiative_update",
-  domain: "linear",
   description: "Edit an existing initiative update's body or health status.",
   access: { risk: "write" },
   input: z.object({

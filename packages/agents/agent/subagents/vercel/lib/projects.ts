@@ -1,8 +1,8 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { vercel } from "./client.ts";
 import { VERCEL_TEAM_ID, VERCEL_TEAM_SLUG } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 const TEAM = { teamId: VERCEL_TEAM_ID, slug: VERCEL_TEAM_SLUG } as const;
 
@@ -24,8 +24,6 @@ function redactEnvValues(input: unknown): unknown {
 }
 
 export const list_projects = defineTool({
-  name: "list_projects",
-  domain: "vercel",
   description:
     "List Vercel projects in the active team. Supports `search`, `from` (timestamp cursor), `limit`, and repo filters.",
   access: { risk: "read" },
@@ -50,8 +48,6 @@ export const list_projects = defineTool({
 });
 
 export const get_project = defineTool({
-  name: "get_project",
-  domain: "vercel",
   description: "Retrieve a single Vercel project by id or name (via search).",
   access: { risk: "read" },
   input: z.object({
@@ -68,8 +64,6 @@ export const get_project = defineTool({
 });
 
 export const delete_project = defineTool({
-  name: "delete_project",
-  domain: "vercel",
   description:
     "Permanently delete a Vercel project and every deployment underneath it. Irreversible.",
   access: { risk: "destructive", confirm: "second-party" },
@@ -83,8 +77,6 @@ export const delete_project = defineTool({
 });
 
 export const pause_project = defineTool({
-  name: "pause_project",
-  domain: "vercel",
   description: "Pause a project. Blocks the active production deployment until unpaused.",
   access: { risk: "destructive" },
   input: z.object({ project_id: z.string() }),
@@ -95,8 +87,6 @@ export const pause_project = defineTool({
 });
 
 export const unpause_project = defineTool({
-  name: "unpause_project",
-  domain: "vercel",
   description: "Unpause a previously paused project. Restores the active production deployment.",
   access: { risk: "destructive" },
   input: z.object({ project_id: z.string() }),
@@ -107,8 +97,6 @@ export const unpause_project = defineTool({
 });
 
 export const create_project_transfer_request = defineTool({
-  name: "create_project_transfer_request",
-  domain: "vercel",
   description:
     "Create a project transfer request. Returns a `code` that another team can redeem within 24h to complete the transfer.",
   access: { risk: "destructive" },
@@ -125,8 +113,6 @@ export const create_project_transfer_request = defineTool({
 // ──────────────── ENV VARS ────────────────
 
 export const list_project_env_vars = defineTool({
-  name: "list_project_env_vars",
-  domain: "vercel",
   description:
     "List environment variables for a project. **Always strips the `value` field** — returns keys, targets, types only. Use `get_project_env_var` to fetch a specific decrypted value.",
   access: { risk: "read" },
@@ -145,8 +131,6 @@ export const list_project_env_vars = defineTool({
 });
 
 export const get_project_env_var = defineTool({
-  name: "get_project_env_var",
-  domain: "vercel",
   description:
     "Retrieve a single environment variable by its id, **including its decrypted value**. Use sparingly.",
   access: { risk: "read" },
@@ -165,8 +149,6 @@ export const get_project_env_var = defineTool({
 });
 
 export const create_project_env_vars = defineTool({
-  name: "create_project_env_vars",
-  domain: "vercel",
   description:
     "Create one or more environment variables on a project. Pass `upsert: true` to update-if-exists.",
   access: { risk: "destructive" },
@@ -198,8 +180,6 @@ export const create_project_env_vars = defineTool({
 });
 
 export const edit_project_env_var = defineTool({
-  name: "edit_project_env_var",
-  domain: "vercel",
   description: "Edit a single environment variable.",
   access: { risk: "destructive" },
   input: z.object({
@@ -224,8 +204,6 @@ export const edit_project_env_var = defineTool({
 });
 
 export const remove_project_env_var = defineTool({
-  name: "remove_project_env_var",
-  domain: "vercel",
   description: "Remove a single environment variable from a project by its id.",
   access: { risk: "destructive" },
   input: z.object({
@@ -245,8 +223,6 @@ export const remove_project_env_var = defineTool({
 // ──────────────── DOMAINS ────────────────
 
 export const list_project_domains = defineTool({
-  name: "list_project_domains",
-  domain: "vercel",
   description:
     "List domains attached to a project. Returns name, git branch binding, redirect, verification state.",
   access: { risk: "read" },
@@ -275,8 +251,6 @@ export const list_project_domains = defineTool({
 });
 
 export const get_project_domain = defineTool({
-  name: "get_project_domain",
-  domain: "vercel",
   description: "Get a single project domain's details.",
   access: { risk: "read" },
   input: z.object({
@@ -294,8 +268,6 @@ export const get_project_domain = defineTool({
 });
 
 export const remove_project_domain = defineTool({
-  name: "remove_project_domain",
-  domain: "vercel",
   description: "Remove a domain from a project.",
   access: { risk: "destructive" },
   input: z.object({
@@ -313,8 +285,6 @@ export const remove_project_domain = defineTool({
 });
 
 export const verify_project_domain = defineTool({
-  name: "verify_project_domain",
-  domain: "vercel",
   description: "Trigger verification of a pending project domain.",
   access: { risk: "write" },
   input: z.object({
@@ -332,8 +302,6 @@ export const verify_project_domain = defineTool({
 });
 
 export const list_promote_aliases = defineTool({
-  name: "list_promote_aliases",
-  domain: "vercel",
   description:
     "List aliases from the most recent promote request. Use after `promote_deployment` to confirm traffic moved.",
   access: { risk: "read" },
@@ -358,8 +326,6 @@ export const list_promote_aliases = defineTool({
 // ──────────────── MEMBERS ────────────────
 
 export const list_project_members = defineTool({
-  name: "list_project_members",
-  domain: "vercel",
   description: "List members with access to a specific project.",
   access: { risk: "read" },
   input: z.object({
@@ -383,8 +349,6 @@ export const list_project_members = defineTool({
 });
 
 export const remove_project_member = defineTool({
-  name: "remove_project_member",
-  domain: "vercel",
   description: "Remove a member from a project.",
   access: { risk: "destructive" },
   input: z.object({

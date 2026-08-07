@@ -1,16 +1,14 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { octokit } from "./client.ts";
 import { env } from "./config.ts";
 import { paginationInputShape } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 const packageTypeSchema = z.enum(["npm", "maven", "rubygems", "docker", "nuget", "container"]);
 
 /** List packages in the organization. */
 export const list_packages = defineTool({
-  name: "list_packages",
-  domain: "github",
   description: `List packages in the purduehackers organization filtered by package type (npm, docker, container, etc.). Returns each package's ID, name, type, visibility, URL, and timestamps.`,
   access: { risk: "read" },
   input: z.object({
@@ -40,8 +38,6 @@ export const list_packages = defineTool({
 
 /** Get details for a specific package. */
 export const get_package = defineTool({
-  name: "get_package",
-  domain: "github",
   description: `Get detailed information about a specific package in the purduehackers organization, including its ID, name, type, visibility, URL, and timestamps.`,
   access: { risk: "read" },
   input: z.object({
@@ -68,8 +64,6 @@ export const get_package = defineTool({
 
 /** List versions of a package. */
 export const list_package_versions = defineTool({
-  name: "list_package_versions",
-  domain: "github",
   description: `List all versions of a package in the purduehackers organization. Returns each version's ID, name (tag), timestamps, URL, and metadata.`,
   access: { risk: "read" },
   input: z.object({
@@ -100,8 +94,6 @@ export const list_package_versions = defineTool({
 
 /** Delete a specific package version. */
 export const delete_package_version = defineTool({
-  name: "delete_package_version",
-  domain: "github",
   description: `Delete a specific version of a package from the purduehackers organization. This action is irreversible. You need the package version ID (get it from list_package_versions).`,
   access: { risk: "destructive" },
   input: z.object({

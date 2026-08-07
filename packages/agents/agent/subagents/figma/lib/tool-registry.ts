@@ -1,7 +1,7 @@
+import type { DomainToolSpec } from "../../../lib/policy/domain-tools.ts";
 import * as m_base from "./base.ts";
 import * as m_comments from "./comments.ts";
 import * as m_components from "./components.ts";
-import type { FigmaToolSpec } from "./define-tool.ts";
 import * as m_dev_resources from "./dev-resources.ts";
 import * as m_nodes from "./nodes.ts";
 import * as m_variables from "./variables.ts";
@@ -42,6 +42,6 @@ export const FIGMA_TOOLS = {
   search_files: m_base.search_files,
   update_dev_resource: m_dev_resources.update_dev_resource,
   update_webhook: m_webhooks.update_webhook,
-} as const satisfies Record<string, FigmaToolSpec>;
+} as const satisfies Record<string, DomainToolSpec>;
 
 export type FigmaToolName = keyof typeof FIGMA_TOOLS;

@@ -1,12 +1,10 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { sentryGet, sentryOrg } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 
 /** List available custom metrics. */
 export const list_metrics = defineTool({
-  name: "list_metrics",
-  domain: "sentry",
   description:
     "List available custom metrics (counters, distributions, gauges, sets) in the Sentry organization.",
   access: { risk: "read" },
@@ -23,8 +21,6 @@ export const list_metrics = defineTool({
 
 /** Query custom metrics data. */
 export const query_metrics = defineTool({
-  name: "query_metrics",
-  domain: "sentry",
   description:
     "Query custom metrics data with aggregation. Supports counters, distributions, gauges, and sets.",
   access: { risk: "read" },
@@ -64,8 +60,6 @@ export const query_metrics = defineTool({
 
 /** List tag keys available for metrics. */
 export const list_metric_tags = defineTool({
-  name: "list_metric_tags",
-  domain: "sentry",
   description: "List tag keys available for custom metrics filtering and grouping.",
   access: { risk: "read" },
   input: z.object({
@@ -83,8 +77,6 @@ export const list_metric_tags = defineTool({
 
 /** List values for a specific metric tag key. */
 export const get_metric_tag_values = defineTool({
-  name: "get_metric_tag_values",
-  domain: "sentry",
   description: "Get values for a specific metric tag key.",
   access: { risk: "read" },
   input: z.object({

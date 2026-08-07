@@ -16,6 +16,7 @@ import { assertToolOutput } from "../../../lib/core/serialization.ts";
 import { env } from "../../../lib/env.ts";
 import { ApprovalPolicyStore } from "../../../lib/policy/approval-record.ts";
 import { BudgetStore } from "../../../lib/policy/budget.ts";
+import type { DomainToolSpec } from "../../../lib/policy/domain-tools.ts";
 import { decideCapability } from "../../../lib/policy/engine.ts";
 import { resolveExecutionAuthority } from "../../../lib/policy/execution-authority.ts";
 import { requirePrincipal } from "../../../lib/policy/principal.ts";
@@ -24,7 +25,6 @@ import {
   type PolicyEvaluationContext,
   type PolicyPrincipal,
 } from "../../../lib/policy/types.ts";
-import type { CmsToolSpec } from "./define-tool.ts";
 import { descriptorForTool, isCmsToolName } from "./descriptors.ts";
 import { CMS_TOOLS, type CmsToolName } from "./tool-registry.ts";
 
@@ -234,7 +234,7 @@ export async function executeCmsTool(
   }
 
   // oxlint-disable-next-line typescript/consistent-type-assertions -- normalize the catalog union after name lookup
-  const spec = CMS_TOOLS[name] as CmsToolSpec<z.ZodType>;
+  const spec = CMS_TOOLS[name] as DomainToolSpec<z.ZodType>;
   const parsed = spec.input.safeParse(input);
   if (!parsed.success) {
     return {

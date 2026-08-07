@@ -8,9 +8,9 @@ import type {
 } from "@notionhq/client/build/src/api-endpoints";
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { notion } from "./client.ts";
 import { DEALS_DATA_SOURCE_ID } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 import { isQueryFilter, isQuerySorts } from "./notion-input.ts";
 import { cursorPaginationInputShape } from "./shared-constants.ts";
 
@@ -27,8 +27,6 @@ function summarizePage(page: CrmPage): Record<string, unknown> {
 }
 
 export const list_deals = defineTool({
-  name: "list_deals",
-  domain: "outreach",
   description: `List Deal pages in the CRM. Supports Notion filters/sorts against the Deals data source. Call retrieve_crm_schema first to learn the Stage/Priority options.`,
   access: { risk: "read" },
   input: z.object({
@@ -68,8 +66,6 @@ export const list_deals = defineTool({
 });
 
 export const get_deal = defineTool({
-  name: "get_deal",
-  domain: "outreach",
   description: `Retrieve a single Deal page by its Notion page ID.`,
   access: { risk: "read" },
   input: z.object({
@@ -82,8 +78,6 @@ export const get_deal = defineTool({
 });
 
 export const create_deal = defineTool({
-  name: "create_deal",
-  domain: "outreach",
   description: `Create a new Deal row. "name" becomes the Deal title. Stage defaults to "Lead" when omitted. Call retrieve_crm_schema first to confirm Stage/Priority option labels.`,
   access: { risk: "write" },
   input: z.object({
@@ -114,8 +108,6 @@ export const create_deal = defineTool({
 });
 
 export const update_deal_stage = defineTool({
-  name: "update_deal_stage",
-  domain: "outreach",
   description: `Update a Deal's Stage. Use the exact status option label (e.g. "Lead", "Qualified", "Proposal", "Negotiation", "Won", "Lost"). Stage transitions are manual — do not auto-advance.`,
   access: { risk: "write" },
   input: z.object({
@@ -132,8 +124,6 @@ export const update_deal_stage = defineTool({
 });
 
 export const update_deal = defineTool({
-  name: "update_deal",
-  domain: "outreach",
   description: `Update arbitrary Deal fields (amount, priority, close date, notes). Use update_deal_stage for Stage changes.`,
   access: { risk: "write" },
   input: z.object({

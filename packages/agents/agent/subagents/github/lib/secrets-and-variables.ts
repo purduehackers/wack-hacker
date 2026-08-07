@@ -4,10 +4,10 @@ import { blake2b } from "@noble/hashes/blake2.js";
 import { u32, u8 } from "@noble/hashes/utils.js";
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { octokit } from "./client.ts";
 import { env } from "./config.ts";
 import { paginationInputShape } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 // NaCl "expand 32-byte k" sigma constant
 const SIGMA = new Uint32Array([1_634_760_805, 857_760_878, 2_036_477_234, 1_797_285_236]);
@@ -59,8 +59,6 @@ function encryptSecret(value: string, publicKeyBase64: string) {
 // ---------------------------------------------------------------------------
 
 export const list_repo_secrets = defineTool({
-  name: "list_repo_secrets",
-  domain: "github",
   description: `List Actions secrets for a repository. Returns secret names and timestamps only — values are never readable.`,
   access: { risk: "read" },
   input: z.object({
@@ -86,8 +84,6 @@ export const list_repo_secrets = defineTool({
 });
 
 export const create_or_update_repo_secret = defineTool({
-  name: "create_or_update_repo_secret",
-  domain: "github",
   description: `Create or update an Actions secret for a repository. The value is encrypted before storage.`,
   access: { risk: "destructive" },
   input: z.object({
@@ -113,8 +109,6 @@ export const create_or_update_repo_secret = defineTool({
 });
 
 export const delete_repo_secret = defineTool({
-  name: "delete_repo_secret",
-  domain: "github",
   description: `Delete an Actions secret from a repository.`,
   access: { risk: "destructive" },
   input: z.object({
@@ -136,8 +130,6 @@ export const delete_repo_secret = defineTool({
 // ---------------------------------------------------------------------------
 
 export const list_repo_variables = defineTool({
-  name: "list_repo_variables",
-  domain: "github",
   description: `List Actions variables for a repository. Unlike secrets, variable values are readable.`,
   access: { risk: "read" },
   input: z.object({
@@ -164,8 +156,6 @@ export const list_repo_variables = defineTool({
 });
 
 export const create_or_update_repo_variable = defineTool({
-  name: "create_or_update_repo_variable",
-  domain: "github",
   description: `Create or update an Actions variable for a repository. Updates if it exists, creates if it doesn't.`,
   access: { risk: "destructive" },
   input: z.object({
@@ -196,8 +186,6 @@ export const create_or_update_repo_variable = defineTool({
 });
 
 export const delete_repo_variable = defineTool({
-  name: "delete_repo_variable",
-  domain: "github",
   description: `Delete an Actions variable from a repository.`,
   access: { risk: "destructive" },
   input: z.object({
@@ -219,8 +207,6 @@ export const delete_repo_variable = defineTool({
 // ---------------------------------------------------------------------------
 
 export const list_org_secrets = defineTool({
-  name: "list_org_secrets",
-  domain: "github",
   description: `List Actions secrets for the purduehackers organization. Returns names, timestamps, and visibility scope. Values are never readable.`,
   access: { risk: "read" },
   input: z.object({
@@ -245,8 +231,6 @@ export const list_org_secrets = defineTool({
 });
 
 export const create_or_update_org_secret = defineTool({
-  name: "create_or_update_org_secret",
-  domain: "github",
   description: `Create or update an Actions secret for the organization. Value is encrypted. Set visibility to control repo access ('all', 'private', or 'selected' with repo IDs).`,
   access: { risk: "destructive" },
   input: z.object({
@@ -276,8 +260,6 @@ export const create_or_update_org_secret = defineTool({
 });
 
 export const delete_org_secret = defineTool({
-  name: "delete_org_secret",
-  domain: "github",
   description: `Delete an Actions secret from the organization.`,
   access: { risk: "destructive" },
   input: z.object({
@@ -297,8 +279,6 @@ export const delete_org_secret = defineTool({
 // ---------------------------------------------------------------------------
 
 export const list_org_variables = defineTool({
-  name: "list_org_variables",
-  domain: "github",
   description: `List Actions variables for the purduehackers organization. Returns name, value, timestamps, and visibility scope.`,
   access: { risk: "read" },
   input: z.object({
@@ -324,8 +304,6 @@ export const list_org_variables = defineTool({
 });
 
 export const create_or_update_org_variable = defineTool({
-  name: "create_or_update_org_variable",
-  domain: "github",
   description: `Create or update an Actions variable for the organization. Updates if it exists, creates if it doesn't. Set visibility to control repo access.`,
   access: { risk: "destructive" },
   input: z.object({
@@ -359,8 +337,6 @@ export const create_or_update_org_variable = defineTool({
 });
 
 export const delete_org_variable = defineTool({
-  name: "delete_org_variable",
-  domain: "github",
   description: `Delete an Actions variable from the organization.`,
   access: { risk: "destructive" },
   input: z.object({

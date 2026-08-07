@@ -9,8 +9,8 @@ import {
 } from "@sentry/api";
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { sentryOpts, sentryOrg } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 
 const releaseCommitProjectionSchema = z.looseObject({
   author: z.unknown().optional(),
@@ -19,8 +19,6 @@ const releaseCommitProjectionSchema = z.looseObject({
 
 /** List releases for the organization. */
 export const list_releases = defineTool({
-  name: "list_releases",
-  domain: "sentry",
   description:
     "List releases for the Sentry organization. Returns version, date, commit count, new groups, and projects.",
   access: { risk: "read" },
@@ -57,8 +55,6 @@ export const list_releases = defineTool({
 
 /** Get full details for a release. */
 export const get_release = defineTool({
-  name: "get_release",
-  domain: "sentry",
   description: "Get full details for a Sentry release by version string.",
   access: { risk: "read" },
   input: z.object({
@@ -79,8 +75,6 @@ export const get_release = defineTool({
 
 /** Create a new release. */
 export const create_release = defineTool({
-  name: "create_release",
-  domain: "sentry",
   description:
     "Create a new Sentry release. Requires a version string and at least one project slug.",
   access: { risk: "write" },
@@ -108,8 +102,6 @@ export const create_release = defineTool({
 
 /** List deploys for a release. */
 export const list_release_deploys = defineTool({
-  name: "list_release_deploys",
-  domain: "sentry",
   description: "List deploys for a Sentry release. Shows environment, dates, and deploy name.",
   access: { risk: "read" },
   input: z.object({
@@ -130,8 +122,6 @@ export const list_release_deploys = defineTool({
 
 /** Record a deploy for a release. */
 export const create_deploy = defineTool({
-  name: "create_deploy",
-  domain: "sentry",
   description:
     "Record a deploy for a Sentry release. Requires an environment name (e.g. 'production', 'staging').",
   access: { risk: "write" },
@@ -163,8 +153,6 @@ export const create_deploy = defineTool({
 
 /** List commits associated with a release. */
 export const list_release_commits = defineTool({
-  name: "list_release_commits",
-  domain: "sentry",
   description: "List commits associated with a Sentry release.",
   access: { risk: "read" },
   input: z.object({

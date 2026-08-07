@@ -6,8 +6,8 @@ import type {
 } from "@notionhq/client/build/src/api-endpoints";
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { firstDataSourceId, notion, resolveDataSourceId, richTextToPlain } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 import {
   isCreateDataSourceProperties,
   isQueryFilter,
@@ -17,8 +17,6 @@ import {
 import { cursorPaginationInputShape } from "./shared-constants.ts";
 
 export const query_database = defineTool({
-  name: "query_database",
-  domain: "notion",
   description: `Query a database with optional filters and sorts. Returns matching pages with their properties. Always call retrieve_database first to understand the schema before building filters. Supports pagination via start_cursor.`,
   access: { risk: "read" },
   input: z.object({
@@ -70,8 +68,6 @@ export const query_database = defineTool({
 });
 
 export const create_database = defineTool({
-  name: "create_database",
-  domain: "notion",
   description: `Create a new database as a child of a page. Requires a title property at minimum. Define the property schema — supported types: title, rich_text, number, select, multi_select, status, date, checkbox, people, url, email, relation.`,
   access: { risk: "write" },
   input: z.object({
@@ -103,8 +99,6 @@ export const create_database = defineTool({
 });
 
 export const update_database = defineTool({
-  name: "update_database",
-  domain: "notion",
   description: `Update a database's title or property schema. To add a property, include it in properties. To rename, use the property ID as the key. To delete, set the property to null.`,
   access: { risk: "write" },
   input: z.object({
@@ -142,8 +136,6 @@ export const update_database = defineTool({
 });
 
 export const archive_database = defineTool({
-  name: "archive_database",
-  domain: "notion",
   description:
     "Archive (soft-delete) a Notion database. The database and its pages become hidden from default views but can be restored from the Notion UI.",
   access: { risk: "destructive" },

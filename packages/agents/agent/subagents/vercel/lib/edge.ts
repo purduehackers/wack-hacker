@@ -1,8 +1,8 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { vercel } from "./client.ts";
 import { VERCEL_TEAM_ID, VERCEL_TEAM_SLUG } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 const TEAM = { teamId: VERCEL_TEAM_ID, slug: VERCEL_TEAM_SLUG } as const;
 
@@ -28,8 +28,6 @@ function redactTokens(input: unknown): unknown {
 // ──────────────── EDGE CONFIG — STORES ────────────────
 
 export const list_edge_configs = defineTool({
-  name: "list_edge_configs",
-  domain: "vercel",
   description: "List every Edge Config store in the team.",
   access: { risk: "read" },
   input: z.object({}),
@@ -40,8 +38,6 @@ export const list_edge_configs = defineTool({
 });
 
 export const get_edge_config = defineTool({
-  name: "get_edge_config",
-  domain: "vercel",
   description: "Retrieve a single Edge Config by id.",
   access: { risk: "read" },
   input: z.object({ edge_config_id: z.string() }),
@@ -55,8 +51,6 @@ export const get_edge_config = defineTool({
 });
 
 export const create_edge_config = defineTool({
-  name: "create_edge_config",
-  domain: "vercel",
   description: "Create a new Edge Config store.",
   access: { risk: "write" },
   input: z.object({
@@ -72,8 +66,6 @@ export const create_edge_config = defineTool({
 });
 
 export const update_edge_config = defineTool({
-  name: "update_edge_config",
-  domain: "vercel",
   description: "Rename an Edge Config.",
   access: { risk: "destructive" },
   input: z.object({
@@ -91,8 +83,6 @@ export const update_edge_config = defineTool({
 });
 
 export const delete_edge_config = defineTool({
-  name: "delete_edge_config",
-  domain: "vercel",
   description: "Permanently delete an Edge Config store.",
   access: { risk: "destructive" },
   input: z.object({ edge_config_id: z.string() }),
@@ -108,8 +98,6 @@ export const delete_edge_config = defineTool({
 // ──────────────── EDGE CONFIG — ITEMS ────────────────
 
 export const list_edge_config_items = defineTool({
-  name: "list_edge_config_items",
-  domain: "vercel",
   description: "List all items in an Edge Config.",
   access: { risk: "read" },
   input: z.object({ edge_config_id: z.string() }),
@@ -123,8 +111,6 @@ export const list_edge_config_items = defineTool({
 });
 
 export const get_edge_config_item = defineTool({
-  name: "get_edge_config_item",
-  domain: "vercel",
   description: "Get a single item by key from an Edge Config.",
   access: { risk: "read" },
   input: z.object({
@@ -142,8 +128,6 @@ export const get_edge_config_item = defineTool({
 });
 
 export const patch_edge_config_items = defineTool({
-  name: "patch_edge_config_items",
-  domain: "vercel",
   description:
     "Upsert or delete items in an Edge Config. Pass an array of operations: { operation: 'create'|'update'|'upsert'|'delete', key, value? }.",
   access: { risk: "destructive" },
@@ -172,8 +156,6 @@ export const patch_edge_config_items = defineTool({
 // ──────────────── EDGE CONFIG — SCHEMA & TOKENS & BACKUPS ────────────────
 
 export const get_edge_config_schema = defineTool({
-  name: "get_edge_config_schema",
-  domain: "vercel",
   description: "Get the JSON Schema for an Edge Config (validates future writes).",
   access: { risk: "read" },
   input: z.object({ edge_config_id: z.string() }),
@@ -187,8 +169,6 @@ export const get_edge_config_schema = defineTool({
 });
 
 export const delete_edge_config_schema = defineTool({
-  name: "delete_edge_config_schema",
-  domain: "vercel",
   description: "Delete the schema definition on an Edge Config.",
   access: { risk: "destructive" },
   input: z.object({ edge_config_id: z.string() }),
@@ -202,8 +182,6 @@ export const delete_edge_config_schema = defineTool({
 });
 
 export const list_edge_config_tokens = defineTool({
-  name: "list_edge_config_tokens",
-  domain: "vercel",
   description:
     "List read tokens for an Edge Config. **Always strips the raw `token` field** — returns id/label/createdAt metadata only. The Vercel dashboard is the only path for retrieving an existing token's secret.",
   access: { risk: "read" },
@@ -218,8 +196,6 @@ export const list_edge_config_tokens = defineTool({
 });
 
 export const get_edge_config_token = defineTool({
-  name: "get_edge_config_token",
-  domain: "vercel",
   description:
     "Retrieve a specific Edge Config read token's metadata. **Strips the raw `token` field** from the response.",
   access: { risk: "read" },
@@ -238,8 +214,6 @@ export const get_edge_config_token = defineTool({
 });
 
 export const create_edge_config_token = defineTool({
-  name: "create_edge_config_token",
-  domain: "vercel",
   description:
     "Create a new read token for an Edge Config. **Does NOT return the token value** — only its id and label. Retrieve the secret from the Vercel dashboard to avoid leaking it into Discord/logs.",
   access: { risk: "write" },
@@ -262,8 +236,6 @@ export const create_edge_config_token = defineTool({
 });
 
 export const delete_edge_config_tokens = defineTool({
-  name: "delete_edge_config_tokens",
-  domain: "vercel",
   description: "Delete one or more Edge Config read tokens.",
   access: { risk: "destructive" },
   input: z.object({
@@ -281,8 +253,6 @@ export const delete_edge_config_tokens = defineTool({
 });
 
 export const list_edge_config_backups = defineTool({
-  name: "list_edge_config_backups",
-  domain: "vercel",
   description: "List automatic backups for an Edge Config.",
   access: { risk: "read" },
   input: z.object({
@@ -300,8 +270,6 @@ export const list_edge_config_backups = defineTool({
 });
 
 export const get_edge_config_backup = defineTool({
-  name: "get_edge_config_backup",
-  domain: "vercel",
   description: "Retrieve a specific Edge Config backup.",
   access: { risk: "read" },
   input: z.object({
@@ -321,8 +289,6 @@ export const get_edge_config_backup = defineTool({
 // ──────────────── EDGE CACHE ────────────────
 
 export const invalidate_edge_cache_by_tags = defineTool({
-  name: "invalidate_edge_cache_by_tags",
-  domain: "vercel",
   description: "Invalidate Vercel Edge Cache entries tagged with any of the given tags.",
   access: { risk: "write" },
   input: z.object({
@@ -340,8 +306,6 @@ export const invalidate_edge_cache_by_tags = defineTool({
 });
 
 export const dangerously_delete_edge_cache_by_tags = defineTool({
-  name: "dangerously_delete_edge_cache_by_tags",
-  domain: "vercel",
   description:
     "Forcefully delete (not just invalidate) cache entries by tag. Use invalidate first unless you need storage freed immediately.",
   access: { risk: "destructive" },
@@ -360,8 +324,6 @@ export const dangerously_delete_edge_cache_by_tags = defineTool({
 });
 
 export const invalidate_edge_cache_by_src_images = defineTool({
-  name: "invalidate_edge_cache_by_src_images",
-  domain: "vercel",
   description: "Invalidate the image optimizer cache for specific source image URLs.",
   access: { risk: "write" },
   input: z.object({
@@ -379,8 +341,6 @@ export const invalidate_edge_cache_by_src_images = defineTool({
 });
 
 export const dangerously_delete_edge_cache_by_src_images = defineTool({
-  name: "dangerously_delete_edge_cache_by_src_images",
-  domain: "vercel",
   description: "Forcefully delete image optimizer cache entries for source URLs.",
   access: { risk: "destructive" },
   input: z.object({
@@ -400,8 +360,6 @@ export const dangerously_delete_edge_cache_by_src_images = defineTool({
 // ──────────────── FEATURE FLAGS ────────────────
 
 export const list_flags = defineTool({
-  name: "list_flags",
-  domain: "vercel",
   description: "List Vercel feature flags for a project.",
   access: { risk: "read" },
   input: z.object({
@@ -419,8 +377,6 @@ export const list_flags = defineTool({
 });
 
 export const get_flag = defineTool({
-  name: "get_flag",
-  domain: "vercel",
   description: "Get a feature flag by id.",
   access: { risk: "read" },
   input: z.object({
@@ -438,8 +394,6 @@ export const get_flag = defineTool({
 });
 
 export const delete_flag = defineTool({
-  name: "delete_flag",
-  domain: "vercel",
   description: "Permanently delete a feature flag.",
   access: { risk: "destructive" },
   input: z.object({
@@ -457,8 +411,6 @@ export const delete_flag = defineTool({
 });
 
 export const list_flag_versions = defineTool({
-  name: "list_flag_versions",
-  domain: "vercel",
   description: "List historical versions of a feature flag.",
   access: { risk: "read" },
   input: z.object({
@@ -478,8 +430,6 @@ export const list_flag_versions = defineTool({
 });
 
 export const get_flag_settings = defineTool({
-  name: "get_flag_settings",
-  domain: "vercel",
   description: "Get flag settings for a project.",
   access: { risk: "read" },
   input: z.object({ project_id_or_name: z.string() }),
@@ -493,8 +443,6 @@ export const get_flag_settings = defineTool({
 });
 
 export const list_team_flag_settings = defineTool({
-  name: "list_team_flag_settings",
-  domain: "vercel",
   description: "List feature-flag settings across every project on the team.",
   access: { risk: "read" },
   input: z.object({}),
@@ -505,8 +453,6 @@ export const list_team_flag_settings = defineTool({
 });
 
 export const list_team_flags = defineTool({
-  name: "list_team_flags",
-  domain: "vercel",
   description: "List every feature flag across the team's projects.",
   access: { risk: "read" },
   input: z.object({ limit: z.number().optional() }),
@@ -517,8 +463,6 @@ export const list_team_flags = defineTool({
 });
 
 export const list_flag_segments = defineTool({
-  name: "list_flag_segments",
-  domain: "vercel",
   description: "List targeting segments for feature flags on a project.",
   access: { risk: "read" },
   input: z.object({
@@ -534,8 +478,6 @@ export const list_flag_segments = defineTool({
 });
 
 export const get_flag_segment = defineTool({
-  name: "get_flag_segment",
-  domain: "vercel",
   description: "Get a specific flag segment.",
   access: { risk: "read" },
   input: z.object({
@@ -555,8 +497,6 @@ export const get_flag_segment = defineTool({
 });
 
 export const delete_flag_segment = defineTool({
-  name: "delete_flag_segment",
-  domain: "vercel",
   description: "Delete a targeting segment.",
   access: { risk: "destructive" },
   input: z.object({
@@ -574,8 +514,6 @@ export const delete_flag_segment = defineTool({
 });
 
 export const get_deployment_feature_flags = defineTool({
-  name: "get_deployment_feature_flags",
-  domain: "vercel",
   description: "Get the feature flags evaluated during a specific deployment.",
   access: { risk: "read" },
   input: z.object({ deployment_id: z.string() }),
@@ -589,8 +527,6 @@ export const get_deployment_feature_flags = defineTool({
 });
 
 export const list_sdk_keys = defineTool({
-  name: "list_sdk_keys",
-  domain: "vercel",
   description: "List SDK keys for Vercel feature flags on a project.",
   access: { risk: "read" },
   input: z.object({ project_id_or_name: z.string() }),
@@ -604,8 +540,6 @@ export const list_sdk_keys = defineTool({
 });
 
 export const create_sdk_key = defineTool({
-  name: "create_sdk_key",
-  domain: "vercel",
   description: "Create a new feature-flags SDK key for a project.",
   access: { risk: "destructive" },
   input: z.object({
@@ -625,8 +559,6 @@ export const create_sdk_key = defineTool({
 });
 
 export const delete_sdk_key = defineTool({
-  name: "delete_sdk_key",
-  domain: "vercel",
   description: "Delete a feature-flags SDK key.",
   access: { risk: "destructive" },
   input: z.object({

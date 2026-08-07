@@ -1,16 +1,14 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { vercel } from "./client.ts";
 import { VERCEL_TEAM_ID, VERCEL_TEAM_SLUG } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 const TEAM = { teamId: VERCEL_TEAM_ID, slug: VERCEL_TEAM_SLUG } as const;
 
 // ──────────────── CONFIGURATIONS ────────────────
 
 export const list_integration_configurations = defineTool({
-  name: "list_integration_configurations",
-  domain: "vercel",
   description:
     "List every integration installed on the team (marketplace apps — Turso, Upstash, Neon, etc.). `view` is required.",
   access: { risk: "read" },
@@ -26,8 +24,6 @@ export const list_integration_configurations = defineTool({
 });
 
 export const get_integration_configuration = defineTool({
-  name: "get_integration_configuration",
-  domain: "vercel",
   description: "Get a specific integration configuration by id.",
   access: { risk: "read" },
   input: z.object({ configuration_id: z.string() }),
@@ -41,8 +37,6 @@ export const get_integration_configuration = defineTool({
 });
 
 export const get_integration_configuration_products = defineTool({
-  name: "get_integration_configuration_products",
-  domain: "vercel",
   description: "List products offered by an installed integration — e.g. Postgres / Redis / Blob.",
   access: { risk: "read" },
   input: z.object({ configuration_id: z.string() }),
@@ -56,8 +50,6 @@ export const get_integration_configuration_products = defineTool({
 });
 
 export const get_integration_billing_plans = defineTool({
-  name: "get_integration_billing_plans",
-  domain: "vercel",
   description:
     "List billing plans for a specific product of an integration. Use the returned plan id in `create_integration_store_direct`.",
   access: { risk: "read" },
@@ -80,8 +72,6 @@ export const get_integration_billing_plans = defineTool({
 });
 
 export const delete_integration_configuration = defineTool({
-  name: "delete_integration_configuration",
-  domain: "vercel",
   description: "Uninstall an integration.",
   access: { risk: "destructive" },
   input: z.object({ configuration_id: z.string() }),
@@ -94,8 +84,6 @@ export const delete_integration_configuration = defineTool({
 // ──────────────── PROVISIONING STORES ────────────────
 
 export const create_integration_store_direct = defineTool({
-  name: "create_integration_store_direct",
-  domain: "vercel",
   description:
     "Provision a new integration resource — e.g. a Turso database, Upstash Redis, Neon Postgres, Vercel Blob. Returns a resource id to pass to `connect_integration_resource_to_project`.",
   access: { risk: "destructive" },
@@ -128,8 +116,6 @@ export const create_integration_store_direct = defineTool({
 });
 
 export const connect_integration_resource_to_project = defineTool({
-  name: "connect_integration_resource_to_project",
-  domain: "vercel",
   description:
     "Connect a provisioned integration resource to a Vercel project. Auto-populates env vars. Trigger a new deploy for them to take effect.",
   access: { risk: "destructive" },
@@ -158,8 +144,6 @@ export const connect_integration_resource_to_project = defineTool({
 // ──────────────── MARKETPLACE RESOURCES ────────────────
 
 export const list_integration_resources = defineTool({
-  name: "list_integration_resources",
-  domain: "vercel",
   description:
     "List every resource provisioned under an integration installation (e.g. every Turso DB under the Turso integration).",
   access: { risk: "read" },
@@ -173,8 +157,6 @@ export const list_integration_resources = defineTool({
 });
 
 export const get_integration_resource = defineTool({
-  name: "get_integration_resource",
-  domain: "vercel",
   description: "Retrieve a specific integration resource by id.",
   access: { risk: "read" },
   input: z.object({
@@ -191,8 +173,6 @@ export const get_integration_resource = defineTool({
 });
 
 export const delete_integration_resource = defineTool({
-  name: "delete_integration_resource",
-  domain: "vercel",
   description:
     "Permanently delete a provisioned integration resource (e.g. drop a Turso DB). Data is LOST.",
   access: { risk: "destructive" },
@@ -212,8 +192,6 @@ export const delete_integration_resource = defineTool({
 // ──────────────── GIT SEARCH ────────────────
 
 export const list_git_namespaces = defineTool({
-  name: "list_git_namespaces",
-  domain: "vercel",
   description:
     "List Git namespaces (orgs/users) accessible to the team across GitHub/GitLab/Bitbucket integrations.",
   access: { risk: "read" },
@@ -228,8 +206,6 @@ export const list_git_namespaces = defineTool({
 });
 
 export const search_git_repos = defineTool({
-  name: "search_git_repos",
-  domain: "vercel",
   description:
     "Search Git repos available to the team across installed Git integrations — use when creating a new project from a repo.",
   access: { risk: "read" },

@@ -1,8 +1,8 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { hcbGet, hcbOrgSlug, hcbPaginate, hcbTxnUrl, paginationQuery } from "./client.ts";
 import { paginationInputShape } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 const hcbCardChargeSchema = z.object({
   id: z.string().optional(),
@@ -48,8 +48,6 @@ function projectCharge(c: HcbCardCharge) {
 
 /** List HCB card charges, optionally filtered by user. */
 export const list_card_charges = defineTool({
-  name: "list_card_charges",
-  domain: "finance",
   description:
     "List HCB card charges — merchant, user, amount_cents, and receipts summary {count, missing}. Supports an optional user filter (substring match on cardholder name or email) for microgrant recipient spend tracking.",
   access: { risk: "read" },

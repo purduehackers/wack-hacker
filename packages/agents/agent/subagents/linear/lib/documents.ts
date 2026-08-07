@@ -1,12 +1,10 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { linear } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 import { sdkInput } from "./sdk-input.ts";
 
 export const create_document = defineTool({
-  name: "create_document",
-  domain: "linear",
   description:
     "Create a Markdown document attached to exactly one parent: a project, initiative, issue, or cycle. Requires title and at least one parent ID.",
   access: { risk: "write" },
@@ -30,8 +28,6 @@ export const create_document = defineTool({
 });
 
 export const update_document = defineTool({
-  name: "update_document",
-  domain: "linear",
   description:
     "Update a document's Markdown content or move it to a different parent entity. Only include fields to change.",
   access: { risk: "write" },

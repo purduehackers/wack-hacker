@@ -1,14 +1,12 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { searchAmazon } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 
 const DEFAULT_MAX_RESULTS = 5;
 const HARD_MAX_RESULTS = 10;
 
 export const search_products = defineTool({
-  name: "search_products",
-  domain: "shopping",
   description:
     "Search Amazon for products matching a query. Returns a list of products with ASIN, title, price (USD), rating, image URL, and product URL. Use the ASIN when adding to the cart.",
   access: { risk: "read" },

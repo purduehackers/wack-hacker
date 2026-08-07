@@ -1,11 +1,9 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { linear } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 
 export const set_reminder = defineTool({
-  name: "set_reminder",
-  domain: "linear",
   description:
     "Set a reminder on an issue. Triggers a Linear notification at the specified time. One reminder per issue (replaces any existing). Resolve the issue ID via search_entities first.",
   access: { risk: "write" },

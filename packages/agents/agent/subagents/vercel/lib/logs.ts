@@ -1,16 +1,14 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { vercel } from "./client.ts";
 import { VERCEL_TEAM_ID, VERCEL_TEAM_SLUG } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 const TEAM = { teamId: VERCEL_TEAM_ID, slug: VERCEL_TEAM_SLUG } as const;
 
 // ──────────────── RUNTIME LOGS ────────────────
 
 export const get_runtime_logs = defineTool({
-  name: "get_runtime_logs",
-  domain: "vercel",
   description:
     "Fetch runtime logs for a specific deployment. Returns platform/runtime logs (cold starts, function invocation, timeouts). For application errors, prefer the Sentry subagent.",
   access: { risk: "read" },
@@ -31,8 +29,6 @@ export const get_runtime_logs = defineTool({
 // ──────────────── LOG DRAINS ────────────────
 
 export const list_log_drains = defineTool({
-  name: "list_log_drains",
-  domain: "vercel",
   description: "List every configurable log drain on the team.",
   access: { risk: "read" },
   input: z.object({
@@ -46,8 +42,6 @@ export const list_log_drains = defineTool({
 });
 
 export const get_log_drain = defineTool({
-  name: "get_log_drain",
-  domain: "vercel",
   description: "Retrieve a configurable log drain by id.",
   access: { risk: "read" },
   input: z.object({ drain_id: z.string() }),
@@ -58,8 +52,6 @@ export const get_log_drain = defineTool({
 });
 
 export const delete_configurable_log_drain = defineTool({
-  name: "delete_configurable_log_drain",
-  domain: "vercel",
   description: "Delete a configurable log drain.",
   access: { risk: "destructive" },
   input: z.object({ drain_id: z.string() }),
@@ -70,8 +62,6 @@ export const delete_configurable_log_drain = defineTool({
 });
 
 export const list_integration_log_drains = defineTool({
-  name: "list_integration_log_drains",
-  domain: "vercel",
   description: "List integration-backed log drains (created by installed integrations).",
   access: { risk: "read" },
   input: z.object({}),
@@ -82,8 +72,6 @@ export const list_integration_log_drains = defineTool({
 });
 
 export const delete_integration_log_drain = defineTool({
-  name: "delete_integration_log_drain",
-  domain: "vercel",
   description: "Delete an integration log drain.",
   access: { risk: "destructive" },
   input: z.object({ drain_id: z.string() }),
@@ -96,8 +84,6 @@ export const delete_integration_log_drain = defineTool({
 // ──────────────── DRAINS (newer generic API) ────────────────
 
 export const list_drains = defineTool({
-  name: "list_drains",
-  domain: "vercel",
   description:
     "List every data drain (the newer generic drain API — supports logs, traces, metrics).",
   access: { risk: "read" },
@@ -112,8 +98,6 @@ export const list_drains = defineTool({
 });
 
 export const get_drain = defineTool({
-  name: "get_drain",
-  domain: "vercel",
   description: "Retrieve a drain by id.",
   access: { risk: "read" },
   input: z.object({ drain_id: z.string() }),
@@ -124,8 +108,6 @@ export const get_drain = defineTool({
 });
 
 export const delete_drain = defineTool({
-  name: "delete_drain",
-  domain: "vercel",
   description: "Delete a data drain.",
   access: { risk: "destructive" },
   input: z.object({ drain_id: z.string() }),
@@ -138,8 +120,6 @@ export const delete_drain = defineTool({
 // ──────────────── OBSERVABILITY ────────────────
 
 export const get_observability_config = defineTool({
-  name: "get_observability_config",
-  domain: "vercel",
   description: "Retrieve the API Observability configuration for the team.",
   access: { risk: "read" },
   input: z.object({}),
@@ -152,8 +132,6 @@ export const get_observability_config = defineTool({
 });
 
 export const update_observability_config = defineTool({
-  name: "update_observability_config",
-  domain: "vercel",
   description: "Update the API Observability Plus setting (enabled/disabled) for a project.",
   access: { risk: "write" },
   input: z.object({
@@ -173,8 +151,6 @@ export const update_observability_config = defineTool({
 // ──────────────── ARTIFACTS (Turborepo remote cache) ────────────────
 
 export const artifacts_status = defineTool({
-  name: "artifacts_status",
-  domain: "vercel",
   description: "Get the Turborepo remote cache status for the team (enabled? usage?).",
   access: { risk: "read" },
   input: z.object({}),
@@ -185,8 +161,6 @@ export const artifacts_status = defineTool({
 });
 
 export const artifact_exists = defineTool({
-  name: "artifact_exists",
-  domain: "vercel",
   description: "Check whether a Turborepo artifact with the given hash exists.",
   access: { risk: "read" },
   input: z.object({ hash: z.string() }),
@@ -197,8 +171,6 @@ export const artifact_exists = defineTool({
 });
 
 export const artifact_query = defineTool({
-  name: "artifact_query",
-  domain: "vercel",
   description: "Query Turborepo artifact events and usage statistics by hashes.",
   access: { risk: "read" },
   input: z.object({

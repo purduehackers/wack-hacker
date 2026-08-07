@@ -8,8 +8,8 @@ import type {
 } from "@figma/rest-api-spec";
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { figma } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -43,8 +43,6 @@ function summarizeWebhook(w: WebhookV2) {
 // ---------------------------------------------------------------------------
 
 export const list_team_webhooks = defineTool({
-  name: "list_team_webhooks",
-  domain: "figma",
   description: "List all webhooks configured for the team.",
   access: { risk: "read", minRole: "admin" },
   input: z.object({}),
@@ -55,8 +53,6 @@ export const list_team_webhooks = defineTool({
 });
 
 export const create_webhook = defineTool({
-  name: "create_webhook",
-  domain: "figma",
   description:
     "Create a new webhook for team events. Events include FILE_UPDATE, FILE_DELETE, FILE_VERSION_UPDATE, LIBRARY_PUBLISH, and more.",
   access: { risk: "destructive", minRole: "admin" },
@@ -81,8 +77,6 @@ export const create_webhook = defineTool({
 });
 
 export const get_webhook = defineTool({
-  name: "get_webhook",
-  domain: "figma",
   description: "Get a webhook's details by ID.",
   access: { risk: "read", minRole: "admin" },
   input: z.object({
@@ -95,8 +89,6 @@ export const get_webhook = defineTool({
 });
 
 export const update_webhook = defineTool({
-  name: "update_webhook",
-  domain: "figma",
   description: "Update webhook configuration — endpoint, passcode, description, or status.",
   access: { risk: "destructive", minRole: "admin" },
   input: z.object({
@@ -121,8 +113,6 @@ export const update_webhook = defineTool({
 });
 
 export const delete_webhook = defineTool({
-  name: "delete_webhook",
-  domain: "figma",
   description: "Delete a webhook permanently.",
   access: { risk: "destructive", minRole: "admin" },
   input: z.object({

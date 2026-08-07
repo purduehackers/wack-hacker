@@ -7,14 +7,12 @@ const HEALTH: Record<"onTrack" | "atRisk" | "offTrack", ProjectUpdateHealthType>
   offTrack: ProjectUpdateHealthType.OffTrack,
 };
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { linear } from "./client.ts";
 import { healthSchema } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 import { sdkInput } from "./sdk-input.ts";
 
 export const query_project_updates = defineTool({
-  name: "query_project_updates",
-  domain: "linear",
   description:
     "List recent project status updates with body, health, date, and URL. Pull prior updates before drafting a new one to match tone.",
   access: { risk: "read" },
@@ -38,8 +36,6 @@ export const query_project_updates = defineTool({
 });
 
 export const create_project_update = defineTool({
-  name: "create_project_update",
-  domain: "linear",
   description:
     "Create a project status update with Markdown body and health (onTrack/atRisk/offTrack). Draft in chat first unless the user says to post immediately.",
   access: { risk: "write" },
@@ -65,8 +61,6 @@ export const create_project_update = defineTool({
 });
 
 export const update_project_update = defineTool({
-  name: "update_project_update",
-  domain: "linear",
   description: "Edit an existing project update's body or health status.",
   access: { risk: "write" },
   input: z.object({

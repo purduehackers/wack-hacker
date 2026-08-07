@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import {
   cmsAdminUrl,
   paginationQuery,
@@ -8,7 +9,6 @@ import {
   wrapPayloadError,
 } from "./client.ts";
 import { paginationInputShape } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 const COLLECTION = "users";
 
@@ -36,8 +36,6 @@ function projectUser(u: PayloadUser) {
 }
 
 export const list_users = defineTool({
-  name: "list_users",
-  domain: "cms",
   description:
     "List CMS user accounts (email + assigned roles). The `users` collection holds every human account regardless of role; filter by `email` to find one. Roles follow a hierarchy: admin > editor > viewer. Additional scoped roles: hack_night_dashboard, events_website, wack_hacker.",
   access: { risk: "read", minRole: "admin" },
@@ -65,8 +63,6 @@ export const list_users = defineTool({
 });
 
 export const get_user = defineTool({
-  name: "get_user",
-  domain: "cms",
   description: "Fetch a single CMS user by ID.",
   access: { risk: "read", minRole: "admin" },
   input: z.object({ id: z.union([z.string(), z.number()]) }),
@@ -84,8 +80,6 @@ export const get_user = defineTool({
 });
 
 export const create_user = defineTool({
-  name: "create_user",
-  domain: "cms",
   description:
     "Invite a new CMS user. Assigns the given roles. Role hierarchy is enforced server-side (admin implies editor implies viewer).",
   access: { risk: "destructive", minRole: "admin" },
@@ -108,8 +102,6 @@ export const create_user = defineTool({
 });
 
 export const update_user = defineTool({
-  name: "update_user",
-  domain: "cms",
   description:
     "Update a CMS user's email or roles. Pass `roles` to replace the user's role set entirely (not a merge).",
   access: { risk: "destructive", minRole: "admin" },
@@ -136,8 +128,6 @@ export const update_user = defineTool({
 });
 
 export const delete_user = defineTool({
-  name: "delete_user",
-  domain: "cms",
   description:
     "Remove a CMS user permanently. Loses their sessions and audit trail — prefer updating roles to strip access when possible.",
   access: { risk: "destructive", minRole: "admin" },

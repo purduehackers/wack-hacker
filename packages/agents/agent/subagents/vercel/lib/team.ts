@@ -1,16 +1,14 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { vercel } from "./client.ts";
 import { VERCEL_TEAM_ID, VERCEL_TEAM_SLUG } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 const TEAM = { teamId: VERCEL_TEAM_ID, slug: VERCEL_TEAM_SLUG } as const;
 
 // ──────────────── TEAM ────────────────
 
 export const get_team = defineTool({
-  name: "get_team",
-  domain: "vercel",
   description: "Retrieve a team by id or slug.",
   access: { risk: "read" },
   input: z.object({
@@ -26,8 +24,6 @@ export const get_team = defineTool({
 // ──────────────── TEAM MEMBERS ────────────────
 
 export const list_team_members = defineTool({
-  name: "list_team_members",
-  domain: "vercel",
   description: "List members of the active team.",
   access: { risk: "read" },
   input: z.object({
@@ -64,8 +60,6 @@ export const list_team_members = defineTool({
 });
 
 export const remove_team_member = defineTool({
-  name: "remove_team_member",
-  domain: "vercel",
   description: "Remove a member from the active team.",
   access: { risk: "destructive" },
   input: z.object({ uid: z.string(), newDefaultTeamId: z.string().optional() }),
@@ -80,8 +74,6 @@ export const remove_team_member = defineTool({
 });
 
 export const delete_team_invite_code = defineTool({
-  name: "delete_team_invite_code",
-  domain: "vercel",
   description: "Delete a pending team invite code.",
   access: { risk: "destructive" },
   input: z.object({ inviteId: z.string() }),
@@ -97,8 +89,6 @@ export const delete_team_invite_code = defineTool({
 // ──────────────── ACCESS GROUPS ────────────────
 
 export const list_access_groups = defineTool({
-  name: "list_access_groups",
-  domain: "vercel",
   description: "List access groups on the team.",
   access: { risk: "read" },
   input: z.object({
@@ -116,8 +106,6 @@ export const list_access_groups = defineTool({
 });
 
 export const get_access_group = defineTool({
-  name: "get_access_group",
-  domain: "vercel",
   description: "Retrieve an access group by id or name.",
   access: { risk: "read" },
   input: z.object({ access_group_id_or_name: z.string() }),
@@ -131,8 +119,6 @@ export const get_access_group = defineTool({
 });
 
 export const delete_access_group = defineTool({
-  name: "delete_access_group",
-  domain: "vercel",
   description: "Delete an access group.",
   access: { risk: "destructive" },
   input: z.object({ access_group_id_or_name: z.string() }),
@@ -146,8 +132,6 @@ export const delete_access_group = defineTool({
 });
 
 export const list_access_group_members = defineTool({
-  name: "list_access_group_members",
-  domain: "vercel",
   description: "List members of an access group.",
   access: { risk: "read" },
   input: z.object({
@@ -169,8 +153,6 @@ export const list_access_group_members = defineTool({
 // ──────────────── WEBHOOKS ────────────────
 
 export const list_webhooks = defineTool({
-  name: "list_webhooks",
-  domain: "vercel",
   description: "List team webhooks.",
   access: { risk: "read" },
   input: z.object({
@@ -183,8 +165,6 @@ export const list_webhooks = defineTool({
 });
 
 export const get_webhook = defineTool({
-  name: "get_webhook",
-  domain: "vercel",
   description: "Retrieve a team webhook by id.",
   access: { risk: "read" },
   input: z.object({ webhook_id: z.string() }),
@@ -195,8 +175,6 @@ export const get_webhook = defineTool({
 });
 
 export const delete_webhook = defineTool({
-  name: "delete_webhook",
-  domain: "vercel",
   description: "Delete a team webhook.",
   access: { risk: "destructive" },
   input: z.object({ webhook_id: z.string() }),
@@ -209,8 +187,6 @@ export const delete_webhook = defineTool({
 // ──────────────── PROJECT ROUTES ────────────────
 
 export const list_project_routes = defineTool({
-  name: "list_project_routes",
-  domain: "vercel",
   description: "List routing rules for a project (from the Routing Middleware subsystem).",
   access: { risk: "read" },
   input: z.object({
@@ -226,8 +202,6 @@ export const list_project_routes = defineTool({
 });
 
 export const list_project_route_versions = defineTool({
-  name: "list_project_route_versions",
-  domain: "vercel",
   description: "List historical versions of a project's routing rules.",
   access: { risk: "read" },
   input: z.object({
@@ -245,8 +219,6 @@ export const list_project_route_versions = defineTool({
 // ──────────────── CONNECT NETWORKS ────────────────
 
 export const list_connect_networks = defineTool({
-  name: "list_connect_networks",
-  domain: "vercel",
   description: "List Vercel Connect private networks on the team.",
   access: { risk: "read" },
   input: z.object({}),
@@ -257,8 +229,6 @@ export const list_connect_networks = defineTool({
 });
 
 export const get_connect_network = defineTool({
-  name: "get_connect_network",
-  domain: "vercel",
   description: "Retrieve a Vercel Connect network by id.",
   access: { risk: "read" },
   input: z.object({ network_id: z.string() }),
@@ -272,8 +242,6 @@ export const get_connect_network = defineTool({
 });
 
 export const delete_connect_network = defineTool({
-  name: "delete_connect_network",
-  domain: "vercel",
   description: "Delete a Vercel Connect private network.",
   access: { risk: "destructive" },
   input: z.object({ network_id: z.string() }),
@@ -286,8 +254,6 @@ export const delete_connect_network = defineTool({
 // ──────────────── MICROFRONTENDS ────────────────
 
 export const list_microfrontend_groups = defineTool({
-  name: "list_microfrontend_groups",
-  domain: "vercel",
   description: "List microfrontend groups on the team.",
   access: { risk: "read" },
   input: z.object({
@@ -306,8 +272,6 @@ export const list_microfrontend_groups = defineTool({
 // ──────────────── BILLING ────────────────
 
 export const list_billing_charges = defineTool({
-  name: "list_billing_charges",
-  domain: "vercel",
   description:
     "List billing charges for the team between `from` and `to` (ISO 8601 UTC date-time strings).",
   access: { risk: "read" },
@@ -322,8 +286,6 @@ export const list_billing_charges = defineTool({
 });
 
 export const list_contract_commitments = defineTool({
-  name: "list_contract_commitments",
-  domain: "vercel",
   description: "List contractual billing commitments.",
   access: { risk: "read" },
   input: z.object({
@@ -338,8 +300,6 @@ export const list_contract_commitments = defineTool({
 // ──────────────── CUSTOM ENVIRONMENTS ────────────────
 
 export const list_custom_environments = defineTool({
-  name: "list_custom_environments",
-  domain: "vercel",
   description:
     "List custom preview environments for a project. Custom environments support per-branch URL schemes, custom domains, and environment-specific variables.",
   access: { risk: "read" },
@@ -358,8 +318,6 @@ export const list_custom_environments = defineTool({
 });
 
 export const get_custom_environment = defineTool({
-  name: "get_custom_environment",
-  domain: "vercel",
   description: "Get a specific custom environment by id or slug.",
   access: { risk: "read" },
   input: z.object({
@@ -377,8 +335,6 @@ export const get_custom_environment = defineTool({
 });
 
 export const remove_custom_environment = defineTool({
-  name: "remove_custom_environment",
-  domain: "vercel",
   description: "Remove a custom preview environment from a project.",
   access: { risk: "destructive" },
   input: z.object({

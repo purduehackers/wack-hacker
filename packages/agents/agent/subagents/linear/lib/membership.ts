@@ -7,12 +7,10 @@ const INVITE_ROLE: Record<"admin" | "member" | "guest", UserRoleType> = {
   guest: UserRoleType.Guest,
 };
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { linear } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 
 export const add_member_to_platform = defineTool({
-  name: "add_member_to_platform",
-  domain: "linear",
   description:
     "Send a Linear workspace invite by email. Role defaults to 'member'; can also invite as 'admin' or 'guest' (guest users only see teams they're explicitly added to). Never guess or fabricate an email — always confirm the exact address with the user.",
   access: { risk: "destructive", minRole: "admin" },
@@ -40,8 +38,6 @@ export const add_member_to_platform = defineTool({
 });
 
 export const remove_member_from_platform = defineTool({
-  name: "remove_member_from_platform",
-  domain: "linear",
   description:
     "Remove a member from the Linear workspace. If the user has not yet accepted their invite, revokes the pending invite. If they have joined, suspends them (data is preserved; they lose access). Provide either email (for pending invites) or user_id (for active users). Always confirm identity before calling.",
   access: { risk: "destructive", minRole: "admin" },

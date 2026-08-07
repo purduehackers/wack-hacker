@@ -7,12 +7,10 @@ const INVITE_ROLE: Record<"admin" | "member" | "guest", UserRoleType> = {
   guest: UserRoleType.Guest,
 };
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { linear } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 
 export const list_users = defineTool({
-  name: "list_users",
-  domain: "linear",
   description:
     "List all workspace members. Returns name, display name, email, role flags (admin/owner/guest), active status, and profile URL.",
   access: { risk: "read" },
@@ -36,8 +34,6 @@ export const list_users = defineTool({
 });
 
 export const get_user = defineTool({
-  name: "get_user",
-  domain: "linear",
   description:
     "Get a user's full profile by ID — name, email, display name, roles, timezone, current status, issue count, and profile URL.",
   access: { risk: "read" },
@@ -65,8 +61,6 @@ export const get_user = defineTool({
 });
 
 export const get_user_teams = defineTool({
-  name: "get_user_teams",
-  domain: "linear",
   description: "List the teams a user belongs to. Returns team ID, name, and key.",
   access: { risk: "read" },
   input: z.object({
@@ -80,8 +74,6 @@ export const get_user_teams = defineTool({
 });
 
 export const get_user_assigned_issues = defineTool({
-  name: "get_user_assigned_issues",
-  domain: "linear",
   description:
     "List open issues assigned to a user. Returns identifier, title, priority, state, and URL. Use for 'what's X working on?' or 'show my issues'.",
   access: { risk: "read" },
@@ -110,8 +102,6 @@ export const get_user_assigned_issues = defineTool({
 });
 
 export const suspend_user = defineTool({
-  name: "suspend_user",
-  domain: "linear",
   description:
     "Suspend a user, disabling their access. Data is preserved. Resolve user identity first — never suspend on ambiguous input.",
   access: { risk: "destructive", minRole: "admin" },
@@ -126,8 +116,6 @@ export const suspend_user = defineTool({
 });
 
 export const unsuspend_user = defineTool({
-  name: "unsuspend_user",
-  domain: "linear",
   description: "Restore a suspended user's access.",
   access: { risk: "destructive", minRole: "admin" },
   input: z.object({
@@ -141,8 +129,6 @@ export const unsuspend_user = defineTool({
 });
 
 export const invite_user = defineTool({
-  name: "invite_user",
-  domain: "linear",
   description:
     "Send a workspace invite by email. Role can be admin, member (default), or guest. Guest users only see teams they're explicitly added to.",
   access: { risk: "destructive", minRole: "admin" },
@@ -170,8 +156,6 @@ export const invite_user = defineTool({
 });
 
 export const list_invites = defineTool({
-  name: "list_invites",
-  domain: "linear",
   description: "List all pending workspace invites with email, role, who sent it, and expiry date.",
   access: { risk: "read", minRole: "admin" },
   input: z.object({}),
@@ -195,8 +179,6 @@ export const list_invites = defineTool({
 });
 
 export const delete_invite = defineTool({
-  name: "delete_invite",
-  domain: "linear",
   description: "Revoke a pending invite by ID. Use list_invites first to find the ID.",
   access: { risk: "destructive", minRole: "admin" },
   input: z.object({

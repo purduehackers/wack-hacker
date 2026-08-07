@@ -1,16 +1,14 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { vercel } from "./client.ts";
 import { VERCEL_TEAM_ID, VERCEL_TEAM_SLUG } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 const TEAM = { teamId: VERCEL_TEAM_ID, slug: VERCEL_TEAM_SLUG } as const;
 
 // ──────────────── FIREWALL ────────────────
 
 export const get_firewall_config = defineTool({
-  name: "get_firewall_config",
-  domain: "vercel",
   description:
     "Retrieve a firewall configuration version for a project. Pass `configVersion: 'active'` for the live version.",
   access: { risk: "read" },
@@ -29,8 +27,6 @@ export const get_firewall_config = defineTool({
 });
 
 export const get_active_attack_status = defineTool({
-  name: "get_active_attack_status",
-  domain: "vercel",
   description: "Check whether Vercel detects an active attack on a project.",
   access: { risk: "read" },
   input: z.object({
@@ -48,8 +44,6 @@ export const get_active_attack_status = defineTool({
 });
 
 export const update_attack_challenge_mode = defineTool({
-  name: "update_attack_challenge_mode",
-  domain: "vercel",
   description:
     "Enable or disable attack challenge mode (shows a managed challenge page to suspected bots).",
   access: { risk: "destructive" },
@@ -73,8 +67,6 @@ export const update_attack_challenge_mode = defineTool({
 // ──────────────── BYPASS IPs ────────────────
 
 export const list_bypass_ips = defineTool({
-  name: "list_bypass_ips",
-  domain: "vercel",
   description: "List IPs currently allowed to bypass firewall challenges.",
   access: { risk: "read" },
   input: z.object({
@@ -96,8 +88,6 @@ export const list_bypass_ips = defineTool({
 });
 
 export const list_firewall_events = defineTool({
-  name: "list_firewall_events",
-  domain: "vercel",
   description:
     "List recent firewall events — blocked requests, challenged requests, rate-limit hits.",
   access: { risk: "read" },
@@ -121,8 +111,6 @@ export const list_firewall_events = defineTool({
 // ──────────────── AUTH TOKENS ────────────────
 
 export const list_auth_tokens = defineTool({
-  name: "list_auth_tokens",
-  domain: "vercel",
   description: "List auth tokens for the currently-authenticated user.",
   access: { risk: "read" },
   input: z.object({}),
@@ -133,8 +121,6 @@ export const list_auth_tokens = defineTool({
 });
 
 export const get_auth_token = defineTool({
-  name: "get_auth_token",
-  domain: "vercel",
   description: "Retrieve a specific auth token's metadata.",
   access: { risk: "read" },
   input: z.object({ token_id: z.string() }),
@@ -145,8 +131,6 @@ export const get_auth_token = defineTool({
 });
 
 export const delete_auth_token = defineTool({
-  name: "delete_auth_token",
-  domain: "vercel",
   description: "Revoke (delete) an auth token.",
   access: { risk: "destructive" },
   input: z.object({ token_id: z.string() }),

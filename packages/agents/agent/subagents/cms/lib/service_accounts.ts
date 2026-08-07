@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import {
   cmsAdminUrl,
   paginationQuery,
@@ -8,7 +9,6 @@ import {
   wrapPayloadError,
 } from "./client.ts";
 import { paginationInputShape } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 const COLLECTION = "service-accounts";
 
@@ -37,8 +37,6 @@ function projectServiceAccount(s: PayloadServiceAccount) {
 }
 
 export const list_service_accounts = defineTool({
-  name: "list_service_accounts",
-  domain: "cms",
   description:
     "List service accounts (API-key-only CMS identities used by bots and integrations). Each has a name, revoked flag, and role set.",
   access: { risk: "read" },
@@ -69,8 +67,6 @@ export const list_service_accounts = defineTool({
 });
 
 export const get_service_account = defineTool({
-  name: "get_service_account",
-  domain: "cms",
   description: "Fetch a single service account by ID.",
   access: { risk: "read" },
   input: z.object({ id: z.union([z.string(), z.number()]) }),
@@ -88,8 +84,6 @@ export const get_service_account = defineTool({
 });
 
 export const create_service_account = defineTool({
-  name: "create_service_account",
-  domain: "cms",
   description:
     "Create a new service account. The API key itself is minted in the Payload admin UI after creation — this tool only provisions the identity and its roles.",
   access: { risk: "destructive" },
@@ -112,8 +106,6 @@ export const create_service_account = defineTool({
 });
 
 export const update_service_account = defineTool({
-  name: "update_service_account",
-  domain: "cms",
   description:
     "Update a service account. Set `revoked: true` to kill its API key without deleting the record (preserves audit trail).",
   access: { risk: "destructive" },
@@ -142,8 +134,6 @@ export const update_service_account = defineTool({
 });
 
 export const delete_service_account = defineTool({
-  name: "delete_service_account",
-  domain: "cms",
   description:
     "Delete a service account permanently. Prefer `update_service_account({ revoked: true })` unless you're sure you don't need the audit trail.",
   access: { risk: "destructive" },

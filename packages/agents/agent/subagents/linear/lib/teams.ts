@@ -1,11 +1,9 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { linear } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 
 export const list_team_members = defineTool({
-  name: "list_team_members",
-  domain: "linear",
   description:
     "List all members of a Linear team. Returns name, display name, email, admin flag, and active status.",
   access: { risk: "read" },
@@ -29,8 +27,6 @@ export const list_team_members = defineTool({
 });
 
 export const add_user_to_team = defineTool({
-  name: "add_user_to_team",
-  domain: "linear",
   description:
     "Add a user to a Linear team. Resolve user and team IDs first via list_users and suggest_property_values.",
   access: { risk: "destructive", minRole: "admin" },
@@ -55,8 +51,6 @@ export const add_user_to_team = defineTool({
 });
 
 export const remove_user_from_team = defineTool({
-  name: "remove_user_from_team",
-  domain: "linear",
   description:
     "Remove a user from a Linear team. Resolve user and team IDs first via list_users and suggest_property_values.",
   access: { risk: "destructive", minRole: "admin" },

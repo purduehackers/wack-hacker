@@ -1,6 +1,6 @@
+import type { DomainToolSpec } from "../../../lib/policy/domain-tools.ts";
 import * as m_alerts from "./alerts.ts";
 import * as m_base from "./base.ts";
-import type { SentryToolSpec } from "./define-tool.ts";
 import * as m_events from "./events.ts";
 import * as m_issue_management from "./issue-management.ts";
 import * as m_logs from "./logs.ts";
@@ -85,6 +85,6 @@ export const SENTRY_TOOLS = {
   update_monitor: m_monitors.update_monitor,
   update_project: m_projects_management.update_project,
   update_team: m_members.update_team,
-} as const satisfies Record<string, SentryToolSpec>;
+} as const satisfies Record<string, DomainToolSpec>;
 
 export type SentryToolName = keyof typeof SENTRY_TOOLS;

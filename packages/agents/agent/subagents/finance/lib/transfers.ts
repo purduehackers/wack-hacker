@@ -1,8 +1,8 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { hcbGet, hcbOrgSlug, paginationQuery } from "./client.ts";
 import { paginationInputShape } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 const hcbTransferSchema = z.object({
   id: z.string().optional(),
@@ -33,8 +33,6 @@ function projectTransfer(t: HcbTransfer) {
 
 /** Get a single inter-org transfer by ID. */
 export const get_transfer = defineTool({
-  name: "get_transfer",
-  domain: "finance",
   description:
     "Get a single HCB inter-org transfer by ID — sender, receiver, amount_cents, status, and memo.",
   access: { risk: "read" },
@@ -49,8 +47,6 @@ export const get_transfer = defineTool({
 
 /** List inter-org transfers (disbursements between HCB orgs). */
 export const list_transfers = defineTool({
-  name: "list_transfers",
-  domain: "finance",
   description:
     "List HCB inter-org transfers (disbursements) involving Purdue Hackers — sender, receiver, amount_cents, status, and memo.",
   access: { risk: "read" },

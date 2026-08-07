@@ -1,8 +1,8 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { hcbGet, hcbOrgSlug, hcbPaginate, paginationQuery } from "./client.ts";
 import { paginationInputShape } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 const SETTLED_DONATION_STATUSES = new Set(["deposited", "succeeded", "in_transit"]);
 
@@ -34,8 +34,6 @@ function projectDonation(d: HcbDonation) {
 
 /** List donations to the org. */
 export const list_donations = defineTool({
-  name: "list_donations",
-  domain: "finance",
   description:
     "List donations to the Hack Club Bank org — donor name (or '(anonymous)'), amount_cents, status, recurring flag, and message.",
   access: { risk: "read" },
@@ -52,8 +50,6 @@ export const list_donations = defineTool({
 
 /** Fetch a single donation by ID. */
 export const get_donation = defineTool({
-  name: "get_donation",
-  domain: "finance",
   description:
     "Fetch a single donation by ID. Returns donor name (or '(anonymous)'), amount_cents, status, recurring flag, and message.",
   access: { risk: "read" },
@@ -68,8 +64,6 @@ export const get_donation = defineTool({
 
 /** Sum donations in a date window. */
 export const donation_totals = defineTool({
-  name: "donation_totals",
-  domain: "finance",
   description:
     "Sum successful donations within an ISO date range. Returns total_cents, count, and a breakdown of recurring vs one-time. Useful for fundraising team asks ('what did we raise this month?').",
   access: { risk: "read" },

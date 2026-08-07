@@ -7,13 +7,11 @@ const INITIATIVE_STATUS: Record<"Planned" | "Active" | "Completed", InitiativeSt
   Completed: InitiativeStatus.Completed,
 };
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { linear } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 import { sdkInput } from "./sdk-input.ts";
 
 export const create_initiative = defineTool({
-  name: "create_initiative",
-  domain: "linear",
   description:
     "Create an initiative (strategic goal grouping multiple projects). Supports owner, status (Planned/Active/Completed), target date, and Markdown content.",
   access: { risk: "write" },
@@ -39,8 +37,6 @@ export const create_initiative = defineTool({
 });
 
 export const update_initiative = defineTool({
-  name: "update_initiative",
-  domain: "linear",
   description: "Update an initiative by ID. Only include fields to change.",
   access: { risk: "write" },
   input: z.object({
@@ -67,8 +63,6 @@ export const update_initiative = defineTool({
 });
 
 export const list_initiatives = defineTool({
-  name: "list_initiatives",
-  domain: "linear",
   description: "List all initiatives with name, status, target date, and URL.",
   access: { risk: "read" },
   input: z.object({}),
@@ -87,8 +81,6 @@ export const list_initiatives = defineTool({
 });
 
 export const query_initiative_activity = defineTool({
-  name: "query_initiative_activity",
-  domain: "linear",
   description: "Fetch an initiative's change history (status changes, owner changes, etc.).",
   access: { risk: "read" },
   input: z.object({ id: z.string() }),

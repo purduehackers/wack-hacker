@@ -1,12 +1,10 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { linear } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 import { sdkInput } from "./sdk-input.ts";
 
 export const create_project = defineTool({
-  name: "create_project",
-  domain: "linear",
   description:
     "Create a project. Requires name and at least one teamId. Supports lead, members, dates, priority, and Markdown content.",
   access: { risk: "write" },
@@ -32,8 +30,6 @@ export const create_project = defineTool({
 });
 
 export const update_project = defineTool({
-  name: "update_project",
-  domain: "linear",
   description:
     "Update a project by ID. Only include fields to change — omitted fields are left unchanged.",
   access: { risk: "write" },
@@ -60,8 +56,6 @@ export const update_project = defineTool({
 });
 
 export const create_project_milestone = defineTool({
-  name: "create_project_milestone",
-  domain: "linear",
   description:
     "Create a milestone inside a project. Milestones mark key deliverables within a project timeline.",
   access: { risk: "write" },
@@ -82,8 +76,6 @@ export const create_project_milestone = defineTool({
 });
 
 export const update_project_milestone = defineTool({
-  name: "update_project_milestone",
-  domain: "linear",
   description: "Update a project milestone.",
   access: { risk: "write" },
   input: z.object({
@@ -104,8 +96,6 @@ export const update_project_milestone = defineTool({
 });
 
 export const get_project = defineTool({
-  name: "get_project",
-  domain: "linear",
   description:
     "Get a single project's details by ID — name, status, description, progress, lead, target/start dates, and URL.",
   access: { risk: "read" },
@@ -126,8 +116,6 @@ export const get_project = defineTool({
 });
 
 export const archive_project = defineTool({
-  name: "archive_project",
-  domain: "linear",
   description:
     "Archive a project. Archived projects are hidden from default views but preserved. Prefer this over delete_project.",
   access: { risk: "destructive" },
@@ -139,8 +127,6 @@ export const archive_project = defineTool({
 });
 
 export const unarchive_project = defineTool({
-  name: "unarchive_project",
-  domain: "linear",
   description: "Restore an archived project.",
   access: { risk: "write" },
   input: z.object({ id: z.string().describe("Project UUID") }),
@@ -151,8 +137,6 @@ export const unarchive_project = defineTool({
 });
 
 export const delete_project = defineTool({
-  name: "delete_project",
-  domain: "linear",
   description: "Permanently delete a project. Irreversible — prefer archive_project.",
   access: { risk: "destructive", confirm: "second-party" },
   input: z.object({ id: z.string().describe("Project UUID") }),
@@ -163,8 +147,6 @@ export const delete_project = defineTool({
 });
 
 export const query_project_activity = defineTool({
-  name: "query_project_activity",
-  domain: "linear",
   description:
     "Fetch a project's change history, status updates, and comments. Use for 'what happened on project X' questions.",
   access: { risk: "read" },

@@ -6,9 +6,9 @@ import {
 } from "@sentry/api";
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { sentryGet, sentryOpts, sentryOrg, sentryProjectId } from "./client.ts";
 import { perPageField } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 const projectProjectionSchema = z.looseObject({ status: z.string().nullish() });
 const issueProjectionSchema = z.looseObject({ priority: z.string().nullish() });
@@ -30,8 +30,6 @@ const issueListResponseSchema = z.array(
 
 /** List all projects in the Sentry organization. */
 export const list_projects = defineTool({
-  name: "list_projects",
-  domain: "sentry",
   description:
     "List all projects in the Sentry organization. Returns slug, name, platform, date created, and status.",
   access: { risk: "read" },
@@ -57,8 +55,6 @@ export const list_projects = defineTool({
 
 /** Get full details for a single Sentry project. */
 export const get_project = defineTool({
-  name: "get_project",
-  domain: "sentry",
   description:
     "Get full details for a Sentry project — platform, team, features, date created, and configuration.",
   access: { risk: "read" },
@@ -80,8 +76,6 @@ export const get_project = defineTool({
 
 /** Search Sentry issues across the organization. */
 export const search_issues = defineTool({
-  name: "search_issues",
-  domain: "sentry",
   description:
     "Search Sentry issues across the organization. Supports Sentry search syntax (e.g. 'is:unresolved', 'assigned:me', 'level:error', 'first-seen:-24h'). Returns issue ID, short ID, title, status, level, count, first/last seen, and URL.",
   access: { risk: "read" },
@@ -123,8 +117,6 @@ export const search_issues = defineTool({
 
 /** Get full details for a single Sentry issue. */
 export const get_issue = defineTool({
-  name: "get_issue",
-  domain: "sentry",
   description:
     "Get full details for a Sentry issue by its numeric ID. Returns title, metadata, status, assignee, tags, first/last seen, and activity.",
   access: { risk: "read" },

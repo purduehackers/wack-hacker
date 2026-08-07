@@ -1,13 +1,11 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { octokit } from "./client.ts";
 import { env } from "./config.ts";
 import { paginationInputShape } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 export const create_repository = defineTool({
-  name: "create_repository",
-  domain: "github",
   description: `Create a new repository in the purduehackers organization. Returns the repo name, URL, visibility, and default branch.`,
   access: { risk: "write" },
   input: z.object({
@@ -41,8 +39,6 @@ export const create_repository = defineTool({
 });
 
 export const update_repository = defineTool({
-  name: "update_repository",
-  domain: "github",
   description: `Update repository settings — description, visibility, archive status, default branch, and merge strategies.`,
   access: { risk: "destructive" },
   input: z.object({
@@ -99,8 +95,6 @@ export const update_repository = defineTool({
 });
 
 export const delete_repository = defineTool({
-  name: "delete_repository",
-  domain: "github",
   description: `Permanently delete a repository. Irreversible — destroys all code, issues, and history.`,
   access: { risk: "destructive", confirm: "second-party" },
   input: z.object({
@@ -113,8 +107,6 @@ export const delete_repository = defineTool({
 });
 
 export const archive_repository = defineTool({
-  name: "archive_repository",
-  domain: "github",
   description:
     "Archive a repository — makes it read-only. Reversible via update_repository archived=false, but users can no longer push, open issues/PRs, or fork while archived.",
   access: { risk: "destructive" },
@@ -135,8 +127,6 @@ export const archive_repository = defineTool({
 });
 
 export const transfer_repository = defineTool({
-  name: "transfer_repository",
-  domain: "github",
   description:
     "Transfer a repository to a different owner (user or org). The new owner receives a transfer invitation which they must accept.",
   access: { risk: "destructive" },
@@ -161,8 +151,6 @@ export const transfer_repository = defineTool({
 });
 
 export const list_branches = defineTool({
-  name: "list_branches",
-  domain: "github",
   description: `List branches for a repository. Optionally filter to only protected branches. Returns branch name and protection status.`,
   access: { risk: "read" },
   input: z.object({
@@ -183,8 +171,6 @@ export const list_branches = defineTool({
 });
 
 export const get_branch_protection = defineTool({
-  name: "get_branch_protection",
-  domain: "github",
   description: `Get branch protection rules — required status checks, review requirements, admin enforcement, and push restrictions. Returns 'not protected' if no rules are set.`,
   access: { risk: "read" },
   input: z.object({
@@ -225,8 +211,6 @@ export const get_branch_protection = defineTool({
 });
 
 export const set_branch_protection = defineTool({
-  name: "set_branch_protection",
-  domain: "github",
   description: `Set or update branch protection rules — status checks, admin enforcement, review requirements, and push restrictions. Pass null to clear a rule.`,
   access: { risk: "destructive" },
   input: z.object({
@@ -298,8 +282,6 @@ export const set_branch_protection = defineTool({
 });
 
 export const delete_branch_protection = defineTool({
-  name: "delete_branch_protection",
-  domain: "github",
   description: `Remove all branch protection rules from a branch, making it unprotected.`,
   access: { risk: "destructive" },
   input: z.object({

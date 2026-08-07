@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import {
   cmsAdminUrl,
   paginationQuery,
@@ -8,7 +9,6 @@ import {
   wrapPayloadError,
 } from "./client.ts";
 import { paginationInputShape } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 const COLLECTION = "emails";
 
@@ -34,8 +34,6 @@ function projectEmail(e: PayloadEmail) {
 }
 
 export const list_emails = defineTool({
-  name: "list_emails",
-  domain: "cms",
   description:
     "List email blast records. These are the `emails` collection rows — each is a subject/body tied to an event, with a `send` flag and `sentAt` timestamp when fired.",
   access: { risk: "read" },
@@ -66,8 +64,6 @@ export const list_emails = defineTool({
 });
 
 export const get_email = defineTool({
-  name: "get_email",
-  domain: "cms",
   description: "Fetch a single email blast record by ID.",
   access: { risk: "read" },
   input: z.object({ id: z.union([z.string(), z.number()]) }),
@@ -82,8 +78,6 @@ export const get_email = defineTool({
 });
 
 export const create_email = defineTool({
-  name: "create_email",
-  domain: "cms",
   description:
     "Draft a new email blast tied to an event. `send: false` by default — the message won't fire until `send_email` flips the flag. Use this to prepare copy before getting approval to send.",
   access: { risk: "write" },
@@ -106,8 +100,6 @@ export const create_email = defineTool({
 });
 
 export const update_email = defineTool({
-  name: "update_email",
-  domain: "cms",
   description:
     "Update an email draft's subject/body or retarget it to a different event. Does NOT fire the email — use `send_email` for that.",
   access: { risk: "write" },
@@ -136,8 +128,6 @@ export const update_email = defineTool({
 });
 
 export const delete_email = defineTool({
-  name: "delete_email",
-  domain: "cms",
   description: "Delete an email draft record permanently.",
   access: { risk: "destructive" },
   input: z.object({ id: z.union([z.string(), z.number()]) }),
@@ -152,8 +142,6 @@ export const delete_email = defineTool({
 });
 
 export const send_email = defineTool({
-  name: "send_email",
-  domain: "cms",
   description:
     "Fire the email blast (flips `send: true`, Payload's afterChange hook dispatches real emails via Resend, then resets send to false). Destructive external side effect — confirm the draft is final before calling.",
   access: { risk: "destructive" },

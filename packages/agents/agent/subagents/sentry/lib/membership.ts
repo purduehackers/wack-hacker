@@ -1,14 +1,12 @@
 import { addAMemberToAnOrganization, deleteAnOrganizationMember, unwrapResult } from "@sentry/api";
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { sentryOpts, sentryOrg } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 
 const memberProjectionSchema = z.looseObject({ role: z.unknown().optional() });
 
 export const add_member_to_platform = defineTool({
-  name: "add_member_to_platform",
-  domain: "sentry",
   description:
     "Invite a new member to the Sentry organization by email. Role defaults to 'member'; other roles include 'admin', 'manager', 'owner', 'billing'. Optionally assign to teams by slug. Never fabricate emails — confirm the exact address first.",
   access: { risk: "destructive", minRole: "admin" },
@@ -54,8 +52,6 @@ export const add_member_to_platform = defineTool({
 });
 
 export const remove_member_from_platform = defineTool({
-  name: "remove_member_from_platform",
-  domain: "sentry",
   description:
     "Remove a member from the Sentry organization by their member ID. Resolve the member ID via list_members first — never remove on ambiguous input.",
   access: { risk: "destructive", minRole: "admin" },

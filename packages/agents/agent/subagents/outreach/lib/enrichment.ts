@@ -1,8 +1,8 @@
 /* oxlint-disable unicorn/no-null -- Hunter projections use null to represent external fields with no value. */
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { hunter, notion } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 
 const emailFinderResponseSchema = z.object({
   data: z
@@ -73,8 +73,6 @@ async function domainFromNotionPage(pageId: string): Promise<string | undefined>
 }
 
 export const find_email_for_lead = defineTool({
-  name: "find_email_for_lead",
-  domain: "outreach",
   description: `Look up an email address via Hunter. If full_name is provided, uses /v2/email-finder with the domain. Otherwise uses /v2/domain-search. You may pass a Notion page_id to derive the domain from the Company's Website property.`,
   access: { risk: "read" },
   input: z.object({
@@ -129,8 +127,6 @@ export const find_email_for_lead = defineTool({
 });
 
 export const verify_email = defineTool({
-  name: "verify_email",
-  domain: "outreach",
   description: `Verify an email address via Hunter /v2/email-verifier. Returns status ("deliverable", "undeliverable", "risky", "unknown") plus score. Treat "risky" and "undeliverable" as blockers unless the user overrides.`,
   access: { risk: "read" },
   input: z.object({

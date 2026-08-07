@@ -1,5 +1,5 @@
+import type { DomainToolSpec } from "../../../lib/policy/domain-tools.ts";
 import * as m_account from "./account.ts";
-import type { VercelToolSpec } from "./define-tool.ts";
 import * as m_deployments from "./deployments.ts";
 import * as m_domains from "./domains.ts";
 import * as m_edge from "./edge.ts";
@@ -178,6 +178,6 @@ export const VERCEL_TOOLS = {
   update_rollback_description: m_deployments.update_rollback_description,
   verify_project_domain: m_projects.verify_project_domain,
   whoami: m_account.whoami,
-} as const satisfies Record<string, VercelToolSpec>;
+} as const satisfies Record<string, DomainToolSpec>;
 
 export type VercelToolName = keyof typeof VERCEL_TOOLS;

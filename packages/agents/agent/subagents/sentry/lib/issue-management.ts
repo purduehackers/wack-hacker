@@ -16,12 +16,10 @@ const issueTagsResponseSchema = z.array(
     topValues: z.array(z.looseObject({ value: z.string(), count: z.number(), name: z.string() })),
   }),
 );
-import { defineTool } from "./define-tool.ts";
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 
 /** Update a Sentry issue's status, assignee, or priority. */
 export const update_issue = defineTool({
-  name: "update_issue",
-  domain: "sentry",
   description:
     "Update a Sentry issue — resolve, ignore, assign, set priority, or bookmark. Use status 'resolved', 'ignored', or 'unresolved'.",
   access: { risk: "write" },
@@ -70,8 +68,6 @@ export const update_issue = defineTool({
 
 /** Delete a Sentry issue permanently. */
 export const delete_issue = defineTool({
-  name: "delete_issue",
-  domain: "sentry",
   description: "Permanently delete a Sentry issue. This action cannot be undone.",
   access: { risk: "destructive", minRole: "admin" },
   input: z.object({
@@ -92,8 +88,6 @@ export const delete_issue = defineTool({
 
 /** Bulk update multiple issues at once. */
 export const bulk_update_issues = defineTool({
-  name: "bulk_update_issues",
-  domain: "sentry",
   description:
     "Bulk update multiple Sentry issues. Can resolve, ignore, or assign multiple issues at once.",
   access: { risk: "write", confirm: "self" },
@@ -124,8 +118,6 @@ export const bulk_update_issues = defineTool({
 
 /** List tag distributions for a Sentry issue. */
 export const list_issue_tags = defineTool({
-  name: "list_issue_tags",
-  domain: "sentry",
   description:
     "List tag distributions for a Sentry issue. Shows tag keys (browser, os, environment, etc.) with value counts.",
   access: { risk: "read" },
@@ -148,8 +140,6 @@ export const list_issue_tags = defineTool({
 
 /** Get values for a specific tag on a Sentry issue. */
 export const get_issue_tag_values = defineTool({
-  name: "get_issue_tag_values",
-  domain: "sentry",
   description: "Get values for a specific tag on a Sentry issue, with occurrence counts.",
   access: { risk: "read" },
   input: z.object({

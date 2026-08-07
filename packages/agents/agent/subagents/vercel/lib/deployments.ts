@@ -1,14 +1,12 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { vercel } from "./client.ts";
 import { VERCEL_TEAM_ID, VERCEL_TEAM_SLUG } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 const TEAM = { teamId: VERCEL_TEAM_ID, slug: VERCEL_TEAM_SLUG } as const;
 
 export const list_deployments = defineTool({
-  name: "list_deployments",
-  domain: "vercel",
   description:
     "List deployments for the active team. Optional filters: `projectId`, `target` (production/preview), `state` (comma-separated states like 'BUILDING,READY'), branch/commit, and time window. Paginate with `from`, `to`, `until`, `since`, and `limit`.",
   access: { risk: "read" },
@@ -34,8 +32,6 @@ export const list_deployments = defineTool({
 });
 
 export const get_deployment = defineTool({
-  name: "get_deployment",
-  domain: "vercel",
   description:
     "Retrieve a deployment by its id (dpl_…) or URL hostname. Returns full metadata, build info, creator, alias assignment, commit details.",
   access: { risk: "read" },
@@ -54,8 +50,6 @@ export const get_deployment = defineTool({
 });
 
 export const get_deployment_events = defineTool({
-  name: "get_deployment_events",
-  domain: "vercel",
   description:
     "Fetch build events / logs for a deployment in JSON mode. Returns an array of events (stdout, stderr, stage transitions). Hard-capped at `limit` (max 200).",
   access: { risk: "read" },
@@ -84,8 +78,6 @@ export const get_deployment_events = defineTool({
 });
 
 export const list_deployment_files = defineTool({
-  name: "list_deployment_files",
-  domain: "vercel",
   description: "List the file tree of a deployment's source code.",
   access: { risk: "read" },
   input: z.object({ deployment_id: z.string() }),
@@ -96,8 +88,6 @@ export const list_deployment_files = defineTool({
 });
 
 export const get_deployment_file_contents = defineTool({
-  name: "get_deployment_file_contents",
-  domain: "vercel",
   description: "Get the contents of a specific file from a deployment. Response is base64-encoded.",
   access: { risk: "read" },
   input: z.object({
@@ -117,8 +107,6 @@ export const get_deployment_file_contents = defineTool({
 });
 
 export const cancel_deployment = defineTool({
-  name: "cancel_deployment",
-  domain: "vercel",
   description:
     "Cancel an in-flight deployment (state must be BUILDING / QUEUED / INITIALIZING). Returns the deployment's new state.",
   access: { risk: "destructive" },
@@ -130,8 +118,6 @@ export const cancel_deployment = defineTool({
 });
 
 export const delete_deployment = defineTool({
-  name: "delete_deployment",
-  domain: "vercel",
   description:
     "Permanently delete a deployment by id or URL. Irreversible. Cannot be used on the active production deployment.",
   access: { risk: "destructive" },
@@ -150,8 +136,6 @@ export const delete_deployment = defineTool({
 });
 
 export const update_integration_deployment_action = defineTool({
-  name: "update_integration_deployment_action",
-  domain: "vercel",
   description: "Update the deployment integration action state for a specific integration install.",
   access: { risk: "write" },
   input: z.object({
@@ -176,8 +160,6 @@ export const update_integration_deployment_action = defineTool({
 // Lives on the `projects` module in the Vercel SDK but semantically operates on deployments.
 
 export const promote_deployment = defineTool({
-  name: "promote_deployment",
-  domain: "vercel",
   description:
     "Promote a deployment to production without rebuilding it. Returns immediately; the actual traffic shift is async — check `list_promote_aliases` for status.",
   access: { risk: "destructive" },
@@ -201,8 +183,6 @@ export const promote_deployment = defineTool({
 });
 
 export const rollback_deployment = defineTool({
-  name: "rollback_deployment",
-  domain: "vercel",
   description:
     "Roll production traffic back to an older deployment. Async — check `list_promote_aliases` for completion.",
   access: { risk: "destructive" },
@@ -226,8 +206,6 @@ export const rollback_deployment = defineTool({
 });
 
 export const update_rollback_description = defineTool({
-  name: "update_rollback_description",
-  domain: "vercel",
   description: "Update the description (reason) attached to an active rollback.",
   access: { risk: "write" },
   input: z.object({

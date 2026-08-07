@@ -1,8 +1,8 @@
 import type { Comment, GetCommentsResponse } from "@figma/rest-api-spec";
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { figma } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -26,8 +26,6 @@ function summarizeComment(c: Comment) {
 // ---------------------------------------------------------------------------
 
 export const list_comments = defineTool({
-  name: "list_comments",
-  domain: "figma",
   description:
     "List comments on a Figma file. Returns comment text, author, timestamp, resolved status, and thread info.",
   access: { risk: "read" },
@@ -47,8 +45,6 @@ export const list_comments = defineTool({
 });
 
 export const create_comment = defineTool({
-  name: "create_comment",
-  domain: "figma",
   description:
     "Post a comment on a Figma file. Can optionally be pinned to a specific location or node.",
   access: { risk: "write" },
@@ -73,8 +69,6 @@ export const create_comment = defineTool({
 });
 
 export const delete_comment = defineTool({
-  name: "delete_comment",
-  domain: "figma",
   description: "Delete a comment from a Figma file.",
   access: { risk: "destructive" },
   input: z.object({
@@ -88,8 +82,6 @@ export const delete_comment = defineTool({
 });
 
 export const add_reaction = defineTool({
-  name: "add_reaction",
-  domain: "figma",
   description: "Add an emoji reaction to a comment on a Figma file.",
   access: { risk: "write" },
   input: z.object({
@@ -104,8 +96,6 @@ export const add_reaction = defineTool({
 });
 
 export const delete_reaction = defineTool({
-  name: "delete_reaction",
-  domain: "figma",
   description: "Remove an emoji reaction from a comment on a Figma file.",
   access: { risk: "destructive" },
   input: z.object({

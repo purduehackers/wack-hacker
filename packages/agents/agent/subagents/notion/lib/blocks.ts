@@ -1,13 +1,11 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { notion } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 import { isAppendBlockChildrenParameters, isUpdateBlockParameters } from "./notion-input.ts";
 import { cursorPaginationInputShape } from "./shared-constants.ts";
 
 export const retrieve_block = defineTool({
-  name: "retrieve_block",
-  domain: "notion",
   description:
     "Get a single Notion block by ID. Returns block type and its typed content. Use for inspecting individual blocks before updating.",
   access: { risk: "read" },
@@ -20,8 +18,6 @@ export const retrieve_block = defineTool({
 });
 
 export const update_block = defineTool({
-  name: "update_block",
-  domain: "notion",
   description:
     "Update a block's content. The shape of block_content must match the existing block's type (e.g. { paragraph: { rich_text: [...] } }). Use retrieve_block first to see the current structure.",
   access: { risk: "destructive" },
@@ -46,8 +42,6 @@ export const update_block = defineTool({
 });
 
 export const delete_block = defineTool({
-  name: "delete_block",
-  domain: "notion",
   description:
     "Archive (soft-delete) a block. Notion does not permanently delete blocks — this sets archived=true.",
   access: { risk: "destructive" },
@@ -64,8 +58,6 @@ export const delete_block = defineTool({
 });
 
 export const list_block_children = defineTool({
-  name: "list_block_children",
-  domain: "notion",
   description:
     "List a block's child blocks (for a page or container block). Paginated. Returns each child's ID, type, and summary content.",
   access: { risk: "read" },
@@ -93,8 +85,6 @@ export const list_block_children = defineTool({
 });
 
 export const append_block_children = defineTool({
-  name: "append_block_children",
-  domain: "notion",
   description:
     "Append blocks to a page or container block. children is an array of block objects in Notion API format (e.g. [{ paragraph: { rich_text: [{ text: { content: 'Hello' } }] } }]).",
   access: { risk: "write" },

@@ -1,12 +1,10 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { linear } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 import { sdkInput } from "./sdk-input.ts";
 
 export const create_customer_need = defineTool({
-  name: "create_customer_need",
-  domain: "linear",
   description:
     "Create a customer request (feedback/need) attached to an issue or project. Links a customer to the work item with optional importance and body.",
   access: { risk: "write" },
@@ -28,8 +26,6 @@ export const create_customer_need = defineTool({
 });
 
 export const update_customer_need = defineTool({
-  name: "update_customer_need",
-  domain: "linear",
   description: "Update a customer request.",
   access: { risk: "write" },
   input: z.object({
@@ -50,8 +46,6 @@ export const update_customer_need = defineTool({
 });
 
 export const list_customer_needs = defineTool({
-  name: "list_customer_needs",
-  domain: "linear",
   description: "List all customer requests with priority and creation date.",
   access: { risk: "read" },
   input: z.object({}),

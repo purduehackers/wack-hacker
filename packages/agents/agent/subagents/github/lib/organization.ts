@@ -1,13 +1,11 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { octokit } from "./client.ts";
 import { env } from "./config.ts";
 import { paginationInputShape } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 export const list_org_members = defineTool({
-  name: "list_org_members",
-  domain: "github",
   description: `List members of the purduehackers organization. Optionally filter by role (all, admin, member). Returns login, ID, avatar URL, and profile URL.`,
   access: { risk: "read" },
   input: z.object({
@@ -33,8 +31,6 @@ export const list_org_members = defineTool({
 });
 
 export const get_org_member = defineTool({
-  name: "get_org_member",
-  domain: "github",
   description: `Get organization membership details for a GitHub user. Returns role (admin or member) and state (active or pending).`,
   access: { risk: "read" },
   input: z.object({
@@ -54,8 +50,6 @@ export const get_org_member = defineTool({
 });
 
 export const list_teams = defineTool({
-  name: "list_teams",
-  domain: "github",
   description: `List teams in the purduehackers organization. Returns ID, name, slug, description, privacy, and URL.`,
   access: { risk: "read" },
   input: z.object({
@@ -81,8 +75,6 @@ export const list_teams = defineTool({
 });
 
 export const get_team = defineTool({
-  name: "get_team",
-  domain: "github",
   description: `Get details for a team by slug. Returns ID, name, description, privacy, and URL.`,
   access: { risk: "read" },
   input: z.object({
@@ -105,8 +97,6 @@ export const get_team = defineTool({
 });
 
 export const list_team_members = defineTool({
-  name: "list_team_members",
-  domain: "github",
   description: `List members of a team. Optionally filter by role (all, member, maintainer). Returns login, ID, and profile URL.`,
   access: { risk: "read" },
   input: z.object({
@@ -127,8 +117,6 @@ export const list_team_members = defineTool({
 });
 
 export const list_repo_webhooks = defineTool({
-  name: "list_repo_webhooks",
-  domain: "github",
   description: `List webhooks configured for a repository. Returns ID, active status, subscribed events, and config URL.`,
   access: { risk: "read" },
   input: z.object({
@@ -155,8 +143,6 @@ export const list_repo_webhooks = defineTool({
 });
 
 export const invite_org_member = defineTool({
-  name: "invite_org_member",
-  domain: "github",
   description: `Invite a GitHub user to the purduehackers organization or update their role. Role can be "admin" or "member" (default).`,
   access: { risk: "destructive", minRole: "admin" },
   input: z.object({
@@ -178,8 +164,6 @@ export const invite_org_member = defineTool({
 });
 
 export const remove_org_member = defineTool({
-  name: "remove_org_member",
-  domain: "github",
   description: `Remove a user from the purduehackers organization. This revokes all their access to org repos.`,
   access: { risk: "destructive", minRole: "admin" },
   input: z.object({
@@ -195,8 +179,6 @@ export const remove_org_member = defineTool({
 });
 
 export const add_team_member = defineTool({
-  name: "add_team_member",
-  domain: "github",
   description: `Add a user to a team or update their team role. Role can be "member" (default) or "maintainer".`,
   access: { risk: "destructive", minRole: "admin" },
   input: z.object({
@@ -216,8 +198,6 @@ export const add_team_member = defineTool({
 });
 
 export const remove_team_member = defineTool({
-  name: "remove_team_member",
-  domain: "github",
   description: `Remove a user from a team. They keep org membership but lose team-specific repo access.`,
   access: { risk: "destructive", minRole: "admin" },
   input: z.object({
@@ -235,8 +215,6 @@ export const remove_team_member = defineTool({
 });
 
 export const create_webhook = defineTool({
-  name: "create_webhook",
-  domain: "github",
   description: `Create a webhook for a repository. Specify payload URL, events, and optional secret for signature verification.`,
   access: { risk: "destructive" },
   input: z.object({
@@ -268,8 +246,6 @@ export const create_webhook = defineTool({
 });
 
 export const update_webhook = defineTool({
-  name: "update_webhook",
-  domain: "github",
   description: `Update a repository webhook's URL, events, secret, or active status. Only provided fields are changed.`,
   access: { risk: "destructive" },
   input: z.object({
@@ -303,8 +279,6 @@ export const update_webhook = defineTool({
 });
 
 export const delete_webhook = defineTool({
-  name: "delete_webhook",
-  domain: "github",
   description: `Delete a repository webhook. Irreversible — the webhook stops receiving events immediately.`,
   access: { risk: "destructive" },
   input: z.object({
@@ -322,8 +296,6 @@ export const delete_webhook = defineTool({
 });
 
 export const list_org_webhooks = defineTool({
-  name: "list_org_webhooks",
-  domain: "github",
   description: `List webhooks configured for the purduehackers organization. Returns ID, active status, subscribed events, and config URL.`,
   access: { risk: "read" },
   input: z.object({

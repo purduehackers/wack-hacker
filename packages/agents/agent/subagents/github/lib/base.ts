@@ -19,14 +19,12 @@ const grepAppResponseSchema = z.looseObject({
     })
     .optional(),
 });
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { env } from "./config.ts";
 import { paginationInputShape } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 /** List repositories in the purduehackers organization with optional filters. */
 export const list_repositories = defineTool({
-  name: "list_repositories",
-  domain: "github",
   description:
     "List repositories in the purduehackers org. Returns name, description, language, URL, and activity dates. Supports filtering by type and sorting.",
   access: { risk: "read" },
@@ -63,8 +61,6 @@ export const list_repositories = defineTool({
 
 /** Get full details for a single repository by name. */
 export const get_repository = defineTool({
-  name: "get_repository",
-  domain: "github",
   description:
     "Get full details for a repository — description, branches, topics, visibility, license, issue/wiki/pages status, and URLs.",
   access: { risk: "read" },
@@ -103,8 +99,6 @@ export const get_repository = defineTool({
 
 /** Search code across all purduehackers repos using grep.app for fast, accurate results with snippets. */
 export const search_code = defineTool({
-  name: "search_code",
-  domain: "github",
   description:
     "Search code across purduehackers repositories using grep.app. Returns matching file paths, code snippets with line numbers, and repository info. Supports language and path filters.",
   access: { risk: "read" },
@@ -160,8 +154,6 @@ export const search_code = defineTool({
 
 /** Search issues and pull requests across purduehackers repositories. */
 export const search_issues = defineTool({
-  name: "search_issues",
-  domain: "github",
   description:
     "Search issues and pull requests across purduehackers repos. Supports GitHub search qualifiers like 'is:open', 'is:pr', 'label:bug', 'is:merged'. Returns number, title, state, URL, labels, and dates.",
   access: { risk: "read" },

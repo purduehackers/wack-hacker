@@ -1,11 +1,9 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { resend } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 
 export const list_broadcasts = defineTool({
-  name: "list_broadcasts",
-  domain: "outreach",
   description:
     "List Resend broadcasts (mass email campaigns). Returns each broadcast's id, name, status, audience, scheduled_at, and created_at.",
   access: { risk: "read" },
@@ -18,8 +16,6 @@ export const list_broadcasts = defineTool({
 });
 
 export const get_broadcast = defineTool({
-  name: "get_broadcast",
-  domain: "outreach",
   description: "Get a single Resend broadcast by ID, including content preview and status.",
   access: { risk: "read" },
   input: z.object({
@@ -33,8 +29,6 @@ export const get_broadcast = defineTool({
 });
 
 export const create_broadcast = defineTool({
-  name: "create_broadcast",
-  domain: "outreach",
   description:
     "Create a new Resend broadcast (mass email campaign) targeting a segment. Supply subject, content (html and/or text), and the segment to send to. The broadcast is created in draft state — call send_broadcast to dispatch.",
   access: { risk: "write" },
@@ -66,8 +60,6 @@ export const create_broadcast = defineTool({
 });
 
 export const send_broadcast = defineTool({
-  name: "send_broadcast",
-  domain: "outreach",
   description:
     "Dispatch a Resend broadcast to its target audience. Optionally schedule for a future time with scheduled_at (ISO 8601 or natural-language like 'in 1 hour'). Once sent, cannot be undone.",
   access: { risk: "destructive", confirm: "second-party" },
@@ -89,8 +81,6 @@ export const send_broadcast = defineTool({
 });
 
 export const delete_broadcast = defineTool({
-  name: "delete_broadcast",
-  domain: "outreach",
   description: "Delete a Resend broadcast. Cannot delete a broadcast that has been sent.",
   access: { risk: "destructive" },
   input: z.object({

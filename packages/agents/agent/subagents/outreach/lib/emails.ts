@@ -1,11 +1,9 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { resend } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 
 export const get_email = defineTool({
-  name: "get_email",
-  domain: "outreach",
   description:
     "Retrieve a Resend email by ID. Returns current delivery status (sent, delivered, bounced, complained, opened, clicked), subject, from, to, and timestamps.",
   access: { risk: "read" },
@@ -20,8 +18,6 @@ export const get_email = defineTool({
 });
 
 export const cancel_email = defineTool({
-  name: "cancel_email",
-  domain: "outreach",
   description:
     "Cancel a scheduled Resend email that has not yet been sent. Only works for emails with a future scheduled_at.",
   access: { risk: "destructive" },

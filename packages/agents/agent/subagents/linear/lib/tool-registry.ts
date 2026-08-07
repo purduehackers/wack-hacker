@@ -1,8 +1,8 @@
+import type { DomainToolSpec } from "../../../lib/policy/domain-tools.ts";
 import * as m_base from "./base.ts";
 import * as m_comments from "./comments.ts";
 import * as m_customer_requests from "./customer-requests.ts";
 import * as m_cycles from "./cycles.ts";
-import type { LinearToolSpec } from "./define-tool.ts";
 import * as m_documents from "./documents.ts";
 import * as m_initiative_updates from "./initiative-updates.ts";
 import * as m_initiatives from "./initiatives.ts";
@@ -82,6 +82,6 @@ export const LINEAR_TOOLS = {
   invite_user: m_users.invite_user,
   list_invites: m_users.list_invites,
   delete_invite: m_users.delete_invite,
-} as const satisfies Record<string, LinearToolSpec>;
+} as const satisfies Record<string, DomainToolSpec>;
 
 export type LinearToolName = keyof typeof LINEAR_TOOLS;

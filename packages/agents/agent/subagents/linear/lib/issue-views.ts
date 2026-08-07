@@ -1,11 +1,9 @@
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { linear, issueFilter } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 
 export const query_issue_view = defineTool({
-  name: "query_issue_view",
-  domain: "linear",
   description:
     "Query issues with filters. Supports filtering by team, project, assignee, status, label, and cycle. Returns identifier, title, priority, state, assignee, and URL for each issue. Paged (max 50).",
   access: { risk: "read" },

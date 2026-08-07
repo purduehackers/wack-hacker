@@ -1,8 +1,8 @@
+import type { DomainToolSpec } from "../../../lib/policy/domain-tools.ts";
 import * as m_actions from "./actions.ts";
 import * as m_base from "./base.ts";
 import * as m_collaborators from "./collaborators.ts";
 import * as m_contents from "./contents.ts";
-import type { GithubToolSpec } from "./define-tool.ts";
 import * as m_deployments from "./deployments.ts";
 import * as m_environments from "./environments.ts";
 import * as m_issues from "./issues.ts";
@@ -137,6 +137,6 @@ export const GITHUB_TOOLS = {
   update_release: m_releases.update_release,
   update_repository: m_repositories.update_repository,
   update_webhook: m_organization.update_webhook,
-} as const satisfies Record<string, GithubToolSpec>;
+} as const satisfies Record<string, DomainToolSpec>;
 
 export type GithubToolName = keyof typeof GITHUB_TOOLS;

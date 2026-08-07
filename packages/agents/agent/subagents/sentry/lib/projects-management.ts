@@ -10,12 +10,10 @@ import {
 } from "@sentry/api";
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { sentryOpts, sentryOrg } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 
 export const create_project = defineTool({
-  name: "create_project",
-  domain: "sentry",
   description:
     "Create a new Sentry project under a team. Platform is the language/framework slug (e.g. 'javascript-nextjs', 'python-django', 'go'). Returns the new project's id, slug, and first DSN.",
   access: { risk: "write", minRole: "admin" },
@@ -44,8 +42,6 @@ export const create_project = defineTool({
 });
 
 export const update_project = defineTool({
-  name: "update_project",
-  domain: "sentry",
   description:
     "Update a Sentry project's name, slug, platform, default environment, or resolve age settings.",
   access: { risk: "write" },
@@ -84,8 +80,6 @@ export const update_project = defineTool({
 });
 
 export const delete_project = defineTool({
-  name: "delete_project",
-  domain: "sentry",
   description:
     "Permanently delete a Sentry project. This removes all issues, events, and configuration. Irreversible.",
   access: { risk: "destructive", minRole: "admin", confirm: "second-party" },
@@ -106,8 +100,6 @@ export const delete_project = defineTool({
 });
 
 export const list_project_environments = defineTool({
-  name: "list_project_environments",
-  domain: "sentry",
   description:
     "List environments configured for a Sentry project. Returns name, is_hidden, and environment ID.",
   access: { risk: "read" },
@@ -128,8 +120,6 @@ export const list_project_environments = defineTool({
 });
 
 export const list_project_keys = defineTool({
-  name: "list_project_keys",
-  domain: "sentry",
   description:
     "List client keys (DSNs) for a Sentry project. Each key has a public DSN used by SDKs to send events.",
   access: { risk: "read" },
@@ -158,8 +148,6 @@ export const list_project_keys = defineTool({
 });
 
 export const create_project_key = defineTool({
-  name: "create_project_key",
-  domain: "sentry",
   description: "Create a new client key (DSN) for a Sentry project. Returns the new DSN.",
   access: { risk: "write" },
   input: z.object({
@@ -181,8 +169,6 @@ export const create_project_key = defineTool({
 });
 
 export const delete_project_key = defineTool({
-  name: "delete_project_key",
-  domain: "sentry",
   description:
     "Delete a Sentry client key (DSN). All SDKs using this key will stop sending events. Irreversible.",
   access: { risk: "destructive" },

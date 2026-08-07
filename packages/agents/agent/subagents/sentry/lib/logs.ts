@@ -5,14 +5,12 @@ import {
 } from "@sentry/api";
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { sentryOpts, sentryOrg, sentryProjectId } from "./client.ts";
 import { perPageField } from "./constants.ts";
-import { defineTool } from "./define-tool.ts";
 
 /** Search structured logs. */
 export const search_logs = defineTool({
-  name: "search_logs",
-  domain: "sentry",
   description:
     "Search structured log entries across Sentry projects. Supports filtering by log level, message content, and tags.",
   access: { risk: "read" },
@@ -53,8 +51,6 @@ export const search_logs = defineTool({
 
 /** Get log volume stats over time. */
 export const get_log_stats = defineTool({
-  name: "get_log_stats",
-  domain: "sentry",
   description:
     "Get log volume over time, optionally grouped by severity level. Useful for spotting log spikes.",
   access: { risk: "read" },

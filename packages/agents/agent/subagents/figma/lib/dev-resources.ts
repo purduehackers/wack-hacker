@@ -7,12 +7,10 @@ import type {
 } from "@figma/rest-api-spec";
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { figma } from "./client.ts";
-import { defineTool } from "./define-tool.ts";
 
 export const list_dev_resources = defineTool({
-  name: "list_dev_resources",
-  domain: "figma",
   description:
     "List dev resources (links to code, docs, etc.) attached to nodes in a Figma file. Optionally filter by node ID.",
   access: { risk: "read" },
@@ -32,8 +30,6 @@ export const list_dev_resources = defineTool({
 });
 
 export const create_dev_resources = defineTool({
-  name: "create_dev_resources",
-  domain: "figma",
   description:
     "Attach dev resource links to nodes in a Figma file. Each resource has a URL, name, and target node.",
   access: { risk: "write" },
@@ -62,8 +58,6 @@ export const create_dev_resources = defineTool({
 });
 
 export const update_dev_resource = defineTool({
-  name: "update_dev_resource",
-  domain: "figma",
   description: "Update an existing dev resource's URL or name.",
   access: { risk: "write" },
   input: z.object({
@@ -82,8 +76,6 @@ export const update_dev_resource = defineTool({
 });
 
 export const delete_dev_resource = defineTool({
-  name: "delete_dev_resource",
-  domain: "figma",
   description: "Delete a dev resource from a Figma file.",
   access: { risk: "destructive" },
   input: z.object({
