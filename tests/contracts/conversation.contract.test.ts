@@ -4,10 +4,9 @@ import { beforeEach, expect, spyOn, test } from "bun:test";
 
 import { createRenderPublisher } from "../../packages/agents/agent/lib/discord/render-intent.ts";
 import type { AgentClient } from "../../packages/bot/src/agent/client.ts";
-import { createRenderCoordinator } from "../../packages/bot/src/agent/render/coordinator.ts";
 import type { DiscordRest } from "../../packages/bot/src/agent/render/discord-rest.ts";
-import { createAgentRouter } from "../../packages/bot/src/agent/router.ts";
 import { createTurnMessageStore } from "../../packages/bot/src/agent/turn-messages.ts";
+import { createConversationFlow } from "../../packages/bot/src/conversations/flow.ts";
 import {
   createConversationStore,
   DELIVERY_LEASE_MS,
@@ -551,44 +550,39 @@ function createAdmissionClient(redis: RedisClient, sent: DeliveryPayload[]): Age
 
 async function startBotRuntime(
   redis: RedisClient,
-  queue: ConversationStore["queue"],
-  renderStore: ConversationStore["render"],
+  store: ConversationStore,
   discord: MemoryDiscord,
   client: AgentClient,
 ) {
-  const coordinator = createRenderCoordinator({
+  const flow = createConversationFlow({
+    eve: client,
+    store,
     rest: discord.rest,
-    store: renderStore,
     turnMessages: createTurnMessageStore(redis),
+    schedules: { admit: async () => {} },
     reporter: silentReporter,
     recoveryIntervalMs: 0,
   });
-  await coordinator.start();
-  const router = createAgentRouter({
-    client,
-    queue,
-    reporter: silentReporter,
-    beforeComplete: (payload) => coordinator.flush(payload.dispatchId),
-    recoveryIntervalMs: 0,
-  });
-  return { coordinator, router };
+  await flow.start();
+  return flow;
 }
 
 contractTest(
   "a restart converges terminal Discord paint before admitting the next queued turn",
   async () => {
     const redis = contractRedis();
-    const queue = conversations(redis).queue;
-    const renderStore = conversations(redis).render;
+    const store = conversations(redis);
+    const queue = store.queue;
+    const renderStore = store.render;
     const discord = new MemoryDiscord();
     const sent: DeliveryPayload[] = [];
     const client = createAdmissionClient(redis, sent);
-    const beforeRestart = await startBotRuntime(redis, queue, renderStore, discord, client);
+    const beforeRestart = await startBotRuntime(redis, store, discord, client);
 
     const first = message("40000000000000010", "first");
     const second = message("40000000000000011", "second");
-    expect(await beforeRestart.router.submit(first)).toEqual(Result.ok(undefined));
-    expect(await beforeRestart.router.submit(second)).toEqual(Result.ok(undefined));
+    expect(await beforeRestart.submit(first)).toEqual(Result.ok(undefined));
+    expect(await beforeRestart.submit(second)).toEqual(Result.ok(undefined));
     expect(sent).toHaveLength(1);
 
     const delivery = sent[0];
@@ -617,14 +611,13 @@ contractTest(
     } finally {
       callbackLog.mockRestore();
     }
-    await beforeRestart.coordinator.sweep();
+    await beforeRestart.sweep();
     await waitUntil(async () => {
       const projection = await renderStore.projection(delivery.dispatchId);
       return Result.isOk(projection) && projection.value.appliedRevision === 1;
     }, "the streaming projection");
 
-    beforeRestart.router.stop();
-    await beforeRestart.coordinator.stop();
+    await beforeRestart.stop();
 
     const parked: ParkedPayload = {
       continuationKey: delivery.continuationKey,
@@ -642,19 +635,19 @@ contractTest(
       footer: "done",
     };
     expect(await publisher.settleAndPark(terminal, parked)).toBe(2);
+    expect(await queue.complete(parked)).toBe("pending");
     expect(sent).toHaveLength(1);
 
-    const recovered = await startBotRuntime(redis, queue, renderStore, discord, client);
+    const recovered = await startBotRuntime(redis, store, discord, client);
     try {
-      await recovered.router.sweep();
+      await recovered.sweep();
 
       expect(await renderStore.outcome(delivery.dispatchId)).toBe("applied");
       expect(sent).toHaveLength(2);
       expect(sent[1]?.messageId).toBe(second.messageId);
       expect([...discord.messages.values()]).toEqual(["final answer\n-# done"]);
     } finally {
-      recovered.router.stop();
-      await recovered.coordinator.stop();
+      await recovered.stop();
       await queue.purge(first.continuationKey);
     }
   },

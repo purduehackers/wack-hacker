@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
+import type { ConversationStore } from "@repo/shared/conversations";
 import { UpstreamError } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
-import type { WideEvent } from "@repo/shared/result/observe";
+import type { Reporter, WideEvent } from "@repo/shared/result/observe";
 import type { DeliveryPayload, InteractionPayload, ResetRequestPayload } from "@repo/shared/wire";
 
-import { createAgentRouter } from "./router.ts";
+import type { AgentClient } from "../agent/client.ts";
+import { createConversationFlow } from "./flow.ts";
 
 const delivery: DeliveryPayload = {
   kind: "followup",
@@ -22,6 +24,26 @@ const delivery: DeliveryPayload = {
   dispatchId: "00000000-0000-4000-8000-000000000001",
 };
 
+function flowHarness(eve: AgentClient, queue: ConversationStore["queue"], reporter: Reporter) {
+  return createConversationFlow({
+    eve,
+    store: {
+      queue,
+      render: { ready: async () => [], outcome: async () => undefined },
+    } as unknown as ConversationStore,
+    rest: {
+      postMessage: async () => Result.ok({ id: "50000000000000000", content: "" }),
+      editMessage: async () => Result.ok(undefined),
+      deleteMessage: async () => Result.ok(undefined),
+      reply: async () => Result.ok({ id: "50000000000000000", content: "" }),
+    },
+    turnMessages: { record: async () => Result.ok(undefined) },
+    schedules: { admit: async () => {} },
+    reporter,
+    recoveryIntervalMs: 0,
+  });
+}
+
 describe("agent router admission remediation", () => {
   test("surfaces a terminal admission error to the message handler and logs it", async () => {
     const reportedEvents: WideEvent[] = [];
@@ -31,14 +53,14 @@ describe("agent router admission remediation", () => {
       detail: "RecoveryRequired: reset this conversation before retrying",
     });
     let claimed = false;
-    const router = createAgentRouter({
-      client: {
+    const router = flowHarness(
+      {
         sendMessage: async (_delivery: DeliveryPayload) => Result.err(recovery),
         sendInteraction: async (_interaction: InteractionPayload) =>
           Result.ok({ sessionId: "session-1", continuationToken: delivery.continuationKey }),
         sendReset: async (_reset: ResetRequestPayload) => Result.ok(undefined),
       },
-      queue: {
+      {
         enqueue: async () => {},
         claim: async () => {
           if (claimed) return Result.ok(undefined);
@@ -56,12 +78,11 @@ describe("agent router admission remediation", () => {
         commitReset: async () => true,
         purge: async () => {},
       },
-      reporter: {
+      {
         emit: (wideEvent) => reportedEvents.push(wideEvent),
         captureDefect: () => {},
       },
-      recoveryIntervalMs: 0,
-    });
+    );
 
     const submitted = await router.submit(delivery);
     expect(submitted).toEqual(Result.err(recovery));
@@ -76,7 +97,7 @@ describe("agent router admission remediation", () => {
         dispatchId: delivery.dispatchId,
       },
     });
-    router.stop();
+    await router.stop();
   });
 });
 
@@ -85,8 +106,8 @@ describe("agent router admission sweep", () => {
     const recorded: WideEvent[] = [];
     let recoveryChecks = 0;
     let sends = 0;
-    const router = createAgentRouter({
-      client: {
+    const router = flowHarness(
+      {
         sendMessage: async (_delivery: DeliveryPayload) => {
           sends += 1;
           return Result.ok({
@@ -98,7 +119,7 @@ describe("agent router admission sweep", () => {
           Result.ok({ sessionId: "session-1", continuationToken: delivery.continuationKey }),
         sendReset: async (_reset: ResetRequestPayload) => Result.ok(undefined),
       },
-      queue: {
+      {
         enqueue: async () => {},
         claim: async () => Result.ok(undefined),
         recoverAdmission: async () => {
@@ -115,12 +136,11 @@ describe("agent router admission sweep", () => {
         commitReset: async () => true,
         purge: async () => {},
       },
-      reporter: {
+      {
         emit: (wideEvent) => recorded.push(wideEvent),
         captureDefect: () => {},
       },
-      recoveryIntervalMs: 0,
-    });
+    );
 
     await router.sweep();
     expect(recoveryChecks).toBe(1);
@@ -137,6 +157,6 @@ describe("agent router admission sweep", () => {
         dispatchId: delivery.dispatchId,
       },
     });
-    router.stop();
+    await router.stop();
   });
 });

@@ -1,138 +1,18 @@
 import { describe, expect, test } from "bun:test";
 
 import { DiscordAPIError } from "@discordjs/rest";
-import { createConversationStore } from "@repo/shared/conversations";
 import { DISCORD_IDS } from "@repo/shared/discord";
 import { Transient } from "@repo/shared/errors";
-import type { RedisClient } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
 import type { MessagePayload, ScheduledFirePayload } from "@repo/shared/wire";
 import { RESTJSONErrorCodes } from "discord-api-types/v10";
 
-import type { AgentRouter } from "./router.ts";
 import {
-  createScheduledFireHandler,
+  createScheduledDiscordAdapter,
   isTransientDiscordFailure,
   scheduledFailureMessage,
   type ScheduledFireDeps,
 } from "./scheduled.ts";
-
-interface Receipt {
-  readonly actionType: string;
-  readonly channelId: string;
-  readonly claimToken?: string;
-  readonly ownerId: string;
-  readonly scheduleId: string;
-  readonly status: "accepted" | "forwarding";
-}
-
-function parseReceipt(raw: string): Receipt {
-  const parsed: unknown = JSON.parse(raw);
-  if (
-    typeof parsed !== "object" ||
-    parsed === null ||
-    !("actionType" in parsed) ||
-    typeof parsed.actionType !== "string" ||
-    !("channelId" in parsed) ||
-    typeof parsed.channelId !== "string" ||
-    !("ownerId" in parsed) ||
-    typeof parsed.ownerId !== "string" ||
-    !("scheduleId" in parsed) ||
-    typeof parsed.scheduleId !== "string" ||
-    !("status" in parsed) ||
-    (parsed.status !== "accepted" && parsed.status !== "forwarding") ||
-    ("claimToken" in parsed && typeof parsed.claimToken !== "string")
-  ) {
-    throw new Error("fake Redis received an invalid receipt");
-  }
-  const claimToken = "claimToken" in parsed ? parsed.claimToken : undefined;
-  if (claimToken !== undefined && typeof claimToken !== "string") {
-    throw new Error("fake Redis received an invalid claim token");
-  }
-  return {
-    actionType: parsed.actionType,
-    channelId: parsed.channelId,
-    ownerId: parsed.ownerId,
-    scheduleId: parsed.scheduleId,
-    status: parsed.status,
-    ...(claimToken === undefined ? {} : { claimToken }),
-  };
-}
-
-class StrictReceiptRedis {
-  readonly receipts = new Map<string, Receipt>();
-
-  private claim(receiptKey: string, args: readonly unknown[]): number {
-    const [scheduleId, ownerId, channelId, actionType, raw] = args;
-    if (
-      typeof scheduleId !== "string" ||
-      typeof ownerId !== "string" ||
-      typeof channelId !== "string" ||
-      typeof actionType !== "string" ||
-      typeof raw !== "string"
-    ) {
-      throw new Error("fake Redis received an invalid claim");
-    }
-    const current = this.receipts.get(receiptKey);
-    if (current !== undefined) {
-      const identityMatches =
-        current.scheduleId === scheduleId &&
-        current.ownerId === ownerId &&
-        current.channelId === channelId &&
-        current.actionType === actionType;
-      if (!identityMatches) return -1;
-      return current.status === "accepted" ? 2 : 0;
-    }
-    this.receipts.set(receiptKey, parseReceipt(raw));
-    return 1;
-  }
-
-  private complete(receiptKey: string, args: readonly unknown[]): number {
-    const [claimToken, raw] = args;
-    const current = this.receipts.get(receiptKey);
-    if (
-      typeof claimToken !== "string" ||
-      typeof raw !== "string" ||
-      current?.status !== "forwarding" ||
-      current.claimToken !== claimToken
-    ) {
-      return 0;
-    }
-    this.receipts.set(receiptKey, parseReceipt(raw));
-    return 1;
-  }
-
-  private release(receiptKey: string, args: readonly unknown[]): number {
-    const claimToken = args[0];
-    const current = this.receipts.get(receiptKey);
-    if (
-      typeof claimToken !== "string" ||
-      current?.status !== "forwarding" ||
-      current.claimToken !== claimToken
-    ) {
-      return 0;
-    }
-    this.receipts.delete(receiptKey);
-    return 1;
-  }
-
-  async eval(
-    script: string,
-    redisKeys: readonly string[],
-    args: readonly unknown[],
-  ): Promise<number> {
-    const receiptKey = redisKeys[0];
-    if (receiptKey === undefined) throw new Error("fake Redis expected one key");
-    if (script.includes("ARGV[5]") && script.includes('"PX"')) {
-      return this.claim(receiptKey, args);
-    }
-    if (script.includes('"EX"') && script.includes("claimToken")) {
-      return this.complete(receiptKey, args);
-    }
-    if (script.includes('redis.call("DEL"')) return this.release(receiptKey, args);
-    throw new Error("fake Redis received an unexpected script");
-  }
-}
 
 interface FakeMessage {
   readonly edits: string[];
@@ -209,7 +89,6 @@ interface HarnessOptions {
 }
 
 function harness(options: HarnessOptions = {}) {
-  const redis = new StrictReceiptRedis();
   const sends: SendRecord[] = [];
   const messages = new Map<string, FakeMessage>();
   const memberFetches: unknown[] = [];
@@ -279,22 +158,20 @@ function harness(options: HarnessOptions = {}) {
         : Result.ok(undefined);
     },
   };
-  const handler = createScheduledFireHandler({
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- intentionally minimal strict fake
-    agent: agent as unknown as AgentRouter,
+  const adapter = createScheduledDiscordAdapter({
     // oxlint-disable-next-line typescript/consistent-type-assertions -- intentionally minimal strict fake
     client: client as unknown as ScheduledFireDeps["client"],
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- intentionally minimal strict fake
-    store: createConversationStore({ redis: redis as unknown as RedisClient }).scheduledFires,
     guildId: "30000000000000000",
   });
+  const handler = {
+    submit: (scheduled: ScheduledFirePayload) => adapter.admit(scheduled, agent.submit),
+  };
 
   return {
     channelFetches,
     handler,
     memberFetches,
     messages,
-    redis,
     sends,
     submissions,
   };
@@ -308,6 +185,21 @@ async function rejectionOf(promise: Promise<unknown>): Promise<unknown> {
   }
   throw new Error("expected promise to reject");
 }
+
+describe("scheduled action semantics", () => {
+  test("message schedules post directly without entering the agent turn path", async () => {
+    const direct = { ...payload, actionType: "message" as const };
+    const testHarness = harness();
+    await testHarness.handler.submit(direct);
+    expect(testHarness.submissions).toHaveLength(0);
+    expect(testHarness.sends).toContainEqual({
+      content: direct.prompt,
+      nonce: `m:${direct.occurrenceId}`,
+      enforceNonce: true,
+      allowedMentions: { parse: [] },
+    });
+  });
+});
 
 describe("scheduled role refresh and fallbacks", () => {
   test("force-refreshes the member and current roles override the creation snapshot", async () => {
@@ -323,11 +215,6 @@ describe("scheduled role refresh and fallbacks", () => {
       nickname: "Owner",
       memberRoles: [],
     });
-
-    // The accepted receipt is durable: a dispatcher retry does no Discord work.
-    await testHarness.handler.submit(payload);
-    expect(testHarness.memberFetches).toHaveLength(1);
-    expect(testHarness.sends).toHaveLength(1);
   });
 
   test("a departed owner is downgraded to public with a visible warning", async () => {
@@ -385,7 +272,6 @@ describe("scheduled role refresh and fallbacks", () => {
     expect(testHarness.submissions).toHaveLength(0);
     const notice = testHarness.messages.get(`f:${payload.occurrenceId}`);
     expect(notice?.content).toContain("final automatic attempt");
-    expect(testHarness.redis.receipts).toHaveLength(0);
   });
 });
 
@@ -399,7 +285,6 @@ describe("scheduled failure remediation", () => {
     expect(placeholder?.content).toContain("final automatic attempt");
     expect(placeholder?.content).toContain("list scheduled tasks");
     expect(placeholder?.content).toContain("cancel or replace");
-    expect(testHarness.redis.receipts).toHaveLength(0);
   });
 
   test("nonterminal failures accurately promise an automatic retry", () => {

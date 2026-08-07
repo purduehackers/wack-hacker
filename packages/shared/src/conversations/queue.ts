@@ -21,6 +21,7 @@ import {
   pendingKey,
   QUEUE_INDEX_KEY,
   queueMember,
+  renderOutcomeKey,
   renderTargetKey,
   resetKey,
   resetPendingKey,
@@ -148,6 +149,8 @@ if parked.messageId ~= ARGV[1] or parked.sessionId ~= ARGV[2] or parked.dispatch
   or parked.eveTurnId ~= ARGV[5] then
   return -1
 end
+local outcome = redis.call("GET", KEYS[6])
+if outcome ~= "applied" and outcome ~= "discarded" then return -2 end
 local raw = redis.call("GET", KEYS[1])
 if not raw then
   redis.call("DEL", KEYS[2])
@@ -274,7 +277,7 @@ export interface ClaimedTurn {
   readonly claimToken: string;
 }
 
-export type CompletionStatus = "completed" | "missing" | "stale";
+export type CompletionStatus = "completed" | "missing" | "pending" | "stale";
 
 function parseStored<T>(
   raw: unknown,
@@ -406,6 +409,7 @@ async function completeTurn(redis: RedisClient, payload: ParkedPayload): Promise
         pendingKey(payload.continuationKey),
         QUEUE_INDEX_KEY,
         AGENT_READY_SET_KEY,
+        renderOutcomeKey(payload.dispatchId),
       ],
       [
         payload.messageId,
@@ -418,6 +422,7 @@ async function completeTurn(redis: RedisClient, payload: ParkedPayload): Promise
     ),
   );
   if (result === 1) return "completed";
+  if (result === -2) return "pending";
   return result === -1 ? "stale" : "missing";
 }
 

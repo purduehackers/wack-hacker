@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import type { ConversationStore } from "@repo/shared/conversations";
 import { Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { silentReporter } from "@repo/shared/result/observe";
@@ -10,7 +11,8 @@ import type {
   ResetRequestPayload,
 } from "@repo/shared/wire";
 
-import { createAgentRouter } from "./router.ts";
+import type { AgentClient } from "../agent/client.ts";
+import { createConversationFlow } from "./flow.ts";
 
 const continuationKey = "30000000000000000";
 const parked: ParkedPayload = {
@@ -35,19 +37,43 @@ const delivery: DeliveryPayload = {
   dispatchId: "00000000-0000-4000-8000-000000000001",
 };
 
+function flowHarness(
+  eve: AgentClient,
+  queue: ConversationStore["queue"],
+  outcome: () => Promise<"applied" | "discarded" | undefined> = async () => undefined,
+) {
+  return createConversationFlow({
+    eve,
+    store: {
+      queue,
+      render: { ready: async () => [], outcome },
+    } as unknown as ConversationStore,
+    rest: {
+      postMessage: async () => Result.ok({ id: "50000000000000000", content: "" }),
+      editMessage: async () => Result.ok(undefined),
+      deleteMessage: async () => Result.ok(undefined),
+      reply: async () => Result.ok({ id: "50000000000000000", content: "" }),
+    },
+    turnMessages: { record: async () => Result.ok(undefined) },
+    schedules: { admit: async () => {} },
+    reporter: silentReporter,
+    recoveryIntervalMs: 0,
+  });
+}
+
 describe("agent router durable recovery", () => {
   test("replays a parked marker but does not advance until terminal paint has an outcome", async () => {
     let visible = false;
     let completions = 0;
-    const router = createAgentRouter({
-      client: {
+    const router = flowHarness(
+      {
         sendMessage: async (_delivery: DeliveryPayload) =>
           Result.ok({ sessionId: "session-1", continuationToken: continuationKey }),
         sendInteraction: async (_interaction: InteractionPayload) =>
           Result.ok({ sessionId: "session-1", continuationToken: continuationKey }),
         sendReset: async (_reset: ResetRequestPayload) => Result.ok(undefined),
       },
-      queue: {
+      {
         enqueue: async () => {},
         claim: async () => Result.ok(undefined),
         recoverAdmission: async () => Result.ok(undefined),
@@ -64,10 +90,8 @@ describe("agent router durable recovery", () => {
         commitReset: async () => true,
         purge: async () => {},
       },
-      reporter: silentReporter,
-      beforeComplete: async () => visible,
-      recoveryIntervalMs: 0,
-    });
+      async () => (visible ? "applied" : undefined),
+    );
 
     await router.sweep();
     expect(completions).toBe(0);
@@ -75,7 +99,7 @@ describe("agent router durable recovery", () => {
     visible = true;
     await router.sweep();
     expect(completions).toBe(1);
-    router.stop();
+    await router.stop();
   });
 });
 
@@ -86,9 +110,10 @@ describe("agent router reset recovery", () => {
     let resetAttempts = 0;
     let committed = false;
     let delivered = 0;
+    let confirmations = 0;
     let claimed = false;
-    const router = createAgentRouter({
-      client: {
+    const router = flowHarness(
+      {
         sendMessage: async (_delivery: DeliveryPayload) => {
           delivered += 1;
           return Result.ok({ sessionId: "session-2", continuationToken: continuationKey });
@@ -103,7 +128,7 @@ describe("agent router reset recovery", () => {
             : Result.ok(undefined);
         },
       },
-      queue: {
+      {
         enqueue: async () => {},
         claim: async () => {
           if (!committed || claimed) return Result.ok(undefined);
@@ -111,7 +136,10 @@ describe("agent router reset recovery", () => {
           return Result.ok({ payload: delivery, claimToken: "claim-1" });
         },
         recoverAdmission: async () => Result.ok(undefined),
-        confirm: async () => true,
+        confirm: async () => {
+          confirmations += 1;
+          return true;
+        },
         complete: async () => "missing",
         keys: async () => [],
         readyKeys: async () => [],
@@ -124,9 +152,7 @@ describe("agent router reset recovery", () => {
         },
         purge: async () => {},
       },
-      reporter: silentReporter,
-      recoveryIntervalMs: 0,
-    });
+    );
     const resetCommand = {
       continuationKey,
       reason: "start fresh",
@@ -138,6 +164,7 @@ describe("agent router reset recovery", () => {
     expect(Result.isOk(await router.reset(resetCommand))).toBe(true);
     expect(resetCalls.map(({ resetId: candidate }) => candidate)).toEqual([resetId, resetId]);
     expect(delivered).toBe(1);
-    router.stop();
+    expect(confirmations).toBe(1);
+    await router.stop();
   });
 });

@@ -1,7 +1,6 @@
 /** Materialize an agent-owned scheduled fire through the normal bot turn path. */
 
 import { DiscordAPIError } from "@discordjs/rest";
-import type { ConversationStore } from "@repo/shared/conversations";
 import { DISCORD_GUILD_ID } from "@repo/shared/discord";
 import { Result } from "@repo/shared/result";
 import { continuationKeyFor } from "@repo/shared/wire";
@@ -15,14 +14,19 @@ import type {
 import { RESTJSONErrorCodes } from "discord-api-types/v10";
 import type { Client, Guild, GuildBasedChannel, GuildMember } from "discord.js";
 
-import type { AgentRouter } from "./router.ts";
+import type { AgentError } from "./client.ts";
 
 const PLACEHOLDER = "> Scheduled task is starting…";
 export interface ScheduledFireDeps {
-  readonly agent: AgentRouter;
   readonly client: Client;
-  readonly store: ConversationStore["scheduledFires"];
   readonly guildId?: string;
+}
+
+export interface ScheduledDiscordAdapter {
+  admit(
+    payload: ScheduledFirePayload,
+    submit: (turn: MessagePayload) => Promise<Result<void, AgentError>>,
+  ): Promise<void>;
 }
 
 function channelName(channel: Pick<GuildBasedChannel, "name">): string {
@@ -170,7 +174,7 @@ async function admitOccurrence(
   deps: ScheduledFireDeps,
   guildId: string,
   payload: ScheduledFirePayload,
-  claimToken: string,
+  submit: (turn: MessagePayload) => Promise<Result<void, AgentError>>,
 ): Promise<void> {
   const guild = deps.client.guilds.cache.get(guildId);
   if (guild === undefined || !deps.client.isReady()) {
@@ -234,7 +238,7 @@ async function admitOccurrence(
         ...(payload.traceparent === undefined ? {} : { traceparent: payload.traceparent }),
       };
 
-      const submitted = await deps.agent.submit(turn);
+      const submitted = await submit(turn);
       if (Result.isError(submitted)) throw submitted.error;
     } catch (cause) {
       // The durable store records the technical error. Discord gets a stable,
@@ -257,36 +261,11 @@ async function admitOccurrence(
       throw cause;
     }
   }
-
-  if (!(await deps.store.complete(payload, claimToken))) {
-    throw new Error("scheduled occurrence admission receipt ownership was lost");
-  }
 }
 
-export function createScheduledFireHandler(deps: ScheduledFireDeps) {
+export function createScheduledDiscordAdapter(deps: ScheduledFireDeps): ScheduledDiscordAdapter {
   const guildId = deps.guildId ?? DISCORD_GUILD_ID;
-
   return {
-    submit: async (payload: ScheduledFirePayload): Promise<void> => {
-      const claimToken = crypto.randomUUID();
-      const claim = await deps.store.claim(payload, claimToken);
-      if (claim === "accepted") return;
-      if (claim === "busy") throw new Error("scheduled occurrence is already being admitted");
-
-      try {
-        await admitOccurrence(deps, guildId, payload, claimToken);
-      } catch (cause) {
-        // Release only our forwarding claim. If admission was ambiguous, the
-        // stable Discord nonce and AgentRouter queue identity make retry safe.
-        await deps.store
-          .release(payload.occurrenceId, claimToken)
-          .catch((releaseCause: unknown) =>
-            console.warn("could not release scheduled occurrence claim", releaseCause),
-          );
-        throw cause;
-      }
-    },
+    admit: (payload, submit) => admitOccurrence(deps, guildId, payload, submit),
   };
 }
-
-export type ScheduledFireHandler = ReturnType<typeof createScheduledFireHandler>;

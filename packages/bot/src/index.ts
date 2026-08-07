@@ -30,12 +30,11 @@ import { Events } from "discord.js";
 import { createAgentClient } from "./agent/client.ts";
 import { createHitlInteractionHandler } from "./agent/hitl/interaction.ts";
 import type { HitlInteractionHandler } from "./agent/hitl/interaction.ts";
-import { createRenderCoordinator } from "./agent/render/coordinator.ts";
 import { createDiscordRest } from "./agent/render/discord-rest.ts";
-import { createAgentRouter } from "./agent/router.ts";
-import { createScheduledFireHandler } from "./agent/scheduled.ts";
+import { createScheduledDiscordAdapter } from "./agent/scheduled.ts";
 import { createTurnMessageStore } from "./agent/turn-messages.ts";
 import { buildCommands } from "./commands/index.ts";
+import { createConversationFlow } from "./conversations/flow.ts";
 import { env } from "./env.ts";
 import { buildEventHandlers } from "./events/index.ts";
 import type { SlashCommand } from "./framework/commands.ts";
@@ -67,43 +66,31 @@ function attachInteractionDispatcher(
   });
 }
 
-function createAgentSeam(
+function createConversationSeam(
   client: ReturnType<typeof createClient>,
   redis: RedisClient,
   conversations: ConversationStore,
   commands: readonly SlashCommand[],
 ) {
-  const agentClient = createAgentClient({
-    baseUrl: env.AGENT_URL,
-    secret: env.AGENT_INGRESS_SECRET,
-  });
-  const renderStore = conversations.render;
-  let recoverParked = (): Promise<void> => Promise.resolve();
-  const render = createRenderCoordinator({
+  const flow = createConversationFlow({
+    eve: createAgentClient({
+      baseUrl: env.AGENT_URL,
+      secret: env.AGENT_INGRESS_SECRET,
+    }),
+    store: conversations,
     rest: createDiscordRest(client.rest),
-    store: renderStore,
     turnMessages: createTurnMessageStore(redis),
+    schedules: createScheduledDiscordAdapter({ client }),
     reporter: consoleReporter,
-    onOutcome: () => recoverParked(),
   });
-  const agent = createAgentRouter({
-    client: agentClient,
-    queue: conversations.queue,
-    reporter: consoleReporter,
-    beforeComplete: (payload) => render.flush(payload.dispatchId),
-  });
-  recoverParked = agent.sweep;
-
   const hitl = createHitlInteractionHandler({
-    agent: agentClient,
-    store: conversations.hitl,
-    renders: renderStore,
+    flow,
+    renders: conversations.render,
     reporter: consoleReporter,
     guildId: DISCORD_GUILD_ID,
   });
   attachInteractionDispatcher(client, commands, hitl, redis);
-  onShutdown("agent-router", () => agent.stop());
-  return { agent, render };
+  return flow;
 }
 
 function logStartupSummary(input: {
@@ -149,20 +136,13 @@ async function main(): Promise<void> {
 
   let operationalReady = false;
   const conversations = createConversationStore({ redis });
-  const { agent, render } = createAgentSeam(client, redis, conversations, commands);
-  const scheduledFires = createScheduledFireHandler({
-    client,
-    agent,
-    store: conversations.scheduledFires,
-  });
+  const flow = createConversationSeam(client, redis, conversations, commands);
 
   // Reports ready: false until the gateway connects.
   startServer({
     port: env.PORT,
     client,
-    parked: agent,
-    render,
-    scheduled: scheduledFires,
+    conversations: flow,
     ingressSecret: env.BOT_INGRESS_SECRET,
     operationalReady: () => operationalReady,
   });
@@ -179,14 +159,10 @@ async function main(): Promise<void> {
   }
 
   const ready = connected.value;
-  // Stop new admissions first, then drain paint while the gateway still owns its REST token.
-  onShutdown("agent-renderer", async () => {
-    agent.stop();
-    await render.stop();
-  });
-  await render.start();
+  // Stop new admissions and drain paint while the gateway still owns its REST token.
+  onShutdown("conversation-flow", () => flow.stop());
   const recovered = await Result.tryPromise({
-    try: () => agent.sweep(),
+    try: () => flow.start(),
     catch: (cause) => cause,
   });
   if (Result.isError(recovered)) {
@@ -197,7 +173,7 @@ async function main(): Promise<void> {
 
   const handlers = buildEventHandlers({
     redis,
-    agent,
+    agent: flow,
     reporter: consoleReporter,
     cmsApiKey: env.PAYLOAD_CMS_API_KEY,
     shipApiKey: env.SHIP_API_KEY,

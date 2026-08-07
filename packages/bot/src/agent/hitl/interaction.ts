@@ -22,16 +22,15 @@ import {
 } from "discord.js";
 import type { GuildMember, Interaction } from "discord.js";
 
+import type { ConversationFlow } from "../../conversations/flow.ts";
 import { activeTraceparent } from "../../framework/observability.ts";
-import type { AgentClient } from "../client.ts";
 import { modalCustomId, parseLocator } from "./components.ts";
 import type { HitlLocator } from "./components.ts";
 
 const ANSWER_FIELD_ID = "answer";
 
 export interface HitlInteractionDeps {
-  readonly agent: AgentClient;
-  readonly store: ConversationStore["hitl"];
+  readonly flow: ConversationFlow;
   readonly renders: ConversationStore["render"];
   readonly reporter: Reporter;
   readonly guildId: string;
@@ -272,55 +271,49 @@ async function handleInput(
     return;
   }
 
-  const claimed = await deps.store.claim({
-    dispatchId: locator.dispatchId,
-    continuationKey: loaded.continuationKey,
-    revision: locator.revision,
-    requestIndex: locator.requestIndex,
-    requestId: request.requestId,
-    recipientUserId: request.recipientUserId,
-    interactionId: interaction.id,
+  const traceparent = activeTraceparent();
+  const answered = await deps.flow.answer({
+    claim: {
+      dispatchId: locator.dispatchId,
+      continuationKey: loaded.continuationKey,
+      revision: locator.revision,
+      requestIndex: locator.requestIndex,
+      requestId: request.requestId,
+      recipientUserId: request.recipientUserId,
+      interactionId: interaction.id,
+    },
+    payload: {
+      continuationKey: loaded.continuationKey,
+      interactionId: interaction.id,
+      dispatchId: locator.dispatchId,
+      renderRevision: locator.revision,
+      requestId: request.requestId,
+      authChannelId: loaded.authChannelId,
+      ...(loaded.authThreadId === undefined ? {} : { authThreadId: loaded.authThreadId }),
+      ...(optionId === undefined ? { freeform } : { optionId }),
+      principal: loaded.principal,
+      ...(loaded.approvalRequester === undefined
+        ? {}
+        : { approvalRequester: loaded.approvalRequester }),
+      ...(traceparent === undefined ? {} : { traceparent }),
+    },
   });
-  if (claimed !== "acquired") {
+  if (answered.status === "claimed" || answered.status === "stale") {
     await ephemeral(
       interaction,
-      claimed === "claimed"
+      answered.status === "claimed"
         ? "An answer is already being processed for this request."
         : "This input request is stale or has already been handled.",
     );
     return;
   }
-
-  const traceparent = activeTraceparent();
-  const sent = await deps.agent.sendInteraction({
-    continuationKey: loaded.continuationKey,
-    interactionId: interaction.id,
-    dispatchId: locator.dispatchId,
-    renderRevision: locator.revision,
-    requestId: request.requestId,
-    authChannelId: loaded.authChannelId,
-    ...(loaded.authThreadId === undefined ? {} : { authThreadId: loaded.authThreadId }),
-    ...(optionId === undefined ? { freeform } : { optionId }),
-    principal: loaded.principal,
-    ...(loaded.approvalRequester === undefined
-      ? {}
-      : { approvalRequester: loaded.approvalRequester }),
-    ...(traceparent === undefined ? {} : { traceparent }),
-  });
-  if (Result.isError(sent)) {
-    report(deps, "agent.hitl.forward", sent.error);
+  if (answered.status === "failed") {
+    report(deps, "agent.hitl.forward", answered.error);
     await ephemeral(
       interaction,
       "I couldn't confirm whether that answer was received, so this request is paused safely.",
     );
     return;
-  }
-
-  if (!(await deps.store.complete(locator.dispatchId, locator.revision, interaction.id))) {
-    deps.reporter.captureDefect(new Error("accepted HITL claim could not be completed"), {
-      op: "agent.hitl.complete",
-      attributes: { dispatchId: locator.dispatchId, interactionId: interaction.id },
-    });
   }
   await ephemeral(interaction, "Your answer was sent.");
 }

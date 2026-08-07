@@ -20,7 +20,7 @@ import {
   decodeRenderWakePayload,
   decodeScheduledFirePayload,
 } from "@repo/shared/wire";
-import type { ParkedPayload, ScheduledFirePayload } from "@repo/shared/wire";
+import type { ScheduledFirePayload } from "@repo/shared/wire";
 import type { Client } from "discord.js";
 
 import {
@@ -53,31 +53,18 @@ export function healthOf(
   };
 }
 
-/**
- * What the park callback needs to do its job.
- *
- * An interface rather than the router type so the HTTP layer depends on the one
- * method it calls, and so the health server can be started before the router
- * exists.
- */
-export interface ParkedSink {
-  readonly onParked: (payload: ParkedPayload) => Promise<void>;
-}
-
-export interface RenderSink {
-  readonly kick: (dispatchId: string) => void;
-}
-
-export interface ScheduledFireSink {
-  readonly submit: (payload: ScheduledFirePayload) => Promise<void>;
+export interface ConversationSink {
+  readonly wake: (hint: {
+    readonly dispatchId?: string;
+    readonly continuationKey?: string;
+  }) => void;
+  readonly admitSchedule: (payload: ScheduledFirePayload) => Promise<void>;
 }
 
 export interface ServerDeps {
   readonly port: number;
   readonly client: Client;
-  readonly parked: ParkedSink;
-  readonly render: RenderSink;
-  readonly scheduled: ScheduledFireSink;
+  readonly conversations: ConversationSink;
   /** Bearer the agent must present on internal callbacks. */
   readonly ingressSecret: string;
   /** Final startup latch: recovery, handlers, and schedules must all be attached. */
@@ -153,8 +140,10 @@ async function handleParked(request: Request, deps: ServerDeps): Promise<Respons
     return Response.json({ ok: false, issues: decoded.error.issues }, { status: 400 });
   }
 
-  deps.render.kick(decoded.value.dispatchId);
-  await deps.parked.onParked(decoded.value);
+  deps.conversations.wake({
+    dispatchId: decoded.value.dispatchId,
+    continuationKey: decoded.value.continuationKey,
+  });
   return Response.json({ ok: true });
 }
 
@@ -169,7 +158,7 @@ async function handleRender(request: Request, deps: ServerDeps): Promise<Respons
   if (Result.isError(decoded)) {
     return Response.json({ ok: false, issues: decoded.error.issues }, { status: 400 });
   }
-  deps.render.kick(decoded.value.dispatchId);
+  deps.conversations.wake({ dispatchId: decoded.value.dispatchId });
   return Response.json({ ok: true }, { status: 202 });
 }
 
@@ -186,7 +175,7 @@ async function handleScheduled(request: Request, deps: ServerDeps): Promise<Resp
   }
 
   try {
-    await deps.scheduled.submit(decoded.value);
+    await deps.conversations.admitSchedule(decoded.value);
     return Response.json({ ok: true }, { status: 202 });
   } catch (cause) {
     console.error("scheduled fire could not enter the agent router", cause);

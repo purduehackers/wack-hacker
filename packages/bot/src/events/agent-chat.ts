@@ -19,8 +19,8 @@ import { ChannelType } from "discord.js";
 import type { Message } from "discord.js";
 
 import { fetchLeadIn } from "../agent/lead-in.ts";
-import type { AgentRouter } from "../agent/router.ts";
 import type { TurnMessageReader } from "../agent/turn-messages.ts";
+import type { ConversationFlow } from "../conversations/flow.ts";
 import type { ReactorLike } from "../framework/events.ts";
 import { defineEvent } from "../framework/events.ts";
 import { activeTraceparent } from "../framework/observability.ts";
@@ -119,7 +119,7 @@ function attachmentsOf(message: Message): NonNullable<MessagePayload["attachment
 }
 
 export interface AgentChatDeps {
-  readonly agent: AgentRouter;
+  readonly agent: ConversationFlow;
 }
 
 export interface ConversationDoneDeps extends AgentChatDeps {
@@ -280,7 +280,7 @@ export interface ConversationResetInput {
 
 /** Security decision kept independent from Discord fetching for focused tests. */
 export async function resetConversationForPrincipal(
-  agent: Pick<AgentRouter, "reset">,
+  agent: Pick<ConversationFlow, "reset">,
   input: ConversationResetInput,
 ) {
   if (

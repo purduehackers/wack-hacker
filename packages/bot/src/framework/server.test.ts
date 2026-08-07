@@ -24,26 +24,20 @@ function request(path: string, body: unknown, secret = ingressSecret): Request {
 }
 
 function harness() {
-  const parked: ParkedPayload[] = [];
-  const renders: string[] = [];
+  const wakes: { readonly dispatchId?: string; readonly continuationKey?: string }[] = [];
   const scheduled: ScheduledFirePayload[] = [];
   const deps: ServerDeps = {
     port: 0,
     client,
-    parked: {
-      onParked: async (payload) => {
-        parked.push(payload);
-      },
-    },
-    render: { kick: (dispatchId) => renders.push(dispatchId) },
-    scheduled: {
-      submit: async (payload) => {
+    conversations: {
+      wake: (hint) => wakes.push(hint),
+      admitSchedule: async (payload) => {
         scheduled.push(payload);
       },
     },
     ingressSecret,
   };
-  return { deps, parked, renders, scheduled };
+  return { deps, wakes, scheduled };
 }
 
 test("internal parked callback validates, wakes render, and preserves the semantic payload", async () => {
@@ -59,8 +53,9 @@ test("internal parked callback validates, wakes render, and preserves the semant
   const response = await handleRequest(request("/internal/agent/parked", payload), state.deps);
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({ ok: true });
-  expect(state.renders).toEqual([payload.dispatchId]);
-  expect(state.parked).toEqual([payload]);
+  expect(state.wakes).toEqual([
+    { dispatchId: payload.dispatchId, continuationKey: payload.continuationKey },
+  ]);
 });
 
 test("internal render callback rejects bad auth and malformed wakeups before dispatch", async () => {
@@ -80,7 +75,7 @@ test("internal render callback rejects bad auth and malformed wakeups before dis
     state.deps,
   );
   expect(malformed.status).toBe(400);
-  expect(state.renders).toEqual([]);
+  expect(state.wakes).toEqual([]);
 });
 
 test("internal scheduled callback accepts the strict scheduled occurrence", async () => {

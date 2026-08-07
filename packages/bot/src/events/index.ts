@@ -14,8 +14,8 @@
 import type { RedisClient } from "@repo/shared/redis";
 import type { Reporter } from "@repo/shared/result/observe";
 
-import type { AgentRouter } from "../agent/router.ts";
 import { createTurnMessageStore } from "../agent/turn-messages.ts";
+import type { ConversationFlow } from "../conversations/flow.ts";
 import type { AnyEventHandler } from "../framework/events.ts";
 import { createCmsClient } from "../integrations/cms.ts";
 import { createThreadSlugStore } from "../integrations/hack-night.ts";
@@ -31,7 +31,7 @@ import { createTranscriber, transcribeVoiceMessage } from "./transcribe-voice-me
 
 export interface EventDeps {
   readonly redis: RedisClient;
-  readonly agent: AgentRouter;
+  readonly agent: ConversationFlow;
   readonly reporter: Reporter;
   readonly cmsApiKey: string;
   readonly shipApiKey: string;
