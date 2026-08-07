@@ -1,35 +1,68 @@
-# Simplification plan
+# Simplification implementation record
 
-> Status: Groups A (Eve-native skills) and B (conversation ownership) are
-> approved, implemented, and locally validated. Hosted sandbox reattachment
-> remains a Group A deployment cutover gate. Groups C–E remain proposed and
-> unapproved; their wire-contract, public-type, abstraction, and package-boundary
-> changes still require approval.
+> Status: Groups A–E are approved, implemented, and locally validated through
+> integration commit `2ded01a`. The hosted Eve `defaultBackend()` reattachment
+> check remains a deployment cutover canary, not a code blocker.
 
-## Audit baseline
+## Audit baseline and measured result
 
-The original audit at `2cec01c` covered 421 tracked TypeScript files and 52,853
-lines with 168 passing tests. After Groups A and B, the repository has 434
-tracked TypeScript files and 54,680 lines; 187 tests pass (agents 120, bot 38,
-shared 20, supervisor 9). The real-Redis suite separately runs 10 contract tests
-with 64 assertions against production Lua.
-The largest accidental systems and high-risk gaps are:
+The initial audit at `2cec01c` covered **421 tracked TypeScript files, 52,853
+lines, and 168 passing tests**. These values are retained as the baseline rather
+than being rewritten to match later work.
 
-| Area                   | Current evidence                                                                                                                                                                                           | Finding                                                                                                                               |
+### Initial evidence
+
+The following table records what the initial audit found at `2cec01c`; it is not
+a description of the integrated implementation.
+
+| Area                   | Initial evidence at `2cec01c`                                                                                                                                                                              | Initial finding                                                                                                                       |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Skills                 | 115 `SKILL.md` sources (3,381 lines), 11 generated registries (2,436 TypeScript lines), 11 custom skill runtimes (1,033 lines), 11 custom catalogs (1,115 lines), and 276 lines of compiler/formatter code | Wack Hacker rebuilds Eve's skill discovery, `load_skill`, activation state, and history tracking                                      |
-| Domain tool policy     | 11 `lib/runtime.ts` files total 2,773 lines and are 79–98% structurally similar                                                                                                                            | Authorization, approval, audit, and execution policy are copied instead of shared once                                                |
-| Discord commands       | `handler.ts` is 1,234 lines; `record()` is called about 44 times, `records()` 18 times, and `compact()` 20 times                                                                                           | A loose `Record<string, unknown>` layer discards discord.js's exported contracts and turns malformed responses into partial successes |
-| Conversation lifecycle | Queue, admission, render, HITL, authorization, reset, and scheduled-fire Lua are owned by both runtimes across at least eight files                                                                        | One persisted aggregate has multiple private key builders, implicit record shapes, and transition owners                              |
-| Tests                  | Production delivery/render Lua is imitated by fakes; `renderer.ts` and the 872-line Eve Discord channel have no end-to-end lifecycle characterization                                                      | The suite is green but cannot safely prove a state-machine consolidation                                                              |
-| Manual types           | Several local interfaces exactly restate Eve, Sentry, fetch, Upstash, Drizzle, and Zod-derived types                                                                                                       | Small, mechanical drift risks remain after the large architectural duplication                                                        |
+| Skills                 | 115 `SKILL.md` sources (3,381 lines), 11 generated registries (2,436 TypeScript lines), 11 custom skill runtimes (1,033 lines), 11 custom catalogs (1,115 lines), and 276 lines of compiler/formatter code | Wack Hacker rebuilt Eve's skill discovery, `load_skill`, activation state, and history tracking                                       |
+| Domain tool policy     | 11 `lib/runtime.ts` files totaled 2,773 lines and were 79–98% structurally similar                                                                                                                         | Authorization, approval, audit, and execution policy were copied instead of shared once                                               |
+| Discord commands       | `handler.ts` was 1,234 lines; `record()` was called about 44 times, `records()` 18 times, and `compact()` 20 times                                                                                         | A loose `Record<string, unknown>` layer discarded discord.js's exported contracts and turned malformed responses into partial success |
+| Conversation lifecycle | Queue, admission, render, HITL, authorization, reset, and scheduled-fire Lua were owned by both runtimes across at least eight files                                                                       | One persisted aggregate had multiple private key builders, implicit record shapes, and transition owners                              |
+| Tests                  | Production delivery/render Lua was imitated by fakes; `renderer.ts` and the 872-line Eve Discord channel had no end-to-end lifecycle characterization                                                      | The green suite could not safely prove a state-machine consolidation                                                                  |
+| Manual types           | Several local interfaces exactly restated Eve, Sentry, fetch, Upstash, Drizzle, and Zod-derived types                                                                                                      | Small, mechanical drift risks remained after the large architectural duplication                                                      |
 
-The size of a file is not itself evidence that it should be split. The shell
-policy, renderer checkpoints, schedule leases, supervisor fencing, and strict
-JSON guard are branch-heavy because they encode real safety or durability
-rules. They remain unless a characterization test proves a smaller equivalent.
+The size of a file was not treated as evidence that it should be split. The
+shell policy, renderer checkpoints, schedule leases, supervisor fencing, and
+strict JSON guard are branch-heavy because they encode real safety or durability
+rules. They remain unless characterization proves a smaller equivalent.
 
-## Behavior that must not change
+### Current measurements
+
+At `2ded01a`, `git ls-files '*.ts' '*.tsx'` contains **427 tracked TypeScript
+files and 52,859 lines**. Direct package test runs pass **267 tests**:
+
+| Package    | Passing tests |
+| ---------- | ------------: |
+| agents     |           153 |
+| bot        |            52 |
+| shared     |            53 |
+| supervisor |             9 |
+| **Total**  |       **267** |
+
+The real-Redis contract suite separately remains at **10 tests / 64 assertions**
+against production Lua. The package totals above come from each package's Bun
+`test` script on the integrated branch; they are not inferred from old totals.
+
+For a production-only comparison, count tracked `.ts`/`.tsx` blobs under
+`packages/`, excluding `*.test.*`, `*.spec.*`, test directories, and `scripts/`.
+That measure fell from **47,351 lines at `2cec01c` to 43,991 lines at `2ded01a`**:
+a measured reduction of **3,360 production TypeScript lines (7.1%)**. Group A
+also deleted **3,381 lines of duplicate skill Markdown** from
+`packages/agents/skill-sources/`.
+
+The initial 6,000–8,000 production-TypeScript estimate was not met and is not a
+current claim. Tests and contract schemas grew, leaving repository-wide tracked
+TypeScript almost flat while production TypeScript became smaller. The measured
+result, plus removal of the duplicate Markdown skill system, is the honest size
+outcome; the ownership and fail-closed improvements are the larger architectural
+result.
+
+## Security and durability invariants
+
+The implementation preserves these review constraints:
 
 1. The bot is the only Discord gateway and REST principal. Eve produces semantic
    desired state; it never materializes Discord messages.
@@ -49,15 +82,14 @@ rules. They remain unless a characterization test proves a smaller equivalent.
 8. Skill instructions never grant execution authority. Tool visibility,
    approval, and execution revalidation are independent.
 9. Existing wire route names, Redis keys/TTLs, Discord custom IDs, scheduled
-   occurrence IDs, and applied SQL migrations remain compatible during the
-   first consolidation.
+   occurrence IDs, and applied SQL migrations remain compatible.
 10. Eve tool/state outputs remain strict plain JSON. The existing guard against
     class instances, cycles, accessors, `Result`, `Date`, nonfinite numbers,
     `-0`, sparse arrays, and unsafe properties is not replaced by `z.json()`.
 
-## Target data flow
+## Current data flow
 
-`docs/architecture.md` is the target diagram. The important dependency rule is:
+`docs/architecture.md` is the current diagram. The important dependency rule is:
 
 ```text
 Discord adapters -> bot ConversationFlow -> shared ConversationStore -> Redis
@@ -67,402 +99,270 @@ Discord adapters -> bot ConversationFlow -> shared ConversationStore -> Redis
 ```
 
 The bot owns the single reconciler. The bot and Eve channel use the same store
-API because both must participate in admission and desired-state publication.
-HTTP callbacks only wake the reconciler. Redis keys, persisted schemas, and Lua
+API because both participate in admission and desired-state publication. HTTP
+callbacks only wake the reconciler. Redis keys, persisted schemas, and Lua
 scripts are not reimplemented by either runtime.
 
-## Refactor sequence
+## Implementation record
 
-### 0. Add behavioral proof before deletion
+### Phase 0 — behavioral proof before deletion
 
-This slice changes tests and test infrastructure, not production behavior.
-Keep tests beside the owning code rather than creating another workspace.
+Phase 0 added characterization rather than changing architecture. Tests live
+beside the owning code and move with it rather than forming another workspace.
+The real-Redis suite runs the production Upstash client and Lua through pinned
+Redis 6.2 and `serverless-redis-http` containers. It covers queue dedupe, FIFO,
+lease takeover, independent keys, reset cutover, lost-response admission,
+ambiguous-admission recovery publication, one-winner HITL, interaction-receipt
+duplicate and conflict fencing, reset staleness, lost render callbacks, render
+claim/renew/release/discard, authorization indexing, scheduled-fire
+claim/complete/release, and a two-turn streaming/terminal/restart flow with a
+stateful Discord fake.
 
-**Add**
+All 27 production conversation Lua scripts execute in that suite. The restart
+case proves queue completion stays pending until the terminal outcome exists.
+The capability artifact freezes each skill's policy role, description, criteria,
+tool membership, and normalized instruction digest. A table-driven policy test
+covers anonymous, public, organizer, and admin discovery and loading across all
+11 domains, including exact `Unauthenticated`, `Forbidden`, and `NotFound`
+precedence. Discord fixtures pin channel projection and writes, managed-guild
+confinement, webhook credential omission, typed rate-limit mapping, malformed
+response failure, and exact operation parity.
 
-- Contract tests beside today's queue, coordination, render-store, and HITL
-  modules that execute their public APIs and actual Lua through an
-  Upstash-compatible local Redis HTTP emulator. Move these tests with the code
-  when `ConversationStore` lands.
-- `packages/bot/src/agent/conversation.contract.test.ts`: compose today's queue,
-  router, coordinator, and a stateful fake Discord message store with
-  edit/create/delete, enforced nonces, restart, and injected faults. Rename it
-  with `ConversationFlow` later.
-- Request-level tests for `packages/bot/src/framework/server.ts` and
-  `packages/agents/agent/channels/discord.ts`.
-- Focused contracts for native skills, Discord commands, HITL, schedules, and
-  supervisor fencing as the relevant slice starts.
+The initial golden run exposed a real coordinator lifetime bug:
+`applyLatest` returned a pending traced promise from inside `try/finally`, so the
+render lease was released before its checkpoint. Awaiting the traced operation
+inside the lease scope restored the stated behavior. This was a narrow
+correctness repair supported by the characterization, not an architecture
+change.
 
-**Minimum golden scenario**
+### Group A — Eve-native skills — implemented
 
-Enqueue two turns, admit the first, publish streaming state, atomically settle
-terminal state, restart the bot at each checkpoint, paint Discord, record the
-terminal outcome, and prove only then that the second turn can be claimed.
-Repeat with a lost admission response and a lost parked callback.
+Each integration subagent now owns a `skills/catalog.ts` that directly exports
+Eve `defineDynamic` from `eve/skills`. Its `turn.started` resolver returns the
+role-permitted map of `defineSkill` values. Eve advertises the skills, owns
+`load_skill`, and supplies loaded-turn context. A separate `step.started` tool
+resolver derives visibility from current role and descriptor policy; it never
+reads model history or `load_skill` output. Approval and execution revalidation
+remain independent, and missing provider configuration remains a typed
+execution-time failure.
 
-The contract matrix must also cover duplicate ingress, independent continuation
-keys, lease expiry, admission ambiguity, render revision collision, stale
-outcomes, reset cutover, two-click HITL races, current-role downgrade, and one
-scheduled occurrence converging to one visible result. Once, deliberately break
-an admission fence, role check, and paint barrier to prove the new tests fail.
-Lua-emulating fakes can be deleted only after the real-script tests overlap.
+The implementation deleted:
 
-#### Phase 0 checkpoint
+- `packages/agents/skill-sources/**` — 3,381 duplicate Markdown lines
+- the skill manifest compiler and formatter scripts
+- all 11 generated skill registries and custom skill runtimes
+- custom `load_skill` tools, activation strings, loaded-skill history parsing,
+  and duplicate catalog resolvers
+- compile/format hooks that existed only for the generated tree
 
-The first real-Redis suite now runs the production Upstash client and Lua through
-pinned Redis 6.2 and `serverless-redis-http` containers. It covers queue dedupe,
-FIFO, lease takeover, independent keys, reset cutover, lost-response admission,
-ambiguous-admission recovery publication, one-winner HITL,
-interaction-receipt duplicate and conflict fencing, reset staleness, lost render
-callbacks, render claim/renew/release/discard, authorization indexing,
-scheduled-fire claim/complete/release, and a two-turn
-streaming/terminal/restart flow with a stateful Discord fake. All 27 production
-conversation Lua scripts now execute in the real-Redis suite; the restart case
-also proves queue completion stays pending until the terminal outcome exists. The
-feature-parity artifact now also freezes each skill's policy role, description,
-criteria, tool membership, and normalized instruction digest, independent of
-the activation protocol. A table-driven policy test now covers anonymous,
-public, organizer, and admin discovery and loading across all eleven domains,
-including exact `Unauthenticated`, `Forbidden`, and `NotFound` precedence. Bot
-command fixtures now also pin nominal channel projection and writes,
-managed-guild confinement, webhook credential omission, and typed rate-limit
-mapping without blessing malformed partial responses. The initial golden run
-exposed a real coordinator
-lifetime bug: `applyLatest` returned a pending traced Promise from inside
-`try/finally`, so `finally`
-released the render lease before its checkpoint. Awaiting the traced operation
-inside the lease scope restored the stated behavior; the golden suite now
-passes and runs in CI. This was a narrow correctness repair, not an approved
-architecture refactor. The planned Phase 0 characterization is now complete;
-add further fixtures only when an approved migration exposes a specific
-uncovered ambiguity.
+The normalized feature artifact remains equal across 11 domains, 104 skills,
+659 tools, and 13 subagents, including the code and docs auxiliaries. Root skill
+documents were reviewed against subagent instructions before the duplicate copy
+was removed.
 
-### 1. Replace the custom skill system with Eve-native dynamic skills
+A compiled Eve 0.29.5 canary has proven local `defaultBackend()` behavior with an
+actual Linear skill: native `load_skill` returned the expected Markdown on two
+turns of one preserved session, and a later resolver result of `{}` removed it.
+Repository `eve info` and `eve build` report the expected skill and tool resolver
+for every integration subagent. Hosted sandbox reattachment cannot be proven by
+a repository test; it remains the deployment canary. Failure stops cutover and
+does not justify restoring a parallel loader.
 
-This is the first production slice because it removes the clearest parallel
-framework and does not touch the conversation state machine.
+#### Accepted eval tradeoff
 
-**Target**
-
-```text
-packages/agents/agent/subagents/<domain>/
-├── instructions.md
-├── skills/catalog.ts   # defineDynamic + defineSkill
-└── tools/catalog.ts    # independent step.started tool resolver
-```
-
-Each `skills/catalog.ts` directly exports `defineDynamic` from `eve/skills` with
-a `turn.started` resolver. It returns the role-permitted map of `defineSkill`
-values. Eve advertises them and owns `load_skill` and loaded-turn context. A
-migration canary must prove the installed Eve runtime gives each integration
-subagent a usable sandbox context for dynamic-skill materialization and reload.
-If that canary fails, stop and resolve the Eve-native lifecycle; do not add a
-second loader. An isolated Eve 0.29.5 eval has already proven the framework
-path with `just-bash@3.0.0`: `defineDynamic` materialized a `defineSkill`
-package and sibling file, native `load_skill({ skill: "probe" })` returned the
-exact Markdown, and the mock-model turn passed all three lifecycle gates. This
-proves local API/backend feasibility, not deployed durability. `just-bash` is
-an optional peer backed by an app-local cache, so keep Eve's `defaultBackend()`
-for deployment unless a production canary also proves a pinned just-bash cache
-can be written and restored across turns.
-
-The cutover canary also passed against the actual rendered Linear `issues`
-definition through a compiled `defineDynamic` module with no authored sandbox.
-Eve selected `defaultBackend()`'s local Docker backend: native `load_skill`
-returned the expected Markdown on two turns of one preserved session, then a
-resolver result of `{}` removed the package and the same forged name failed with
-`No skill named "issues".` All four eval gates passed. Repository `eve info` and
-`eve build` also report zero diagnostics and compile one `turn.started` skill
-resolver plus one `step.started` tool resolver for each of the eleven integration
-subagents. This proves compiled discovery, local default-backend materialization,
-follow-up reload, and fail-closed removal. It still does not prove hosted sandbox
-reattachment, which remains a deployment canary rather than a reason to restore
-the deleted loader.
-
-The tool catalog resolves separately on `step.started` from the current role and
-the existing tool descriptor policy. It does not read model messages or
-`load_skill` results. All permitted tools may therefore be visible before a
-skill is loaded; approval and execution revalidation remain unchanged.
-Credential/configuration readiness remains an execution-time typed failure, as
-it was before this cleanup.
-
-This intentionally trades the custom activation protocol for a larger
+Group A intentionally trades the custom activation protocol for a larger
 library-native tool catalog. A source-level JSON Schema estimate for an
-organizer measured GitHub at 109 visible tools / 64,642 serialized bytes
-(current base: 4 / 2,672; largest base-plus-one-skill: 16 / 9,872) and Vercel at
-166 / 60,471 bytes (current base: 8 / 3,966; largest: 42 / 15,697). Provider
-tokenization will differ, but the direction is material. Approving Group A
-therefore accepts policy-visible tools being present before `load_skill`, as
-Eve documents, in exchange for deleting activation markers, history parsing,
-and the parallel loader. If that prompt/tool-selection cost is unacceptable,
-stop Group A and seek separate approval for native Eve connections or a
-subagent partition; do not recreate a custom loader by accident.
+organizer measured GitHub at 109 visible tools / 64,642 serialized bytes (old
+base: 4 / 2,672; old largest base-plus-one-skill: 16 / 9,872) and Vercel at 166 /
+60,471 bytes (old base: 8 / 3,966; old largest: 42 / 15,697). Provider
+tokenization differs, but the direction is material. Approval accepted
+policy-visible tools being present before `load_skill`, as Eve documents, in
+exchange for deleting activation markers, history parsing, and the parallel
+loader. If this prompt/tool-selection cost becomes unacceptable, the next step
+is a separately approved native Eve connection or subagent partition, not a new
+custom loader.
 
-**Delete after parity passes**
+### Group B — conversation ownership — implemented
 
-- `packages/agents/skill-sources/**`
-- `packages/agents/scripts/skill-manifest.ts`
-- `packages/agents/scripts/compile-skills.ts`
-- `packages/agents/scripts/format-generated-skills.ts`
-- all 11 `subagents/<domain>/lib/skills.generated.ts`
-- all 11 `subagents/<domain>/lib/skills.ts`
-- all custom `load_skill` definitions, activation strings, loaded-skill message
-  parsing, and duplicate `turn.started` catalog resolvers
-- compile/format hooks whose only purpose is the generated skill tree
+Group B changed ownership while preserving keys, values, TTLs, wire payloads,
+component IDs, and terminal strings. Redis remains the durable coordination
+boundary.
 
-The 104 loadable skill names, descriptions, instruction bodies, role minima,
-and reviewed 659 tool names remain exact. Before deletion, the version-2 parity
-artifact was normalized to the version-3 shape and compared equal across all
-11 domains, 104 skills, 659 tools, 13 subagents, and both auxiliary subagents;
-the new check also rejects registry tools absent from the base/skill union. The
-11 root skill documents were reviewed against subagent instructions, and useful
-terminology and safety details were retained in `instructions.md` before the
-second copy was deleted. `check-feature-parity.ts` now inspects native catalogs
-and registries rather than regexing source format.
-
-**Validation**
-
-- Public/Organizer/Admin discovery table for every subagent
-- native `load_skill` returns the expected instructions
-- no cross-subagent skill leakage
-- repeated loads are Eve-idempotent
-- tool visibility is role/policy based, not load-history based
-- denied skill/tool names are absent and direct execution still fails closed
-- `eve build`, `eve info`, serialization invariant, and unchanged parity set
-
-**Estimated reduction:** about 2,000–3,000 production TypeScript lines plus the
-3,381-line duplicate Markdown source tree. The architectural reduction is more
-important than the exact line count.
-
-### 2. Centralize the conversation aggregate and reconciler — implemented
-
-Group B changed ownership while preserving the existing keys, values, TTLs,
-wire payloads, component IDs, and terminal strings. Redis remains the durable
-coordination boundary.
-
-**Implemented**
+Implemented boundaries:
 
 - Persisted shapes used only to construct Lua arguments remain local to their
-  transition modules. The stored render projection keeps its real read-time Zod
-  validation in `render.ts`; aspirational unused schema exports are not retained.
-- `packages/shared/src/conversations/store.ts`: the only exported Redis-facing
-  conversation API. Internal files may separate Lua by aggregate, but callers
-  see one `ConversationStore`.
-- `packages/bot/src/conversations/flow.ts`: the only bot-side reconciler and the
-  commands `submit`, `answer`, `reset`, `admitSchedule`, `wake`, `start`,
-  `sweep`, and `stop`.
-- Existing focused adapters remain in `agent/client.ts`, `agent/render/`,
+  transition modules. `render.ts` keeps the real read-time Zod validation for
+  stored render projections; unused aspirational schema exports were removed.
+- `packages/shared/src/conversations/store.ts` is the only exported Redis-facing
+  conversation API. Internal files separate Lua by aggregate, but callers see
+  one `ConversationStore`.
+- `packages/bot/src/conversations/flow.ts` is the only bot-side reconciler. It
+  owns `submit`, `answer`, `reset`, `admitSchedule`, `wake`, `start`, `sweep`, and
+  `stop`.
+- Focused adapters remain in `agent/client.ts`, `agent/render/`,
   `agent/hitl/interaction.ts`, and `agent/scheduled.ts`; no pass-through
-  `conversations/{discord,eve}.ts` wrappers were added.
+  `conversations/{discord,eve}.ts` wrappers were introduced.
 
-The implemented store deliberately retains `redis.eval` and the production Lua
-bodies. Adopting `Redis.createScript<TResult>()`, changing decoders, or
-normalizing TTLs would be a separate behavior-sensitive change. Atomic Lua was
-not replaced with pipelines or transactions.
+Transition ownership moved out of the old bot queue/render/HITL stores and Eve
+coordination/render/receipt implementations. Separate Eve admission confirmation
+and bot queue acknowledgement remain because they fence different crash windows.
+The production Lua bodies and `redis.eval` remain; replacing them with
+`createScript`, pipelines, transactions, or normalized TTLs would be a separate
+behavior-sensitive change.
 
-**Transition ownership moved out of**
-
-- `packages/bot/src/agent/queue.ts`
-- `packages/agents/agent/lib/discord/coordination.ts`
-- `packages/agents/agent/lib/discord/render-intent.ts`
-- `packages/bot/src/agent/render/store.ts`
-- `packages/bot/src/agent/hitl/store.ts`
-- `packages/agents/agent/lib/discord/interaction-receipt.ts`
-- authorization scripts in `packages/agents/agent/channels/discord.ts`
-- scheduled-fire scripts in `packages/bot/src/agent/scheduled.ts`
-
-The implementation preserves separate Eve admission confirmation and bot queue
-acknowledgement because they fence different crash windows. It removes duplicate
-script/key ownership, not an acknowledgement merely because two functions have
-similar names.
-
-`ConversationFlow` replaces `createAgentSeam`'s mutable `recoverParked` callback
+`ConversationFlow` replaced `createAgentSeam`'s mutable `recoverParked` callback
 cycle and the in-memory terminal waiter. Wakeups enqueue reconciliation and
-return promptly. Reconciliation claims the newest desired render, materializes
-it, records `applied|discarded`, and advances exactly one queued turn. The
-queue-completion Lua transition itself checks the terminal outcome instead of
-relying only on caller ordering.
+return promptly. Reconciliation claims desired render state, materializes it,
+records `applied|discarded`, and advances one queued turn. Queue-completion Lua
+checks the terminal outcome rather than trusting caller ordering.
 
-**Keep explicit**
+The Group B implementation moved or added 2,607 production TypeScript lines and
+deleted 2,453 (net +154). The store intentionally retains branch-heavy
+durability logic; this group's result is ownership centralization, not line-count
+deletion.
 
-- renderer projection/checkpoint algorithm and exact terminal error strings
-- recovery-required behavior and authorized reset remediation
-- current-role resolution and second-party execution authority
-- callbacks as optional wakeups plus startup/periodic ready-set recovery
+### Group C — strict Discord command boundary — implemented
 
-**Validation**
+The approved implementation is deliberately narrower than the original manager
+proposal. The bot passes a
+`DiscordRest = Pick<Client["rest"], "delete" | "get" | "patch" | "post" | "put">`
+to one readable, exhaustive switch. It uses discord.js `Routes` and exported v10
+REST input/result types. Small `discordObject`/`discordArray` guards fail closed
+at raw REST boundaries, while strict project-owned Zod schemas validate every
+semantic output before it crosses processes. We intentionally did **not** adopt
+discord.js managers or cache semantics: they do not cover all RPC endpoints and
+would change freshness/identity behavior without making this boundary simpler.
 
-All phase-0 contracts, crash-point rendering, malformed persisted records,
-reset/HITL races, startup recovery, and existing exact-error assertions. No key,
-TTL, wire payload, or custom-ID change is allowed in this slice.
+`DISCORD_COMMAND_INPUT_SCHEMAS`, `DISCORD_COMMAND_OUTPUT_SCHEMAS`, and the agent's
+`DISCORD_TOOLS` registry have exact **68-key parity**. The output registry
+`satisfies Record<DiscordCommandOperation, z.ZodType>`, the tool registry is
+mapped by the same operation union, and the executor ends with
+`command satisfies never`. Requests use a strict generated discriminated union;
+response envelopes are strict; the agent decodes both the envelope and the
+operation-specific success data. Malformed lists, objects, nested projections,
+or successful envelopes now become typed `UpstreamError`/502 failures instead
+of `{}`, `[]`, or partial successes.
 
-**Implemented result:** 2,607 production TypeScript lines were added or moved
-and 2,453 deleted (net +154); tests grew. The store intentionally keeps the Lua
-and branch-heavy durability logic, so the result is ownership centralization,
-not aggressive line-count deletion. The old router, render coordinator,
-in-memory terminal waiter, mutable callback cycle, and runtime-owned Redis
-implementations were deleted.
+The implementation also fixed behavior exposed by strict fixtures:
 
-### 3. Make the Discord command boundary typed and discord.js-native
+- archived thread listing validates the parent, covers applicable public,
+  private, and joined-private routes, follows each route's timestamp or
+  snowflake cursor, rejects missing/nonadvancing cursors, caps pages, and
+  deduplicates IDs
+- sticker creation accepts PNG, APNG, GIF, and Lottie JSON with correct upload
+  metadata while retaining the 512 KiB bound
+- sticker edits preserve omitted versus explicit `null` descriptions
+- role-position operations summarize Discord's position response rather than a
+  stale pre-move role
 
-**Current problem**
+Validation covers all 68 canonical inputs, strict extra-key rejection, REST
+method/path/body/query projection, representative valid result families,
+malformed upstream failures, JSON-safe output, envelope decoding, and exact
+contract/tool/switch parity.
 
-`packages/bot/src/agent/discord-commands/handler.ts` converts every REST result
-to `Readonly<Record<string, unknown>>`. `record()` returns `{}` and `records()`
-returns `[]` on malformed data, so invalid Discord responses can cross the wire
-as successful partial summaries.
+### Group D — shared domain policy runtime — implemented
 
-**Change**
+All 11 integration domains now use shared agent-local policy modules:
 
-1. Pass the ready `Client<true>` (or managed `Guild`) to the executor instead of
-   a hand-narrowed REST-only object.
-2. Use discord.js managers/entities and guards for channels, members, roles,
-   events, messages, and webhooks where they fit. Use `Routes` for remaining
-   raw endpoints.
-3. For raw REST, assert once at the endpoint boundary to the matching type that
-   discord.js re-exports from `discord-api-types/v10`, such as
-   `RESTGetAPIChannelResult`, `RESTGetAPIGuildMemberResult`, and the matching
-   list results. Do not recreate those interfaces.
-4. Extend the project-owned Discord command schema table with strict output
-   schemas. Infer response summary types from Zod. Validate bot output and agent
-   decode; malformed upstream data becomes a typed `UpstreamError`, never an
-   empty success.
-5. Keep one readable exhaustive operation dispatch. Do not create 68 tiny files
-   or pass-through handler factories merely to remove a switch.
-6. Generate/derive operation set equality from the shared schema keys so the 68
-   wire operations, tool names, and executor cases cannot drift.
+- `domain-tools.ts` defines `DomainToolSpec`, access descriptors, registry/name/
+  input/output relationships, and the shared authoring helper
+- `domain-runtime.ts` owns visibility, approval, second-party authority,
+  execution-time current-role recheck, provider readiness, error mapping, audit
+  order, output projection, and strict serialization
+- `stores.ts` owns lazy approval, budget, and audit stores
+- `usage-hook.ts` and `domain-audit-hook.ts` share hook behavior while thin
+  per-domain exports remain for Eve filesystem discovery
+- `provider-redaction.ts` centralizes GitHub/Sentry/Vercel secret, error, audit,
+  and output redaction
 
-**Delete**
+Per-domain `runtime.ts` files are now narrow adapter objects instead of copied
+policy engines. The 11 descriptor modules and 11 per-domain `define-tool.ts`
+identity wrappers were deleted. Provider clients, Zod inputs, managed budgets,
+immutable audit rows, current-role enforcement, and provider-specific error
+mapping remain explicit.
 
-`unknownRecordSchema`, `record`, `records`, most `compact` calls, external-shape
-string indexing, and any locally recreated REST result interfaces.
+Every Eve tool catalog still calls `defineTool` **directly inside** its dynamic
+resolver and supplies an inline `execute` function that delegates to the shared
+runtime. This source shape is a native Eve constraint: hiding `defineTool` behind
+a factory prevents Eve replay reconstruction. The compiled native-tool lifecycle
+canary exercises two turns and protects that constraint.
 
-**Keep**
+Requested-action audit ownership remains singular. GitHub, Sentry, and Vercel
+requested actions are redacted before persistence, matching their execution
+audit/output/error treatment; the post-merge redaction regression was repaired
+and characterized. Feature parity is exact at **11 native domains / 659 tools /
+104 skills / 13 subagents**.
 
-managed-guild checks, webhook secret omission, media download bounds, error
-classification, semantic project summaries, and the bot-only REST principal.
+### Group E — approved mechanical cleanup — implemented
 
-**Validation**
+Group E was intentionally limited to mechanical changes that had direct owner or
+runtime evidence:
 
-All 68 canonical inputs, strict extra-key rejection, REST method/path/body/query
-projection, representative valid response families, malformed-response typed
-failure, JSON-safe output, and exact set equality across contracts/tools/cases.
+- `AuthAttributes` and test attributes derive from
+  `SessionAuthContext["attributes"]`
+- `MetricSink` derives from
+  `Pick<typeof Sentry.metrics, "count" | "distribution">`
+- Linear issue relations derive from `z.output<typeof issueRelationSchema>` and
+  shopping insert input derives from Drizzle's `$inferInsert`
+- duplicate agent JSON value declarations now use the existing strict
+  serialization owner
+- bot commands use discord.js `SlashCommandBuilder` directly; `defineCommand`,
+  `commandName`, `toRegistrationBody`, `defineSchedule`, and unused
+  `observeWith` identity helpers were removed in favor of direct values with
+  `satisfies`
+- shared `healthReportSchema`/`readyHealthReportSchema` now serve the bot,
+  supervisor, and release checks
+- shared `activeBotGenerationSchema`, decoder, Redis reader, and constants now
+  serve the supervisor, Eve bot-endpoint resolution, release/operations scripts,
+  and `sandbox-admin.ts`
+- selected schedule view and claim rows now pass through strict Zod schemas that
+  reject extra columns, invalid enums/counters/role JSON, and inconsistent
+  once/recurring nullability before normalization
 
-This phase may be line-count neutral because strict project-owned output schemas
-replace loose code. Its success metric is removal of unknown-record branching
-and compile-time drift, not raw deletion.
+The schedule change did not alter lease SQL, task semantics, or applied
+migrations.
 
-### 4. Collapse repeated domain policy/tool scaffolding
+## Deliberately unchanged or deferred
 
-Consolidate behavior, not domain API clients.
+These older ideas were not part of the approved mechanical Group E result:
 
-**Shared agent-local code**
+- **`AgentFetch`:** the named injected alias in `packages/bot/src/agent/client.ts`
+  remains. It already derives parameters and return type from
+  `globalThis.fetch`; replacing the useful test seam with an exact type alias was
+  not proven simpler.
+- **`AsyncDisposableStack`:** the bot keeps its explicit reverse-order shutdown
+  registry, signal grace period, error isolation, and idempotent drain. A
+  disposal-stack rewrite did not prove those lifecycle policies more clearly.
+- **Bun route table:** `framework/server.ts` keeps the injected `fetch` dispatcher.
+  Static `routes` did not prove simpler with the current request-level tests and
+  dynamic dependencies.
+- **Migrations and lease SQL:** no migration was added, rewritten, or reordered.
+  Raw libSQL conditional claims remain; Group E tightened only the row decoder.
+- **Discord managers/cache:** Group C intentionally kept the narrow REST seam and
+  did not introduce cache-dependent semantics.
+- **Conversation Lua/Redis API:** Group B did not replace production scripts with
+  `createScript`, transactions, or pipelines, and did not change keys or TTLs.
+- **Better Result seam:** the project-owned import seam and `fromNullable` helper
+  remain; a dependency churn across workspaces was not justified.
+- **Official Eve OpenAPI/MCP connections:** these remain a separately approved
+  evaluation because they must preserve role, budget, approval, redaction, and
+  audit behavior.
+- **Supervisor splitting:** the cohesive fenced cutover reconciler was not split
+  merely to reduce file length.
 
-- one project-owned `DomainToolSpec` and policy runtime for visibility,
-  approval, second-party authority, execution recheck, execution-time provider
-  configuration checks, error conversion, audit, and output projection
-- one descriptor registry keyed by domain/tool instead of 11 identical
-  `descriptors.ts` implementations
-- one usage hook implementation and one parameterized audit hook for the nine
-  domains with identical behavior
+These are not unfinished blockers for Groups A–E. They are either retained
+because current code is clearer or reserved for a future evidence-backed,
+separately approved change.
 
-Each Eve dynamic catalog must still call `defineTool` with an inline `execute`
-function so replay reconstruction works. The inline function delegates to the
-shared policy runtime; do not hide `defineTool` inside a factory Eve cannot
-transform.
+## Validation gates
 
-**Delete or reduce**
-
-- the duplicated bodies of all 11 `subagents/<domain>/lib/runtime.ts` files
-- eleven 33-line descriptor modules
-- eleven 25-line identity `define-tool.ts` wrappers used by 713 declarations;
-  declarations use `satisfies DomainToolSpec` instead
-- 13 byte-identical usage hooks (retain thin discovered re-exports only if Eve
-  filesystem discovery requires them)
-- nine copied audit hooks and the duplicate `Requested` audit ownership path
-- pass-through `createAuditStore`, per-domain lazy store getters, and one-use
-  integration/error helpers when direct construction is clearer
-
-Keep GitHub/Sentry/Vercel redaction, Discord error mapping, provider clients,
-Zod tool inputs, budgets, immutable audit records, and execution-time current
-role checks as explicit adapters.
-
-**Estimated reduction:** 2,800–3,500 production lines across runtimes,
-descriptors, identity helpers, hooks, and repeated agent declarations.
-
-### 5. Derive external types and remove small accidental helpers
-
-Apply these mechanical changes with the owning phase rather than as a large
-unrelated churn commit.
-
-| Current declaration                      | Replacement                                                           |
-| ---------------------------------------- | --------------------------------------------------------------------- |
-| `lib/discord/state.ts: AuthAttributes`   | `SessionAuthContext["attributes"]`                                    |
-| test-local Eve `Attributes`              | the same exported Eve projection                                      |
-| `framework/observability.ts: MetricSink` | `Pick<typeof Sentry.metrics, "count"                                  | "distribution">` |
-| `agent/client.ts: AgentFetch`            | `typeof globalThis.fetch`                                             |
-| Redis eval ports in coordination/queue   | `Parameters<RedisClient["eval"]>` or removal into `ConversationStore` |
-| shopping `NewCartItemInput`              | `Pick<typeof shoppingCartItems.$inferInsert, ...>`                    |
-| Linear issue relation object             | `z.output<typeof issueRelationSchema>` projection                     |
-| duplicate `JsonValue` definitions        | one project-owned strict JSON type                                    |
-| supervisor/release-check health guards   | shared `healthReportSchema` + `z.output`                              |
-| active-generation manual parsers         | shared `activeBotGenerationSchema` + `z.output`                       |
-| `framework/commands.ts: CommandBuilder`  | discord.js `SlashCommandBuilder` directly                             |
-
-Remove `defineCommand`, `commandName`, unused `toRegistrationBody`, unused
-`observeWith`, and other identity/one-use helpers when their call sites are more
-readable with `satisfies` or a direct expression.
-
-Keep manual types for Wack Hacker wire/storage/domain summaries, narrow injected
-ports with real alternate implementations, and runtime Zod decoders for
-untrusted HTTP/DB/Redis data. Keep the Better Result import seam unless a
-separate dependency change produces measurable simplification: it avoids 117
-cross-workspace import edits and adds the project-owned `fromNullable` helper.
-The unexported upstream retry config justifies the small local retry-policy type.
-
-### 6. Lower-priority library-native cleanup
-
-Only after the central slices are green:
-
-- Replace the global shutdown registry in `packages/bot/src/lifecycle.ts` with
-  `AsyncDisposableStack`, using discord.js `Client` and Bun server disposal plus
-  explicit queue-drain defers. Keep signal and uncaught-error policy.
-- Replace `schedule-store.ts` field-by-field row helpers with a schema-derived
-  strict Zod decoder while retaining raw libSQL conditional claims and immutable
-  migrations.
-- Share health/active-generation schemas with supervisor and make
-  `sandbox-admin.ts` call the production generation store rather than repeat
-  Redis constants/parsers.
-- Consider Bun's route table for static bot routes only if pure injected handler
-  tests remain simpler. The current switch is not a priority.
-- Evaluate official Eve OpenAPI/MCP connections for API-heavy domains in a
-  separate approved spike. Do not adopt them if they bypass current role,
-  budget, approval, redaction, or audit behavior.
-
-Do not split the 1,365-line supervisor reconciler merely to reduce file length;
-its fencing/cutover sequence is cohesive. Extract only genuinely shared schema
-and store behavior.
-
-## Expected result
-
-The conservative target is 6,000–8,000 fewer production TypeScript lines, with
-new contract tests partly offsetting the repository-wide net deletion. More
-important outcomes are:
-
-- one native Eve skill lifecycle instead of two
-- one conversation transition model and Redis API instead of cross-package Lua
-- one shared policy execution path instead of eleven clones
-- one strict Discord command contract instead of unknown records
-- external types imported or derived from their owners
-- fewer composition callbacks, identity helpers, source-shape generators, and
-  mock-driven ports
-
-## Validation gates for every production slice
+The repository keeps the following gates for behavior-sensitive production
+changes:
 
 1. `bun run format:check`
 2. `bun run typecheck`
 3. `bun run lint`
-4. `bun run test`, plus the relevant real-Redis contract suite
+4. `bun run test`, plus the real-Redis contract suite
 5. `bun run build` and Eve `build`/`info`
 6. unchanged reviewed capability names unless separately approved
 7. `bun run audit`
@@ -472,26 +372,34 @@ important outcomes are:
 
 A diff gate must flag any changed wire schema, Redis key/TTL, custom component
 ID, migration, tool/skill name, authorization rule, or terminal error string.
+The current CI also runs the compiled native skill lifecycle, compiled inline
+native tool lifecycle, production Redis/Lua contract suite, migration checks,
+and bot image build.
 
-## Approval requested
+At the integrated documentation audit, direct Bun package tests pass 267/267
+(agents 153, bot 52, shared 53, supervisor 9), the feature-parity checker reports
+11/659/104/13, and the real-Redis suite reports 10 tests / 64 assertions. Hosted
+Eve sandbox reattachment is the remaining **deployment canary**. It is checked
+at cutover because local compilation cannot prove hosted sandbox persistence.
 
-Approval may be given for all items or individually:
+## Implementation and approval record
 
-- **A — Eve-native skills:** remove the custom loader/compiler/history system
-  and make tools independently role/policy visible. This intentionally
-  changes model-visible tool timing, not execution authority.
-- **B — Conversation ownership (approved and implemented):** all conversation
-  records/scripts are behind shared `ConversationStore`; bot `ConversationFlow`
-  owns reconciliation; completion Lua requires a terminal render outcome while
-  preserving current keys and wire formats.
-- **C — Discord contract:** pass `Client<true>`, derive Discord API types, and add
-  strict project-owned output schemas to the bot-agent command wire.
-- **D — Domain runtime:** replace 11 copied policy runtimes and identity helpers
-  with one agent-local implementation plus explicit provider adapters.
-- **E — Mechanical/native cleanup:** apply the type derivations, helper deletion,
-  disposal stack, schedule row decoder, and shared supervisor schemas described
-  above.
+- **Phase 0:** implemented first to characterize the durability, policy, and
+  Discord boundaries before deletion.
+- **A — Eve-native skills:** approved and implemented. Approval accepted the
+  model-visible tool timing/eval tradeoff without weakening execution authority.
+- **B — conversation ownership:** approved and implemented with shared
+  `ConversationStore` and bot-owned `ConversationFlow`.
+- **C — Discord contract:** approved and implemented as the narrower
+  `DiscordRest`/exhaustive-switch design with strict schemas; manager/cache
+  semantics were deliberately not adopted.
+- **D — domain runtime:** approved and implemented with shared policy runtime,
+  stores, hooks, redaction, and direct inline Eve `defineTool` catalogs.
+- **E — mechanical cleanup:** approved and implemented only for the derived
+  owner types, helper removal, shared health/generation contracts, and strict
+  schedule-row decoding recorded above.
 
-Implementation should start only after the corresponding approval. The planned
-execution order is phase 0, A, B, C, D, then E, with full validation after each
-mergeable slice.
+There is no outstanding code approval request in this document. Future
+state-machine, wire-contract, public-type, migration, or package-boundary changes
+still require their own evidence and approval. The hosted Eve reattachment
+canary remains an operational cutover decision, not an unimplemented code group.

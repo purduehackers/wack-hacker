@@ -1,8 +1,8 @@
-# Target architecture
+# Architecture
 
-> Status: current for the Group B conversation path. Later simplification groups
-> may refine unrelated Discord and domain-runtime modules, but the single
-> `ConversationFlow` and shared `ConversationStore` shown here are live.
+> Status: current through integration commit `2ded01a`. Groups A–E are approved,
+> implemented, and locally validated. Hosted Eve `defaultBackend()` sandbox
+> reattachment remains a deployment cutover canary, not a code blocker.
 
 Wack Hacker has two application runtimes: a Bun/discord.js bot that owns Discord
 I/O and an Eve application that owns sessions and reasoning. Redis carries the
@@ -19,18 +19,20 @@ flowchart LR
     DiscordClient["discord.js Client"]
     Flow["Conversation Flow<br/>single orchestration point"]
     Projector["Discord Projector<br/>messages • components • terminal paint"]
+    CommandBoundary["Discord Command Boundary<br/>DiscordRest • 68 strict operations"]
     Features["Community Features<br/>commands • handlers • local schedules"]
   end
 
   subgraph Eve["Eve application"]
     Channel["Discord Channel<br/>single Eve ingress/egress path"]
     Session["Eve Session<br/>reasoning • state • lifecycle"]
-    Policy["Policy + Approval"]
-    Tools["Domain Tools"]
+    Policy["Shared Domain Policy Runtime<br/>visibility • approval • audit • redaction"]
+    Tools["Eve-native Domain Tools"]
     Schedule["Durable Schedule Dispatcher"]
   end
 
   Store["Conversation Store<br/>one shared Redis-facing API"]
+  CommandWire["Strict Discord Command Wire<br/>input • output • envelope schemas"]
   Redis[("Redis<br/>conversation coordination")]
   Turso[("Turso<br/>schedules • audit")]
   APIs[External APIs]
@@ -51,9 +53,12 @@ flowchart LR
 
   Channel --> Session
   Session --> Policy
-  Session --> Tools
+  Policy --> Tools
   Policy --> Turso
   Tools --> APIs
+  Tools --> CommandWire
+  CommandWire --> CommandBoundary
+  CommandBoundary --> DiscordClient
 
   Schedule <--> Turso
   Schedule -->|"scheduled occurrence"| Flow
@@ -107,37 +112,58 @@ queued turn.
 
 ```text
 packages/bot/src
-├── index.ts                         # composition root
-├── conversations/flow.ts           # the only conversation reconciler
-└── agent/
-    ├── client.ts                    # thin typed Eve HTTP transport
-    ├── render/{renderer,discord-rest}.ts
-    │                                # Discord projection adapter
-    ├── hitl/interaction.ts          # Discord interaction adapter
-    └── scheduled.ts                 # Discord schedule materialization
+├── index.ts                              # composition root
+├── conversations/flow.ts                # the only conversation reconciler
+├── agent/
+│   ├── client.ts                         # thin typed Eve HTTP transport
+│   ├── discord-commands/
+│   │   ├── route.ts                      # authenticated strict request/response adapter
+│   │   └── handler.ts                    # narrow DiscordRest + exhaustive operation switch
+│   ├── render/{renderer,discord-rest}.ts # Discord projection adapter
+│   ├── hitl/interaction.ts               # Discord interaction adapter
+│   └── scheduled.ts                      # Discord schedule materialization
+└── framework/
+    ├── server.ts                         # Bun HTTP dispatch and health endpoint
+    └── lifecycle.ts                      # explicit reverse-order process teardown
 
 packages/agents/agent
-├── channels/discord.ts              # thin Eve lifecycle adapter
-├── tools/                            # root capabilities
+├── channels/discord.ts                   # thin Eve lifecycle adapter
+├── lib/
+│   ├── policy/
+│   │   ├── domain-tools.ts               # shared DomainToolSpec and registry types
+│   │   ├── domain-runtime.ts             # shared visibility/approval/execution/audit policy
+│   │   ├── stores.ts                     # shared lazy approval, budget, and audit stores
+│   │   ├── {usage-hook,domain-audit-hook}.ts
+│   │   │                                 # shared hook implementations
+│   │   └── provider-redaction.ts         # provider secret/error/output projection
+│   └── schedule-store.ts                 # strict Zod libSQL row boundary and lease SQL
+├── tools/                                # root capabilities
 ├── subagents/<domain>/
-│   ├── agent.ts                      # native Eve subagent declaration
-│   ├── tools/catalog.ts              # independently policy-filtered tools
-│   └── skills/catalog.ts             # defineDynamic + defineSkill skill map
-└── schedules/                        # durable schedules and dispatch
+│   ├── agent.ts                          # native Eve subagent declaration
+│   ├── tools/catalog.ts                  # direct inline Eve defineTool declarations
+│   ├── skills/catalog.ts                 # defineDynamic + defineSkill skill map
+│   ├── hooks/                            # thin Eve-discovered policy hook exports
+│   └── lib/{tool-registry,runtime}.ts    # provider specs and narrow runtime adapter
+└── schedules/                            # durable schedules and dispatch
 
 packages/shared/src
 ├── conversations/
-│   ├── keys.ts                       # private conversation key catalog
-│   ├── store.ts                      # only exported Redis-facing API
-│   ├── render.ts                     # validates the stored render projection
-│   └── *.ts                          # private keys, eval/Lua, and local record shapes
-├── wire.ts                           # cross-process schemas, not Redis keys
-├── errors.ts                         # project error taxonomy
-└── domain data                       # only genuinely shared shapes
+│   ├── keys.ts                           # private conversation key catalog
+│   ├── store.ts                          # only exported Redis-facing API
+│   ├── render.ts                         # validates the stored render projection
+│   └── *.ts                              # private keys, eval/Lua, and local record shapes
+├── discord-command-wire.ts               # 68 strict semantic Discord contracts
+├── bot-health.ts                         # shared bot health schemas and output types
+├── bot-generation.ts                     # shared active-generation schema/decoder/reader
+├── wire.ts                               # other cross-process schemas, not Redis keys
+├── errors.ts                             # project error taxonomy
+└── domain data                           # only genuinely shared shapes
 ```
 
 An optional process supervisor may start or replace the bot container, but it is
-not part of the application data flow and should not shape application APIs.
+not part of the application data flow and should not shape application APIs. It
+and release/operations scripts consume the shared health and active-generation
+decoders rather than restating those external records.
 
 ## Eve-native subagent skills
 
@@ -146,19 +172,20 @@ Each subagent owns its skills under its own `skills/` directory. A single
 that subagent. Eve advertises those skills and supplies its framework-owned
 `load_skill` tool.
 
-The cleanup removes the parallel `skill-sources/` tree, generated skill registry,
-custom `load_skill` definitions, activation-marker output, and message-history
-parsing used to infer loaded skills. Loading a skill adds instructions through
-Eve; it does not register tools. Tool availability is resolved independently on
-`step.started` from current role and tool policy, then enforced again at approval
-and execution. Missing provider configuration remains a typed execution-time
-failure. No tool resolver reads `load_skill`
-results or model-message history. A compiled lifecycle canary proves local
-`defaultBackend()` materialization, repeated native loads on one preserved
-session, and removal after the resolver returns `{}`. The compiled manifest also
-contains the skill and tool resolver for every integration subagent. Hosted
-sandbox reattachment is verified at deployment; a failure stops cutover rather
-than adding a second loader.
+The cleanup removed the parallel `skill-sources/` tree, generated skill
+registry, custom `load_skill` definitions, activation-marker output, and
+message-history parsing used to infer loaded skills. Loading a skill adds
+instructions through Eve; it does not register tools. Tool availability is
+resolved independently on `step.started` from current role and tool policy, then
+enforced again at approval and execution. Missing provider configuration remains
+a typed execution-time failure. No tool resolver reads `load_skill` results or
+model-message history.
+
+A compiled lifecycle canary proves local `defaultBackend()` materialization,
+repeated native loads on one preserved session, and removal after the resolver
+returns `{}`. The compiled manifest also contains the skill and tool resolver
+for every integration subagent. Hosted sandbox reattachment is verified at
+deployment; a failure stops cutover rather than adding a second loader.
 
 ```mermaid
 flowchart LR
@@ -168,10 +195,66 @@ flowchart LR
   EveLoader --> Context[Turn context]
 
   Auth --> Tools["tools/catalog.ts<br/>defineDynamic"]
-  Tools --> ToolMap["Authorized defineTool map"]
+  Tools --> ToolMap["Authorized inline defineTool map"]
   ToolMap --> Model[Model step]
   Context --> Model
 ```
+
+## Discord command boundary
+
+The agent-to-bot Discord seam is a strict semantic RPC with exactly 68 operation
+keys. The input schemas, output schemas, Discord tool registry, and exhaustive
+bot switch are checked for exact key parity. Requests are a strict discriminated
+union; response envelopes are strict; both the bot and the agent decode the
+operation-specific project output. Malformed Discord results fail closed as a
+typed upstream error instead of becoming `{}`, `[]`, or a partial success.
+
+The bot deliberately accepts a narrow
+`DiscordRest = Pick<Client["rest"], "delete" | "get" | "patch" | "post" | "put">`
+and uses `Routes`, discord.js-exported v10 REST types, small fail-closed object and
+array guards, and strict project-owned projection schemas. It did **not** adopt
+discord.js managers or cache semantics: the boundary covers raw endpoints and
+requires current REST results, so managers would add a second behavior model
+without simplifying the seam. The centralized switch remains readable and ends
+with `command satisfies never`.
+
+Archived threads follow each applicable public/private/joined route's native
+cursor, reject missing or nonadvancing cursors, cap pagination, and deduplicate
+results. Sticker creation preserves the 512 KiB media bound, uses MIME-correct
+PNG/APNG/GIF/Lottie filenames, and sticker edits preserve omitted versus explicit
+`null` descriptions. Role-position summaries use Discord's actual position
+response.
+
+## Shared domain policy runtime
+
+All 11 integration domains author provider operations as `DomainToolSpec`
+registries and bind narrow provider-specific configuration, error, projection,
+and redaction adapters to one shared runtime. That runtime owns discovery,
+approval, second-party authority, execution-time current-role and provider
+readiness checks, budgets, audit ordering, and plain-JSON output enforcement.
+Approval, budget, and audit stores are shared and lazy; usage and domain-audit
+hooks share implementations while thin per-domain files remain for Eve filesystem
+discovery.
+
+Eve tool catalogs still call `defineTool` directly inside their `defineDynamic`
+resolver and provide an inline `execute` closure. This source shape is required
+for Eve replay reconstruction; a factory must not hide `defineTool`. The inline
+closure delegates to the shared runtime. GitHub, Sentry, and Vercel retain
+provider-secret redaction for requested actions, execution audit input, errors,
+and output. Feature parity remains exact across 11 native domains, 659 tools,
+104 skills, and 13 subagents.
+
+## Shared deployment and schedule decoders
+
+`healthReportSchema` and `readyHealthReportSchema` define the bot health response
+used by the bot, supervisor, and release checks. `activeBotGenerationSchema`, its
+decoder, and its narrow Redis reader define the fenced generation record used by
+the supervisor, Eve endpoint resolution, and operations scripts.
+
+The schedule store keeps raw conditional libSQL claims and immutable migrations,
+but strict Zod schemas now decode selected view and claimed rows. They reject
+extra fields, invalid enums/counters/member-role JSON, and inconsistent
+once-versus-recurring nullability before values enter domain logic.
 
 ## Simplification rules
 
@@ -189,8 +272,8 @@ flowchart LR
    wrappers or speculative abstraction layers.
 7. Leaf adapters may isolate unavoidable I/O, but pass-through factories,
    single-use helpers, and interfaces created only for mocks should be removed.
-8. Behaviorally important durability and authorization transitions remain
-   explicit even when their implementation becomes smaller.
+8. Behaviorally important durability, serialization, redaction, and authorization
+   transitions remain explicit even when their implementation becomes smaller.
 
-Meaningful state-machine, wire-contract, public-type, or package-boundary
-changes require approval before implementation.
+Meaningful state-machine, wire-contract, public-type, or package-boundary changes
+still require approval before implementation.
