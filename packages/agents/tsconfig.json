@@ -1,10 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    // eve builds on Nitro and runs on Node, not Bun.
-    "types": ["node"],
+    // Eve builds on Nitro/Node; Bun types cover the package's compiler and tests.
+    "types": ["node", "bun"],
     "module": "esnext",
     "esModuleInterop": true
   },
-  "include": ["agent/**/*.ts", "evals/**/*.ts"]
+  "include": ["agent/**/*.ts", "evals/**/*.ts", "scripts/**/*.ts"]
 }

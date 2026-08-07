@@ -5,7 +5,7 @@
  * public Purdue Hackers projects, so this is the one integration where getting
  * the failure mode wrong has a privacy consequence rather than a UX one.
  *
- * Three changes from the legacy client, each deliberate:
+ * Three changes from the prior client, each deliberate:
  *
  * - It returns `Result` instead of throwing a generic `Error("Privacy API
  *   request failed")`. The old shape made every failure indistinguishable, so

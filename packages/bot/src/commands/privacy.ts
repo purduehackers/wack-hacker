@@ -1,11 +1,8 @@
 /**
  * `/privacy` — manage your own privacy preferences.
  *
- * Ported from the legacy command with its subcommands and copy intact, plus one
- * correction: every reply is **ephemeral**. The legacy version replied publicly,
- * which meant asking a privacy question broadcast the answer to the channel.
- * That is the one behaviour change here, and it is a fix rather than a
- * preference.
+ * Every reply is ephemeral: asking a privacy question must not broadcast the
+ * answer to the channel.
  *
  * The command is self-scoped by construction — the user id comes from the
  * interaction, never from an option — so there is no way to read or change

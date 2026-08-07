@@ -1,8 +1,8 @@
 /**
  * Splitting text to fit Discord's message limit.
  *
- * Lives in shared because both sides need it: the bot splits long
- * transcriptions, and the agent's paint layer splits streamed replies.
+ * Lives in shared because the bot uses the same readable splitting policy for
+ * transcriptions and agent render intents.
  *
  * The split priority is what makes the output readable rather than merely
  * short — break at a paragraph if there is one, then a sentence, then a word,
@@ -15,6 +15,14 @@
 export const DEFAULT_MAX_CHARS = 1_900;
 
 const SENTENCE_ENDINGS = [". ", "! ", "? "] as const;
+
+/** Takes a UTF-16 prefix without leaving an unmatched high surrogate. */
+export function sliceText(value: string, length: number): string {
+  let sliced = value.slice(0, length);
+  const last = sliced.charCodeAt(sliced.length - 1);
+  if (last >= 0xd800 && last <= 0xdbff) sliced = sliced.slice(0, -1);
+  return sliced;
+}
 
 /** The best break point at or before `limit`, or `undefined` for none. */
 function bestBreak(text: string, limit: number): number | undefined {
@@ -48,7 +56,12 @@ export function splitText(text: string, maxChars: number = DEFAULT_MAX_CHARS): s
   while (rest.length > maxChars) {
     // No natural break means a very long unbroken run — a URL, a base64 blob —
     // and a hard cut is the only option left.
-    const cut = bestBreak(rest, maxChars) ?? maxChars;
+    let cut = bestBreak(rest, maxChars) ?? maxChars;
+    const previous = rest.charCodeAt(cut - 1);
+    const following = rest.charCodeAt(cut);
+    // Never split a UTF-16 surrogate pair during the last-resort hard cut.
+    if (previous >= 0xd800 && previous <= 0xdbff && following >= 0xdc00 && following <= 0xdfff)
+      cut--;
     chunks.push(rest.slice(0, cut).trimEnd());
     rest = rest.slice(cut);
   }

@@ -4,7 +4,7 @@
  * The dashboard reads `version` from Edge Config at request time, so this is how
  * `/hack-night start` changes what the site shows.
  *
- * Uses the REST endpoint directly rather than `@vercel/sdk`. The legacy code
+ * Uses the REST endpoint directly rather than `@vercel/sdk`. The prior code
  * called `vercel.edgeConfig.patchEdgeConfigItems(...)`, but that accessor no
  * longer exists: as of `@vercel/sdk` 1.28 the Edge Config operations moved under
  * `globalConfig` and the item-*write* methods were dropped entirely, leaving only

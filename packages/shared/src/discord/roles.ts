@@ -19,7 +19,7 @@
  *    stops getting organizer-powered runs.
  *
  * `as const` object rather than a TS `enum`: `erasableSyntaxOnly` forbids enums
- * because they emit runtime code. The legacy app reached the same shape by
+ * because they emit runtime code. The prior implementation reached the same shape by
  * convention, since its workflow step bundles ran in strip-only type mode.
  */
 

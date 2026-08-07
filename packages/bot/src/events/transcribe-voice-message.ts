@@ -66,18 +66,18 @@ export function createTranscriber(deps: TranscriberDeps) {
       return Result.err(new Transient({ operation: "split audio", detail: split.error.message }));
     }
 
-    const chunks = split.value;
+    const audioSegments = split.value;
     const settled = await Promise.all(
-      chunks.map(async (chunk, index) => {
+      audioSegments.map(async (segment, index) => {
         try {
-          return await once(chunk);
+          return await once(segment);
         } catch {
           // One retry: these failures are usually transient upstream capacity.
           await sleep(CHUNK_RETRY_DELAY_MS);
           try {
-            return await once(chunk);
+            return await once(segment);
           } catch (cause) {
-            console.warn(`transcription chunk ${index + 1}/${chunks.length} failed`, cause);
+            console.warn(`transcription chunk ${index + 1}/${audioSegments.length} failed`, cause);
             return undefined;
           }
         }
@@ -91,11 +91,11 @@ export function createTranscriber(deps: TranscriberDeps) {
     }
 
     const text = settled
-      .map((part, index) => part ?? `[part ${index + 1}/${chunks.length} failed]`)
+      .map((part, index) => part ?? `[part ${index + 1}/${audioSegments.length} failed]`)
       .join(" ")
       .trim();
 
-    return Result.ok({ text, partCount: chunks.length });
+    return Result.ok({ text, partCount: audioSegments.length });
   };
 
   return {
@@ -144,7 +144,8 @@ export function transcribeVoiceMessage(transcriber: Transcriber) {
     name: "transcribe-voice-message",
     kind: "message",
     dedupKey: (message) => message.id,
-    handle: async (message) => {
+    handle: async (message, context) => {
+      if (context.isBotMention) return Result.ok(undefined);
       if (!message.flags.has(MessageFlags.IsVoiceMessage)) return Result.ok(undefined);
 
       const audio = [...message.attachments.values()].find((a) => a.name.endsWith(".ogg"));

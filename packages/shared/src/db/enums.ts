@@ -6,7 +6,7 @@
  * these exact strings. The agent's policy modules import them from here so a
  * value can never drift away from what is persisted.
  *
- * All are `as const` objects. The legacy app used real TS `enum`s for
+ * All are `as const` objects. The prior implementation used real TS `enum`s for
  * `ScheduleType` and `ScheduledTaskStatus`; `erasableSyntaxOnly` forbids that
  * because an enum emits runtime code. The string values are unchanged, so
  * existing rows are unaffected.
@@ -77,3 +77,12 @@ export const ScheduledTaskStatus = {
 } as const;
 
 export type ScheduledTaskStatus = (typeof ScheduledTaskStatus)[keyof typeof ScheduledTaskStatus];
+/** How a durable schedule is materialized at fire time. */
+export const ScheduleActionType = {
+  /** Run a fresh Eve turn with current Discord authority. */
+  Agent: "agent",
+  /** Ask the bot to post the stored content verbatim without a model call. */
+  Message: "message",
+} as const;
+
+export type ScheduleActionType = (typeof ScheduleActionType)[keyof typeof ScheduleActionType];

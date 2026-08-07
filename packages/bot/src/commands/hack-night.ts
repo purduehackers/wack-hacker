@@ -1,10 +1,8 @@
 /**
  * `/hack-night` — set up or reset the weekly hack night.
  *
- * Merges the legacy `/init-hn` and `/reset-hn` into one command with `start` and
- * `reset` subcommands. They only ever differed by which emoji they wrote and
- * whether they bumped the dashboard version, which is a subcommand, not two
- * commands.
+ * `start` and `reset` are subcommands because they act on the same weekly hack
+ * night state.
  *
  * Organizer-gated. The check reads the member's live roles off the interaction,
  * so it reflects the caller's roles right now rather than anything cached.

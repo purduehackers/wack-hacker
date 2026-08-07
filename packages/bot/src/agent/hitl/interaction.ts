@@ -1,0 +1,434 @@
+import { roleAtLeast, roleFromMemberRoles, UserRole } from "@repo/shared/discord";
+import { serializeError, tagOf } from "@repo/shared/errors";
+import { Result } from "@repo/shared/result";
+import type { Reporter } from "@repo/shared/result/observe";
+import { sliceText } from "@repo/shared/text";
+import type {
+  AuthorizationChallenge,
+  InteractionPayload,
+  Principal,
+  RenderAuthorization,
+  RenderInputRequest,
+} from "@repo/shared/wire";
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  MessageFlags,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+} from "discord.js";
+import type { GuildMember, Interaction } from "discord.js";
+
+import { activeTraceparent } from "../../framework/observability.ts";
+import type { AgentClient } from "../client.ts";
+import type { RenderStore } from "../render/store.ts";
+import { modalCustomId, parseLocator } from "./components.ts";
+import type { HitlLocator } from "./components.ts";
+import type { HitlStore } from "./store.ts";
+
+const ANSWER_FIELD_ID = "answer";
+
+export interface HitlInteractionDeps {
+  readonly agent: AgentClient;
+  readonly store: HitlStore;
+  readonly renders: RenderStore;
+  readonly reporter: Reporter;
+  readonly guildId: string;
+}
+
+function report(deps: HitlInteractionDeps, operation: string, error: unknown): void {
+  const serialized = serializeError(error);
+  deps.reporter.emit({
+    op: operation,
+    status: "error",
+    errorTag: tagOf(error),
+    errorMessage: serialized.message,
+  });
+}
+
+function memberRoles(member: GuildMember | undefined, guildId: string): string[] {
+  return [...(member?.roles.cache.keys() ?? [])].filter((roleId) => roleId !== guildId);
+}
+
+async function principalOf(interaction: Interaction, guildId: string): Promise<Principal> {
+  const member = await interaction.guild?.members.fetch(interaction.user.id).catch(() => undefined);
+  return {
+    userId: interaction.user.id,
+    username: interaction.user.username,
+    nickname: member?.displayName ?? interaction.user.username,
+    memberRoles: memberRoles(member, guildId),
+  };
+}
+
+async function ephemeral(interaction: Interaction, content: string): Promise<void> {
+  if (!interaction.isRepliable()) return;
+  await interaction.editReply({ content, components: [], allowedMentions: { parse: [] } });
+}
+
+function modalFor(locator: Extract<HitlLocator, { readonly kind: "input" }>): ModalBuilder {
+  const input = new TextInputBuilder()
+    .setCustomId(ANSWER_FIELD_ID)
+    .setLabel("Your answer")
+    .setStyle(TextInputStyle.Paragraph)
+    .setMinLength(1)
+    .setMaxLength(4_000)
+    .setRequired(true);
+  return new ModalBuilder()
+    .setCustomId(modalCustomId(locator))
+    .setTitle("Answer the agent")
+    .addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input));
+}
+
+function isExpired(challenge: AuthorizationChallenge): boolean {
+  if (challenge.expiresAt === undefined) return false;
+  const expiresAt = Date.parse(challenge.expiresAt);
+  return Number.isFinite(expiresAt) && expiresAt <= Date.now();
+}
+
+async function revealAuthorization(
+  interaction: Interaction,
+  authorization: RenderAuthorization,
+  challenge: AuthorizationChallenge,
+): Promise<void> {
+  if (isExpired(challenge)) {
+    await ephemeral(interaction, "This authorization challenge has expired.");
+    return;
+  }
+
+  const name = authorization.displayName ?? authorization.name;
+  const sections = [`Connect **${sliceText(name, 128)}** to continue.`];
+  if (challenge.userCode !== undefined) {
+    sections.push(`Code: \`${challenge.userCode.replaceAll("`", "")}\``);
+  }
+  if (challenge.expiresAt !== undefined) sections.push(`Expires: ${challenge.expiresAt}`);
+  if (challenge.instructions !== undefined) sections.push(challenge.instructions);
+  if (challenge.description !== "") sections.push(challenge.description);
+
+  const components =
+    challenge.url === undefined
+      ? []
+      : [
+          new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder()
+              .setStyle(ButtonStyle.Link)
+              .setLabel(sliceText(`Open ${name}`, 80))
+              .setURL(challenge.url),
+          ),
+        ];
+  if (!interaction.isRepliable()) return;
+  await interaction.editReply({
+    content: sliceText(sections.join("\n\n"), 1_900),
+    components,
+    allowedMentions: { parse: [] },
+  });
+}
+
+function selectedOptionIndex(
+  interaction: Interaction,
+  locator: Extract<HitlLocator, { readonly kind: "input" }>,
+): number | undefined {
+  if (locator.action === "option" && interaction.isButton()) return locator.index;
+  if (locator.action !== "select" || !interaction.isStringSelectMenu()) return undefined;
+  const selected =
+    interaction.values.length === 1 ? /^o(\d+)$/u.exec(interaction.values[0] ?? "") : undefined;
+  const index = selected === null || selected === undefined ? undefined : Number(selected[1]);
+  if (index === undefined || !Number.isSafeInteger(index)) return undefined;
+  const chunkStart = locator.index;
+  return chunkStart !== undefined && index >= chunkStart && index < chunkStart + 25
+    ? index
+    : undefined;
+}
+
+function freeformAnswer(
+  interaction: Interaction,
+  locator: Extract<HitlLocator, { readonly kind: "input" }>,
+): string | undefined {
+  if (locator.action !== "modal" || !interaction.isModalSubmit()) return undefined;
+  const answer = interaction.fields.getTextInputValue(ANSWER_FIELD_ID).trim();
+  return answer === "" ? undefined : answer;
+}
+
+function messageIdOf(interaction: Interaction): string | undefined {
+  if (interaction.isButton() || interaction.isStringSelectMenu()) return interaction.message.id;
+  return undefined;
+}
+
+interface LoadedInput {
+  readonly request: RenderInputRequest;
+  readonly continuationKey: string;
+  readonly authChannelId: string;
+  readonly authThreadId?: string;
+  readonly principal: Principal;
+  readonly approvalRequester?: InteractionPayload["approvalRequester"];
+}
+
+// oxlint-disable-next-line oxclippy/cognitive-complexity -- linear validation keeps the HITL admission checks auditable
+async function loadInput(
+  deps: HitlInteractionDeps,
+  interaction: Interaction,
+  locator: Extract<HitlLocator, { readonly kind: "input" }>,
+): Promise<LoadedInput | string> {
+  const [intentResult, targetResult] = await Promise.all([
+    deps.renders.intent(locator.dispatchId),
+    deps.renders.target(locator.dispatchId),
+  ]);
+  if (Result.isError(intentResult)) {
+    report(deps, "agent.hitl.decode-intent", intentResult.error);
+    return "This input request is temporarily unavailable.";
+  }
+  if (Result.isError(targetResult)) {
+    report(deps, "agent.hitl.decode-target", targetResult.error);
+    return "This input request is temporarily unavailable.";
+  }
+  const intent = intentResult.value;
+  const target = targetResult.value;
+  if (
+    intent === undefined ||
+    target === undefined ||
+    intent.phase !== "streaming" ||
+    intent.dispatchId !== target.dispatchId ||
+    intent.continuationKey !== target.continuationKey ||
+    intent.revision !== locator.revision
+  ) {
+    return "This input request is stale or has already been handled.";
+  }
+  const request = intent.inputRequests?.[locator.requestIndex];
+  if (request === undefined) return "This input request is stale or has already been handled.";
+  if (interaction.guildId !== deps.guildId || interaction.channelId !== target.channelId) {
+    return "This input request is not valid in this channel.";
+  }
+
+  const principal = await principalOf(interaction, deps.guildId);
+  let approvalRequester: LoadedInput["approvalRequester"];
+  if (request.approvalMode === "second-party") {
+    const minimum = request.approverMinRole === "admin" ? UserRole.Admin : UserRole.Organizer;
+    const requesterMember = await interaction.guild?.members
+      .fetch(target.requesterUserId)
+      .catch(() => undefined);
+    const requesterRoles = memberRoles(requesterMember, deps.guildId);
+    if (!roleAtLeast(roleFromMemberRoles(requesterRoles), minimum)) {
+      return "The requester is no longer authorized for this action.";
+    }
+    if (
+      interaction.user.id === target.requesterUserId ||
+      !roleAtLeast(roleFromMemberRoles(principal.memberRoles), minimum)
+    ) {
+      return `A different ${minimum} must answer this approval request.`;
+    }
+    approvalRequester = { userId: target.requesterUserId, memberRoles: requesterRoles };
+  } else if (
+    interaction.user.id !== target.requesterUserId ||
+    interaction.user.id !== request.recipientUserId
+  ) {
+    return "Only the person who started this turn can answer this request.";
+  }
+
+  const sourceMessageId = messageIdOf(interaction);
+  if (sourceMessageId !== undefined) {
+    const projection = await deps.renders.projection(locator.dispatchId, target.anchorMessageId);
+    if (Result.isError(projection)) {
+      report(deps, "agent.hitl.decode-projection", projection.error);
+      return "This input request is temporarily unavailable.";
+    }
+    if (projection.value.anchorMessageId !== sourceMessageId) {
+      return "This input request is no longer active.";
+    }
+  }
+  return {
+    request,
+    continuationKey: intent.continuationKey,
+    authChannelId: target.authChannelId,
+    ...(target.authThreadId === undefined ? {} : { authThreadId: target.authThreadId }),
+    principal,
+    ...(approvalRequester === undefined ? {} : { approvalRequester }),
+  };
+}
+
+async function handleInput(
+  deps: HitlInteractionDeps,
+  interaction: Interaction,
+  locator: Extract<HitlLocator, { readonly kind: "input" }>,
+): Promise<void> {
+  const loaded = await loadInput(deps, interaction, locator);
+  if (typeof loaded === "string") {
+    await ephemeral(interaction, loaded);
+    return;
+  }
+
+  const { request } = loaded;
+  const optionIndex = selectedOptionIndex(interaction, locator);
+  const freeform = freeformAnswer(interaction, locator);
+  const options = request.options ?? [];
+  const optionId = optionIndex === undefined ? undefined : options[optionIndex]?.id;
+  const freeformAllowed =
+    request.kind === "question" && (request.allowFreeform || options.length === 0);
+  if (
+    (optionId === undefined && freeform === undefined) ||
+    (optionId !== undefined && freeform !== undefined) ||
+    (freeform !== undefined && !freeformAllowed)
+  ) {
+    await ephemeral(interaction, "That answer is not valid for this request.");
+    return;
+  }
+
+  const claimed = await deps.store.claim({
+    dispatchId: locator.dispatchId,
+    continuationKey: loaded.continuationKey,
+    revision: locator.revision,
+    requestIndex: locator.requestIndex,
+    requestId: request.requestId,
+    recipientUserId: request.recipientUserId,
+    interactionId: interaction.id,
+  });
+  if (claimed !== "acquired") {
+    await ephemeral(
+      interaction,
+      claimed === "claimed"
+        ? "An answer is already being processed for this request."
+        : "This input request is stale or has already been handled.",
+    );
+    return;
+  }
+
+  const traceparent = activeTraceparent();
+  const sent = await deps.agent.sendInteraction({
+    continuationKey: loaded.continuationKey,
+    interactionId: interaction.id,
+    dispatchId: locator.dispatchId,
+    renderRevision: locator.revision,
+    requestId: request.requestId,
+    authChannelId: loaded.authChannelId,
+    ...(loaded.authThreadId === undefined ? {} : { authThreadId: loaded.authThreadId }),
+    ...(optionId === undefined ? { freeform } : { optionId }),
+    principal: loaded.principal,
+    ...(loaded.approvalRequester === undefined
+      ? {}
+      : { approvalRequester: loaded.approvalRequester }),
+    ...(traceparent === undefined ? {} : { traceparent }),
+  });
+  if (Result.isError(sent)) {
+    report(deps, "agent.hitl.forward", sent.error);
+    await ephemeral(
+      interaction,
+      "I couldn't confirm whether that answer was received, so this request is paused safely.",
+    );
+    return;
+  }
+
+  if (!(await deps.store.complete(locator.dispatchId, locator.revision, interaction.id))) {
+    deps.reporter.captureDefect(new Error("accepted HITL claim could not be completed"), {
+      op: "agent.hitl.complete",
+      attributes: { dispatchId: locator.dispatchId, interactionId: interaction.id },
+    });
+  }
+  await ephemeral(interaction, "Your answer was sent.");
+}
+
+async function handleAuthorization(
+  deps: HitlInteractionDeps,
+  interaction: Interaction,
+  locator: Extract<HitlLocator, { readonly kind: "authorization" }>,
+): Promise<void> {
+  const [intentResult, targetResult] = await Promise.all([
+    deps.renders.intent(locator.dispatchId),
+    deps.renders.target(locator.dispatchId),
+  ]);
+  if (Result.isError(intentResult)) {
+    report(deps, "agent.hitl.decode-authorization-intent", intentResult.error);
+    await ephemeral(interaction, "This authorization challenge is temporarily unavailable.");
+    return;
+  }
+  if (Result.isError(targetResult)) {
+    report(deps, "agent.hitl.decode-authorization-target", targetResult.error);
+    await ephemeral(interaction, "This authorization challenge is temporarily unavailable.");
+    return;
+  }
+  const intent = intentResult.value;
+  const target = targetResult.value;
+  const authorization = intent?.authorizations?.[locator.authorizationIndex];
+  if (
+    intent === undefined ||
+    target === undefined ||
+    intent.phase !== "streaming" ||
+    intent.revision !== locator.revision ||
+    intent.dispatchId !== target.dispatchId ||
+    intent.continuationKey !== target.continuationKey ||
+    authorization === undefined
+  ) {
+    await ephemeral(interaction, "This authorization challenge has expired or completed.");
+    return;
+  }
+  const sourceMessageId = messageIdOf(interaction);
+  if (
+    interaction.guildId !== deps.guildId ||
+    interaction.channelId !== target.channelId ||
+    interaction.user.id !== target.requesterUserId ||
+    interaction.user.id !== authorization.recipientUserId ||
+    sourceMessageId === undefined
+  ) {
+    await ephemeral(interaction, "Only the person who started this turn can open this connection.");
+    return;
+  }
+  const projection = await deps.renders.projection(locator.dispatchId, target.anchorMessageId);
+  if (Result.isError(projection)) {
+    report(deps, "agent.hitl.decode-authorization-projection", projection.error);
+    await ephemeral(interaction, "This authorization challenge is temporarily unavailable.");
+    return;
+  }
+  if (projection.value.anchorMessageId !== sourceMessageId) {
+    await ephemeral(interaction, "This authorization challenge is no longer active.");
+    return;
+  }
+  const challenge = await deps.renders.authorization(locator.dispatchId, authorization.id);
+  if (Result.isError(challenge)) {
+    report(deps, "agent.hitl.decode-authorization-challenge", challenge.error);
+    await ephemeral(interaction, "This authorization challenge is temporarily unavailable.");
+    return;
+  }
+  if (challenge.value === undefined) {
+    await ephemeral(interaction, "This authorization challenge has expired or completed.");
+    return;
+  }
+  await revealAuthorization(interaction, authorization, challenge.value);
+}
+
+export function createHitlInteractionHandler(deps: HitlInteractionDeps) {
+  return async (interaction: Interaction): Promise<boolean> => {
+    const customId =
+      interaction.isButton() || interaction.isStringSelectMenu() || interaction.isModalSubmit()
+        ? interaction.customId
+        : undefined;
+    if (customId === undefined || !customId.startsWith("eve-hitl:")) return false;
+    const locator = parseLocator(customId);
+
+    if (locator?.kind === "input" && locator.action === "freeform" && interaction.isButton()) {
+      await interaction.showModal(modalFor(locator));
+      return true;
+    }
+
+    if (!interaction.isRepliable()) return true;
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    if (locator === undefined) {
+      await ephemeral(interaction, "This agent control is malformed or no longer supported.");
+      return true;
+    }
+
+    try {
+      if (locator.kind === "authorization") {
+        await handleAuthorization(deps, interaction, locator);
+      } else {
+        await handleInput(deps, interaction, locator);
+      }
+    } catch (error) {
+      report(deps, "agent.hitl.handle", error);
+      await ephemeral(interaction, "This request is temporarily unavailable.").catch(
+        () => undefined,
+      );
+    }
+    return true;
+  };
+}
+
+export type HitlInteractionHandler = ReturnType<typeof createHitlInteractionHandler>;

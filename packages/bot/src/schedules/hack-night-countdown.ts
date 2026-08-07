@@ -22,8 +22,10 @@ import { LightningTime } from "@purduehackers/time";
 import { DISCORD_IDS } from "@repo/shared/discord";
 import { Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
+import type { Client } from "discord.js";
 
 import { defineSchedule } from "../framework/schedules.ts";
+import { indianaWallClock, nextIndianaMidnight } from "../time/indiana.ts";
 
 const lightning = new LightningTime();
 
@@ -53,14 +55,13 @@ const SPARK_MS = 86_400_000 / (16 * 16 * 16);
  * reads `f~f~f|0`.
  */
 export function finalSparkAt(at: Date): Date {
-  const midnight = new Date(at);
-  midnight.setHours(24, 0, 0, 0);
+  const midnight = nextIndianaMidnight(at);
   return new Date(Math.ceil(midnight.getTime() - SPARK_MS));
 }
 
 /** Current Lightning Time, for example `f~f~a|4`. */
 export function lightningNow(at: Date): string {
-  return lightning.convertToLightning(at).lightningString;
+  return lightning.convertToLightning(indianaWallClock(at)).lightningString;
 }
 
 /**
@@ -97,8 +98,7 @@ const CHARGES_PER_SPARK = 16;
  * make the clock drift behind the real time it is displaying.
  */
 export function countdownTicks(at: Date): readonly Date[] {
-  const midnight = new Date(at);
-  midnight.setHours(24, 0, 0, 0);
+  const midnight = nextIndianaMidnight(at);
   const sparkStart = midnight.getTime() - SPARK_MS;
 
   const ticks: Date[] = [];
@@ -174,7 +174,7 @@ export const LEAD_WARMUP_MS = 2_000;
  * early reads as the clock jumping ahead of itself.
  */
 export async function measureLead(
-  rest: { readonly get: (route: `/${string}`) => Promise<unknown> },
+  rest: Pick<Client["rest"], "get">,
   deps: { readonly now: () => Date; readonly sleep: (ms: number) => Promise<void> },
 ): Promise<number> {
   const samples: number[] = [];

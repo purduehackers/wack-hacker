@@ -36,7 +36,7 @@ export function shipContent(message: Message): string {
   for (const snapshot of message.messageSnapshots.values()) {
     if (snapshot.content !== undefined && snapshot.content !== "") sections.push(snapshot.content);
   }
-  return sections.filter((section) => section !== "").join("\n");
+  return sections.filter((value) => value !== "").join("\n");
 }
 
 export function shipAttachments(message: Message): readonly ShipAttachmentInput[] {
@@ -92,21 +92,24 @@ export function emitShipMessage(ships: ShipsClient) {
     name: "emit-ship-message",
     kind: "message",
     dedupKey: (message) => message.id,
-    handle: async (message) => {
+    handle: async (message, context) => {
+      if (context.isBotMention) return Result.ok(undefined);
       if (message.channelId !== DISCORD_IDS.channels.SHIP) return Result.ok(undefined);
 
-      const content = shipContent(message);
+      const shipText = shipContent(message);
       const attachments = shipAttachments(message);
-      // Nothing to show: `auto-thread` will have removed it anyway.
-      if (!URL_PATTERN.test(content) && attachments.length === 0) return Result.ok(undefined);
+      // Any attachment makes a valid ship even when the gallery cannot render
+      // that file type; eligibility and media projection are separate concerns.
+      if (!URL_PATTERN.test(shipText) && message.attachments.size === 0)
+        return Result.ok(undefined);
 
       const created = await ships.createShip({
         userId: message.author.id,
         username: message.member?.displayName ?? message.author.username,
         avatarUrl: avatarUrlFor(message.author.id, message.author.avatar),
         messageId: message.id,
-        title: shipTitle(content),
-        content,
+        title: shipTitle(shipText),
+        content: shipText,
         attachments,
       });
 

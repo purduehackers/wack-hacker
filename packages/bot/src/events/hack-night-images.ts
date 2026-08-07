@@ -39,7 +39,8 @@ export function hackNightImages(deps: {
     name: "hack-night-images",
     kind: "message",
     dedupKey: (message) => message.id,
-    handle: async (message) => {
+    handle: async (message, context) => {
+      if (context.isBotMention) return Result.ok(undefined);
       if (!isPhotoThread(message)) return Result.ok(undefined);
 
       const images = [...message.attachments.values()].filter(
@@ -49,22 +50,26 @@ export function hackNightImages(deps: {
 
       const slug = await resolveEventSlug(deps.slugStore, message.channelId, message.createdAt);
 
-      // The CMS is the source of truth for "already filed", so a replayed
-      // message cannot double-file even if dedup has expired.
-      const existing = await deps.cms.hasImageForMessage(slug, message.id);
-      if (Result.isError(existing)) return Result.map(existing, () => undefined);
-      if (existing.value) return Result.ok(undefined);
-
       let failed = 0;
-      for (const image of images) {
+      for (const attachment of images) {
+        // Check each attachment independently. If one upload succeeds and a
+        // later one fails, replay must resume the missing file rather than
+        // treating the whole Discord message as complete.
+        const filename = `${message.id}-${attachment.name}`;
+        const existing = await deps.cms.hasImageForMessage(slug, message.id, filename);
+        if (Result.isError(existing)) {
+          failed += 1;
+          continue;
+        }
+        if (existing.value) continue;
+
         const uploaded = await deps.cms.uploadImage({
-          url: image.url,
+          url: attachment.url,
           slug,
           discordMessageId: message.id,
           discordUserId: message.author.id,
-          // Prefixed so two people posting `IMG_1234.jpg` do not collide.
-          filename: `${message.id}-${image.name}`,
-          contentType: image.contentType ?? "image/jpeg",
+          filename,
+          contentType: attachment.contentType ?? "image/jpeg",
         });
         if (Result.isError(uploaded)) failed += 1;
       }

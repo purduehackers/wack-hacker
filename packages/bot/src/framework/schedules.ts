@@ -1,27 +1,22 @@
 /**
- * Scheduled jobs, run in-process.
+ * In-process scheduled community jobs.
  *
- * The legacy app could not hold a timer, so each job was a Vercel Cron hitting
- * `GET /api/crons/:name` behind a `CRON_SECRET`, with `buildCronRoutes()`
- * generating the schedule table at build time. A single always-on process needs
- * none of that: `croner` fires the callback directly.
- *
- * Because there is exactly one instance, there is also no coordination problem —
- * no lease, no "did another worker already run this minute" check. That
- * assumption is worth stating because it is the one thing that breaks if the bot
- * is ever scaled to two replicas: every job would fire twice.
- *
- * Timezone is explicit rather than inherited from the host. Hack night is a
- * Friday-evening event in Indiana, and a container defaulting to UTC would
- * announce it on the wrong day.
+ * Croner evaluates every expression in Indiana time. Sandbox replacement may
+ * briefly overlap processes, so Redis claims each nominal occurrence before any
+ * side effect and retains the claim beyond the weekly interval.
  */
 
+import { Transient } from "@repo/shared/errors";
 import type { KnownError } from "@repo/shared/errors";
+import type { RedisClient } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
 import { instrument } from "@repo/shared/result/observe";
 import type { Reporter } from "@repo/shared/result/observe";
 import { Cron } from "croner";
 import type { Client } from "discord.js";
+
+import { indianaMinuteId } from "../time/indiana.ts";
+import { traceOperation } from "./observability.ts";
 
 /** Purdue Hackers is in Indiana; every schedule below is local to it. */
 export const SCHEDULE_TIMEZONE = "America/Indiana/Indianapolis";
@@ -45,6 +40,8 @@ export interface SchedulerDeps {
   readonly schedules: readonly Schedule[];
   readonly client: Client<true>;
   readonly reporter: Reporter;
+  readonly redis: RedisClient;
+  readonly now?: () => Date;
 }
 
 export interface RunningScheduler {
@@ -52,6 +49,27 @@ export interface RunningScheduler {
   readonly stop: () => void;
   /** Next fire time per job, for logging at startup. */
   readonly nextRuns: ReadonlyMap<string, Date | undefined>;
+}
+
+const SCHEDULE_CLAIM_TTL_SECONDS = 14 * 24 * 60 * 60;
+
+export async function claimScheduleFire(
+  redis: RedisClient,
+  scheduleName: string,
+  at: Date,
+): Promise<Result<boolean, Transient>> {
+  return Result.tryPromise({
+    try: async () =>
+      (await redis.set(`bot:schedule:${scheduleName}:${indianaMinuteId(at)}`, "1", {
+        nx: true,
+        ex: SCHEDULE_CLAIM_TTL_SECONDS,
+      })) === "OK",
+    catch: (cause) =>
+      new Transient({
+        operation: `claim schedule ${scheduleName}`,
+        detail: cause instanceof Error ? cause.message : String(cause),
+      }),
+  });
 }
 
 export function startScheduler(deps: SchedulerDeps): RunningScheduler {
@@ -69,13 +87,25 @@ export function startScheduler(deps: SchedulerDeps): RunningScheduler {
         },
       },
       async () => {
-        await instrument(`schedule.${schedule.name}`, deps.reporter, () =>
-          Result.tryPromise({
-            try: () => schedule.run({ client: deps.client }),
-            catch: (cause) => cause,
-          }).then((settled) =>
-            Result.isError(settled) ? Result.err(settled.error) : settled.value,
-          ),
+        const op = `schedule.${schedule.name}`;
+        await traceOperation(
+          op,
+          () =>
+            instrument(op, deps.reporter, async () => {
+              const claimed = await claimScheduleFire(
+                deps.redis,
+                schedule.name,
+                (deps.now ?? (() => new Date()))(),
+              );
+              if (Result.isError(claimed)) return claimed;
+              if (!claimed.value) return Result.ok(undefined);
+              const ran = await Result.tryPromise({
+                try: () => schedule.run({ client: deps.client }),
+                catch: (cause) => cause,
+              });
+              return Result.isError(ran) ? Result.err(ran.error) : ran.value;
+            }),
+          { "schedule.name": schedule.name },
         );
       },
     );

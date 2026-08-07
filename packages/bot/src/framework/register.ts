@@ -1,41 +1,34 @@
-/**
- * Registers slash commands with Discord.
- *
- * Guild-scoped, not global: the bot serves one guild, and guild commands appear
- * immediately while global commands can take up to an hour to propagate.
- *
- * `PUT` replaces the whole set, which makes this idempotent and also means a
- * command removed from `COMMANDS` disappears from Discord on the next run —
- * that is intended, and the reason the registry is an explicit list.
- *
- * Run separately from process start. The legacy app registered during its build
- * so a broken build could never touch the live bot; the same reasoning applies
- * here, which is why `bun run src/index.ts` does not do this implicitly.
- */
+/** Explicit, guarded guild-command registration. Never runs during bot startup. */
 
 import { DISCORD_GUILD_ID } from "@repo/shared/discord";
 import { UpstreamError, httpStatusOf, serializeError } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { REST, Routes } from "discord.js";
+import type { RESTPostAPIChatInputApplicationCommandsJSONBody } from "discord.js";
 
-import { buildCommands } from "../commands/index.ts";
-import { env } from "../env.ts";
-import { toRegistrationBody } from "./commands.ts";
-import type { SlashCommand } from "./commands.ts";
+import { builder as hackNight } from "../commands/hack-night.ts";
+import { ping } from "../commands/ping.ts";
+import { builder as privacy } from "../commands/privacy.ts";
+
+export const registrationBody: readonly RESTPostAPIChatInputApplicationCommandsJSONBody[] = [
+  ping.builder.toJSON(),
+  privacy.toJSON(),
+  hackNight.toJSON(),
+];
 
 export async function registerCommands(deps: {
   readonly token: string;
   readonly applicationId: string;
   readonly guildId: string;
-  readonly commands: readonly SlashCommand[];
+  readonly body: readonly RESTPostAPIChatInputApplicationCommandsJSONBody[];
 }): Promise<Result<number, UpstreamError>> {
   const rest = new REST({ version: "10" }).setToken(deps.token);
-  const body = deps.commands.map(toRegistrationBody);
-
   return Result.tryPromise({
     try: async () => {
-      await rest.put(Routes.applicationGuildCommands(deps.applicationId, deps.guildId), { body });
-      return body.length;
+      await rest.put(Routes.applicationGuildCommands(deps.applicationId, deps.guildId), {
+        body: deps.body,
+      });
+      return deps.body.length;
     },
     catch: (cause) =>
       new UpstreamError({
@@ -46,27 +39,32 @@ export async function registerCommands(deps: {
   });
 }
 
-const built = buildCommands({
-  privacyApiKey: env.PRIVACY_DB_API_KEY,
-  vercelToken: env.VERCEL_API_TOKEN,
-  dashboardEdgeConfig: env.DASHBOARD_EDGE_CONFIG,
-});
+async function main(): Promise<void> {
+  if (process.env["CONFIRM_COMMAND_GUILD"] !== DISCORD_GUILD_ID) {
+    console.error(`refusing command registration: set CONFIRM_COMMAND_GUILD=${DISCORD_GUILD_ID}`);
+    process.exitCode = 1;
+    return;
+  }
+  const token = process.env["DISCORD_BOT_TOKEN"];
+  const applicationId = process.env["DISCORD_BOT_CLIENT_ID"];
+  if (!token || !applicationId) {
+    console.error("DISCORD_BOT_TOKEN and DISCORD_BOT_CLIENT_ID are required");
+    process.exitCode = 1;
+    return;
+  }
 
-if (Result.isError(built)) {
-  console.error(`cannot build commands: ${serializeError(built.error).message}`);
-  process.exit(1);
+  const outcome = await registerCommands({
+    token,
+    applicationId,
+    guildId: DISCORD_GUILD_ID,
+    body: registrationBody,
+  });
+  if (Result.isError(outcome)) {
+    console.error(`command registration failed: ${serializeError(outcome.error).message}`);
+    process.exitCode = 1;
+    return;
+  }
+  console.info(`registered ${outcome.value} command(s) to guild ${DISCORD_GUILD_ID}`);
 }
 
-const outcome = await registerCommands({
-  token: env.DISCORD_BOT_TOKEN,
-  applicationId: env.DISCORD_BOT_CLIENT_ID,
-  guildId: DISCORD_GUILD_ID,
-  commands: built.value,
-});
-
-if (Result.isError(outcome)) {
-  console.error(`command registration failed: ${serializeError(outcome.error).message}`);
-  process.exit(1);
-}
-
-console.info(`registered ${outcome.value} command(s) to guild ${DISCORD_GUILD_ID}`);
+if (import.meta.main) await main();

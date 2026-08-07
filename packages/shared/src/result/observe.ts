@@ -4,7 +4,7 @@
  * The point of adopting Result here is that error *reporting* stops being
  * something you have to remember. Wrap an operation once and every failure is
  * classified, counted, and — only when it is genuinely our bug — reported as an
- * issue. That replaces the legacy app's scattered
+ * issue. That replaces the prior implementation's scattered
  * `logger.error(err)` → `captureException` → evlog chain, and preserves its one
  * good rule: exactly one reporting path, never a bare `captureException` next
  * to a `logger.error`, which double-reports.
@@ -18,20 +18,40 @@ import { isDefect, serializeError, tagOf } from "../errors.ts";
 import type { Result } from "./index.ts";
 import { Result as ResultOps } from "./index.ts";
 
-/** One wide event per unit of work, matching the legacy `evlog` discipline. */
+/**
+ * Extra dimensions on an event.
+ *
+ * Scalars only, because these end up as OTel attributes and as Sentry tags,
+ * neither of which accepts a nested object. Keep the cardinality in mind: a
+ * conversation id is a good attribute, a full message body is not.
+ */
+export type Attributes = Readonly<Record<string, string | number | boolean>>;
+
+/**
+ * One wide event per unit of work, matching the wide-event discipline.
+ *
+ * The named fields are the ones every event has; `attributes` carries whatever
+ * makes a *particular* event answerable without a second query. That bag is the
+ * point of a wide event — an error you cannot attribute to a conversation is a
+ * count, not a diagnosis.
+ */
 export interface WideEvent {
   readonly op: string;
   readonly status: "ok" | "error" | "defect";
   readonly errorTag?: string;
   readonly errorMessage?: string;
   readonly durationMs?: number;
+  readonly attributes?: Attributes;
 }
 
 export interface Reporter {
   /** Emit the terminal wide event for a unit of work. */
   readonly emit: (event: WideEvent) => void;
   /** Report a genuine bug. Only ever called for defects. */
-  readonly captureDefect: (error: unknown, context: { readonly op: string }) => void;
+  readonly captureDefect: (
+    error: unknown,
+    context: { readonly op: string; readonly attributes?: Attributes },
+  ) => void;
 }
 
 /** Discards everything. For code paths that must not report. */

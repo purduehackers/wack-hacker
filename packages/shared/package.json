@@ -4,34 +4,36 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./bearer": "./src/bearer.ts",
     "./errors": "./src/errors.ts",
     "./result": "./src/result/index.ts",
     "./result/observe": "./src/result/observe.ts",
     "./result/retry": "./src/result/retry.ts",
     "./discord": "./src/discord/index.ts",
+    "./discord-command-wire": "./src/discord-command-wire.ts",
     "./db": "./src/db/index.ts",
     "./redis": "./src/redis/client.ts",
     "./wire": "./src/wire.ts",
-    "./text": "./src/text.ts"
+    "./text": "./src/text.ts",
+    "./bot-generation": "./src/bot-generation.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "db:baseline-legacy": "bun scripts/baseline-legacy-migrations.ts",
+    "test": "bun test"
   },
   "dependencies": {
     "@libsql/client": "^0.17.4",
-    "@upstash/redis": "^1.38.1",
+    "@upstash/redis": "^1.38.2",
     "better-result": "^3.0.0",
     "drizzle-orm": "^0.45.2",
     "zod": "4.4.3"
   },
   "devDependencies": {
-    "@types/bun": "latest",
+    "@types/bun": "1.3.14",
     "drizzle-kit": "^0.31.10"
-  },
-  "peerDependencies": {
-    "typescript": "^7"
   }
 }

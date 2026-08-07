@@ -1,0 +1,15 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/ensure-bot",
+      "schedule": "*/5 * * * *"
+    }
+  ],
+  "functions": {
+    "api/ensure-bot.ts": {
+      "maxDuration": 300,
+      "includeFiles": "../{supervisor,shared}/src/**/*.ts"
+    }
+  }
+}

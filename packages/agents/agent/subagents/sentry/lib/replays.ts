@@ -1,0 +1,82 @@
+import { listAnOrganization_sReplays, retrieveAReplayInstance, unwrapResult } from "@sentry/api";
+import { z } from "zod";
+
+import { sentryOpts, sentryOrg, sentryProjectId } from "./client.ts";
+import { perPageField } from "./constants.ts";
+import { defineTool } from "./define-tool.ts";
+
+const replayProjectionSchema = z.looseObject({ title: z.string().nullish() });
+
+/** List session replays. */
+export const list_replays = defineTool({
+  name: "list_replays",
+  domain: "sentry",
+  description:
+    "List session replays for the organization. Returns replay ID, duration, error count, URLs visited, user info, and browser/OS.",
+  access: { risk: "read" },
+  input: z.object({
+    project_slug: z.string().optional().describe("Filter by project slug"),
+    query: z
+      .string()
+      .optional()
+      .describe("Search query (e.g. 'user.email:alice@example.com', 'count_errors:>0')"),
+    sort: z
+      .enum(["started_at", "-started_at", "duration", "-duration", "count_errors", "-count_errors"])
+      .optional(),
+    per_page: perPageField,
+    stat_period: z.string().optional().describe("Time range (e.g. '24h', '7d'). Defaults to '7d'."),
+  }),
+  execute: async ({ project_slug, query, sort, per_page, stat_period }) => {
+    const projectId = project_slug === undefined ? undefined : await sentryProjectId(project_slug);
+    const result = await listAnOrganization_sReplays({
+      ...sentryOpts(),
+      path: { organization_id_or_slug: sentryOrg() },
+      query: {
+        ...(projectId === undefined ? {} : { project: [projectId] }),
+        statsPeriod: stat_period ?? "7d",
+        ...(per_page === undefined ? {} : { per_page }),
+        ...(query === undefined ? {} : { query }),
+        ...(sort === undefined ? {} : { sort }),
+      },
+    });
+    const { data } = unwrapResult(result, "listReplays");
+    return JSON.stringify(
+      data.map((replay) => ({
+        id: replay.id,
+        title: replayProjectionSchema.parse(replay).title,
+        duration: replay.duration,
+        countErrors: replay.count_errors,
+        startedAt: replay.started_at,
+        finishedAt: replay.finished_at,
+        urls: replay.urls?.slice(0, 10),
+        user: replay.user,
+        browser: replay.browser,
+        os: replay.os,
+        activity: replay.activity,
+      })),
+    );
+  },
+});
+
+/** Get details for a specific session replay. */
+export const get_replay = defineTool({
+  name: "get_replay",
+  domain: "sentry",
+  description:
+    "Get full details for a session replay — duration, error count, URLs, user info, browser/OS, and segment count.",
+  access: { risk: "read" },
+  input: z.object({
+    replay_id: z.string().describe("Replay ID"),
+  }),
+  execute: async ({ replay_id }) => {
+    const result = await retrieveAReplayInstance({
+      ...sentryOpts(),
+      path: {
+        organization_id_or_slug: sentryOrg(),
+        replay_id,
+      },
+    });
+    const { data } = unwrapResult(result, "getReplay");
+    return JSON.stringify(data);
+  },
+});

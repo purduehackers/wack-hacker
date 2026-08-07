@@ -1,35 +1,111 @@
 /**
- * The bot's reporter.
+ * Structured logging, tracing, and metrics for the long-running bot.
  *
- * `@repo/shared` defines `Reporter` as an interface rather than importing Sentry,
- * so each package supplies its own. This is the console-backed implementation:
- * one structured line per unit of work, which is exactly what a container host
- * captures from stdout. Sentry and evlog replace `captureDefect` and `emit` in
- * Phase 7 without touching a single call site.
- *
- * The split it enforces is the point. An expected failure — a role denial, a 404
- * from Linear — is counted and never paged. A defect is our bug and gets the
- * full error. The legacy app blurred these and compensated with an
- * `ignoreErrors` denylist in its Sentry config.
+ * Expected failures are counted and logged; only defects become Sentry issues.
+ * Metric dimensions deliberately exclude Discord/session identifiers so cardinality
+ * stays bounded, while the wide JSON event retains those identifiers for diagnosis.
  */
 
-import type { Reporter, WideEvent } from "@repo/shared/result/observe";
+import { context, isSpanContextValid, trace } from "@opentelemetry/api";
+import type { Attributes, Reporter, WideEvent } from "@repo/shared/result/observe";
+import * as Sentry from "@sentry/bun";
 
-function line(event: WideEvent): string {
-  const fields: string[] = [`op=${event.op}`, `status=${event.status}`];
-  if (event.durationMs !== undefined) fields.push(`duration_ms=${event.durationMs}`);
-  if (event.errorTag !== undefined) fields.push(`error_tag=${event.errorTag}`);
-  if (event.errorMessage !== undefined) fields.push(`error="${event.errorMessage}"`);
-  return fields.join(" ");
+interface MetricSink {
+  readonly count: (
+    name: string,
+    value?: number,
+    options?: { readonly attributes?: Attributes },
+  ) => void;
+  readonly distribution: (
+    name: string,
+    value: number,
+    options?: { readonly unit?: string; readonly attributes?: Attributes },
+  ) => void;
+}
+
+/** Pure formatter kept exported so the accounting/log contract can be tested. */
+export function wideEventLine(event: WideEvent, traceId?: string): string {
+  return JSON.stringify({
+    ...event.attributes,
+    event: "operation.completed",
+    op: event.op,
+    status: event.status,
+    ...(event.durationMs === undefined ? {} : { durationMs: event.durationMs }),
+    ...(event.errorTag === undefined ? {} : { errorTag: event.errorTag }),
+    ...(event.errorMessage === undefined ? {} : { errorMessage: event.errorMessage }),
+    ...(traceId === undefined ? {} : { traceId }),
+  });
+}
+
+/** One counter per terminal operation and one latency sample when available. */
+export function recordOperationMetrics(
+  event: WideEvent,
+  metrics: MetricSink = Sentry.metrics,
+): void {
+  const attributes: Record<string, string> = { op: event.op, status: event.status };
+  if (event.errorTag !== undefined) attributes["errorTag"] = event.errorTag;
+  metrics.count("bot.operation", 1, { attributes });
+  if (event.durationMs !== undefined) {
+    metrics.distribution("bot.operation.duration", event.durationMs, {
+      unit: "millisecond",
+      attributes: { op: event.op, status: event.status },
+    });
+  }
+}
+
+/** W3C context used on durable bot→agent deliveries. */
+export function activeTraceparent(): string | undefined {
+  const span = trace.getSpan(context.active());
+  if (span === undefined) return undefined;
+  const spanContext = span.spanContext();
+  if (!isSpanContextValid(spanContext)) return undefined;
+  const flags = spanContext.traceFlags.toString(16).padStart(2, "0");
+  return `00-${spanContext.traceId}-${spanContext.spanId}-${flags}`;
+}
+
+/** Restores a persisted W3C parent before starting the recovery consumer span. */
+export function continueTrace<T>(traceparent: string | undefined, work: () => T): T {
+  if (traceparent === undefined) return work();
+  const match =
+    /^(?!ff)[0-9a-f]{2}-((?!0{32})[0-9a-f]{32})-((?!0{16})[0-9a-f]{16})-([0-9a-f]{2})$/u.exec(
+      traceparent,
+    );
+  if (match === null) return work();
+  const [, traceId = "", spanId = "", flags = "00"] = match;
+  const sampled = (Number.parseInt(flags, 16) & 1) === 1 ? "1" : "0";
+  return Sentry.continueTrace(
+    { sentryTrace: `${traceId}-${spanId}-${sampled}`, baggage: undefined },
+    work,
+  );
+}
+
+/** Ensures gateway and cron work has an active span before it crosses a durable seam. */
+export function traceOperation<T>(op: string, work: () => T, attributes?: Attributes): T {
+  return Sentry.startSpan(
+    { name: op, op, ...(attributes === undefined ? {} : { attributes }) },
+    work,
+  );
+}
+
+function activeTraceId(): string | undefined {
+  const span = Sentry.getActiveSpan();
+  return span === undefined ? undefined : Sentry.spanToJSON(span).trace_id;
 }
 
 export const consoleReporter: Reporter = {
   emit: (event) => {
-    if (event.status === "ok") console.info(line(event));
-    else console.warn(line(event));
+    recordOperationMetrics(event);
+    const line = wideEventLine(event, activeTraceId());
+    if (event.status === "ok") console.info(line);
+    else console.warn(line);
   },
   captureDefect: (error, context) => {
-    // Defects keep their stack: this is the one place the full error is wanted.
+    // Defects keep their stack and are the only failures that create an issue.
     console.error(`defect op=${context.op}`, error);
+    Sentry.withScope((scope) => {
+      scope.setTag("operation", context.op);
+      if (context.attributes !== undefined) scope.setAttributes(context.attributes);
+      Sentry.captureException(error);
+    });
   },
 };

@@ -22,6 +22,7 @@ import { DISCORD_IDS } from "@repo/shared/discord";
 import { Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { upstreamRetry } from "@repo/shared/result/retry";
+import { ChannelType, PermissionFlagsBits } from "discord.js";
 import type { Client, Message } from "discord.js";
 import rehypeStringify from "rehype-stringify";
 import remarkParse from "remark-parse";
@@ -95,12 +96,16 @@ export async function renderHtml(content: string, resolver: Resolver): Promise<s
 export function isPubliclyMirrorable(message: Message): boolean {
   if (!message.inGuild()) return false;
 
+  if (message.channel.isThread() && message.channel.type === ChannelType.PrivateThread)
+    return false;
   const parent = message.channel.isThread() ? message.channel.parent : message.channel;
-  if (!parent) return false;
+  if (!parent || !("permissionsFor" in parent)) return false;
 
   const { parentId } = parent;
-  if (parentId === null) return true;
-  return !DISCORD_IDS.categories.INTERNAL.has(parentId);
+  if (parentId !== null && DISCORD_IDS.categories.INTERNAL.has(parentId)) return false;
+
+  const everyone = message.guild.roles.everyone;
+  return parent.permissionsFor(everyone)?.has(PermissionFlagsBits.ViewChannel) ?? false;
 }
 
 export function emitDashboardMessage(deps: { readonly apiToken: string }) {
@@ -108,7 +113,8 @@ export function emitDashboardMessage(deps: { readonly apiToken: string }) {
     name: "emit-dashboard-message",
     kind: "message",
     dedupKey: (message) => message.id,
-    handle: async (message) => {
+    handle: async (message, context) => {
+      if (context.isBotMention) return Result.ok(undefined);
       if (!isPubliclyMirrorable(message)) return Result.ok(undefined);
       if (!message.inGuild()) return Result.ok(undefined);
 

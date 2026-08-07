@@ -1,30 +1,15 @@
-/**
- * Hack night photo archive in Payload CMS.
- *
- * Photos posted in a hack night images thread are uploaded to the `media`
- * collection, tagged `source: "hack-night"` and filed under the event slug in
- * `batchId`. The Sunday cleanup job reads them back to count photos and rank
- * photographers.
- *
- * Two things worth stating:
- *
- * - Listing is paginated with a hard page cap. An unbounded loop over a
- *   collection this job does not own is how a cleanup job turns into an outage;
- *   hitting the cap truncates and says so rather than spinning.
- * - Uploads are idempotent on `discordMessageId`. Reposting the same message —
- *   which a gateway `RESUME` can cause — must not duplicate the photo, and the
- *   count that drives the leaderboard depends on that.
- */
+/** Hack Night photo archive backed by Payload's documented REST API. */
 
-import { PayloadSDK } from "@payloadcms/sdk";
 import { Transient, UpstreamError, httpStatusOf } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { upstreamRetry } from "@repo/shared/result/retry";
+import { z } from "zod";
 
 const COLLECTION = "media";
 const SOURCE = "hack-night";
 const LIST_PAGE_SIZE = 100;
 const LIST_PAGE_CAP = 20;
+const FETCH_TIMEOUT_MS = 15_000;
 
 export interface HackNightImage {
   readonly id: number | string;
@@ -44,23 +29,24 @@ export interface UploadImageInput {
   readonly contentType: string;
 }
 
-/** Discord CDN is usually quick; a slow host must not wedge the handler. */
-const FETCH_TIMEOUT_MS = 15_000;
-
-function altTextFor(slug: string, filename: string): string {
-  return `Hack Night ${slug.replace(/^hack-night-/, "")} photo — ${filename}`;
-}
-
 export type CmsError = Transient | UpstreamError;
 
-interface MediaDoc {
-  readonly id?: number | string;
-  readonly filename?: string;
-  readonly url?: string;
-  readonly discordMessageId?: string;
-  readonly discordUserId?: string;
-  readonly createdAt?: string;
-}
+const mediaDocSchema = z.object({
+  id: z.union([z.string(), z.number()]).optional(),
+  filename: z.string().optional(),
+  url: z.string().optional(),
+  discordMessageId: z.string().optional(),
+  discordUserId: z.string().optional(),
+  createdAt: z.string().optional(),
+});
+const mediaListSchema = z.object({
+  docs: z.array(mediaDocSchema),
+  totalPages: z.number().int().nonnegative(),
+});
+const mediaMutationSchema = z.object({ doc: mediaDocSchema });
+const mediaDeleteSchema = z.object({ docs: z.array(mediaDocSchema) });
+
+type MediaDoc = z.infer<typeof mediaDocSchema>;
 
 function project(doc: MediaDoc): HackNightImage {
   return {
@@ -73,8 +59,13 @@ function project(doc: MediaDoc): HackNightImage {
   };
 }
 
+function altTextFor(slug: string, filename: string): string {
+  return `Hack Night ${slug.replace(/^hack-night-/, "")} photo — ${filename}`;
+}
+
 function toCmsError(operation: string) {
   return (cause: unknown): CmsError => {
+    if (cause instanceof UpstreamError || cause instanceof Transient) return cause;
     const status = httpStatusOf(cause);
     const detail = cause instanceof Error ? cause.message : String(cause);
     return status !== undefined && status < 500
@@ -90,133 +81,192 @@ export interface CmsDeps {
 
 export const CMS_URL = "https://cms.purduehackers.com";
 
-export function createCmsClient(deps: CmsDeps) {
-  const payload = new PayloadSDK({
-    baseInit: { headers: { Authorization: `users API-Key ${deps.apiKey}` } },
-    baseURL: `${deps.baseUrl ?? CMS_URL}/api`,
+function mediaUrl(baseUrl: string, query: Readonly<Record<string, string>> = {}): URL {
+  const url = new URL(`/api/${COLLECTION}`, baseUrl);
+  for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);
+  return url;
+}
+
+async function payloadRequest<T>(
+  schema: z.ZodType<T>,
+  url: URL,
+  apiKey: string,
+  init: RequestInit = {},
+): Promise<T> {
+  const headers = new Headers(init.headers);
+  headers.set("Authorization", `users API-Key ${apiKey}`);
+  const response = await fetch(url, {
+    ...init,
+    headers,
+    signal: init.signal ?? AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
+  if (!response.ok) {
+    const detail = (await response.text().catch(() => "")).slice(0, 500) || response.statusText;
+    throw new UpstreamError({ service: "payload-cms", status: response.status, detail });
+  }
 
+  const body = await response.json().catch((): unknown => undefined);
+  const parsed = schema.safeParse(body);
+  if (!parsed.success) {
+    throw new UpstreamError({
+      service: "payload-cms",
+      status: 502,
+      detail: `invalid response: ${z.prettifyError(parsed.error)}`,
+    });
+  }
+  return parsed.data;
+}
+
+function imageWhere(
+  slug: string,
+  discordMessageId?: string,
+  filename?: string,
+): Record<string, string> {
+  const where: Record<string, string> = {
+    "where[source][equals]": SOURCE,
+    "where[batchId][equals]": slug,
+  };
+  if (discordMessageId !== undefined) {
+    where["where[discordMessageId][equals]"] = discordMessageId;
+  }
+  if (filename !== undefined) where["where[filename][equals]"] = filename;
+  return where;
+}
+
+interface CmsContext {
+  readonly apiKey: string;
+  readonly baseUrl: string;
+}
+
+function listImages(
+  cms: CmsContext,
+  slug: string,
+): Promise<Result<readonly HackNightImage[], CmsError>> {
+  return Result.tryPromise(
+    {
+      try: async () => {
+        const images: HackNightImage[] = [];
+        for (let page = 1; page <= LIST_PAGE_CAP; page += 1) {
+          const found = await payloadRequest(
+            mediaListSchema,
+            mediaUrl(cms.baseUrl, {
+              ...imageWhere(slug),
+              limit: String(LIST_PAGE_SIZE),
+              page: String(page),
+              sort: "createdAt",
+            }),
+            cms.apiKey,
+          );
+          for (const doc of found.docs) images.push(project(doc));
+          if (page >= found.totalPages) return images;
+        }
+        console.warn(
+          `listImages(${slug}) hit the ${LIST_PAGE_CAP}-page cap; truncated at ${images.length}`,
+        );
+        return images;
+      },
+      catch: toCmsError("list hack night images"),
+    },
+    upstreamRetry,
+  );
+}
+
+function uploadImage(
+  cms: CmsContext,
+  input: UploadImageInput,
+): Promise<Result<HackNightImage, CmsError>> {
+  return Result.tryPromise({
+    try: async () => {
+      const response = await fetch(input.url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+      if (!response.ok) {
+        throw new UpstreamError({
+          service: "discord-cdn",
+          status: response.status,
+          detail: `could not fetch ${input.filename}`,
+        });
+      }
+      const blob = await response.blob();
+      const file = new File([blob], input.filename, {
+        type: blob.type.length > 0 ? blob.type : input.contentType,
+      });
+      const form = new FormData();
+      form.append("file", file);
+      form.append(
+        "_payload",
+        JSON.stringify({
+          alt: altTextFor(input.slug, input.filename),
+          source: SOURCE,
+          batchId: input.slug,
+          discordMessageId: input.discordMessageId,
+          discordUserId: input.discordUserId,
+        }),
+      );
+      const created = await payloadRequest(mediaMutationSchema, mediaUrl(cms.baseUrl), cms.apiKey, {
+        method: "POST",
+        body: form,
+      });
+      return project(created.doc);
+    },
+    catch: toCmsError("upload hack night image"),
+  });
+}
+
+function hasImageForMessage(
+  cms: CmsContext,
+  slug: string,
+  discordMessageId: string,
+  filename?: string,
+): Promise<Result<boolean, CmsError>> {
+  return Result.tryPromise(
+    {
+      try: async () => {
+        const found = await payloadRequest(
+          mediaListSchema,
+          mediaUrl(cms.baseUrl, {
+            ...imageWhere(slug, discordMessageId, filename),
+            limit: "1",
+          }),
+          cms.apiKey,
+        );
+        return found.docs.length > 0;
+      },
+      catch: toCmsError("check hack night image"),
+    },
+    upstreamRetry,
+  );
+}
+
+function deleteImagesForMessage(
+  cms: CmsContext,
+  slug: string,
+  discordMessageId: string,
+): Promise<Result<number, CmsError>> {
+  return Result.tryPromise(
+    {
+      try: async () => {
+        const deleted = await payloadRequest(
+          mediaDeleteSchema,
+          mediaUrl(cms.baseUrl, imageWhere(slug, discordMessageId)),
+          cms.apiKey,
+          { method: "DELETE" },
+        );
+        return deleted.docs.length;
+      },
+      catch: toCmsError("delete hack night images"),
+    },
+    upstreamRetry,
+  );
+}
+
+export function createCmsClient(deps: CmsDeps) {
+  const cms = { apiKey: deps.apiKey, baseUrl: deps.baseUrl ?? CMS_URL };
   return {
-    /** Every photo filed under an event slug, oldest first. */
-    listImages: async (slug: string): Promise<Result<readonly HackNightImage[], CmsError>> =>
-      Result.tryPromise(
-        {
-          try: async () => {
-            const images: HackNightImage[] = [];
-
-            for (let page = 1; page <= LIST_PAGE_CAP; page += 1) {
-              const found = await payload.find({
-                collection: COLLECTION,
-                limit: LIST_PAGE_SIZE,
-                page,
-                sort: "createdAt",
-                where: { source: { equals: SOURCE }, batchId: { equals: slug } },
-              });
-
-              for (const doc of found.docs) images.push(project(doc));
-              if (page >= found.totalPages) return images;
-            }
-
-            // Truncating loudly beats looping over a collection we do not own.
-            console.warn(
-              `listImages(${slug}) hit the ${LIST_PAGE_CAP}-page cap; truncated at ${images.length}`,
-            );
-            return images;
-          },
-          catch: toCmsError("list hack night images"),
-        },
-        upstreamRetry,
-      ),
-
-    /**
-     * Downloads an attachment from Discord and files it under the event slug.
-     *
-     * Two hops, and the first is the fragile one: the image is pulled from the
-     * Discord CDN before being uploaded, so a slow or unreachable host is bounded
-     * by an explicit timeout rather than hanging the handler.
-     */
-    uploadImage: async (input: UploadImageInput): Promise<Result<HackNightImage, CmsError>> =>
-      Result.tryPromise({
-        try: async () => {
-          const response = await fetch(input.url, {
-            signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-          });
-          if (!response.ok) {
-            throw new UpstreamError({
-              service: "discord-cdn",
-              status: response.status,
-              detail: `could not fetch ${input.filename}`,
-            });
-          }
-
-          const blob = await response.blob();
-          const file = new File([blob], input.filename, {
-            type: blob.type.length > 0 ? blob.type : input.contentType,
-          });
-
-          const created = await payload.create({
-            collection: COLLECTION,
-            data: {
-              alt: altTextFor(input.slug, input.filename),
-              source: SOURCE,
-              batchId: input.slug,
-              discordMessageId: input.discordMessageId,
-              discordUserId: input.discordUserId,
-            },
-            file,
-          });
-          return project(created.doc);
-        },
-        catch: (cause) =>
-          cause instanceof UpstreamError ? cause : toCmsError("upload hack night image")(cause),
-      }),
-
-    /** True when a photo for this Discord message is already filed. */
-    hasImageForMessage: async (
-      slug: string,
-      discordMessageId: string,
-    ): Promise<Result<boolean, CmsError>> =>
-      Result.tryPromise(
-        {
-          try: async () => {
-            const found = await payload.find({
-              collection: COLLECTION,
-              limit: 1,
-              where: {
-                source: { equals: SOURCE },
-                batchId: { equals: slug },
-                discordMessageId: { equals: discordMessageId },
-              },
-            });
-            return found.docs.length > 0;
-          },
-          catch: toCmsError("check hack night image"),
-        },
-        upstreamRetry,
-      ),
-
-    /** Removes every photo filed against a Discord message. Returns the count. */
-    deleteImagesForMessage: async (
-      slug: string,
-      discordMessageId: string,
-    ): Promise<Result<number, CmsError>> =>
-      Result.tryPromise(
-        {
-          try: async () => {
-            const deleted = await payload.delete({
-              collection: COLLECTION,
-              where: {
-                source: { equals: SOURCE },
-                batchId: { equals: slug },
-                discordMessageId: { equals: discordMessageId },
-              },
-            });
-            return deleted.docs.length;
-          },
-          catch: toCmsError("delete hack night images"),
-        },
-        upstreamRetry,
-      ),
+    listImages: (slug: string) => listImages(cms, slug),
+    uploadImage: (input: UploadImageInput) => uploadImage(cms, input),
+    hasImageForMessage: (slug: string, discordMessageId: string, filename?: string) =>
+      hasImageForMessage(cms, slug, discordMessageId, filename),
+    deleteImagesForMessage: (slug: string, discordMessageId: string) =>
+      deleteImagesForMessage(cms, slug, discordMessageId),
   };
 }
 

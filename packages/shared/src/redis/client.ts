@@ -10,19 +10,36 @@
  * `eval` is in the set because two operations need atomicity that plain
  * commands cannot express: releasing a lock only if we still hold it, and the
  * compare-and-delete used when tearing down conversation state.
+ *
+ * The list commands back the bot's per-conversation pending queue. eve does not
+ * keep a durable FIFO of user messages for a session, so ordering bursts is the
+ * bot's job, and a Redis list is the smallest thing that survives a restart.
  */
 
 import { Redis } from "@upstash/redis";
+import type { RedisConfigNodejs } from "@upstash/redis";
 
 export type RedisClient = Pick<
   Redis,
-  "get" | "set" | "del" | "expire" | "eval" | "incrby" | "sadd" | "smembers" | "srem" | "pipeline"
+  | "get"
+  | "set"
+  | "del"
+  | "expire"
+  | "eval"
+  | "incrby"
+  | "sadd"
+  | "smembers"
+  | "srem"
+  | "pipeline"
+  | "rpush"
+  | "lpop"
+  | "llen"
+  | "ltrim"
 >;
 
-export interface RedisConfig {
-  readonly url: string;
-  readonly token: string;
-}
+export type RedisConfig = Readonly<{
+  [K in "token" | "url"]: NonNullable<RedisConfigNodejs[K]>;
+}>;
 
 let cached: RedisClient | undefined;
 
@@ -30,7 +47,7 @@ let cached: RedisClient | undefined;
  * Process-wide client, memoized so repeated store construction does not rebuild
  * the HTTP client.
  *
- * The legacy app called `Redis.fromEnv()`, which reads either
+ * The prior implementation called `Redis.fromEnv()`, which reads either
  * `UPSTASH_REDIS_REST_*` or `KV_REST_API_*`. That flexibility hid a real
  * inconsistency: its budget module gated on the former while its env schema
  * declared the latter, and it worked only because `fromEnv` accepts both.

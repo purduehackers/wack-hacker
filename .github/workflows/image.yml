@@ -1,0 +1,168 @@
+name: Publish bot image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "bun.lock"
+      - "package.json"
+      - "packages/bot/**"
+      - "packages/shared/**"
+      - "packages/shared/scripts/release-check.ts"
+      - ".github/workflows/image.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-bot-image-${{ github.sha }}
+  cancel-in-progress: false
+
+env:
+  VERCEL_CLI_VERSION: 58.7.1
+  SYFT_VERSION: 1.39.0
+  SYFT_LINUX_X64_SHA256: bb8f1ba8201d1ce0d99ab4f5243142629c1afba4da97a7c4ca2df97327f97190
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.14
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
+
+      - run: bun install --frozen-lockfile
+
+      - name: Validate registry configuration
+        env:
+          VCR_IMAGE: ${{ vars.VCR_IMAGE }}
+          VCR_PROJECT: ${{ vars.VCR_PROJECT }}
+          VERCEL_SCOPE: ${{ vars.VERCEL_SCOPE }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VCR_IMAGE"
+          test -n "$VCR_PROJECT"
+          test -n "$VERCEL_SCOPE"
+          test -n "$VERCEL_TOKEN"
+          case "$VCR_IMAGE" in
+            vcr.vercel.com/*) ;;
+            *) echo "VCR_IMAGE must be a vcr.vercel.com repository" >&2; exit 1 ;;
+          esac
+
+      - name: Log in to VCR
+        env:
+          VCR_PROJECT: ${{ vars.VCR_PROJECT }}
+          VERCEL_SCOPE: ${{ vars.VERCEL_SCOPE }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: >-
+          bunx vercel@${VERCEL_CLI_VERSION} vcr login docker
+          --project "$VCR_PROJECT" --scope "$VERCEL_SCOPE" --token "$VERCEL_TOKEN"
+
+      - name: Build and push immutable candidate
+        id: build
+        env:
+          BUILDX_METADATA_PROVENANCE: max
+          VCR_IMAGE: ${{ vars.VCR_IMAGE }}
+        run: |
+          set -euo pipefail
+          docker buildx build             --platform linux/amd64             --file packages/bot/Dockerfile             --output "type=image,name=${VCR_IMAGE}:${GITHUB_SHA},push=true,oci-mediatypes=true,compression=zstd,compression-level=3,force-compression=true"             --provenance mode=max             --sbom true             --metadata-file build-metadata.json             .
+          digest="$(bun -e '
+            const metadata = await Bun.file(process.argv[1]).json();
+            const digest = metadata["containerimage.digest"];
+            if (typeof digest !== "string" || !/^sha256:[a-f0-9]{64}$/.test(digest)) process.exit(1);
+            console.log(digest);
+          ' build-metadata.json)"
+          image="${VCR_IMAGE}@${digest}"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for VCR and verify platform
+        env:
+          IMAGE: ${{ steps.build.outputs.image }}
+        run: bun packages/shared/scripts/release-check.ts image "$IMAGE"
+
+      - name: Export SPDX SBOM with checksum-pinned Syft
+        env:
+          IMAGE: ${{ steps.build.outputs.image }}
+        run: |
+          set -euo pipefail
+          archive="syft_${SYFT_VERSION}_linux_amd64.tar.gz"
+          curl --fail --location --proto '=https' --tlsv1.2             --output "$archive"             "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/${archive}"
+          echo "${SYFT_LINUX_X64_SHA256}  ${archive}" | sha256sum --check --strict
+          tar -xzf "$archive" syft
+          install -m 0755 syft /usr/local/bin/syft
+          SYFT_CHECK_FOR_APP_UPDATE=false syft scan "$IMAGE" --output spdx-json > sbom.spdx.json
+          test -s sbom.spdx.json
+
+      - name: Extract reviewable SLSA provenance
+        run: |
+          bun -e '
+            const metadata = await Bun.file("build-metadata.json").json();
+            const provenance = metadata["buildx.build.provenance"];
+            if (typeof provenance !== "object" || provenance === null) {
+              throw new Error("Buildx did not emit provenance metadata");
+            }
+            await Bun.write("provenance.json", JSON.stringify(provenance, null, 2));
+          '
+
+      - name: Scan immutable image
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+        with:
+          image-ref: ${{ steps.build.outputs.image }}
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+          vuln-type: os,library
+
+      - name: Sign image, SBOM, and provenance with GitHub OIDC
+        env:
+          IMAGE: ${{ steps.build.outputs.image }}
+        run: |
+          set -euo pipefail
+          cosign sign --yes "$IMAGE"
+          cosign attest --yes --type spdxjson --predicate sbom.spdx.json "$IMAGE"
+          cosign attest --yes --type slsaprovenance --predicate provenance.json "$IMAGE"
+
+      - name: Verify published signature and attestations
+        env:
+          IMAGE: ${{ steps.build.outputs.image }}
+        run: |
+          set -euo pipefail
+          identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/image.yml@refs/heads/main"
+          issuer="https://token.actions.githubusercontent.com"
+          cosign verify --certificate-identity "$identity" --certificate-oidc-issuer "$issuer" "$IMAGE"
+          cosign verify-attestation --type spdxjson --certificate-identity "$identity" --certificate-oidc-issuer "$issuer" "$IMAGE" >/dev/null
+          cosign verify-attestation --type slsaprovenance --certificate-identity "$identity" --certificate-oidc-issuer "$issuer" "$IMAGE" >/dev/null
+
+      - name: Upload review record
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: bot-image-${{ github.sha }}
+          path: |
+            build-metadata.json
+            provenance.json
+            sbom.spdx.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish digest for review
+        env:
+          IMAGE: ${{ steps.build.outputs.image }}
+        run: |
+          {
+            echo "## Bot image candidate"
+            echo
+            echo '\`\`\`'
+            echo "$IMAGE"
+            echo '\`\`\`'
+            echo
+            echo "Review the attached SBOM/provenance and this job's scan before promotion."
+          } >> "$GITHUB_STEP_SUMMARY"

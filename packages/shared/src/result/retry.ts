@@ -11,7 +11,7 @@
  * upstream load for an outcome that cannot change, so every policy below sets it
  * explicitly.
  *
- * Together these replace the legacy app's hand-rolled
+ * Together these replace the prior implementation's hand-rolled
  * `Math.min(300, 2 ** deliveryCount * 5)` backoff and its `eventRetryPolicy` /
  * task-retry directives, which keyed off a delivery counter that knew nothing
  * about the cause.

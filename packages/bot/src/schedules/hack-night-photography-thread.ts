@@ -14,11 +14,12 @@
 import { DISCORD_IDS } from "@repo/shared/discord";
 import { Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
-import { MessageType } from "discord.js";
+import { MessageType, ThreadAutoArchiveDuration } from "discord.js";
 
 import { defineSchedule } from "../framework/schedules.ts";
 import { generateEventSlug } from "../integrations/hack-night.ts";
 import type { ThreadSlugStore } from "../integrations/hack-night.ts";
+import { indianaDate } from "../time/indiana.ts";
 
 const ANNOUNCEMENTS = [
   "Happy Hack Night! :D",
@@ -32,17 +33,16 @@ const ANNOUNCEMENTS = [
   "Hack Night is a go! :D",
 ] as const;
 
-/** One day, in minutes. The thread only needs to outlive the event. */
-const THREAD_ARCHIVE_MINUTES = 1_440;
+/** The thread only needs to outlive the event. */
+const THREAD_ARCHIVE_DURATION = ThreadAutoArchiveDuration.OneDay;
 
 /** Enough to find the pin notice without scanning the channel. */
 const PIN_NOTICE_LOOKBACK = 5;
 
-/** `MM/DD`, matching the legacy thread naming so archives stay consistent. */
+/** `MM/DD`, matching the established thread naming so archives stay consistent. */
 export function threadDateLabel(date: Date): string {
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${month}/${day}`;
+  const { month, day } = indianaDate(date);
+  return `${String(month).padStart(2, "0")}/${String(day).padStart(2, "0")}`;
 }
 
 export function hackNightPhotographyThread(deps: {
@@ -55,7 +55,7 @@ export function hackNightPhotographyThread(deps: {
 
   return defineSchedule({
     name: "hack-night-photography-thread",
-    // Friday at 20:00 local. The legacy cron said "0 0 * * 6" because Vercel
+    // Friday at 20:00 local. The former cron said "0 0 * * 6" because Vercel
     // evaluates in UTC; running in-process with an explicit timezone means the
     // expression can say what it means.
     cron: "0 20 * * 5",
@@ -85,14 +85,15 @@ export function hackNightPhotographyThread(deps: {
           const today = now();
           const thread = await announcement.startThread({
             name: `Hack Night Images - ${threadDateLabel(today)}`,
-            autoArchiveDuration: THREAD_ARCHIVE_MINUTES,
+            autoArchiveDuration: THREAD_ARCHIVE_DURATION,
           });
 
           await thread.send(`(<@&${DISCORD_IDS.roles.HACK_NIGHT_PING}>)`);
 
           // Recorded last: the thread must exist before anything can be filed
           // against its slug.
-          await deps.slugStore.set(thread.id, generateEventSlug(today));
+          const stored = await deps.slugStore.set(thread.id, generateEventSlug(today));
+          if (Result.isError(stored)) throw stored.error;
           return undefined;
         },
         catch: (cause) =>

@@ -1,7 +1,7 @@
 /**
  * Turso (libSQL) access.
  *
- * The legacy version read `env` directly at module scope, which coupled the data
+ * The prior implementation read `env` directly at module scope, which coupled the data
  * layer to one env schema. Here the config is passed in: each package resolves
  * its own env and calls `getDb` once.
  *
@@ -9,8 +9,9 @@
  * rebuilding it per query would leak sockets in a long-running process.
  */
 
-import { type Client, createClient } from "@libsql/client";
-import { drizzle } from "drizzle-orm/libsql";
+import type { Client } from "@libsql/client";
+import { createClient } from "@libsql/client/web";
+import { drizzle } from "drizzle-orm/libsql/web";
 
 import * as actionAudit from "./schemas/action-audit.ts";
 import * as relations from "./schemas/relations.ts";
@@ -19,7 +20,6 @@ import * as shoppingCartItems from "./schemas/shopping-cart-items.ts";
 import * as shoppingCarts from "./schemas/shopping-carts.ts";
 
 export * from "./enums.ts";
-export type { TaskAction } from "./types.ts";
 export { actionAudit } from "./schemas/action-audit.ts";
 export { scheduledTasks } from "./schemas/scheduled-tasks.ts";
 export { shoppingCartItems } from "./schemas/shopping-cart-items.ts";
@@ -35,10 +35,7 @@ const schema = {
 
 export type Db = ReturnType<typeof drizzle<typeof schema>>;
 
-export interface TursoConfig {
-  readonly url: string;
-  readonly authToken?: string;
-}
+export type TursoConfig = Pick<Parameters<typeof createClient>[0], "authToken" | "url">;
 
 /** Wraps a caller-supplied client, for example a local `file:` database. */
 export function buildDb(client: Client): Db {

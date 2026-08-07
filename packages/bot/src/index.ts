@@ -6,7 +6,7 @@
  * The health server binds *first*, so a supervisor polling `/health` during a
  * slow or failing login gets a structured 503 rather than a refused connection.
  * Readiness stays honest regardless of order, because it is derived from the
- * gateway's own `readyTimestamp` rather than from a flag set at startup.
+ * gateway's current WebSocket status rather than from a flag set at startup.
  *
  * Login readiness is then *awaited*, so a bad token aborts the process instead
  * of leaving a bot that is running and receiving nothing. Exiting is deliberate:
@@ -18,14 +18,29 @@
  * gateway that cannot yet send anything.
  */
 
+import { DISCORD_GUILD_ID } from "@repo/shared/discord";
 import { serializeError } from "@repo/shared/errors";
 import { getRedis } from "@repo/shared/redis";
+import type { RedisClient } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
+import * as Sentry from "@sentry/bun";
 import { Events } from "discord.js";
 
+import { createAgentClient } from "./agent/client.ts";
+import { createHitlInteractionHandler } from "./agent/hitl/interaction.ts";
+import type { HitlInteractionHandler } from "./agent/hitl/interaction.ts";
+import { createHitlStore } from "./agent/hitl/store.ts";
+import { createTurnQueue } from "./agent/queue.ts";
+import { createRenderCoordinator } from "./agent/render/coordinator.ts";
+import { createDiscordRest } from "./agent/render/discord-rest.ts";
+import { createRenderStore } from "./agent/render/store.ts";
+import { createAgentRouter } from "./agent/router.ts";
+import { createScheduledFireHandler } from "./agent/scheduled.ts";
+import { createTurnMessageStore } from "./agent/turn-messages.ts";
 import { buildCommands } from "./commands/index.ts";
 import { env } from "./env.ts";
 import { buildEventHandlers } from "./events/index.ts";
+import type { SlashCommand } from "./framework/commands.ts";
 import { createDeduplicator } from "./framework/dedup.ts";
 import { dispatchInteraction } from "./framework/dispatch.ts";
 import { attachEventRouter } from "./framework/events.ts";
@@ -36,8 +51,84 @@ import { startScheduler } from "./framework/schedules.ts";
 import { startServer } from "./framework/server.ts";
 import { buildSchedules } from "./schedules/index.ts";
 
+function attachInteractionDispatcher(
+  client: ReturnType<typeof createClient>,
+  commands: readonly SlashCommand[],
+  hitl: HitlInteractionHandler,
+  redis: RedisClient,
+): void {
+  client.on(Events.InteractionCreate, (interaction) => {
+    void dispatchInteraction(interaction, {
+      commands,
+      reporter: consoleReporter,
+      hitl,
+      redis,
+    }).catch((cause: unknown) =>
+      consoleReporter.captureDefect(cause, { op: "interaction.dispatch" }),
+    );
+  });
+}
+
+function createAgentSeam(
+  client: ReturnType<typeof createClient>,
+  redis: RedisClient,
+  commands: readonly SlashCommand[],
+) {
+  const agentClient = createAgentClient({
+    baseUrl: env.AGENT_URL,
+    secret: env.AGENT_INGRESS_SECRET,
+  });
+  const renderStore = createRenderStore(redis);
+  let recoverParked = (): Promise<void> => Promise.resolve();
+  const render = createRenderCoordinator({
+    rest: createDiscordRest(client.rest),
+    store: renderStore,
+    turnMessages: createTurnMessageStore(redis),
+    reporter: consoleReporter,
+    onOutcome: () => recoverParked(),
+  });
+  const agent = createAgentRouter({
+    client: agentClient,
+    queue: createTurnQueue({ redis }),
+    reporter: consoleReporter,
+    beforeComplete: (payload) => render.flush(payload.dispatchId),
+  });
+  recoverParked = agent.sweep;
+
+  const hitl = createHitlInteractionHandler({
+    agent: agentClient,
+    store: createHitlStore(redis),
+    renders: renderStore,
+    reporter: consoleReporter,
+    guildId: DISCORD_GUILD_ID,
+  });
+  attachInteractionDispatcher(client, commands, hitl, redis);
+  onShutdown("agent-router", () => agent.stop());
+  return { agent, render };
+}
+
+function logStartupSummary(input: {
+  readonly userTag: string;
+  readonly commandCount: number;
+  readonly handlerCount: number;
+  readonly nextRuns: ReadonlyMap<string, Date | undefined>;
+}): void {
+  const upcoming = [...input.nextRuns]
+    .map(([name, next]) => `${name}=${next?.toISOString() ?? "never"}`)
+    .join(" ");
+  console.info(`logged in as ${input.userTag}`);
+  console.info(
+    `${input.commandCount} command(s), ${input.handlerCount} event handler(s), ` +
+      `${input.nextRuns.size} schedule(s)${upcoming === "" ? "" : `: ${upcoming}`}`,
+  );
+}
+
 async function main(): Promise<void> {
   installSignalHandlers();
+  // Registered first so reverse-order shutdown flushes Sentry last.
+  onShutdown("sentry", async () => {
+    await Sentry.close(5_000);
+  });
 
   const client = createClient();
   const built = buildCommands({
@@ -51,14 +142,26 @@ async function main(): Promise<void> {
   }
   const commands = built.value;
 
-  client.on(Events.InteractionCreate, (interaction) => {
-    // discord.js does not await listeners, so the promise is handled here or a
-    // rejection is lost. `dispatchInteraction` is written never to reject.
-    void dispatchInteraction(interaction, { commands, reporter: consoleReporter });
+  // These HTTP clients make no connection before the callback server binds.
+  const redis = getRedis({
+    url: env.UPSTASH_REDIS_REST_URL,
+    token: env.UPSTASH_REDIS_REST_TOKEN,
   });
 
+  let operationalReady = false;
+  const { agent, render } = createAgentSeam(client, redis, commands);
+  const scheduledFires = createScheduledFireHandler({ client, agent, redis });
+
   // Reports ready: false until the gateway connects.
-  startServer({ port: env.PORT, client });
+  startServer({
+    port: env.PORT,
+    client,
+    parked: agent,
+    render,
+    scheduled: scheduledFires,
+    ingressSecret: env.BOT_INGRESS_SECRET,
+    operationalReady: () => operationalReady,
+  });
 
   const connected = await connect(client, {
     token: env.DISCORD_BOT_TOKEN,
@@ -72,15 +175,26 @@ async function main(): Promise<void> {
   }
 
   const ready = connected.value;
-
-  // One client, shared by dedup and the hack night slug store.
-  const redis = getRedis({
-    url: env.UPSTASH_REDIS_REST_URL,
-    token: env.UPSTASH_REDIS_REST_TOKEN,
+  // Stop new admissions first, then drain paint while the gateway still owns its REST token.
+  onShutdown("agent-renderer", async () => {
+    agent.stop();
+    await render.stop();
   });
+  await render.start();
+  const recovered = await Result.tryPromise({
+    try: () => agent.sweep(),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(recovered)) {
+    consoleReporter.captureDefect(recovered.error, { op: "agent.router.startup-recovery" });
+    await shutdown("startup-recovery-failure");
+    process.exit(1);
+  }
 
   const handlers = buildEventHandlers({
     redis,
+    agent,
+    reporter: consoleReporter,
     cmsApiKey: env.PAYLOAD_CMS_API_KEY,
     shipApiKey: env.SHIP_API_KEY,
     dashboardApiToken: env.PHACK_API_TOKEN,
@@ -96,18 +210,17 @@ async function main(): Promise<void> {
     schedules: buildSchedules({ redis, cmsApiKey: env.PAYLOAD_CMS_API_KEY }),
     client: ready,
     reporter: consoleReporter,
+    redis,
   });
   onShutdown("scheduler", () => scheduler.stop());
+  operationalReady = true;
 
-  const upcoming = [...scheduler.nextRuns]
-    .map(([name, next]) => `${name}=${next?.toISOString() ?? "never"}`)
-    .join(" ");
-
-  console.info(`logged in as ${ready.user.tag}`);
-  console.info(
-    `${commands.length} command(s), ${handlers.length} event handler(s), ` +
-      `${scheduler.nextRuns.size} schedule(s)${upcoming === "" ? "" : `: ${upcoming}`}`,
-  );
+  logStartupSummary({
+    userTag: ready.user.tag,
+    commandCount: commands.length,
+    handlerCount: handlers.length,
+    nextRuns: scheduler.nextRuns,
+  });
 }
 
 await main();

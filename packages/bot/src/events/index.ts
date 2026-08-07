@@ -1,22 +1,28 @@
 /**
  * The event registry.
  *
- * Explicit, for the same reason the command registry is: the legacy app
+ * Explicit, for the same reason the command registry is: the prior implementation
  * discovered handlers by scanning barrel re-exports, so a forgotten export
  * silently unregistered a behaviour.
  *
- * Not yet here, because they need the agent seam: the mention handler that opens
- * a conversation, the ✅ reaction that ends one, and the feedback reaction that
- * records sentiment against a turn. They arrive with Phase 2.
+ * Order within the list does not matter — the router buckets handlers by kind
+ * and runs each bucket concurrently — except that `kind: "mention"` handlers
+ * always complete before `kind: "message"` ones, which is how `agent-chat`
+ * claims a message before the community handlers see it.
  */
 
 import type { RedisClient } from "@repo/shared/redis";
+import type { Reporter } from "@repo/shared/result/observe";
 
+import type { AgentRouter } from "../agent/router.ts";
+import { createTurnMessageStore } from "../agent/turn-messages.ts";
 import type { AnyEventHandler } from "../framework/events.ts";
 import { createCmsClient } from "../integrations/cms.ts";
 import { createThreadSlugStore } from "../integrations/hack-night.ts";
 import { createShipsClient } from "../integrations/ships.ts";
+import { agentChat, conversationDone } from "./agent-chat.ts";
 import { autoThread } from "./auto-thread.ts";
+import { chatFeedback } from "./chat-indexer.ts";
 import { emitDashboardMessage } from "./emit-dashboard-message.ts";
 import { deleteShipMessage, emitShipMessage } from "./emit-ship-message.ts";
 import { hackNightImageRemoval, hackNightImages } from "./hack-night-images.ts";
@@ -25,6 +31,8 @@ import { createTranscriber, transcribeVoiceMessage } from "./transcribe-voice-me
 
 export interface EventDeps {
   readonly redis: RedisClient;
+  readonly agent: AgentRouter;
+  readonly reporter: Reporter;
   readonly cmsApiKey: string;
   readonly shipApiKey: string;
   readonly dashboardApiToken: string;
@@ -37,6 +45,12 @@ export function buildEventHandlers(deps: EventDeps): readonly AnyEventHandler[] 
   const ships = createShipsClient({ apiKey: deps.shipApiKey });
 
   return [
+    agentChat({ agent: deps.agent }),
+    conversationDone({ agent: deps.agent, turnMessages: createTurnMessageStore(deps.redis) }),
+    chatFeedback({
+      turnMessages: createTurnMessageStore(deps.redis),
+      reporter: deps.reporter,
+    }),
     praise,
     autoThread,
     emitShipMessage(ships),

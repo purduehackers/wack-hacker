@@ -6,10 +6,10 @@ import { defineConfig } from "drizzle-kit";
  * correct: a migration against an unset database must fail loudly before it can
  * touch anything.
  *
- * The migration history in `drizzle/` is carried over from the legacy app
- * unchanged, so `db:migrate` against the existing Turso database is a no-op.
- * Generating a migration that recreates these tables would mean the schema
- * drifted — treat that as a bug, not a fresh baseline.
+ * The first three migrations describe the carried-over production tables. The
+ * gold architecture adds one data-preserving scheduled-task migration after
+ * that baseline. Generating a migration that recreates unrelated tables would
+ * mean the schema drifted — treat that as a bug, not a fresh baseline.
  */
 const url = process.env["TURSO_DATABASE_URL"];
 if (url === undefined || url === "") {

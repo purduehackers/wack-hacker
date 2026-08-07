@@ -34,17 +34,6 @@ export interface CreateShipInput {
   readonly attachments: readonly ShipAttachmentInput[];
 }
 
-export interface CreateShipResult {
-  readonly id: string;
-  readonly alreadyExists: boolean;
-}
-
-export interface DeleteShipResult {
-  readonly deleted: boolean;
-  readonly id: string | undefined;
-  readonly attachmentsRemoved: number;
-}
-
 export type ShipsError = InvalidInput | RateLimited | Transient | UpstreamError;
 
 /**
@@ -52,16 +41,26 @@ export type ShipsError = InvalidInput | RateLimited | Transient | UpstreamError;
  *
  * `.loose()` because the gallery may add fields; we only depend on these.
  */
-const createResponseSchema = z.looseObject({
-  id: z.union([z.string(), z.number()]).transform(String),
-  alreadyExists: z.boolean().optional(),
-});
+const createResponseSchema = z
+  .looseObject({
+    id: z.union([z.string(), z.number()]).transform(String),
+    alreadyExists: z.boolean().optional(),
+  })
+  .transform(({ id, alreadyExists }) => ({ id, alreadyExists: alreadyExists ?? false }) as const);
 
-const deleteResponseSchema = z.looseObject({
-  ok: z.boolean().optional(),
-  id: z.string().optional(),
-  attachmentsRemoved: z.number().optional(),
-});
+const deleteResponseSchema = z
+  .looseObject({
+    ok: z.boolean().optional(),
+    id: z.string().optional(),
+    attachmentsRemoved: z.number().optional(),
+  })
+  .transform(
+    ({ ok, id, attachmentsRemoved }) =>
+      ({ deleted: ok ?? false, id, attachmentsRemoved: attachmentsRemoved ?? 0 }) as const,
+  );
+
+export type CreateShipResult = z.output<typeof createResponseSchema>;
+export type DeleteShipResult = z.output<typeof deleteResponseSchema>;
 
 function parseOr<T>(schema: z.ZodType<T>, subject: string, value: unknown): T {
   const parsed = schema.safeParse(value);
@@ -84,6 +83,7 @@ function classify(status: number, detail: string): ShipsError {
   return new UpstreamError({ service: "ships", status, detail });
 }
 
+// oxlint-disable-next-line oxclippy/too-many-lines -- two symmetric API methods share authentication and error policy
 export function createShipsClient(deps: ShipsDeps) {
   const baseUrl = (deps.baseUrl ?? SHIPS_URL).replace(/\/$/, "");
   const doFetch = deps.fetchImpl ?? fetch;
@@ -110,12 +110,7 @@ export function createShipsClient(deps: ShipsDeps) {
               );
             }
 
-            const created = parseOr(
-              createResponseSchema,
-              "ships create response",
-              await response.json(),
-            );
-            return { id: created.id, alreadyExists: created.alreadyExists ?? false };
+            return parseOr(createResponseSchema, "ships create response", await response.json());
           },
           catch: (cause) =>
             cause instanceof InvalidInput ||
@@ -159,16 +154,7 @@ export function createShipsClient(deps: ShipsDeps) {
               );
             }
 
-            const body = parseOr(
-              deleteResponseSchema,
-              "ships delete response",
-              await response.json(),
-            );
-            return {
-              deleted: body.ok ?? false,
-              id: body.id,
-              attachmentsRemoved: body.attachmentsRemoved ?? 0,
-            };
+            return parseOr(deleteResponseSchema, "ships delete response", await response.json());
           },
           catch: (cause) =>
             cause instanceof InvalidInput ||

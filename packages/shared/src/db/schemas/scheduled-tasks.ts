@@ -1,52 +1,40 @@
 import { sql } from "drizzle-orm";
-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { check, index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
-import { ScheduleType, ScheduledTaskStatus } from "../enums.ts";
-import type { TaskAction } from "../types.ts";
+import { ScheduleActionType, ScheduleType, ScheduledTaskStatus } from "../enums.ts";
 
-/**
- * The authoritative record for every agent-created scheduled task.
- *
- * The legacy app paired this table with a Vercel Queue: a row plus a delayed
- * message, reconciled by a claim/heal protocol and a nightly sweep. The queue is
- * gone — a once-a-minute eve schedule claims due rows directly — but the table
- * is unchanged, so existing schedules survive the migration.
- *
- * `memberRoles` is a snapshot taken when the task was created. It is a
- * *fallback only*: a fire re-resolves the creator's current Discord roles so a
- * de-roled organizer stops getting organizer-powered runs. The snapshot is used
- * solely when Discord itself is unreachable.
- *
- * `(status, next_run_at)` is the index the dispatcher's claim query rides.
- */
+/** Durable prompts claimed by the once-a-minute Eve dispatcher. */
 export const scheduledTasks = sqliteTable(
   "scheduled_tasks",
   {
     id: text("id").primaryKey(),
-    userId: text("user_id").notNull(),
+    ownerId: text("owner_id").notNull(),
     channelId: text("channel_id").notNull(),
     description: text("description").notNull(),
+    actionType: text("action_type")
+      .$type<ScheduleActionType>()
+      .notNull()
+      .default(ScheduleActionType.Agent),
+    prompt: text("prompt").notNull(),
+    /** Creation-time snapshot used only when Discord role lookup is unavailable. */
+    memberRoles: text("member_roles", { mode: "json" }).$type<string[]>(),
     scheduleType: text("schedule_type").$type<ScheduleType>().notNull(),
-    /** Set for one-time tasks. ISO 8601; sorts lexicographically. */
-    runAt: text("run_at"),
-    /** Set for recurring tasks. Five-field cron, evaluated in `timezone`. */
     cron: text("cron"),
     timezone: text("timezone"),
-    action: text("action", { mode: "json" }).$type<TaskAction>().notNull(),
-    memberRoles: text("member_roles", { mode: "json" }).$type<string[]>(),
     status: text("status")
       .$type<ScheduledTaskStatus>()
       .notNull()
       .default(ScheduledTaskStatus.Active),
-    nextRunAt: text("next_run_at"),
-    /**
-     * Retained from the queue-based design so in-flight rows written by the old
-     * system still round-trip. The dispatcher does not write it.
-     */
-    queueMessageId: text("queue_message_id"),
-    lastFiredAt: text("last_fired_at"),
+    /** The stable occurrence anchor; retries never advance it. */
+    nextRunAt: text("next_run_at").notNull(),
+    /** Retry eligibility, independently movable from `nextRunAt`. */
+    availableAt: text("available_at").notNull(),
+    leaseToken: text("lease_token"),
+    leaseExpiresAt: text("lease_expires_at"),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    lastError: text("last_error"),
+    lastDispatchedAt: text("last_dispatched_at"),
     fireCount: integer("fire_count").notNull().default(0),
-    maxDriftMs: integer("max_drift_ms"),
     createdAt: text("created_at")
       .notNull()
       .default(sql`(CURRENT_TIMESTAMP)`),
@@ -55,7 +43,14 @@ export const scheduledTasks = sqliteTable(
       .default(sql`(CURRENT_TIMESTAMP)`),
   },
   (table) => [
-    index("scheduled_tasks_user_status_idx").on(table.userId, table.status),
-    index("scheduled_tasks_status_next_run_idx").on(table.status, table.nextRunAt),
+    check("scheduled_tasks_action_type_check", sql`${table.actionType} IN ('agent', 'message')`),
+    check(
+      "scheduled_tasks_shape_check",
+      sql`(${table.scheduleType} = 'once' AND ${table.cron} IS NULL AND ${table.timezone} IS NULL) OR (${table.scheduleType} = 'recurring' AND ${table.cron} IS NOT NULL AND ${table.timezone} IS NOT NULL)`,
+    ),
+    check("scheduled_tasks_attempt_count_check", sql`${table.attemptCount} >= 0`),
+    check("scheduled_tasks_fire_count_check", sql`${table.fireCount} >= 0`),
+    index("scheduled_tasks_due_idx").on(table.status, table.availableAt, table.leaseExpiresAt),
+    index("scheduled_tasks_owner_idx").on(table.ownerId, table.status, table.createdAt),
   ],
 );

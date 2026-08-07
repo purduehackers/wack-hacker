@@ -1,0 +1,304 @@
+/** Redis desired-state inbox and durable bot-owned Discord projection. */
+
+import { InvalidInput } from "@repo/shared/errors";
+import type { RedisClient } from "@repo/shared/redis";
+import { Result } from "@repo/shared/result";
+import {
+  AGENT_RENDER_READY_SET_KEY,
+  agentRenderMember,
+  authorizationChallengeKey,
+  decodeAuthorizationChallenge,
+  decodeRenderIntent,
+  decodeRenderTarget,
+  dispatchIdFromAgentRenderMember,
+  renderClaimKey,
+  renderIntentKey,
+  renderOutcomeKey,
+  renderProjectionKey,
+  renderTargetKey,
+} from "@repo/shared/wire";
+import type { AuthorizationChallenge, RenderIntent, RenderTarget } from "@repo/shared/wire";
+import { z } from "zod";
+
+import type { RendererProjection } from "./renderer.ts";
+
+const CLAIM_TTL_MS = 45_000;
+const PROJECTION_TTL_SECONDS = 7 * 24 * 60 * 60;
+
+const CLAIM_SCRIPT = `
+-- wack:claim-render
+local current = redis.call("GET", KEYS[1])
+if current == ARGV[1] then
+  redis.call("PEXPIRE", KEYS[1], tonumber(ARGV[2]))
+  return 1
+end
+if current then return 0 end
+redis.call("SET", KEYS[1], ARGV[1], "PX", tonumber(ARGV[2]))
+return 1
+`;
+
+const RENEW_SCRIPT = `
+-- wack:renew-render
+if redis.call("GET", KEYS[1]) ~= ARGV[1] then return 0 end
+redis.call("PEXPIRE", KEYS[1], tonumber(ARGV[2]))
+return 1
+`;
+
+const CHECKPOINT_SCRIPT = `
+-- wack:checkpoint-render
+if redis.call("GET", KEYS[1]) ~= ARGV[1] then return 0 end
+redis.call("SET", KEYS[2], ARGV[2], "EX", tonumber(ARGV[3]))
+redis.call("PEXPIRE", KEYS[1], tonumber(ARGV[4]))
+return 1
+`;
+
+const COMPLETE_SCRIPT = `
+-- wack:complete-render
+if redis.call("GET", KEYS[1]) ~= ARGV[1] then return 0 end
+redis.call("SET", KEYS[2], ARGV[2], "EX", tonumber(ARGV[5]))
+redis.call("DEL", KEYS[1])
+local current = redis.call("GET", KEYS[3])
+if not current then
+  redis.call("SREM", KEYS[4], ARGV[4])
+  if ARGV[6] == "1" then
+    redis.call("EXPIRE", KEYS[5], tonumber(ARGV[5]))
+    redis.call("SET", KEYS[6], "applied", "EX", tonumber(ARGV[5]))
+  end
+  return 1
+end
+local intent = cjson.decode(current)
+if tonumber(intent.revision) <= tonumber(ARGV[3]) then
+  redis.call("SREM", KEYS[4], ARGV[4])
+  if ARGV[6] == "1" then
+    redis.call("EXPIRE", KEYS[5], tonumber(ARGV[5]))
+    redis.call("SET", KEYS[6], "applied", "EX", tonumber(ARGV[5]))
+  end
+  return 1
+end
+return 2
+`;
+
+const RELEASE_SCRIPT = `
+-- wack:release-render
+if redis.call("GET", KEYS[1]) == ARGV[1] then return redis.call("DEL", KEYS[1]) end
+return 0
+`;
+
+const DISCARD_SCRIPT = `
+-- wack:discard-render
+redis.call("SREM", KEYS[1], ARGV[1])
+for index = 2, 4 do
+  if redis.call("EXISTS", KEYS[index]) == 1 then
+    redis.call("EXPIRE", KEYS[index], tonumber(ARGV[2]))
+  end
+end
+redis.call("SET", KEYS[5], "discarded", "EX", tonumber(ARGV[2]))
+return 1
+`;
+
+const hashSchema = z.string().regex(/^[A-Za-z0-9_-]{16}$/);
+const projectionSchema = z.object({
+  anchorMessageId: z
+    .string()
+    .regex(/^\d{17,20}$/)
+    .optional(),
+  anchorContentHash: hashSchema.optional(),
+  overflow: z
+    .array(
+      z.object({
+        messageId: z.string().regex(/^\d{17,20}$/),
+        contentHash: hashSchema.optional(),
+      }),
+    )
+    .max(10),
+  appliedRevision: z.number().int().nonnegative(),
+});
+
+type StoredProjection = z.infer<typeof projectionSchema>;
+
+function decodeProjection(raw: unknown): Result<StoredProjection, InvalidInput> {
+  const parsed = projectionSchema.safeParse(raw);
+  return parsed.success
+    ? Result.ok(parsed.data)
+    : Result.err(
+        new InvalidInput({
+          subject: "render projection",
+          issues: parsed.error.issues.map(({ message, path }) => `${path.join(".")}: ${message}`),
+        }),
+      );
+}
+
+function renderIds(values: readonly unknown[]): readonly string[] {
+  return values.flatMap((candidate) => {
+    const dispatchId = dispatchIdFromAgentRenderMember(candidate);
+    return dispatchId === undefined ? [] : [dispatchId];
+  });
+}
+
+function storedProjection(
+  projection: RendererProjection,
+  appliedRevision: number,
+): StoredProjection {
+  return { ...projection, appliedRevision };
+}
+
+async function readOptional<T>(
+  redis: RedisClient,
+  key: string,
+  decode: (raw: unknown) => Result<T, InvalidInput>,
+): Promise<Result<T | undefined, InvalidInput>> {
+  const raw: unknown = await redis.get(key);
+  // oxlint-disable-next-line unicorn/no-null -- Redis missing key is null
+  return raw === null || raw === undefined ? Result.ok(undefined) : decode(raw);
+}
+
+async function readProjection(
+  redis: RedisClient,
+  dispatchId: string,
+  anchorMessageId?: string,
+): Promise<Result<StoredProjection, InvalidInput>> {
+  const raw: unknown = await redis.get(renderProjectionKey(dispatchId));
+  // oxlint-disable-next-line unicorn/no-null -- Redis missing key is null
+  if (raw === null || raw === undefined) {
+    return Result.ok({
+      ...(anchorMessageId === undefined ? {} : { anchorMessageId }),
+      overflow: [],
+      appliedRevision: 0,
+    });
+  }
+  return decodeProjection(raw);
+}
+
+interface RenderCompletion {
+  readonly dispatchId: string;
+  readonly claimToken: string;
+  readonly projection: RendererProjection;
+  readonly appliedRevision: number;
+  readonly terminal: boolean;
+}
+
+async function completeRender(
+  redis: RedisClient,
+  completion: RenderCompletion,
+): Promise<"caught-up" | "newer" | "lost"> {
+  const { dispatchId, claimToken, projection, appliedRevision, terminal } = completion;
+  const outcome = Number(
+    await redis.eval(
+      COMPLETE_SCRIPT,
+      [
+        renderClaimKey(dispatchId),
+        renderProjectionKey(dispatchId),
+        renderIntentKey(dispatchId),
+        AGENT_RENDER_READY_SET_KEY,
+        renderTargetKey(dispatchId),
+        renderOutcomeKey(dispatchId),
+      ],
+      [
+        claimToken,
+        JSON.stringify(storedProjection(projection, appliedRevision)),
+        appliedRevision,
+        agentRenderMember(dispatchId),
+        PROJECTION_TTL_SECONDS,
+        Number(terminal),
+      ],
+    ),
+  );
+  if (outcome === 1) return "caught-up";
+  if (outcome === 2) return "newer";
+  return "lost";
+}
+
+export function createRenderStore(redis: RedisClient) {
+  return {
+    claim: async (dispatchId: string): Promise<string | undefined> => {
+      const token = crypto.randomUUID();
+      const claimed = Number(
+        await redis.eval(CLAIM_SCRIPT, [renderClaimKey(dispatchId)], [token, CLAIM_TTL_MS]),
+      );
+      return claimed === 1 ? token : undefined;
+    },
+
+    renew: async (dispatchId: string, claimToken: string): Promise<boolean> =>
+      Number(
+        await redis.eval(RENEW_SCRIPT, [renderClaimKey(dispatchId)], [claimToken, CLAIM_TTL_MS]),
+      ) === 1,
+
+    intent: (dispatchId: string): Promise<Result<RenderIntent | undefined, InvalidInput>> =>
+      readOptional(redis, renderIntentKey(dispatchId), decodeRenderIntent),
+
+    authorization: (
+      dispatchId: string,
+      authorizationId: string,
+    ): Promise<Result<AuthorizationChallenge | undefined, InvalidInput>> =>
+      readOptional(
+        redis,
+        authorizationChallengeKey(dispatchId, authorizationId),
+        decodeAuthorizationChallenge,
+      ),
+
+    target: (dispatchId: string): Promise<Result<RenderTarget | undefined, InvalidInput>> =>
+      readOptional(redis, renderTargetKey(dispatchId), decodeRenderTarget),
+
+    projection: (
+      dispatchId: string,
+      anchorMessageId?: string,
+    ): Promise<Result<StoredProjection, InvalidInput>> =>
+      readProjection(redis, dispatchId, anchorMessageId),
+
+    checkpoint: async (
+      dispatchId: string,
+      claimToken: string,
+      projection: RendererProjection,
+      appliedRevision: number,
+    ): Promise<boolean> =>
+      Number(
+        await redis.eval(
+          CHECKPOINT_SCRIPT,
+          [renderClaimKey(dispatchId), renderProjectionKey(dispatchId)],
+          [
+            claimToken,
+            JSON.stringify(storedProjection(projection, appliedRevision)),
+            PROJECTION_TTL_SECONDS,
+            CLAIM_TTL_MS,
+          ],
+        ),
+      ) === 1,
+
+    complete: (
+      dispatchId: string,
+      claimToken: string,
+      projection: RendererProjection,
+      appliedRevision: number,
+      terminal: boolean,
+    ): Promise<"caught-up" | "newer" | "lost"> =>
+      completeRender(redis, { dispatchId, claimToken, projection, appliedRevision, terminal }),
+
+    release: async (dispatchId: string, claimToken: string): Promise<void> => {
+      await redis.eval(RELEASE_SCRIPT, [renderClaimKey(dispatchId)], [claimToken]);
+    },
+
+    outcome: async (dispatchId: string): Promise<"applied" | "discarded" | undefined> => {
+      const raw: unknown = await redis.get(renderOutcomeKey(dispatchId));
+      return raw === "applied" || raw === "discarded" ? raw : undefined;
+    },
+
+    ready: async (): Promise<readonly string[]> =>
+      renderIds(await redis.smembers(AGENT_RENDER_READY_SET_KEY)),
+
+    discard: async (dispatchId: string): Promise<void> => {
+      await redis.eval(
+        DISCARD_SCRIPT,
+        [
+          AGENT_RENDER_READY_SET_KEY,
+          renderIntentKey(dispatchId),
+          renderTargetKey(dispatchId),
+          renderProjectionKey(dispatchId),
+          renderOutcomeKey(dispatchId),
+        ],
+        [agentRenderMember(dispatchId), PROJECTION_TTL_SECONDS],
+      );
+    },
+  };
+}
+
+export type RenderStore = ReturnType<typeof createRenderStore>;

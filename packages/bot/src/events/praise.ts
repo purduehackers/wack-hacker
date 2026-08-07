@@ -22,7 +22,8 @@ export const praise = defineEvent({
   kind: "message",
   // Granting a role twice is harmless, but reacting twice is visible noise.
   dedupKey: (message) => message.id,
-  handle: async (message) => {
+  handle: async (message, context) => {
+    if (context.isBotMention) return Result.ok(undefined);
     const granting = PRAISE_PATTERN.test(message.content);
     const revoking = DISMISS_PATTERN.test(message.content);
     if (!granting && !revoking) return Result.ok(undefined);

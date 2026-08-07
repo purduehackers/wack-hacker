@@ -1,7 +1,7 @@
 /**
  * The command registry.
  *
- * Explicit rather than filesystem-discovered. The legacy app discovered commands
+ * Explicit rather than filesystem-discovered. The prior implementation discovered commands
  * by scanning barrel re-exports for anything shaped like a `SlashCommand`, which
  * meant a forgotten re-export silently unregistered a command. A literal list
  * is one line longer and cannot do that.

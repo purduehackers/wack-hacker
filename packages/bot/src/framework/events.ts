@@ -1,8 +1,7 @@
 /**
  * Gateway event authoring and routing.
  *
- * Far smaller than the legacy equivalent because events are handled in-process.
- * There is no `Packet` type, no codec, no Vercel Queue, and no consumer function
+ * Far smaller than the prior equivalent because events are handled in-process.
  * — a discord.js object goes straight to a handler. What survives from that
  * design is the part that was load-bearing rather than incidental:
  *
@@ -18,7 +17,7 @@
  *    unhandled rejection inside one is silently lost — the event just vanishes.
  *    Every dispatch is wrapped.
  *
- * Reactions are *not* force-fetched when partial. The legacy gateway published
+ * Reactions are *not* force-fetched when partial. The prior gateway published
  * straight off the partial so a reaction on a just-deleted message still
  * relayed; a REST fetch here would throw instead. Handlers that need more data
  * fetch it themselves and handle failure.
@@ -29,17 +28,10 @@ import { Result } from "@repo/shared/result";
 import { instrument } from "@repo/shared/result/observe";
 import type { Reporter } from "@repo/shared/result/observe";
 import { Events } from "discord.js";
-import type {
-  Client,
-  Message,
-  MessageReaction,
-  PartialMessage,
-  PartialMessageReaction,
-  PartialUser,
-  User,
-} from "discord.js";
+import type { Client, ClientEvents } from "discord.js";
 
 import { isBotMention, isReplyToBot } from "../utils/mention.ts";
+import { traceOperation } from "./observability.ts";
 
 /**
  * `mention` is derived rather than a real gateway event: it is a `MESSAGE_CREATE`
@@ -55,30 +47,46 @@ export interface EventContext {
   readonly isBotMention: boolean;
 }
 
-export type ReactionLike = MessageReaction | PartialMessageReaction;
-export type ReactorLike = User | PartialUser;
+export type ReactionLike = ClientEvents[Events.MessageReactionAdd][0];
+export type ReactorLike = ClientEvents[Events.MessageReactionAdd][1];
 
 export interface EventPayloads {
-  mention: Message;
-  message: Message;
-  messageDelete: Message | PartialMessage;
-  reactionAdd: { readonly reaction: ReactionLike; readonly user: ReactorLike };
-  reactionRemove: { readonly reaction: ReactionLike; readonly user: ReactorLike };
+  mention: ClientEvents[Events.MessageCreate][0];
+  message: ClientEvents[Events.MessageCreate][0];
+  messageDelete: ClientEvents[Events.MessageDelete][0];
+  reactionAdd: {
+    readonly reaction: ClientEvents[Events.MessageReactionAdd][0];
+    readonly user: ClientEvents[Events.MessageReactionAdd][1];
+  };
+  reactionRemove: {
+    readonly reaction: ClientEvents[Events.MessageReactionRemove][0];
+    readonly user: ClientEvents[Events.MessageReactionRemove][1];
+  };
 }
 
-export interface EventHandler<K extends EventKind = EventKind> {
+/**
+ * The payload-independent part of an event handler.
+ *
+ * `EventHandler` below pins this to Discord's payload for production. Keeping
+ * the router core generic lets focused tests exercise ordering and deduplication
+ * without manufacturing structurally invalid discord.js objects.
+ */
+export interface RoutedEventHandler<P> {
   /** Used in logs and metric dimensions. */
   readonly name: string;
-  readonly kind: K;
+  readonly kind: EventKind;
   /**
    * A stable identity for this occurrence, or undefined to skip deduplication.
    * Scoped per handler so two handlers on the same event do not evict each other.
    */
-  readonly dedupKey?: (payload: EventPayloads[K]) => string | undefined;
-  readonly handle: (
-    payload: EventPayloads[K],
-    context: EventContext,
-  ) => Promise<Result<void, KnownError>>;
+  readonly dedupKey?: (payload: P) => string | undefined;
+  readonly handle: (payload: P, context: EventContext) => Promise<Result<void, KnownError>>;
+}
+
+export interface EventHandler<K extends EventKind = EventKind> extends RoutedEventHandler<
+  EventPayloads[K]
+> {
+  readonly kind: K;
 }
 
 /**
@@ -158,11 +166,11 @@ function buildRegistry(declared: readonly AnyEventHandler[]): Registry {
  * Failures are reported and swallowed on purpose: one handler failing must not
  * prevent its siblings from running, and there is no caller to propagate to.
  */
-async function runHandler<K extends EventKind>(
-  handler: EventHandler<K>,
-  payload: EventPayloads[K],
+async function runHandler<P>(
+  handler: RoutedEventHandler<P>,
+  payload: P,
   context: EventContext,
-  deps: RouterDeps,
+  deps: Pick<RouterDeps, "reporter" | "dedup">,
 ): Promise<void> {
   const key = handler.dedupKey?.(payload);
   if (key !== undefined) {
@@ -170,22 +178,42 @@ async function runHandler<K extends EventKind>(
     if (!claimed) return;
   }
 
-  await instrument(`event.${handler.kind}.${handler.name}`, deps.reporter, () =>
-    Result.tryPromise({
-      try: () => handler.handle(payload, context),
-      catch: (cause) => cause,
-    }).then((settled) => (Result.isError(settled) ? Result.err(settled.error) : settled.value)),
+  const op = `event.${handler.kind}.${handler.name}`;
+  await traceOperation(
+    op,
+    () =>
+      instrument(op, deps.reporter, () =>
+        Result.tryPromise({
+          try: () => handler.handle(payload, context),
+          catch: (cause) => cause,
+        }).then((settled) => (Result.isError(settled) ? Result.err(settled.error) : settled.value)),
+      ),
+    { "discord.event.kind": handler.kind, "discord.handler": handler.name },
   );
 }
 
 /** Runs every handler in a bucket concurrently. Siblings never block each other. */
-async function runAll<K extends EventKind>(
-  bucket: readonly EventHandler<K>[],
-  payload: EventPayloads[K],
+async function runAll<P>(
+  bucket: readonly RoutedEventHandler<P>[],
+  payload: P,
   context: EventContext,
-  deps: RouterDeps,
+  deps: Pick<RouterDeps, "reporter" | "dedup">,
 ): Promise<void> {
   await Promise.all(bucket.map((handler) => runHandler(handler, payload, context, deps)));
+}
+
+/**
+ * Runs handler groups in declaration order while keeping siblings concurrent.
+ * Mention and message handlers use this seam so the ordering guarantee is both
+ * explicit and independently testable.
+ */
+export async function runEventHandlerGroups<P>(
+  handlerGroups: readonly (readonly RoutedEventHandler<P>[])[],
+  payload: P,
+  context: EventContext,
+  deps: Pick<RouterDeps, "reporter" | "dedup">,
+): Promise<void> {
+  for (const group of handlerGroups) await runAll(group, payload, context, deps);
 }
 
 export function attachEventRouter(client: Client<true>, deps: RouterDeps): void {
@@ -201,7 +229,7 @@ export function attachEventRouter(client: Client<true>, deps: RouterDeps): void 
 
   client.on(Events.MessageCreate, (message) => {
     guard("event.router.message", async () => {
-      // Bot messages are filtered at the edge, exactly as the legacy gateway did:
+      // Bot messages are filtered at the edge, exactly as the prior gateway did:
       // handlers never see them, so none of them need their own check.
       if (message.author.bot) return;
 
@@ -210,8 +238,12 @@ export function attachEventRouter(client: Client<true>, deps: RouterDeps): void 
 
       // Mention handlers first, to completion. They decide whether a
       // conversation starts; message handlers then see that decision.
-      if (addressed) await runAll(registry.mention, message, context, deps);
-      await runAll(registry.message, message, context, deps);
+      await runEventHandlerGroups(
+        addressed ? [registry.mention, registry.message] : [registry.message],
+        message,
+        context,
+        deps,
+      );
     });
   });
 

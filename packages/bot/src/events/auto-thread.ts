@@ -118,7 +118,8 @@ export const autoThread = defineEvent({
   kind: "message",
   // Deleting or threading twice would be visible, and a RESUME can replay.
   dedupKey: (message) => message.id,
-  handle: async (message) => {
+  handle: async (message, context) => {
+    if (context.isBotMention) return Result.ok(undefined);
     if (!WATCHED_CHANNELS.includes(message.channelId)) return Result.ok(undefined);
 
     if (!showsWork(message)) {

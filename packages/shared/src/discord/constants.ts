@@ -5,7 +5,7 @@
  * than configuration. If a role or channel is recreated upstream, change it
  * here — there is no runtime lookup to fall back on.
  *
- * Deliberately *not* carried over from the legacy app: the `BISHOP` and
+ * Deliberately *not* carried over from the prior implementation: the `BISHOP` and
  * `WELCOMERS` roles, the `LOUNGE` and `INTRO` channels, and the `SIGHORSE`
  * category. All five were unreferenced there — vestiges of removed features —
  * and porting them would imply behaviour that does not exist.

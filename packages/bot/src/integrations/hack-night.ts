@@ -18,13 +18,13 @@ import { Transient } from "@repo/shared/errors";
 import type { RedisClient } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
 
+import { fridayOfIndianaWeek, indianaDate } from "../time/indiana.ts";
+
 const THREAD_SLUG_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 export function generateEventSlug(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `hack-night-${year}-${month}-${day}`;
+  const { year, month, day } = indianaDate(date);
+  return `hack-night-${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
 /**
@@ -34,9 +34,7 @@ export function generateEventSlug(date: Date): string {
  * back to the Friday that started the event rather than forward to the next one.
  */
 export function fridayOf(date: Date): Date {
-  const friday = new Date(date);
-  friday.setDate(date.getDate() - ((date.getDay() + 2) % 7));
-  return friday;
+  return fridayOfIndianaWeek(date);
 }
 
 export interface ThreadSlugStore {

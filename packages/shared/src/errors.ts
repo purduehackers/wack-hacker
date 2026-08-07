@@ -90,6 +90,24 @@ export class Transient extends TaggedError("Transient")<{
   }
 }
 
+/**
+ * Work stopped at an ambiguous boundary and requires an explicit safe repair.
+ * Retrying the same operation is forbidden because it could repeat a side effect.
+ */
+export class RecoveryRequired extends TaggedError("RecoveryRequired")<{
+  operation: string;
+  detail: string;
+  remediation: string;
+  message: string;
+}> {
+  constructor(props: { operation: string; detail: string; remediation: string }) {
+    super({
+      ...props,
+      message: `${props.operation} requires recovery: ${props.detail}; ${props.remediation}`,
+    });
+  }
+}
+
 /** Input failed validation. Never retryable: the same input fails identically. */
 export class InvalidInput extends TaggedError("InvalidInput")<{
   subject: string;
@@ -141,6 +159,7 @@ export type KnownError =
   | InvariantViolated
   | NotFound
   | RateLimited
+  | RecoveryRequired
   | Transient
   | Unauthenticated
   | UpstreamError;
@@ -149,7 +168,7 @@ export type KnownError =
  * True when a failure means "we are broken" rather than "that didn't work".
  *
  * Defects belong in Sentry Issues; expected failures belong in metrics. The
- * legacy app blurred this and compensated with an
+ * prior error handling blurred this and compensated with an
  * `ignoreErrors: ["LockContentionError", "DuplicateMessageError"]` denylist.
  * With tags the distinction is structural, so no denylist is needed.
  */

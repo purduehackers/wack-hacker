@@ -75,16 +75,16 @@ export interface OggSplitOptions {
 
 /** Assembles one self-contained stream from the shared headers plus a group. */
 function emitChunk(headerPages: readonly OggPage[], audioGroup: readonly OggPage[]): Uint8Array {
-  const pages = [...headerPages, ...audioGroup];
-  const total = pages.reduce((sum, page) => sum + page.rawData.length, 0);
+  const assembledPages = [...headerPages, ...audioGroup];
+  const total = assembledPages.reduce((sum, encodedPage) => sum + encodedPage.rawData.length, 0);
   const chunk = new Uint8Array(total);
 
   const slots: { offset: number; length: number }[] = [];
   let offset = 0;
-  for (const page of pages) {
-    chunk.set(page.rawData, offset);
-    slots.push({ offset, length: page.rawData.length });
-    offset += page.rawData.length;
+  for (const packetPage of assembledPages) {
+    chunk.set(packetPage.rawData, offset);
+    slots.push({ offset, length: packetPage.rawData.length });
+    offset += packetPage.rawData.length;
   }
 
   for (const [index, slot] of slots.entries()) {
@@ -149,7 +149,7 @@ export function splitOggOpus(
     return Result.err(new InvalidInput({ subject: "ogg opus stream", issues: ["no audio pages"] }));
   }
 
-  const headerBytes = headerPages.reduce((sum, page) => sum + page.rawData.length, 0);
+  const headerBytes = headerPages.reduce((sum, value) => sum + value.rawData.length, 0);
   const audioBudget = targetBytes - headerBytes;
   if (audioBudget <= 0) {
     return Result.err(
@@ -166,14 +166,14 @@ export function splitOggOpus(
   let current: OggPage[] = [];
   let currentBytes = 0;
 
-  for (const page of audioPages) {
-    if (currentBytes + page.rawData.length > audioBudget && current.length > 0) {
+  for (const packetPage of audioPages) {
+    if (currentBytes + packetPage.rawData.length > audioBudget && current.length > 0) {
       groups.push(current);
       current = [];
       currentBytes = 0;
     }
-    current.push(page);
-    currentBytes += page.rawData.length;
+    current.push(packetPage);
+    currentBytes += packetPage.rawData.length;
   }
   groups.push(current);
 

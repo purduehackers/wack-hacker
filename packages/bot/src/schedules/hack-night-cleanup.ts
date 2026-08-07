@@ -5,7 +5,7 @@
  * locks the thread.
  *
  * The thread is archived on *every* path, including when no photos were found.
- * The legacy version did the same, and it matters: a thread left open collects
+ * The prior implementation did the same, and it matters: a thread left open collects
  * stray messages all week and the next Friday's job then has two candidate
  * threads to choose between.
  */
@@ -65,10 +65,8 @@ export function hackNightCleanup(deps: {
           const slug = await resolveEventSlug(deps.slugStore, thread.id, fridayOf(now()));
 
           const listed = await deps.cms.listImages(slug);
-          const images = Result.isError(listed) ? [] : listed.value;
-          if (Result.isError(listed)) {
-            console.warn(`could not list photos for ${slug}; closing the thread anyway`);
-          }
+          if (Result.isError(listed)) throw listed.error;
+          const images = listed.value;
 
           if (images.length > 0) {
             await channel.send(
@@ -88,10 +86,12 @@ export function hackNightCleanup(deps: {
           return undefined;
         },
         catch: (cause) =>
-          new Transient({
-            operation: "close hack night",
-            detail: cause instanceof Error ? cause.message : String(cause),
-          }),
+          cause instanceof Transient
+            ? cause
+            : new Transient({
+                operation: "close hack night",
+                detail: cause instanceof Error ? cause.message : String(cause),
+              }),
       }),
   });
 }
