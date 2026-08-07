@@ -1,17 +1,14 @@
 #!/usr/bin/env bun
 
-import { getRedis } from "@repo/shared/redis";
-import type { RedisClient } from "@repo/shared/redis";
 import { Sandbox } from "@vercel/sandbox";
 
-const ACTIVE_KEY = "wack:bot-sandbox:active:v1";
-const MUTEX_KEY = "wack:bot-sandbox:supervisor:v1";
+import {
+  BOT_SUPERVISOR_MUTEX_KEY,
+  readActiveBotGeneration,
+  type ActiveBotGeneration,
+} from "../../shared/src/bot-generation.ts";
+import { getRedis, type RedisClient } from "../../shared/src/redis/client.ts";
 const MANAGED_TAGS = { managedBy: "wack-hacker", workload: "discord-bot" } as const;
-
-interface ActiveGeneration {
-  readonly generation: number;
-  readonly sandboxName: string;
-}
 
 function usage(): never {
   console.error(`usage:
@@ -19,19 +16,6 @@ function usage(): never {
   bun packages/supervisor/scripts/sandbox-admin.ts cleanup [--apply]
   bun packages/supervisor/scripts/sandbox-admin.ts stop-active --confirm <exact-name> --apply`);
   process.exit(2);
-}
-
-function activeGeneration(raw: unknown): ActiveGeneration | undefined {
-  let value: unknown = raw;
-  if (typeof raw === "string") value = JSON.parse(raw);
-  if (value === undefined || value === null) return undefined;
-  if (typeof value !== "object") throw new Error("active generation is malformed");
-  const generation = Number(Reflect.get(value, "generation"));
-  const sandboxName = Reflect.get(value, "sandboxName");
-  if (!Number.isSafeInteger(generation) || generation < 1 || typeof sandboxName !== "string") {
-    throw new Error("active generation is malformed");
-  }
-  return { generation, sandboxName };
 }
 
 function requiredEnvironment(name: string): string {
@@ -50,20 +34,22 @@ function auth() {
 
 async function coordination(): Promise<{
   redis: RedisClient;
-  active: ActiveGeneration | undefined;
+  active: ActiveBotGeneration | undefined;
 }> {
   const redis = getRedis({
     url: requiredEnvironment("UPSTASH_REDIS_REST_URL"),
     token: requiredEnvironment("UPSTASH_REDIS_REST_TOKEN"),
   });
-  return { redis, active: activeGeneration(await redis.get(ACTIVE_KEY)) };
+  return { redis, active: await readActiveBotGeneration(redis) };
 }
 
-async function assertStable(redis: RedisClient, expected: ActiveGeneration): Promise<void> {
-  const [mutex, current] = await Promise.all([redis.get(MUTEX_KEY), redis.get(ACTIVE_KEY)]);
+async function assertStable(redis: RedisClient, expected: ActiveBotGeneration): Promise<void> {
+  const [mutex, active] = await Promise.all([
+    redis.get(BOT_SUPERVISOR_MUTEX_KEY),
+    readActiveBotGeneration(redis),
+  ]);
   if (mutex !== undefined && mutex !== null)
     throw new Error("a supervisor invocation owns the mutex; retry after it exits");
-  const active = activeGeneration(current);
   if (
     active === undefined ||
     active.generation !== expected.generation ||

@@ -12,13 +12,20 @@ import { APIError, Sandbox } from "@vercel/sandbox";
 
 import {
   BOT_ACTIVE_GENERATION_KEY,
+  BOT_SUPERVISOR_FENCE_KEY,
+  BOT_SUPERVISOR_MUTEX_KEY,
+  decodeActiveBotGeneration,
   type ActiveBotGeneration,
 } from "../../shared/src/bot-generation.ts";
 import { readyHealthReportSchema } from "../../shared/src/bot-health.ts";
 import type { RedisClient } from "../../shared/src/redis/client.ts";
 import { Result, TaggedError } from "../../shared/src/result/index.ts";
 
-export { BOT_ACTIVE_GENERATION_KEY } from "../../shared/src/bot-generation.ts";
+export {
+  BOT_ACTIVE_GENERATION_KEY,
+  BOT_SUPERVISOR_FENCE_KEY,
+  BOT_SUPERVISOR_MUTEX_KEY,
+} from "../../shared/src/bot-generation.ts";
 
 const BOT_PORT_DEFAULT = 8080;
 export const BOT_SANDBOX_TIMEOUT_MS = 24 * 60 * 60_000;
@@ -30,9 +37,6 @@ const HEALTH_REQUEST_TIMEOUT_MS = 5_000;
 const HEALTH_POLL_INTERVAL_MS = 2_000;
 const DRAIN_TIMEOUT_MS = 20_000;
 const MUTEX_TTL_MS = 10 * 60_000;
-
-export const BOT_SUPERVISOR_MUTEX_KEY = "wack:bot-sandbox:supervisor:v1";
-export const BOT_SUPERVISOR_FENCE_KEY = "wack:bot-sandbox:fence:v1";
 
 const MANAGED_TAGS = Object.freeze({
   managedBy: "wack-hacker",
@@ -530,91 +534,6 @@ function parseLease(raw: unknown): Lease | undefined {
   return { value, generation };
 }
 
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === "string" && value.length > 0;
-}
-
-function activeStringFields(
-  decoded: object,
-): Result<Omit<ActiveBotGeneration, "generation" | "version">, InvalidBotActiveGeneration> {
-  const sandboxName = Reflect.get(decoded, "sandboxName");
-  const commandId = Reflect.get(decoded, "commandId");
-  const image = Reflect.get(decoded, "image");
-  const healthUrl = Reflect.get(decoded, "healthUrl");
-  const activatedAt = Reflect.get(decoded, "activatedAt");
-  const expiresAt = Reflect.get(decoded, "expiresAt");
-  if (
-    !isNonEmptyString(sandboxName) ||
-    !isNonEmptyString(commandId) ||
-    !isNonEmptyString(image) ||
-    !isNonEmptyString(healthUrl) ||
-    !isNonEmptyString(activatedAt) ||
-    !isNonEmptyString(expiresAt)
-  ) {
-    return Result.err(
-      new InvalidBotActiveGeneration("all string fields must be present and non-empty"),
-    );
-  }
-  return Result.ok({ sandboxName, commandId, image, healthUrl, activatedAt, expiresAt });
-}
-
-function parseActiveGeneration(
-  raw: unknown,
-): Result<ActiveBotGeneration | undefined, InvalidBotActiveGeneration> {
-  if (raw === null || raw === undefined) return Result.ok(undefined);
-  let decoded: unknown = raw;
-  if (typeof raw === "string") {
-    try {
-      decoded = JSON.parse(raw);
-    } catch {
-      return Result.err(new InvalidBotActiveGeneration("record is not valid JSON"));
-    }
-  }
-  if (typeof decoded !== "object" || decoded === null) {
-    return Result.err(new InvalidBotActiveGeneration("record is not an object"));
-  }
-
-  if (Reflect.get(decoded, "version") !== 1) {
-    return Result.err(new InvalidBotActiveGeneration("version must be 1"));
-  }
-  const generation = Reflect.get(decoded, "generation");
-  if (typeof generation !== "number" || !Number.isSafeInteger(generation) || generation < 1) {
-    return Result.err(new InvalidBotActiveGeneration("generation must be a positive safe integer"));
-  }
-  const fields = activeStringFields(decoded);
-  if (Result.isError(fields)) return fields;
-  const value = fields.value;
-  if (immutableImageDigest(value.image) === undefined) {
-    return Result.err(new InvalidBotActiveGeneration("image is not digest-pinned"));
-  }
-  try {
-    const url = new URL(value.healthUrl);
-    if (
-      url.protocol !== "https:" ||
-      url.pathname !== HEALTH_PATH ||
-      url.username !== "" ||
-      url.password !== "" ||
-      url.search !== "" ||
-      url.hash !== ""
-    ) {
-      return Result.err(
-        new InvalidBotActiveGeneration(
-          "healthUrl must be an HTTPS /health URL without credentials, query, or fragment",
-        ),
-      );
-    }
-  } catch {
-    return Result.err(new InvalidBotActiveGeneration("healthUrl is not a valid URL"));
-  }
-  if (!Number.isFinite(Date.parse(value.activatedAt))) {
-    return Result.err(new InvalidBotActiveGeneration("activatedAt is not an ISO timestamp"));
-  }
-  if (!Number.isFinite(Date.parse(value.expiresAt))) {
-    return Result.err(new InvalidBotActiveGeneration("expiresAt is not an ISO timestamp"));
-  }
-  return Result.ok({ version: 1, generation, ...value });
-}
-
 function healthUrlFor(sandbox: ManagedBotSandbox, port: number): string {
   const url = new URL(sandbox.domain(port));
   if (url.protocol !== "https:") throw new Error("sandbox health domain is not HTTPS");
@@ -764,7 +683,11 @@ async function readActive(
       }),
     );
   }
-  return parseActiveGeneration(raw);
+  try {
+    return Result.ok(decodeActiveBotGeneration(raw));
+  } catch (cause) {
+    return Result.err(new InvalidBotActiveGeneration(detailOf(cause)));
+  }
 }
 
 async function commitGeneration(

@@ -3,10 +3,8 @@
 import { createClient } from "@libsql/client";
 import { Redis } from "@upstash/redis";
 
+import { BOT_ACTIVE_GENERATION_KEY, BOT_SUPERVISOR_MUTEX_KEY } from "../src/bot-generation.ts";
 import { createConversationStore } from "../src/conversations/index.ts";
-
-const ACTIVE_GENERATION_KEY = "wack:bot-sandbox:active:v1";
-const SUPERVISOR_MUTEX_KEY = "wack:bot-sandbox:supervisor:v1";
 
 function usage(): never {
   console.error(`usage:
@@ -64,9 +62,9 @@ async function inspectRedis(arguments_: readonly string[]): Promise<void> {
   const conversations = createConversationStore({ redis });
 
   const [active, mutexExists, mutexTtlMs, indexes] = await Promise.all([
-    redis.get(ACTIVE_GENERATION_KEY),
-    redis.exists(SUPERVISOR_MUTEX_KEY),
-    redis.pttl(SUPERVISOR_MUTEX_KEY),
+    redis.get(BOT_ACTIVE_GENERATION_KEY),
+    redis.exists(BOT_SUPERVISOR_MUTEX_KEY),
+    redis.pttl(BOT_SUPERVISOR_MUTEX_KEY),
     conversations.inspectIndexes(),
   ]);
   const report: Record<string, unknown> = {

@@ -2,20 +2,10 @@
 
 import { Redis } from "@upstash/redis";
 
+import { BOT_ACTIVE_GENERATION_KEY, decodeActiveBotGeneration } from "../src/bot-generation.ts";
 import { readyHealthReportSchema } from "../src/bot-health.ts";
 
 const IMAGE_PATTERN = /^vcr\.vercel\.com\/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$/u;
-const ACTIVE_KEY = "wack:bot-sandbox:active:v1";
-
-interface ActiveGeneration {
-  readonly version: 1;
-  readonly generation: number;
-  readonly sandboxName: string;
-  readonly image: string;
-  readonly healthUrl: string;
-  readonly expiresAt: string;
-}
-
 function usage(): never {
   console.error(`usage:
   bun packages/shared/scripts/release-check.ts image <vcr-image@sha256:digest>
@@ -30,35 +20,6 @@ function requireImage(value: string | undefined): string {
     );
   }
   return value;
-}
-
-function stringField(value: object, key: string): string {
-  const field = Reflect.get(value, key);
-  if (typeof field !== "string" || field.length === 0) {
-    throw new Error(`active generation has invalid ${key}`);
-  }
-  return field;
-}
-
-function activeGeneration(raw: unknown): ActiveGeneration {
-  let parsed: unknown = raw;
-  if (typeof raw === "string") parsed = JSON.parse(raw);
-  if (typeof parsed !== "object" || parsed === null) {
-    throw new Error("active bot generation is missing or malformed");
-  }
-  const version = Reflect.get(parsed, "version");
-  const generation = Reflect.get(parsed, "generation");
-  if (version !== 1 || !Number.isSafeInteger(generation) || Number(generation) < 1) {
-    throw new Error("active bot generation has an invalid fence");
-  }
-  return {
-    version,
-    generation: Number(generation),
-    sandboxName: stringField(parsed, "sandboxName"),
-    image: stringField(parsed, "image"),
-    healthUrl: stringField(parsed, "healthUrl"),
-    expiresAt: stringField(parsed, "expiresAt"),
-  };
 }
 
 async function checkImage(image: string): Promise<void> {
@@ -89,7 +50,8 @@ async function smoke(expectedImage: string): Promise<void> {
   if (!url || !token) throw new Error("UPSTASH_REDIS_REST_URL and token are required");
 
   const redis = new Redis({ url, token });
-  const active = activeGeneration(await redis.get(ACTIVE_KEY));
+  const active = decodeActiveBotGeneration(await redis.get(BOT_ACTIVE_GENERATION_KEY));
+  if (active === undefined) throw new Error("active bot generation is missing");
   if (active.image !== expectedImage) {
     throw new Error(`active image mismatch: expected ${expectedImage}, received ${active.image}`);
   }

@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import type { ActiveBotGeneration } from "../../shared/src/bot-generation.ts";
+import {
+  decodeActiveBotGeneration,
+  type ActiveBotGeneration,
+} from "../../shared/src/bot-generation.ts";
 import { Result, type Result as ResultType } from "../../shared/src/result/index.ts";
 import {
   BOT_ACTIVE_GENERATION_KEY,
@@ -59,40 +62,11 @@ function activeGeneration(
 }
 
 function decodeActive(raw: unknown): ActiveBotGeneration | undefined {
-  if (raw === undefined) return undefined;
-  let decoded = raw;
-  if (typeof raw === "string") decoded = JSON.parse(raw);
-  if (typeof decoded !== "object" || !decoded) return undefined;
-
-  const generation = Reflect.get(decoded, "generation");
-  const sandboxName = Reflect.get(decoded, "sandboxName");
-  const commandId = Reflect.get(decoded, "commandId");
-  const image = Reflect.get(decoded, "image");
-  const healthUrl = Reflect.get(decoded, "healthUrl");
-  const activatedAt = Reflect.get(decoded, "activatedAt");
-  const expiresAt = Reflect.get(decoded, "expiresAt");
-  if (
-    Reflect.get(decoded, "version") !== 1 ||
-    typeof generation !== "number" ||
-    typeof sandboxName !== "string" ||
-    typeof commandId !== "string" ||
-    typeof image !== "string" ||
-    typeof healthUrl !== "string" ||
-    typeof activatedAt !== "string" ||
-    typeof expiresAt !== "string"
-  ) {
+  try {
+    return decodeActiveBotGeneration(raw);
+  } catch {
     return undefined;
   }
-  return {
-    version: 1,
-    generation,
-    sandboxName,
-    commandId,
-    image,
-    healthUrl,
-    activatedAt,
-    expiresAt,
-  };
 }
 
 class RedisFake implements BotSandboxRedisClient {
@@ -696,7 +670,7 @@ describe("bot Sandbox supervisor", () => {
     expect(InvalidBotActiveGeneration.is(error)).toBe(true);
     expect(fetchCount).toBe(0);
     expect(client.created).toHaveLength(0);
-    expect(decodeActive(redis.activeRaw)).toEqual(active);
+    expect(redis.activeRaw).toEqual(active);
   });
 
   test("rejects a non-HTTPS candidate endpoint without changing the active record", async () => {
