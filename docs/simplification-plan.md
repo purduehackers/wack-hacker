@@ -109,7 +109,9 @@ Lua-emulating fakes can be deleted only after the real-script tests overlap.
 The first real-Redis suite now runs the production Upstash client and Lua through
 pinned Redis 6.2 and `serverless-redis-http` containers. It covers queue dedupe,
 FIFO, lease takeover, independent keys, reset cutover, lost-response admission,
-ambiguous-admission fencing, one-winner HITL and reset staleness, lost render callbacks, render-lease renewal, and a two-turn streaming/terminal/restart flow with a stateful Discord fake. The
+ambiguous-admission fencing, one-winner HITL, interaction-receipt duplicate and
+conflict fencing, reset staleness, lost render callbacks, render-lease renewal,
+and a two-turn streaming/terminal/restart flow with a stateful Discord fake. The
 feature-parity artifact now also freezes each skill's policy role, description,
 criteria, tool membership, and normalized instruction digest, independent of
 the activation protocol. A table-driven policy test now covers anonymous,

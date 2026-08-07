@@ -7,6 +7,7 @@ import {
   finishTurnAdmission,
   startTurnDelivery,
 } from "../../packages/agents/agent/lib/discord/coordination.ts";
+import { claimInteraction } from "../../packages/agents/agent/lib/discord/interaction-receipt.ts";
 import { createRenderPublisher } from "../../packages/agents/agent/lib/discord/render-intent.ts";
 import type { AgentClient } from "../../packages/bot/src/agent/client.ts";
 import { createHitlStore, type HitlClaimInput } from "../../packages/bot/src/agent/hitl/store.ts";
@@ -21,6 +22,7 @@ import { Result } from "../../packages/shared/src/result/index.ts";
 import { silentReporter } from "../../packages/shared/src/result/observe.ts";
 import type {
   DeliveryPayload,
+  InteractionPayload,
   MessagePayload,
   ParkedPayload,
   RenderIntent,
@@ -75,6 +77,55 @@ async function waitUntil(check: () => Promise<boolean>, detail: string): Promise
     await Bun.sleep(10);
   }
   throw new Error(`timed out waiting for ${detail}`);
+}
+
+const successfulCallbackFetch: typeof globalThis.fetch = Object.assign(
+  async () => new Response(undefined, { status: 204 }),
+  { preconnect: globalThis.fetch.preconnect },
+);
+
+async function startStreamingTurn(
+  redis: RedisClient,
+  queue: ReturnType<typeof createTurnQueue>,
+  source: MessagePayload,
+  inputRequests: NonNullable<RenderIntent["inputRequests"]>,
+): Promise<DeliveryPayload> {
+  await queue.enqueue(source);
+  const claimed = await queue.claim(source.continuationKey);
+  if (Result.isError(claimed)) throw claimed.error;
+  const delivery = claimed.value?.payload;
+  if (delivery === undefined) throw new Error("streaming delivery was not claimed");
+
+  const attemptId = crypto.randomUUID();
+  if ((await startTurnDelivery(redis, delivery, attemptId)).status !== "start") {
+    throw new Error("streaming delivery was not admitted");
+  }
+  const publisher = createRenderPublisher({
+    redis,
+    botUrl: "http://bot.invalid",
+    botSecret: "contract-secret",
+    fetch: successfulCallbackFetch,
+  });
+  if (
+    !(await publisher.publish({
+      dispatchId: delivery.dispatchId,
+      continuationKey: delivery.continuationKey,
+      messageId: delivery.messageId,
+      sessionId: "session-input",
+      eveTurnId: "turn-input",
+      revision: 1,
+      phase: "streaming",
+      text: "Choose",
+      activity: "Waiting",
+      inputRequests,
+    }))
+  ) {
+    throw new Error("streaming input request was not published");
+  }
+  if (!(await finishTurnAdmission(redis, delivery.continuationKey, attemptId))) {
+    throw new Error("streaming admission was not released");
+  }
+  return delivery;
 }
 
 class MemoryDiscord {
@@ -223,44 +274,15 @@ contractTest("HITL Lua admits one answer and reset makes the control stale", asy
   const queue = createTurnQueue({ redis });
   const continuationKey = "30000000000000020";
   const source = message("40000000000000030", "approval", continuationKey);
-  await queue.enqueue(source);
-  const claimed = await queue.claim(continuationKey);
-  if (Result.isError(claimed)) throw claimed.error;
-  const delivery = claimed.value?.payload;
-  if (delivery === undefined) throw new Error("HITL delivery was not claimed");
-
-  const attemptId = crypto.randomUUID();
-  expect((await startTurnDelivery(redis, delivery, attemptId)).status).toBe("start");
-  const publisher = createRenderPublisher({
-    redis,
-    botUrl: "http://bot.invalid",
-    botSecret: "contract-secret",
-    fetch: Object.assign(async () => new Response(undefined, { status: 204 }), {
-      preconnect: globalThis.fetch.preconnect,
-    }),
-  });
-  expect(
-    await publisher.publish({
-      dispatchId: delivery.dispatchId,
-      continuationKey,
-      messageId: delivery.messageId,
-      sessionId: "session-hitl",
-      eveTurnId: "turn-hitl",
-      revision: 1,
-      phase: "streaming",
-      text: "Choose",
-      activity: "Waiting",
-      inputRequests: [
-        {
-          requestId: "approval-1",
-          recipientUserId: "10000000000000000",
-          prompt: "Continue?",
-          kind: "question",
-          display: "confirmation",
-        },
-      ],
-    }),
-  ).toBe(true);
+  const delivery = await startStreamingTurn(redis, queue, source, [
+    {
+      requestId: "approval-1",
+      recipientUserId: "10000000000000000",
+      prompt: "Continue?",
+      kind: "question",
+      display: "confirmation",
+    },
+  ]);
 
   const hitl = createHitlStore(redis);
   const approval: HitlClaimInput = {
@@ -285,6 +307,65 @@ contractTest("HITL Lua admits one answer and reset makes the control stale", asy
   expect(await hitl.claim(approval)).toBe("stale");
   await queue.purge(continuationKey);
 });
+
+contractTest(
+  "interaction admission Lua fences duplicate, conflicting, and reset controls",
+  async () => {
+    const redis = contractRedis();
+    const queue = createTurnQueue({ redis });
+    const continuationKey = "30000000000000021";
+    const source = message("40000000000000040", "interaction", continuationKey);
+    const delivery = await startStreamingTurn(redis, queue, source, [
+      {
+        requestId: "approval-2",
+        recipientUserId: "10000000000000000",
+        prompt: "Continue?",
+        kind: "question",
+        display: "confirmation",
+        options: [
+          { id: "approve", label: "Approve" },
+          { id: "deny", label: "Deny" },
+        ],
+      },
+    ]);
+    const interaction: InteractionPayload = {
+      continuationKey,
+      interactionId: "40000000000000041",
+      dispatchId: delivery.dispatchId,
+      renderRevision: 1,
+      requestId: "approval-2",
+      authChannelId: source.channel.id,
+      optionId: "approve",
+      principal: source.principal,
+    };
+
+    const claims = await Promise.all([
+      claimInteraction(redis, interaction),
+      claimInteraction(redis, interaction),
+    ]);
+    expect(claims.map(({ claim }) => claim).sort((left, right) => left - right)).toEqual([0, 1]);
+    expect(
+      (
+        await claimInteraction(redis, {
+          ...interaction,
+          optionId: "deny",
+        })
+      ).claim,
+    ).toBe(-1);
+
+    expect(await finishTurnAdmission(redis, continuationKey, interaction.interactionId)).toBe(true);
+    await queue.beginReset(continuationKey);
+    expect(
+      (
+        await claimInteraction(redis, {
+          ...interaction,
+          interactionId: "40000000000000042",
+        })
+      ).claim,
+    ).toBe(-1);
+    await queue.purge(continuationKey);
+  },
+);
 
 contractTest("render leases survive renewal through the Upstash-compatible transport", async () => {
   const redis = contractRedis();
