@@ -457,33 +457,42 @@ export function createConversationFlow(deps: ConversationFlowDeps): Conversation
   async function recoverActiveQueues(): Promise<void> {
     if (stopped) return;
     for (const continuationKey of await deps.store.queue.keys()) {
-      const recovery = await deps.store.queue.recoverAdmission(continuationKey);
-      if (Result.isError(recovery)) {
-        deps.reporter.captureDefect(recovery.error, {
-          op: "agent.router.recover-admission",
+      if (stopped) break;
+      try {
+        const recovery = await deps.store.queue.recoverAdmission(continuationKey);
+        if (Result.isError(recovery)) {
+          deps.reporter.captureDefect(recovery.error, {
+            op: "agent.router.recover-admission",
+            attributes: { continuationKey },
+          });
+          continue;
+        }
+        if (recovery.value !== undefined) {
+          const error = new RecoveryRequired({
+            operation: "agent delivery admission",
+            detail: "the admission lease expired before Eve acknowledgement was durable",
+            remediation: "reset the conversation before retrying",
+          });
+          deps.reporter.emit({
+            op: "agent.router.recover-admission",
+            status: "error",
+            errorTag: error._tag,
+            errorMessage: error.message,
+            attributes: {
+              continuationKey,
+              messageId: recovery.value.messageId,
+              dispatchId: recovery.value.dispatchId,
+            },
+          });
+        }
+        if (stopped) break;
+        await kick(continuationKey);
+      } catch (cause) {
+        deps.reporter.captureDefect(cause, {
+          op: "agent.router.recover-queue",
           attributes: { continuationKey },
         });
-        continue;
       }
-      if (recovery.value !== undefined) {
-        const error = new RecoveryRequired({
-          operation: "agent delivery admission",
-          detail: "the admission lease expired before Eve acknowledgement was durable",
-          remediation: "reset the conversation before retrying",
-        });
-        deps.reporter.emit({
-          op: "agent.router.recover-admission",
-          status: "error",
-          errorTag: error._tag,
-          errorMessage: error.message,
-          attributes: {
-            continuationKey,
-            messageId: recovery.value.messageId,
-            dispatchId: recovery.value.dispatchId,
-          },
-        });
-      }
-      await kick(continuationKey);
     }
   }
 
@@ -624,6 +633,7 @@ export function createConversationFlow(deps: ConversationFlowDeps): Conversation
       started = true;
       sweepRequested = true;
       await drainSweeps();
+      if (stopped) return;
       const interval = deps.recoveryIntervalMs ?? 15_000;
       if (interval > 0) {
         recoveryTimer = setInterval(scheduleSweep, interval);

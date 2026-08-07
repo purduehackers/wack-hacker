@@ -128,9 +128,9 @@ packages/agents/agent
 packages/shared/src
 ├── conversations/
 │   ├── keys.ts                       # private conversation key catalog
-│   ├── schemas.ts                    # persisted conversation records
 │   ├── store.ts                      # only exported Redis-facing API
-│   └── *.ts                          # private eval/Lua transition modules
+│   ├── render.ts                     # validates the stored render projection
+│   └── *.ts                          # private keys, eval/Lua, and local record shapes
 ├── wire.ts                           # cross-process schemas, not Redis keys
 ├── errors.ts                         # project error taxonomy
 └── domain data                       # only genuinely shared shapes

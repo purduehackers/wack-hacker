@@ -18,4 +18,3 @@ export {
   type InteractionReceiptIdentity,
 } from "./interaction.ts";
 export type { HitlClaimInput } from "./hitl.ts";
-export type { RenderProjection, StoredRenderProjection } from "./schemas.ts";

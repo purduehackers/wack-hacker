@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 
 import type { ConversationStore } from "@repo/shared/conversations";
 import { Transient } from "@repo/shared/errors";
@@ -41,13 +41,15 @@ function flowHarness(
   eve: AgentClient,
   queue: ConversationStore["queue"],
   outcome: () => Promise<"applied" | "discarded" | undefined> = async () => undefined,
+  ready: () => Promise<readonly string[]> = async () => [],
+  recoveryIntervalMs = 0,
 ) {
   return createConversationFlow({
     eve,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- intentionally minimal strict fake
     store: {
       queue,
-      render: { ready: async () => [], outcome },
+      render: { ready, outcome },
     } as unknown as ConversationStore,
     rest: {
       postMessage: async () => Result.ok({ id: "50000000000000000", content: "" }),
@@ -58,7 +60,7 @@ function flowHarness(
     turnMessages: { record: async () => Result.ok(undefined) },
     schedules: { admit: async () => {} },
     reporter: silentReporter,
-    recoveryIntervalMs: 0,
+    recoveryIntervalMs,
   });
 }
 
@@ -168,4 +170,50 @@ describe("agent router reset recovery", () => {
     expect(confirmations).toBe(1);
     await router.stop();
   });
+});
+
+test("stop overlapping the initial sweep does not install recovery afterward", async () => {
+  const readyGate = Promise.withResolvers<void>();
+  const readyEntered = Promise.withResolvers<void>();
+  const router = flowHarness(
+    {
+      sendMessage: async (_delivery: DeliveryPayload) =>
+        Result.ok({ sessionId: "session-1", continuationToken: continuationKey }),
+      sendInteraction: async (_interaction: InteractionPayload) =>
+        Result.ok({ sessionId: "session-1", continuationToken: continuationKey }),
+      sendReset: async (_reset: ResetRequestPayload) => Result.ok(undefined),
+    },
+    {
+      enqueue: async () => {},
+      claim: async () => Result.ok(undefined),
+      recoverAdmission: async () => Result.ok(undefined),
+      confirm: async () => true,
+      complete: async () => "missing",
+      keys: async () => [],
+      readyKeys: async () => [],
+      parked: async () => Result.ok(undefined),
+      depth: async () => 0,
+      beginReset: async () => "00000000-0000-4000-8000-000000000099",
+      commitReset: async () => true,
+      purge: async () => {},
+    },
+    async () => undefined,
+    async () => {
+      readyEntered.resolve();
+      await readyGate.promise;
+      return [];
+    },
+    1,
+  );
+  const interval = spyOn(globalThis, "setInterval");
+  try {
+    const starting = router.start();
+    await readyEntered.promise;
+    const stopping = router.stop();
+    readyGate.resolve();
+    await Promise.all([starting, stopping]);
+    expect(interval).not.toHaveBeenCalled();
+  } finally {
+    interval.mockRestore();
+  }
 });

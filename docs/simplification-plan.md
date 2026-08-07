@@ -9,8 +9,8 @@
 ## Audit baseline
 
 The original audit at `2cec01c` covered 421 tracked TypeScript files and 52,853
-lines with 168 passing tests. After Groups A and B, the repository has 435
-tracked TypeScript files and 54,645 lines; 185 tests pass (agents 120, bot 36,
+lines with 168 passing tests. After Groups A and B, the repository has 434
+tracked TypeScript files and 54,680 lines; 187 tests pass (agents 120, bot 38,
 shared 20, supervisor 9). The real-Redis suite separately runs 10 contract tests
 with 64 assertions against production Lua.
 The largest accidental systems and high-risk gaps are:
@@ -242,10 +242,9 @@ coordination boundary.
 
 **Implemented**
 
-- `packages/shared/src/conversations/schemas.ts`: project-owned persisted record
-  schemas for active delivery, render projection/outcome, HITL claims/receipts,
-  and scheduled-fire receipts. Existing permissive decode behavior remains where
-  tightening it would be a separate behavior change.
+- Persisted shapes used only to construct Lua arguments remain local to their
+  transition modules. The stored render projection keeps its real read-time Zod
+  validation in `render.ts`; aspirational unused schema exports are not retained.
 - `packages/shared/src/conversations/store.ts`: the only exported Redis-facing
   conversation API. Internal files may separate Lua by aggregate, but callers
   see one `ConversationStore`.
@@ -297,8 +296,8 @@ All phase-0 contracts, crash-point rendering, malformed persisted records,
 reset/HITL races, startup recovery, and existing exact-error assertions. No key,
 TTL, wire payload, or custom-ID change is allowed in this slice.
 
-**Implemented result:** 2,670 production TypeScript lines were added or moved
-and 2,453 deleted (net +217); tests grew. The store intentionally keeps the Lua
+**Implemented result:** 2,607 production TypeScript lines were added or moved
+and 2,453 deleted (net +154); tests grew. The store intentionally keeps the Lua
 and branch-heavy durability logic, so the result is ownership centralization,
 not aggressive line-count deletion. The old router, render coordinator,
 in-memory terminal waiter, mutable callback cycle, and runtime-owned Redis

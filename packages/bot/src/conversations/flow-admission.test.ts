@@ -161,3 +161,53 @@ describe("agent router admission sweep", () => {
     await router.stop();
   });
 });
+
+test("a throwing recovery entry does not starve later continuation keys", async () => {
+  const poisonedKey = "30000000000000001";
+  const recoveredKeys: string[] = [];
+  const claimedKeys: string[] = [];
+  const defects: string[] = [];
+  const flow = flowHarness(
+    {
+      sendMessage: async (_delivery: DeliveryPayload) =>
+        Result.ok({ sessionId: "session-1", continuationToken: delivery.continuationKey }),
+      sendInteraction: async (_interaction: InteractionPayload) =>
+        Result.ok({ sessionId: "session-1", continuationToken: delivery.continuationKey }),
+      sendReset: async (_reset: ResetRequestPayload) => Result.ok(undefined),
+    },
+    {
+      enqueue: async () => {},
+      claim: async (continuationKey) => {
+        claimedKeys.push(continuationKey);
+        return Result.ok(undefined);
+      },
+      recoverAdmission: async (continuationKey) => {
+        recoveredKeys.push(continuationKey);
+        if (continuationKey === poisonedKey) throw new Error("poisoned active delivery");
+        return Result.ok(undefined);
+      },
+      confirm: async () => true,
+      complete: async () => "missing",
+      keys: async () => [poisonedKey, delivery.continuationKey],
+      readyKeys: async () => [],
+      parked: async () => Result.ok(undefined),
+      depth: async () => 0,
+      beginReset: async () => "00000000-0000-4000-8000-000000000099",
+      commitReset: async () => true,
+      purge: async () => {},
+    },
+    {
+      emit: () => {},
+      captureDefect: (_error, context) => {
+        defects.push(`${context.op}:${String(context.attributes?.["continuationKey"])}`);
+      },
+    },
+  );
+
+  await flow.sweep();
+
+  expect(recoveredKeys).toEqual([poisonedKey, delivery.continuationKey]);
+  expect(claimedKeys).toEqual([delivery.continuationKey]);
+  expect(defects).toContain(`agent.router.recover-queue:${poisonedKey}`);
+  await flow.stop();
+});

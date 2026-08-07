@@ -1,5 +1,7 @@
 /** Redis desired-state inbox and durable bot-owned Discord projection. */
 
+import { z } from "zod";
+
 import { InvalidInput } from "../errors.ts";
 import type { RedisClient } from "../redis/client.ts";
 import { Result } from "../result/index.ts";
@@ -16,8 +18,31 @@ import {
   renderProjectionKey,
   renderTargetKey,
 } from "./keys.ts";
-import { renderProjectionSchema } from "./schemas.ts";
-import type { RenderProjection, StoredRenderProjection } from "./schemas.ts";
+const contentHashSchema = z.string().regex(/^[A-Za-z0-9_-]{16}$/);
+const renderProjectionSchema = z.object({
+  anchorMessageId: z
+    .string()
+    .regex(/^\d{17,20}$/)
+    .optional(),
+  anchorContentHash: contentHashSchema.optional(),
+  overflow: z
+    .array(
+      z.object({
+        messageId: z.string().regex(/^\d{17,20}$/),
+        contentHash: contentHashSchema.optional(),
+      }),
+    )
+    .max(10),
+  appliedRevision: z.number().int().nonnegative(),
+});
+
+interface RenderProjection {
+  anchorMessageId?: string;
+  anchorContentHash?: string;
+  overflow: { messageId: string; contentHash?: string }[];
+}
+
+type StoredRenderProjection = z.infer<typeof renderProjectionSchema>;
 
 const CLAIM_TTL_MS = 45_000;
 const PROJECTION_TTL_SECONDS = 7 * 24 * 60 * 60;
