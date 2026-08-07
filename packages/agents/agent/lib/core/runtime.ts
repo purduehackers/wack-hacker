@@ -106,11 +106,17 @@ export async function authorizeCoreTool(name: CoreToolName, ctx: ToolContext) {
             actual: "exhausted",
             subject: name,
           })
-        : new Forbidden({
-            required: descriptor.minRole,
-            actual: principal.value.role,
-            subject: name,
-          });
+        : decision.value.denial === "confirmation"
+          ? new Forbidden({
+              required: "a confirmation-free scheduled action",
+              actual: "confirmation required",
+              subject: name,
+            })
+          : new Forbidden({
+              required: descriptor.minRole,
+              actual: principal.value.role,
+              subject: name,
+            });
     return { allowed: false, output: { ok: false, error: serializeError(error) } } as const;
   }
   return { allowed: true, principal: principal.value } as const;

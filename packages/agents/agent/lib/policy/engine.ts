@@ -62,20 +62,33 @@ function withinBudget(input: PolicyInput): boolean {
   );
 }
 
+function confirmationAvailable(input: PolicyInput): boolean {
+  return (
+    input.principal.source !== PolicySource.Scheduled ||
+    confirmationFor(input.capability) === Confirmation.None
+  );
+}
+
 /** Every policy dimension has an explicit deny fallback. */
 const capabilities = module("capabilities", { input: inputSchema })
   .default("discover", false)
   .when("discover", (ctx) => authorized(ctx.input), true)
   .default("execute", false)
-  .when("execute", (ctx) => authorized(ctx.input) && withinBudget(ctx.input), true)
+  .when(
+    "execute",
+    (ctx) => authorized(ctx.input) && withinBudget(ctx.input) && confirmationAvailable(ctx.input),
+    true,
+  )
   .default("approve", "deny" as const)
-  .complete("approve", (ctx) =>
-    authorized(ctx.input) && withinBudget(ctx.input)
-      ? ctx.input.principal.source === PolicySource.Scheduled
-        ? Confirmation.None
-        : confirmationFor(ctx.input.capability)
-      : undefined,
-  );
+  .complete("approve", (ctx) => {
+    if (!authorized(ctx.input) || !withinBudget(ctx.input)) return undefined;
+    const confirmation = confirmationFor(ctx.input.capability);
+    if (ctx.input.principal.source !== PolicySource.Scheduled) return confirmation;
+    // Scheduled work has nobody present to answer a confirmation. Only tools
+    // that require no confirmation may run; converting a required confirmation
+    // to none would turn scheduling into an approval bypass.
+    return confirmation === Confirmation.None ? Confirmation.None : undefined;
+  });
 
 const engine = new Engine().add(capabilities);
 
@@ -104,7 +117,9 @@ export function decideCapability(
         ...(!canDiscover
           ? { denial: "role" as const }
           : !canExecute
-            ? { denial: "budget" as const }
+            ? {
+                denial: withinBudget(input) ? ("confirmation" as const) : ("budget" as const),
+              }
             : {}),
       };
     },

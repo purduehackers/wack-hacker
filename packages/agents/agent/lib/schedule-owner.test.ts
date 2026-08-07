@@ -6,7 +6,11 @@ import type { SessionAuthContext, SessionContext } from "eve/context";
 import type { ApprovalContext } from "eve/tools/approval";
 
 import { requirePrincipal } from "./policy/principal.ts";
-import { approveScheduleMutation, requireScheduleOwner } from "./schedule-owner.ts";
+import {
+  approveScheduleMutation,
+  requireScheduleMutationOwner,
+  requireScheduleOwner,
+} from "./schedule-owner.ts";
 
 function session(
   attributes: SessionAuthContext["attributes"],
@@ -105,6 +109,30 @@ describe("schedule mutation RBAC", () => {
     expect(approveScheduleMutation("cancel_task", approvalContext(organizer))).toBe(
       "user-approval",
     );
+  });
+
+  test("revalidates current organizer authority at mutation execution", () => {
+    const destination = { channelId: "20000000000000000" };
+    const downgraded = session({ ...destination, memberRoles: [] });
+    expect(() => requireScheduleMutationOwner(downgraded, "schedule_task")).toThrow(
+      "current policy denies this schedule change",
+    );
+    expect(() => requireScheduleMutationOwner(downgraded, "cancel_task")).toThrow(
+      "current policy denies this schedule change",
+    );
+
+    const organizer = session({
+      ...destination,
+      memberRoles: [DISCORD_IDS.roles.ORGANIZER],
+    });
+    expect(requireScheduleMutationOwner(organizer, "schedule_task")).toEqual({
+      ownerId: "10000000000000000",
+      channelId: destination.channelId,
+      memberRoles: [DISCORD_IDS.roles.ORGANIZER],
+    });
+    expect(requireScheduleMutationOwner(organizer, "cancel_task")).toMatchObject({
+      ownerId: "10000000000000000",
+    });
   });
 
   test("raw current roles override a stale asserted admin role", () => {

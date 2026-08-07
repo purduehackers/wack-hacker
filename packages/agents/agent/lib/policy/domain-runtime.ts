@@ -193,7 +193,9 @@ export function createDomainRuntime<const R extends DomainToolRegistry>(
           ? decision.error.message
           : decision.value.denial === "budget"
             ? "Daily AI token budget reached."
-            : `Policy denied this ${adapter.label} action.`,
+            : decision.value.denial === "confirmation"
+              ? "Scheduled actions cannot run tools that require confirmation."
+              : `Policy denied this ${adapter.label} action.`,
       };
     }
     if (decision.value.approve === Confirmation.None) return "not-applicable";
@@ -252,12 +254,14 @@ export function createDomainRuntime<const R extends DomainToolRegistry>(
     if (Result.isError(decision)) {
       return { ok: false, error: serializeError(decision.error) };
     }
-    if (!decision.value.execute) {
+    if (!decision.value.execute || decision.value.approve === "deny") {
       await audit(principal, name, input, AUDIT_DECISIONS.Denied, authority.decidedBy);
       return denied(
-        decision.value.denial === "budget"
-          ? "available daily token budget"
-          : descriptorForTool(name).minRole,
+        decision.value.denial === "confirmation"
+          ? "a confirmation-free scheduled action"
+          : decision.value.denial === "budget"
+            ? "available daily token budget"
+            : descriptorForTool(name).minRole,
         principal.role,
         name,
       );

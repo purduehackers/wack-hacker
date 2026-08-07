@@ -2,7 +2,7 @@ import { defineTool } from "eve/tools";
 import { z } from "zod";
 
 import { guardToolExecution } from "../lib/core/serialization.ts";
-import { approveScheduleMutation, requireScheduleOwner } from "../lib/schedule-owner.ts";
+import { approveScheduleMutation, requireScheduleMutationOwner } from "../lib/schedule-owner.ts";
 import { getScheduleStore } from "../lib/schedule-store.ts";
 
 export default defineTool({
@@ -12,7 +12,10 @@ export default defineTool({
   async execute({ id }, ctx) {
     return guardToolExecution(async () => {
       const scheduleStore = await getScheduleStore();
-      const cancelled = await scheduleStore.cancel(requireScheduleOwner(ctx), id);
+      const cancelled = await scheduleStore.cancel(
+        requireScheduleMutationOwner(ctx, "cancel_task"),
+        id,
+      );
       return { cancelled: cancelled.unwrap("cancel scheduled task") };
     });
   },

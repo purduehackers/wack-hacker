@@ -10,19 +10,19 @@ import type { SecondPartyApprovalRecord } from "./approval-record.ts";
 import type { ActionAuditRecord } from "./audit.ts";
 import { createDomainRuntime, type DomainRuntimeDependencies } from "./domain-runtime.ts";
 import { defineDomainTool } from "./domain-tools.ts";
-import { Confirmation, RiskLevel } from "./types.ts";
+import { Confirmation, PolicySource, RiskLevel } from "./types.ts";
 
-function auth(role: UserRoleValue) {
+function auth(role: UserRoleValue, source: PolicySource = PolicySource.Chat) {
   return {
-    attributes: { role },
+    attributes: { role, source },
     authenticator: "domain-runtime-test",
     principalId: "10000000000000000",
     principalType: "user",
   };
 }
 
-function session(role: UserRoleValue) {
-  const current = auth(role);
+function session(role: UserRoleValue, source: PolicySource = PolicySource.Chat) {
+  const current = auth(role, source);
   return {
     id: "session-1",
     auth: { current, initiator: current },
@@ -34,6 +34,7 @@ function approvalContext(
   role: UserRoleValue,
   toolName: string,
   toolInput: Readonly<Record<string, unknown>>,
+  source: PolicySource = PolicySource.Chat,
 ): ApprovalContext {
   return {
     approvedTools: new Set(),
@@ -44,13 +45,17 @@ function approvalContext(
     getSkill: () => {
       throw new Error("no skills in policy test");
     },
-    session: session(role),
+    session: session(role, source),
     toolInput,
     toolName,
   };
 }
 
-function toolContext(role: UserRoleValue, toolName: string): ToolContext {
+function toolContext(
+  role: UserRoleValue,
+  toolName: string,
+  source: PolicySource = PolicySource.Chat,
+): ToolContext {
   return {
     abortSignal: new AbortController().signal,
     callId: "call-1",
@@ -66,7 +71,7 @@ function toolContext(role: UserRoleValue, toolName: string): ToolContext {
     requireAuth: () => {
       throw new Error("no auth provider in policy test");
     },
-    session: session(role),
+    session: session(role, source),
     toolName,
   };
 }
@@ -148,6 +153,64 @@ describe("central domain policy runtime", () => {
       ),
     ).toBe("user-approval");
     expect(auditRecords.map((entry) => entry.decision)).toEqual(["requested"]);
+  });
+
+  test("scheduled execution denies confirmation-required tools and allows unconfirmed tools", async () => {
+    const auditRecords: ActionAuditRecord[] = [];
+    let destructiveExecutions = 0;
+    let unconfirmedExecutions = 0;
+    const tools = {
+      destroy: defineDomainTool({
+        access: { risk: RiskLevel.Destructive, confirm: Confirmation.SecondParty },
+        description: "Destroy",
+        input: z.object({}),
+        execute: async () => {
+          destructiveExecutions += 1;
+          return { ok: true };
+        },
+      }),
+      mutate: defineDomainTool({
+        access: { risk: RiskLevel.Write, confirm: Confirmation.None },
+        description: "Mutate",
+        input: z.object({}),
+        execute: async () => {
+          unconfirmedExecutions += 1;
+          return { ok: true };
+        },
+      }),
+    } as const;
+    const runtime = createDomainRuntime(
+      { domain: "test", label: "Test", service: "Test", tools },
+      dependencies(auditRecords),
+    );
+
+    const scheduled = PolicySource.Scheduled;
+    expect(
+      await runtime.approvalForTool(
+        "destroy",
+        approvalContext(UserRole.Organizer, "destroy", {}, scheduled),
+      ),
+    ).toMatchObject({ type: "denied" });
+    expect(
+      await runtime.executeTool(
+        "destroy",
+        {},
+        toolContext(UserRole.Organizer, "destroy", scheduled),
+      ),
+    ).toMatchObject({ ok: false, error: { tag: "Forbidden" } });
+    expect(destructiveExecutions).toBe(0);
+
+    expect(
+      await runtime.approvalForTool(
+        "mutate",
+        approvalContext(UserRole.Organizer, "mutate", {}, scheduled),
+      ),
+    ).toBe("not-applicable");
+    expect(
+      await runtime.executeTool("mutate", {}, toolContext(UserRole.Organizer, "mutate", scheduled)),
+    ).toEqual({ ok: true });
+    expect(unconfirmedExecutions).toBe(1);
+    expect(auditRecords.map((entry) => entry.decision)).toEqual(["denied", "denied", "executed"]);
   });
 
   test("rebinds second-party execution to the requester and records the approver", async () => {

@@ -1,19 +1,41 @@
 /** Trusted schedule ownership and policy derived from Eve's current delivery. */
 
 import { UserRole } from "@repo/shared/discord";
+import type { InvariantViolated, Unauthenticated } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
-import type { SessionContext } from "eve/context";
+import type { SessionAuthContext, SessionContext } from "eve/context";
 import type { ApprovalContext, ApprovalStatus } from "eve/tools/approval";
 
 import { decideCapability } from "./policy/engine.ts";
 import { requirePrincipal } from "./policy/principal.ts";
-import { CapabilityKind, Confirmation, RiskLevel } from "./policy/types.ts";
+import {
+  CapabilityKind,
+  Confirmation,
+  RiskLevel,
+  type CapabilityDecision,
+} from "./policy/types.ts";
 import type { ScheduleOwner } from "./schedule-store.ts";
 
 const DISCORD_ID = /^\d{17,20}$/u;
+type ScheduleMutationName = "schedule_task" | "cancel_task";
 
 function discordId(value: unknown): string | undefined {
   return typeof value === "string" && DISCORD_ID.test(value) ? value : undefined;
+}
+
+function scheduleMutationDecision(
+  name: ScheduleMutationName,
+  current: SessionAuthContext | null | undefined,
+): Result<CapabilityDecision, Unauthenticated | InvariantViolated> {
+  const principal = requirePrincipal(current);
+  if (Result.isError(principal)) return principal;
+  return decideCapability(principal.value, {
+    kind: CapabilityKind.Tool,
+    name,
+    minRole: UserRole.Organizer,
+    risk: RiskLevel.Write,
+    confirmation: Confirmation.Self,
+  });
 }
 
 export function requireScheduleOwner(ctx: SessionContext): ScheduleOwner {
@@ -48,22 +70,24 @@ export function requireScheduleOwner(ctx: SessionContext): ScheduleOwner {
   return { ownerId: auth.principalId, channelId, memberRoles };
 }
 
+export function requireScheduleMutationOwner(
+  ctx: SessionContext,
+  name: ScheduleMutationName,
+): ScheduleOwner {
+  const decision = scheduleMutationDecision(name, ctx.session.auth.current);
+  if (Result.isError(decision)) throw decision.error;
+  if (!decision.value.execute || decision.value.approve === "deny") {
+    throw new Error("current policy denies this schedule change");
+  }
+  return requireScheduleOwner(ctx);
+}
+
 /** Central policy adapter for owner-scoped scheduling mutations. */
 export function approveScheduleMutation(
-  name: "schedule_task" | "cancel_task",
+  name: ScheduleMutationName,
   ctx: ApprovalContext,
 ): ApprovalStatus {
-  const principal = requirePrincipal(ctx.session.auth.current);
-  if (Result.isError(principal)) {
-    return { type: "denied", reason: principal.error.message };
-  }
-  const decision = decideCapability(principal.value, {
-    kind: CapabilityKind.Tool,
-    name,
-    minRole: UserRole.Organizer,
-    risk: RiskLevel.Write,
-    confirmation: Confirmation.Self,
-  });
+  const decision = scheduleMutationDecision(name, ctx.session.auth.current);
   if (Result.isError(decision) || !decision.value.execute || decision.value.approve === "deny") {
     return {
       type: "denied",

@@ -2,7 +2,7 @@ import { defineTool } from "eve/tools";
 import { z } from "zod";
 
 import { guardToolExecution } from "../lib/core/serialization.ts";
-import { approveScheduleMutation, requireScheduleOwner } from "../lib/schedule-owner.ts";
+import { approveScheduleMutation, requireScheduleMutationOwner } from "../lib/schedule-owner.ts";
 import { getScheduleStore } from "../lib/schedule-store.ts";
 
 const schedule = z.discriminatedUnion("type", [
@@ -28,7 +28,7 @@ export default defineTool({
   approval: (ctx) => approveScheduleMutation("schedule_task", ctx),
   async execute({ description, prompt, schedule }, ctx) {
     return guardToolExecution(async () => {
-      const owner = requireScheduleOwner(ctx);
+      const owner = requireScheduleMutationOwner(ctx, "schedule_task");
       const scheduleStore = await getScheduleStore();
       const created = await (schedule.type === "once"
         ? scheduleStore.create(owner, {

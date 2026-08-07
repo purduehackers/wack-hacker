@@ -75,19 +75,57 @@ describe("Verdex capability defaults", () => {
     );
     expect(result).toMatchObject({ status: "ok", value: { approve: Confirmation.Self } });
   });
+});
 
-  test("scheduled execution cannot park for approval", () => {
+describe("Verdex execution constraints", () => {
+  test("scheduled execution denies an explicit second-party confirmation", () => {
     const result = decideCapability(
       { ...publicPrincipal, role: UserRole.Organizer, source: PolicySource.Scheduled },
       {
         kind: CapabilityKind.Tool,
-        name: "test-scheduled",
+        name: "test-scheduled-second-party",
         minRole: UserRole.Organizer,
         risk: RiskLevel.Destructive,
         confirmation: Confirmation.SecondParty,
       },
     );
-    expect(result).toMatchObject({ status: "ok", value: { approve: Confirmation.None } });
+    expect(result).toMatchObject({
+      status: "ok",
+      value: { execute: false, approve: "deny", denial: "confirmation" },
+    });
+  });
+
+  test("scheduled execution denies the destructive self-confirmation default", () => {
+    const result = decideCapability(
+      { ...publicPrincipal, role: UserRole.Organizer, source: PolicySource.Scheduled },
+      {
+        kind: CapabilityKind.Tool,
+        name: "test-scheduled-self",
+        minRole: UserRole.Organizer,
+        risk: RiskLevel.Destructive,
+      },
+    );
+    expect(result).toMatchObject({
+      status: "ok",
+      value: { execute: false, approve: "deny", denial: "confirmation" },
+    });
+  });
+
+  test("scheduled execution allows tools with no effective confirmation", () => {
+    const result = decideCapability(
+      { ...publicPrincipal, role: UserRole.Organizer, source: PolicySource.Scheduled },
+      {
+        kind: CapabilityKind.Tool,
+        name: "test-scheduled-unconfirmed",
+        minRole: UserRole.Organizer,
+        risk: RiskLevel.Write,
+        confirmation: Confirmation.None,
+      },
+    );
+    expect(result).toMatchObject({
+      status: "ok",
+      value: { execute: true, approve: Confirmation.None },
+    });
   });
 
   test("public budget exhaustion denies execution without increasing discovery", () => {

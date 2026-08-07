@@ -45,5 +45,5 @@ export interface CapabilityDecision {
   readonly discover: boolean;
   readonly execute: boolean;
   readonly approve: "deny" | Confirmation;
-  readonly denial?: "role" | "budget";
+  readonly denial?: "role" | "budget" | "confirmation";
 }
