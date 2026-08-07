@@ -139,12 +139,15 @@ The cleanup removes the parallel `skill-sources/` tree, generated skill registry
 custom `load_skill` definitions, activation-marker output, and message-history
 parsing used to infer loaded skills. Loading a skill adds instructions through
 Eve; it does not register tools. Tool availability is resolved independently on
-`step.started` from current role, integration readiness, and tool policy, then
-enforced again at approval and execution. No tool resolver reads `load_skill`
-results or model-message history. Before cutover, a native lifecycle canary must
-prove Eve materializes and reloads dynamic skills for each subagent's active
-sandbox context. If it cannot, the migration stops rather than adding a second
-loader.
+`step.started` from current role and tool policy, then enforced again at approval
+and execution. Missing provider configuration remains a typed execution-time
+failure. No tool resolver reads `load_skill`
+results or model-message history. A compiled lifecycle canary proves local
+`defaultBackend()` materialization, repeated native loads on one preserved
+session, and removal after the resolver returns `{}`. The compiled manifest also
+contains the skill and tool resolver for every integration subagent. Hosted
+sandbox reattachment is verified at deployment; a failure stops cutover rather
+than adding a second loader.
 
 ```mermaid
 flowchart LR

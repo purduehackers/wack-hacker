@@ -5,6 +5,13 @@ import {
   type IntegrationSkillDefinition,
 } from "../../../lib/policy/skill-catalog.ts";
 
+export const LINEAR_BASE_TOOL_NAMES = [
+  "search_entities",
+  "retrieve_entities",
+  "suggest_property_values",
+  "aggregate_issues",
+] as const;
+
 export const LINEAR_SKILL_DEFINITIONS = [
   {
     name: "comments",

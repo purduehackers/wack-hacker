@@ -4,16 +4,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "bun run compile:skills && bun run check:parity && eve build",
+    "build": "bun run check:parity && eve build",
     "dev": "node --env-file-if-exists=.env.local node_modules/.bin/eve dev",
-    "info": "bun run compile:skills && bun run check:parity && node --env-file-if-exists=.env.local node_modules/.bin/eve info",
+    "info": "bun run check:parity && node --env-file-if-exists=.env.local node_modules/.bin/eve info",
     "start": "eve start",
-    "typecheck": "bun run compile:skills && bun run check:parity && tsc --noEmit",
-    "compile:skills": "bun scripts/compile-skills.ts && bun scripts/format-generated-skills.ts",
+    "typecheck": "bun run check:parity && tsc --noEmit",
     "check:parity": "bun scripts/check-feature-parity.ts && bun run check:serialization",
     "check:serialization": "bun scripts/check-serialization-boundaries.ts",
-    "parity:update": "bun run compile:skills && bun scripts/check-feature-parity.ts --write",
-    "test": "bun run compile:skills && bun run check:parity && bun test"
+    "parity:update": "bun scripts/check-feature-parity.ts --write && oxfmt feature-parity.json",
+    "test": "bun run check:parity && bun test",
+    "test:skills:lifecycle": "bun scripts/test-native-skill-lifecycle.ts"
   },
   "dependencies": {
     "@figma/rest-api-spec": "0.37.0",

@@ -2,9 +2,11 @@
 
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { analyzeSerializationBoundaries } from "./serialization-invariant.ts";
-import { agentRoot, packageRoot } from "./skill-manifest.ts";
+const packageRoot = fileURLToPath(new URL("..", import.meta.url));
+const agentRoot = join(packageRoot, "agent");
 
 async function authoredTypeScriptFiles(directory: string): Promise<string[]> {
   const files: string[] = [];

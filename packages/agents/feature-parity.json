@@ -1,10 +1,9 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "generatedBy": "scripts/check-feature-parity.ts",
   "domains": [
     {
       "name": "cms",
-      "sourceName": "cms",
       "baseTools": [
         "list_events",
         "list_hack_night_sessions",
@@ -170,7 +169,6 @@
     },
     {
       "name": "discord",
-      "sourceName": "discord",
       "baseTools": ["get_server_info", "list_channels", "list_roles", "search_members"],
       "skills": [
         {
@@ -400,7 +398,6 @@
     },
     {
       "name": "figma",
-      "sourceName": "figma",
       "baseTools": ["get_file", "list_projects", "list_project_files", "search_files"],
       "skills": [
         {
@@ -524,7 +521,6 @@
     },
     {
       "name": "finance",
-      "sourceName": "finance",
       "baseTools": ["get_organization", "get_balance", "list_transactions", "get_transaction"],
       "skills": [
         {
@@ -597,7 +593,6 @@
     },
     {
       "name": "github",
-      "sourceName": "github",
       "baseTools": ["list_repositories", "get_repository", "search_code", "search_issues"],
       "skills": [
         {
@@ -974,7 +969,6 @@
     },
     {
       "name": "linear",
-      "sourceName": "linear",
       "baseTools": [
         "search_entities",
         "retrieve_entities",
@@ -1217,7 +1211,6 @@
     },
     {
       "name": "notion",
-      "sourceName": "notion",
       "baseTools": ["search_notion", "retrieve_page", "retrieve_database", "list_users"],
       "skills": [
         {
@@ -1297,7 +1290,6 @@
     },
     {
       "name": "outreach",
-      "sourceName": "sales",
       "baseTools": [
         "list_companies",
         "list_contacts",
@@ -1449,7 +1441,6 @@
     },
     {
       "name": "sentry",
-      "sourceName": "sentry",
       "baseTools": ["list_projects", "get_project", "search_issues", "get_issue"],
       "skills": [
         {
@@ -1693,7 +1684,6 @@
     },
     {
       "name": "shopping",
-      "sourceName": "shopping",
       "baseTools": ["search_products", "view_cart"],
       "skills": [
         {
@@ -1716,7 +1706,6 @@
     },
     {
       "name": "vercel",
-      "sourceName": "vercel",
       "baseTools": [
         "list_projects",
         "get_project",
@@ -2175,9 +2164,9 @@
   ],
   "auxiliarySubagents": ["code", "docs"],
   "totals": {
-    "generatedDomains": 11,
-    "generatedTools": 659,
-    "skillSources": 104,
+    "domains": 11,
+    "tools": 659,
+    "skills": 104,
     "subagents": 13
   }
 }

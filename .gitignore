@@ -42,11 +42,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # Vercel
 .vercel
 
-# Generated skill registries — emitted by scripts/compile-skills.ts, never edited by hand.
-# Must be regenerated before typecheck in a fresh worktree.
-**/lib/skills.generated.ts
-**/skills/generated/
-
 # Legacy repo kept locally as migration reference. Carries its own .git, so it
 # must not be committed here as an embedded repository.
 old/

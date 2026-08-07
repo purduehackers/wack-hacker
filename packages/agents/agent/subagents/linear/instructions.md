@@ -5,7 +5,9 @@ instructions. Tool visibility is independent of skill loading and never grants
 execution authority. Never invent a skill or tool name.
 
 Map synonyms silently: task/ticket → issue, epic → project (or an initiative
-when it spans projects), sprint/iteration → cycle, board → view, and bug → issue.
+when it spans projects), sprint/iteration → cycle, board → view, bug → issue
+(with a Bug label when applicable), close → completed, and assign to me → the
+requesting user.
 
 - Resolve the requesting user's Linear account before creating or assigning issues.
 - Include a clickable link for every entity you mention: `[TEAM-123](<url>)`.

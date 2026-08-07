@@ -1,9 +1,10 @@
 # Simplification plan
 
-> Status: proposed, not approved. This plan is based on the current source at
-> `2cec01c`. It authorizes no production refactor by itself. The approval points
-> at the end must be accepted before changing state machines, wire contracts,
-> public types, abstractions, or package boundaries.
+> Status: Group A (Eve-native skills) is approved, implemented, and locally
+> validated; hosted sandbox reattachment remains a deployment cutover gate.
+> Groups B–E remain proposed and unapproved. This plan is based on the source
+> audit begun at `2cec01c`. Approval is still required before the remaining state-machine,
+> wire-contract, public-type, abstraction, or package-boundary changes.
 
 ## Audit baseline
 
@@ -159,11 +160,25 @@ an optional peer backed by an app-local cache, so keep Eve's `defaultBackend()`
 for deployment unless a production canary also proves a pinned just-bash cache
 can be written and restored across turns.
 
-The tool catalog resolves separately on `step.started` from current role,
-integration readiness, and the existing tool descriptor policy. It does not
-read model messages or `load_skill` results. All permitted tools may therefore
-be visible before a skill is loaded; approval and execution revalidation remain
-unchanged.
+The cutover canary also passed against the actual rendered Linear `issues`
+definition through a compiled `defineDynamic` module with no authored sandbox.
+Eve selected `defaultBackend()`'s local Docker backend: native `load_skill`
+returned the expected Markdown on two turns of one preserved session, then a
+resolver result of `{}` removed the package and the same forged name failed with
+`No skill named "issues".` All four eval gates passed. Repository `eve info` and
+`eve build` also report zero diagnostics and compile one `turn.started` skill
+resolver plus one `step.started` tool resolver for each of the eleven integration
+subagents. This proves compiled discovery, local default-backend materialization,
+follow-up reload, and fail-closed removal. It still does not prove hosted sandbox
+reattachment, which remains a deployment canary rather than a reason to restore
+the deleted loader.
+
+The tool catalog resolves separately on `step.started` from the current role and
+the existing tool descriptor policy. It does not read model messages or
+`load_skill` results. All permitted tools may therefore be visible before a
+skill is loaded; approval and execution revalidation remain unchanged.
+Credential/configuration readiness remains an execution-time typed failure, as
+it was before this cleanup.
 
 This intentionally trades the custom activation protocol for a larger
 library-native tool catalog. A source-level JSON Schema estimate for an
@@ -190,10 +205,14 @@ subagent partition; do not recreate a custom loader by accident.
 - compile/format hooks whose only purpose is the generated skill tree
 
 The 104 loadable skill names, descriptions, instruction bodies, role minima,
-and reviewed 659 tool names remain exact. The 11 root skill documents are
-already duplicated by subagent instructions; reconcile their useful text into
-`instructions.md` and delete the second copy. Rewrite `check-feature-parity.ts`
-to inspect native catalogs/Eve discovery instead of regexing source format.
+and reviewed 659 tool names remain exact. Before deletion, the version-2 parity
+artifact was normalized to the version-3 shape and compared equal across all
+11 domains, 104 skills, 659 tools, 13 subagents, and both auxiliary subagents;
+the new check also rejects registry tools absent from the base/skill union. The
+11 root skill documents were reviewed against subagent instructions, and useful
+terminology and safety details were retained in `instructions.md` before the
+second copy was deleted. `check-feature-parity.ts` now inspects native catalogs
+and registries rather than regexing source format.
 
 **Validation**
 
@@ -201,7 +220,7 @@ to inspect native catalogs/Eve discovery instead of regexing source format.
 - native `load_skill` returns the expected instructions
 - no cross-subagent skill leakage
 - repeated loads are Eve-idempotent
-- tool visibility is role/integration based, not load-history based
+- tool visibility is role/policy based, not load-history based
 - denied skill/tool names are absent and direct execution still fails closed
 - `eve build`, `eve info`, serialization invariant, and unchanged parity set
 
@@ -325,8 +344,8 @@ Consolidate behavior, not domain API clients.
 **Shared agent-local code**
 
 - one project-owned `DomainToolSpec` and policy runtime for visibility,
-  integration readiness, approval, second-party authority, execution recheck,
-  error conversion, audit, and output projection
+  approval, second-party authority, execution recheck, execution-time provider
+  configuration checks, error conversion, audit, and output projection
 - one descriptor registry keyed by domain/tool instead of 11 identical
   `descriptors.ts` implementations
 - one usage hook implementation and one parameterized audit hook for the nine
@@ -444,7 +463,7 @@ ID, migration, tool/skill name, authorization rule, or terminal error string.
 Approval may be given for all items or individually:
 
 - **A — Eve-native skills:** remove the custom loader/compiler/history system
-  and make tools independently role/integration visible. This intentionally
+  and make tools independently role/policy visible. This intentionally
   changes model-visible tool timing, not execution authority.
 - **B — Conversation ownership:** move all conversation records/scripts behind
   shared `ConversationStore`, add bot `ConversationFlow`, and strengthen the Lua

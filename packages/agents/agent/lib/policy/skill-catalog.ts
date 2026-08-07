@@ -16,6 +16,11 @@ export interface IntegrationSkillDefinition {
   readonly instructions: string;
 }
 
+function nativeMarkdown(skill: IntegrationSkillDefinition): string {
+  const tools = skill.tools.map((name) => `\`${name}\``).join(", ");
+  return `## When to use\n\n${skill.criteria}\n\n## Relevant tools\n\n${tools}\n\n## Instructions\n\n${skill.instructions}`;
+}
+
 /** Converts the current principal's catalog into Eve-native loadable skills. */
 export function resolveIntegrationSkills(
   current: SessionAuthContext | null | undefined,
@@ -30,8 +35,8 @@ export function resolveIntegrationSkills(
       .map((skill) => [
         skill.name,
         defineSkill({
-          description: `${skill.description} ${skill.criteria}`,
-          markdown: skill.instructions,
+          description: skill.description,
+          markdown: nativeMarkdown(skill),
           metadata: { criteria: skill.criteria, minRole: skill.minRole },
         }),
       ]),

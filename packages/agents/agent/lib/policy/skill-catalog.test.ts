@@ -48,8 +48,10 @@ describe("Eve-native integration skill catalog", () => {
 
   test("preserves instructions and advertises the existing use criterion", () => {
     const skills = resolveIntegrationSkills(auth(UserRole.Organizer), definitions);
-    expect(skills.read?.markdown).toBe("READ_INSTRUCTIONS");
-    expect(skills.read?.description).toBe("Read records. Use for record lookup.");
+    expect(skills.read?.markdown).toBe(
+      "## When to use\n\nUse for record lookup.\n\n## Relevant tools\n\n`read_record`\n\n## Instructions\n\nREAD_INSTRUCTIONS",
+    );
+    expect(skills.read?.description).toBe("Read records.");
     expect(skills.read?.metadata).toEqual({
       criteria: "Use for record lookup.",
       minRole: UserRole.Public,
