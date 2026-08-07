@@ -20,7 +20,6 @@ flowchart LR
     Flow["Conversation Flow<br/>single orchestration point"]
     Projector["Discord Projector<br/>messages • components • terminal paint"]
     Features["Community Features<br/>commands • handlers • local schedules"]
-    Store["Conversation Store<br/>one Redis-facing API"]
   end
 
   subgraph Eve["Eve application"]
@@ -31,6 +30,7 @@ flowchart LR
     Schedule["Durable Schedule Dispatcher"]
   end
 
+  Store["Conversation Store<br/>one shared Redis-facing API"]
   Redis[("Redis<br/>conversation coordination")]
   Turso[("Turso<br/>schedules • audit")]
   APIs[External APIs]
@@ -43,10 +43,11 @@ flowchart LR
   Projector --> DiscordClient
 
   Flow <--> Store
+  Channel <--> Store
   Store <--> Redis
 
   Flow -->|"user turn • HITL answer • reset"| Channel
-  Channel -->|"desired render • park • wakeup"| Flow
+  Channel -->|"wakeup only"| Flow
 
   Channel --> Session
   Session --> Policy
@@ -64,25 +65,35 @@ flowchart LR
 sequenceDiagram
   participant D as Discord
   participant B as Bot ConversationFlow
-  participant R as ConversationStore / Redis
+  participant C as Shared ConversationStore
+  participant R as Redis
   participant E as Eve Discord Channel
   participant S as Eve Session
 
   D->>B: message, interaction, or reset
-  B->>R: one atomic conversation transition
+  B->>C: enqueue or claim one transition
+  C->>R: atomic script
   B->>E: validated semantic input
+  E->>C: begin and confirm admission
+  C->>R: atomic script
   E->>S: native Eve send or continue
   S-->>E: state and desired output
-  E->>R: publish desired render or parked state
+  E->>C: publish desired render or parked state
+  C->>R: atomic script
   E-->>B: wakeup only
-  B->>R: claim latest desired state
+  B->>C: reconcile latest desired state
   B->>D: materialize through discord.js
-  B->>R: record applied or discarded outcome
+  B->>C: record outcome and advance if terminal
+  C->>R: atomic script
 ```
 
 Redis remains the durable coordination boundary; HTTP is transport and wakeup.
-“Centralized” means one visible orchestration path and one storage API, not one
-large file or an attempt to hide the distributed transition behind callbacks.
+The bot and Eve channel call the same project-owned `ConversationStore`, so no
+runtime owns a second spelling of a key, record, or Lua transition. The bot's
+`ConversationFlow` is the only reconciler that turns stored desired state into
+Discord effects and advances the queue. “Centralized” means one visible
+orchestration path and one storage API, not one large file or an attempt to hide
+the distributed transition behind callbacks.
 
 ## Intended code boundaries
 
@@ -90,23 +101,25 @@ large file or an attempt to hide the distributed transition behind callbacks.
 packages/bot
 ├── app.ts                    # composition root only
 ├── conversations/
-│   ├── flow.ts               # the only conversation orchestrator
-│   ├── store.ts              # all conversation Redis transitions
+│   ├── flow.ts               # the only conversation reconciler
 │   ├── discord.ts            # discord.js input and projection
 │   └── eve.ts                # thin typed Eve transport
 └── features/                 # unrelated community commands/events/schedules
 
 packages/agents
 └── agent/
-    ├── channels/discord.ts   # one Eve-side Discord lifecycle
+    ├── channels/discord.ts   # thin Eve lifecycle adapter
     ├── tools/                # root capabilities
     ├── subagents/<domain>/
     │   ├── agent.ts          # native Eve subagent declaration
-    │   ├── tools/catalog.ts  # defineDynamic policy-filtered tools
+    │   ├── tools/catalog.ts  # independently policy-filtered tools
     │   └── skills/catalog.ts # defineDynamic + defineSkill skill map
     └── schedules/            # durable schedules and dispatch
 
 packages/shared
+├── conversations/
+│   ├── schemas.ts            # our persisted conversation records
+│   └── store.ts              # every conversation key and atomic transition
 ├── wire.ts                   # our cross-process schemas
 ├── errors.ts                 # our error taxonomy
 └── domain data               # only genuinely shared project-owned shapes
@@ -125,9 +138,11 @@ that subagent. Eve advertises those skills and supplies its framework-owned
 The cleanup removes the parallel `skill-sources/` tree, generated skill registry,
 custom `load_skill` definitions, activation-marker output, and message-history
 parsing used to infer loaded skills. Loading a skill adds instructions through
-Eve; it does not register tools. Tool availability is resolved independently by
-the subagent's native dynamic tools file and enforced again at approval and
-execution.
+Eve; it does not register tools. Tool availability is resolved independently on
+`step.started` from current role, integration readiness, and tool policy, then
+enforced again at approval and execution. No tool resolver reads `load_skill`
+results or model-message history. Eve's default sandbox supplies the native
+dynamic-skill materialization; Wack Hacker does not add a second loader.
 
 ```mermaid
 flowchart LR
@@ -146,8 +161,8 @@ flowchart LR
 
 1. The bot has one `ConversationFlow`; queueing, rendering, HITL, and reset code
    do not become independent mini-frameworks.
-2. The bot has one `ConversationStore`; Redis keys and atomic scripts remain
-   private implementation details behind it.
+2. Both runtimes use one shared `ConversationStore`; Redis keys and atomic
+   scripts remain private implementation details behind it.
 3. Eve uses native `defineChannel`, `defineTool`, `defineState`, and schedule
    lifecycles instead of parallel local frameworks.
 4. discord.js values remain discord.js values until they cross one of our wire
