@@ -34,6 +34,7 @@ import {
   type RESTPatchAPIGuildMemberJSONBody,
   type RESTPatchAPIGuildRoleJSONBody,
   type RESTPatchAPIGuildRolePositionsJSONBody,
+  type RESTPatchAPIGuildRolePositionsResult,
   type RESTPatchAPIGuildScheduledEventJSONBody,
   type RESTPatchAPIGuildStickerJSONBody,
   type RESTPatchAPIWebhookJSONBody,
@@ -58,6 +59,8 @@ import {
   type RESTGetAPIChannelMessagesQuery,
   type RESTGetAPIChannelMessagesResult,
   type RESTGetAPIChannelThreadsArchivedPublicResult,
+  type RESTGetAPIChannelThreadsArchivedPrivateResult,
+  type RESTGetAPIChannelUsersThreadsArchivedResult,
   type RESTGetAPIChannelWebhooksResult,
   type RESTGetAPIInviteResult,
   type RESTGetAPIGuildBansQuery,
@@ -232,6 +235,19 @@ function discordArray<T extends readonly object[]>(value: unknown, endpoint: str
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- discord.js REST returns unknown; T is the endpoint's exported v10 result.
   return value as unknown as T;
+}
+function positionedRole(
+  value: unknown,
+  roleId: string,
+): RESTPatchAPIGuildRolePositionsResult[number] {
+  const positionResults = discordArray<RESTPatchAPIGuildRolePositionsResult>(
+    value,
+    "modify guild role positions",
+  );
+  const positioned = positionResults.find((candidate) => candidate.id === roleId);
+  if (positioned === undefined)
+    throw malformedDiscordResponse("modify guild role positions target role");
+  return positioned;
 }
 function compact<T extends object>(value: T): T {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- removing undefined properties preserves the supplied request/output shape.
@@ -461,6 +477,24 @@ async function imageDataUri(url: string, maxBytes = 256 * 1_024): Promise<string
     "image/webp",
   ]);
   return `data:${image.contentType};base64,${Buffer.from(image.bytes).toString("base64")}`;
+}
+
+function stickerFilename(contentType: string): string {
+  switch (contentType) {
+    case "application/json":
+      return "sticker.json";
+    case "image/gif":
+      return "sticker.gif";
+    case "image/apng":
+    case "image/png":
+      return "sticker.png";
+    default:
+      throw new UpstreamError({
+        service: "image-source",
+        status: 415,
+        detail: `unsupported sticker content type ${contentType}`,
+      });
+  }
 }
 
 // oxlint-disable-next-line oxclippy/too-many-lines, oxclippy/cognitive-complexity -- exhaustive 68-operation allowlist is intentionally centralized.
@@ -1233,13 +1267,16 @@ async function execute(rest: DiscordRest, command: DiscordCommand): Promise<unkn
         }),
         "create guild role",
       );
-      if (input.position !== undefined)
+      if (input.position === undefined) return summarizeRole(role);
+      const positioned = positionedRole(
         await rest.patch(Routes.guildRoles(DISCORD_GUILD_ID), {
           body: [
             { id: role.id, position: input.position },
           ] satisfies RESTPatchAPIGuildRolePositionsJSONBody,
-        });
-      return summarizeRole(role);
+        }),
+        role.id,
+      );
+      return summarizeRole(positioned);
     }
     case "edit_role": {
       const input = command.input;
@@ -1258,13 +1295,16 @@ async function execute(rest: DiscordRest, command: DiscordCommand): Promise<unkn
         }),
         "edit guild role",
       );
-      if (input.position !== undefined)
+      if (input.position === undefined) return summarizeRole(role);
+      const positioned = positionedRole(
         await rest.patch(Routes.guildRoles(DISCORD_GUILD_ID), {
           body: [
             { id: input.role_id, position: input.position },
           ] satisfies RESTPatchAPIGuildRolePositionsJSONBody,
-        });
-      return summarizeRole(role);
+        }),
+        input.role_id,
+      );
+      return summarizeRole(positioned);
     }
     case "delete_role": {
       const input = command.input;
@@ -1298,22 +1338,20 @@ async function execute(rest: DiscordRest, command: DiscordCommand): Promise<unkn
       const file = await download(input.url, 512 * 1_024, [
         "image/png",
         "image/apng",
+        "image/gif",
         "application/json",
       ]);
       const sticker = discordObject<RESTPostAPIGuildStickerResult>(
         await rest.post(Routes.guildStickers(DISCORD_GUILD_ID), {
-          body: compact<
-            Pick<RESTPostAPIGuildStickerFormDataBody, "name" | "tags"> &
-              Partial<Pick<RESTPostAPIGuildStickerFormDataBody, "description">>
-          >({
+          body: compact<Omit<RESTPostAPIGuildStickerFormDataBody, "file">>({
             name: input.name,
-            ...(input.description === undefined ? {} : { description: input.description }),
+            description: input.description,
             tags: input.tags,
           }),
           files: [
             {
               data: file.bytes,
-              name: file.contentType === "application/json" ? "sticker.json" : "sticker.png",
+              name: stickerFilename(file.contentType),
               contentType: file.contentType,
             },
           ],
@@ -1343,34 +1381,86 @@ async function execute(rest: DiscordRest, command: DiscordCommand): Promise<unkn
 
     case "list_threads": {
       const input = command.input;
+      if (input.include_archived && input.channel_id === undefined) {
+        throw new UpstreamError({
+          service: "discord",
+          status: 400,
+          detail: "include_archived requires channel_id",
+        });
+      }
       const active = discordObject<RESTGetAPIGuildThreadsResult>(
         await rest.get(Routes.guildActiveThreads(DISCORD_GUILD_ID)),
         "list active guild threads",
       );
-      let foundThreads = discordArray<RESTGetAPIGuildThreadsResult["threads"]>(
+      const foundThreads = new Map<string, ThreadResult>();
+      for (const thread of discordArray<RESTGetAPIGuildThreadsResult["threads"]>(
         active.threads,
         "list active guild threads",
-      )
-        .map((thread) => discordObject<ThreadResult>(thread, "list active guild threads"))
-        .filter((thread) => input.channel_id === undefined || thread.parent_id === input.channel_id)
-        .map(summarizeThread);
-      if (input.channel_id !== undefined) await guildChannel(rest, input.channel_id);
-      if (input.channel_id !== undefined && input.include_archived) {
-        const archived = discordObject<RESTGetAPIChannelThreadsArchivedPublicResult>(
-          await rest.get(Routes.channelThreads(input.channel_id, "public")),
-          "list archived channel threads",
-        );
-        foundThreads = [
-          ...foundThreads,
-          ...discordArray<RESTGetAPIChannelThreadsArchivedPublicResult["threads"]>(
-            archived.threads,
-            "list archived channel threads",
-          )
-            .map((thread) => discordObject<ThreadResult>(thread, "list archived channel threads"))
-            .map(summarizeThread),
-        ];
+      )) {
+        const checkedThread = discordObject<ThreadResult>(thread, "list active guild threads");
+        if (input.channel_id === undefined || checkedThread.parent_id === input.channel_id) {
+          foundThreads.set(checkedThread.id, checkedThread);
+        }
       }
-      return foundThreads;
+      if (input.channel_id === undefined) return [...foundThreads.values()].map(summarizeThread);
+
+      const parent = await guildChannel(rest, input.channel_id);
+      if (!input.include_archived) return [...foundThreads.values()].map(summarizeThread);
+      if (typeof parent.type !== "number")
+        throw malformedDiscordResponse("get thread parent channel");
+
+      const publicThreadParents = new Set<number>([
+        ChannelType.GuildText,
+        ChannelType.GuildAnnouncement,
+        ChannelType.GuildForum,
+        ChannelType.GuildMedia,
+      ]);
+      if (!publicThreadParents.has(parent.type)) {
+        throw new UpstreamError({
+          service: "discord",
+          status: 400,
+          detail: "channel type does not support archived threads",
+        });
+      }
+
+      const addArchived = (
+        archived: RESTGetAPIChannelThreadsArchivedPublicResult,
+        endpoint: string,
+      ) => {
+        for (const candidate of discordArray<
+          RESTGetAPIChannelThreadsArchivedPublicResult["threads"]
+        >(archived.threads, endpoint)) {
+          const checkedThread = discordObject<ThreadResult>(candidate, endpoint);
+          foundThreads.set(checkedThread.id, checkedThread);
+        }
+      };
+      const publicEndpoint = "list public archived channel threads";
+      addArchived(
+        discordObject<RESTGetAPIChannelThreadsArchivedPublicResult>(
+          await rest.get(Routes.channelThreads(input.channel_id, "public")),
+          publicEndpoint,
+        ),
+        publicEndpoint,
+      );
+      if (parent.type === ChannelType.GuildText) {
+        const privateEndpoint = "list private archived channel threads";
+        addArchived(
+          discordObject<RESTGetAPIChannelThreadsArchivedPrivateResult>(
+            await rest.get(Routes.channelThreads(input.channel_id, "private")),
+            privateEndpoint,
+          ),
+          privateEndpoint,
+        );
+        const joinedEndpoint = "list joined private archived channel threads";
+        addArchived(
+          discordObject<RESTGetAPIChannelUsersThreadsArchivedResult>(
+            await rest.get(Routes.channelJoinedArchivedThreads(input.channel_id)),
+            joinedEndpoint,
+          ),
+          joinedEndpoint,
+        );
+      }
+      return [...foundThreads.values()].map(summarizeThread);
     }
     case "create_thread": {
       const input = command.input;
@@ -1517,7 +1607,8 @@ function summarizeMessage(message: RESTGetAPIChannelMessageResult) {
       name: attachment.filename,
       url: attachment.url,
     })),
-    embeds: message.embeds.length,
+    embeds: discordArray<RESTGetAPIChannelMessageResult["embeds"]>(message.embeds, "message embeds")
+      .length,
   };
 }
 function summarizeRole(role: RESTGetAPIGuildRolesResult[number]) {

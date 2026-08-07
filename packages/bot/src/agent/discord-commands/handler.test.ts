@@ -2,7 +2,7 @@
 import { expect, test } from "bun:test";
 
 import { DISCORD_GUILD_ID } from "@repo/shared/discord";
-import type { DiscordCommand } from "@repo/shared/discord-command-wire";
+import { decodeDiscordCommand, type DiscordCommand } from "@repo/shared/discord-command-wire";
 import { RateLimited, UpstreamError } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { ChannelType } from "discord.js";
@@ -277,4 +277,308 @@ test("Discord command boundary: classifies malformed nested Discord objects as u
   expect(result.error).toBeInstanceOf(UpstreamError);
   if (!(result.error instanceof UpstreamError)) return;
   expect(result.error.status).toBe(502);
+});
+
+test("Discord sticker creation preserves current formats, adds GIF, and sends the real REST body", async () => {
+  const originalFetch = globalThis.fetch;
+  const contentTypes = {
+    png: "image/png",
+    apng: "image/apng",
+    gif: "image/gif",
+    json: "application/json",
+  } as const;
+  const fetch = async (input: string | URL | Request): Promise<Response> => {
+    const url = new URL(
+      typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+    );
+    const extension = url.pathname.slice(url.pathname.lastIndexOf(".") + 1);
+    const contentType = Object.entries(contentTypes).find(([key]) => key === extension)?.[1];
+    if (contentType === undefined) return new Response("unsupported", { status: 404 });
+    return new Response(new Uint8Array([1]), {
+      headers: { "content-type": contentType, "content-length": "1" },
+    });
+  };
+  fetch.preconnect = originalFetch.preconnect;
+  globalThis.fetch = fetch;
+
+  const capturedRequests: NonNullable<Parameters<DiscordRest["post"]>[1]>[] = [];
+  const rest = restWith({
+    post: async (_route, options) => {
+      if (options === undefined) throw new Error("expected sticker request options");
+      capturedRequests.push(options);
+      return {
+        id: "50000000000000002",
+        name: "wave",
+        description: "",
+        tags: "wave",
+        format_type: 1,
+        available: true,
+      };
+    },
+  });
+
+  try {
+    for (const extension of Object.keys(contentTypes)) {
+      const decoded = decodeDiscordCommand({
+        operation: "create_sticker",
+        input: {
+          name: "wave",
+          tags: "wave",
+          url: `https://cdn.example.test/sticker.${extension}`,
+        },
+      });
+      if (Result.isError(decoded)) throw decoded.error;
+      await succeed(rest, decoded.value);
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  expect(capturedRequests.map((entry) => entry.body)).toEqual([
+    { name: "wave", description: "", tags: "wave" },
+    { name: "wave", description: "", tags: "wave" },
+    { name: "wave", description: "", tags: "wave" },
+    { name: "wave", description: "", tags: "wave" },
+  ]);
+  expect(capturedRequests.map((entry) => entry.files?.[0]?.name)).toEqual([
+    "sticker.png",
+    "sticker.png",
+    "sticker.gif",
+    "sticker.json",
+  ]);
+  expect(capturedRequests.map((entry) => entry.files?.[0]?.contentType)).toEqual([
+    "image/png",
+    "image/apng",
+    "image/gif",
+    "application/json",
+  ]);
+});
+
+test("Discord sticker creation retains the 512 KiB media limit", async () => {
+  const originalFetch = globalThis.fetch;
+  const fetch = async (): Promise<Response> =>
+    new Response(new Uint8Array(), {
+      headers: { "content-type": "image/gif", "content-length": String(512 * 1_024 + 1) },
+    });
+  fetch.preconnect = originalFetch.preconnect;
+  globalThis.fetch = fetch;
+  let posts = 0;
+  try {
+    const result = await executeDiscordCommand(
+      restWith({
+        post: async () => {
+          posts += 1;
+          return {};
+        },
+      }),
+      {
+        operation: "create_sticker",
+        input: {
+          name: "wave",
+          description: "",
+          tags: "wave",
+          url: "https://cdn.example.test/sticker.gif",
+        },
+      },
+    );
+    expect(Result.isError(result)).toBe(true);
+    if (!Result.isError(result)) return;
+    expect(result.error).toBeInstanceOf(UpstreamError);
+    if (!(result.error instanceof UpstreamError)) return;
+    expect(result.error.status).toBe(413);
+    expect(posts).toBe(0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Discord command boundary: rejects malformed nested message embeds as UpstreamError 502", async () => {
+  const channelId = "20000000000000009";
+  const messageId = "40000000000000004";
+  const result = await executeDiscordCommand(
+    restWith({
+      get: async (route) =>
+        route === `/channels/${channelId}`
+          ? { id: channelId, guild_id: DISCORD_GUILD_ID, name: "general", type: 0 }
+          : {
+              id: messageId,
+              author: {
+                id: "10000000000000001",
+                username: "member",
+                global_name: "Member",
+              },
+              content: "hello",
+              timestamp: "2026-08-07T12:00:00.000Z",
+              edited_timestamp: null,
+              pinned: false,
+              attachments: [],
+              embeds: null,
+            },
+    }),
+    { operation: "get_message", input: { channel_id: channelId, message_id: messageId } },
+  );
+  expect(Result.isError(result)).toBe(true);
+  if (!Result.isError(result)) return;
+  expect(result.error).toBeInstanceOf(UpstreamError);
+  if (!(result.error instanceof UpstreamError)) return;
+  expect(result.error.status).toBe(502);
+});
+
+test("Discord role position commands summarize the Modify Guild Role Positions result", async () => {
+  const roleId = "50000000000000003";
+  const staleRole = {
+    id: roleId,
+    name: "moderator",
+    color: 0,
+    position: 1,
+    mentionable: false,
+    hoist: false,
+    managed: false,
+  };
+  const positionedRole = { ...staleRole, position: 7 };
+
+  const created = await succeed(
+    restWith({
+      post: async () => staleRole,
+      patch: async () => [positionedRole],
+    }),
+    {
+      operation: "create_role",
+      input: { name: "moderator", hoist: false, mentionable: false, position: 7 },
+    },
+  );
+  expect(created).toMatchObject({ position: 7 });
+
+  let patches = 0;
+  const edited = await succeed(
+    restWith({
+      patch: async () => {
+        patches += 1;
+        return patches === 1 ? staleRole : [positionedRole];
+      },
+    }),
+    { operation: "edit_role", input: { role_id: roleId, position: 7 } },
+  );
+  expect(edited).toMatchObject({ position: 7 });
+});
+
+test("Discord role position commands reject a result without the positioned role", async () => {
+  const roleId = "50000000000000003";
+  const result = await executeDiscordCommand(
+    restWith({
+      post: async () => ({
+        id: roleId,
+        name: "moderator",
+        color: 0,
+        position: 1,
+        mentionable: false,
+        hoist: false,
+        managed: false,
+      }),
+      patch: async () => [],
+    }),
+    {
+      operation: "create_role",
+      input: { name: "moderator", hoist: false, mentionable: false, position: 7 },
+    },
+  );
+  expect(Result.isError(result)).toBe(true);
+  if (!Result.isError(result)) return;
+  expect(result.error).toBeInstanceOf(UpstreamError);
+  if (!(result.error instanceof UpstreamError)) return;
+  expect(result.error.status).toBe(502);
+});
+
+test("Discord archived thread listing fetches every applicable route and deduplicates by id", async () => {
+  const channelId = "20000000000000010";
+  const archiveTimestamp = "2026-08-07T12:00:00.000Z";
+  const makeThread = (id: string, name: string, type: ChannelType) => ({
+    id,
+    name,
+    type,
+    parent_id: channelId,
+    thread_metadata: {
+      archived: true,
+      auto_archive_duration: 1_440,
+      archive_timestamp: archiveTimestamp,
+      locked: false,
+      create_timestamp: archiveTimestamp,
+    },
+    message_count: 1,
+    member_count: 1,
+  });
+  const active = makeThread("60000000000000001", "active", ChannelType.PublicThread);
+  const publicThread = makeThread("60000000000000002", "public", ChannelType.PublicThread);
+  const privateThread = makeThread("60000000000000003", "private", ChannelType.PrivateThread);
+  const joinedThread = makeThread("60000000000000004", "joined", ChannelType.PrivateThread);
+  const visitedRoutes: string[] = [];
+
+  const listedThreads = await succeed(
+    restWith({
+      get: async (endpointRoute) => {
+        visitedRoutes.push(endpointRoute);
+        if (endpointRoute === `/guilds/${DISCORD_GUILD_ID}/threads/active`) {
+          return { threads: [active], members: [] };
+        }
+        if (endpointRoute === `/channels/${channelId}`) {
+          return { id: channelId, guild_id: DISCORD_GUILD_ID, name: "general", type: 0 };
+        }
+        if (endpointRoute === `/channels/${channelId}/threads/archived/public`) {
+          return { threads: [active, publicThread], members: [], has_more: false };
+        }
+        if (endpointRoute === `/channels/${channelId}/threads/archived/private`) {
+          return { threads: [privateThread], members: [], has_more: false };
+        }
+        if (endpointRoute === `/channels/${channelId}/users/@me/threads/archived/private`) {
+          return { threads: [privateThread, joinedThread], members: [], has_more: false };
+        }
+        throw new Error(`unexpected route ${endpointRoute}`);
+      },
+    }),
+    {
+      operation: "list_threads",
+      input: { channel_id: channelId, include_archived: true },
+    },
+  );
+
+  expect(visitedRoutes).toEqual([
+    `/guilds/${DISCORD_GUILD_ID}/threads/active`,
+    `/channels/${channelId}`,
+    `/channels/${channelId}/threads/archived/public`,
+    `/channels/${channelId}/threads/archived/private`,
+    `/channels/${channelId}/users/@me/threads/archived/private`,
+  ]);
+  expect(listedThreads).toEqual([
+    expect.objectContaining({ id: active.id }),
+    expect.objectContaining({ id: publicThread.id }),
+    expect.objectContaining({ id: privateThread.id }),
+    expect.objectContaining({ id: joinedThread.id }),
+  ]);
+});
+
+test("Discord sticker editing preserves omitted versus explicit null descriptions", async () => {
+  const stickerId = "50000000000000004";
+  const bodies: unknown[] = [];
+  const rest = restWith({
+    patch: async (_route, options) => {
+      bodies.push(options?.body);
+      return {
+        id: stickerId,
+        name: "wave",
+        description: null,
+        tags: "wave",
+        format_type: 1,
+        available: true,
+      };
+    },
+  });
+  await succeed(rest, {
+    operation: "edit_sticker",
+    input: { sticker_id: stickerId },
+  });
+  await succeed(rest, {
+    operation: "edit_sticker",
+    input: { sticker_id: stickerId, description: null },
+  });
+  expect(bodies).toEqual([{}, { description: null }]);
 });
