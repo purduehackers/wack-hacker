@@ -5,7 +5,7 @@ import { defineHook } from "eve/hooks";
 
 import { env } from "../../../lib/env.ts";
 import { createAuditStore, requirePrincipal } from "../../../lib/policy/index.ts";
-import { descriptorForTool, isShoppingToolName } from "../lib/descriptors.ts";
+import { descriptorForTool, isShoppingToolName } from "../lib/runtime.ts";
 
 const audit = createAuditStore({
   url: env.TURSO_DATABASE_URL,

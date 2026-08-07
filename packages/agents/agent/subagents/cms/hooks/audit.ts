@@ -4,7 +4,7 @@ import { defineHook } from "eve/hooks";
 
 import { env } from "../../../lib/env.ts";
 import { requirePrincipal } from "../../../lib/policy/principal.ts";
-import { descriptorForTool, isCmsToolName } from "../lib/descriptors.ts";
+import { descriptorForTool, isCmsToolName } from "../lib/runtime.ts";
 
 type AuditDecisionValues = typeof import("@repo/shared/db").AuditDecision;
 const REQUESTED = "requested" satisfies AuditDecisionValues["Requested"];

@@ -4,7 +4,7 @@ import { defineAgent, defineDynamic } from "eve";
 
 import { SUBAGENT_OUTPUT_SCHEMA } from "../../lib/core/subagent-output.ts";
 import { decideCapability, requirePrincipal } from "../../lib/policy/index.ts";
-import { FINANCE_SUBAGENT_DESCRIPTOR } from "./lib/descriptors.ts";
+import { FINANCE_SUBAGENT_DESCRIPTOR } from "./lib/runtime.ts";
 
 export default defineDynamic({
   events: {

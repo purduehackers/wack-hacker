@@ -18,12 +18,27 @@ async function authoredTypeScriptFiles(directory: string): Promise<string[]> {
   return files.sort((left, right) => left.localeCompare(right));
 }
 
+const INTEGRATION_DOMAINS = new Set([
+  "cms",
+  "discord",
+  "figma",
+  "finance",
+  "github",
+  "linear",
+  "notion",
+  "outreach",
+  "sentry",
+  "shopping",
+  "vercel",
+]);
+let integrationCatalogs = 0;
 let toolExecutors = 0;
 let stateInitializers = 0;
 const failures: string[] = [];
 for (const path of await authoredTypeScriptFiles(agentRoot)) {
   const displayPath = relative(packageRoot, path);
-  const analysis = analyzeSerializationBoundaries(await readFile(path, "utf8"), displayPath);
+  const source = await readFile(path, "utf8");
+  const analysis = analyzeSerializationBoundaries(source, displayPath);
   toolExecutors += analysis.toolExecutors;
   stateInitializers += analysis.stateInitializers;
   failures.push(
@@ -32,17 +47,31 @@ for (const path of await authoredTypeScriptFiles(agentRoot)) {
         `${diagnostic.path}:${diagnostic.line}:${diagnostic.column}: ${diagnostic.message}`,
     ),
   );
+  const catalogMatch = displayPath.match(/^agent\/subagents\/([^/]+)\/tools\/catalog\.ts$/u);
+  if (catalogMatch !== null && INTEGRATION_DOMAINS.has(catalogMatch[1] ?? "")) {
+    integrationCatalogs += 1;
+    if (analysis.toolExecutors !== 1) {
+      failures.push(
+        `${displayPath}: each integration catalog must directly author one inline Eve defineTool executor`,
+      );
+    }
+    if (!/\bapproval\s*:\s*async\s*\([^)]*\)\s*=>/u.test(source)) {
+      failures.push(`${displayPath}: Eve defineTool approval must remain an inline async function`);
+    }
+  }
 }
 if (failures.length > 0) {
   throw new Error(`serialization boundary invariant failed:\n${failures.join("\n")}`);
 }
-if (toolExecutors === 0 || stateInitializers === 0) {
+if (toolExecutors === 0 || stateInitializers === 0 || integrationCatalogs !== 11) {
   throw new Error(
-    `serialization boundary scan found ${toolExecutors} tool executors and ` +
-      `${stateInitializers} state initializers; expected both surfaces to be non-empty`,
+    `serialization boundary scan found ${toolExecutors} tool executors, ` +
+      `${stateInitializers} state initializers, and ${integrationCatalogs} integration catalogs; ` +
+      "expected non-empty boundaries and exactly 11 direct integration catalogs",
   );
 }
 console.info(
   `serialization boundaries: ${toolExecutors} defineTool executors and ` +
-    `${stateInitializers} defineState initializers guarded`,
+    `${stateInitializers} defineState initializers guarded; ` +
+    `${integrationCatalogs} integration catalogs remain inline`,
 );
