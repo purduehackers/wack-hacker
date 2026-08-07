@@ -1,8 +1,8 @@
 /** Materialize an agent-owned scheduled fire through the normal bot turn path. */
 
 import { DiscordAPIError } from "@discordjs/rest";
+import type { ConversationStore } from "@repo/shared/conversations";
 import { DISCORD_GUILD_ID } from "@repo/shared/discord";
-import type { RedisClient } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
 import { continuationKeyFor } from "@repo/shared/wire";
 import type {
@@ -18,48 +18,10 @@ import type { Client, Guild, GuildBasedChannel, GuildMember } from "discord.js";
 import type { AgentRouter } from "./router.ts";
 
 const PLACEHOLDER = "> Scheduled task is starting…";
-const CLAIM_TTL_MS = 2 * 60_000;
-const RECEIPT_TTL_SECONDS = 7 * 24 * 60 * 60;
-
-const CLAIM_SCRIPT = `
-local raw = redis.call("GET", KEYS[1])
-if raw then
-  local current = cjson.decode(raw)
-  if current.scheduleId ~= ARGV[1]
-    or current.ownerId ~= ARGV[2]
-    or current.channelId ~= ARGV[3]
-    or current.actionType ~= ARGV[4]
-  then
-    return -1
-  end
-  return current.status == "accepted" and 2 or 0
-end
-redis.call("SET", KEYS[1], ARGV[5], "PX", tonumber(ARGV[6]), "NX")
-return 1
-`;
-
-const COMPLETE_SCRIPT = `
-local raw = redis.call("GET", KEYS[1])
-if not raw then return 0 end
-local current = cjson.decode(raw)
-if current.status ~= "forwarding" or current.claimToken ~= ARGV[1] then return 0 end
-redis.call("SET", KEYS[1], ARGV[2], "EX", tonumber(ARGV[3]))
-return 1
-`;
-
-const RELEASE_SCRIPT = `
-local raw = redis.call("GET", KEYS[1])
-if not raw then return 0 end
-local current = cjson.decode(raw)
-if current.status ~= "forwarding" or current.claimToken ~= ARGV[1] then return 0 end
-redis.call("DEL", KEYS[1])
-return 1
-`;
-
 export interface ScheduledFireDeps {
   readonly agent: AgentRouter;
   readonly client: Client;
-  readonly redis: RedisClient;
+  readonly store: ConversationStore["scheduledFires"];
   readonly guildId?: string;
 }
 
@@ -198,74 +160,6 @@ function scheduledPrompt(payload: ScheduledFirePayload): string {
   ].join("\n\n");
 }
 
-function receiptKey(occurrenceId: string): string {
-  return `agent:scheduled-fire:${occurrenceId}`;
-}
-
-async function claimOccurrence(
-  redis: RedisClient,
-  payload: ScheduledFirePayload,
-  claimToken: string,
-): Promise<"acquired" | "accepted" | "busy"> {
-  const forwarding = JSON.stringify({
-    status: "forwarding",
-    claimToken,
-    scheduleId: payload.scheduleId,
-    ownerId: payload.ownerId,
-    channelId: payload.channelId,
-    actionType: payload.actionType,
-  });
-  const result = Number(
-    await redis.eval(
-      CLAIM_SCRIPT,
-      [receiptKey(payload.occurrenceId)],
-      [
-        payload.scheduleId,
-        payload.ownerId,
-        payload.channelId,
-        payload.actionType,
-        forwarding,
-        CLAIM_TTL_MS,
-      ],
-    ),
-  );
-  if (result === 2) return "accepted";
-  if (result === 1) return "acquired";
-  if (result === 0) return "busy";
-  throw new Error("scheduled occurrence identity conflicts with its durable receipt");
-}
-
-async function completeOccurrence(
-  redis: RedisClient,
-  payload: ScheduledFirePayload,
-  claimToken: string,
-): Promise<boolean> {
-  const accepted = JSON.stringify({
-    status: "accepted",
-    scheduleId: payload.scheduleId,
-    ownerId: payload.ownerId,
-    channelId: payload.channelId,
-    actionType: payload.actionType,
-  });
-  return (
-    Number(
-      await redis.eval(
-        COMPLETE_SCRIPT,
-        [receiptKey(payload.occurrenceId)],
-        [claimToken, accepted, RECEIPT_TTL_SECONDS],
-      ),
-    ) === 1
-  );
-}
-
-async function releaseOccurrence(
-  redis: RedisClient,
-  occurrenceId: string,
-  claimToken: string,
-): Promise<void> {
-  await redis.eval(RELEASE_SCRIPT, [receiptKey(occurrenceId)], [claimToken]);
-}
-
 export function scheduledFailureMessage(payload: ScheduledFirePayload): string {
   return payload.finalAttempt
     ? "⚠️ This scheduled task could not start after its final automatic attempt. Ask me to list scheduled tasks, then cancel or replace it after fixing its destination or permissions."
@@ -364,7 +258,7 @@ async function admitOccurrence(
     }
   }
 
-  if (!(await completeOccurrence(deps.redis, payload, claimToken))) {
+  if (!(await deps.store.complete(payload, claimToken))) {
     throw new Error("scheduled occurrence admission receipt ownership was lost");
   }
 }
@@ -375,7 +269,7 @@ export function createScheduledFireHandler(deps: ScheduledFireDeps) {
   return {
     submit: async (payload: ScheduledFirePayload): Promise<void> => {
       const claimToken = crypto.randomUUID();
-      const claim = await claimOccurrence(deps.redis, payload, claimToken);
+      const claim = await deps.store.claim(payload, claimToken);
       if (claim === "accepted") return;
       if (claim === "busy") throw new Error("scheduled occurrence is already being admitted");
 
@@ -384,10 +278,11 @@ export function createScheduledFireHandler(deps: ScheduledFireDeps) {
       } catch (cause) {
         // Release only our forwarding claim. If admission was ambiguous, the
         // stable Discord nonce and AgentRouter queue identity make retry safe.
-        await releaseOccurrence(deps.redis, payload.occurrenceId, claimToken).catch(
-          (releaseCause: unknown) =>
+        await deps.store
+          .release(payload.occurrenceId, claimToken)
+          .catch((releaseCause: unknown) =>
             console.warn("could not release scheduled occurrence claim", releaseCause),
-        );
+          );
         throw cause;
       }
     },

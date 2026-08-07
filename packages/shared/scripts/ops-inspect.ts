@@ -3,6 +3,8 @@
 import { createClient } from "@libsql/client";
 import { Redis } from "@upstash/redis";
 
+import { createConversationStore } from "../src/conversations/index.ts";
+
 const ACTIVE_GENERATION_KEY = "wack:bot-sandbox:active:v1";
 const SUPERVISOR_MUTEX_KEY = "wack:bot-sandbox:supervisor:v1";
 
@@ -59,16 +61,14 @@ async function inspectRedis(arguments_: readonly string[]): Promise<void> {
   const token = process.env["UPSTASH_REDIS_REST_TOKEN"];
   if (!url || !token) throw new Error("UPSTASH_REDIS_REST_URL and token are required");
   const redis = new Redis({ url, token });
+  const conversations = createConversationStore({ redis });
 
-  const [active, mutexExists, mutexTtlMs, queueCount, readyCount, renderReadyCount] =
-    await Promise.all([
-      redis.get(ACTIVE_GENERATION_KEY),
-      redis.exists(SUPERVISOR_MUTEX_KEY),
-      redis.pttl(SUPERVISOR_MUTEX_KEY),
-      redis.scard("agent:queues"),
-      redis.scard("agent:ready"),
-      redis.scard("agent:render-ready"),
-    ]);
+  const [active, mutexExists, mutexTtlMs, indexes] = await Promise.all([
+    redis.get(ACTIVE_GENERATION_KEY),
+    redis.exists(SUPERVISOR_MUTEX_KEY),
+    redis.pttl(SUPERVISOR_MUTEX_KEY),
+    conversations.inspectIndexes(),
+  ]);
   const report: Record<string, unknown> = {
     at: new Date().toISOString(),
     supervisor: {
@@ -84,27 +84,19 @@ async function inspectRedis(arguments_: readonly string[]): Promise<void> {
       mutexPresent: mutexExists === 1,
       mutexTtlMs,
     },
-    indexes: { conversations: queueCount, ready: readyCount, renderReady: renderReadyCount },
+    indexes,
   };
 
   if (continuation !== undefined) {
-    const [depth, activeTurn, parked, ingress, reset, resetPending, ready] = await Promise.all([
-      redis.llen(`pending:${continuation}`),
-      redis.get(`agent:active:${continuation}`),
-      redis.get(`agent:parked:${continuation}`),
-      redis.exists(`agent:ingress:${continuation}`),
-      redis.exists(`agent:reset:${continuation}`),
-      redis.llen(`agent:reset-pending:${continuation}`),
-      redis.sismember("agent:ready", `k:${continuation}`),
-    ]);
+    const state = await conversations.inspectConversation(continuation);
     report["conversation"] = {
       key: continuation,
-      pendingDepth: depth,
-      resetPendingDepth: resetPending,
-      ingressPresent: ingress === 1,
-      resetPresent: reset === 1,
-      readyMember: ready === 1,
-      active: summary(activeTurn, [
+      pendingDepth: state.depth,
+      resetPendingDepth: state.resetPending,
+      ingressPresent: state.ingress === 1,
+      resetPresent: state.reset === 1,
+      readyMember: state.ready === 1,
+      active: summary(state.active, [
         "phase",
         "messageId",
         "dispatchId",
@@ -112,29 +104,22 @@ async function inspectRedis(arguments_: readonly string[]): Promise<void> {
         "eveTurnId",
         "deliveryLeaseUntilMs",
       ]),
-      parked: summary(parked, ["messageId", "dispatchId", "sessionId", "eveTurnId"]),
+      parked: summary(state.parked, ["messageId", "dispatchId", "sessionId", "eveTurnId"]),
     };
   }
 
   if (dispatch !== undefined) {
-    const [ready, target, intent, projection, claim, claimTtlMs, outcome] = await Promise.all([
-      redis.sismember("agent:render-ready", `r:${dispatch}`),
-      redis.exists(`agent:render-target:${dispatch}`),
-      redis.exists(`agent:render-intent:${dispatch}`),
-      redis.exists(`agent:render-projection:${dispatch}`),
-      redis.exists(`agent:render-claim:${dispatch}`),
-      redis.pttl(`agent:render-claim:${dispatch}`),
-      redis.get(`agent:render-outcome:${dispatch}`),
-    ]);
+    const state = await conversations.inspectRender(dispatch);
     report["render"] = {
       dispatchId: dispatch,
-      readyMember: ready === 1,
-      targetPresent: target === 1,
-      intentPresent: intent === 1,
-      projectionPresent: projection === 1,
-      claimPresent: claim === 1,
-      claimTtlMs,
-      outcome: outcome === "applied" || outcome === "discarded" ? outcome : undefined,
+      readyMember: state.ready === 1,
+      targetPresent: state.target === 1,
+      intentPresent: state.intent === 1,
+      projectionPresent: state.projection === 1,
+      claimPresent: state.claim === 1,
+      claimTtlMs: state.claimTtlMs,
+      outcome:
+        state.outcome === "applied" || state.outcome === "discarded" ? state.outcome : undefined,
     };
   }
 

@@ -1,26 +1,23 @@
 /** Redis desired-state inbox and durable bot-owned Discord projection. */
 
-import { InvalidInput } from "@repo/shared/errors";
-import type { RedisClient } from "@repo/shared/redis";
-import { Result } from "@repo/shared/result";
+import { InvalidInput } from "../errors.ts";
+import type { RedisClient } from "../redis/client.ts";
+import { Result } from "../result/index.ts";
+import { decodeAuthorizationChallenge, decodeRenderIntent, decodeRenderTarget } from "../wire.ts";
+import type { AuthorizationChallenge, RenderIntent, RenderTarget } from "../wire.ts";
 import {
   AGENT_RENDER_READY_SET_KEY,
-  agentRenderMember,
   authorizationChallengeKey,
-  decodeAuthorizationChallenge,
-  decodeRenderIntent,
-  decodeRenderTarget,
-  dispatchIdFromAgentRenderMember,
+  dispatchIdFromRenderMember,
   renderClaimKey,
   renderIntentKey,
+  renderMember,
   renderOutcomeKey,
   renderProjectionKey,
   renderTargetKey,
-} from "@repo/shared/wire";
-import type { AuthorizationChallenge, RenderIntent, RenderTarget } from "@repo/shared/wire";
-import { z } from "zod";
-
-import type { RendererProjection } from "./renderer.ts";
+} from "./keys.ts";
+import { renderProjectionSchema } from "./schemas.ts";
+import type { RenderProjection, StoredRenderProjection } from "./schemas.ts";
 
 const CLAIM_TTL_MS = 45_000;
 const PROJECTION_TTL_SECONDS = 7 * 24 * 60 * 60;
@@ -96,28 +93,8 @@ redis.call("SET", KEYS[5], "discarded", "EX", tonumber(ARGV[2]))
 return 1
 `;
 
-const hashSchema = z.string().regex(/^[A-Za-z0-9_-]{16}$/);
-const projectionSchema = z.object({
-  anchorMessageId: z
-    .string()
-    .regex(/^\d{17,20}$/)
-    .optional(),
-  anchorContentHash: hashSchema.optional(),
-  overflow: z
-    .array(
-      z.object({
-        messageId: z.string().regex(/^\d{17,20}$/),
-        contentHash: hashSchema.optional(),
-      }),
-    )
-    .max(10),
-  appliedRevision: z.number().int().nonnegative(),
-});
-
-type StoredProjection = z.infer<typeof projectionSchema>;
-
-function decodeProjection(raw: unknown): Result<StoredProjection, InvalidInput> {
-  const parsed = projectionSchema.safeParse(raw);
+function decodeProjection(raw: unknown): Result<StoredRenderProjection, InvalidInput> {
+  const parsed = renderProjectionSchema.safeParse(raw);
   return parsed.success
     ? Result.ok(parsed.data)
     : Result.err(
@@ -130,15 +107,15 @@ function decodeProjection(raw: unknown): Result<StoredProjection, InvalidInput> 
 
 function renderIds(values: readonly unknown[]): readonly string[] {
   return values.flatMap((candidate) => {
-    const dispatchId = dispatchIdFromAgentRenderMember(candidate);
+    const dispatchId = dispatchIdFromRenderMember(candidate);
     return dispatchId === undefined ? [] : [dispatchId];
   });
 }
 
 function storedProjection(
-  projection: RendererProjection,
+  projection: RenderProjection,
   appliedRevision: number,
-): StoredProjection {
+): StoredRenderProjection {
   return { ...projection, appliedRevision };
 }
 
@@ -156,7 +133,7 @@ async function readProjection(
   redis: RedisClient,
   dispatchId: string,
   anchorMessageId?: string,
-): Promise<Result<StoredProjection, InvalidInput>> {
+): Promise<Result<StoredRenderProjection, InvalidInput>> {
   const raw: unknown = await redis.get(renderProjectionKey(dispatchId));
   // oxlint-disable-next-line unicorn/no-null -- Redis missing key is null
   if (raw === null || raw === undefined) {
@@ -172,7 +149,7 @@ async function readProjection(
 interface RenderCompletion {
   readonly dispatchId: string;
   readonly claimToken: string;
-  readonly projection: RendererProjection;
+  readonly projection: RenderProjection;
   readonly appliedRevision: number;
   readonly terminal: boolean;
 }
@@ -197,7 +174,7 @@ async function completeRender(
         claimToken,
         JSON.stringify(storedProjection(projection, appliedRevision)),
         appliedRevision,
-        agentRenderMember(dispatchId),
+        renderMember(dispatchId),
         PROJECTION_TTL_SECONDS,
         Number(terminal),
       ],
@@ -208,7 +185,7 @@ async function completeRender(
   return "lost";
 }
 
-export function createRenderStore(redis: RedisClient) {
+export function createRenderTransitions(redis: RedisClient) {
   return {
     claim: async (dispatchId: string): Promise<string | undefined> => {
       const token = crypto.randomUUID();
@@ -242,13 +219,13 @@ export function createRenderStore(redis: RedisClient) {
     projection: (
       dispatchId: string,
       anchorMessageId?: string,
-    ): Promise<Result<StoredProjection, InvalidInput>> =>
+    ): Promise<Result<StoredRenderProjection, InvalidInput>> =>
       readProjection(redis, dispatchId, anchorMessageId),
 
     checkpoint: async (
       dispatchId: string,
       claimToken: string,
-      projection: RendererProjection,
+      projection: RenderProjection,
       appliedRevision: number,
     ): Promise<boolean> =>
       Number(
@@ -267,7 +244,7 @@ export function createRenderStore(redis: RedisClient) {
     complete: (
       dispatchId: string,
       claimToken: string,
-      projection: RendererProjection,
+      projection: RenderProjection,
       appliedRevision: number,
       terminal: boolean,
     ): Promise<"caught-up" | "newer" | "lost"> =>
@@ -295,10 +272,10 @@ export function createRenderStore(redis: RedisClient) {
           renderProjectionKey(dispatchId),
           renderOutcomeKey(dispatchId),
         ],
-        [agentRenderMember(dispatchId), PROJECTION_TTL_SECONDS],
+        [renderMember(dispatchId), PROJECTION_TTL_SECONDS],
       );
     },
   };
 }
 
-export type RenderStore = ReturnType<typeof createRenderStore>;
+export type RenderTransitions = ReturnType<typeof createRenderTransitions>;

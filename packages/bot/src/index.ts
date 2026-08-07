@@ -18,6 +18,7 @@
  * gateway that cannot yet send anything.
  */
 
+import { createConversationStore, type ConversationStore } from "@repo/shared/conversations";
 import { DISCORD_GUILD_ID } from "@repo/shared/discord";
 import { serializeError } from "@repo/shared/errors";
 import { getRedis } from "@repo/shared/redis";
@@ -29,11 +30,8 @@ import { Events } from "discord.js";
 import { createAgentClient } from "./agent/client.ts";
 import { createHitlInteractionHandler } from "./agent/hitl/interaction.ts";
 import type { HitlInteractionHandler } from "./agent/hitl/interaction.ts";
-import { createHitlStore } from "./agent/hitl/store.ts";
-import { createTurnQueue } from "./agent/queue.ts";
 import { createRenderCoordinator } from "./agent/render/coordinator.ts";
 import { createDiscordRest } from "./agent/render/discord-rest.ts";
-import { createRenderStore } from "./agent/render/store.ts";
 import { createAgentRouter } from "./agent/router.ts";
 import { createScheduledFireHandler } from "./agent/scheduled.ts";
 import { createTurnMessageStore } from "./agent/turn-messages.ts";
@@ -72,13 +70,14 @@ function attachInteractionDispatcher(
 function createAgentSeam(
   client: ReturnType<typeof createClient>,
   redis: RedisClient,
+  conversations: ConversationStore,
   commands: readonly SlashCommand[],
 ) {
   const agentClient = createAgentClient({
     baseUrl: env.AGENT_URL,
     secret: env.AGENT_INGRESS_SECRET,
   });
-  const renderStore = createRenderStore(redis);
+  const renderStore = conversations.render;
   let recoverParked = (): Promise<void> => Promise.resolve();
   const render = createRenderCoordinator({
     rest: createDiscordRest(client.rest),
@@ -89,7 +88,7 @@ function createAgentSeam(
   });
   const agent = createAgentRouter({
     client: agentClient,
-    queue: createTurnQueue({ redis }),
+    queue: conversations.queue,
     reporter: consoleReporter,
     beforeComplete: (payload) => render.flush(payload.dispatchId),
   });
@@ -97,7 +96,7 @@ function createAgentSeam(
 
   const hitl = createHitlInteractionHandler({
     agent: agentClient,
-    store: createHitlStore(redis),
+    store: conversations.hitl,
     renders: renderStore,
     reporter: consoleReporter,
     guildId: DISCORD_GUILD_ID,
@@ -149,8 +148,13 @@ async function main(): Promise<void> {
   });
 
   let operationalReady = false;
-  const { agent, render } = createAgentSeam(client, redis, commands);
-  const scheduledFires = createScheduledFireHandler({ client, agent, redis });
+  const conversations = createConversationStore({ redis });
+  const { agent, render } = createAgentSeam(client, redis, conversations, commands);
+  const scheduledFires = createScheduledFireHandler({
+    client,
+    agent,
+    store: conversations.scheduledFires,
+  });
 
   // Reports ready: false until the gateway connects.
   startServer({

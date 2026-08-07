@@ -341,68 +341,6 @@ export const scheduledFirePayloadSchema = z.strictObject({
   scheduledFor: z.iso.datetime({ offset: true }),
 });
 
-/**
- * Shared recovery marker written before the best-effort HTTP callback. Keeping
- * the key shape in the wire package makes Redis part of the explicit seam.
- */
-export const AGENT_READY_SET_KEY = "agent:ready";
-/** Prefix prevents Upstash from JSON-parsing a snowflake set member as a number. */
-export function agentQueueMember(continuationKey: string): string {
-  return `k:${continuationKey}`;
-}
-export function continuationKeyFromAgentQueueMember(member: unknown): string | undefined {
-  if (typeof member !== "string" || !/^k:\d{17,20}$/.test(member)) return undefined;
-  return member.slice(2);
-}
-export function agentActiveKey(continuationKey: string): string {
-  return `agent:active:${continuationKey}`;
-}
-export function agentResetKey(continuationKey: string): string {
-  return `agent:reset:${continuationKey}`;
-}
-export function agentIngressKey(continuationKey: string): string {
-  return `agent:ingress:${continuationKey}`;
-}
-export function parkedMarkerKey(continuationKey: string): string {
-  return `agent:parked:${continuationKey}`;
-}
-
-export const AGENT_RENDER_READY_SET_KEY = "agent:render-ready";
-export function renderTargetKey(dispatchId: string): string {
-  return `agent:render-target:${dispatchId}`;
-}
-export function renderIntentKey(dispatchId: string): string {
-  return `agent:render-intent:${dispatchId}`;
-}
-export function renderProjectionKey(dispatchId: string): string {
-  return `agent:render-projection:${dispatchId}`;
-}
-export function renderClaimKey(dispatchId: string): string {
-  return `agent:render-claim:${dispatchId}`;
-}
-export function renderOutcomeKey(dispatchId: string): string {
-  return `agent:render-outcome:${dispatchId}`;
-}
-export function hitlClaimKey(dispatchId: string): string {
-  return `agent:hitl-claim:${dispatchId}`;
-}
-export function interactionReceiptKey(interactionId: string): string {
-  return `agent:interaction-receipt:${interactionId}`;
-}
-export function authorizationChallengeKey(dispatchId: string, authorizationId: string): string {
-  return `agent:authorization:${dispatchId}:${authorizationId}`;
-}
-export function authorizationIndexKey(dispatchId: string): string {
-  return `agent:authorization-index:${dispatchId}`;
-}
-export function agentRenderMember(dispatchId: string): string {
-  return `r:${dispatchId}`;
-}
-export function dispatchIdFromAgentRenderMember(member: unknown): string | undefined {
-  if (typeof member !== "string" || !/^r:[0-9a-f-]{36}$/i.test(member)) return undefined;
-  return member.slice(2);
-}
-
 export type Principal = z.infer<typeof principalSchema>;
 export type ChannelRef = z.infer<typeof channelRefSchema>;
 export type ThreadRef = z.infer<typeof threadRefSchema>;

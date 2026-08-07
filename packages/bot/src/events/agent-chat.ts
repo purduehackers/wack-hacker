@@ -10,6 +10,7 @@
  * person immediate feedback that something is happening.
  */
 
+import { ADMISSION_RECOVERY_FOOTER, ADMISSION_RECOVERY_TEXT } from "@repo/shared/conversations";
 import { DISCORD_GUILD_ID, roleAtLeast, roleFromMemberRoles, UserRole } from "@repo/shared/discord";
 import { Result } from "@repo/shared/result";
 import { continuationKeyFor } from "@repo/shared/wire";
@@ -18,7 +19,6 @@ import { ChannelType } from "discord.js";
 import type { Message } from "discord.js";
 
 import { fetchLeadIn } from "../agent/lead-in.ts";
-import { ADMISSION_RECOVERY_FOOTER, ADMISSION_RECOVERY_TEXT } from "../agent/queue.ts";
 import type { AgentRouter } from "../agent/router.ts";
 import type { TurnMessageReader } from "../agent/turn-messages.ts";
 import type { ReactorLike } from "../framework/events.ts";

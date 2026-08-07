@@ -1,15 +1,15 @@
 import { createHash } from "node:crypto";
 
-import { roleFromMemberRoles } from "@repo/shared/discord";
-import type { RedisClient } from "@repo/shared/redis";
+import { roleFromMemberRoles } from "../discord/index.ts";
+import type { RedisClient } from "../redis/client.ts";
+import type { InteractionPayload } from "../wire.ts";
 import {
-  agentIngressKey,
-  agentResetKey,
+  ingressKey,
   interactionReceiptKey,
   renderIntentKey,
   renderTargetKey,
-} from "@repo/shared/wire";
-import type { InteractionPayload } from "@repo/shared/wire";
+  resetKey,
+} from "./keys.ts";
 
 export const INTERACTION_RECEIPT_TTL_SECONDS = 7 * 24 * 60 * 60;
 
@@ -122,8 +122,8 @@ export async function claimInteraction(
         renderIntentKey(payload.dispatchId),
         renderTargetKey(payload.dispatchId),
         interactionReceiptKey(payload.interactionId),
-        agentResetKey(payload.continuationKey),
-        agentIngressKey(payload.continuationKey),
+        resetKey(payload.continuationKey),
+        ingressKey(payload.continuationKey),
       ],
       [
         payload.dispatchId,
@@ -150,3 +150,25 @@ export async function claimInteraction(
   );
   return { claim, receiptIdentity };
 }
+
+export function createInteractionTransitions(redis: Pick<RedisClient, "eval" | "get" | "set">) {
+  return {
+    claim: (payload: InteractionPayload): Promise<InteractionClaim> =>
+      claimInteraction(redis, payload),
+    read: (interactionId: string): Promise<unknown> =>
+      redis.get(interactionReceiptKey(interactionId)),
+    accept: (
+      interactionId: string,
+      receiptIdentity: InteractionReceiptIdentity,
+      sessionId: string,
+      continuationToken: string,
+    ): Promise<unknown> =>
+      redis.set(
+        interactionReceiptKey(interactionId),
+        { status: "accepted", ...receiptIdentity, sessionId, continuationToken },
+        { ex: INTERACTION_RECEIPT_TTL_SECONDS },
+      ),
+  };
+}
+
+export type InteractionTransitions = ReturnType<typeof createInteractionTransitions>;

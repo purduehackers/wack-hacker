@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { DiscordAPIError } from "@discordjs/rest";
+import { createConversationStore } from "@repo/shared/conversations";
 import { DISCORD_IDS } from "@repo/shared/discord";
 import { Transient } from "@repo/shared/errors";
 import type { RedisClient } from "@repo/shared/redis";
@@ -284,7 +285,7 @@ function harness(options: HarnessOptions = {}) {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- intentionally minimal strict fake
     client: client as unknown as ScheduledFireDeps["client"],
     // oxlint-disable-next-line typescript/consistent-type-assertions -- intentionally minimal strict fake
-    redis: redis as unknown as RedisClient,
+    store: createConversationStore({ redis: redis as unknown as RedisClient }).scheduledFires,
     guildId: "30000000000000000",
   });
 

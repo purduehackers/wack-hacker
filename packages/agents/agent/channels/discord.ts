@@ -21,20 +21,16 @@
 import { createHash } from "node:crypto";
 
 import { bearerMatches } from "@repo/shared/bearer";
+import { createConversationStore } from "@repo/shared/conversations";
 import { DISCORD_GUILD_ID, roleFromMemberRoles } from "@repo/shared/discord";
 import { RecoveryRequired, serializeError, Transient } from "@repo/shared/errors";
 import { getRedis } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
 import { sliceText } from "@repo/shared/text";
 import {
-  agentIngressKey,
-  agentResetKey,
-  authorizationChallengeKey,
-  authorizationIndexKey,
   decodeDeliveryPayload,
   decodeInteractionPayload,
   decodeResetRequestPayload,
-  interactionReceiptKey,
   WIRE_ROUTES,
 } from "@repo/shared/wire";
 import type {
@@ -52,16 +48,7 @@ import { createUnauthorizedResponse } from "eve/channels/auth";
 import type { SessionAuthContext, SessionContext } from "eve/context";
 
 import { resolveBotBaseUrl } from "../lib/bot-endpoint.ts";
-import {
-  confirmTurnDelivery,
-  finishTurnAdmission,
-  startTurnDelivery,
-} from "../lib/discord/coordination.ts";
 import { applyInputRequests } from "../lib/discord/input-requests.ts";
-import {
-  claimInteraction,
-  INTERACTION_RECEIPT_TTL_SECONDS,
-} from "../lib/discord/interaction-receipt.ts";
 import { createRenderPublisher, renderFooter } from "../lib/discord/render-intent.ts";
 import {
   appendStreamingMessage,
@@ -80,26 +67,13 @@ const redis = getRedis({
   url: env.UPSTASH_REDIS_REST_URL,
   token: env.UPSTASH_REDIS_REST_TOKEN,
 });
+const conversations = createConversationStore({ redis });
 const renderPublisher = createRenderPublisher({
-  redis,
+  store: conversations.renderPublication,
   botUrl: () => resolveBotBaseUrl(redis, env.BOT_URL),
   botSecret: env.BOT_INGRESS_SECRET,
 });
 const approvalPolicyStore = new ApprovalPolicyStore(redis);
-
-const STORE_AUTHORIZATION_SCRIPT = `
-redis.call("SET", KEYS[1], ARGV[1], "EX", tonumber(ARGV[2]))
-redis.call("SADD", KEYS[2], KEYS[1])
-redis.call("EXPIRE", KEYS[2], tonumber(ARGV[3]))
-return 1
-`;
-
-const DELETE_AUTHORIZATION_SCRIPT = `
-redis.call("DEL", KEYS[1])
-redis.call("SREM", KEYS[2], KEYS[1])
-if redis.call("SCARD", KEYS[2]) == 0 then redis.call("DEL", KEYS[2]) end
-return 1
-`;
 
 const RESET_DRAIN_TIMEOUT_MS = 8_000;
 
@@ -109,13 +83,8 @@ async function waitForResetCutover(
 ): Promise<"ready" | "stale" | "busy"> {
   const deadline = Date.now() + RESET_DRAIN_TIMEOUT_MS;
   do {
-    const [owner, admission] = await Promise.all([
-      redis.get(agentResetKey(continuationKey)),
-      redis.get(agentIngressKey(continuationKey)),
-    ]);
-    if (owner !== resetId) return "stale";
-    // Upstash reports a missing key as null; accept undefined for test doubles.
-    if (admission === null || admission === undefined) return "ready";
+    const status = await conversations.resetCutoverStatus(continuationKey, resetId);
+    if (status !== "busy") return status;
     await new Promise((resolve) => setTimeout(resolve, 50));
   } while (Date.now() < deadline);
   return "busy";
@@ -198,7 +167,7 @@ function failed(error: unknown, status = 400): Response {
 }
 
 async function acceptedInteractionResponse(interactionId: string): Promise<Response> {
-  const raw: unknown = await redis.get(interactionReceiptKey(interactionId));
+  const raw = await conversations.interactions.read(interactionId);
   let receipt: unknown = raw;
   if (typeof raw === "string") {
     try {
@@ -373,7 +342,7 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
 
       // Last side effect before Eve: after this fence becomes live, a crash must
       // wedge safely rather than risk starting this dispatch twice.
-      const admission = await startTurnDelivery(redis, payload);
+      const admission = await conversations.admission.start(payload);
       if (admission.status === "accepted") {
         return ok(admission.sessionId, payload.continuationKey);
       }
@@ -427,7 +396,7 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
           },
         );
 
-        const confirmed = await confirmTurnDelivery(redis, payload, session.id);
+        const confirmed = await conversations.admission.confirm(payload, session.id);
         if (!confirmed) {
           return failed(
             new RecoveryRequired({
@@ -440,7 +409,7 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
         }
         return ok(session.id, payload.continuationKey);
       } finally {
-        await finishTurnAdmission(redis, payload.continuationKey, admission.admissionAttemptId);
+        await conversations.admission.finish(payload.continuationKey, admission.admissionAttemptId);
       }
     }),
 
@@ -453,9 +422,9 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
       const decoded = decodeInteractionPayload(await request.json());
       if (Result.isError(decoded)) return failed(decoded.error);
       const payload = decoded.value;
-      const { claim, receiptIdentity } = await claimInteraction(redis, payload);
+      const { claim, receiptIdentity } = await conversations.interactions.claim(payload);
       if (claim === 2) {
-        await finishTurnAdmission(redis, payload.continuationKey, payload.interactionId);
+        await conversations.admission.finish(payload.continuationKey, payload.interactionId);
         return acceptedInteractionResponse(payload.interactionId);
       }
       if (claim !== 1) {
@@ -496,19 +465,15 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
           },
         );
 
-        await redis.set(
-          interactionReceiptKey(payload.interactionId),
-          {
-            status: "accepted",
-            ...receiptIdentity,
-            sessionId: session.id,
-            continuationToken: payload.continuationKey,
-          },
-          { ex: INTERACTION_RECEIPT_TTL_SECONDS },
+        await conversations.interactions.accept(
+          payload.interactionId,
+          receiptIdentity,
+          session.id,
+          payload.continuationKey,
         );
         return ok(session.id, payload.continuationKey);
       } finally {
-        await finishTurnAdmission(redis, payload.continuationKey, payload.interactionId);
+        await conversations.admission.finish(payload.continuationKey, payload.interactionId);
       }
     }),
 
@@ -598,10 +563,12 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
             ? {}
             : { instructions: sliceText(challenge.instructions, 1_000) }),
         };
-        await redis.eval(
-          STORE_AUTHORIZATION_SCRIPT,
-          [authorizationChallengeKey(dispatchId, id), authorizationIndexKey(dispatchId)],
-          [JSON.stringify(storedChallenge), challengeTtl(expiresAt), 60 * 60],
+        await conversations.authorizations.store(
+          dispatchId,
+          id,
+          storedChallenge,
+          challengeTtl(expiresAt),
+          60 * 60,
         );
         const authorization = {
           id,
@@ -639,14 +606,7 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
       } else {
         const dispatchId = state.activeDispatchId;
         if (dispatchId !== undefined) {
-          await redis.eval(
-            DELETE_AUTHORIZATION_SCRIPT,
-            [
-              authorizationChallengeKey(dispatchId, completed.id),
-              authorizationIndexKey(dispatchId),
-            ],
-            [],
-          );
+          await conversations.authorizations.delete(dispatchId, completed.id);
         }
         state.pendingAuthorizationNames = state.pendingAuthorizationNames.filter(
           (id) => id !== completed.id,

@@ -1,15 +1,9 @@
 import { describe, expect, spyOn, test } from "bun:test";
 
-import { agentActiveKey, agentIngressKey } from "@repo/shared/wire";
-import type { DeliveryPayload } from "@repo/shared/wire";
-
-import {
-  DELIVERY_ADMISSION_TTL_MS,
-  confirmTurnDelivery,
-  finishTurnAdmission,
-  startTurnDelivery,
-  type CoordinationStore,
-} from "./coordination.ts";
+import type { RedisClient } from "../redis/client.ts";
+import type { DeliveryPayload } from "../wire.ts";
+import { createConversationStore, DELIVERY_ADMISSION_TTL_MS } from "./index.ts";
+import { activeKey, ingressKey } from "./keys.ts";
 
 interface ActiveDelivery {
   phase: "claimed" | "live" | "recovery-required";
@@ -43,7 +37,7 @@ function keyAt(scriptKeys: string[], index: number): string {
 }
 
 /** State-aware Redis stand-in for the three coordination Lua scripts. */
-class AdmissionRedis implements CoordinationStore {
+class AdmissionRedis {
   private readonly active = new Map<string, ActiveDelivery>();
   private readonly leases = new Map<string, AdmissionLease>();
   private currentTime = 0;
@@ -53,7 +47,7 @@ class AdmissionRedis implements CoordinationStore {
   }
 
   seedClaimed(payload: DeliveryPayload): void {
-    this.active.set(agentActiveKey(payload.continuationKey), {
+    this.active.set(activeKey(payload.continuationKey), {
       phase: "claimed",
       dispatchId: payload.dispatchId,
       messageId: payload.messageId,
@@ -62,11 +56,11 @@ class AdmissionRedis implements CoordinationStore {
   }
 
   activeFor(payload: DeliveryPayload): ActiveDelivery | undefined {
-    return this.active.get(agentActiveKey(payload.continuationKey));
+    return this.active.get(activeKey(payload.continuationKey));
   }
 
   leaseFor(continuationKey: string): AdmissionLease | undefined {
-    const key = agentIngressKey(continuationKey);
+    const key = ingressKey(continuationKey);
     const lease = this.leases.get(key);
     if (lease !== undefined && lease.expiresAt <= this.currentTime) {
       this.leases.delete(key);
@@ -148,6 +142,10 @@ class AdmissionRedis implements CoordinationStore {
   }
 }
 
+function admission(redis: AdmissionRedis) {
+  return createConversationStore({ redis: redis as unknown as RedisClient }).admission;
+}
+
 const ATTEMPT_ONE = "10000000-0000-4000-8000-000000000001";
 const ATTEMPT_TWO = "10000000-0000-4000-8000-000000000002";
 const ATTEMPT_THREE = "10000000-0000-4000-8000-000000000003";
@@ -173,7 +171,7 @@ describe("live delivery admission", () => {
     redis.setNow(1_000);
     redis.seedClaimed(delivery);
 
-    expect(await startTurnDelivery(redis, delivery, ATTEMPT_ONE)).toEqual({
+    expect(await admission(redis).start(delivery, ATTEMPT_ONE)).toEqual({
       status: "start",
       admissionAttemptId: ATTEMPT_ONE,
     });
@@ -187,7 +185,7 @@ describe("live delivery admission", () => {
     });
 
     redis.setNow(6_000);
-    expect(await startTurnDelivery(redis, delivery, ATTEMPT_ONE)).toEqual({
+    expect(await admission(redis).start(delivery, ATTEMPT_ONE)).toEqual({
       status: "start",
       admissionAttemptId: ATTEMPT_ONE,
     });
@@ -195,7 +193,7 @@ describe("live delivery admission", () => {
       owner: ATTEMPT_ONE,
       expiresAt: 6_000 + DELIVERY_ADMISSION_TTL_MS,
     });
-    expect(await startTurnDelivery(redis, delivery, ATTEMPT_TWO)).toEqual({
+    expect(await admission(redis).start(delivery, ATTEMPT_TWO)).toEqual({
       status: "in-progress",
     });
   });
@@ -204,17 +202,17 @@ describe("live delivery admission", () => {
     const redis = new AdmissionRedis();
     redis.setNow(1_000);
     redis.seedClaimed(delivery);
-    await startTurnDelivery(redis, delivery, ATTEMPT_ONE);
+    await admission(redis).start(delivery, ATTEMPT_ONE);
     redis.setNow(1_000 + DELIVERY_ADMISSION_TTL_MS);
     const logged = spyOn(console, "error").mockImplementation(() => {});
 
     try {
-      expect(await startTurnDelivery(redis, delivery, ATTEMPT_TWO)).toEqual({
+      expect(await admission(redis).start(delivery, ATTEMPT_TWO)).toEqual({
         status: "recovery-required",
       });
       expect(redis.activeFor(delivery)?.phase).toBe("recovery-required");
-      expect(await confirmTurnDelivery(redis, delivery, "late-session")).toBe(false);
-      expect(await startTurnDelivery(redis, delivery, ATTEMPT_ONE)).toEqual({
+      expect(await admission(redis).confirm(delivery, "late-session")).toBe(false);
+      expect(await admission(redis).start(delivery, ATTEMPT_ONE)).toEqual({
         status: "recovery-required",
       });
       expect(logged).toHaveBeenCalledWith(
@@ -234,10 +232,10 @@ describe("live delivery admission", () => {
   test("returns the accepted session when the first HTTP response was lost", async () => {
     const redis = new AdmissionRedis();
     redis.seedClaimed(delivery);
-    await startTurnDelivery(redis, delivery, ATTEMPT_ONE);
+    await admission(redis).start(delivery, ATTEMPT_ONE);
 
-    expect(await confirmTurnDelivery(redis, delivery, "session-1")).toBe(true);
-    expect(await startTurnDelivery(redis, delivery, ATTEMPT_TWO)).toEqual({
+    expect(await admission(redis).confirm(delivery, "session-1")).toBe(true);
+    expect(await admission(redis).start(delivery, ATTEMPT_TWO)).toEqual({
       status: "accepted",
       sessionId: "session-1",
     });
@@ -247,21 +245,19 @@ describe("live delivery admission", () => {
     const redis = new AdmissionRedis();
     redis.setNow(10);
     redis.seedClaimed(delivery);
-    await startTurnDelivery(redis, delivery, ATTEMPT_ONE);
+    await admission(redis).start(delivery, ATTEMPT_ONE);
 
-    expect(await finishTurnAdmission(redis, delivery.continuationKey, ATTEMPT_TWO)).toBe(false);
+    expect(await admission(redis).finish(delivery.continuationKey, ATTEMPT_TWO)).toBe(false);
     expect(redis.leaseFor(delivery.continuationKey)?.owner).toBe(ATTEMPT_ONE);
-    expect(await finishTurnAdmission(redis, delivery.continuationKey, ATTEMPT_ONE)).toBe(true);
+    expect(await admission(redis).finish(delivery.continuationKey, ATTEMPT_ONE)).toBe(true);
     expect(redis.leaseFor(delivery.continuationKey)).toBeUndefined();
 
     const expiring = new AdmissionRedis();
     expiring.setNow(10);
     expiring.seedClaimed(delivery);
-    await startTurnDelivery(expiring, delivery, ATTEMPT_THREE);
+    await admission(expiring).start(delivery, ATTEMPT_THREE);
     expiring.setNow(10 + DELIVERY_ADMISSION_TTL_MS);
     expect(expiring.leaseFor(delivery.continuationKey)).toBeUndefined();
-    expect(await finishTurnAdmission(expiring, delivery.continuationKey, ATTEMPT_THREE)).toBe(
-      false,
-    );
+    expect(await admission(expiring).finish(delivery.continuationKey, ATTEMPT_THREE)).toBe(false);
   });
 });

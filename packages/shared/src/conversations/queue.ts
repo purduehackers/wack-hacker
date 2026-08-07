@@ -6,34 +6,31 @@
  * so no stale/replayed turn can advance a newer one.
  */
 
-import { InvalidInput } from "@repo/shared/errors";
-import type { RedisClient } from "@repo/shared/redis";
-import { Result } from "@repo/shared/result";
+import { InvalidInput } from "../errors.ts";
+import type { RedisClient } from "../redis/client.ts";
+import { Result } from "../result/index.ts";
+import { decodeDeliveryPayload, decodeParkedPayload } from "../wire.ts";
+import type { DeliveryPayload, MessagePayload, ParkedPayload, RenderTarget } from "../wire.ts";
 import {
+  activeKey,
   AGENT_READY_SET_KEY,
   AGENT_RENDER_READY_SET_KEY,
-  agentActiveKey,
-  agentIngressKey,
-  agentQueueMember,
-  agentResetKey,
-  continuationKeyFromAgentQueueMember,
-  decodeDeliveryPayload,
-  decodeParkedPayload,
-  parkedMarkerKey,
+  continuationKeyFromQueueMember,
+  ingressKey,
+  parkedKey,
+  pendingKey,
+  QUEUE_INDEX_KEY,
+  queueMember,
   renderTargetKey,
-} from "@repo/shared/wire";
-import type {
-  DeliveryPayload,
-  MessagePayload,
-  ParkedPayload,
-  RenderTarget,
-} from "@repo/shared/wire";
+  resetKey,
+  resetPendingKey,
+  seenKey,
+} from "./keys.ts";
 
 /** Short claim lease is safe because ingress fences one admission per dispatch. */
 export const DELIVERY_LEASE_MS = 30_000;
 /** Completed Discord-message tombstones are only needed across plausible retries. */
 export const SEEN_TTL_SECONDS = 7 * 24 * 60 * 60;
-const QUEUE_INDEX_KEY = "agent:queues";
 const ADMISSION_RECOVERY_EVE_TURN_ID = "delivery-admission-recovery";
 export const ADMISSION_RECOVERY_TEXT =
   "I couldn't safely finish starting this turn, so I stopped rather than risk running it twice.";
@@ -279,16 +276,6 @@ export interface ClaimedTurn {
 
 export type CompletionStatus = "completed" | "missing" | "stale";
 
-function pendingKey(continuationKey: string): string {
-  return `pending:${continuationKey}`;
-}
-function resetPendingKey(continuationKey: string): string {
-  return `agent:reset-pending:${continuationKey}`;
-}
-function seenKey(continuationKey: string): string {
-  return `agent:seen:${continuationKey}`;
-}
-
 function parseStored<T>(
   raw: unknown,
   subject: string,
@@ -304,7 +291,7 @@ function parseStored<T>(
 
 function continuationKeys(values: readonly unknown[]): readonly string[] {
   return values.flatMap((candidate) => {
-    const key = continuationKeyFromAgentQueueMember(candidate);
+    const key = continuationKeyFromQueueMember(candidate);
     return key === undefined ? [] : [key];
   });
 }
@@ -334,13 +321,13 @@ async function enqueueTurn(
       QUEUE_INDEX_KEY,
       seenKey(payload.continuationKey),
       renderTargetKey(delivery.dispatchId),
-      agentResetKey(payload.continuationKey),
+      resetKey(payload.continuationKey),
       resetPendingKey(payload.continuationKey),
     ],
     [
       JSON.stringify(delivery),
       payload.messageId,
-      agentQueueMember(payload.continuationKey),
+      queueMember(payload.continuationKey),
       SEEN_TTL_SECONDS,
       JSON.stringify(target),
     ],
@@ -359,16 +346,16 @@ async function claimTurn(
     CLAIM_SCRIPT,
     [
       pendingKey(continuationKey),
-      agentActiveKey(continuationKey),
+      activeKey(continuationKey),
       QUEUE_INDEX_KEY,
-      agentResetKey(continuationKey),
+      resetKey(continuationKey),
     ],
     [
       claimToken,
       continuationKey,
       claimedAt,
       claimedAt + DELIVERY_LEASE_MS,
-      agentQueueMember(continuationKey),
+      queueMember(continuationKey),
     ],
   );
   // oxlint-disable-next-line unicorn/no-null -- Redis nil is returned as null
@@ -384,9 +371,9 @@ export async function recoverAdmission(
   const raw: unknown = await redis.eval(
     RECOVER_ADMISSION_SCRIPT,
     [
-      agentActiveKey(continuationKey),
-      agentResetKey(continuationKey),
-      agentIngressKey(continuationKey),
+      activeKey(continuationKey),
+      resetKey(continuationKey),
+      ingressKey(continuationKey),
       AGENT_RENDER_READY_SET_KEY,
     ],
     [ADMISSION_RECOVERY_EVE_TURN_ID, ADMISSION_RECOVERY_TEXT, ADMISSION_RECOVERY_FOOTER],
@@ -404,7 +391,7 @@ async function confirmTurn(
 ): Promise<boolean> {
   return (
     Number(
-      await redis.eval(CONFIRM_SCRIPT, [agentActiveKey(continuationKey)], [claimToken, sessionId]),
+      await redis.eval(CONFIRM_SCRIPT, [activeKey(continuationKey)], [claimToken, sessionId]),
     ) === 1
   );
 }
@@ -414,8 +401,8 @@ async function completeTurn(redis: RedisClient, payload: ParkedPayload): Promise
     await redis.eval(
       COMPLETE_SCRIPT,
       [
-        agentActiveKey(payload.continuationKey),
-        parkedMarkerKey(payload.continuationKey),
+        activeKey(payload.continuationKey),
+        parkedKey(payload.continuationKey),
         pendingKey(payload.continuationKey),
         QUEUE_INDEX_KEY,
         AGENT_READY_SET_KEY,
@@ -426,7 +413,7 @@ async function completeTurn(redis: RedisClient, payload: ParkedPayload): Promise
         payload.continuationKey,
         payload.dispatchId,
         payload.eveTurnId,
-        agentQueueMember(payload.continuationKey),
+        queueMember(payload.continuationKey),
       ],
     ),
   );
@@ -438,7 +425,7 @@ async function readParked(
   redis: RedisClient,
   continuationKey: string,
 ): Promise<Result<ParkedPayload | undefined, InvalidInput>> {
-  const raw: unknown = await redis.get(parkedMarkerKey(continuationKey));
+  const raw: unknown = await redis.get(parkedKey(continuationKey));
   // oxlint-disable-next-line unicorn/no-null -- Redis missing key is null
   if (raw === null || raw === undefined) return Result.ok(undefined);
   return parseStored(raw, "parked marker", decodeParkedPayload);
@@ -452,7 +439,7 @@ async function beginReset(
   const token = newToken();
   const result: unknown = await redis.eval(
     BEGIN_RESET_SCRIPT,
-    [agentResetKey(continuationKey)],
+    [resetKey(continuationKey)],
     [token],
   );
   if (typeof result !== "string" || result === "") {
@@ -473,14 +460,14 @@ async function commitReset(
         [
           pendingKey(continuationKey),
           resetPendingKey(continuationKey),
-          agentActiveKey(continuationKey),
-          parkedMarkerKey(continuationKey),
-          agentResetKey(continuationKey),
+          activeKey(continuationKey),
+          parkedKey(continuationKey),
+          resetKey(continuationKey),
           QUEUE_INDEX_KEY,
           AGENT_READY_SET_KEY,
           AGENT_RENDER_READY_SET_KEY,
         ],
-        [resetId, agentQueueMember(continuationKey)],
+        [resetId, queueMember(continuationKey)],
       ),
     ) === 1
   );
@@ -491,21 +478,21 @@ async function purgeTurns(redis: RedisClient, continuationKey: string): Promise<
     PURGE_SCRIPT,
     [
       pendingKey(continuationKey),
-      agentActiveKey(continuationKey),
-      parkedMarkerKey(continuationKey),
+      activeKey(continuationKey),
+      parkedKey(continuationKey),
       QUEUE_INDEX_KEY,
       AGENT_READY_SET_KEY,
       seenKey(continuationKey),
       AGENT_RENDER_READY_SET_KEY,
       resetPendingKey(continuationKey),
-      agentResetKey(continuationKey),
-      agentIngressKey(continuationKey),
+      resetKey(continuationKey),
+      ingressKey(continuationKey),
     ],
-    [continuationKey, agentQueueMember(continuationKey)],
+    [continuationKey, queueMember(continuationKey)],
   );
 }
 
-export function createTurnQueue(deps: QueueDeps) {
+export function createQueueTransitions(deps: QueueDeps) {
   const newToken = deps.newToken ?? (() => crypto.randomUUID());
   const now = deps.now ?? (() => Date.now());
 
@@ -537,4 +524,4 @@ export function createTurnQueue(deps: QueueDeps) {
   };
 }
 
-export type TurnQueue = ReturnType<typeof createTurnQueue>;
+export type QueueTransitions = ReturnType<typeof createQueueTransitions>;

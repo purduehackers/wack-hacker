@@ -1,5 +1,6 @@
 /** Gateway turns in; Redis-owned, per-conversation deliveries out. */
 
+import type { ConversationStore } from "@repo/shared/conversations";
 import { RecoveryRequired, Transient, tagOf } from "@repo/shared/errors";
 import type { KnownError } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
@@ -7,11 +8,10 @@ import type { Reporter } from "@repo/shared/result/observe";
 import type { MessagePayload, ParkedPayload, ResetPayload } from "@repo/shared/wire";
 
 import type { AgentClient, AgentError } from "./client.ts";
-import type { TurnQueue } from "./queue.ts";
 
 export interface AgentRouterDeps {
   readonly client: AgentClient;
-  readonly queue: TurnQueue;
+  readonly queue: ConversationStore["queue"];
   readonly reporter: Reporter;
   /** Terminal Discord paint is the visible commit barrier for this delivery. */
   readonly beforeComplete?: (payload: ParkedPayload) => Promise<boolean>;

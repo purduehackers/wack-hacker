@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import type { InteractionPayload } from "@repo/shared/wire";
-
-import { claimInteraction } from "./interaction-receipt.ts";
+import type { RedisClient } from "../redis/client.ts";
+import type { InteractionPayload } from "../wire.ts";
+import { createConversationStore } from "./index.ts";
 
 const interaction: InteractionPayload = {
   continuationKey: "30000000000000000",
@@ -70,17 +70,21 @@ function receiptRedis(): ReceiptRedisHarness {
   };
 }
 
+function interactions(redis: ReceiptRedisHarness["redis"]) {
+  return createConversationStore({ redis: redis as unknown as RedisClient }).interactions;
+}
+
 describe("agent interaction admission receipt", () => {
   test("one concurrent delivery wins and an accepted retry receives the durable acknowledgement", async () => {
     const harness = receiptRedis();
     const [first, overlap] = await Promise.all([
-      claimInteraction(harness.redis, interaction),
-      claimInteraction(harness.redis, interaction),
+      interactions(harness.redis).claim(interaction),
+      interactions(harness.redis).claim(interaction),
     ]);
 
     expect([first.claim, overlap.claim].sort((left, right) => left - right)).toEqual([0, 1]);
     harness.accept();
-    expect((await claimInteraction(harness.redis, interaction)).claim).toBe(2);
+    expect((await interactions(harness.redis).claim(interaction)).claim).toBe(2);
 
     const invocation = harness.invocations()[0];
     expect(invocation?.keys).toEqual([
@@ -95,10 +99,10 @@ describe("agent interaction admission receipt", () => {
 
   test("the same interaction id cannot be replayed with a different answer", async () => {
     const harness = receiptRedis();
-    expect((await claimInteraction(harness.redis, interaction)).claim).toBe(1);
+    expect((await interactions(harness.redis).claim(interaction)).claim).toBe(1);
     expect(
       (
-        await claimInteraction(harness.redis, {
+        await interactions(harness.redis).claim({
           ...interaction,
           optionId: "deny",
         })

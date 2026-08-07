@@ -1,20 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
 import { Result } from "@repo/shared/result";
-import {
-  AGENT_RENDER_READY_SET_KEY,
-  agentActiveKey,
-  agentIngressKey,
-  agentResetKey,
-} from "@repo/shared/wire";
 import type { DeliveryPayload, RenderIntent } from "@repo/shared/wire";
 
+import type { RedisClient } from "../redis/client.ts";
 import {
   ADMISSION_RECOVERY_FOOTER,
   ADMISSION_RECOVERY_TEXT,
-  recoverAdmission,
-  type QueueRecoveryStore,
-} from "./queue.ts";
+  createConversationStore,
+} from "./index.ts";
+import { activeKey, AGENT_RENDER_READY_SET_KEY, ingressKey, resetKey } from "./keys.ts";
 
 interface ActiveDelivery {
   phase: "live" | "recovery-required";
@@ -25,7 +20,7 @@ interface ActiveDelivery {
   recoveryReported?: boolean;
 }
 
-class RecoveryRedis implements QueueRecoveryStore {
+class RecoveryRedis {
   active: ActiveDelivery | undefined;
   reset = false;
   ingress = false;
@@ -41,9 +36,9 @@ class RecoveryRedis implements QueueRecoveryStore {
       throw new Error("recovery script omitted its atomic terminal transition or render");
     }
     expect(keys).toEqual([
-      agentActiveKey(delivery.continuationKey),
-      agentResetKey(delivery.continuationKey),
-      agentIngressKey(delivery.continuationKey),
+      activeKey(delivery.continuationKey),
+      resetKey(delivery.continuationKey),
+      ingressKey(delivery.continuationKey),
       AGENT_RENDER_READY_SET_KEY,
     ]);
     if (this.reset || this.active === undefined) return undefined;
@@ -104,7 +99,9 @@ describe("bot admission recovery sweep", () => {
     const redis = new RecoveryRedis();
     seed(redis);
 
-    const recovered = await recoverAdmission(redis, delivery.continuationKey);
+    const recovered = await createConversationStore({
+      redis: redis as unknown as RedisClient,
+    }).queue.recoverAdmission(delivery.continuationKey);
     expect(Result.isOk(recovered) ? recovered.value : undefined).toEqual(delivery);
     expect(redis.active?.phase).toBe("recovery-required");
     expect(redis.intent).toMatchObject({
@@ -115,7 +112,9 @@ describe("bot admission recovery sweep", () => {
     });
     expect(redis.ready).toEqual(new Set([`r:${delivery.dispatchId}`]));
 
-    const repeated = await recoverAdmission(redis, delivery.continuationKey);
+    const repeated = await createConversationStore({
+      redis: redis as unknown as RedisClient,
+    }).queue.recoverAdmission(delivery.continuationKey);
     expect(Result.isOk(repeated) ? repeated.value : delivery).toBeUndefined();
     expect(redis.intent?.revision).toBe(1);
   });
@@ -124,7 +123,11 @@ describe("bot admission recovery sweep", () => {
     const redis = new RecoveryRedis();
     seed(redis);
     redis.ingress = true;
-    expect(await recoverAdmission(redis, delivery.continuationKey)).toMatchObject({
+    expect(
+      await createConversationStore({
+        redis: redis as unknown as RedisClient,
+      }).queue.recoverAdmission(delivery.continuationKey),
+    ).toMatchObject({
       status: "ok",
       value: undefined,
     });
@@ -132,7 +135,11 @@ describe("bot admission recovery sweep", () => {
 
     redis.ingress = false;
     redis.reset = true;
-    expect(await recoverAdmission(redis, delivery.continuationKey)).toMatchObject({
+    expect(
+      await createConversationStore({
+        redis: redis as unknown as RedisClient,
+      }).queue.recoverAdmission(delivery.continuationKey),
+    ).toMatchObject({
       status: "ok",
       value: undefined,
     });

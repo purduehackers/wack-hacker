@@ -1,5 +1,6 @@
 /** Coalesced Redis outbox consumer and sole Discord paint owner. */
 
+import type { ConversationStore } from "@repo/shared/conversations";
 import { serializeError, tagOf, Transient, UpstreamError } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import type { Reporter } from "@repo/shared/result/observe";
@@ -11,13 +12,12 @@ import type { TurnMessageWriter } from "../turn-messages.ts";
 import type { DiscordRest } from "./discord-rest.ts";
 import { createRenderer } from "./renderer.ts";
 import type { RendererProjection } from "./renderer.ts";
-import type { RenderStore } from "./store.ts";
 
 const MAX_CONCURRENT_RENDERS = 4;
 
 export interface RenderCoordinatorDeps {
   readonly rest: DiscordRest;
-  readonly store: RenderStore;
+  readonly store: ConversationStore["render"];
   readonly turnMessages: TurnMessageWriter;
   readonly reporter: Reporter;
   /** Re-checks parked markers after a terminal render reaches an outcome. */

@@ -1,3 +1,4 @@
+import type { ConversationStore } from "@repo/shared/conversations";
 import { roleAtLeast, roleFromMemberRoles, UserRole } from "@repo/shared/discord";
 import { serializeError, tagOf } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
@@ -23,17 +24,15 @@ import type { GuildMember, Interaction } from "discord.js";
 
 import { activeTraceparent } from "../../framework/observability.ts";
 import type { AgentClient } from "../client.ts";
-import type { RenderStore } from "../render/store.ts";
 import { modalCustomId, parseLocator } from "./components.ts";
 import type { HitlLocator } from "./components.ts";
-import type { HitlStore } from "./store.ts";
 
 const ANSWER_FIELD_ID = "answer";
 
 export interface HitlInteractionDeps {
   readonly agent: AgentClient;
-  readonly store: HitlStore;
-  readonly renders: RenderStore;
+  readonly store: ConversationStore["hitl"];
+  readonly renders: ConversationStore["render"];
   readonly reporter: Reporter;
   readonly guildId: string;
 }

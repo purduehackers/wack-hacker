@@ -1,12 +1,11 @@
 /** Redis half of the bot↔agent delivery and parked-turn handshake. */
 
-import { agentActiveKey, agentIngressKey, agentResetKey } from "@repo/shared/wire";
-import type { DeliveryPayload } from "@repo/shared/wire";
+import type { RedisClient } from "../redis/client.ts";
+import type { DeliveryPayload } from "../wire.ts";
+import { activeKey, ingressKey, resetKey } from "./keys.ts";
 
 /** Atomic Redis scripting surface used by delivery coordination. */
-export interface CoordinationStore {
-  readonly eval: (script: string, keys: string[], args: (string | number)[]) => Promise<unknown>;
-}
+export type AdmissionRedis = Pick<RedisClient, "eval">;
 
 export const DELIVERY_ADMISSION_TTL_MS = 15 * 60_000;
 
@@ -99,18 +98,18 @@ function parseAdmission(raw: unknown): DeliveryAdmission {
 }
 
 /** Fences overlapping bot POSTs before either is allowed to call Eve `send`. */
-export async function startTurnDelivery(
-  redis: CoordinationStore,
+export async function startDelivery(
+  redis: AdmissionRedis,
   payload: DeliveryPayload,
   /** Stable within one route invocation, and therefore across Upstash retries. */
-  admissionAttemptId = crypto.randomUUID(),
+  admissionAttemptId: string = crypto.randomUUID(),
 ): Promise<DeliveryAdmission> {
   const raw: unknown = await redis.eval(
     START_DELIVERY_SCRIPT,
     [
-      agentActiveKey(payload.continuationKey),
-      agentResetKey(payload.continuationKey),
-      agentIngressKey(payload.continuationKey),
+      activeKey(payload.continuationKey),
+      resetKey(payload.continuationKey),
+      ingressKey(payload.continuationKey),
     ],
     [payload.dispatchId, payload.messageId, admissionAttemptId, DELIVERY_ADMISSION_TTL_MS],
   );
@@ -130,8 +129,8 @@ export async function startTurnDelivery(
 }
 
 /** Releases the reset-visible admission lease after Eve send has settled. */
-export async function finishTurnAdmission(
-  redis: CoordinationStore,
+export async function finishAdmission(
+  redis: AdmissionRedis,
   continuationKey: string,
   admissionAttemptId: string,
 ): Promise<boolean> {
@@ -139,7 +138,7 @@ export async function finishTurnAdmission(
     Number(
       await redis.eval(
         FINISH_ADMISSION_SCRIPT,
-        [agentIngressKey(continuationKey)],
+        [ingressKey(continuationKey)],
         [admissionAttemptId],
       ),
     ) === 1
@@ -147,8 +146,8 @@ export async function finishTurnAdmission(
 }
 
 /** Makes an accepted retry answerable even if the first bot lost its response. */
-export async function confirmTurnDelivery(
-  redis: CoordinationStore,
+export async function confirmDelivery(
+  redis: AdmissionRedis,
   payload: DeliveryPayload,
   sessionId: string,
 ): Promise<boolean> {
@@ -156,9 +155,22 @@ export async function confirmTurnDelivery(
     Number(
       await redis.eval(
         CONFIRM_DELIVERY_SCRIPT,
-        [agentActiveKey(payload.continuationKey)],
+        [activeKey(payload.continuationKey)],
         [payload.dispatchId, payload.messageId, sessionId],
       ),
     ) === 1
   );
 }
+
+export function createAdmissionTransitions(redis: AdmissionRedis) {
+  return {
+    start: (payload: DeliveryPayload, admissionAttemptId?: string): Promise<DeliveryAdmission> =>
+      startDelivery(redis, payload, admissionAttemptId),
+    finish: (continuationKey: string, admissionAttemptId: string): Promise<boolean> =>
+      finishAdmission(redis, continuationKey, admissionAttemptId),
+    confirm: (payload: DeliveryPayload, sessionId: string): Promise<boolean> =>
+      confirmDelivery(redis, payload, sessionId),
+  };
+}
+
+export type AdmissionTransitions = ReturnType<typeof createAdmissionTransitions>;

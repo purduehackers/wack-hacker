@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { createHitlStore, type HitlClaimInput } from "./store.ts";
+import type { RedisClient } from "../redis/client.ts";
+import { createConversationStore, type HitlClaimInput } from "./index.ts";
 
 const approval: HitlClaimInput = {
   dispatchId: "00000000-0000-4000-8000-000000000000",
@@ -50,7 +51,7 @@ function hitlRedis() {
 describe("bot HITL approval claim", () => {
   test("atomically admits one of two concurrent answers and fences completion to the winner", async () => {
     const harness = hitlRedis();
-    const store = createHitlStore(harness.redis);
+    const store = createConversationStore({ redis: harness.redis as unknown as RedisClient }).hitl;
     const outcomes = await Promise.all([
       store.claim(approval),
       store.claim({ ...approval, interactionId: "40000000000000001" }),
@@ -68,7 +69,7 @@ describe("bot HITL approval claim", () => {
   test("a reset barrier makes an otherwise current control stale", async () => {
     const harness = hitlRedis();
     harness.installReset();
-    const store = createHitlStore(harness.redis);
+    const store = createConversationStore({ redis: harness.redis as unknown as RedisClient }).hitl;
 
     expect(await store.claim(approval)).toBe("stale");
   });

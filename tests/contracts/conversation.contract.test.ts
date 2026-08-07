@@ -2,21 +2,19 @@
 
 import { beforeEach, expect, spyOn, test } from "bun:test";
 
-import {
-  confirmTurnDelivery,
-  finishTurnAdmission,
-  startTurnDelivery,
-} from "../../packages/agents/agent/lib/discord/coordination.ts";
-import { claimInteraction } from "../../packages/agents/agent/lib/discord/interaction-receipt.ts";
 import { createRenderPublisher } from "../../packages/agents/agent/lib/discord/render-intent.ts";
 import type { AgentClient } from "../../packages/bot/src/agent/client.ts";
-import { createHitlStore, type HitlClaimInput } from "../../packages/bot/src/agent/hitl/store.ts";
-import { createTurnQueue, DELIVERY_LEASE_MS } from "../../packages/bot/src/agent/queue.ts";
 import { createRenderCoordinator } from "../../packages/bot/src/agent/render/coordinator.ts";
 import type { DiscordRest } from "../../packages/bot/src/agent/render/discord-rest.ts";
-import { createRenderStore } from "../../packages/bot/src/agent/render/store.ts";
 import { createAgentRouter } from "../../packages/bot/src/agent/router.ts";
 import { createTurnMessageStore } from "../../packages/bot/src/agent/turn-messages.ts";
+import {
+  createConversationStore,
+  DELIVERY_LEASE_MS,
+  type ConversationStore,
+  type ConversationStoreDeps,
+  type HitlClaimInput,
+} from "../../packages/shared/src/conversations/index.ts";
 import { getRedis, type RedisClient } from "../../packages/shared/src/redis/client.ts";
 import { Result } from "../../packages/shared/src/result/index.ts";
 import { silentReporter } from "../../packages/shared/src/result/observe.ts";
@@ -27,7 +25,6 @@ import type {
   ParkedPayload,
   RenderIntent,
 } from "../../packages/shared/src/wire.ts";
-import { renderClaimKey } from "../../packages/shared/src/wire.ts";
 
 const contractUrl = process.env["CONTRACT_REDIS_URL"];
 const contractToken = process.env["CONTRACT_REDIS_TOKEN"];
@@ -41,6 +38,13 @@ function contractRedis(): RedisClient {
     throw new Error("contract Redis must be an isolated loopback HTTP endpoint");
   }
   return getRedis({ url: url.href, token: contractToken });
+}
+
+function conversations(
+  redis: RedisClient,
+  overrides: Omit<ConversationStoreDeps, "redis"> = {},
+): ConversationStore {
+  return createConversationStore({ redis, ...overrides });
 }
 
 const redisAvailable = contractUrl !== undefined && contractToken !== undefined;
@@ -86,7 +90,7 @@ const successfulCallbackFetch: typeof globalThis.fetch = Object.assign(
 
 async function startStreamingTurn(
   redis: RedisClient,
-  queue: ReturnType<typeof createTurnQueue>,
+  queue: ConversationStore["queue"],
   source: MessagePayload,
   inputRequests: NonNullable<RenderIntent["inputRequests"]>,
 ): Promise<DeliveryPayload> {
@@ -97,11 +101,11 @@ async function startStreamingTurn(
   if (delivery === undefined) throw new Error("streaming delivery was not claimed");
 
   const attemptId = crypto.randomUUID();
-  if ((await startTurnDelivery(redis, delivery, attemptId)).status !== "start") {
+  if ((await conversations(redis).admission.start(delivery, attemptId)).status !== "start") {
     throw new Error("streaming delivery was not admitted");
   }
   const publisher = createRenderPublisher({
-    redis,
+    store: conversations(redis).renderPublication,
     botUrl: "http://bot.invalid",
     botSecret: "contract-secret",
     fetch: successfulCallbackFetch,
@@ -122,7 +126,7 @@ async function startStreamingTurn(
   ) {
     throw new Error("streaming input request was not published");
   }
-  if (!(await finishTurnAdmission(redis, delivery.continuationKey, attemptId))) {
+  if (!(await conversations(redis).admission.finish(delivery.continuationKey, attemptId))) {
     throw new Error("streaming admission was not released");
   }
   return delivery;
@@ -168,7 +172,7 @@ contractTest(
   async () => {
     const redis = contractRedis();
     const now = 1_000;
-    const queue = createTurnQueue({ redis, now: () => now });
+    const queue = conversations(redis, { now: () => now }).queue;
     const first = message("40000000000000000", "first");
     const second = message("40000000000000001", "second");
     const independent = message("40000000000000002", "independent", "30000000000000001");
@@ -193,11 +197,10 @@ contractTest(
       independent.messageId,
     );
 
-    const restarted = createTurnQueue({
-      redis,
+    const restarted = conversations(redis, {
       now: () => now + DELIVERY_LEASE_MS + 1,
       newToken: () => "restarted-owner",
-    });
+    }).queue;
     const reclaimed = await restarted.claim(first.continuationKey);
     expect(Result.isOk(reclaimed) && reclaimed.value?.payload.messageId).toBe(first.messageId);
     expect(Result.isOk(reclaimed) && reclaimed.value?.claimToken).toBe("restarted-owner");
@@ -221,7 +224,7 @@ contractTest(
 
 contractTest("delivery admission recovers lost responses and fences ambiguous work", async () => {
   const redis = contractRedis();
-  const queue = createTurnQueue({ redis });
+  const queue = conversations(redis).queue;
   const continuationKey = "30000000000000010";
 
   const acceptedMessage = message("40000000000000020", "accepted", continuationKey);
@@ -232,16 +235,20 @@ contractTest("delivery admission recovers lost responses and fences ambiguous wo
   if (acceptedDelivery === undefined) throw new Error("accepted delivery was not claimed");
 
   const acceptedAttempt = crypto.randomUUID();
-  expect(await startTurnDelivery(redis, acceptedDelivery, acceptedAttempt)).toEqual({
+  expect(await conversations(redis).admission.start(acceptedDelivery, acceptedAttempt)).toEqual({
     status: "start",
     admissionAttemptId: acceptedAttempt,
   });
-  expect(await confirmTurnDelivery(redis, acceptedDelivery, "session-lost-response")).toBe(true);
-  expect(await finishTurnAdmission(redis, continuationKey, acceptedAttempt)).toBe(true);
-  expect(await startTurnDelivery(redis, acceptedDelivery, crypto.randomUUID())).toEqual({
-    status: "accepted",
-    sessionId: "session-lost-response",
-  });
+  expect(
+    await conversations(redis).admission.confirm(acceptedDelivery, "session-lost-response"),
+  ).toBe(true);
+  expect(await conversations(redis).admission.finish(continuationKey, acceptedAttempt)).toBe(true);
+  expect(await conversations(redis).admission.start(acceptedDelivery, crypto.randomUUID())).toEqual(
+    {
+      status: "accepted",
+      sessionId: "session-lost-response",
+    },
+  );
   await queue.purge(continuationKey);
 
   const ambiguousMessage = message("40000000000000021", "ambiguous", continuationKey);
@@ -252,14 +259,16 @@ contractTest("delivery admission recovers lost responses and fences ambiguous wo
   if (ambiguousDelivery === undefined) throw new Error("ambiguous delivery was not claimed");
 
   const ambiguousAttempt = crypto.randomUUID();
-  expect(await startTurnDelivery(redis, ambiguousDelivery, ambiguousAttempt)).toEqual({
+  expect(await conversations(redis).admission.start(ambiguousDelivery, ambiguousAttempt)).toEqual({
     status: "start",
     admissionAttemptId: ambiguousAttempt,
   });
-  expect(await finishTurnAdmission(redis, continuationKey, ambiguousAttempt)).toBe(true);
+  expect(await conversations(redis).admission.finish(continuationKey, ambiguousAttempt)).toBe(true);
   const recoveryLog = spyOn(console, "error").mockImplementation(() => undefined);
   try {
-    expect(await startTurnDelivery(redis, ambiguousDelivery, crypto.randomUUID())).toEqual({
+    expect(
+      await conversations(redis).admission.start(ambiguousDelivery, crypto.randomUUID()),
+    ).toEqual({
       status: "recovery-required",
     });
     expect(recoveryLog).toHaveBeenCalledTimes(1);
@@ -273,7 +282,7 @@ contractTest(
   "queue recovery publishes one durable failed intent for an ambiguous admission",
   async () => {
     const redis = contractRedis();
-    const queue = createTurnQueue({ redis });
+    const queue = conversations(redis).queue;
     const continuationKey = "30000000000000011";
     const source = message("40000000000000022", "ambiguous recovery", continuationKey);
     await queue.enqueue(source);
@@ -283,14 +292,14 @@ contractTest(
     if (delivery === undefined) throw new Error("ambiguous delivery was not claimed");
 
     const attemptId = crypto.randomUUID();
-    expect(await startTurnDelivery(redis, delivery, attemptId)).toEqual({
+    expect(await conversations(redis).admission.start(delivery, attemptId)).toEqual({
       status: "start",
       admissionAttemptId: attemptId,
     });
-    expect(await finishTurnAdmission(redis, continuationKey, attemptId)).toBe(true);
+    expect(await conversations(redis).admission.finish(continuationKey, attemptId)).toBe(true);
 
     expect(await queue.recoverAdmission(continuationKey)).toEqual(Result.ok(delivery));
-    const recovered = await createRenderStore(redis).intent(delivery.dispatchId);
+    const recovered = await conversations(redis).render.intent(delivery.dispatchId);
     expect(Result.isOk(recovered) && recovered.value).toMatchObject({
       dispatchId: delivery.dispatchId,
       continuationKey,
@@ -307,7 +316,7 @@ contractTest(
 
 contractTest("HITL Lua admits one answer and reset makes the control stale", async () => {
   const redis = contractRedis();
-  const queue = createTurnQueue({ redis });
+  const queue = conversations(redis).queue;
   const continuationKey = "30000000000000020";
   const source = message("40000000000000030", "approval", continuationKey);
   const delivery = await startStreamingTurn(redis, queue, source, [
@@ -320,7 +329,7 @@ contractTest("HITL Lua admits one answer and reset makes the control stale", asy
     },
   ]);
 
-  const hitl = createHitlStore(redis);
+  const hitl = conversations(redis).hitl;
   const approval: HitlClaimInput = {
     dispatchId: delivery.dispatchId,
     continuationKey,
@@ -348,7 +357,7 @@ contractTest(
   "interaction admission Lua fences duplicate, conflicting, and reset controls",
   async () => {
     const redis = contractRedis();
-    const queue = createTurnQueue({ redis });
+    const queue = conversations(redis).queue;
     const continuationKey = "30000000000000021";
     const source = message("40000000000000040", "interaction", continuationKey);
     const delivery = await startStreamingTurn(redis, queue, source, [
@@ -376,24 +385,26 @@ contractTest(
     };
 
     const claims = await Promise.all([
-      claimInteraction(redis, interaction),
-      claimInteraction(redis, interaction),
+      conversations(redis).interactions.claim(interaction),
+      conversations(redis).interactions.claim(interaction),
     ]);
     expect(claims.map(({ claim }) => claim).sort((left, right) => left - right)).toEqual([0, 1]);
     expect(
       (
-        await claimInteraction(redis, {
+        await conversations(redis).interactions.claim({
           ...interaction,
           optionId: "deny",
         })
       ).claim,
     ).toBe(-1);
 
-    expect(await finishTurnAdmission(redis, continuationKey, interaction.interactionId)).toBe(true);
+    expect(
+      await conversations(redis).admission.finish(continuationKey, interaction.interactionId),
+    ).toBe(true);
     await queue.beginReset(continuationKey);
     expect(
       (
-        await claimInteraction(redis, {
+        await conversations(redis).interactions.claim({
           ...interaction,
           interactionId: "40000000000000042",
         })
@@ -405,13 +416,13 @@ contractTest(
 
 contractTest("render leases survive renewal through the Upstash-compatible transport", async () => {
   const redis = contractRedis();
-  const store = createRenderStore(redis);
+  const store = conversations(redis).render;
   const dispatchId = crypto.randomUUID();
   const token = await store.claim(dispatchId);
   expect(token).toBeDefined();
   const before = await redis.eval(
     'return {redis.call("GET", KEYS[1]), redis.call("PTTL", KEYS[1])}',
-    [renderClaimKey(dispatchId)],
+    [`agent:render-claim:${dispatchId}`],
     [],
   );
   expect(Array.isArray(before) && before[0]).toBe(token);
@@ -420,7 +431,7 @@ contractTest("render leases survive renewal through the Upstash-compatible trans
   expect(await store.renew(dispatchId, token)).toBe(true);
   const after = await redis.eval(
     'return {redis.call("GET", KEYS[1]), redis.call("PTTL", KEYS[1])}',
-    [renderClaimKey(dispatchId)],
+    [`agent:render-claim:${dispatchId}`],
     [],
   );
   expect(Array.isArray(after) && after[0]).toBe(token);
@@ -431,7 +442,7 @@ contractTest(
   "render release and discard preserve claim ownership and terminal outcome",
   async () => {
     const redis = contractRedis();
-    const store = createRenderStore(redis);
+    const store = conversations(redis).render;
     const unownedDispatchId = crypto.randomUUID();
     const firstToken = await store.claim(unownedDispatchId);
     if (firstToken === undefined) throw new Error("render lease was not claimed");
@@ -440,7 +451,7 @@ contractTest(
     await store.release(unownedDispatchId, firstToken);
     expect(await store.claim(unownedDispatchId)).toBeDefined();
 
-    const queue = createTurnQueue({ redis });
+    const queue = conversations(redis).queue;
     const source = message("40000000000000050", "discard this render", "30000000000000030");
     const delivery = await startStreamingTurn(redis, queue, source, []);
     expect((await store.ready()).includes(delivery.dispatchId)).toBe(true);
@@ -450,6 +461,57 @@ contractTest(
     expect(Result.isOk(await store.intent(delivery.dispatchId))).toBe(true);
     expect(Result.isOk(await store.target(delivery.dispatchId))).toBe(true);
     await queue.purge(source.continuationKey);
+  },
+);
+
+contractTest(
+  "authorization challenge Lua maintains the reset-cleanable dispatch index",
+  async () => {
+    const store = conversations(contractRedis());
+    const dispatchId = crypto.randomUUID();
+    const authorizationId = "authorization-1";
+    const challenge = {
+      description: "Connect the provider",
+      url: "https://example.com/authorize",
+      userCode: "ABCD-EFGH",
+    };
+
+    await store.authorizations.store(dispatchId, authorizationId, challenge, 600, 3_600);
+    expect(await store.render.authorization(dispatchId, authorizationId)).toEqual(
+      Result.ok(challenge),
+    );
+    await store.authorizations.delete(dispatchId, authorizationId);
+    expect(await store.render.authorization(dispatchId, authorizationId)).toEqual(
+      Result.ok(undefined),
+    );
+  },
+);
+
+contractTest(
+  "scheduled-fire Lua claims, releases, and durably accepts one occurrence",
+  async () => {
+    const store = conversations(contractRedis()).scheduledFires;
+    const payload = {
+      scheduleId: crypto.randomUUID(),
+      occurrenceId: "abcdefghijklmnopqrstuv",
+      ownerId: "10000000000000000",
+      channelId: "20000000000000000",
+      description: "post an update",
+      actionType: "message" as const,
+      prompt: "The update",
+      attemptNumber: 1,
+      finalAttempt: false,
+      scheduledFor: "2026-01-01T00:00:00.000Z",
+    };
+
+    expect(await store.claim(payload, "claim-1")).toBe("acquired");
+    expect(await store.claim(payload, "claim-2")).toBe("busy");
+    await store.release(payload.occurrenceId, "claim-2");
+    expect(await store.claim(payload, "claim-2")).toBe("busy");
+    await store.release(payload.occurrenceId, "claim-1");
+    expect(await store.claim(payload, "claim-3")).toBe("acquired");
+    expect(await store.complete(payload, "claim-3")).toBe(true);
+    expect(await store.claim(payload, "claim-4")).toBe("accepted");
   },
 );
 
@@ -465,15 +527,15 @@ function createAdmissionClient(redis: RedisClient, sent: DeliveryPayload[]): Age
     sendMessage: async (delivery) => {
       sent.push(delivery);
       const attemptId = crypto.randomUUID();
-      const admission = await startTurnDelivery(redis, delivery, attemptId);
+      const admission = await conversations(redis).admission.start(delivery, attemptId);
       if (admission.status !== "start") {
         throw new Error(`unexpected admission status ${admission.status}`);
       }
       const sessionId = `session-${sent.length}`;
-      if (!(await confirmTurnDelivery(redis, delivery, sessionId))) {
+      if (!(await conversations(redis).admission.confirm(delivery, sessionId))) {
         throw new Error("agent delivery confirmation failed");
       }
-      if (!(await finishTurnAdmission(redis, delivery.continuationKey, attemptId))) {
+      if (!(await conversations(redis).admission.finish(delivery.continuationKey, attemptId))) {
         throw new Error("agent admission release failed");
       }
       return Result.ok({ sessionId, continuationToken: delivery.continuationKey });
@@ -489,8 +551,8 @@ function createAdmissionClient(redis: RedisClient, sent: DeliveryPayload[]): Age
 
 async function startBotRuntime(
   redis: RedisClient,
-  queue: ReturnType<typeof createTurnQueue>,
-  renderStore: ReturnType<typeof createRenderStore>,
+  queue: ConversationStore["queue"],
+  renderStore: ConversationStore["render"],
   discord: MemoryDiscord,
   client: AgentClient,
 ) {
@@ -516,8 +578,8 @@ contractTest(
   "a restart converges terminal Discord paint before admitting the next queued turn",
   async () => {
     const redis = contractRedis();
-    const queue = createTurnQueue({ redis });
-    const renderStore = createRenderStore(redis);
+    const queue = conversations(redis).queue;
+    const renderStore = conversations(redis).render;
     const discord = new MemoryDiscord();
     const sent: DeliveryPayload[] = [];
     const client = createAdmissionClient(redis, sent);
@@ -532,7 +594,7 @@ contractTest(
     const delivery = sent[0];
     if (delivery === undefined) throw new Error("first delivery was not admitted");
     const publisher = createRenderPublisher({
-      redis,
+      store: conversations(redis).renderPublication,
       botUrl: "http://bot.invalid",
       botSecret: "contract-secret",
       fetch: callbackFetch,

@@ -1,5 +1,5 @@
-import type { RedisClient } from "@repo/shared/redis";
-import { agentResetKey, hitlClaimKey, renderIntentKey } from "@repo/shared/wire";
+import type { RedisClient } from "../redis/client.ts";
+import { hitlClaimKey, renderIntentKey, resetKey } from "./keys.ts";
 
 const CLAIM_TTL_SECONDS = 7 * 24 * 60 * 60;
 
@@ -53,7 +53,7 @@ interface HitlClaimRecord {
   readonly status: "forwarding" | "accepted";
 }
 
-export function createHitlStore(redis: Pick<RedisClient, "eval">) {
+export function createHitlTransitions(redis: Pick<RedisClient, "eval">) {
   return {
     claim: async (input: HitlClaimInput): Promise<"acquired" | "claimed" | "stale"> => {
       const record: HitlClaimRecord = {
@@ -68,7 +68,7 @@ export function createHitlStore(redis: Pick<RedisClient, "eval">) {
           [
             renderIntentKey(input.dispatchId),
             hitlClaimKey(input.dispatchId),
-            agentResetKey(input.continuationKey),
+            resetKey(input.continuationKey),
           ],
           [
             input.revision,
@@ -99,4 +99,4 @@ export function createHitlStore(redis: Pick<RedisClient, "eval">) {
   };
 }
 
-export type HitlStore = ReturnType<typeof createHitlStore>;
+export type HitlTransitions = ReturnType<typeof createHitlTransitions>;
