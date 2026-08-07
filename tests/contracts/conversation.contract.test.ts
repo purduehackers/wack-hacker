@@ -1,6 +1,6 @@
 /// <reference types="bun" />
 
-import { beforeEach, expect, test } from "bun:test";
+import { beforeEach, expect, spyOn, test } from "bun:test";
 
 import {
   confirmTurnDelivery,
@@ -167,6 +167,56 @@ contractTest(
   },
 );
 
+contractTest("delivery admission recovers lost responses and fences ambiguous work", async () => {
+  const redis = contractRedis();
+  const queue = createTurnQueue({ redis });
+  const continuationKey = "30000000000000010";
+
+  const acceptedMessage = message("40000000000000020", "accepted", continuationKey);
+  await queue.enqueue(acceptedMessage);
+  const acceptedClaim = await queue.claim(continuationKey);
+  if (Result.isError(acceptedClaim)) throw acceptedClaim.error;
+  const acceptedDelivery = acceptedClaim.value?.payload;
+  if (acceptedDelivery === undefined) throw new Error("accepted delivery was not claimed");
+
+  const acceptedAttempt = crypto.randomUUID();
+  expect(await startTurnDelivery(redis, acceptedDelivery, acceptedAttempt)).toEqual({
+    status: "start",
+    admissionAttemptId: acceptedAttempt,
+  });
+  expect(await confirmTurnDelivery(redis, acceptedDelivery, "session-lost-response")).toBe(true);
+  expect(await finishTurnAdmission(redis, continuationKey, acceptedAttempt)).toBe(true);
+  expect(await startTurnDelivery(redis, acceptedDelivery, crypto.randomUUID())).toEqual({
+    status: "accepted",
+    sessionId: "session-lost-response",
+  });
+  await queue.purge(continuationKey);
+
+  const ambiguousMessage = message("40000000000000021", "ambiguous", continuationKey);
+  await queue.enqueue(ambiguousMessage);
+  const ambiguousClaim = await queue.claim(continuationKey);
+  if (Result.isError(ambiguousClaim)) throw ambiguousClaim.error;
+  const ambiguousDelivery = ambiguousClaim.value?.payload;
+  if (ambiguousDelivery === undefined) throw new Error("ambiguous delivery was not claimed");
+
+  const ambiguousAttempt = crypto.randomUUID();
+  expect(await startTurnDelivery(redis, ambiguousDelivery, ambiguousAttempt)).toEqual({
+    status: "start",
+    admissionAttemptId: ambiguousAttempt,
+  });
+  expect(await finishTurnAdmission(redis, continuationKey, ambiguousAttempt)).toBe(true);
+  const recoveryLog = spyOn(console, "error").mockImplementation(() => undefined);
+  try {
+    expect(await startTurnDelivery(redis, ambiguousDelivery, crypto.randomUUID())).toEqual({
+      status: "recovery-required",
+    });
+    expect(recoveryLog).toHaveBeenCalledTimes(1);
+  } finally {
+    recoveryLog.mockRestore();
+  }
+  await queue.purge(continuationKey);
+});
+
 contractTest("render leases survive renewal through the Upstash-compatible transport", async () => {
   const redis = contractRedis();
   const store = createRenderStore(redis);
@@ -192,7 +242,9 @@ contractTest("render leases survive renewal through the Upstash-compatible trans
 });
 
 const callbackFetch: typeof globalThis.fetch = Object.assign(
-  async () => new Response(undefined, { status: 204 }),
+  async () => {
+    throw new Error("simulated lost render callback");
+  },
   { preconnect: globalThis.fetch.preconnect },
 );
 
@@ -284,7 +336,13 @@ contractTest(
       text: "partial answer",
       activity: "Working",
     };
-    expect(await publisher.publish(streaming)).toBe(true);
+    const callbackLog = spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      expect(await publisher.publish(streaming)).toBe(true);
+      expect(callbackLog).toHaveBeenCalledTimes(1);
+    } finally {
+      callbackLog.mockRestore();
+    }
     await beforeRestart.coordinator.sweep();
     await waitUntil(async () => {
       const projection = await renderStore.projection(delivery.dispatchId);

@@ -108,11 +108,14 @@ Lua-emulating fakes can be deleted only after the real-script tests overlap.
 
 The first real-Redis suite now runs the production Upstash client and Lua through
 pinned Redis 6.2 and `serverless-redis-http` containers. It covers queue dedupe,
-FIFO, lease takeover, independent keys, reset cutover, render-lease renewal, and
-a two-turn streaming/terminal/restart flow with a stateful Discord fake. The
+FIFO, lease takeover, independent keys, reset cutover, lost-response admission,
+ambiguous-admission fencing, lost render callbacks, render-lease renewal, and a two-turn streaming/terminal/restart flow with a stateful Discord fake. The
 feature-parity artifact now also freezes each skill's policy role, description,
 criteria, tool membership, and normalized instruction digest, independent of
-the activation protocol. The initial golden run exposed a real coordinator
+the activation protocol. A table-driven policy test now covers anonymous,
+public, organizer, and admin discovery and loading across all eleven domains,
+including exact `Unauthenticated`, `Forbidden`, and `NotFound` precedence. The
+initial golden run exposed a real coordinator
 lifetime bug: `applyLatest` returned a pending traced Promise from inside
 `try/finally`, so `finally`
 released the render lease before its checkpoint. Awaiting the traced operation
@@ -140,7 +143,10 @@ values. Eve advertises them and owns `load_skill` and loaded-turn context. A
 migration canary must prove the installed Eve runtime gives each integration
 subagent a usable sandbox context for dynamic-skill materialization and reload.
 If that canary fails, stop and resolve the Eve-native lifecycle; do not add a
-second loader.
+second loader. `justbash()` is sufficient for the file-only lifecycle canary,
+but it is an optional peer backed by an app-local cache. Keep Eve's
+`defaultBackend()` for the deployed path unless a production canary also proves
+a pinned just-bash cache can be written and restored across turns.
 
 The tool catalog resolves separately on `step.started` from current role,
 integration readiness, and the existing tool descriptor policy. It does not
