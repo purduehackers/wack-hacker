@@ -116,14 +116,19 @@ feature-parity artifact now also freezes each skill's policy role, description,
 criteria, tool membership, and normalized instruction digest, independent of
 the activation protocol. A table-driven policy test now covers anonymous,
 public, organizer, and admin discovery and loading across all eleven domains,
-including exact `Unauthenticated`, `Forbidden`, and `NotFound` precedence. The
-initial golden run exposed a real coordinator
+including exact `Unauthenticated`, `Forbidden`, and `NotFound` precedence. Bot
+command fixtures now also pin nominal channel projection and writes,
+managed-guild confinement, webhook credential omission, and typed rate-limit
+mapping without blessing malformed partial responses. The initial golden run
+exposed a real coordinator
 lifetime bug: `applyLatest` returned a pending traced Promise from inside
 `try/finally`, so `finally`
 released the render lease before its checkpoint. Awaiting the traced operation
 inside the lease scope restored the stated behavior; the golden suite now
 passes and runs in CI. This was a narrow correctness repair, not an approved
-architecture refactor.
+architecture refactor. The planned Phase 0 characterization is now complete;
+add further fixtures only when an approved migration exposes a specific
+uncovered ambiguity.
 
 ### 1. Replace the custom skill system with Eve-native dynamic skills
 
