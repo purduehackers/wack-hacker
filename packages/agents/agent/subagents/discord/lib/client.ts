@@ -61,7 +61,7 @@ export function createDiscordCommandClient(deps: {
         if (Result.isError(decoded)) {
           throw new UpstreamError({
             service: "bot",
-            status: response.status || 502,
+            status: response.ok ? 502 : response.status,
             detail: decoded.error.message,
           });
         }

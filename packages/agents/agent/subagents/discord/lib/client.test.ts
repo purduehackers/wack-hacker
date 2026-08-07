@@ -83,3 +83,12 @@ test("Discord command client keeps ordinary service failures transient", async (
   if (!Result.isError(result)) return;
   expect(result.error).toBeInstanceOf(Transient);
 });
+
+test("Discord command client maps a malformed successful envelope to 502", async () => {
+  const result = await clientReturning(200, { unexpected: true })("list_roles", {});
+  expect(Result.isError(result)).toBe(true);
+  if (!Result.isError(result)) return;
+  expect(result.error).toBeInstanceOf(UpstreamError);
+  if (!(result.error instanceof UpstreamError)) return;
+  expect(result.error.status).toBe(502);
+});
