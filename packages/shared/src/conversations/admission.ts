@@ -5,7 +5,7 @@ import type { DeliveryPayload } from "../wire.ts";
 import { activeKey, ingressKey, resetKey } from "./keys.ts";
 
 /** Atomic Redis scripting surface used by delivery coordination. */
-export type AdmissionRedis = Pick<RedisClient, "eval">;
+type AdmissionRedis = Pick<RedisClient, "eval">;
 
 export const DELIVERY_ADMISSION_TTL_MS = 15 * 60_000;
 
@@ -98,7 +98,7 @@ function parseAdmission(raw: unknown): DeliveryAdmission {
 }
 
 /** Fences overlapping bot POSTs before either is allowed to call Eve `send`. */
-export async function startDelivery(
+async function startDelivery(
   redis: AdmissionRedis,
   payload: DeliveryPayload,
   /** Stable within one route invocation, and therefore across Upstash retries. */
@@ -129,7 +129,7 @@ export async function startDelivery(
 }
 
 /** Releases the reset-visible admission lease after Eve send has settled. */
-export async function finishAdmission(
+async function finishAdmission(
   redis: AdmissionRedis,
   continuationKey: string,
   admissionAttemptId: string,
@@ -146,7 +146,7 @@ export async function finishAdmission(
 }
 
 /** Makes an accepted retry answerable even if the first bot lost its response. */
-export async function confirmDelivery(
+async function confirmDelivery(
   redis: AdmissionRedis,
   payload: DeliveryPayload,
   sessionId: string,
@@ -172,5 +172,3 @@ export function createAdmissionTransitions(redis: AdmissionRedis) {
       confirmDelivery(redis, payload, sessionId),
   };
 }
-
-export type AdmissionTransitions = ReturnType<typeof createAdmissionTransitions>;

@@ -116,5 +116,3 @@ export function createScheduledFireTransitions(redis: Pick<RedisClient, "eval">)
       releaseOccurrence(redis, occurrenceId, claimToken),
   };
 }
-
-export type ScheduledFireTransitions = ReturnType<typeof createScheduledFireTransitions>;

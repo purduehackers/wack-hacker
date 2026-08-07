@@ -302,5 +302,3 @@ export function createRenderTransitions(redis: RedisClient) {
     },
   };
 }
-
-export type RenderTransitions = ReturnType<typeof createRenderTransitions>;

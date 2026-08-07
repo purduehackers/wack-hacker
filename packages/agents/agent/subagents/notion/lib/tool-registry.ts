@@ -31,5 +31,3 @@ export const NOTION_TOOLS = {
   update_page: m_pages.update_page,
   update_page_content: m_pages.update_page_content,
 } as const satisfies Record<string, DomainToolSpec>;
-
-export type NotionToolName = keyof typeof NOTION_TOOLS;

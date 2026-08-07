@@ -27,9 +27,3 @@ export function defineDomainTool<I extends z.ZodType, O>(
 
 export type DomainToolRegistry = Readonly<Record<string, DomainToolSpec<z.ZodType, unknown>>>;
 export type DomainToolName<R extends DomainToolRegistry> = Extract<keyof R, string>;
-export type DomainToolInput<R extends DomainToolRegistry, N extends DomainToolName<R>> = z.output<
-  R[N]["input"]
->;
-export type DomainToolOutput<R extends DomainToolRegistry, N extends DomainToolName<R>> = Awaited<
-  ReturnType<R[N]["execute"]>
->;

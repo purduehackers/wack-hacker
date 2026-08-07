@@ -65,5 +65,3 @@ export const CMS_TOOLS = {
   update_service_account: m_service_accounts.update_service_account,
   delete_service_account: m_service_accounts.delete_service_account,
 } as const satisfies Record<string, DomainToolSpec>;
-
-export type CmsToolName = keyof typeof CMS_TOOLS;

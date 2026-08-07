@@ -86,5 +86,3 @@ export const SENTRY_TOOLS = {
   update_project: m_projects_management.update_project,
   update_team: m_members.update_team,
 } as const satisfies Record<string, DomainToolSpec>;
-
-export type SentryToolName = keyof typeof SENTRY_TOOLS;

@@ -42,5 +42,3 @@ export function createAuthorizationTransitions(redis: Pick<RedisClient, "eval">)
     },
   };
 }
-
-export type AuthorizationTransitions = ReturnType<typeof createAuthorizationTransitions>;

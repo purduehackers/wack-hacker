@@ -98,5 +98,3 @@ export function createHitlTransitions(redis: Pick<RedisClient, "eval">) {
       ) === 1,
   };
 }
-
-export type HitlTransitions = ReturnType<typeof createHitlTransitions>;

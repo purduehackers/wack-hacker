@@ -83,5 +83,3 @@ export const LINEAR_TOOLS = {
   list_invites: m_users.list_invites,
   delete_invite: m_users.delete_invite,
 } as const satisfies Record<string, DomainToolSpec>;
-
-export type LinearToolName = keyof typeof LINEAR_TOOLS;

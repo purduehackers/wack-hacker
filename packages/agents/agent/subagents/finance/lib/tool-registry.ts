@@ -25,5 +25,3 @@ export const FINANCE_TOOLS = {
   list_transactions: m_transactions.list_transactions,
   list_transfers: m_transfers.list_transfers,
 } as const satisfies Record<string, DomainToolSpec>;
-
-export type FinanceToolName = keyof typeof FINANCE_TOOLS;

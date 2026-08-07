@@ -11,5 +11,3 @@ export type HealthReport = z.output<typeof healthReportSchema>;
 
 /** A successful supervisor/release probe must be structurally valid and ready. */
 export const readyHealthReportSchema = healthReportSchema.extend({ ready: z.literal(true) });
-
-export type ReadyHealthReport = z.output<typeof readyHealthReportSchema>;

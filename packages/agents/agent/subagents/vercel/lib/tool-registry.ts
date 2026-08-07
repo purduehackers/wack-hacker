@@ -179,5 +179,3 @@ export const VERCEL_TOOLS = {
   verify_project_domain: m_projects.verify_project_domain,
   whoami: m_account.whoami,
 } as const satisfies Record<string, DomainToolSpec>;
-
-export type VercelToolName = keyof typeof VERCEL_TOOLS;

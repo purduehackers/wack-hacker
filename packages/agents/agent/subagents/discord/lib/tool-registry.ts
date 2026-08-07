@@ -759,5 +759,3 @@ export const DISCORD_TOOLS = {
     },
   }),
 } as const satisfies DiscordToolRegistry;
-
-export type DiscordToolName = keyof typeof DISCORD_TOOLS;

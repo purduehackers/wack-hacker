@@ -528,5 +528,3 @@ export function createQueueTransitions(deps: QueueDeps) {
     purge: (continuationKey: string): Promise<void> => purgeTurns(deps.redis, continuationKey),
   };
 }
-
-export type QueueTransitions = ReturnType<typeof createQueueTransitions>;

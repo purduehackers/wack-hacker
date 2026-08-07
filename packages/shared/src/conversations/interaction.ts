@@ -94,7 +94,7 @@ export interface InteractionClaim {
   readonly receiptIdentity: InteractionReceiptIdentity;
 }
 
-export async function claimInteraction(
+async function claimInteraction(
   redis: Pick<RedisClient, "eval">,
   payload: InteractionPayload,
 ): Promise<InteractionClaim> {
@@ -170,5 +170,3 @@ export function createInteractionTransitions(redis: Pick<RedisClient, "eval" | "
       ),
   };
 }
-
-export type InteractionTransitions = ReturnType<typeof createInteractionTransitions>;

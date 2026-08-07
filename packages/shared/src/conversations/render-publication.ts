@@ -156,5 +156,3 @@ export function createRenderPublicationTransitions(redis: Pick<RedisClient, "eva
     },
   };
 }
-
-export type RenderPublicationTransitions = ReturnType<typeof createRenderPublicationTransitions>;

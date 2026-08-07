@@ -43,5 +43,3 @@ export const FIGMA_TOOLS = {
   update_dev_resource: m_dev_resources.update_dev_resource,
   update_webhook: m_webhooks.update_webhook,
 } as const satisfies Record<string, DomainToolSpec>;
-
-export type FigmaToolName = keyof typeof FIGMA_TOOLS;

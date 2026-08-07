@@ -138,5 +138,3 @@ export const GITHUB_TOOLS = {
   update_repository: m_repositories.update_repository,
   update_webhook: m_organization.update_webhook,
 } as const satisfies Record<string, DomainToolSpec>;
-
-export type GithubToolName = keyof typeof GITHUB_TOOLS;

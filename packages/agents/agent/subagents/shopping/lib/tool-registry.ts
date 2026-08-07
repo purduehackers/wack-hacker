@@ -10,5 +10,3 @@ export const SHOPPING_TOOLS = {
   update_quantity: m_cart.update_quantity,
   view_cart: m_cart.view_cart,
 } as const satisfies Record<string, DomainToolSpec>;
-
-export type ShoppingToolName = keyof typeof SHOPPING_TOOLS;
