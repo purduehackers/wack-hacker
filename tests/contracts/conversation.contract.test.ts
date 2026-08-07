@@ -269,6 +269,42 @@ contractTest("delivery admission recovers lost responses and fences ambiguous wo
   await queue.purge(continuationKey);
 });
 
+contractTest(
+  "queue recovery publishes one durable failed intent for an ambiguous admission",
+  async () => {
+    const redis = contractRedis();
+    const queue = createTurnQueue({ redis });
+    const continuationKey = "30000000000000011";
+    const source = message("40000000000000022", "ambiguous recovery", continuationKey);
+    await queue.enqueue(source);
+    const claimed = await queue.claim(continuationKey);
+    if (Result.isError(claimed)) throw claimed.error;
+    const delivery = claimed.value?.payload;
+    if (delivery === undefined) throw new Error("ambiguous delivery was not claimed");
+
+    const attemptId = crypto.randomUUID();
+    expect(await startTurnDelivery(redis, delivery, attemptId)).toEqual({
+      status: "start",
+      admissionAttemptId: attemptId,
+    });
+    expect(await finishTurnAdmission(redis, continuationKey, attemptId)).toBe(true);
+
+    expect(await queue.recoverAdmission(continuationKey)).toEqual(Result.ok(delivery));
+    const recovered = await createRenderStore(redis).intent(delivery.dispatchId);
+    expect(Result.isOk(recovered) && recovered.value).toMatchObject({
+      dispatchId: delivery.dispatchId,
+      continuationKey,
+      messageId: source.messageId,
+      sessionId: "recovery-required",
+      eveTurnId: "delivery-admission-recovery",
+      revision: 1,
+      phase: "failed",
+    });
+    expect(await queue.recoverAdmission(continuationKey)).toEqual(Result.ok(undefined));
+    await queue.purge(continuationKey);
+  },
+);
+
 contractTest("HITL Lua admits one answer and reset makes the control stale", async () => {
   const redis = contractRedis();
   const queue = createTurnQueue({ redis });
@@ -390,6 +426,32 @@ contractTest("render leases survive renewal through the Upstash-compatible trans
   expect(Array.isArray(after) && after[0]).toBe(token);
   expect(Array.isArray(after) && Number(after[1])).toBeGreaterThan(44_000);
 });
+
+contractTest(
+  "render release and discard preserve claim ownership and terminal outcome",
+  async () => {
+    const redis = contractRedis();
+    const store = createRenderStore(redis);
+    const unownedDispatchId = crypto.randomUUID();
+    const firstToken = await store.claim(unownedDispatchId);
+    if (firstToken === undefined) throw new Error("render lease was not claimed");
+    await store.release(unownedDispatchId, `${firstToken}-stale`);
+    expect(await store.claim(unownedDispatchId)).toBeUndefined();
+    await store.release(unownedDispatchId, firstToken);
+    expect(await store.claim(unownedDispatchId)).toBeDefined();
+
+    const queue = createTurnQueue({ redis });
+    const source = message("40000000000000050", "discard this render", "30000000000000030");
+    const delivery = await startStreamingTurn(redis, queue, source, []);
+    expect((await store.ready()).includes(delivery.dispatchId)).toBe(true);
+    await store.discard(delivery.dispatchId);
+    expect(await store.outcome(delivery.dispatchId)).toBe("discarded");
+    expect((await store.ready()).includes(delivery.dispatchId)).toBe(false);
+    expect(Result.isOk(await store.intent(delivery.dispatchId))).toBe(true);
+    expect(Result.isOk(await store.target(delivery.dispatchId))).toBe(true);
+    await queue.purge(source.continuationKey);
+  },
+);
 
 const callbackFetch: typeof globalThis.fetch = Object.assign(
   async () => {
