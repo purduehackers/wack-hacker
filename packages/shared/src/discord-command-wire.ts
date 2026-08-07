@@ -379,22 +379,32 @@ export const DISCORD_COMMAND_INPUT_SCHEMAS = {
   list_stickers: empty,
   create_sticker: z.strictObject({
     name: z.string().min(2).max(30),
-    description: z.string().max(100).optional(),
+    description: z.union([z.literal(""), z.string().min(2).max(100)]).default(""),
     tags: z.string().min(2).max(200),
     url: httpUrl,
   }),
   edit_sticker: z.strictObject({
     sticker_id: discordSnowflakeSchema,
     name: z.string().min(2).max(30).optional(),
-    description: z.string().max(100).optional(),
+    description: z.string().min(2).max(100).nullable().optional(),
     tags: z.string().min(2).max(200).optional(),
   }),
   delete_sticker: z.strictObject({ sticker_id: discordSnowflakeSchema }),
 
-  list_threads: z.strictObject({
-    channel_id: channelId.optional(),
-    include_archived: z.boolean().default(false),
-  }),
+  list_threads: z
+    .strictObject({
+      channel_id: channelId.optional(),
+      include_archived: z.boolean().default(false),
+    })
+    .superRefine((value, ctx) => {
+      if (value.include_archived && value.channel_id === undefined) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["channel_id"],
+          message: "include_archived requires channel_id",
+        });
+      }
+    }),
   create_thread: z.strictObject({
     channel_id: channelId,
     name: z.string().min(1).max(100),
@@ -446,6 +456,7 @@ const autoModRuleOutput = z.strictObject({
   eventType: z.number().int(),
   triggerType: z.number().int(),
   enabled: z.boolean(),
+  // Wire compatibility: provider-owned nested automod JSON remains pass-through in this projection.
   triggerMetadata: z.json(),
   actions: z.array(z.json()),
   exemptRoles: z.array(discordSnowflakeSchema),
@@ -465,15 +476,15 @@ const memberOutput = z.strictObject({
   displayName: z.string(),
   nickname: z.string().nullable(),
   roles: z.array(discordSnowflakeSchema),
-  joinedAt: z.string().nullable(),
+  joinedAt: isoDateTime.nullable(),
   isBot: z.boolean(),
 });
 const eventOutput = z.strictObject({
   id: discordSnowflakeSchema,
   name: z.string(),
   description: z.string().nullable(),
-  scheduledStartAt: z.string().nullable(),
-  scheduledEndAt: z.string().nullable(),
+  scheduledStartAt: isoDateTime.nullable(),
+  scheduledEndAt: isoDateTime.nullable(),
   status: z.number().int(),
   entityType: z.number().int(),
   channelId: discordSnowflakeSchema.nullable(),
@@ -488,6 +499,7 @@ const emojiOutput = z.strictObject({
   animated: z.boolean(),
   url: httpUrl.nullable(),
   roles: z.array(discordSnowflakeSchema),
+  // Legacy wire compatibility: this key has always carried the emoji snowflake, not a timestamp.
   createdAt: discordSnowflakeSchema.nullable(),
 });
 const stickerOutput = z.strictObject({
@@ -508,7 +520,7 @@ const threadOutput = z.strictObject({
   autoArchiveDuration: z.number().int().nullable(),
   messageCount: z.number().int(),
   memberCount: z.number().int(),
-  createdAt: z.string().nullable(),
+  createdAt: isoDateTime.nullable(),
   type: z.string(),
 });
 const webhookOutput = z.strictObject({
@@ -516,6 +528,7 @@ const webhookOutput = z.strictObject({
   name: z.string().nullable(),
   channelId: discordSnowflakeSchema.nullable(),
   avatar: httpUrl.nullable(),
+  // Legacy wire compatibility: this key has always carried the webhook snowflake, not a timestamp.
   createdAt: discordSnowflakeSchema,
 });
 const messageOutput = z.strictObject({
@@ -524,8 +537,8 @@ const messageOutput = z.strictObject({
   authorId: discordSnowflakeSchema,
   isBot: z.boolean(),
   content: z.string(),
-  timestamp: z.string(),
-  editedTimestamp: z.string().nullable(),
+  timestamp: isoDateTime,
+  editedTimestamp: isoDateTime.nullable(),
   pinned: z.boolean(),
   attachments: z.array(z.strictObject({ name: z.string(), url: httpUrl })),
   embeds: z.number().int().nonnegative(),
@@ -540,7 +553,7 @@ const inviteOutput = z.strictObject({
   maxUses: z.number().int(),
   maxAge: z.number().int(),
   temporary: z.boolean(),
-  expiresAt: z.string().nullable(),
+  expiresAt: isoDateTime.nullable(),
 });
 const compactInviteOutput = z.strictObject({
   code: z.string(),
@@ -549,7 +562,7 @@ const compactInviteOutput = z.strictObject({
   maxAge: z.number().int(),
   maxUses: z.number().int(),
   temporary: z.boolean().optional(),
-  expiresAt: z.string().nullable(),
+  expiresAt: isoDateTime.nullable(),
 });
 const roleOutput = z.strictObject({
   id: discordSnowflakeSchema,
@@ -582,6 +595,7 @@ export const DISCORD_COMMAND_OUTPUT_SCHEMAS = {
     boostLevel: z.number().int(),
     boostCount: z.number().int().optional(),
     verificationLevel: z.number().int(),
+    // Legacy wire compatibility: this key has always carried the guild snowflake, not a timestamp.
     createdAt: discordSnowflakeSchema,
   }),
   list_channels: z.array(
@@ -659,7 +673,7 @@ export const DISCORD_COMMAND_OUTPUT_SCHEMAS = {
   ),
   kick_member: z.strictObject({ kicked: z.literal(true), member_id: discordSnowflakeSchema }),
   timeout_member: z.strictObject({
-    timeout_until: z.string(),
+    timeout_until: isoDateTime,
     member_id: discordSnowflakeSchema,
   }),
   clear_timeout: z.strictObject({
@@ -667,7 +681,7 @@ export const DISCORD_COMMAND_OUTPUT_SCHEMAS = {
     member_id: discordSnowflakeSchema,
   }),
   get_member: z.union([
-    memberOutput.extend({ premiumSince: z.string().nullable(), avatar: httpUrl.nullable() }),
+    memberOutput.extend({ premiumSince: isoDateTime.nullable(), avatar: httpUrl.nullable() }),
     z.strictObject({ error: z.literal("Member not found") }),
   ]),
   set_nickname: z.strictObject({

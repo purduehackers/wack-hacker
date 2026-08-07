@@ -273,3 +273,134 @@ test("rejects extra semantic output keys and malformed operation output", () => 
   expect(Result.isError(decodeDiscordCommandOutput("list_roles", {}))).toBe(true);
   expect(Result.isError(decodeDiscordCommandOutput("get_server_info", {}))).toBe(true);
 });
+
+test("applies Discord sticker description compatibility without weakening edit semantics", () => {
+  const created = decodeDiscordCommand({
+    operation: "create_sticker",
+    input: {
+      name: "wave",
+      tags: "wave",
+      url: "https://cdn.example.test/sticker.gif",
+    },
+  });
+  expect(created).toMatchObject({ value: { input: { description: "" } } });
+
+  for (const description of ["", "ok"]) {
+    expect(
+      Result.isError(
+        decodeDiscordCommand({
+          operation: "create_sticker",
+          input: {
+            name: "wave",
+            description,
+            tags: "wave",
+            url: "https://cdn.example.test/sticker.gif",
+          },
+        }),
+      ),
+      `create/${description}`,
+    ).toBe(false);
+  }
+  expect(
+    Result.isError(
+      decodeDiscordCommand({
+        operation: "create_sticker",
+        input: {
+          name: "wave",
+          description: "x",
+          tags: "wave",
+          url: "https://cdn.example.test/sticker.gif",
+        },
+      }),
+    ),
+  ).toBe(true);
+
+  for (const input of [
+    { sticker_id: id },
+    { sticker_id: id, description: null },
+    { sticker_id: id, description: "updated" },
+  ]) {
+    expect(
+      Result.isError(decodeDiscordCommand({ operation: "edit_sticker", input })),
+      JSON.stringify(input),
+    ).toBe(false);
+  }
+  expect(
+    Result.isError(
+      decodeDiscordCommand({
+        operation: "edit_sticker",
+        input: { sticker_id: id, description: "" },
+      }),
+    ),
+  ).toBe(true);
+});
+
+test("requires a channel when archived Discord threads are requested", () => {
+  expect(
+    Result.isError(
+      decodeDiscordCommand({ operation: "list_threads", input: { include_archived: true } }),
+    ),
+  ).toBe(true);
+  expect(
+    Result.isError(
+      decodeDiscordCommand({
+        operation: "list_threads",
+        input: { channel_id: id, include_archived: true },
+      }),
+    ),
+  ).toBe(false);
+});
+
+test("validates real Discord timestamps while preserving legacy snowflake-valued createdAt keys", () => {
+  expect(
+    Result.isError(
+      decodeDiscordCommandOutput("get_message", { ...message, timestamp: "not-a-timestamp" }),
+    ),
+  ).toBe(true);
+  expect(Result.isError(decodeDiscordCommandOutput("get_message", message))).toBe(false);
+
+  expect(Result.isError(decodeDiscordCommandOutput("create_webhook", webhook))).toBe(false);
+  expect(Result.isError(decodeDiscordCommandOutput("create_emoji", emoji))).toBe(false);
+  expect(
+    Result.isError(decodeDiscordCommandOutput("get_server_info", VALID_OUTPUTS.get_server_info)),
+  ).toBe(false);
+  expect(
+    Result.isError(
+      decodeDiscordCommandOutput("create_webhook", {
+        ...webhook,
+        createdAt: "2026-08-07T12:00:00.000Z",
+      }),
+    ),
+  ).toBe(true);
+  expect(
+    Result.isError(
+      decodeDiscordCommandOutput("create_emoji", {
+        ...emoji,
+        createdAt: "2026-08-07T12:00:00.000Z",
+      }),
+    ),
+  ).toBe(true);
+  expect(
+    Result.isError(
+      decodeDiscordCommandOutput("get_server_info", {
+        ...VALID_OUTPUTS.get_server_info,
+        createdAt: "2026-08-07T12:00:00.000Z",
+      }),
+    ),
+  ).toBe(true);
+});
+
+test("keeps provider-owned nested automod JSON as an intentional wire pass-through", () => {
+  expect(
+    Result.isError(
+      decodeDiscordCommandOutput("get_auto_mod_rule", {
+        ...autoModRule,
+        triggerMetadata: {
+          keyword_filter: ["blocked"],
+          future_provider_field: { nested: true },
+        },
+        actions: [{ type: 1, metadata: { future_provider_field: [1, 2, 3] } }],
+      }),
+    ),
+  ).toBe(false);
+});
