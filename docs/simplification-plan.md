@@ -10,7 +10,7 @@
 
 The original audit at `2cec01c` covered 421 tracked TypeScript files and 52,853
 lines with 168 passing tests. After Groups A and B, the repository has 435
-tracked TypeScript files and 54,614 lines; 185 tests pass (agents 120, bot 36,
+tracked TypeScript files and 54,645 lines; 185 tests pass (agents 120, bot 36,
 shared 20, supervisor 9). The real-Redis suite separately runs 10 contract tests
 with 64 assertions against production Lua.
 The largest accidental systems and high-risk gaps are:
@@ -297,8 +297,8 @@ All phase-0 contracts, crash-point rendering, malformed persisted records,
 reset/HITL races, startup recovery, and existing exact-error assertions. No key,
 TTL, wire payload, or custom-ID change is allowed in this slice.
 
-**Implemented result:** 2,669 production TypeScript lines were added or moved
-and 2,453 deleted (net +216); tests grew. The store intentionally keeps the Lua
+**Implemented result:** 2,670 production TypeScript lines were added or moved
+and 2,453 deleted (net +217); tests grew. The store intentionally keeps the Lua
 and branch-heavy durability logic, so the result is ownership centralization,
 not aggressive line-count deletion. The old router, render coordinator,
 in-memory terminal waiter, mutable callback cycle, and runtime-owned Redis
