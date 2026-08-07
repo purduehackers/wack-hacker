@@ -1,9 +1,9 @@
 import { defineDomainAuditHook } from "../../../lib/policy/domain-audit-hook.ts";
-import { descriptorForTool, isNotionToolName } from "../lib/runtime.ts";
+import { NOTION_RUNTIME } from "../lib/runtime.ts";
 
 export default defineDomainAuditHook({
-  descriptorForTool,
+  descriptorForTool: NOTION_RUNTIME.descriptorForTool,
   domain: "notion",
-  isToolName: isNotionToolName,
+  isToolName: NOTION_RUNTIME.isToolName,
   label: "Notion",
 });

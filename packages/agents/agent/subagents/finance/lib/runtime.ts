@@ -4,7 +4,7 @@ import { env } from "../../../lib/env.ts";
 import { createDomainRuntime } from "../../../lib/policy/domain-runtime.ts";
 import { FINANCE_TOOLS } from "./tool-registry.ts";
 
-const runtime = createDomainRuntime({
+export const FINANCE_RUNTIME = createDomainRuntime({
   domain: "finance",
   label: "Finance",
   service: "Finance",
@@ -18,10 +18,3 @@ const runtime = createDomainRuntime({
         })
       : undefined,
 });
-
-export const descriptorForTool = runtime.descriptorForTool;
-export const isFinanceToolName = runtime.isToolName;
-export const FINANCE_SUBAGENT_DESCRIPTOR = runtime.subagentDescriptor;
-export const visibleFinanceToolNames = runtime.visibleToolNames;
-export const approvalForFinanceTool = runtime.approvalForTool;
-export const executeFinanceTool = runtime.executeTool;

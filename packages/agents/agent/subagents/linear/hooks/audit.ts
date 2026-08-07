@@ -1,9 +1,9 @@
 import { defineDomainAuditHook } from "../../../lib/policy/domain-audit-hook.ts";
-import { descriptorForTool, isLinearToolName } from "../lib/runtime.ts";
+import { LINEAR_RUNTIME } from "../lib/runtime.ts";
 
 export default defineDomainAuditHook({
-  descriptorForTool,
+  descriptorForTool: LINEAR_RUNTIME.descriptorForTool,
   domain: "linear",
-  isToolName: isLinearToolName,
+  isToolName: LINEAR_RUNTIME.isToolName,
   label: "Linear",
 });

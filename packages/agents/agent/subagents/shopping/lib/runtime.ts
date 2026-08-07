@@ -4,7 +4,7 @@ import { env } from "../../../lib/env.ts";
 import { createDomainRuntime } from "../../../lib/policy/domain-runtime.ts";
 import { SHOPPING_TOOLS } from "./tool-registry.ts";
 
-const runtime = createDomainRuntime({
+export const SHOPPING_RUNTIME = createDomainRuntime({
   domain: "shopping",
   label: "Shopping",
   service: "Shopping",
@@ -23,10 +23,3 @@ const runtime = createDomainRuntime({
       : new UpstreamError({ service: "Shopping", status: 401, detail: missing });
   },
 });
-
-export const descriptorForTool = runtime.descriptorForTool;
-export const isShoppingToolName = runtime.isToolName;
-export const SHOPPING_SUBAGENT_DESCRIPTOR = runtime.subagentDescriptor;
-export const visibleShoppingToolNames = runtime.visibleToolNames;
-export const approvalForShoppingTool = runtime.approvalForTool;
-export const executeShoppingTool = runtime.executeTool;

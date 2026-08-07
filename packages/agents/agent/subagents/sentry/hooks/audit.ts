@@ -1,9 +1,9 @@
 import { defineDomainAuditHook } from "../../../lib/policy/domain-audit-hook.ts";
-import { descriptorForTool, isSentryToolName } from "../lib/runtime.ts";
+import { SENTRY_RUNTIME } from "../lib/runtime.ts";
 
 export default defineDomainAuditHook({
-  descriptorForTool,
+  descriptorForTool: SENTRY_RUNTIME.descriptorForTool,
   domain: "sentry",
-  isToolName: isSentryToolName,
+  isToolName: SENTRY_RUNTIME.isToolName,
   label: "Sentry",
 });

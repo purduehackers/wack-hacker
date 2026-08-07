@@ -3,7 +3,7 @@ import { defineAgent, defineDynamic } from "eve";
 
 import { SUBAGENT_OUTPUT_SCHEMA } from "../../lib/core/subagent-output.ts";
 import { decideCapability, requirePrincipal } from "../../lib/policy/index.ts";
-import { DISCORD_SUBAGENT_DESCRIPTOR } from "./lib/runtime.ts";
+import { DISCORD_RUNTIME } from "./lib/runtime.ts";
 
 export default defineDynamic({
   events: {
@@ -13,7 +13,7 @@ export default defineDynamic({
         // oxlint-disable-next-line unicorn/no-null -- Eve dynamic resolvers use null to hide a capability.
         return null;
       }
-      const decision = decideCapability(principal.value, DISCORD_SUBAGENT_DESCRIPTOR);
+      const decision = decideCapability(principal.value, DISCORD_RUNTIME.subagentDescriptor);
       if (Result.isError(decision) || !decision.value.discover) {
         // oxlint-disable-next-line unicorn/no-null -- Eve dynamic resolvers use null to hide a capability.
         return null;

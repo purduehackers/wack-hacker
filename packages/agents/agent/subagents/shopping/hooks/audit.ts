@@ -1,9 +1,9 @@
 import { defineDomainAuditHook } from "../../../lib/policy/domain-audit-hook.ts";
-import { descriptorForTool, isShoppingToolName } from "../lib/runtime.ts";
+import { SHOPPING_RUNTIME } from "../lib/runtime.ts";
 
 export default defineDomainAuditHook({
-  descriptorForTool,
+  descriptorForTool: SHOPPING_RUNTIME.descriptorForTool,
   domain: "shopping",
-  isToolName: isShoppingToolName,
+  isToolName: SHOPPING_RUNTIME.isToolName,
   label: "Shopping",
 });

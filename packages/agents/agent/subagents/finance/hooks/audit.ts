@@ -1,9 +1,9 @@
 import { defineDomainAuditHook } from "../../../lib/policy/domain-audit-hook.ts";
-import { descriptorForTool, isFinanceToolName } from "../lib/runtime.ts";
+import { FINANCE_RUNTIME } from "../lib/runtime.ts";
 
 export default defineDomainAuditHook({
-  descriptorForTool,
+  descriptorForTool: FINANCE_RUNTIME.descriptorForTool,
   domain: "finance",
-  isToolName: isFinanceToolName,
+  isToolName: FINANCE_RUNTIME.isToolName,
   label: "Finance",
 });

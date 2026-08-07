@@ -4,7 +4,7 @@ import { env } from "../../../lib/env.ts";
 import { createDomainRuntime } from "../../../lib/policy/domain-runtime.ts";
 import { CMS_TOOLS } from "./tool-registry.ts";
 
-const runtime = createDomainRuntime({
+export const CMS_RUNTIME = createDomainRuntime({
   domain: "cms",
   label: "CMS",
   service: "Payload CMS",
@@ -18,10 +18,3 @@ const runtime = createDomainRuntime({
         })
       : undefined,
 });
-
-export const descriptorForTool = runtime.descriptorForTool;
-export const isCmsToolName = runtime.isToolName;
-export const CMS_SUBAGENT_DESCRIPTOR = runtime.subagentDescriptor;
-export const visibleCmsToolNames = runtime.visibleToolNames;
-export const approvalForCmsTool = runtime.approvalForTool;
-export const executeCmsTool = runtime.executeTool;

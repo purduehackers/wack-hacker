@@ -1,9 +1,9 @@
 import { defineDomainAuditHook } from "../../../lib/policy/domain-audit-hook.ts";
-import { descriptorForTool, isGithubToolName } from "../lib/runtime.ts";
+import { GITHUB_RUNTIME } from "../lib/runtime.ts";
 
 export default defineDomainAuditHook({
-  descriptorForTool,
+  descriptorForTool: GITHUB_RUNTIME.descriptorForTool,
   domain: "github",
-  isToolName: isGithubToolName,
+  isToolName: GITHUB_RUNTIME.isToolName,
   label: "GitHub",
 });

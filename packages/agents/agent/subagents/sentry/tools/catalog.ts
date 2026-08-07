@@ -1,11 +1,7 @@
 import { defineDynamic, defineTool } from "eve/tools";
 
 import { guardToolExecution } from "../../../lib/core/serialization.ts";
-import {
-  approvalForSentryTool,
-  executeSentryTool,
-  visibleSentryToolNames,
-} from "../lib/runtime.ts";
+import { SENTRY_RUNTIME } from "../lib/runtime.ts";
 import { SENTRY_TOOLS } from "../lib/tool-registry.ts";
 
 const SENTRY_TOOL_NAMES = Object.keys(SENTRY_TOOLS);
@@ -13,7 +9,7 @@ const SENTRY_TOOL_NAMES = Object.keys(SENTRY_TOOLS);
 export default defineDynamic({
   events: {
     "step.started": async (_event, ctx) => {
-      const visibleNames = await visibleSentryToolNames(
+      const visibleNames = await SENTRY_RUNTIME.visibleToolNames(
         ctx.session.auth.current,
         SENTRY_TOOL_NAMES,
       );
@@ -23,9 +19,12 @@ export default defineDynamic({
         tools[toolName] = defineTool({
           description: spec.description,
           inputSchema: spec.input,
-          approval: async (approvalCtx) => await approvalForSentryTool(toolName, approvalCtx),
+          approval: async (approvalCtx) =>
+            await SENTRY_RUNTIME.approvalForTool(toolName, approvalCtx),
           execute: async (input, toolCtx) =>
-            guardToolExecution(async () => await executeSentryTool(toolName, input, toolCtx)),
+            guardToolExecution(
+              async () => await SENTRY_RUNTIME.executeTool(toolName, input, toolCtx),
+            ),
         });
       }
       return tools;

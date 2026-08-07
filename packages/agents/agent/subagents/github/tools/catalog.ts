@@ -1,11 +1,7 @@
 import { defineDynamic, defineTool } from "eve/tools";
 
 import { guardToolExecution } from "../../../lib/core/serialization.ts";
-import {
-  approvalForGithubTool,
-  executeGithubTool,
-  visibleGithubToolNames,
-} from "../lib/runtime.ts";
+import { GITHUB_RUNTIME } from "../lib/runtime.ts";
 import { GITHUB_TOOLS } from "../lib/tool-registry.ts";
 
 const GITHUB_TOOL_NAMES = Object.keys(GITHUB_TOOLS);
@@ -13,7 +9,7 @@ const GITHUB_TOOL_NAMES = Object.keys(GITHUB_TOOLS);
 export default defineDynamic({
   events: {
     "step.started": async (_event, ctx) => {
-      const visibleNames = await visibleGithubToolNames(
+      const visibleNames = await GITHUB_RUNTIME.visibleToolNames(
         ctx.session.auth.current,
         GITHUB_TOOL_NAMES,
       );
@@ -23,9 +19,12 @@ export default defineDynamic({
         tools[toolName] = defineTool({
           description: spec.description,
           inputSchema: spec.input,
-          approval: async (approvalCtx) => await approvalForGithubTool(toolName, approvalCtx),
+          approval: async (approvalCtx) =>
+            await GITHUB_RUNTIME.approvalForTool(toolName, approvalCtx),
           execute: async (input, toolCtx) =>
-            guardToolExecution(async () => await executeGithubTool(toolName, input, toolCtx)),
+            guardToolExecution(
+              async () => await GITHUB_RUNTIME.executeTool(toolName, input, toolCtx),
+            ),
         });
       }
       return tools;

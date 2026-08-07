@@ -1,9 +1,9 @@
 import { defineDomainAuditHook } from "../../../lib/policy/domain-audit-hook.ts";
-import { descriptorForTool, isOutreachToolName } from "../lib/runtime.ts";
+import { OUTREACH_RUNTIME } from "../lib/runtime.ts";
 
 export default defineDomainAuditHook({
-  descriptorForTool,
+  descriptorForTool: OUTREACH_RUNTIME.descriptorForTool,
   domain: "outreach",
-  isToolName: isOutreachToolName,
+  isToolName: OUTREACH_RUNTIME.isToolName,
   label: "Outreach",
 });

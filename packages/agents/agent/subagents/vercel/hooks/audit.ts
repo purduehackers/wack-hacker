@@ -1,9 +1,9 @@
 import { defineDomainAuditHook } from "../../../lib/policy/domain-audit-hook.ts";
-import { descriptorForTool, isVercelToolName } from "../lib/runtime.ts";
+import { VERCEL_RUNTIME } from "../lib/runtime.ts";
 
 export default defineDomainAuditHook({
-  descriptorForTool,
+  descriptorForTool: VERCEL_RUNTIME.descriptorForTool,
   domain: "vercel",
-  isToolName: isVercelToolName,
+  isToolName: VERCEL_RUNTIME.isToolName,
   label: "Vercel",
 });

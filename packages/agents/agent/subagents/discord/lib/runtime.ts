@@ -3,7 +3,7 @@ import { RateLimited, Transient, UpstreamError } from "@repo/shared/errors";
 import { createDomainRuntime } from "../../../lib/policy/domain-runtime.ts";
 import { DISCORD_TOOLS } from "./tool-registry.ts";
 
-const runtime = createDomainRuntime({
+export const DISCORD_RUNTIME = createDomainRuntime({
   domain: "discord",
   label: "Discord",
   service: "discord-command-bot",
@@ -23,10 +23,3 @@ const runtime = createDomainRuntime({
     });
   },
 });
-
-export const descriptorForTool = runtime.descriptorForTool;
-export const isDiscordToolName = runtime.isToolName;
-export const DISCORD_SUBAGENT_DESCRIPTOR = runtime.subagentDescriptor;
-export const visibleDiscordToolNames = runtime.visibleToolNames;
-export const approvalForDiscordTool = runtime.approvalForTool;
-export const executeDiscordTool = runtime.executeTool;

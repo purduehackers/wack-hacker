@@ -9,7 +9,7 @@ import {
 } from "../../../lib/policy/provider-redaction.ts";
 import { GITHUB_TOOLS } from "./tool-registry.ts";
 
-const runtime = createDomainRuntime({
+export const GITHUB_RUNTIME = createDomainRuntime({
   domain: "github",
   label: "GitHub",
   service: "GitHub",
@@ -29,10 +29,3 @@ const runtime = createDomainRuntime({
   projectOutput: projectProviderOutput,
   sanitizeErrorText: redactProviderText,
 });
-
-export const descriptorForTool = runtime.descriptorForTool;
-export const isGithubToolName = runtime.isToolName;
-export const GITHUB_SUBAGENT_DESCRIPTOR = runtime.subagentDescriptor;
-export const visibleGithubToolNames = runtime.visibleToolNames;
-export const approvalForGithubTool = runtime.approvalForTool;
-export const executeGithubTool = runtime.executeTool;

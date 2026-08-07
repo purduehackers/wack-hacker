@@ -1,9 +1,9 @@
 import { defineDomainAuditHook } from "../../../lib/policy/domain-audit-hook.ts";
-import { descriptorForTool, isFigmaToolName } from "../lib/runtime.ts";
+import { FIGMA_RUNTIME } from "../lib/runtime.ts";
 
 export default defineDomainAuditHook({
-  descriptorForTool,
+  descriptorForTool: FIGMA_RUNTIME.descriptorForTool,
   domain: "figma",
-  isToolName: isFigmaToolName,
+  isToolName: FIGMA_RUNTIME.isToolName,
   label: "Figma",
 });

@@ -4,7 +4,7 @@ import { env } from "../../../lib/env.ts";
 import { createDomainRuntime } from "../../../lib/policy/domain-runtime.ts";
 import { FIGMA_TOOLS } from "./tool-registry.ts";
 
-const runtime = createDomainRuntime({
+export const FIGMA_RUNTIME = createDomainRuntime({
   domain: "figma",
   label: "Figma",
   service: "Figma",
@@ -27,10 +27,3 @@ const runtime = createDomainRuntime({
     return undefined;
   },
 });
-
-export const descriptorForTool = runtime.descriptorForTool;
-export const isFigmaToolName = runtime.isToolName;
-export const FIGMA_SUBAGENT_DESCRIPTOR = runtime.subagentDescriptor;
-export const visibleFigmaToolNames = runtime.visibleToolNames;
-export const approvalForFigmaTool = runtime.approvalForTool;
-export const executeFigmaTool = runtime.executeTool;

@@ -1,11 +1,7 @@
 import { defineDynamic, defineTool } from "eve/tools";
 
 import { guardToolExecution } from "../../../lib/core/serialization.ts";
-import {
-  approvalForFinanceTool,
-  executeFinanceTool,
-  visibleFinanceToolNames,
-} from "../lib/runtime.ts";
+import { FINANCE_RUNTIME } from "../lib/runtime.ts";
 import { FINANCE_TOOLS } from "../lib/tool-registry.ts";
 
 const FINANCE_TOOL_NAMES = Object.keys(FINANCE_TOOLS);
@@ -13,7 +9,7 @@ const FINANCE_TOOL_NAMES = Object.keys(FINANCE_TOOLS);
 export default defineDynamic({
   events: {
     "step.started": async (_event, ctx) => {
-      const visibleNames = await visibleFinanceToolNames(
+      const visibleNames = await FINANCE_RUNTIME.visibleToolNames(
         ctx.session.auth.current,
         FINANCE_TOOL_NAMES,
       );
@@ -23,9 +19,12 @@ export default defineDynamic({
         tools[toolName] = defineTool({
           description: spec.description,
           inputSchema: spec.input,
-          approval: async (approvalCtx) => await approvalForFinanceTool(toolName, approvalCtx),
+          approval: async (approvalCtx) =>
+            await FINANCE_RUNTIME.approvalForTool(toolName, approvalCtx),
           execute: async (input, toolCtx) =>
-            guardToolExecution(async () => await executeFinanceTool(toolName, input, toolCtx)),
+            guardToolExecution(
+              async () => await FINANCE_RUNTIME.executeTool(toolName, input, toolCtx),
+            ),
         });
       }
       return tools;

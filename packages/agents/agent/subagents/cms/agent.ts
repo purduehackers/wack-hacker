@@ -4,14 +4,14 @@ import { defineAgent, defineDynamic } from "eve";
 import { SUBAGENT_OUTPUT_SCHEMA } from "../../lib/core/subagent-output.ts";
 import { decideCapability } from "../../lib/policy/engine.ts";
 import { requirePrincipal } from "../../lib/policy/principal.ts";
-import { CMS_SUBAGENT_DESCRIPTOR } from "./lib/runtime.ts";
+import { CMS_RUNTIME } from "./lib/runtime.ts";
 
 export default defineDynamic({
   events: {
     "turn.started": (_event, ctx) => {
       const principal = requirePrincipal(ctx.session.auth.current);
       if (Result.isError(principal)) return undefined;
-      const decision = decideCapability(principal.value, CMS_SUBAGENT_DESCRIPTOR);
+      const decision = decideCapability(principal.value, CMS_RUNTIME.subagentDescriptor);
       if (Result.isError(decision) || !decision.value.discover) return undefined;
       return defineAgent({
         description:

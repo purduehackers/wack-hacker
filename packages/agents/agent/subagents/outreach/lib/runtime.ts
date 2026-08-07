@@ -49,7 +49,7 @@ const NOTION_TOOL_NAMES = new Set<OutreachToolName>([
 ]);
 const HUNTER_TOOL_NAMES = new Set<OutreachToolName>(["find_email_for_lead", "verify_email"]);
 
-const runtime = createDomainRuntime({
+export const OUTREACH_RUNTIME = createDomainRuntime({
   domain: "outreach",
   label: "Outreach",
   service: "Outreach",
@@ -86,10 +86,3 @@ const runtime = createDomainRuntime({
     return undefined;
   },
 });
-
-export const descriptorForTool = runtime.descriptorForTool;
-export const isOutreachToolName = runtime.isToolName;
-export const OUTREACH_SUBAGENT_DESCRIPTOR = runtime.subagentDescriptor;
-export const visibleOutreachToolNames = runtime.visibleToolNames;
-export const approvalForOutreachTool = runtime.approvalForTool;
-export const executeOutreachTool = runtime.executeTool;

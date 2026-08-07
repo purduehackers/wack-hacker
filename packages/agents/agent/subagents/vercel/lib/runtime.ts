@@ -9,7 +9,7 @@ import {
 } from "../../../lib/policy/provider-redaction.ts";
 import { VERCEL_TOOLS } from "./tool-registry.ts";
 
-const runtime = createDomainRuntime({
+export const VERCEL_RUNTIME = createDomainRuntime({
   domain: "vercel",
   label: "Vercel",
   service: "Vercel",
@@ -26,10 +26,3 @@ const runtime = createDomainRuntime({
   projectOutput: projectProviderOutput,
   sanitizeErrorText: redactProviderText,
 });
-
-export const descriptorForTool = runtime.descriptorForTool;
-export const isVercelToolName = runtime.isToolName;
-export const VERCEL_SUBAGENT_DESCRIPTOR = runtime.subagentDescriptor;
-export const visibleVercelToolNames = runtime.visibleToolNames;
-export const approvalForVercelTool = runtime.approvalForTool;
-export const executeVercelTool = runtime.executeTool;

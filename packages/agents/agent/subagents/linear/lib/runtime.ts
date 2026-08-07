@@ -4,7 +4,7 @@ import { env } from "../../../lib/env.ts";
 import { createDomainRuntime } from "../../../lib/policy/domain-runtime.ts";
 import { LINEAR_TOOLS } from "./tool-registry.ts";
 
-const runtime = createDomainRuntime({
+export const LINEAR_RUNTIME = createDomainRuntime({
   domain: "linear",
   label: "Linear",
   service: "Linear",
@@ -18,10 +18,3 @@ const runtime = createDomainRuntime({
         })
       : undefined,
 });
-
-export const descriptorForTool = runtime.descriptorForTool;
-export const isLinearToolName = runtime.isToolName;
-export const LINEAR_SUBAGENT_DESCRIPTOR = runtime.subagentDescriptor;
-export const visibleLinearToolNames = runtime.visibleToolNames;
-export const approvalForLinearTool = runtime.approvalForTool;
-export const executeLinearTool = runtime.executeTool;

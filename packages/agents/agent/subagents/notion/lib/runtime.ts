@@ -4,7 +4,7 @@ import { env } from "../../../lib/env.ts";
 import { createDomainRuntime } from "../../../lib/policy/domain-runtime.ts";
 import { NOTION_TOOLS } from "./tool-registry.ts";
 
-const runtime = createDomainRuntime({
+export const NOTION_RUNTIME = createDomainRuntime({
   domain: "notion",
   label: "Notion",
   service: "Notion",
@@ -18,10 +18,3 @@ const runtime = createDomainRuntime({
         })
       : undefined,
 });
-
-export const descriptorForTool = runtime.descriptorForTool;
-export const isNotionToolName = runtime.isToolName;
-export const NOTION_SUBAGENT_DESCRIPTOR = runtime.subagentDescriptor;
-export const visibleNotionToolNames = runtime.visibleToolNames;
-export const approvalForNotionTool = runtime.approvalForTool;
-export const executeNotionTool = runtime.executeTool;

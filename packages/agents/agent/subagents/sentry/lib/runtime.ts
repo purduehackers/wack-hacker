@@ -9,7 +9,7 @@ import {
 } from "../../../lib/policy/provider-redaction.ts";
 import { SENTRY_TOOLS } from "./tool-registry.ts";
 
-const runtime = createDomainRuntime({
+export const SENTRY_RUNTIME = createDomainRuntime({
   domain: "sentry",
   label: "Sentry",
   service: "Sentry",
@@ -26,10 +26,3 @@ const runtime = createDomainRuntime({
   projectOutput: projectProviderOutput,
   sanitizeErrorText: redactProviderText,
 });
-
-export const descriptorForTool = runtime.descriptorForTool;
-export const isSentryToolName = runtime.isToolName;
-export const SENTRY_SUBAGENT_DESCRIPTOR = runtime.subagentDescriptor;
-export const visibleSentryToolNames = runtime.visibleToolNames;
-export const approvalForSentryTool = runtime.approvalForTool;
-export const executeSentryTool = runtime.executeTool;

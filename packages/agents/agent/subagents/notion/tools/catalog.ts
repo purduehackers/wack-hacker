@@ -1,11 +1,7 @@
 import { defineDynamic, defineTool } from "eve/tools";
 
 import { guardToolExecution } from "../../../lib/core/serialization.ts";
-import {
-  approvalForNotionTool,
-  executeNotionTool,
-  visibleNotionToolNames,
-} from "../lib/runtime.ts";
+import { NOTION_RUNTIME } from "../lib/runtime.ts";
 import { NOTION_TOOLS } from "../lib/tool-registry.ts";
 
 const NOTION_TOOL_NAMES = Object.keys(NOTION_TOOLS);
@@ -13,7 +9,7 @@ const NOTION_TOOL_NAMES = Object.keys(NOTION_TOOLS);
 export default defineDynamic({
   events: {
     "step.started": async (_event, ctx) => {
-      const visibleNames = await visibleNotionToolNames(
+      const visibleNames = await NOTION_RUNTIME.visibleToolNames(
         ctx.session.auth.current,
         NOTION_TOOL_NAMES,
       );
@@ -23,9 +19,12 @@ export default defineDynamic({
         tools[toolName] = defineTool({
           description: spec.description,
           inputSchema: spec.input,
-          approval: async (approvalCtx) => await approvalForNotionTool(toolName, approvalCtx),
+          approval: async (approvalCtx) =>
+            await NOTION_RUNTIME.approvalForTool(toolName, approvalCtx),
           execute: async (input, toolCtx) =>
-            guardToolExecution(async () => await executeNotionTool(toolName, input, toolCtx)),
+            guardToolExecution(
+              async () => await NOTION_RUNTIME.executeTool(toolName, input, toolCtx),
+            ),
         });
       }
       return tools;
