@@ -1,8 +1,9 @@
 /** Durable Discord adapter state and its per-turn transitions. */
 
 import type { DeliveryPayload, RenderAuthorization, RenderInputRequest } from "@repo/shared/wire";
+import type { SessionAuthContext } from "eve/context";
 
-type AuthAttributes = Readonly<Record<string, string | readonly string[]>>;
+type AuthAttributes = SessionAuthContext["attributes"];
 
 export interface DiscordChannelState {
   channelId: string;

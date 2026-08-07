@@ -8,10 +8,8 @@ import type { ApprovalContext } from "eve/tools/approval";
 import { requirePrincipal } from "./policy/principal.ts";
 import { approveScheduleMutation, requireScheduleOwner } from "./schedule-owner.ts";
 
-type Attributes = Readonly<Record<string, string | readonly string[]>>;
-
 function session(
-  attributes: Attributes,
+  attributes: SessionAuthContext["attributes"],
   options: { readonly authenticator?: string; readonly principalId?: string } = {},
 ): SessionContext {
   const current: SessionAuthContext = {
@@ -89,7 +87,7 @@ describe("scheduled task ownership", () => {
 
 describe("schedule mutation RBAC", () => {
   test("denies public users and requires self approval for organizers", () => {
-    const base: Attributes = {
+    const base: SessionAuthContext["attributes"] = {
       channelId: "20000000000000000",
       memberRoles: [],
     };

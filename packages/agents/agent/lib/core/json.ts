@@ -1,13 +1,7 @@
+import type { JsonValue } from "./serialization.ts";
+
 const SENSITIVE_KEY =
   /authorization|cookie|credential|password|secret|token|api[-_]?key|private[-_]?key|^value$/iu;
-
-export type JsonValue =
-  | null
-  | boolean
-  | number
-  | string
-  | readonly JsonValue[]
-  | { readonly [key: string]: JsonValue };
 
 function redact(value: unknown, key = "", depth = 0): unknown {
   if (SENSITIVE_KEY.test(key)) return "[redacted]";

@@ -1,6 +1,7 @@
 import { IssueRelationType, LinearClient } from "@linear/sdk";
 
 import { env } from "../../../lib/env.ts";
+import type { IssueRelation } from "./constants.ts";
 
 const linearApiKey = env.LINEAR_API_KEY ?? "missing-linear-api-key";
 export const linear = new LinearClient({ apiKey: linearApiKey });
@@ -25,10 +26,7 @@ export function issueFilter(f: {
 }
 
 /** Apply a list of semantic relations after creating/updating an issue. */
-export async function applyIssueRelations(
-  issueId: string,
-  relations: { issueId: string; type: string }[],
-) {
+export async function applyIssueRelations(issueId: string, relations: IssueRelation[]) {
   const results = [];
   for (const rel of relations) {
     if (rel.type === "unrelatedTo") {
@@ -53,7 +51,7 @@ export async function applyIssueRelations(
   return results;
 }
 
-function mapRelation(sourceId: string, rel: { issueId: string; type: string }) {
+function mapRelation(sourceId: string, rel: IssueRelation) {
   switch (rel.type) {
     case "isBlocking":
       return {

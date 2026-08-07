@@ -29,9 +29,7 @@ export interface CartMutation {
   snapshot: CartSnapshot;
 }
 
-export interface NewCartItemInput {
-  asin: string;
-  title: string;
-  price: number;
-  quantity: number;
-}
+export type NewCartItemInput = Pick<
+  typeof shoppingCartItems.$inferInsert,
+  "asin" | "title" | "price" | "quantity"
+>;

@@ -17,6 +17,8 @@ export const issueRelationSchema = z
   .optional()
   .describe("Relations to add or remove");
 
+export type IssueRelation = NonNullable<z.output<typeof issueRelationSchema>>[number];
+
 export const issueFields = {
   title: z.string().optional(),
   description: z.string().optional(),

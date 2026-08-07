@@ -10,18 +10,7 @@ import { context, isSpanContextValid, trace } from "@opentelemetry/api";
 import type { Attributes, Reporter, WideEvent } from "@repo/shared/result/observe";
 import * as Sentry from "@sentry/bun";
 
-interface MetricSink {
-  readonly count: (
-    name: string,
-    value?: number,
-    options?: { readonly attributes?: Attributes },
-  ) => void;
-  readonly distribution: (
-    name: string,
-    value: number,
-    options?: { readonly unit?: string; readonly attributes?: Attributes },
-  ) => void;
-}
+type MetricSink = Pick<typeof Sentry.metrics, "count" | "distribution">;
 
 /** Pure formatter kept exported so the accounting/log contract can be tested. */
 export function wideEventLine(event: WideEvent, traceId?: string): string {
