@@ -13,7 +13,8 @@
     "check:serialization": "bun scripts/check-serialization-boundaries.ts",
     "parity:update": "bun scripts/check-feature-parity.ts --write && oxfmt feature-parity.json",
     "test": "bun run check:parity && bun test",
-    "test:skills:lifecycle": "bun scripts/test-native-skill-lifecycle.ts"
+    "test:skills:lifecycle": "bun scripts/test-native-skill-lifecycle.ts",
+    "test:tools:lifecycle": "bun scripts/test-native-tool-lifecycle.ts"
   },
   "dependencies": {
     "@figma/rest-api-spec": "0.37.0",

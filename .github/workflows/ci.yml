@@ -27,6 +27,8 @@ jobs:
       - run: bun run validate
       - run: bun run test:skills:lifecycle
         working-directory: packages/agents
+      - run: bun run test:tools:lifecycle
+        working-directory: packages/agents
       - run: bun run test:contracts:docker
       # drizzle-kit carries a dev-server-only esbuild advisory; no such server is run or shipped.
       - run: bun run audit
