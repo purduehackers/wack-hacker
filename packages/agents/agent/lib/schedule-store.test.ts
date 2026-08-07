@@ -82,6 +82,22 @@ function oneTimeStore(client: Client, createdAt: Date, leasePrefix = "lease") {
   });
 }
 
+type ClientRow = Awaited<ReturnType<Client["execute"]>>["rows"][number];
+type RowMutation = (row: ClientRow) => void;
+
+function mutatingClient(client: Client, mutate: RowMutation): Client {
+  return new Proxy(client, {
+    get(target, property, receiver) {
+      if (property !== "execute") return Reflect.get(target, property, receiver);
+      return async (...input: Parameters<Client["execute"]>) => {
+        const result = await target.execute(...input);
+        for (const row of result.rows) mutate(row);
+        return result;
+      };
+    },
+  });
+}
+
 async function rawTask(client: Client) {
   const result = await client.execute("SELECT * FROM scheduled_tasks");
   const row = result.rows[0];
@@ -147,29 +163,87 @@ describe("schedule store row normalization", () => {
   });
 });
 
+const malformedViewCases: ReadonlyArray<readonly [string, string, RowMutation]> = [
+  ["missing column", "id", (row) => delete row["id"]],
+  ["wrong string type", "description", (row) => (row["description"] = 42)],
+  ["unknown action", "actionType", (row) => (row["actionType"] = "email")],
+  ["unknown status", "status", (row) => (row["status"] = "unknown")],
+  ["negative counter", "fireCount", (row) => (row["fireCount"] = -1)],
+  ["fractional counter", "fireCount", (row) => (row["fireCount"] = 1.5)],
+  ["unsafe counter", "fireCount", (row) => (row["fireCount"] = Number.MAX_SAFE_INTEGER + 1)],
+  ["mismatched once shape", "scheduleType", (row) => (row["cron"] = "* * * * *")],
+  ["mismatched recurring shape", "scheduleType", (row) => (row["scheduleType"] = "recurring")],
+  ["extra column", "row", (row) => (row["unexpected"] = "value")],
+];
+
+const malformedClaimCases: ReadonlyArray<readonly [string, string, RowMutation]> = [
+  ["invalid member-role JSON", "memberRoles", (row) => (row["memberRoles"] = "{")],
+  ["non-string member role", "memberRoles", (row) => (row["memberRoles"] = '["role", 42]')],
+  ["wrong lease-token type", "leaseToken", (row) => (row["leaseToken"] = 42)],
+  ["negative attempt counter", "attemptCount", (row) => (row["attemptCount"] = -1)],
+  ["fractional attempt counter", "attemptCount", (row) => (row["attemptCount"] = 1.5)],
+  [
+    "unsafe attempt counter",
+    "attemptCount",
+    (row) => (row["attemptCount"] = Number.MAX_SAFE_INTEGER + 1),
+  ],
+  ["mismatched once claim", "scheduleType", (row) => (row["cron"] = "* * * * *")],
+  ["mismatched recurring claim", "scheduleType", (row) => (row["scheduleType"] = "recurring")],
+];
+
+function expectRowInvariant(result: ResultValue<unknown, unknown>, field: string): void {
+  expect(Result.isError(result)).toBeTrue();
+  if (Result.isOk(result)) throw new Error("expected malformed row failure");
+  expect(InvariantViolated.is(result.error)).toBeTrue();
+  if (!InvariantViolated.is(result.error)) throw new Error("expected InvariantViolated");
+  expect(result.error.detail).toContain(field);
+}
+
 describe("schedule store errors", () => {
-  test("returns InvariantViolated for a malformed database row", async () => {
+  test.each(malformedViewCases)(
+    "rejects malformed task view: %s",
+    async (_label, field, mutate) => {
+      const database = await localDatabase();
+      try {
+        const createdAt = new Date("2026-01-01T00:00:00.000Z");
+        const store = oneTimeStore(database.client, createdAt);
+        expectOk(
+          await store.create(owner, {
+            type: "once",
+            description: "Malformed row",
+            prompt: "Never dispatch",
+            runAt: new Date("2026-01-01T00:01:00.000Z"),
+          }),
+        );
+        const malformedStore = oneTimeStore(mutatingClient(database.client, mutate), createdAt);
+
+        expectRowInvariant(await malformedStore.list(owner), field);
+      } finally {
+        await closeDatabase(database);
+      }
+    },
+  );
+
+  test.each(malformedClaimCases)("rejects malformed claim: %s", async (_label, field, mutate) => {
     const database = await localDatabase();
     try {
       const createdAt = new Date("2026-01-01T00:00:00.000Z");
+      const dueAt = new Date("2026-01-01T00:01:00.000Z");
       const store = oneTimeStore(database.client, createdAt);
       expectOk(
         await store.create(owner, {
           type: "once",
-          description: "Malformed row",
+          description: "Malformed claim",
           prompt: "Never dispatch",
-          runAt: new Date("2026-01-01T00:01:00.000Z"),
+          runAt: dueAt,
         }),
       );
-      await database.client.execute("UPDATE scheduled_tasks SET status = 'unknown'");
+      const malformedStore = oneTimeStore(mutatingClient(database.client, mutate), createdAt);
 
-      const result = await store.list(owner);
-
-      expect(Result.isError(result)).toBeTrue();
-      if (Result.isOk(result)) throw new Error("expected malformed row failure");
-      expect(InvariantViolated.is(result.error)).toBeTrue();
-      if (!InvariantViolated.is(result.error)) throw new Error("expected InvariantViolated");
-      expect(result.error.detail).toContain("status");
+      expectRowInvariant(
+        await malformedStore.claimDue({ now: dueAt, limit: 1, leaseForMs: 60_000 }),
+        field,
+      );
     } finally {
       await closeDatabase(database);
     }

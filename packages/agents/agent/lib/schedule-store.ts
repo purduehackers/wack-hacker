@@ -6,6 +6,7 @@ import type { Db, scheduledTasks } from "@repo/shared/db";
 import { InvalidInput, InvariantViolated, Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { Cron } from "croner";
+import { z } from "zod";
 
 export const SCHEDULE_MAX_ATTEMPTS = 5;
 const MAX_LISTED_TASKS = 50;
@@ -184,109 +185,113 @@ function execute(
   });
 }
 
-function stringField(row: LibsqlRow, key: string): Result<string, InvariantViolated> {
-  const value = row[key];
-  return typeof value === "string"
-    ? Result.ok(value)
-    : Result.err(invalidRow(key, "expected a string"));
-}
+const actionTypeSchema = z.enum([AGENT, MESSAGE]) satisfies z.ZodType<
+  ScheduledTaskRow["actionType"]
+>;
+const scheduleTypeSchema = z.enum([ONCE, RECURRING]) satisfies z.ZodType<
+  ScheduledTaskRow["scheduleType"]
+>;
+const statusSchema = z.enum([ACTIVE, CANCELLED, COMPLETED, FAILED]) satisfies z.ZodType<
+  ScheduledTaskRow["status"]
+>;
+const nonNegativeIntegerSchema = z.number().int().nonnegative();
+const nullableStringSchema = z.string().nullable();
 
-function nullableStringField(
-  row: LibsqlRow,
-  key: string,
-): Result<ScheduledTaskView["cron"], InvariantViolated> {
-  const value = row[key];
-  if (isLibsqlNull(value)) return Result.ok(undefined);
-  return typeof value === "string"
-    ? Result.ok(value)
-    : Result.err(invalidRow(key, "expected a string or SQL NULL"));
-}
-
-function numberField(row: LibsqlRow, key: string): Result<number, InvariantViolated> {
-  const value = row[key];
-  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
-    return Result.err(invalidRow(key, "expected a non-negative safe integer"));
+function validateScheduleShape(
+  value: Pick<ScheduledTaskRow, "cron" | "scheduleType" | "timezone">,
+  context: z.RefinementCtx,
+): void {
+  const invalid =
+    (value.scheduleType === ONCE && (!isLibsqlNull(value.cron) || !isLibsqlNull(value.timezone))) ||
+    (value.scheduleType === RECURRING &&
+      (isLibsqlNull(value.cron) || isLibsqlNull(value.timezone)));
+  if (invalid) {
+    context.addIssue({
+      code: "custom",
+      path: ["scheduleType"],
+      message: "cron and timezone do not match its shape",
+    });
   }
-  return Result.ok(value);
 }
 
-function actionTypeField(
-  row: LibsqlRow,
-): Result<ScheduledTaskRow["actionType"], InvariantViolated> {
-  const value = row["actionType"];
-  return value === AGENT || value === MESSAGE
-    ? Result.ok(value)
-    : Result.err(invalidRow("actionType", "expected agent or message"));
+const memberRolesSchema = z
+  .string()
+  .transform((value, context): unknown => {
+    try {
+      return JSON.parse(value);
+    } catch (cause) {
+      context.addIssue({ code: "custom", message: `invalid JSON: ${causeDetail(cause)}` });
+      return z.NEVER;
+    }
+  })
+  .pipe(z.array(z.string()))
+  .nullable();
+
+const taskViewRowSchema = z
+  .strictObject({
+    id: z.string(),
+    channelId: z.string(),
+    description: z.string(),
+    actionType: actionTypeSchema,
+    prompt: z.string(),
+    scheduleType: scheduleTypeSchema,
+    cron: nullableStringSchema,
+    timezone: nullableStringSchema,
+    status: statusSchema,
+    nextRunAt: z.string(),
+    lastError: nullableStringSchema,
+    lastDispatchedAt: nullableStringSchema,
+    fireCount: nonNegativeIntegerSchema,
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  })
+  .superRefine(validateScheduleShape)
+  .transform(({ cron, timezone, lastError, lastDispatchedAt, ...view }) => ({
+    ...view,
+    ...(isLibsqlNull(cron) ? {} : { cron }),
+    ...(isLibsqlNull(timezone) ? {} : { timezone }),
+    ...(isLibsqlNull(lastError) ? {} : { lastError }),
+    ...(isLibsqlNull(lastDispatchedAt) ? {} : { lastDispatchedAt }),
+  })) satisfies z.ZodType<ScheduledTaskView>;
+
+const claimedScheduleRowSchema = z
+  .strictObject({
+    id: z.string(),
+    ownerId: z.string(),
+    channelId: z.string(),
+    description: z.string(),
+    actionType: actionTypeSchema,
+    prompt: z.string(),
+    memberRoles: memberRolesSchema,
+    scheduleType: scheduleTypeSchema,
+    cron: nullableStringSchema,
+    timezone: nullableStringSchema,
+    nextRunAt: z.string(),
+    leaseToken: z.string(),
+    attemptCount: nonNegativeIntegerSchema,
+  })
+  .superRefine(validateScheduleShape)
+  .transform(({ cron, timezone, memberRoles, ...claim }) => ({
+    ...claim,
+    ...(isLibsqlNull(cron) ? {} : { cron }),
+    ...(isLibsqlNull(timezone) ? {} : { timezone }),
+    ...(isLibsqlNull(memberRoles) ? {} : { memberRoles }),
+    occurrenceId: scheduleOccurrenceId(claim.id, claim.nextRunAt),
+  })) satisfies z.ZodType<ClaimedSchedule>;
+
+function malformedRow(error: z.ZodError): InvariantViolated {
+  const issue = error.issues[0];
+  const field = issue?.path[0];
+  return invalidRow(field === undefined ? "row" : String(field), issue?.message ?? "invalid row");
 }
 
-function memberRolesField(
-  row: LibsqlRow,
-): Result<ClaimedSchedule["memberRoles"], InvariantViolated> {
-  const value = row["memberRoles"];
-  if (isLibsqlNull(value)) return Result.ok(undefined);
-  if (typeof value !== "string") {
-    return Result.err(invalidRow("memberRoles", "expected JSON text or SQL NULL"));
-  }
-
-  const decoded = Result.try({
-    try: (): unknown => JSON.parse(value),
-    catch: (cause) => invalidRow("memberRoles", `invalid JSON: ${causeDetail(cause)}`),
-  });
-  if (Result.isError(decoded)) return decoded;
-  if (!Array.isArray(decoded.value) || !decoded.value.every((entry) => typeof entry === "string")) {
-    return Result.err(invalidRow("memberRoles", "expected an array of strings"));
-  }
-  return Result.ok(decoded.value);
-}
-
-function scheduleTypeField(
-  row: LibsqlRow,
-): Result<ScheduledTaskRow["scheduleType"], InvariantViolated> {
-  const value = row["scheduleType"];
-  return value === ONCE || value === RECURRING
-    ? Result.ok(value)
-    : Result.err(invalidRow("scheduleType", "expected once or recurring"));
-}
-
-function statusField(row: LibsqlRow): Result<ScheduledTaskRow["status"], InvariantViolated> {
-  const value = row["status"];
-  return value === ACTIVE || value === CANCELLED || value === COMPLETED || value === FAILED
-    ? Result.ok(value)
-    : Result.err(invalidRow("status", "expected a scheduled task status"));
+function decodeRow<T>(schema: z.ZodType<T>, row: LibsqlRow): Result<T, InvariantViolated> {
+  const decoded = schema.safeParse(row);
+  return decoded.success ? Result.ok(decoded.data) : Result.err(malformedRow(decoded.error));
 }
 
 function taskView(row: LibsqlRow): Result<ScheduledTaskView, InvariantViolated> {
-  return Result.gen(function* () {
-    const scheduleType = yield* scheduleTypeField(row);
-    const cron = yield* nullableStringField(row, "cron");
-    const timezone = yield* nullableStringField(row, "timezone");
-    if (
-      (scheduleType === ONCE && (cron !== undefined || timezone !== undefined)) ||
-      (scheduleType === RECURRING && (cron === undefined || timezone === undefined))
-    ) {
-      return Result.err(invalidRow("scheduleType", "cron and timezone do not match its shape"));
-    }
-    const lastError = yield* nullableStringField(row, "lastError");
-    const lastDispatchedAt = yield* nullableStringField(row, "lastDispatchedAt");
-
-    return Result.ok({
-      id: yield* stringField(row, "id"),
-      channelId: yield* stringField(row, "channelId"),
-      description: yield* stringField(row, "description"),
-      actionType: yield* actionTypeField(row),
-      prompt: yield* stringField(row, "prompt"),
-      scheduleType,
-      ...(cron === undefined ? {} : { cron }),
-      ...(timezone === undefined ? {} : { timezone }),
-      status: yield* statusField(row),
-      nextRunAt: yield* stringField(row, "nextRunAt"),
-      ...(lastError === undefined ? {} : { lastError }),
-      ...(lastDispatchedAt === undefined ? {} : { lastDispatchedAt }),
-      fireCount: yield* numberField(row, "fireCount"),
-      createdAt: yield* stringField(row, "createdAt"),
-      updatedAt: yield* stringField(row, "updatedAt"),
-    });
-  });
+  return decodeRow(taskViewRowSchema, row);
 }
 
 function recurringNextRun(cron: string, timezone: string, after: Date): Result<Date, InvalidInput> {
@@ -338,37 +343,7 @@ function retryAt(now: Date, nextAttemptCount: number): Date {
 }
 
 function claimedFromRow(row: LibsqlRow): Result<ClaimedSchedule, InvariantViolated> {
-  return Result.gen(function* () {
-    const id = yield* stringField(row, "id");
-    const nextRunAt = yield* stringField(row, "nextRunAt");
-    const scheduleType = yield* scheduleTypeField(row);
-    const cron = yield* nullableStringField(row, "cron");
-    const timezone = yield* nullableStringField(row, "timezone");
-    if (
-      (scheduleType === ONCE && (cron !== undefined || timezone !== undefined)) ||
-      (scheduleType === RECURRING && (cron === undefined || timezone === undefined))
-    ) {
-      return Result.err(invalidRow("scheduleType", "cron and timezone do not match its shape"));
-    }
-    const memberRoles = yield* memberRolesField(row);
-
-    return Result.ok({
-      id,
-      ownerId: yield* stringField(row, "ownerId"),
-      channelId: yield* stringField(row, "channelId"),
-      description: yield* stringField(row, "description"),
-      actionType: yield* actionTypeField(row),
-      prompt: yield* stringField(row, "prompt"),
-      ...(memberRoles === undefined ? {} : { memberRoles }),
-      scheduleType,
-      ...(cron === undefined ? {} : { cron }),
-      ...(timezone === undefined ? {} : { timezone }),
-      nextRunAt,
-      leaseToken: yield* stringField(row, "leaseToken"),
-      attemptCount: yield* numberField(row, "attemptCount"),
-      occurrenceId: scheduleOccurrenceId(id, nextRunAt),
-    });
-  });
+  return decodeRow(claimedScheduleRowSchema, row);
 }
 
 async function createTask(
