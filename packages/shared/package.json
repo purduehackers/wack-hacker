@@ -16,7 +16,8 @@
     "./conversations": "./src/conversations/index.ts",
     "./wire": "./src/wire.ts",
     "./text": "./src/text.ts",
-    "./bot-generation": "./src/bot-generation.ts"
+    "./bot-generation": "./src/bot-generation.ts",
+    "./bot-health": "./src/bot-health.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

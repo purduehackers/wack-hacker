@@ -14,6 +14,7 @@ import {
   BOT_ACTIVE_GENERATION_KEY,
   type ActiveBotGeneration,
 } from "../../shared/src/bot-generation.ts";
+import { readyHealthReportSchema } from "../../shared/src/bot-health.ts";
 import type { RedisClient } from "../../shared/src/redis/client.ts";
 import { Result, TaggedError } from "../../shared/src/result/index.ts";
 
@@ -626,21 +627,7 @@ function healthUrlFor(sandbox: ManagedBotSandbox, port: number): string {
 }
 
 function validHealthPayload(value: unknown): boolean {
-  if (typeof value !== "object" || value === null) return false;
-  const ready = Reflect.get(value, "ready");
-  const ping = Reflect.get(value, "websocketPingMs");
-  const uptime = Reflect.get(value, "uptimeSeconds");
-  return (
-    typeof ready === "boolean" &&
-    ready &&
-    typeof ping === "number" &&
-    Number.isFinite(ping) &&
-    Number.isInteger(ping) &&
-    ping >= -1 &&
-    typeof uptime === "number" &&
-    Number.isSafeInteger(uptime) &&
-    uptime >= 0
-  );
+  return readyHealthReportSchema.safeParse(value).success;
 }
 
 async function checkHealth(

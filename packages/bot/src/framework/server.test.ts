@@ -99,3 +99,13 @@ test("internal scheduled callback accepts the strict scheduled occurrence", asyn
   expect(await response.json()).toEqual({ ok: true });
   expect(state.scheduled).toEqual([payload]);
 });
+
+test("health route returns the shared ready report shape", async () => {
+  const response = await handleRequest(new Request("http://bot.test/health"), harness().deps);
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({
+    ready: true,
+    websocketPingMs: 42,
+    uptimeSeconds: 0,
+  });
+});

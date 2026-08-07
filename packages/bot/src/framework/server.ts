@@ -13,6 +13,7 @@
  */
 
 import { bearerMatches } from "@repo/shared/bearer";
+import type { HealthReport } from "@repo/shared/bot-health";
 import { Result } from "@repo/shared/result";
 import {
   BOT_ROUTES,
@@ -29,13 +30,6 @@ import {
 } from "../agent/discord-commands/route.ts";
 import { onShutdown } from "./lifecycle.ts";
 import { continueTrace, traceOperation } from "./observability.ts";
-
-export interface HealthReport {
-  readonly ready: boolean;
-  /** Gateway round-trip in milliseconds. `-1` before the first heartbeat. */
-  readonly websocketPingMs: number;
-  readonly uptimeSeconds: number;
-}
 
 export function healthOf(
   client: Client,

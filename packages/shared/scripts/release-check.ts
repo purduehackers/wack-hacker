@@ -2,6 +2,8 @@
 
 import { Redis } from "@upstash/redis";
 
+import { readyHealthReportSchema } from "../src/bot-health.ts";
+
 const IMAGE_PATTERN = /^vcr\.vercel\.com\/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$/u;
 const ACTIVE_KEY = "wack:bot-sandbox:active:v1";
 
@@ -59,25 +61,6 @@ function activeGeneration(raw: unknown): ActiveGeneration {
   };
 }
 
-function validHealth(value: unknown): value is {
-  readonly ready: true;
-  readonly websocketPingMs: number;
-  readonly uptimeSeconds: number;
-} {
-  if (typeof value !== "object" || value === null) return false;
-  const ready = Reflect.get(value, "ready");
-  const ping = Reflect.get(value, "websocketPingMs");
-  const uptime = Reflect.get(value, "uptimeSeconds");
-  return (
-    typeof ready === "boolean" &&
-    ready &&
-    Number.isInteger(ping) &&
-    Number(ping) >= -1 &&
-    Number.isSafeInteger(uptime) &&
-    Number(uptime) >= 0
-  );
-}
-
 async function checkImage(image: string): Promise<void> {
   const process = Bun.spawn(["docker", "buildx", "imagetools", "inspect", image], {
     stdout: "pipe",
@@ -120,8 +103,9 @@ async function smoke(expectedImage: string): Promise<void> {
     signal: AbortSignal.timeout(10_000),
   });
   if (!response.ok) throw new Error(`bot health returned ${response.status}`);
-  const body: unknown = await response.json();
-  if (!validHealth(body)) throw new Error("bot health payload is invalid or not ready");
+  const parsedHealth = readyHealthReportSchema.safeParse(await response.json());
+  if (!parsedHealth.success) throw new Error("bot health payload is invalid or not ready");
+  const health = parsedHealth.data;
   console.info(
     JSON.stringify({
       ok: true,
@@ -129,8 +113,8 @@ async function smoke(expectedImage: string): Promise<void> {
       generation: active.generation,
       sandboxName: active.sandboxName,
       image: active.image,
-      websocketPingMs: body.websocketPingMs,
-      uptimeSeconds: body.uptimeSeconds,
+      websocketPingMs: health.websocketPingMs,
+      uptimeSeconds: health.uptimeSeconds,
     }),
   );
 }
