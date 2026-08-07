@@ -143,6 +143,7 @@ class AdmissionRedis {
 }
 
 function admission(redis: AdmissionRedis) {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- intentionally minimal strict fake
   return createConversationStore({ redis: redis as unknown as RedisClient }).admission;
 }
 

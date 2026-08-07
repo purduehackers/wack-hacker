@@ -44,6 +44,7 @@ function flowHarness(
 ) {
   return createConversationFlow({
     eve,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- intentionally minimal strict fake
     store: {
       queue,
       render: { ready: async () => [], outcome },

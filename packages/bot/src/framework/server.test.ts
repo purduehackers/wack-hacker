@@ -6,6 +6,7 @@ import type { Client } from "discord.js";
 import { handleRequest, type ServerDeps } from "./server.ts";
 
 const ingressSecret = "test-ingress-secret";
+// oxlint-disable-next-line typescript/consistent-type-assertions -- intentionally minimal strict fake
 const client = {
   isReady: () => true,
   readyTimestamp: Date.now(),

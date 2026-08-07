@@ -327,6 +327,7 @@ export interface ConversationFlow {
   stop(): Promise<void>;
 }
 
+// oxlint-disable-next-line oxclippy/too-many-lines -- one closure owns the reconciler lifecycle
 export function createConversationFlow(deps: ConversationFlowDeps): ConversationFlow {
   const pendingDispatches = new Set<string>();
   const pendingContinuations = new Set<string>();

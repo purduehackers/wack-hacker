@@ -5,7 +5,6 @@ import { Result } from "@repo/shared/result";
 import { silentReporter } from "@repo/shared/result/observe";
 import type { RenderIntent, RenderTarget } from "@repo/shared/wire";
 
-import type { AgentClient } from "../agent/client.ts";
 import { createConversationFlow } from "./flow.ts";
 
 const dispatchId = "00000000-0000-4000-8000-000000000000";
@@ -42,13 +41,14 @@ describe("Discord render recovery", () => {
         sendInteraction: async () =>
           Result.ok({ sessionId: "session-1", continuationToken: continuationKey }),
         sendReset: async () => Result.ok(undefined),
-      } as AgentClient,
+      },
       rest: {
         postMessage: async () => Result.ok({ id: "50000000000000000", content: "Done" }),
         editMessage: async () => Result.ok(undefined),
         deleteMessage: async () => Result.ok(undefined),
         reply: async () => Result.ok({ id: "50000000000000000", content: "Done" }),
       },
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- intentionally minimal strict fake
       store: {
         render: {
           claim: async () => "claim-1",

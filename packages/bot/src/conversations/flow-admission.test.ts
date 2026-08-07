@@ -27,6 +27,7 @@ const delivery: DeliveryPayload = {
 function flowHarness(eve: AgentClient, queue: ConversationStore["queue"], reporter: Reporter) {
   return createConversationFlow({
     eve,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- intentionally minimal strict fake
     store: {
       queue,
       render: { ready: async () => [], outcome: async () => undefined },

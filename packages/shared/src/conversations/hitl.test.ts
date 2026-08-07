@@ -51,6 +51,7 @@ function hitlRedis() {
 describe("bot HITL approval claim", () => {
   test("atomically admits one of two concurrent answers and fences completion to the winner", async () => {
     const harness = hitlRedis();
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- intentionally minimal strict fake
     const store = createConversationStore({ redis: harness.redis as unknown as RedisClient }).hitl;
     const outcomes = await Promise.all([
       store.claim(approval),
@@ -69,6 +70,7 @@ describe("bot HITL approval claim", () => {
   test("a reset barrier makes an otherwise current control stale", async () => {
     const harness = hitlRedis();
     harness.installReset();
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- intentionally minimal strict fake
     const store = createConversationStore({ redis: harness.redis as unknown as RedisClient }).hitl;
 
     expect(await store.claim(approval)).toBe("stale");

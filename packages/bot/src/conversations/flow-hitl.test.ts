@@ -35,7 +35,8 @@ const payload: InteractionPayload = {
 
 test("HITL answer preserves the claim revision through durable completion", async () => {
   const completions: unknown[][] = [];
-  const events: WideEvent[] = [];
+  const reported: WideEvent[] = [];
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- intentionally minimal strict fake
   const store = {
     hitl: {
       claim: async () => "acquired",
@@ -55,19 +56,24 @@ test("HITL answer preserves the claim revision through durable completion", asyn
   const flow = createConversationFlow({
     eve,
     store,
-    rest: {} as never,
-    turnMessages: {} as never,
-    schedules: {} as never,
+    rest: {
+      postMessage: async () => Result.ok({ id: "50000000000000000", content: "" }),
+      editMessage: async () => Result.ok(undefined),
+      deleteMessage: async () => Result.ok(undefined),
+      reply: async () => Result.ok({ id: "50000000000000000", content: "" }),
+    },
+    turnMessages: { record: async () => Result.ok(undefined) },
+    schedules: { admit: async () => {} },
     reporter: {
-      emit: (event) => events.push(event),
+      emit: (wideEvent) => reported.push(wideEvent),
       captureDefect: (_error, context) =>
-        events.push({ op: context.op, status: "defect", attributes: context.attributes ?? {} }),
+        reported.push({ op: context.op, status: "defect", attributes: context.attributes ?? {} }),
     },
   });
 
   expect(await flow.answer({ claim, payload })).toEqual({ status: "accepted" });
   expect(completions).toEqual([[claim.dispatchId, claim.revision, claim.interactionId]]);
-  expect(events).toContainEqual({
+  expect(reported).toContainEqual({
     op: "agent.hitl.complete",
     status: "defect",
     attributes: { dispatchId: claim.dispatchId, interactionId: claim.interactionId },

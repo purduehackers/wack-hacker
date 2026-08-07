@@ -29,11 +29,21 @@ function eve(): AgentClient {
   };
 }
 
+async function rejectionOf(promise: Promise<unknown>): Promise<unknown> {
+  try {
+    await promise;
+  } catch (cause) {
+    return cause;
+  }
+  throw new Error("expected promise to reject");
+}
+
 test("scheduled admission completes a durable receipt before accepting a duplicate", async () => {
   let accepted = false;
   let admissions = 0;
   const flow = createConversationFlow({
     eve: eve(),
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- intentionally minimal strict fake
     store: {
       scheduledFires: {
         claim: async () => (accepted ? "accepted" : "acquired"),
@@ -69,6 +79,7 @@ test("failed scheduled admission releases only its forwarding claim", async () =
   const released: { occurrenceId: string; claimToken: string }[] = [];
   const flow = createConversationFlow({
     eve: eve(),
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- intentionally minimal strict fake
     store: {
       scheduledFires: {
         claim: async () => "acquired",
@@ -93,7 +104,9 @@ test("failed scheduled admission releases only its forwarding claim", async () =
     reporter: silentReporter,
   });
 
-  await expect(flow.admitSchedule(payload)).rejects.toThrow("Discord unavailable");
+  expect(await rejectionOf(flow.admitSchedule(payload))).toEqual(
+    expect.objectContaining({ message: "Discord unavailable" }),
+  );
   expect(released).toHaveLength(1);
   expect(released[0]?.occurrenceId).toBe(payload.occurrenceId);
 });

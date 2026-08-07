@@ -100,6 +100,7 @@ describe("bot admission recovery sweep", () => {
     seed(redis);
 
     const recovered = await createConversationStore({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- intentionally minimal strict fake
       redis: redis as unknown as RedisClient,
     }).queue.recoverAdmission(delivery.continuationKey);
     expect(Result.isOk(recovered) ? recovered.value : undefined).toEqual(delivery);
@@ -113,6 +114,7 @@ describe("bot admission recovery sweep", () => {
     expect(redis.ready).toEqual(new Set([`r:${delivery.dispatchId}`]));
 
     const repeated = await createConversationStore({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- intentionally minimal strict fake
       redis: redis as unknown as RedisClient,
     }).queue.recoverAdmission(delivery.continuationKey);
     expect(Result.isOk(repeated) ? repeated.value : delivery).toBeUndefined();
@@ -125,6 +127,7 @@ describe("bot admission recovery sweep", () => {
     redis.ingress = true;
     expect(
       await createConversationStore({
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- intentionally minimal strict fake
         redis: redis as unknown as RedisClient,
       }).queue.recoverAdmission(delivery.continuationKey),
     ).toMatchObject({
@@ -137,6 +140,7 @@ describe("bot admission recovery sweep", () => {
     redis.reset = true;
     expect(
       await createConversationStore({
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- intentionally minimal strict fake
         redis: redis as unknown as RedisClient,
       }).queue.recoverAdmission(delivery.continuationKey),
     ).toMatchObject({

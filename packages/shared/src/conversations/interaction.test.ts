@@ -71,6 +71,7 @@ function receiptRedis(): ReceiptRedisHarness {
 }
 
 function interactions(redis: ReceiptRedisHarness["redis"]) {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- intentionally minimal strict fake
   return createConversationStore({ redis: redis as unknown as RedisClient }).interactions;
 }
 
