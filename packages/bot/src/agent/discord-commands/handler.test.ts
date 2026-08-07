@@ -31,6 +31,77 @@ async function succeed(rest: DiscordRest, command: DiscordCommand): Promise<unkn
   return result.value;
 }
 
+function archivedThreadFixture(
+  parentId: string,
+  id: string,
+  name: string,
+  type: ChannelType,
+  archiveTimestamp: string,
+) {
+  return {
+    id,
+    name,
+    type,
+    parent_id: parentId,
+    thread_metadata: {
+      archived: true,
+      auto_archive_duration: 1_440,
+      archive_timestamp: archiveTimestamp,
+      locked: false,
+      create_timestamp: archiveTimestamp,
+    },
+    message_count: 1,
+    member_count: 1,
+  };
+}
+
+function archivedPaginationFixtures(parentId: string) {
+  return {
+    active: archivedThreadFixture(
+      parentId,
+      "60000000000000090",
+      "active",
+      ChannelType.PublicThread,
+      "2026-08-07T12:00:00.000Z",
+    ),
+    publicSecond: archivedThreadFixture(
+      parentId,
+      "60000000000000080",
+      "public-second",
+      ChannelType.PublicThread,
+      "2026-08-07T11:00:00.000Z",
+    ),
+    privateFirst: archivedThreadFixture(
+      parentId,
+      "60000000000000070",
+      "private-first",
+      ChannelType.PrivateThread,
+      "2026-08-07T10:00:00.000Z",
+    ),
+    privateSecond: archivedThreadFixture(
+      parentId,
+      "60000000000000060",
+      "private-second",
+      ChannelType.PrivateThread,
+      "2026-08-07T09:00:00.000Z",
+    ),
+    joinedFirst: archivedThreadFixture(
+      parentId,
+      "60000000000000050",
+      "joined-first",
+      ChannelType.PrivateThread,
+      "2026-08-07T08:00:00.000Z",
+    ),
+    joinedSecond: archivedThreadFixture(
+      parentId,
+      "60000000000000040",
+      "joined-second",
+      ChannelType.PrivateThread,
+      "2026-08-07T07:00:00.000Z",
+    ),
+  };
+}
+
 test("Discord command boundary: projects the managed guild channel tree into the stable semantic response", async () => {
   const categoryId = "20000000000000001";
   const textId = "20000000000000002";
@@ -581,4 +652,120 @@ test("Discord sticker editing preserves omitted versus explicit null description
     input: { sticker_id: stickerId, description: null },
   });
   expect(bodies).toEqual([{}, { description: null }]);
+});
+
+test("Discord archived thread listing follows every route's native pagination cursor", async () => {
+  const channelId = "20000000000000011";
+  const { active, publicSecond, privateFirst, privateSecond, joinedFirst, joinedSecond } =
+    archivedPaginationFixtures(channelId);
+  const calls: string[] = [];
+  const pageCounts = new Map<string, number>();
+
+  const listedThreads = await succeed(
+    restWith({
+      get: async (route, options) => {
+        const query = options?.query?.toString() ?? "";
+        calls.push(query.length === 0 ? route : `${route}?${query}`);
+        if (route === `/guilds/${DISCORD_GUILD_ID}/threads/active`) {
+          return { threads: [active], members: [] };
+        }
+        if (route === `/channels/${channelId}`) {
+          return { id: channelId, guild_id: DISCORD_GUILD_ID, name: "general", type: 0 };
+        }
+        const page = pageCounts.get(route) ?? 0;
+        pageCounts.set(route, page + 1);
+        if (route === `/channels/${channelId}/threads/archived/public`) {
+          return page === 0
+            ? { threads: [active], members: [], has_more: true }
+            : { threads: [publicSecond], members: [], has_more: false };
+        }
+        if (route === `/channels/${channelId}/threads/archived/private`) {
+          return page === 0
+            ? { threads: [privateFirst], members: [], has_more: true }
+            : { threads: [privateSecond], members: [], has_more: false };
+        }
+        if (route === `/channels/${channelId}/users/@me/threads/archived/private`) {
+          return page === 0
+            ? { threads: [joinedFirst], members: [], has_more: true }
+            : { threads: [joinedSecond], members: [], has_more: false };
+        }
+        throw new Error(`unexpected route ${route}`);
+      },
+    }),
+    {
+      operation: "list_threads",
+      input: { channel_id: channelId, include_archived: true },
+    },
+  );
+
+  expect(calls).toEqual([
+    `/guilds/${DISCORD_GUILD_ID}/threads/active`,
+    `/channels/${channelId}`,
+    `/channels/${channelId}/threads/archived/public?limit=100`,
+    `/channels/${channelId}/threads/archived/public?limit=100&before=2026-08-07T12%3A00%3A00.000Z`,
+    `/channels/${channelId}/threads/archived/private?limit=100`,
+    `/channels/${channelId}/threads/archived/private?limit=100&before=2026-08-07T10%3A00%3A00.000Z`,
+    `/channels/${channelId}/users/@me/threads/archived/private?limit=100`,
+    `/channels/${channelId}/users/@me/threads/archived/private?limit=100&before=60000000000000050`,
+  ]);
+  expect(listedThreads).toEqual([
+    expect.objectContaining({ id: active.id }),
+    expect.objectContaining({ id: publicSecond.id }),
+    expect.objectContaining({ id: privateFirst.id }),
+    expect.objectContaining({ id: privateSecond.id }),
+    expect.objectContaining({ id: joinedFirst.id }),
+    expect.objectContaining({ id: joinedSecond.id }),
+  ]);
+});
+
+test("Discord archived thread pagination rejects missing and nonadvancing cursors as 502", async () => {
+  const channelId = "20000000000000012";
+  const timestamp = "2026-08-07T12:00:00.000Z";
+  const thread = {
+    id: "60000000000000030",
+    name: "archived",
+    type: ChannelType.PublicThread,
+    parent_id: channelId,
+    thread_metadata: {
+      archived: true,
+      auto_archive_duration: 1_440,
+      archive_timestamp: timestamp,
+      locked: false,
+      create_timestamp: timestamp,
+    },
+    message_count: 1,
+    member_count: 1,
+  };
+
+  for (const failure of ["missing", "nonadvancing"] as const) {
+    let publicPages = 0;
+    const result = await executeDiscordCommand(
+      restWith({
+        get: async (route) => {
+          if (route === `/guilds/${DISCORD_GUILD_ID}/threads/active`) {
+            return { threads: [], members: [] };
+          }
+          if (route === `/channels/${channelId}`) {
+            return { id: channelId, guild_id: DISCORD_GUILD_ID, name: "general", type: 0 };
+          }
+          if (route === `/channels/${channelId}/threads/archived/public`) {
+            publicPages += 1;
+            if (failure === "missing") return { threads: [], members: [], has_more: true };
+            return { threads: [thread], members: [], has_more: true };
+          }
+          throw new Error(`unexpected route ${route}`);
+        },
+      }),
+      {
+        operation: "list_threads",
+        input: { channel_id: channelId, include_archived: true },
+      },
+    );
+    expect(Result.isError(result), failure).toBe(true);
+    if (!Result.isError(result)) continue;
+    expect(result.error, failure).toBeInstanceOf(UpstreamError);
+    if (!(result.error instanceof UpstreamError)) continue;
+    expect(result.error.status, failure).toBe(502);
+    expect(publicPages, failure).toBe(failure === "missing" ? 1 : 2);
+  }
 });

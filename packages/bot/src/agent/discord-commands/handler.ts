@@ -60,6 +60,7 @@ import {
   type RESTGetAPIChannelMessagesResult,
   type RESTGetAPIChannelThreadsArchivedPublicResult,
   type RESTGetAPIChannelThreadsArchivedPrivateResult,
+  type RESTGetAPIChannelThreadsArchivedQuery,
   type RESTGetAPIChannelUsersThreadsArchivedResult,
   type RESTGetAPIChannelWebhooksResult,
   type RESTGetAPIInviteResult,
@@ -101,7 +102,9 @@ import {
   type RESTPostAPIGuildScheduledEventResult,
   type RESTPostAPIGuildStickerResult,
   type RESTAPIGuildChannelResolvable,
+  type RouteLike,
 } from "discord.js";
+import { z } from "zod";
 
 const CHANNEL_TYPES = {
   text: ChannelType.GuildText,
@@ -328,6 +331,70 @@ function summarizeThread(thread: ThreadResult) {
     createdAt: metadata?.create_timestamp ?? null,
     type: channelType(thread.type),
   };
+}
+const ARCHIVED_THREAD_PAGE_LIMIT = 100;
+const MAX_ARCHIVED_THREAD_PAGES = 100;
+const archiveTimestampCursorSchema = z.iso.datetime({ offset: true });
+const archiveSnowflakeCursorSchema = z.string().regex(/^\d{17,20}$/u);
+type ArchiveCursorKind = "archive-timestamp" | "thread-snowflake";
+
+function nextArchiveCursor(
+  thread: ThreadResult,
+  kind: ArchiveCursorKind,
+  previous: string | undefined,
+  endpoint: string,
+): string {
+  if (kind === "thread-snowflake") {
+    const parsed = archiveSnowflakeCursorSchema.safeParse(thread.id);
+    if (!parsed.success || (previous !== undefined && BigInt(parsed.data) >= BigInt(previous))) {
+      throw malformedDiscordResponse(`${endpoint} pagination cursor`);
+    }
+    return parsed.data;
+  }
+
+  const metadata = discordObject<NonNullable<ThreadResult["thread_metadata"]>>(
+    thread.thread_metadata,
+    `${endpoint} thread metadata`,
+  );
+  const parsed = archiveTimestampCursorSchema.safeParse(metadata.archive_timestamp);
+  if (
+    !parsed.success ||
+    (previous !== undefined && Date.parse(parsed.data) >= Date.parse(previous))
+  ) {
+    throw malformedDiscordResponse(`${endpoint} pagination cursor`);
+  }
+  return parsed.data;
+}
+
+async function archivedThreadPages<ResultType extends RESTGetAPIChannelUsersThreadsArchivedResult>(
+  rest: DiscordRest,
+  route: RouteLike,
+  endpoint: string,
+  cursorKind: ArchiveCursorKind,
+): Promise<ThreadResult[]> {
+  const found: ThreadResult[] = [];
+  let before: string | undefined;
+  for (let pageNumber = 0; pageNumber < MAX_ARCHIVED_THREAD_PAGES; pageNumber += 1) {
+    const page = discordObject<ResultType>(
+      await rest.get(route, {
+        query: makeURLSearchParams<RESTGetAPIChannelThreadsArchivedQuery>({
+          limit: ARCHIVED_THREAD_PAGE_LIMIT,
+          ...(before === undefined ? {} : { before }),
+        }),
+      }),
+      endpoint,
+    );
+    if (typeof page.has_more !== "boolean") throw malformedDiscordResponse(endpoint);
+    const threads = discordArray<ResultType["threads"]>(page.threads, endpoint).map((candidate) =>
+      discordObject<ThreadResult>(candidate, endpoint),
+    );
+    found.push(...threads);
+    if (!page.has_more) return found;
+    const lastThread = threads.at(-1);
+    if (lastThread === undefined) throw malformedDiscordResponse(`${endpoint} pagination cursor`);
+    before = nextArchiveCursor(lastThread, cursorKind, before, endpoint);
+  }
+  throw malformedDiscordResponse(`${endpoint} pagination did not terminate`);
 }
 type EmojiResult = RESTGetAPIGuildEmojisResult[number];
 function summarizeEmoji(emoji: EmojiResult) {
@@ -1423,42 +1490,34 @@ async function execute(rest: DiscordRest, command: DiscordCommand): Promise<unkn
         });
       }
 
-      const addArchived = (
-        archived: RESTGetAPIChannelThreadsArchivedPublicResult,
-        endpoint: string,
-      ) => {
-        for (const candidate of discordArray<
-          RESTGetAPIChannelThreadsArchivedPublicResult["threads"]
-        >(archived.threads, endpoint)) {
-          const checkedThread = discordObject<ThreadResult>(candidate, endpoint);
-          foundThreads.set(checkedThread.id, checkedThread);
-        }
-      };
       const publicEndpoint = "list public archived channel threads";
-      addArchived(
-        discordObject<RESTGetAPIChannelThreadsArchivedPublicResult>(
-          await rest.get(Routes.channelThreads(input.channel_id, "public")),
-          publicEndpoint,
-        ),
+      for (const thread of await archivedThreadPages<RESTGetAPIChannelThreadsArchivedPublicResult>(
+        rest,
+        Routes.channelThreads(input.channel_id, "public"),
         publicEndpoint,
-      );
+        "archive-timestamp",
+      )) {
+        foundThreads.set(thread.id, thread);
+      }
       if (parent.type === ChannelType.GuildText) {
         const privateEndpoint = "list private archived channel threads";
-        addArchived(
-          discordObject<RESTGetAPIChannelThreadsArchivedPrivateResult>(
-            await rest.get(Routes.channelThreads(input.channel_id, "private")),
-            privateEndpoint,
-          ),
+        for (const thread of await archivedThreadPages<RESTGetAPIChannelThreadsArchivedPrivateResult>(
+          rest,
+          Routes.channelThreads(input.channel_id, "private"),
           privateEndpoint,
-        );
+          "archive-timestamp",
+        )) {
+          foundThreads.set(thread.id, thread);
+        }
         const joinedEndpoint = "list joined private archived channel threads";
-        addArchived(
-          discordObject<RESTGetAPIChannelUsersThreadsArchivedResult>(
-            await rest.get(Routes.channelJoinedArchivedThreads(input.channel_id)),
-            joinedEndpoint,
-          ),
+        for (const thread of await archivedThreadPages<RESTGetAPIChannelUsersThreadsArchivedResult>(
+          rest,
+          Routes.channelJoinedArchivedThreads(input.channel_id),
           joinedEndpoint,
-        );
+          "thread-snowflake",
+        )) {
+          foundThreads.set(thread.id, thread);
+        }
       }
       return [...foundThreads.values()].map(summarizeThread);
     }
