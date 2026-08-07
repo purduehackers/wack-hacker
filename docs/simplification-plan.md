@@ -1,8 +1,8 @@
 # Simplification implementation record
 
-> Status: Groups A–E are approved, implemented, and locally validated through
-> integration commit `2ded01a`. The hosted Eve `defaultBackend()` reattachment
-> check remains a deployment cutover canary, not a code blocker.
+> Status: Groups A–E are approved, implemented, and locally validated on the
+> final reviewed branch. The hosted Eve `defaultBackend()` reattachment check
+> remains a deployment cutover canary, not a code blocker.
 
 ## Audit baseline and measured result
 
@@ -31,16 +31,17 @@ rules. They remain unless characterization proves a smaller equivalent.
 
 ### Current measurements
 
-At `2ded01a`, `git ls-files '*.ts' '*.tsx'` contains **427 tracked TypeScript
-files and 52,859 lines**. Direct package test runs pass **267 tests**:
+At the final security review, `git ls-files '*.ts' '*.tsx'` contains **427
+tracked TypeScript files and 52,996 lines**. Direct package test runs pass **271
+tests**:
 
 | Package    | Passing tests |
 | ---------- | ------------: |
-| agents     |           153 |
+| agents     |           157 |
 | bot        |            52 |
 | shared     |            53 |
 | supervisor |             9 |
-| **Total**  |       **267** |
+| **Total**  |       **271** |
 
 The real-Redis contract suite separately remains at **10 tests / 64 assertions**
 against production Lua. The package totals above come from each package's Bun
@@ -48,8 +49,8 @@ against production Lua. The package totals above come from each package's Bun
 
 For a production-only comparison, count tracked `.ts`/`.tsx` blobs under
 `packages/`, excluding `*.test.*`, `*.spec.*`, test directories, and `scripts/`.
-That measure fell from **47,351 lines at `2cec01c` to 43,991 lines at `2ded01a`**:
-a measured reduction of **3,360 production TypeScript lines (7.1%)**. Group A
+That measure fell from **47,351 lines at `2cec01c` to 43,999 lines at final
+review**: a measured reduction of **3,352 production TypeScript lines (7.1%)**. Group A
 also deleted **3,381 lines of duplicate skill Markdown** from
 `packages/agents/skill-sources/`.
 
@@ -290,8 +291,12 @@ canary exercises two turns and protects that constraint.
 Requested-action audit ownership remains singular. GitHub, Sentry, and Vercel
 requested actions are redacted before persistence, matching their execution
 audit/output/error treatment; the post-merge redaction regression was repaired
-and characterized. Feature parity is exact at **11 native domains / 659 tools /
-104 skills / 13 subagents**.
+and characterized. Scheduled principals may execute only tools whose effective
+confirmation is `none`; confirmation-requiring actions fail closed instead of
+silently erasing self or second-party approval. Schedule creation and cancellation
+also revalidate the current organizer role at execution after self approval.
+Feature parity is exact at **11 native domains / 659 tools / 104 skills / 13
+subagents**.
 
 ### Group E — approved mechanical cleanup — implemented
 
@@ -376,8 +381,8 @@ The current CI also runs the compiled native skill lifecycle, compiled inline
 native tool lifecycle, production Redis/Lua contract suite, migration checks,
 and bot image build.
 
-At the integrated documentation audit, direct Bun package tests pass 267/267
-(agents 153, bot 52, shared 53, supervisor 9), the feature-parity checker reports
+After the final security review, direct Bun package tests pass 271/271 (agents
+157, bot 52, shared 53, supervisor 9), the feature-parity checker reports
 11/659/104/13, and the real-Redis suite reports 10 tests / 64 assertions. Hosted
 Eve sandbox reattachment is the remaining **deployment canary**. It is checked
 at cutover because local compilation cannot prove hosted sandbox persistence.

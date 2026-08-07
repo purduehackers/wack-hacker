@@ -1,8 +1,8 @@
 # Architecture
 
-> Status: current through integration commit `2ded01a`. Groups A–E are approved,
-> implemented, and locally validated. Hosted Eve `defaultBackend()` sandbox
-> reattachment remains a deployment cutover canary, not a code blocker.
+> Status: current after approved Groups A–E and the final security/simplification
+> review. Hosted Eve `defaultBackend()` sandbox reattachment remains a deployment
+> cutover canary, not a code blocker.
 
 Wack Hacker has two application runtimes: a Bun/discord.js bot that owns Discord
 I/O and an Eve application that owns sessions and reasoning. Redis carries the
@@ -234,7 +234,11 @@ approval, second-party authority, execution-time current-role and provider
 readiness checks, budgets, audit ordering, and plain-JSON output enforcement.
 Approval, budget, and audit stores are shared and lazy; usage and domain-audit
 hooks share implementations while thin per-domain files remain for Eve filesystem
-discovery.
+discovery. Scheduled deliveries may execute only tools whose effective
+confirmation is `none`; tools requiring self or second-party confirmation fail
+closed because a scheduled call has nobody present to approve it. Schedule
+creation and cancellation revalidate the current organizer role again at
+execution after self approval.
 
 Eve tool catalogs still call `defineTool` directly inside their `defineDynamic`
 resolver and provide an inline `execute` closure. This source shape is required
