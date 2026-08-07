@@ -1,5 +1,6 @@
 /// <reference types="node" />
 
+import { createHash } from "node:crypto";
 import { access, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -16,7 +17,11 @@ import {
 
 const paritySkillSchema = z.strictObject({
   name: z.string(),
+  minRole: z.enum(["public", "organizer", "admin"]),
+  description: z.string().min(1),
+  criteria: z.string().min(1),
   tools: z.array(z.string()),
+  instructionsDigest: z.string().regex(/^[0-9a-f]{64}$/u),
 });
 const parityDomainSchema = z.strictObject({
   name: z.string(),
@@ -26,7 +31,7 @@ const parityDomainSchema = z.strictObject({
   tools: z.array(z.string()),
 });
 const parityManifestSchema = z.strictObject({
-  schemaVersion: z.literal(1),
+  schemaVersion: z.literal(2),
   generatedBy: z.literal("scripts/check-feature-parity.ts"),
   domains: z.array(parityDomainSchema),
   subagents: z.array(z.string()),
@@ -48,6 +53,15 @@ function serialize(value: unknown): string {
 
 function same(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function digest(instructions: string): string {
+  return createHash("sha256").update(instructions.replaceAll("\r\n", "\n").trim()).digest("hex");
+}
+
+function assertUnique(label: string, entries: readonly string[]): void {
+  const repeated = entries.filter((entry, index) => entries.indexOf(entry) !== index);
+  if (repeated.length > 0) throw new Error(`${label} contains duplicates: ${repeated.join(",")}`);
 }
 
 function constantName(domain: string): string {
@@ -124,20 +138,35 @@ async function deriveParityManifest(): Promise<ParityManifest> {
   for (const domainName of skillDomainNames) {
     const manifest = await buildDomainSkillManifest(domainName);
     await assertGeneratedManifest(domainName, manifest.baseToolNames, manifest.skills);
+    assertUnique(`${domainName} base tools`, manifest.baseToolNames);
+    assertUnique(
+      `${domainName} skill names`,
+      manifest.skills.map((skill) => skill.name),
+    );
+    for (const skill of manifest.skills) {
+      assertUnique(`${domainName}/${skill.name} tools`, skill.toolNames);
+      if (skill.instructions.trim() === "") {
+        throw new Error(`${domainName}/${skill.name} instructions are empty`);
+      }
+    }
     capabilityCatalogs.push({
       name: manifest.domain,
       sourceName: manifest.sourceName,
       baseTools: [...manifest.baseToolNames],
       skills: manifest.skills.map((skill) => ({
         name: skill.name,
+        minRole: skill.minRole,
+        description: skill.description,
+        criteria: skill.criteria,
         tools: [...skill.toolNames],
+        instructionsDigest: digest(skill.instructions),
       })),
       tools: [...manifest.toolNames],
     });
   }
   const auxiliarySubagents = subagents.filter((name) => !skillDomainNames.includes(name));
   return parityManifestSchema.parse({
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedBy: "scripts/check-feature-parity.ts",
     domains: capabilityCatalogs,
     subagents,

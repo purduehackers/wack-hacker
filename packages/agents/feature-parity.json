@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "generatedBy": "scripts/check-feature-parity.ts",
   "domains": [
     {
@@ -15,6 +15,9 @@
       "skills": [
         {
           "name": "events",
+          "minRole": "organizer",
+          "description": "Manage events, RSVPs, and email blasts on cms.purduehackers.com",
+          "criteria": "Use when the user asks about Purdue Hackers events, RSVP lists, unsubscribe requests, or sending email blasts to attendees",
           "tools": [
             "list_events",
             "get_event",
@@ -35,10 +38,14 @@
             "update_email",
             "delete_email",
             "send_email"
-          ]
+          ],
+          "instructionsDigest": "b68c1779489f7dbae640ed0ec9e755749956070f636bef93d79f09eb4d0626b2"
         },
         {
           "name": "hack-nights",
+          "minRole": "organizer",
+          "description": "Create, update, and publish hack night session records on cms.purduehackers.com",
+          "criteria": "Use when the user asks to record, edit, or publish a hack night session (title, date, host, description)",
           "tools": [
             "list_hack_night_sessions",
             "get_hack_night_session",
@@ -47,24 +54,36 @@
             "delete_hack_night_session",
             "publish_hack_night_session",
             "unpublish_hack_night_session"
-          ]
+          ],
+          "instructionsDigest": "ce52aa8a4344d303b546f32a91b8e639fdeb78c3faaca6c83fe925640f11c091"
         },
         {
           "name": "media",
-          "tools": ["list_media", "get_media", "upload_media", "delete_media"]
+          "minRole": "organizer",
+          "description": "List, fetch, upload, and delete image/file assets in the CMS media library",
+          "criteria": "Use when the user asks to upload a photo to the CMS, audit the media library, or delete a media asset",
+          "tools": ["list_media", "get_media", "upload_media", "delete_media"],
+          "instructionsDigest": "0b974ac572499e2c35b5325f03efdf8c615737d5d291115b3297de1ccbb83164"
         },
         {
           "name": "service-accounts",
+          "minRole": "organizer",
+          "description": "Manage service-account (API-key-only) identities in the CMS — bots and integrations",
+          "criteria": "Use when the user asks about CMS service accounts, revoking API keys, or provisioning a new integration identity",
           "tools": [
             "list_service_accounts",
             "get_service_account",
             "create_service_account",
             "update_service_account",
             "delete_service_account"
-          ]
+          ],
+          "instructionsDigest": "b5e2e118b9c52c904b95af1c36359be98b21d9da2b174933bf423cbb22271f05"
         },
         {
           "name": "showcases",
+          "minRole": "organizer",
+          "description": "Manage the ugrants (microgrants) and shelter-projects showcases on cms.purduehackers.com",
+          "criteria": "Use when the user asks to add, edit, publish, or remove entries in the microgrant or shelter wall project showcases",
           "tools": [
             "list_ugrants",
             "get_ugrant",
@@ -80,11 +99,16 @@
             "delete_shelter_project",
             "publish_shelter_project",
             "unpublish_shelter_project"
-          ]
+          ],
+          "instructionsDigest": "98d1172d84daeeabeeed11c62eb687f8671fde62b092acad83ca107bf8b19536"
         },
         {
           "name": "users",
-          "tools": ["list_users", "get_user", "create_user", "update_user", "delete_user"]
+          "minRole": "admin",
+          "description": "Admin-only management of CMS user accounts — invite, update roles, remove",
+          "criteria": "Use when the user asks to grant, change, or revoke CMS access for a teammate (admin only)",
+          "tools": ["list_users", "get_user", "create_user", "update_user", "delete_user"],
+          "instructionsDigest": "cd7a7b01d20d5b7521275c5324ce7d6a30f397c09ddff49ee334e2d6e1d9d844"
         }
       ],
       "tools": [
@@ -151,30 +175,45 @@
       "skills": [
         {
           "name": "audit-log",
-          "tools": ["get_audit_log"]
+          "minRole": "organizer",
+          "description": "View the Discord server audit log — who performed admin actions.",
+          "criteria": "Use when the user wants to investigate recent moderation/admin actions, see who changed what, or audit server activity.",
+          "tools": ["get_audit_log"],
+          "instructionsDigest": "e609bcbb37ff4de91785458fd2e42af764616b3b9ecf7a08d84d5d2aa2687609"
         },
         {
           "name": "auto-moderation",
+          "minRole": "organizer",
+          "description": "Manage Discord auto-moderation rules — keyword filters, spam detection, mention flooding.",
+          "criteria": "Use when the user wants to configure Discord's built-in auto-mod — creating keyword filters, spam protection, or mention-flood rules.",
           "tools": [
             "list_auto_mod_rules",
             "get_auto_mod_rule",
             "create_auto_mod_rule",
             "update_auto_mod_rule",
             "delete_auto_mod_rule"
-          ]
+          ],
+          "instructionsDigest": "d7a248983beb50e9d98ab2fbebd45dd559c3d63f0154ba628f7e70c44a29e5ac"
         },
         {
           "name": "channels",
+          "minRole": "organizer",
+          "description": "Create, edit, and delete channels and categories.",
+          "criteria": "Use when the user wants to create, edit, move, rename, or delete a channel or category.",
           "tools": [
             "create_channel",
             "edit_channel",
             "delete_channel",
             "get_channel",
             "follow_announcement_channel"
-          ]
+          ],
+          "instructionsDigest": "cfba75e954be80e60fec4eeb0d31e2ce484b1f5426cf2279076a266e845e0819"
         },
         {
           "name": "emojis",
+          "minRole": "organizer",
+          "description": "Manage custom emojis and stickers — list, create, edit, and delete.",
+          "criteria": "Use when the user wants to manage custom emojis or stickers.",
           "tools": [
             "list_emojis",
             "create_emoji",
@@ -184,22 +223,38 @@
             "create_sticker",
             "edit_sticker",
             "delete_sticker"
-          ]
+          ],
+          "instructionsDigest": "108e8055170d1d4f9441b62d60dbabe72d0899b98577dd1d3e610290459e2d9a"
         },
         {
           "name": "events",
-          "tools": ["list_events", "create_event", "edit_event", "delete_event"]
+          "minRole": "organizer",
+          "description": "List, create, edit, and delete scheduled events.",
+          "criteria": "Use when the user wants to manage scheduled events — listing upcoming events, creating new ones, editing, or canceling them.",
+          "tools": ["list_events", "create_event", "edit_event", "delete_event"],
+          "instructionsDigest": "beb4aeb727e0654883b967f42d14b2051dcdee42a53615525afad1beeacecead"
         },
         {
           "name": "guild",
-          "tools": ["update_guild", "get_guild_preview", "get_vanity_url"]
+          "minRole": "admin",
+          "description": "View and update server-level settings (admin only for updates).",
+          "criteria": "Use when the user wants to change the server name, icon, banner, verification level, or other server-level settings; or view the public preview/vanity URL.",
+          "tools": ["update_guild", "get_guild_preview", "get_vanity_url"],
+          "instructionsDigest": "6153cb4d991e769df7e28f94be546c2267009f1d698871037389f29823f4796d"
         },
         {
           "name": "invites",
-          "tools": ["list_invites", "create_invite", "delete_invite"]
+          "minRole": "admin",
+          "description": "List, create, and delete server invites.",
+          "criteria": "Use when the user wants to manage server invites — listing active invites, creating new ones, or revoking existing ones.",
+          "tools": ["list_invites", "create_invite", "delete_invite"],
+          "instructionsDigest": "64e3092fabafd570dbe79d846ee485872d442c80485da8966e13827a2361f797"
         },
         {
           "name": "member-management",
+          "minRole": "admin",
+          "description": "Moderate members — ban, kick, timeout, and manage the ban list (admin only).",
+          "criteria": "Use when the user wants to ban, unban, kick, timeout, or clear a timeout on a Discord member, or view the ban list.",
           "tools": [
             "ban_member",
             "unban_member",
@@ -207,18 +262,30 @@
             "kick_member",
             "timeout_member",
             "clear_timeout"
-          ]
+          ],
+          "instructionsDigest": "a492aa5612ca3d8c5a286c88f585b8bfdc48235ca0c0e43bc2fc6e94c031caf0"
         },
         {
           "name": "members",
-          "tools": ["get_member", "set_nickname"]
+          "minRole": "organizer",
+          "description": "View detailed member info and manage nicknames.",
+          "criteria": "Use when the user wants to see detailed member information or change a member's nickname.",
+          "tools": ["get_member", "set_nickname"],
+          "instructionsDigest": "f96a428f4ba065d41efaab88ab141f0ae7061bf708dce42326367000cf368ac4"
         },
         {
           "name": "membership",
-          "tools": ["add_member_to_platform", "remove_member_from_platform"]
+          "minRole": "admin",
+          "description": "Add or remove members from the Discord server (admin only).",
+          "criteria": "Use when the user wants to add a new member to the Discord server or remove an existing member from the server.",
+          "tools": ["add_member_to_platform", "remove_member_from_platform"],
+          "instructionsDigest": "4d65aa1f5c0d55006408e9472aae474c7f448d6158a2125c3a6179134dcaf92c"
         },
         {
           "name": "messages",
+          "minRole": "organizer",
+          "description": "Send, delete, pin/unpin messages, add reactions, and fetch message history.",
+          "criteria": "Use when the user wants to send a message, delete a message, pin/unpin messages, react to messages, or read message history.",
           "tools": [
             "send_message",
             "delete_message",
@@ -232,19 +299,32 @@
             "remove_reaction",
             "remove_all_reactions",
             "fetch_messages"
-          ]
+          ],
+          "instructionsDigest": "48ac7b45af813b9696c7177d1f9f9b240077ecccd82300468b664461ae25a058"
         },
         {
           "name": "roles",
-          "tools": ["create_role", "edit_role", "delete_role", "assign_role", "remove_role"]
+          "minRole": "organizer",
+          "description": "Create, edit, delete roles, and assign/remove roles from members.",
+          "criteria": "Use when the user wants to create, edit, or delete a role, or assign/remove a role from a member.",
+          "tools": ["create_role", "edit_role", "delete_role", "assign_role", "remove_role"],
+          "instructionsDigest": "d9171a584096fbbf4ea61c73699b0885dc8a17c01d4b9916527e51ab6665eb39"
         },
         {
           "name": "threads",
-          "tools": ["list_threads", "create_thread", "edit_thread", "delete_thread"]
+          "minRole": "organizer",
+          "description": "List, create, edit, and delete threads in channels.",
+          "criteria": "Use when the user wants to manage threads — listing, creating, editing, or deleting threads.",
+          "tools": ["list_threads", "create_thread", "edit_thread", "delete_thread"],
+          "instructionsDigest": "fb895952d8eed59eba57802c47937aa21f9adc370cd9670e74576a43792abad3"
         },
         {
           "name": "webhooks",
-          "tools": ["list_webhooks", "create_webhook", "delete_webhook", "edit_webhook"]
+          "minRole": "organizer",
+          "description": "List, create, edit, and delete webhooks.",
+          "criteria": "Use when the user wants to manage webhooks — listing, creating, editing, moving, or deleting them.",
+          "tools": ["list_webhooks", "create_webhook", "delete_webhook", "edit_webhook"],
+          "instructionsDigest": "6af14adb566b84503a29444d52d86a7bcbc4bcbd13123afbc3dae358b865073e"
         }
       ],
       "tools": [
@@ -325,16 +405,23 @@
       "skills": [
         {
           "name": "comments",
+          "minRole": "organizer",
+          "description": "List, create, and delete comments and reactions on files.",
+          "criteria": "Use when the user wants to view, post, or delete comments on a Figma file, or add reactions.",
           "tools": [
             "list_comments",
             "create_comment",
             "delete_comment",
             "add_reaction",
             "delete_reaction"
-          ]
+          ],
+          "instructionsDigest": "b0abc28a418c2f88931c7b7cdc524a0b019703521e2b3a306ee1dd3a8a67af21"
         },
         {
           "name": "components",
+          "minRole": "organizer",
+          "description": "Browse published components, component sets, and styles across the team and files.",
+          "criteria": "Use when the user asks about design system components, component variants, published styles, colors, or text styles.",
           "tools": [
             "list_team_components",
             "list_file_components",
@@ -344,38 +431,59 @@
             "list_team_styles",
             "list_file_styles",
             "get_style"
-          ]
+          ],
+          "instructionsDigest": "3dcfe1d76f7617903c906b70549dbd1a8bf17168c61e323eb9f8db65d3f78b61"
         },
         {
           "name": "dev-resources",
+          "minRole": "organizer",
+          "description": "Manage dev resource links attached to design nodes.",
+          "criteria": "Use when the user asks about dev links, code links, documentation links, or annotations on design nodes.",
           "tools": [
             "list_dev_resources",
             "create_dev_resources",
             "update_dev_resource",
             "delete_dev_resource"
-          ]
+          ],
+          "instructionsDigest": "caa0112594f313aa99d2f3f8ad2068a343c30dccdd30367ae7be69ae84fea846"
         },
         {
           "name": "nodes",
-          "tools": ["get_file_nodes", "get_images", "get_image_fills"]
+          "minRole": "organizer",
+          "description": "Inspect specific nodes within a file and export images.",
+          "criteria": "Use when the user wants to inspect specific frames, components, or layers, or export designs as images.",
+          "tools": ["get_file_nodes", "get_images", "get_image_fills"],
+          "instructionsDigest": "6774d1563ef2e2bad736708acc868060f6d3781a313ffd6bed78766cddf58194"
         },
         {
           "name": "variables",
-          "tools": ["get_local_variables", "get_published_variables", "modify_variables"]
+          "minRole": "organizer",
+          "description": "Inspect and modify design variables and collections.",
+          "criteria": "Use when the user asks about design variables, design tokens, variable collections, or wants to create/update/delete variables.",
+          "tools": ["get_local_variables", "get_published_variables", "modify_variables"],
+          "instructionsDigest": "73e430c6d6d97dc8f109ee0c9d4d086d6f50076962e412cf428129d8aa446e39"
         },
         {
           "name": "versions",
-          "tools": ["list_versions"]
+          "minRole": "organizer",
+          "description": "View file version history.",
+          "criteria": "Use when the user asks about file history, past versions, or who last edited a file.",
+          "tools": ["list_versions"],
+          "instructionsDigest": "26a47a898a551681f8686e9268ec0c5dba9fe7a2de76030dc95ef5f9141500e4"
         },
         {
           "name": "webhooks",
+          "minRole": "admin",
+          "description": "List, create, update, and delete team webhooks.",
+          "criteria": "Use when the user asks about Figma webhooks, event subscriptions, or automated notifications from Figma.",
           "tools": [
             "list_team_webhooks",
             "create_webhook",
             "get_webhook",
             "update_webhook",
             "delete_webhook"
-          ]
+          ],
+          "instructionsDigest": "59b6cf936433d5c98fe74a912b590ffcd95927bc7baa582d034b529b0254537d"
         }
       ],
       "tools": [
@@ -421,27 +529,51 @@
       "skills": [
         {
           "name": "card-charges",
-          "tools": ["list_card_charges"]
+          "minRole": "organizer",
+          "description": "List Hack Club Bank card charges with optional cardholder filter for microgrant spend tracking.",
+          "criteria": "Use when the user asks about card charges, HCB card spend, specific merchant purchases, or per-person grant spend.",
+          "tools": ["list_card_charges"],
+          "instructionsDigest": "90ddb80d794990ac57b5aabf26cf773838166c04bebff6163715c58703740a7d"
         },
         {
           "name": "donations",
-          "tools": ["list_donations", "get_donation", "donation_totals"]
+          "minRole": "organizer",
+          "description": "List Hack Club Bank donations and total them over a date range for fundraising reporting.",
+          "criteria": "Use when the user asks about donations, donors, recurring donations, or fundraising totals over a period.",
+          "tools": ["list_donations", "get_donation", "donation_totals"],
+          "instructionsDigest": "3381e87e4ee7f656328c5e966c4544a4c4984afed7cb82f35999652daace0972"
         },
         {
           "name": "invoices",
-          "tools": ["list_invoices", "get_invoice", "list_open_invoices"]
+          "minRole": "organizer",
+          "description": "List Hack Club Bank invoices and surface outstanding (unpaid) ones for sponsor follow-ups.",
+          "criteria": "Use when the user asks about invoices, sponsor payments, billing status, or outstanding balances.",
+          "tools": ["list_invoices", "get_invoice", "list_open_invoices"],
+          "instructionsDigest": "5a99f886fdf1e0e4c136fd95d01c33dda13a8daaa42383ca642874463e69e68d"
         },
         {
           "name": "receipts",
-          "tools": ["list_missing_receipts", "get_receipt_status"]
+          "minRole": "organizer",
+          "description": "Check which Hack Club Bank transactions are missing an attached receipt. Files themselves are NOT available via API.",
+          "criteria": "Use when the user asks about missing receipts, receipt status for a charge, or wants to chase down receipt uploads.",
+          "tools": ["list_missing_receipts", "get_receipt_status"],
+          "instructionsDigest": "7fef6b4d672e4433d18fb178b52e7b6ce600f3c2628ae45f65330f313758c93c"
         },
         {
           "name": "transactions",
-          "tools": ["list_transactions", "get_transaction", "find_transactions"]
+          "minRole": "organizer",
+          "description": "List, inspect, and search Hack Club Bank transactions by memo, amount, or date range.",
+          "criteria": "Use when the user asks about recent transactions, a specific charge, or wants to find transactions by memo/amount/date.",
+          "tools": ["list_transactions", "get_transaction", "find_transactions"],
+          "instructionsDigest": "416256c315817f580d10403d38db8d296519cbbe6ec32534fd7bceb1170d744a"
         },
         {
           "name": "transfers",
-          "tools": ["list_transfers", "get_transfer"]
+          "minRole": "organizer",
+          "description": "View Hack Club Bank inter-org transfers (disbursements between HCB organizations).",
+          "criteria": "Use when the user asks about transfers, disbursements, or money sent to / received from another HCB org.",
+          "tools": ["list_transfers", "get_transfer"],
+          "instructionsDigest": "f6d4d8f3fabfe7b3ec75034b4c39588a181340f86eba82b6cd02985c27cd3dde"
         }
       ],
       "tools": [
@@ -470,6 +602,9 @@
       "skills": [
         {
           "name": "actions",
+          "minRole": "organizer",
+          "description": "List and manage workflows, workflow runs, jobs, and artifacts.",
+          "criteria": "Use when the user wants to check CI/CD status, trigger workflows, view build logs, or manage runs.",
           "tools": [
             "list_workflows",
             "list_workflow_runs",
@@ -479,20 +614,28 @@
             "rerun_workflow",
             "list_workflow_jobs",
             "download_artifact"
-          ]
+          ],
+          "instructionsDigest": "8febf3e13ff1c55a8c8de6d23f88ca97e5b0b660b5a78478f01477e8b2a1c9de"
         },
         {
           "name": "collaborators",
+          "minRole": "admin",
+          "description": "Manage direct repository collaborators and pending invitations (admin only for writes).",
+          "criteria": "Use when the user wants to list repo collaborators, add/remove one, or manage pending repo invitations.",
           "tools": [
             "list_collaborators",
             "add_collaborator",
             "remove_collaborator",
             "list_repo_invitations",
             "cancel_repo_invitation"
-          ]
+          ],
+          "instructionsDigest": "3ce97fab02f69801f56c2bdadb9dbbecb0bb5accee569debbfa6c668edd8e4b7"
         },
         {
           "name": "contents",
+          "minRole": "organizer",
+          "description": "Read and write file contents; browse directory trees; view commits and diffs.",
+          "criteria": "Use when the user wants to read files, browse code, edit files, view commits, or compare branches.",
           "tools": [
             "get_file_content",
             "create_or_update_file",
@@ -501,10 +644,14 @@
             "list_commits",
             "get_commit",
             "compare_commits"
-          ]
+          ],
+          "instructionsDigest": "61beb15599ef068aa7e7864bf2faa220dd27b0b2db61927e63d110b64321f4ca"
         },
         {
           "name": "deployments",
+          "minRole": "organizer",
+          "description": "Manage deployments, deployment statuses, and GitHub Pages.",
+          "criteria": "Use when the user wants to view or create deployments, check deployment status, or manage GitHub Pages.",
           "tools": [
             "list_deployments",
             "create_deployment",
@@ -512,19 +659,27 @@
             "get_pages_info",
             "list_pages_builds",
             "trigger_pages_build"
-          ]
+          ],
+          "instructionsDigest": "2737310e0da2c132e40726291ec0ce81b887e362fd3b594211c651138c54f011"
         },
         {
           "name": "environments",
+          "minRole": "organizer",
+          "description": "Manage deployment environments — protection rules, wait timers, required reviewers.",
+          "criteria": "Use when the user wants to create/update/delete a deployment environment or view its protection rules.",
           "tools": [
             "list_environments",
             "get_environment",
             "create_or_update_environment",
             "delete_environment"
-          ]
+          ],
+          "instructionsDigest": "702421f1c3b7b90a7e34e2507b17526eaa35b3007980b6cb8c92ea008f1187cb"
         },
         {
           "name": "issues",
+          "minRole": "organizer",
+          "description": "Create, update, and manage issues; manage labels and milestones.",
+          "criteria": "Use when the user wants to create, update, close, or manage issues, labels, or milestones.",
           "tools": [
             "create_issue",
             "update_issue",
@@ -538,14 +693,22 @@
             "delete_issue_comment",
             "manage_labels",
             "manage_milestones"
-          ]
+          ],
+          "instructionsDigest": "0bfc9bdc590ff4f65122b5b3dcdf14769196039eb92b53d2b6c946d614df4442"
         },
         {
           "name": "membership",
-          "tools": ["add_member_to_platform", "remove_member_from_platform"]
+          "minRole": "admin",
+          "description": "Invite or remove members from the purduehackers GitHub organization (admin only).",
+          "criteria": "Use when the user wants to add a new member to the GitHub organization or remove an existing member.",
+          "tools": ["add_member_to_platform", "remove_member_from_platform"],
+          "instructionsDigest": "90326fb4fd1ca9f06b4aad0a4bec7b4b7b74a9b707fda150322aa10f209afd83"
         },
         {
           "name": "organization",
+          "minRole": "organizer",
+          "description": "View organization members and teams; manage team membership and webhooks.",
+          "criteria": "Use when the user wants to view org members, teams, manage membership, or manage webhooks.",
           "tools": [
             "list_org_members",
             "get_org_member",
@@ -561,19 +724,27 @@
             "update_webhook",
             "delete_webhook",
             "list_org_webhooks"
-          ]
+          ],
+          "instructionsDigest": "8016d10df2bf86df645d468b342d3a27f7da65cf7650d7caa70903e99c9a3f11"
         },
         {
           "name": "packages",
+          "minRole": "organizer",
+          "description": "List, inspect, and manage organization packages.",
+          "criteria": "Use when the user wants to view, inspect, or manage GitHub Packages.",
           "tools": [
             "list_packages",
             "get_package",
             "list_package_versions",
             "delete_package_version"
-          ]
+          ],
+          "instructionsDigest": "949f0479723ed8a309d55cf87f071e19c2644414b79dd4742a3b18f66f8b1b86"
         },
         {
           "name": "projects",
+          "minRole": "organizer",
+          "description": "Manage GitHub Projects v2 — list projects, view and manage items.",
+          "criteria": "Use when the user wants to view or manage GitHub Projects, add items, or update fields.",
           "tools": [
             "list_org_projects",
             "get_project",
@@ -581,10 +752,14 @@
             "create_project_item",
             "update_project_item",
             "delete_project_item"
-          ]
+          ],
+          "instructionsDigest": "aeed3a8ef5dbe971d80934e36a4c482e7b7739f6ec4e0d9411bbe899db6d237f"
         },
         {
           "name": "pull-requests",
+          "minRole": "organizer",
+          "description": "Create, update, review, and merge pull requests.",
+          "criteria": "Use when the user wants to create, update, review, merge, or inspect pull requests.",
           "tools": [
             "create_pull_request",
             "update_pull_request",
@@ -596,19 +771,27 @@
             "create_pr_review",
             "list_pr_files",
             "list_pr_comments"
-          ]
+          ],
+          "instructionsDigest": "91a883970ce7b2e03fb55c06881eea80bbbfd3f352b9e637370efc9e119abb56"
         },
         {
           "name": "reactions",
+          "minRole": "organizer",
+          "description": "Add or remove reaction emojis on issues and issue/PR comments.",
+          "criteria": "Use when the user wants to react to an issue or comment with an emoji, or remove a reaction.",
           "tools": [
             "add_issue_reaction",
             "remove_issue_reaction",
             "add_comment_reaction",
             "remove_comment_reaction"
-          ]
+          ],
+          "instructionsDigest": "e6b00c11dd828cb19474498afb77801e5d2620873c80c4a4f340fd4cb461cbe5"
         },
         {
           "name": "releases",
+          "minRole": "organizer",
+          "description": "Manage GitHub releases — list, create, update, and delete releases and their assets.",
+          "criteria": "Use when the user wants to list, view, create, update, or delete a GitHub release, or inspect its assets.",
           "tools": [
             "list_releases",
             "get_release",
@@ -616,10 +799,14 @@
             "update_release",
             "delete_release",
             "list_release_assets"
-          ]
+          ],
+          "instructionsDigest": "e155ab71fa67617b57e2ae4cc62f209ee52a819a4c273724de17b278da0a94c0"
         },
         {
           "name": "repositories",
+          "minRole": "organizer",
+          "description": "Create, update, and delete repositories; manage branches and branch protection.",
+          "criteria": "Use when the user wants to manage repository settings, branches, or branch protection.",
           "tools": [
             "create_repository",
             "update_repository",
@@ -630,10 +817,14 @@
             "get_branch_protection",
             "set_branch_protection",
             "delete_branch_protection"
-          ]
+          ],
+          "instructionsDigest": "c0bcf6d8a0aac76e7b3ac329a0ad0127e277c41d211b63ac96bde1ceb20b4f06"
         },
         {
           "name": "secrets-and-variables",
+          "minRole": "organizer",
+          "description": "Manage repository and organization secrets and variables for GitHub Actions.",
+          "criteria": "Use when the user wants to view, create, update, or delete secrets or variables.",
           "tools": [
             "list_repo_secrets",
             "create_or_update_repo_secret",
@@ -647,11 +838,16 @@
             "list_org_variables",
             "create_or_update_org_variable",
             "delete_org_variable"
-          ]
+          ],
+          "instructionsDigest": "025b5eaa6734d2b3d508d5591302bfeccea37f4c68f53b1d6fd972ec2e73d295"
         },
         {
           "name": "tags-refs",
-          "tools": ["list_tags", "list_refs", "get_ref", "create_ref", "update_ref", "delete_ref"]
+          "minRole": "organizer",
+          "description": "Manage git refs (branches and tags) — list, create, update, and delete.",
+          "criteria": "Use when the user wants to create/delete a branch or tag, or inspect refs via the git plumbing API.",
+          "tools": ["list_tags", "list_refs", "get_ref", "create_ref", "update_ref", "delete_ref"],
+          "instructionsDigest": "0a7325f72fdbf2658cd2f3f3989bc5dc854f12ede6206322de14ad5abc8bda35"
         }
       ],
       "tools": [
@@ -788,43 +984,74 @@
       "skills": [
         {
           "name": "comments",
-          "tools": ["create_comment", "edit_comment", "delete_comment"]
+          "minRole": "organizer",
+          "description": "Post, edit, and delete comments on issues.",
+          "criteria": "Use when the user explicitly asks to comment on, reply to, or annotate an issue.",
+          "tools": ["create_comment", "edit_comment", "delete_comment"],
+          "instructionsDigest": "5af3a9c33e7dcb53c71ec0e7b992e2fe7f111378b39d9ce4bd2f318004895c84"
         },
         {
           "name": "customer-requests",
-          "tools": ["create_customer_need", "update_customer_need", "list_customer_needs"]
+          "minRole": "organizer",
+          "description": "Create, update, list, and analyze customer requests.",
+          "criteria": "Use when the user wants to log, update, list, or analyze customer feedback/requests.",
+          "tools": ["create_customer_need", "update_customer_need", "list_customer_needs"],
+          "instructionsDigest": "a2146f8d5e590ba62349e745e90315bd8575a80f36ed6fa0a588ecce1287b922"
         },
         {
           "name": "cycles",
-          "tools": ["list_cycles", "get_cycle", "create_cycle", "update_cycle", "archive_cycle"]
+          "minRole": "organizer",
+          "description": "List, create, update, and archive Linear cycles (sprints).",
+          "criteria": "Use when the user wants to manage Linear cycles — creating a new sprint, updating dates, or archiving an old cycle.",
+          "tools": ["list_cycles", "get_cycle", "create_cycle", "update_cycle", "archive_cycle"],
+          "instructionsDigest": "e536337df4de54b6352e7fca610c3f5330b12e7dc64d16a12595043b5ceb46d8"
         },
         {
           "name": "documents",
-          "tools": ["create_document", "update_document"]
+          "minRole": "organizer",
+          "description": "Create and update documents attached to a project, initiative, issue, or cycle.",
+          "criteria": "Use when the user wants to create or update a document.",
+          "tools": ["create_document", "update_document"],
+          "instructionsDigest": "e908efc1217cf14db431da5f3486da0f1ccae5bcbd99c614b53c8b467d4cb7ca"
         },
         {
           "name": "initiative-updates",
+          "minRole": "organizer",
+          "description": "Query, create, and update initiative status updates.",
+          "criteria": "Use for cross-project status reporting on an initiative.",
           "tools": [
             "query_initiative_updates",
             "create_initiative_update",
             "update_initiative_update"
-          ]
+          ],
+          "instructionsDigest": "165c8459088923d53331f6c877e2240675a0faa13a06019f031cf912faaae0c4"
         },
         {
           "name": "initiatives",
+          "minRole": "organizer",
+          "description": "Create/update initiatives; query initiative activity and history.",
+          "criteria": "Use when the user wants to create/update an initiative or inspect its history.",
           "tools": [
             "create_initiative",
             "update_initiative",
             "list_initiatives",
             "query_initiative_activity"
-          ]
+          ],
+          "instructionsDigest": "24b522a5c0eb5b53dc12ecf2cc725f7470813fa10644180d123ffa5c01d77abb"
         },
         {
           "name": "issue-views",
-          "tools": ["query_issue_view"]
+          "minRole": "organizer",
+          "description": "Query and analyze issue views in list or insight mode, with filters.",
+          "criteria": "Use for \"show me issues matching X\" or \"count/break down issues by Y\".",
+          "tools": ["query_issue_view"],
+          "instructionsDigest": "8ae4fd5f769e448a4d4868a0476db4f0e33e390b08050f2f17fe8ca434633d8a"
         },
         {
           "name": "issues",
+          "minRole": "organizer",
+          "description": "Create, update, delete issues; query issue activity and history.",
+          "criteria": "Use when the user wants to create, update, delete, or inspect the history of a specific issue.",
           "tools": [
             "create_issue",
             "update_issue",
@@ -832,26 +1059,46 @@
             "archive_issue",
             "unarchive_issue",
             "query_issue_activity"
-          ]
+          ],
+          "instructionsDigest": "4c2471115a8ee4c0297f4292d58946da1eaa0af1f287b303ed44edb10717a96e"
         },
         {
           "name": "labels",
-          "tools": ["list_labels", "get_label", "create_label", "update_label", "delete_label"]
+          "minRole": "organizer",
+          "description": "List, create, update, and delete Linear issue labels.",
+          "criteria": "Use when the user wants to manage Linear labels — creating, renaming, recoloring, or deleting them, or scoping labels to a team.",
+          "tools": ["list_labels", "get_label", "create_label", "update_label", "delete_label"],
+          "instructionsDigest": "a0c5ae1969327894020af13e09801fe9d213f21a60798f2d49d772e04809e205"
         },
         {
           "name": "membership",
-          "tools": ["add_member_to_platform", "remove_member_from_platform"]
+          "minRole": "admin",
+          "description": "Invite new members to the Linear workspace or remove existing ones (admin only).",
+          "criteria": "Use when the user wants to add a new member to the Linear workspace or remove an existing member.",
+          "tools": ["add_member_to_platform", "remove_member_from_platform"],
+          "instructionsDigest": "cb7f77c68eccf9136d136aea2f4410e383b5320cbe70b6a50ab1af24b4abacdb"
         },
         {
           "name": "project-updates",
-          "tools": ["query_project_updates", "create_project_update", "update_project_update"]
+          "minRole": "organizer",
+          "description": "Query, create, and update project status updates.",
+          "criteria": "Use when the user wants to post, edit, or read project status updates.",
+          "tools": ["query_project_updates", "create_project_update", "update_project_update"],
+          "instructionsDigest": "d7d13c0ac9ef43095b6a8ea1a2bf06ee72cd65aa592a615a2c8ab9d9ae1cf8e7"
         },
         {
           "name": "project-views",
-          "tools": ["query_project_view"]
+          "minRole": "organizer",
+          "description": "Query and analyze project views in list or count mode, with filters.",
+          "criteria": "Use for \"show/count projects matching X\".",
+          "tools": ["query_project_view"],
+          "instructionsDigest": "eaba32d480d828b94f15c84b9bf9276429c2a92c7771e6e075ec8e5859595497"
         },
         {
           "name": "projects",
+          "minRole": "organizer",
+          "description": "Create/update projects and milestones; query project activity.",
+          "criteria": "Use when the user wants to create/update a project, manage milestones, or inspect project history.",
           "tools": [
             "create_project",
             "update_project",
@@ -863,18 +1110,30 @@
             "update_project_milestone",
             "query_project_activity",
             "query_project_view"
-          ]
+          ],
+          "instructionsDigest": "77c9b0e153ab77fa9fbc9b77d77b2ec8b6c28d7b1c09c4dd0643b1d902bae02f"
         },
         {
           "name": "reminders",
-          "tools": ["set_reminder"]
+          "minRole": "organizer",
+          "description": "Set a reminder for the current user on an issue, document, project, or initiative.",
+          "criteria": "Use when the user wants to set a reminder or be nudged about something.",
+          "tools": ["set_reminder"],
+          "instructionsDigest": "3a13c66d0dc45b8250bf0d3fcd9ea77575af983cb9c93c1464fe823220ecefe1"
         },
         {
           "name": "teams",
-          "tools": ["list_team_members", "add_user_to_team", "remove_user_from_team"]
+          "minRole": "organizer",
+          "description": "List team members and manage team membership.",
+          "criteria": "Use when the user wants to see who is on a team, add a user to a team, or remove a user from a team.",
+          "tools": ["list_team_members", "add_user_to_team", "remove_user_from_team"],
+          "instructionsDigest": "9e5c29b7f154c1c6577696585d3aa3ade4c58ea8c123a31be03e76e75fd60921"
         },
         {
           "name": "users",
+          "minRole": "organizer",
+          "description": "List, inspect, and manage workspace users — profiles, teams, workload, invites.",
+          "criteria": "Use when the user wants to look up a person, see who's on a team, check workload, invite someone, or manage accounts.",
           "tools": [
             "list_users",
             "get_user",
@@ -885,7 +1144,8 @@
             "invite_user",
             "list_invites",
             "delete_invite"
-          ]
+          ],
+          "instructionsDigest": "e9eb3f9d9ac939a26f628fb2e09936a8eface08dfd776be30d20e24d4c6a4100"
         }
       ],
       "tools": [
@@ -962,24 +1222,39 @@
       "skills": [
         {
           "name": "blocks",
+          "minRole": "organizer",
+          "description": "Read and modify individual Notion blocks — retrieve, update, archive, list children, and append.",
+          "criteria": "Use when the user wants fine-grained block manipulation on a Notion page (individual paragraphs, toggles, callouts) rather than replacing whole-page content.",
           "tools": [
             "retrieve_block",
             "update_block",
             "delete_block",
             "list_block_children",
             "append_block_children"
-          ]
+          ],
+          "instructionsDigest": "e40af0cbf2dc4e5058e33b324ea1c5354002afc42616c144a1f38d16cf1bb826"
         },
         {
           "name": "comments",
-          "tools": ["create_comment", "list_comments", "retrieve_comment"]
+          "minRole": "organizer",
+          "description": "Create and list comments on pages and blocks.",
+          "criteria": "Use when the user wants to comment on a page, read existing comments, or reply in a discussion thread.",
+          "tools": ["create_comment", "list_comments", "retrieve_comment"],
+          "instructionsDigest": "964a8bf5d4dc39999d6f22938ae24610c7377f1da601ab5185fa051c80608415"
         },
         {
           "name": "databases",
-          "tools": ["query_database", "create_database", "update_database", "archive_database"]
+          "minRole": "organizer",
+          "description": "Query database entries with filters/sorts; create and update databases.",
+          "criteria": "Use when the user wants to query, filter, or sort database entries, or create/modify a database schema.",
+          "tools": ["query_database", "create_database", "update_database", "archive_database"],
+          "instructionsDigest": "bf1ff59bfb8095235b3052dce0d5647dcb69e983fd0067bee069b847914276a7"
         },
         {
           "name": "pages",
+          "minRole": "organizer",
+          "description": "Create, update, read, and edit pages — properties and Notion-flavored markdown content.",
+          "criteria": "Use when the user wants to create a new page, update page properties, read or edit page content.",
           "tools": [
             "create_page",
             "update_page",
@@ -989,7 +1264,8 @@
             "update_page_content",
             "retrieve_user",
             "retrieve_bot_user"
-          ]
+          ],
+          "instructionsDigest": "8e18fdca5eb2439af424230f688e3315417f13fe3188075b95979c7a48b23dde"
         }
       ],
       "tools": [
@@ -1034,6 +1310,9 @@
       "skills": [
         {
           "name": "audiences",
+          "minRole": "organizer",
+          "description": "Manage Resend audiences (segments) and their contact rosters.",
+          "criteria": "Use when the user wants to list, create, or delete audiences, or add/remove contacts from an audience.",
           "tools": [
             "list_audiences",
             "get_audience",
@@ -1042,20 +1321,28 @@
             "list_contacts_in_audience",
             "add_contact_to_audience",
             "remove_contact_from_audience"
-          ]
+          ],
+          "instructionsDigest": "10bfc9a9fbdb0eb1466cb4d7657bf1d0c37410417bef0627e2782c00c238e5bb"
         },
         {
           "name": "broadcasts",
+          "minRole": "organizer",
+          "description": "Manage Resend broadcasts — mass email campaigns to audiences.",
+          "criteria": "Use when the user wants to create, schedule, send, or delete a Resend broadcast.",
           "tools": [
             "list_broadcasts",
             "get_broadcast",
             "create_broadcast",
             "send_broadcast",
             "delete_broadcast"
-          ]
+          ],
+          "instructionsDigest": "0a6978eee570fa1fa51559945ebcc8527e369495608f686ce7a6c0415a65eec2"
         },
         {
           "name": "crm-writes",
+          "minRole": "organizer",
+          "description": "Update Company and Contact fields — status, email, next follow-up.",
+          "criteria": "Use when the user wants to change a Company or Contact row (e.g. mark \"Contacted\", set an email, schedule a follow-up).",
           "tools": [
             "create_company",
             "create_contact",
@@ -1066,27 +1353,54 @@
             "update_company_next_followup",
             "update_contact_status",
             "update_contact_email"
-          ]
+          ],
+          "instructionsDigest": "415b8ef850013518a2e2661d97a0d71562747f4b4782ac688e91d4e5dafe9f0c"
         },
         {
           "name": "deals-management",
-          "tools": ["create_deal", "update_deal_stage", "update_deal"]
+          "minRole": "organizer",
+          "description": "Create and update Deal rows in the CRM.",
+          "criteria": "Use when the user wants to create a Deal, change a Deal's Stage, or edit Deal fields (amount, priority, close date, notes).",
+          "tools": ["create_deal", "update_deal_stage", "update_deal"],
+          "instructionsDigest": "8050bed4963058410377dc255df09eb045b7d82f0d5c46b1d39a5f8840df4fce"
         },
         {
           "name": "domains",
-          "tools": ["list_domains", "get_domain", "create_domain", "verify_domain", "delete_domain"]
+          "minRole": "admin",
+          "description": "Manage Resend sending domains and their DNS verification.",
+          "criteria": "Use when the user wants to register a new sending domain, check verification status, or delete a domain (admin only for writes).",
+          "tools": [
+            "list_domains",
+            "get_domain",
+            "create_domain",
+            "verify_domain",
+            "delete_domain"
+          ],
+          "instructionsDigest": "9cd3ad2d84f7ae740e2c4b3f56b87d02a2d23bea024faf45ac75674eaa0f9fdc"
         },
         {
           "name": "email-enrichment",
-          "tools": ["find_email_for_lead", "verify_email"]
+          "minRole": "organizer",
+          "description": "Find and verify email addresses via Hunter.io.",
+          "criteria": "Use when the user asks to find an email for a lead, enrich a Company's contact info, or verify whether an address is deliverable.",
+          "tools": ["find_email_for_lead", "verify_email"],
+          "instructionsDigest": "2b27c7ac8efe99c401480c861a0e4765ab6fd182c320ba3952a83d8daccabcc3"
         },
         {
           "name": "emails",
-          "tools": ["get_email", "cancel_email"]
+          "minRole": "organizer",
+          "description": "Look up and cancel individual Resend emails.",
+          "criteria": "Use when the user wants to check delivery status of a sent email or cancel a scheduled one.",
+          "tools": ["get_email", "cancel_email"],
+          "instructionsDigest": "a4f80d9af5cbbe7d45be7339bd6810b84b58ae9e07c66bb22b120e6d0c02281a"
         },
         {
           "name": "status-tracking",
-          "tools": ["get_email_status"]
+          "minRole": "organizer",
+          "description": "Read the outreach tracking properties off a Company or Contact row.",
+          "criteria": "Use when the user wants to check whether an outreach landed, was opened, or bounced.",
+          "tools": ["get_email_status"],
+          "instructionsDigest": "042c131d44d6607b2683adb64a6fc308f085f8c6be852759973bf18fa4a7f52f"
         }
       ],
       "tools": [
@@ -1140,6 +1454,9 @@
       "skills": [
         {
           "name": "alerts",
+          "minRole": "organizer",
+          "description": "List, create, update, and delete issue and metric alert rules.",
+          "criteria": "Use when the user wants to view, create, modify, or delete alert rules or notification triggers.",
           "tools": [
             "list_alert_rules",
             "get_alert_rule",
@@ -1148,28 +1465,44 @@
             "delete_alert_rule",
             "list_metric_alert_rules",
             "get_metric_alert_rule"
-          ]
+          ],
+          "instructionsDigest": "d9a54806b0f49d6b5924eccb1d943dc971a9e4b53b0af613c5425cc76b5fb457"
         },
         {
           "name": "events",
-          "tools": ["list_issue_events", "get_event", "get_latest_event", "list_project_events"]
+          "minRole": "organizer",
+          "description": "List and inspect error events, stack traces, and breadcrumbs.",
+          "criteria": "Use when the user wants to see error details, stack traces, event history, or breadcrumbs.",
+          "tools": ["list_issue_events", "get_event", "get_latest_event", "list_project_events"],
+          "instructionsDigest": "3f70fb2300b657f828879ab25767e63411be4af18fb7e98e7404951a7567a9e6"
         },
         {
           "name": "issue-management",
+          "minRole": "organizer",
+          "description": "Update, resolve, ignore, assign, delete, and tag issues.",
+          "criteria": "Use when the user wants to resolve, ignore, assign, delete issues, or inspect issue tags.",
           "tools": [
             "update_issue",
             "delete_issue",
             "bulk_update_issues",
             "list_issue_tags",
             "get_issue_tag_values"
-          ]
+          ],
+          "instructionsDigest": "9de769e5a9ec065907d6e39c38cf5155e26604da2865a238c35c0c6df9a5f15f"
         },
         {
           "name": "log-search",
-          "tools": ["search_logs", "get_log_stats"]
+          "minRole": "organizer",
+          "description": "Search structured logs and inspect log volume over time.",
+          "criteria": "Use when the user asks about application logs, log search, log levels, or log spikes/volume over time.",
+          "tools": ["search_logs", "get_log_stats"],
+          "instructionsDigest": "b797bd41a10917b0a0173f470f7c044f45296ecdff66a26b97f42946b0c84d79"
         },
         {
           "name": "members",
+          "minRole": "organizer",
+          "description": "List and manage organization members and teams; view team membership.",
+          "criteria": "Use when the user wants to view org members, teams, manage team membership, or create/delete teams.",
           "tools": [
             "list_members",
             "get_member",
@@ -1182,36 +1515,60 @@
             "delete_team",
             "add_team_member",
             "remove_team_member"
-          ]
+          ],
+          "instructionsDigest": "1f23d333c4d35d13b6a6c200bd3bb6ae0f9804a6fd139553715ba813385843dc"
         },
         {
           "name": "membership",
-          "tools": ["add_member_to_platform", "remove_member_from_platform"]
+          "minRole": "admin",
+          "description": "Invite new members to the Sentry organization or remove existing ones (admin only).",
+          "criteria": "Use when the user wants to add a new member to the Sentry organization or remove an existing member.",
+          "tools": ["add_member_to_platform", "remove_member_from_platform"],
+          "instructionsDigest": "6190d464ff6155b2562fe2a76fdfd1d4337010f8cc98b807dfc785c10a86b596"
         },
         {
           "name": "metrics",
-          "tools": ["list_metrics", "query_metrics", "list_metric_tags", "get_metric_tag_values"]
+          "minRole": "organizer",
+          "description": "Query custom metrics — counters, distributions, gauges, and sets.",
+          "criteria": "Use when the user asks about custom metrics, counters, distributions, gauges, or application-level numeric data.",
+          "tools": ["list_metrics", "query_metrics", "list_metric_tags", "get_metric_tag_values"],
+          "instructionsDigest": "da5ef9c8c6f9b55c73ef7b41b0c8e8b652216e8491e7d1209fa3c78c6b6cf573"
         },
         {
           "name": "monitors",
+          "minRole": "organizer",
+          "description": "Manage cron monitors — view schedules, check-in history, and configure runtime limits.",
+          "criteria": "Use when the user asks about cron jobs, scheduled tasks, monitors, missed check-ins, or job failures.",
           "tools": [
             "list_monitors",
             "get_monitor",
             "list_monitor_checkins",
             "update_monitor",
             "delete_monitor"
-          ]
+          ],
+          "instructionsDigest": "fb5b35ae38d819119939556043f7d1483b1e128582f60465349627fbbd57bb80"
         },
         {
           "name": "performance",
-          "tools": ["list_transactions", "get_transaction_summary", "list_spans"]
+          "minRole": "organizer",
+          "description": "Query transaction performance, latency, throughput, and span data.",
+          "criteria": "Use when the user asks about slow endpoints, latency, throughput, p95/p99, or transaction performance.",
+          "tools": ["list_transactions", "get_transaction_summary", "list_spans"],
+          "instructionsDigest": "33930262925438b2148f532b744d453eca08d97c0504b3fcc0fc6f862b9293db"
         },
         {
           "name": "profiling",
-          "tools": ["get_flamegraph", "list_profiled_functions"]
+          "minRole": "organizer",
+          "description": "View CPU profiling data — flamegraphs and slowest functions.",
+          "criteria": "Use when the user asks about profiling, flamegraphs, CPU usage, slow functions, or function-level performance.",
+          "tools": ["get_flamegraph", "list_profiled_functions"],
+          "instructionsDigest": "d3dc6ba2a3a4377d5fb69eb1ac68f1440977f19cf484edf1ff9c0dda08987864"
         },
         {
           "name": "projects-management",
+          "minRole": "admin",
+          "description": "Create, update, and delete Sentry projects; manage project environments and client keys (DSNs).",
+          "criteria": "Use when the user wants to create/delete a Sentry project, update project settings, or manage DSNs/environments.",
           "tools": [
             "create_project",
             "update_project",
@@ -1220,10 +1577,14 @@
             "list_project_keys",
             "create_project_key",
             "delete_project_key"
-          ]
+          ],
+          "instructionsDigest": "0a37fcb725ab0ed30d64004c8e8f66b989015a7ea8d41e483d22d4c47dffd2b9"
         },
         {
           "name": "releases",
+          "minRole": "organizer",
+          "description": "Create and manage releases and deploys; view release health and commits.",
+          "criteria": "Use when the user wants to create releases, record deploys, view release health, or see release commits.",
           "tools": [
             "list_releases",
             "get_release",
@@ -1231,19 +1592,32 @@
             "list_release_deploys",
             "create_deploy",
             "list_release_commits"
-          ]
+          ],
+          "instructionsDigest": "1bee515a6ac41252b3871eb6eb9cf02c8c690a6a7747ded4f9c215dacdd2ae56"
         },
         {
           "name": "replays",
-          "tools": ["list_replays", "get_replay"]
+          "minRole": "organizer",
+          "description": "View session replays — user session recordings with error context.",
+          "criteria": "Use when the user asks about session replays, user recordings, or wants to see what a user experienced.",
+          "tools": ["list_replays", "get_replay"],
+          "instructionsDigest": "6fae368230a28715fd8229846bbb6393e79107858c09d68721ce0a3873287494"
         },
         {
           "name": "stats",
-          "tools": ["get_org_stats", "get_project_stats"]
+          "minRole": "organizer",
+          "description": "View organization and project usage statistics — event volume, quotas, and trends.",
+          "criteria": "Use when the user asks about Sentry usage, event volume, quotas, dropped events, or ingestion stats.",
+          "tools": ["get_org_stats", "get_project_stats"],
+          "instructionsDigest": "f0e9fd6e03ce44ec887852df3ef1164969de3f7221c6cc35add8c97bdc3b22fe"
         },
         {
           "name": "traces",
-          "tools": ["get_trace", "list_traces"]
+          "minRole": "organizer",
+          "description": "View distributed traces — full request waterfalls across services.",
+          "criteria": "Use when the user asks about traces, distributed tracing, request waterfalls, or wants to follow a request across services.",
+          "tools": ["get_trace", "list_traces"],
+          "instructionsDigest": "f44f7479ce6fc2c29cac8b6e2058b3ae7ebf0047efceaa9cf38784b517bbbaef"
         }
       ],
       "tools": [
@@ -1324,7 +1698,11 @@
       "skills": [
         {
           "name": "cart",
-          "tools": ["add_to_cart", "remove_from_cart", "update_quantity", "clear_cart"]
+          "minRole": "organizer",
+          "description": "Add, remove, update quantities, and clear the shared cart.",
+          "criteria": "Use when the user wants to add an item, remove an item, change a quantity, or clear the cart.",
+          "tools": ["add_to_cart", "remove_from_cart", "update_quantity", "clear_cart"],
+          "instructionsDigest": "90570be9ec69f18a308cc824b0406f184eb555149a581f9b69b26ff88c1dd593"
         }
       ],
       "tools": [
@@ -1352,10 +1730,17 @@
       "skills": [
         {
           "name": "artifacts",
-          "tools": ["artifacts_status", "artifact_exists", "artifact_query"]
+          "minRole": "organizer",
+          "description": "Inspect the Turborepo remote cache — status, artifact existence, and usage.",
+          "criteria": "Use when the user asks about the Turborepo remote cache, build artifacts, cache hits/usage, or whether a specific artifact hash is cached.",
+          "tools": ["artifacts_status", "artifact_exists", "artifact_query"],
+          "instructionsDigest": "7ad77622d63f7697c2319da1114b5afc5a4d61e4246d675cf57b65b870c22e5f"
         },
         {
           "name": "deployments",
+          "minRole": "organizer",
+          "description": "Inspect and control deployments — list, view events, cancel, delete, promote, rollback.",
+          "criteria": "Use when the user asks about specific deployments, build events, canceling an in-flight build, promoting/rolling back production, or investigating deployment files.",
           "tools": [
             "list_deployments",
             "get_deployment",
@@ -1368,10 +1753,14 @@
             "promote_deployment",
             "rollback_deployment",
             "update_rollback_description"
-          ]
+          ],
+          "instructionsDigest": "5ed9622c801dbd06724f189394b0611c463d2e379f009a67411e08fad2793d95"
         },
         {
           "name": "domains",
+          "minRole": "organizer",
+          "description": "Aliases, team domains, DNS records, registrar queries (availability, pricing, auth code), and TLS certs.",
+          "criteria": "Use when the user asks about URL aliases, apex domains, DNS records, domain availability or pricing on Vercel registrar, or TLS certificates.",
           "tools": [
             "list_aliases",
             "get_alias",
@@ -1393,10 +1782,14 @@
             "get_cert",
             "issue_cert",
             "remove_cert"
-          ]
+          ],
+          "instructionsDigest": "84ad9f9cec143739fda90a238aac40a1b915ac9770c581a01d8aac9c1277ecfe"
         },
         {
           "name": "edge-platform",
+          "minRole": "organizer",
+          "description": "Edge Config stores/items/tokens/backups, edge cache invalidation, native Vercel feature flags.",
+          "criteria": "Use when the user asks about Edge Config, cache invalidation (by tag or image URL), or Vercel's native feature flags and SDK keys.",
           "tools": [
             "list_edge_configs",
             "get_edge_config",
@@ -1432,10 +1825,14 @@
             "list_sdk_keys",
             "create_sdk_key",
             "delete_sdk_key"
-          ]
+          ],
+          "instructionsDigest": "d2d4ab25c1d0c23114bcc750de37d660dc49c2624dd4646f9ad9894baa9d266d"
         },
         {
           "name": "integrations",
+          "minRole": "organizer",
+          "description": "Browse installed integrations, provision new marketplace stores (Turso, Upstash Redis, Neon Postgres, Vercel Blob), and connect them to projects.",
+          "criteria": "Use when the user asks about marketplace integrations, provisioning a new database/KV/blob store, attaching a provisioned store to a project, rotating integration secrets, or searching git repos for a new project.",
           "tools": [
             "list_integration_configurations",
             "get_integration_configuration",
@@ -1449,10 +1846,14 @@
             "delete_integration_resource",
             "list_git_namespaces",
             "search_git_repos"
-          ]
+          ],
+          "instructionsDigest": "3e75eddc51b224fc7e458e44b651fa26ba70b088e628e08e80c0c7ac22769e78"
         },
         {
           "name": "observability",
+          "minRole": "organizer",
+          "description": "Runtime logs, log/data drains, API Observability settings, and team audit events.",
+          "criteria": "Use when the user asks about runtime logs, where logs are exported (log drains / data drains), API Observability settings, or the team's audit/activity events.",
           "tools": [
             "get_runtime_logs",
             "list_log_drains",
@@ -1467,10 +1868,14 @@
             "update_observability_config",
             "list_user_events",
             "list_event_types"
-          ]
+          ],
+          "instructionsDigest": "96c52782b691cc6fc41140480bda25f7a75b403f98a7e54fa35b69e7db395d33"
         },
         {
           "name": "projects",
+          "minRole": "organizer",
+          "description": "Inspect and mutate Vercel projects — lifecycle, env vars (value-stripped on list), project domains, members.",
+          "criteria": "Use when the user asks about a Vercel project's configuration, env vars, attached domains, members, pausing/unpausing, or deleting a project.",
           "tools": [
             "list_projects",
             "get_project",
@@ -1490,10 +1895,14 @@
             "list_promote_aliases",
             "list_project_members",
             "remove_project_member"
-          ]
+          ],
+          "instructionsDigest": "745a647d179900adac8d57d2cbcec03179bfcfb52c5345a147d5da0f064f1400"
         },
         {
           "name": "rollouts",
+          "minRole": "organizer",
+          "description": "Rolling releases (canary rollouts) and deployment checks.",
+          "criteria": "Use when the user asks about rolling releases, gradual deployments, approving release stages, or deployment checks (pre-deploy CI-style gates).",
           "tools": [
             "get_rolling_release",
             "get_rolling_release_config",
@@ -1507,10 +1916,14 @@
             "list_check_runs",
             "list_deployment_check_runs",
             "get_deployment_check_run"
-          ]
+          ],
+          "instructionsDigest": "d0d64289d814946b3a78a314bcd78658ee276dbf2da767fa95b0655d34af0cf0"
         },
         {
           "name": "sandboxes",
+          "minRole": "organizer",
+          "description": "Vercel Sandbox lifecycle, shell commands, snapshots.",
+          "criteria": "Use when the user asks about Vercel Sandboxes — running ad-hoc commands in ephemeral environments, listing active sandboxes, or managing snapshots.",
           "tools": [
             "list_sandboxes",
             "get_sandbox",
@@ -1523,10 +1936,14 @@
             "list_sandbox_snapshots",
             "get_sandbox_snapshot",
             "delete_sandbox_snapshot"
-          ]
+          ],
+          "instructionsDigest": "3e06a14878919a070dc8cebeb55409607768306562e0e8acc1987af017ab7338"
         },
         {
           "name": "security",
+          "minRole": "organizer",
+          "description": "Firewall configuration, attack challenge mode, bypass IPs, auth tokens.",
+          "criteria": "Use when the user asks about firewall rules, attack challenge mode, bypass IPs, firewall events, or managing Vercel auth tokens.",
           "tools": [
             "get_firewall_config",
             "get_active_attack_status",
@@ -1536,10 +1953,14 @@
             "list_auth_tokens",
             "get_auth_token",
             "delete_auth_token"
-          ]
+          ],
+          "instructionsDigest": "0556b921b2077c9b72fd47b3d094a8566318b628b4e6d3673aaa44aaf79b8d89"
         },
         {
           "name": "team-admin",
+          "minRole": "organizer",
+          "description": "Team members, access groups, webhooks, project routes, connect networks, microfrontends, billing, custom environments.",
+          "criteria": "Use when the user asks about team membership, access groups, team webhooks, project routes, Vercel Connect private networks, microfrontend groups, billing charges, or custom preview environments.",
           "tools": [
             "get_team",
             "list_team_members",
@@ -1563,7 +1984,8 @@
             "list_custom_environments",
             "get_custom_environment",
             "remove_custom_environment"
-          ]
+          ],
+          "instructionsDigest": "628200c96db36c14258eb7105a7da702d4d2a8b5a3c8ad0dd643e5b59810a0c0"
         }
       ],
       "tools": [

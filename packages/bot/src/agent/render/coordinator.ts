@@ -222,7 +222,7 @@ async function applyLatest(
   try {
     const work = await loadWork(deps, dispatchId);
     if (work === undefined) return "done";
-    return continueTrace(work.intent.traceparent, () =>
+    const result = await continueTrace(work.intent.traceparent, () =>
       traceOperation(
         "agent.render.apply",
         async () => {
@@ -264,6 +264,7 @@ async function applyLatest(
         { "agent.dispatch.id": dispatchId, "agent.render.phase": work.intent.phase },
       ),
     );
+    return result;
   } finally {
     if (releaseClaim) await deps.store.release(dispatchId, claimToken).catch(() => undefined);
   }

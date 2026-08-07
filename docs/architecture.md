@@ -141,8 +141,10 @@ parsing used to infer loaded skills. Loading a skill adds instructions through
 Eve; it does not register tools. Tool availability is resolved independently on
 `step.started` from current role, integration readiness, and tool policy, then
 enforced again at approval and execution. No tool resolver reads `load_skill`
-results or model-message history. Eve's default sandbox supplies the native
-dynamic-skill materialization; Wack Hacker does not add a second loader.
+results or model-message history. Before cutover, a native lifecycle canary must
+prove Eve materializes and reloads dynamic skills for each subagent's active
+sandbox context. If it cannot, the migration stops rather than adding a second
+loader.
 
 ```mermaid
 flowchart LR

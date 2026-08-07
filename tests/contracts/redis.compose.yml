@@ -1,0 +1,22 @@
+services:
+  redis:
+    image: redis:6.2.20-alpine@sha256:77697a75da9f94e9357b61fcaf8345f69e3d9d32e9d15032c8415c21263977dc
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 1s
+      retries: 30
+
+  srh:
+    image: hiett/serverless-redis-http:0.0.10@sha256:65128347949bca511e448fd7238780d624573d74c22b79155a7563db19e9b678
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      SRH_MODE: env
+      SRH_TOKEN: "${CONTRACT_REDIS_TOKEN:?set by test runner}"
+      SRH_CONNECTION_STRING: redis://redis:6379
+      SRH_MAX_CONNECTIONS: "3"
+    ports:
+      - "127.0.0.1::80"

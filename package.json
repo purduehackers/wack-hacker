@@ -16,7 +16,9 @@
     "validate": "bun run format:check && bun run typecheck && bun run lint && bun run test",
     "format:check": "oxfmt --check .",
     "audit": "bun audit --ignore GHSA-67mh-4wv8-2f99",
-    "test": "turbo test"
+    "test": "turbo test",
+    "test:contracts": "bun test tests/contracts",
+    "test:contracts:docker": "bun scripts/test-contracts.ts"
   },
   "dependencies": {},
   "devDependencies": {

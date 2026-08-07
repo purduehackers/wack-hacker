@@ -104,6 +104,22 @@ scheduled occurrence converging to one visible result. Once, deliberately break
 an admission fence, role check, and paint barrier to prove the new tests fail.
 Lua-emulating fakes can be deleted only after the real-script tests overlap.
 
+#### Phase 0 checkpoint
+
+The first real-Redis suite now runs the production Upstash client and Lua through
+pinned Redis 6.2 and `serverless-redis-http` containers. It covers queue dedupe,
+FIFO, lease takeover, independent keys, reset cutover, render-lease renewal, and
+a two-turn streaming/terminal/restart flow with a stateful Discord fake. The
+feature-parity artifact now also freezes each skill's policy role, description,
+criteria, tool membership, and normalized instruction digest, independent of
+the activation protocol. The initial golden run exposed a real coordinator
+lifetime bug: `applyLatest` returned a pending traced Promise from inside
+`try/finally`, so `finally`
+released the render lease before its checkpoint. Awaiting the traced operation
+inside the lease scope restored the stated behavior; the golden suite now
+passes and runs in CI. This was a narrow correctness repair, not an approved
+architecture refactor.
+
 ### 1. Replace the custom skill system with Eve-native dynamic skills
 
 This is the first production slice because it removes the clearest parallel
@@ -120,8 +136,11 @@ packages/agents/agent/subagents/<domain>/
 
 Each `skills/catalog.ts` directly exports `defineDynamic` from `eve/skills` with
 a `turn.started` resolver. It returns the role-permitted map of `defineSkill`
-values. Eve advertises them, materializes dynamic skills through its default
-sandbox, and owns `load_skill` and loaded-turn context.
+values. Eve advertises them and owns `load_skill` and loaded-turn context. A
+migration canary must prove the installed Eve runtime gives each integration
+subagent a usable sandbox context for dynamic-skill materialization and reload.
+If that canary fails, stop and resolve the Eve-native lifecycle; do not add a
+second loader.
 
 The tool catalog resolves separately on `step.started` from current role,
 integration readiness, and the existing tool descriptor policy. It does not
