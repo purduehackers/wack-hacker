@@ -1,16 +1,18 @@
 # Simplification plan
 
-> Status: Group A (Eve-native skills) is approved, implemented, and locally
-> validated; hosted sandbox reattachment remains a deployment cutover gate.
-> Groups B–E remain proposed and unapproved. This plan is based on the source
-> audit begun at `2cec01c`. Approval is still required before the remaining state-machine,
-> wire-contract, public-type, abstraction, or package-boundary changes.
+> Status: Groups A (Eve-native skills) and B (conversation ownership) are
+> approved, implemented, and locally validated. Hosted sandbox reattachment
+> remains a Group A deployment cutover gate. Groups C–E remain proposed and
+> unapproved; their wire-contract, public-type, abstraction, and package-boundary
+> changes still require approval.
 
 ## Audit baseline
 
-The fresh audit covered 421 tracked TypeScript files and 52,853 lines. The
-current 168-test baseline passes (agents 122, bot 29, shared 8, supervisor 9),
-but the tests do not characterize the most important cross-process lifecycle.
+The original audit at `2cec01c` covered 421 tracked TypeScript files and 52,853
+lines with 168 passing tests. After Groups A and B, the repository has 435
+tracked TypeScript files and 54,614 lines; 185 tests pass (agents 120, bot 36,
+shared 20, supervisor 9). The real-Redis suite separately runs 10 contract tests
+with 64 assertions against production Lua.
 The largest accidental systems and high-risk gaps are:
 
 | Area                   | Current evidence                                                                                                                                                                                           | Finding                                                                                                                               |
@@ -110,9 +112,13 @@ Lua-emulating fakes can be deleted only after the real-script tests overlap.
 The first real-Redis suite now runs the production Upstash client and Lua through
 pinned Redis 6.2 and `serverless-redis-http` containers. It covers queue dedupe,
 FIFO, lease takeover, independent keys, reset cutover, lost-response admission,
-ambiguous-admission fencing, one-winner HITL, interaction-receipt duplicate and
-conflict fencing, reset staleness, lost render callbacks, render-lease renewal,
-and a two-turn streaming/terminal/restart flow with a stateful Discord fake. The
+ambiguous-admission recovery publication, one-winner HITL,
+interaction-receipt duplicate and conflict fencing, reset staleness, lost render
+callbacks, render claim/renew/release/discard, authorization indexing,
+scheduled-fire claim/complete/release, and a two-turn
+streaming/terminal/restart flow with a stateful Discord fake. All 27 production
+conversation Lua scripts now execute in the real-Redis suite; the restart case
+also proves queue completion stays pending until the terminal outcome exists. The
 feature-parity artifact now also freezes each skill's policy role, description,
 criteria, tool membership, and normalized instruction digest, independent of
 the activation protocol. A table-driven policy test now covers anonymous,
@@ -228,29 +234,34 @@ and registries rather than regexing source format.
 3,381-line duplicate Markdown source tree. The architectural reduction is more
 important than the exact line count.
 
-### 2. Centralize the conversation aggregate and reconciler
+### 2. Centralize the conversation aggregate and reconciler — implemented
 
-This is the highest-risk and highest-value state-machine slice. Keep current
-keys and persisted values first; change ownership before changing formats.
+Group B changed ownership while preserving the existing keys, values, TTLs,
+wire payloads, component IDs, and terminal strings. Redis remains the durable
+coordination boundary.
 
-**Add**
+**Implemented**
 
-- `packages/shared/src/conversations/schemas.ts`: strict Zod schemas inferred
-  into project-owned types for active delivery, pending/reset entries, render
-  intent/projection/outcome, HITL claim/receipt, authorization index, and
-  scheduled-fire receipt.
+- `packages/shared/src/conversations/schemas.ts`: project-owned persisted record
+  schemas for active delivery, render projection/outcome, HITL claims/receipts,
+  and scheduled-fire receipts. Existing permissive decode behavior remains where
+  tightening it would be a separate behavior change.
 - `packages/shared/src/conversations/store.ts`: the only exported Redis-facing
   conversation API. Internal files may separate Lua by aggregate, but callers
   see one `ConversationStore`.
 - `packages/bot/src/conversations/flow.ts`: the only bot-side reconciler and the
-  commands `submit`, `answer`, `reset`, `admitSchedule`, `wake`, and `stop`.
-- Thin `packages/bot/src/conversations/{discord,eve}.ts` adapters.
+  commands `submit`, `answer`, `reset`, `admitSchedule`, `wake`, `start`,
+  `sweep`, and `stop`.
+- Existing focused adapters remain in `agent/client.ts`, `agent/render/`,
+  `agent/hitl/interaction.ts`, and `agent/scheduled.ts`; no pass-through
+  `conversations/{discord,eve}.ts` wrappers were added.
 
-Use `Redis.createScript<TResult>()` from Upstash for script identity and
-EVALSHA fallback. Parse persisted rows and variable tuples at this boundary;
-do not replace atomic Lua with pipelines or transactions.
+The implemented store deliberately retains `redis.eval` and the production Lua
+bodies. Adopting `Redis.createScript<TResult>()`, changing decoders, or
+normalizing TTLs would be a separate behavior-sensitive change. Atomic Lua was
+not replaced with pipelines or transactions.
 
-**Move transition ownership out of**
+**Transition ownership moved out of**
 
 - `packages/bot/src/agent/queue.ts`
 - `packages/agents/agent/lib/discord/coordination.ts`
@@ -261,15 +272,16 @@ do not replace atomic Lua with pipelines or transactions.
 - authorization scripts in `packages/agents/agent/channels/discord.ts`
 - scheduled-fire scripts in `packages/bot/src/agent/scheduled.ts`
 
-The first pass may preserve separate admission acknowledgements if tests prove
-they represent different fences. It removes duplicate script/key ownership, not
-an acknowledgment merely because two functions have similar names.
+The implementation preserves separate Eve admission confirmation and bot queue
+acknowledgement because they fence different crash windows. It removes duplicate
+script/key ownership, not an acknowledgement merely because two functions have
+similar names.
 
 `ConversationFlow` replaces `createAgentSeam`'s mutable `recoverParked` callback
 cycle and the in-memory terminal waiter. Wakeups enqueue reconciliation and
 return promptly. Reconciliation claims the newest desired render, materializes
 it, records `applied|discarded`, and advances exactly one queued turn. The
-`completeVisible` Lua transition itself checks the terminal outcome instead of
+queue-completion Lua transition itself checks the terminal outcome instead of
 relying only on caller ordering.
 
 **Keep explicit**
@@ -285,8 +297,12 @@ All phase-0 contracts, crash-point rendering, malformed persisted records,
 reset/HITL races, startup recovery, and existing exact-error assertions. No key,
 TTL, wire payload, or custom-ID change is allowed in this slice.
 
-**Estimated reduction:** initially 800–1,500 production lines; tests will grow.
-The principal win is one state model and one owner, not aggressive Lua deletion.
+**Implemented result:** 2,669 production TypeScript lines were added or moved
+and 2,453 deleted (net +216); tests grew. The store intentionally keeps the Lua
+and branch-heavy durability logic, so the result is ownership centralization,
+not aggressive line-count deletion. The old router, render coordinator,
+in-memory terminal waiter, mutable callback cycle, and runtime-owned Redis
+implementations were deleted.
 
 ### 3. Make the Discord command boundary typed and discord.js-native
 
@@ -465,9 +481,10 @@ Approval may be given for all items or individually:
 - **A — Eve-native skills:** remove the custom loader/compiler/history system
   and make tools independently role/policy visible. This intentionally
   changes model-visible tool timing, not execution authority.
-- **B — Conversation ownership:** move all conversation records/scripts behind
-  shared `ConversationStore`, add bot `ConversationFlow`, and strengthen the Lua
-  completion barrier while preserving current keys and wire formats.
+- **B — Conversation ownership (approved and implemented):** all conversation
+  records/scripts are behind shared `ConversationStore`; bot `ConversationFlow`
+  owns reconciliation; completion Lua requires a terminal render outcome while
+  preserving current keys and wire formats.
 - **C — Discord contract:** pass `Client<true>`, derive Discord API types, and add
   strict project-owned output schemas to the bot-agent command wire.
 - **D — Domain runtime:** replace 11 copied policy runtimes and identity helpers

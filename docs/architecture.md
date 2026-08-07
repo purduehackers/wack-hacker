@@ -1,8 +1,8 @@
 # Target architecture
 
-> Status: proposed cleanup target. This diagram describes the architecture the
-> simplification work should converge on; it is not a claim that the current
-> module layout already matches it.
+> Status: current for the Group B conversation path. Later simplification groups
+> may refine unrelated Discord and domain-runtime modules, but the single
+> `ConversationFlow` and shared `ConversationStore` shown here are live.
 
 Wack Hacker has two application runtimes: a Bun/discord.js bot that owns Discord
 I/O and an Eve application that owns sessions and reasoning. Redis carries the
@@ -93,36 +93,47 @@ runtime owns a second spelling of a key, record, or Lua transition. The bot's
 `ConversationFlow` is the only reconciler that turns stored desired state into
 Discord effects and advances the queue. “Centralized” means one visible
 orchestration path and one storage API, not one large file or an attempt to hide
-the distributed transition behind callbacks.
+the distributed transition behind callbacks. Parked and render HTTP callbacks
+validate and enqueue a wake hint, then return; startup and periodic scans of the
+ready sets remain the recovery truth. The queue-completion Lua transition reads
+the terminal render outcome itself, so caller ordering alone cannot advance a
+parked delivery.
 
-## Intended code boundaries
+Scheduled occurrences use the same flow receipt: `message` actions post directly
+through Discord, while `agent` actions create the existing placeholder-backed
+queued turn.
+
+## Current code boundaries
 
 ```text
-packages/bot
-├── app.ts                    # composition root only
-├── conversations/
-│   ├── flow.ts               # the only conversation reconciler
-│   ├── discord.ts            # discord.js input and projection
-│   └── eve.ts                # thin typed Eve transport
-└── features/                 # unrelated community commands/events/schedules
-
-packages/agents
+packages/bot/src
+├── index.ts                         # composition root
+├── conversations/flow.ts           # the only conversation reconciler
 └── agent/
-    ├── channels/discord.ts   # thin Eve lifecycle adapter
-    ├── tools/                # root capabilities
-    ├── subagents/<domain>/
-    │   ├── agent.ts          # native Eve subagent declaration
-    │   ├── tools/catalog.ts  # independently policy-filtered tools
-    │   └── skills/catalog.ts # defineDynamic + defineSkill skill map
-    └── schedules/            # durable schedules and dispatch
+    ├── client.ts                    # thin typed Eve HTTP transport
+    ├── render/{renderer,discord-rest}.ts
+    │                                # Discord projection adapter
+    ├── hitl/interaction.ts          # Discord interaction adapter
+    └── scheduled.ts                 # Discord schedule materialization
 
-packages/shared
+packages/agents/agent
+├── channels/discord.ts              # thin Eve lifecycle adapter
+├── tools/                            # root capabilities
+├── subagents/<domain>/
+│   ├── agent.ts                      # native Eve subagent declaration
+│   ├── tools/catalog.ts              # independently policy-filtered tools
+│   └── skills/catalog.ts             # defineDynamic + defineSkill skill map
+└── schedules/                        # durable schedules and dispatch
+
+packages/shared/src
 ├── conversations/
-│   ├── schemas.ts            # our persisted conversation records
-│   └── store.ts              # every conversation key and atomic transition
-├── wire.ts                   # our cross-process schemas
-├── errors.ts                 # our error taxonomy
-└── domain data               # only genuinely shared project-owned shapes
+│   ├── keys.ts                       # private conversation key catalog
+│   ├── schemas.ts                    # persisted conversation records
+│   ├── store.ts                      # only exported Redis-facing API
+│   └── *.ts                          # private eval/Lua transition modules
+├── wire.ts                           # cross-process schemas, not Redis keys
+├── errors.ts                         # project error taxonomy
+└── domain data                       # only genuinely shared shapes
 ```
 
 An optional process supervisor may start or replace the bot container, but it is

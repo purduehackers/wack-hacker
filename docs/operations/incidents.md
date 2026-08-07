@@ -14,8 +14,10 @@ bun packages/shared/scripts/ops-inspect.ts redis --dispatch <dispatch-id>
 bun packages/shared/scripts/ops-inspect.ts schedules
 ```
 
-The inspector deliberately omits queued message bodies, prompts, claim tokens,
-and credentials. Attach its JSON and timestamps to the incident.
+The inspector calls the same `ConversationStore` inspection API as the runtimes,
+so operators do not maintain another spelling of conversation keys. It
+deliberately omits queued message bodies, prompts, claim tokens, and credentials.
+Attach its JSON and timestamps to the incident.
 
 ## Conversation or render appears stuck
 
