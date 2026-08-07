@@ -3,6 +3,10 @@
 > Status: current after approved Groups A–E and the final security/simplification
 > review. Hosted Eve `defaultBackend()` sandbox reattachment remains a deployment
 > cutover canary, not a code blocker.
+>
+> The detailed code-reading guide is [System internals](system/README.md). It
+> records current framework-default capabilities and approval-path limitations
+> that the stable overview below does not elide.
 
 Wack Hacker has two application runtimes: a Bun/discord.js bot that owns Discord
 I/O and an Eve application that owns sessions and reasoning. Redis carries the
@@ -34,7 +38,7 @@ flowchart LR
   Store["Conversation Store<br/>one shared Redis-facing API"]
   CommandWire["Strict Discord Command Wire<br/>input • output • envelope schemas"]
   Redis[("Redis<br/>conversation coordination")]
-  Turso[("Turso<br/>schedules • audit")]
+  Turso[("Turso<br/>schedules • audit • shopping cart")]
   APIs[External APIs]
 
   Discord <-->|"gateway events and REST"| DiscordClient
@@ -184,8 +188,10 @@ model-message history.
 A compiled lifecycle canary proves local `defaultBackend()` materialization,
 repeated native loads on one preserved session, and removal after the resolver
 returns `{}`. The compiled manifest also contains the skill and tool resolver
-for every integration subagent. Hosted sandbox reattachment is verified at
-deployment; a failure stops cutover rather than adding a second loader.
+for every integration subagent. Hosted sandbox reattachment remains a required
+deployment canary, but no current workflow or runbook executes it automatically.
+Production cutover cannot claim this evidence until an explicit hosted check is
+reviewed and run; the fallback is not a second loader.
 
 ```mermaid
 flowchart LR
@@ -237,8 +243,18 @@ hooks share implementations while thin per-domain files remain for Eve filesyste
 discovery. Scheduled deliveries may execute only tools whose effective
 confirmation is `none`; tools requiring self or second-party confirmation fail
 closed because a scheduled call has nobody present to approve it. Schedule
-creation and cancellation revalidate the current organizer role again at
-execution after self approval.
+creation and cancellation are intended to revalidate the current organizer role
+again at execution after self approval.
+
+The project policy runtime governs project-authored catalogs, not Eve's whole
+default harness. Root and ordinary non-code agents currently retain default
+sandbox shell/file tools and web tools with default allow-all sandbox egress.
+Those defaults bypass the project role/budget/confirmation/action-audit spine and
+use Eve's own policies. Also, the custom Discord input projector requires a policy record for every tool
+approval even though only second-party domain approval writes one, and proxied
+child approvals look up the root rather than child session ID. Self and child
+second-party controls therefore currently fail closed before execution. See the
+[detailed policy limitations](system/eve-policy-and-integrations.md#known-discord-approval-projection-limitation).
 
 Eve tool catalogs still call `defineTool` directly inside their `defineDynamic`
 resolver and provide an inline `execute` closure. This source shape is required
@@ -255,8 +271,9 @@ used by the bot, supervisor, and release checks. `activeBotGenerationSchema`, it
 decoder, and its narrow Redis reader define the fenced generation record used by
 the supervisor, Eve endpoint resolution, and operations scripts.
 
-The schedule store keeps raw conditional libSQL claims and immutable migrations,
-but strict Zod schemas now decode selected view and claimed rows. They reject
+The schedule store keeps raw conditional libSQL claims and migrations that are
+immutable by policy, while strict Zod schemas decode selected view and claimed
+rows. They reject
 extra fields, invalid enums/counters/member-role JSON, and inconsistent
 once-versus-recurring nullability before values enter domain logic.
 

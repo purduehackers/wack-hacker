@@ -33,8 +33,9 @@ Attach its JSON and timestamps to the incident.
 4. Wait longer than the relevant lease and re-snapshot. A terminal render
    outcome (`applied` or `discarded`) is required before the queued turn can be
    released; do not manufacture that outcome manually.
-5. If one conversation remains wedged, use the product's reset/privacy path,
-   which executes the atomic Lua cleanup. Do not independently delete
+5. If one conversation remains wedged, have the original requester or a current
+   organizer use the product reset: react ✅ to a still-indexed terminal agent
+   reply. That path executes the atomic Lua cleanup. Do not independently delete
    `agent:active`, queue, authorization, render, or set-membership keys: partial
    deletion can double-admit a turn, strand private authorization state, or
    break the visible-commit barrier. Escalate with the sanitized snapshot if the

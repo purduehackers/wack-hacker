@@ -4,6 +4,13 @@ This is the evidence checkpoint for the bot-owned Discord/Eve migration. It
 separates completed engineering work from production actions that are blocked by
 credentials, billing, or a human interaction.
 
+> **Later documentation-audit correction:** component/unit evidence below does
+> not prove the authored approval path end to end. Discord self approvals lack a
+> policy record and proxied child approvals look up the wrong session identity,
+> so these controls currently fail closed before rendering. Root/non-code Eve
+> defaults also sit outside the project role/budget/audit spine. See
+> [System internals](../system/eve-policy-and-integrations.md#known-discord-approval-projection-limitation).
+
 ## Completed and evidenced
 
 - **Discord ownership:** the long-running Bun/discord.js bot exclusively owns the
@@ -16,15 +23,18 @@ credentials, billing, or a human interaction.
   receipts, terminal paint barriers, parked markers, reset cutover, and
   crash-recovery paths have permanent tests. Expired ambiguous admission ends in
   one visible `recovery-required` render and never replays Eve work.
-- **HITL and policy:** opaque component locators carry no authority. Private
-  state, current Discord roles, requester/tool/risk/minimum-role bindings,
+- **HITL and policy components:** opaque component locators carry no authority.
+  Private state, role-refresh helpers, requester/tool/risk/minimum-role bindings,
   distinct second-party approvers, requester-owned execution, and `decidedBy`
-  auditing are enforced. Verdex defaults are read `(public, none)`, write
+  auditing are unit-characterized; the correction above blocks the current
+  Discord authored-approval composition. Verdex defaults are read `(public, none)`, write
   `(organizer, none)`, and destructive `(organizer, self)`.
-- **Schedules:** organizer/self-approved mutation, current-role refresh,
-  departed-member downgrade, narrow transient snapshot fallback, overlapping
-  claims, lease recovery, 1/2/4/8-minute retry, stable occurrence IDs, DST-safe
-  recurrence, receipts, and visible remediation are covered.
+- **Schedule components:** organizer/self policy and execution recheck,
+  scheduled-`agent` current-role refresh, departed-member downgrade, narrow
+  transient snapshot fallback, overlapping claims, lease recovery,
+  1/2/4/8-minute retry, stable occurrence IDs, DST-safe recurrence, receipts,
+  and visible remediation are covered. Self-approval composition is blocked as
+  above; direct `message` actions intentionally do not refresh owner roles.
 - **Migration safety:** applied migration 0003 is byte-for-byte immutable;
   remediation is in 0004/0005. Fresh, repeated, and populated-legacy migration
   rehearsals pass, including preservation of legacy role snapshots.

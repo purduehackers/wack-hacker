@@ -44,6 +44,14 @@ Configure these before using the release workflows:
 project-scoped: build/login with `VCR_PROJECT` set to the supervisor project and
 use that project's repository path, or Sandbox creation fails with image-not-found.
 
+## Eve hosted-lifecycle cutover gap
+
+Local canaries prove native skill/tool reconstruction on `defaultBackend()`, but
+no current workflow or runbook step verifies hosted sandbox reattachment across
+a real deployment. Treat that as an unmet production prerequisite: define and
+review a hosted reattachment check before claiming the Eve cutover complete.
+Do not replace it with a second loader or infer it from bot `/health`.
+
 ## Build, review, and promote
 
 1. Merge to `main`. **Publish bot image** (`image.yml`) builds `linux/amd64`,

@@ -279,8 +279,8 @@ All 11 integration domains now use shared agent-local policy modules:
 Per-domain `runtime.ts` files are now narrow adapter objects instead of copied
 policy engines. The 11 descriptor modules and 11 per-domain `define-tool.ts`
 identity wrappers were deleted. Provider clients, Zod inputs, managed budgets,
-immutable audit rows, current-role enforcement, and provider-specific error
-mapping remain explicit.
+application-append-only audit rows, current-role enforcement, and
+provider-specific error mapping remain explicit.
 
 Every Eve tool catalog still calls `defineTool` **directly inside** its dynamic
 resolver and supplies an inline `execute` function that delegates to the shared
@@ -288,13 +288,19 @@ runtime. This source shape is a native Eve constraint: hiding `defineTool` behin
 a factory prevents Eve replay reconstruction. The compiled native-tool lifecycle
 canary exercises two turns and protects that constraint.
 
-Requested-action audit ownership remains singular. GitHub, Sentry, and Vercel
-requested actions are redacted before persistence, matching their execution
-audit/output/error treatment; the post-merge redaction regression was repaired
-and characterized. Scheduled principals may execute only tools whose effective
-confirmation is `none`; confirmation-requiring actions fail closed instead of
-silently erasing self or second-party approval. Schedule creation and cancellation
-also revalidate the current organizer role at execution after self approval.
+A later documentation audit found that requested-action audit ownership is not
+singular: the domain lifecycle hook emits a deterministic Requested row and the
+confirmation path can emit another generated Requested row for the same call.
+GitHub, Sentry, and Vercel requested actions are redacted before persistence,
+matching their execution audit/output/error treatment; the post-merge redaction
+regression was repaired and characterized. Scheduled principals may execute only
+tools whose effective confirmation is `none`; confirmation-requiring actions
+fail closed instead of silently erasing self or second-party approval. Schedule
+creation and cancellation contain an execution-time organizer recheck after
+self approval, but a later audit also found the current Discord input projector
+cannot resolve self approval records or proxied child session records; those
+controls currently fail closed before execution. See
+[System internals](system/eve-policy-and-integrations.md#known-discord-approval-projection-limitation).
 Feature parity is exact at **11 native domains / 659 tools / 104 skills / 13
 subagents**.
 
@@ -361,31 +367,27 @@ separately approved change.
 
 ## Validation gates
 
-The repository keeps the following gates for behavior-sensitive production
-changes:
+Behavior-sensitive production changes use both repository automation and manual
+review evidence.
 
-1. `bun run format:check`
-2. `bun run typecheck`
-3. `bun run lint`
-4. `bun run test`, plus the real-Redis contract suite
-5. `bun run build` and Eve `build`/`info`
-6. unchanged reviewed capability names unless separately approved
-7. `bun run audit`
-8. fresh and repeated Drizzle migrations when database code changes
-9. Linux/amd64 bot image build when runtime/package code changes
-10. `git diff --check`
+Current CI runs frozen install, formatting/full validation (type/parity/
+serialization, lint, 271 package tests), compiled native skill and inline-tool
+lifecycle canaries, the real-Redis contract suite, production dependency audit,
+a fresh Drizzle check/migration, application/Eve build, and a linux/amd64 bot
+image build. It does not run Eve `info`, repeated migrations, `git diff --check`,
+or a semantic diff classifier.
 
-A diff gate must flag any changed wire schema, Redis key/TTL, custom component
-ID, migration, tool/skill name, authorization rule, or terminal error string.
-The current CI also runs the compiled native skill lifecycle, compiled inline
-native tool lifecycle, production Redis/Lua contract suite, migration checks,
-and bot image build.
+Eve `info`, repeated migration rehearsal, `git diff --check`, stable reviewed
+capability names, and review of changes to wire schemas, Redis key/TTL values,
+component IDs, migrations, authorization rules, and terminal error strings are
+manual review requirements unless later automated.
 
 After the final security review, direct Bun package tests pass 271/271 (agents
 157, bot 52, shared 53, supervisor 9), the feature-parity checker reports
 11/659/104/13, and the real-Redis suite reports 10 tests / 64 assertions. Hosted
-Eve sandbox reattachment is the remaining **deployment canary**. It is checked
-at cutover because local compilation cannot prove hosted sandbox persistence.
+Eve sandbox reattachment remains an unmet **deployment canary**; current
+workflows/runbooks do not run it, and local compilation cannot prove hosted
+sandbox persistence.
 
 ## Implementation and approval record
 

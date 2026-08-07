@@ -4,12 +4,22 @@ Only the Eve/agent deployment writes Turso; the bot has no database credentials.
 Production migrations are forward-only. Every schema change must be compatible
 with the currently deployed agent until the new deployment is healthy.
 
+> **Current maintenance blocker:** stopping the bot does not stop the Eve
+> once-per-minute schedule dispatcher, which can still claim and fail due rows in
+> Turso. The workflow's `quiesced` checkbox is an operator assertion, not a
+> technical fence. Do not run the production migration unless the whole agent
+> writer set is externally proven idle for the window; routine use needs an
+> explicit agent/scheduler maintenance fence. Also, the create/cancel schedule
+> smoke below is blocked by the documented Discord self-approval projection
+> limitation.
+
 ## Automated path
 
 Dispatch **Migrate production database and deploy agent** (`database.yml`) from
 the reviewed commit. Enter the production Turso database name, a new backup
-database name, the change ticket, and confirm that ingress is quiesced. The
-protected `production` environment supplies the second human gate.
+database name, the change ticket, and confirm that all writers are quiesced. Naming the `production` environment
+supplies a second human gate only when required reviewers are configured in the
+repository settings.
 
 The job refuses a URL/name mismatch, creates a provider-side point-in-time clone
 before mutation, runs the guarded legacy baseline, applies Drizzle migrations,
@@ -23,10 +33,13 @@ is verified. On any failure, the bot stays quiesced for operator action.
 1. Announce a maintenance window. Deploy the isolated supervisor with
    `BOT_SANDBOX_ENABLED=false`, wait for an in-flight ensure to finish, then stop
    the active bot with the guarded command in [deployment.md](deployment.md).
-   This closes Discord ingress and scheduled callbacks. Wait at least the
-   longest observed agent request, and confirm no Eve invocation is writing.
-   There is no magic database read-only switch in this repository; checking the
-   quiesce box without actually stopping ingress is unsafe.
+   This closes Discord ingress and the bot's scheduled endpoint, but it does
+   **not** stop the Eve dispatcher from updating due schedule rows. Wait at least
+   the longest observed agent request and externally prove no live turn,
+   provider tool, schedule dispatcher, or other Eve invocation can write for the
+   entire window. There is no database read-only or agent-maintenance fence in
+   this repository; checking the quiesce box based only on the bot stop is
+   unsafe.
 2. Record the current agent deployment URL, exact bot digest, database name,
    UTC time, and change ticket. Choose a **new** backup database name; Turso PITR
    cannot restore over an existing database.
@@ -41,8 +54,11 @@ is verified. On any failure, the bot stays quiesced for operator action.
 4. Review the workflow's database verification and Vercel deployment URL.
    Re-enable supervision, then run `promote.yml` with the last reviewed bot
    digest to create a fresh sandbox against the new agent deployment.
-5. Run a non-destructive agent turn, create/list/cancel a test schedule, inspect
-   errors and latency, and close the maintenance window only after success.
+5. Run a non-destructive agent turn and inspect errors/latency. The intended
+   create/list/cancel schedule smoke cannot currently complete because
+   create/cancel self-approval controls fail before rendering. Do not substitute
+   a direct database write or bypass approval. Keep production cutover blocked
+   until that limitation is fixed and the full live smoke succeeds.
 
 The equivalent provider backup command, useful for a witnessed manual change,
 is documented by Turso and does not copy customer data into CI artifacts:
