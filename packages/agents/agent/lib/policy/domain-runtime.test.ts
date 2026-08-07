@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
-import { UserRole, type UserRole as UserRoleValue } from "@repo/shared/discord";
+import { DISCORD_IDS, UserRole, type UserRole as UserRoleValue } from "@repo/shared/discord";
 import { UpstreamError } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import type { ApprovalContext, ToolContext } from "eve/tools";
 import { z } from "zod";
 
+import type { SecondPartyApprovalRecord } from "./approval-record.ts";
 import type { ActionAuditRecord } from "./audit.ts";
 import { createDomainRuntime, type DomainRuntimeDependencies } from "./domain-runtime.ts";
 import { defineDomainTool } from "./domain-tools.ts";
@@ -147,6 +148,75 @@ describe("central domain policy runtime", () => {
       ),
     ).toBe("user-approval");
     expect(auditRecords.map((entry) => entry.decision)).toEqual(["requested"]);
+  });
+
+  test("rebinds second-party execution to the requester and records the approver", async () => {
+    const auditRecords: ActionAuditRecord[] = [];
+    let policy: SecondPartyApprovalRecord | undefined;
+    const baseDependencies = dependencies(auditRecords);
+    const tools = {
+      destroy: defineDomainTool({
+        access: { risk: RiskLevel.Destructive, confirm: Confirmation.SecondParty },
+        description: "Destroy",
+        input: z.object({ id: z.string() }),
+        execute: async ({ id }) => ({ id }),
+      }),
+    } as const;
+    const runtime = createDomainRuntime(
+      { domain: "test", label: "Test", service: "Test", tools },
+      {
+        ...baseDependencies,
+        approval: {
+          putSecondParty: async (_sessionId, _callId, record) => {
+            policy = record;
+            return Result.ok(undefined);
+          },
+          read: async () => Result.ok(policy),
+        },
+      },
+    );
+
+    expect(
+      await runtime.approvalForTool(
+        "destroy",
+        approvalContext(UserRole.Organizer, "destroy", { id: "1" }),
+      ),
+    ).toBe("user-approval");
+
+    const approverId = "10000000000000001";
+    const requesterId = "10000000000000000";
+    const executionContext = toolContext(UserRole.Organizer, "destroy");
+    const approver = {
+      ...auth(UserRole.Organizer),
+      attributes: {
+        approvalRequesterId: requesterId,
+        approvalRequesterMemberRoles: [DISCORD_IDS.roles.ORGANIZER],
+        role: UserRole.Organizer,
+      },
+      principalId: approverId,
+    };
+    expect(
+      await runtime.executeTool(
+        "destroy",
+        { id: "1" },
+        {
+          ...executionContext,
+          session: {
+            ...executionContext.session,
+            auth: { current: approver, initiator: approver },
+          },
+        },
+      ),
+    ).toEqual({ id: "1" });
+    expect(auditRecords.map((entry) => entry.decision)).toEqual([
+      "requested",
+      "approved",
+      "executed",
+    ]);
+    expect(auditRecords.at(-1)).toMatchObject({
+      decidedBy: approverId,
+      principal: { userId: requesterId },
+    });
   });
 
   test("preserves readiness, validation, execution, projection, and audit ordering", async () => {
