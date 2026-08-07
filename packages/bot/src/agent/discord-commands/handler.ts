@@ -223,8 +223,13 @@ function discordObject<T extends object>(value: unknown, endpoint: string): T {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- discord.js REST returns unknown; T is the endpoint's exported v10 result.
   return value as T;
 }
-function discordArray<T extends readonly unknown[]>(value: unknown, endpoint: string): T {
-  if (!Array.isArray(value)) throw malformedDiscordResponse(endpoint);
+function discordArray<T extends readonly object[]>(value: unknown, endpoint: string): T {
+  if (
+    !Array.isArray(value) ||
+    value.some((entry) => entry === null || typeof entry !== "object" || Array.isArray(entry))
+  ) {
+    throw malformedDiscordResponse(endpoint);
+  }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- discord.js REST returns unknown; T is the endpoint's exported v10 result.
   return value as unknown as T;
 }
@@ -233,6 +238,7 @@ function compact<T extends object>(value: T): T {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as T;
 }
 function channelType(value: number): string {
+  if (typeof value !== "number") throw malformedDiscordResponse("channel type");
   return CHANNEL_TYPE_NAMES[value] ?? `unknown(${value})`;
 }
 type GuildChannelResult = RESTAPIGuildChannelResolvable;
@@ -247,7 +253,7 @@ function summarizeChannel(channel: GuildChannelResult) {
   });
 }
 function summarizeMember(member: RESTGetAPIGuildMemberResult) {
-  const user = member.user;
+  const user = discordObject<RESTGetAPIGuildMemberResult["user"]>(member.user, "guild member user");
   return {
     id: user.id,
     username: user.username,
@@ -260,7 +266,13 @@ function summarizeMember(member: RESTGetAPIGuildMemberResult) {
 }
 type ScheduledEventResult = RESTGetAPIGuildScheduledEventsResult[number];
 function summarizeEvent(event: ScheduledEventResult) {
-  const metadata = event.entity_metadata;
+  const metadata =
+    event.entity_metadata === null
+      ? null
+      : discordObject<NonNullable<ScheduledEventResult["entity_metadata"]>>(
+          event.entity_metadata,
+          "guild scheduled event metadata",
+        );
   return {
     id: event.id,
     name: event.name,
@@ -281,7 +293,13 @@ function summarizeEvent(event: ScheduledEventResult) {
 }
 type ThreadResult = APIThreadChannel;
 function summarizeThread(thread: ThreadResult) {
-  const metadata = thread.thread_metadata;
+  const metadata =
+    thread.thread_metadata === undefined
+      ? undefined
+      : discordObject<NonNullable<ThreadResult["thread_metadata"]>>(
+          thread.thread_metadata,
+          "thread metadata",
+        );
   return {
     id: thread.id,
     name: thread.name,
@@ -576,7 +594,7 @@ async function execute(rest: DiscordRest, command: DiscordCommand): Promise<unkn
         await rest.get(Routes.guildChannels(DISCORD_GUILD_ID)),
         "list guild channels",
       ).map((rawChannel) => discordObject<GuildChannelResult>(rawChannel, "list guild channels"));
-      const channels = all.filter((entry) => !THREAD_CHANNEL_TYPES.has(Number(entry.type)));
+      const channels = all.filter((entry) => !THREAD_CHANNEL_TYPES.has(entry.type));
       const categories = channels
         .filter((entry) => entry.type === ChannelType.GuildCategory)
         .sort(byPosition);
@@ -972,7 +990,10 @@ async function execute(rest: DiscordRest, command: DiscordCommand): Promise<unkn
         }),
         "list guild bans",
       ).map((ban) => {
-        const user = ban.user;
+        const user = discordObject<RESTGetAPIGuildBansResult[number]["user"]>(
+          ban.user,
+          "guild ban user",
+        );
         return {
           userId: user.id,
           username: user.global_name ?? user.username,
@@ -1016,7 +1037,10 @@ async function execute(rest: DiscordRest, command: DiscordCommand): Promise<unkn
           await rest.get(Routes.guildMember(DISCORD_GUILD_ID, input.member_id)),
           "get guild member",
         );
-        const user = member.user;
+        const user = discordObject<RESTGetAPIGuildMemberResult["user"]>(
+          member.user,
+          "guild member user",
+        );
         return {
           ...summarizeMember(member),
           premiumSince: member.premium_since ?? null,
@@ -1473,7 +1497,10 @@ function summarizeAutoModRule(rule: RESTGetAPIAutoModerationRuleResult) {
   };
 }
 function summarizeMessage(message: RESTGetAPIChannelMessageResult) {
-  const author = message.author;
+  const author = discordObject<RESTGetAPIChannelMessageResult["author"]>(
+    message.author,
+    "message author",
+  );
   return {
     id: message.id,
     author: author.global_name ?? author.username,
@@ -1483,7 +1510,10 @@ function summarizeMessage(message: RESTGetAPIChannelMessageResult) {
     timestamp: message.timestamp,
     editedTimestamp: message.edited_timestamp ?? null,
     pinned: message.pinned,
-    attachments: message.attachments.map((attachment) => ({
+    attachments: discordArray<RESTGetAPIChannelMessageResult["attachments"]>(
+      message.attachments,
+      "message attachments",
+    ).map((attachment) => ({
       name: attachment.filename,
       url: attachment.url,
     })),
@@ -1501,8 +1531,20 @@ function summarizeRole(role: RESTGetAPIGuildRolesResult[number]) {
   };
 }
 function summarizeInvite(invite: RESTGetAPIGuildInvitesResult[number]) {
-  const channel = invite.channel;
-  const creator = invite.inviter;
+  const channel =
+    invite.channel === null
+      ? null
+      : discordObject<NonNullable<RESTGetAPIGuildInvitesResult[number]["channel"]>>(
+          invite.channel,
+          "invite channel",
+        );
+  const creator =
+    invite.inviter === undefined
+      ? undefined
+      : discordObject<NonNullable<RESTGetAPIGuildInvitesResult[number]["inviter"]>>(
+          invite.inviter,
+          "invite creator",
+        );
   return {
     code: invite.code,
     channel: channel === null ? null : { id: channel.id, name: channel.name },

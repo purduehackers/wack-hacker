@@ -250,3 +250,31 @@ test("Discord command boundary: preserves the legacy pin route and encoded react
     `/channels/${channelId}/messages/${messageId}/reactions/party%20parrot/@me`,
   ]);
 });
+
+test("Discord command boundary: classifies malformed nested Discord objects as upstream failures", async () => {
+  const channelId = "20000000000000008";
+  const messageId = "40000000000000003";
+  const result = await executeDiscordCommand(
+    restWith({
+      get: async (route) =>
+        route === `/channels/${channelId}`
+          ? { id: channelId, guild_id: DISCORD_GUILD_ID, name: "general", type: 0 }
+          : {
+              id: messageId,
+              author: null,
+              content: "hello",
+              timestamp: "2026-08-07T12:00:00.000Z",
+              edited_timestamp: null,
+              pinned: false,
+              attachments: [],
+              embeds: [],
+            },
+    }),
+    { operation: "get_message", input: { channel_id: channelId, message_id: messageId } },
+  );
+  expect(Result.isError(result)).toBe(true);
+  if (!Result.isError(result)) return;
+  expect(result.error).toBeInstanceOf(UpstreamError);
+  if (!(result.error instanceof UpstreamError)) return;
+  expect(result.error.status).toBe(502);
+});
