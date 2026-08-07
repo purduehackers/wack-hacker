@@ -191,3 +191,62 @@ test("Discord command boundary: maps Discord rate limits into the typed expected
   expect(result.error).toBeInstanceOf(RateLimited);
   expect(result.error.message).toContain("discord");
 });
+
+test("Discord command boundary: rejects malformed Discord lists instead of returning empty success", async () => {
+  const result = await executeDiscordCommand(restWith({ get: async () => ({}) }), {
+    operation: "list_roles",
+    input: {},
+  });
+  expect(Result.isError(result)).toBe(true);
+  if (!Result.isError(result)) return;
+  expect(result.error).toBeInstanceOf(UpstreamError);
+  if (!(result.error instanceof UpstreamError)) return;
+  expect(result.error.status).toBe(502);
+});
+
+test("Discord command boundary: rejects partial semantic summaries from malformed objects", async () => {
+  const result = await executeDiscordCommand(restWith({ get: async () => ({}) }), {
+    operation: "get_server_info",
+    input: {},
+  });
+  expect(Result.isError(result)).toBe(true);
+  if (!Result.isError(result)) return;
+  expect(result.error).toBeInstanceOf(UpstreamError);
+  if (!(result.error instanceof UpstreamError)) return;
+  expect(result.error.status).toBe(502);
+  expect(result.error.message).toContain("invalid Discord get_server_info output");
+});
+
+test("Discord command boundary: preserves the legacy pin route and encoded reaction routes", async () => {
+  const channelId = "20000000000000007";
+  const messageId = "40000000000000002";
+  const recordedRoutes: unknown[] = [];
+  const rest = restWith({
+    get: async () => ({ id: channelId, guild_id: DISCORD_GUILD_ID, name: "general", type: 0 }),
+    put: async (route) => {
+      recordedRoutes.push(route);
+    },
+    delete: async (route) => {
+      recordedRoutes.push(route);
+    },
+  });
+
+  await succeed(rest, {
+    operation: "pin_message",
+    input: { channel_id: channelId, message_id: messageId },
+  });
+  await succeed(rest, {
+    operation: "add_reaction",
+    input: { channel_id: channelId, message_id: messageId, emoji: "party parrot" },
+  });
+  await succeed(rest, {
+    operation: "remove_reaction",
+    input: { channel_id: channelId, message_id: messageId, emoji: "party parrot", user_id: "@me" },
+  });
+
+  expect(recordedRoutes).toEqual([
+    `/channels/${channelId}/pins/${messageId}`,
+    `/channels/${channelId}/messages/${messageId}/reactions/party%20parrot/@me`,
+    `/channels/${channelId}/messages/${messageId}/reactions/party%20parrot/@me`,
+  ]);
+});

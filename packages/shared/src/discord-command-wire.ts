@@ -457,7 +457,7 @@ const channelOutput = z.strictObject({
   type: z.string(),
   topic: z.string().nullable().optional(),
   parentId: discordSnowflakeSchema.nullable().optional(),
-  position: z.number().int(),
+  position: z.number().int().optional(),
 });
 const memberOutput = z.strictObject({
   id: discordSnowflakeSchema,

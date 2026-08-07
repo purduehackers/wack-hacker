@@ -1,6 +1,7 @@
 import { afterAll, describe, expect, test } from "bun:test";
 
 import { UserRole } from "@repo/shared/discord";
+import { DISCORD_COMMAND_OPERATIONS } from "@repo/shared/discord-command-wire";
 import type { SessionAuthContext } from "eve/context";
 import type { DynamicResolveContext } from "eve/tools";
 
@@ -166,6 +167,14 @@ async function resolveCatalog(
 afterAll(async () => await redis.stop(true));
 
 describe("independent integration tool policy", () => {
+  test("keeps Discord wire operations, registry keys, and declared names equal", () => {
+    const registryNames = Object.keys(DISCORD_TOOLS).sort();
+    expect(registryNames).toEqual([...DISCORD_COMMAND_OPERATIONS].sort());
+    for (const operation of DISCORD_COMMAND_OPERATIONS) {
+      expect(DISCORD_TOOLS[operation].name, operation).toBe(operation);
+    }
+  });
+
   test("fails closed without a current principal", async () => {
     for (const adapter of adapters) {
       // oxlint-disable-next-line unicorn/no-null -- Eve models absent current auth as null.
