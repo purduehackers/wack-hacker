@@ -431,6 +431,322 @@ export const DISCORD_COMMAND_INPUT_SCHEMAS = {
 } as const;
 
 export type DiscordCommandOperation = keyof typeof DISCORD_COMMAND_INPUT_SCHEMAS;
+
+const auditEntryOutput = z.strictObject({
+  id: discordSnowflakeSchema,
+  actionType: z.number().int(),
+  executor: z.string().nullable(),
+  targetId: z.string().nullable(),
+  reason: z.string().nullable(),
+  changes: z.array(z.json()).optional(),
+});
+const autoModRuleOutput = z.strictObject({
+  id: discordSnowflakeSchema,
+  name: z.string(),
+  eventType: z.number().int(),
+  triggerType: z.number().int(),
+  enabled: z.boolean(),
+  triggerMetadata: z.json(),
+  actions: z.array(z.json()),
+  exemptRoles: z.array(discordSnowflakeSchema),
+  exemptChannels: z.array(discordSnowflakeSchema),
+});
+const channelOutput = z.strictObject({
+  id: discordSnowflakeSchema,
+  name: z.string(),
+  type: z.string(),
+  topic: z.string().nullable().optional(),
+  parentId: discordSnowflakeSchema.nullable().optional(),
+  position: z.number().int(),
+});
+const memberOutput = z.strictObject({
+  id: discordSnowflakeSchema,
+  username: z.string(),
+  displayName: z.string(),
+  nickname: z.string().nullable(),
+  roles: z.array(discordSnowflakeSchema),
+  joinedAt: z.string().nullable(),
+  isBot: z.boolean(),
+});
+const eventOutput = z.strictObject({
+  id: discordSnowflakeSchema,
+  name: z.string(),
+  description: z.string().nullable(),
+  scheduledStartAt: z.string().nullable(),
+  scheduledEndAt: z.string().nullable(),
+  status: z.number().int(),
+  entityType: z.number().int(),
+  channelId: discordSnowflakeSchema.nullable(),
+  location: z.string().nullable(),
+  userCount: z.number().int().nullable(),
+  creatorId: discordSnowflakeSchema.nullable(),
+  image: httpUrl.nullable(),
+});
+const emojiOutput = z.strictObject({
+  id: discordSnowflakeSchema.nullable(),
+  name: z.string().nullable(),
+  animated: z.boolean(),
+  url: httpUrl.nullable(),
+  roles: z.array(discordSnowflakeSchema),
+  createdAt: discordSnowflakeSchema.nullable(),
+});
+const stickerOutput = z.strictObject({
+  id: discordSnowflakeSchema,
+  name: z.string(),
+  description: z.string().nullable(),
+  tags: z.string(),
+  formatType: z.number().int(),
+  available: z.boolean().optional(),
+  url: httpUrl,
+});
+const threadOutput = z.strictObject({
+  id: discordSnowflakeSchema,
+  name: z.string(),
+  parentId: discordSnowflakeSchema.nullable(),
+  archived: z.boolean(),
+  locked: z.boolean(),
+  autoArchiveDuration: z.number().int().nullable(),
+  messageCount: z.number().int(),
+  memberCount: z.number().int(),
+  createdAt: z.string().nullable(),
+  type: z.string(),
+});
+const webhookOutput = z.strictObject({
+  id: discordSnowflakeSchema,
+  name: z.string().nullable(),
+  channelId: discordSnowflakeSchema.nullable(),
+  avatar: httpUrl.nullable(),
+  createdAt: discordSnowflakeSchema,
+});
+const messageOutput = z.strictObject({
+  id: discordSnowflakeSchema,
+  author: z.string(),
+  authorId: discordSnowflakeSchema,
+  isBot: z.boolean(),
+  content: z.string(),
+  timestamp: z.string(),
+  editedTimestamp: z.string().nullable(),
+  pinned: z.boolean(),
+  attachments: z.array(z.strictObject({ name: z.string(), url: httpUrl })),
+  embeds: z.number().int().nonnegative(),
+});
+const inviteOutput = z.strictObject({
+  code: z.string(),
+  channel: z
+    .strictObject({ id: discordSnowflakeSchema, name: z.string().nullable().optional() })
+    .nullable(),
+  inviter: z.strictObject({ id: discordSnowflakeSchema, username: z.string() }).nullable(),
+  uses: z.number().int().optional(),
+  maxUses: z.number().int(),
+  maxAge: z.number().int(),
+  temporary: z.boolean(),
+  expiresAt: z.string().nullable(),
+});
+const compactInviteOutput = z.strictObject({
+  code: z.string(),
+  url: httpUrl.nullable(),
+  channelId: discordSnowflakeSchema.optional(),
+  maxAge: z.number().int(),
+  maxUses: z.number().int(),
+  temporary: z.boolean().optional(),
+  expiresAt: z.string().nullable(),
+});
+const roleOutput = z.strictObject({
+  id: discordSnowflakeSchema,
+  name: z.string(),
+  color: hexColor,
+  position: z.number().int(),
+});
+const successDeletedOutput = z.strictObject({ success: z.literal(true), deleted: z.string() });
+
+/** Strict project-owned bot → agent summaries, keyed by the unchanged semantic operation set. */
+export const DISCORD_COMMAND_OUTPUT_SCHEMAS = {
+  get_audit_log: z.array(auditEntryOutput),
+  list_auto_mod_rules: z.array(autoModRuleOutput),
+  get_auto_mod_rule: autoModRuleOutput,
+  create_auto_mod_rule: autoModRuleOutput,
+  update_auto_mod_rule: autoModRuleOutput,
+  delete_auto_mod_rule: z.strictObject({
+    deleted: z.literal(true),
+    rule_id: discordSnowflakeSchema,
+  }),
+  get_server_info: z.strictObject({
+    id: discordSnowflakeSchema,
+    name: z.string(),
+    memberCount: z.number().int(),
+    presenceCount: z.number().int(),
+    ownerId: discordSnowflakeSchema,
+    description: z.string().nullable(),
+    icon: httpUrl.nullable(),
+    banner: httpUrl.nullable(),
+    boostLevel: z.number().int(),
+    boostCount: z.number().int().optional(),
+    verificationLevel: z.number().int(),
+    createdAt: discordSnowflakeSchema,
+  }),
+  list_channels: z.array(
+    z.strictObject({
+      category: z
+        .strictObject({
+          id: discordSnowflakeSchema,
+          name: z.string(),
+          position: z.number().int(),
+        })
+        .nullable(),
+      channels: z.array(channelOutput),
+    }),
+  ),
+  list_roles: z.array(
+    roleOutput.extend({
+      mentionable: z.boolean(),
+      hoist: z.boolean(),
+      managed: z.boolean(),
+      isEveryone: z.boolean(),
+    }),
+  ),
+  search_members: z.array(memberOutput),
+  create_channel: channelOutput,
+  edit_channel: channelOutput,
+  get_channel: channelOutput,
+  follow_announcement_channel: z.strictObject({
+    followed: z.literal(true),
+    source: discordSnowflakeSchema,
+    target: discordSnowflakeSchema,
+    webhook_id: discordSnowflakeSchema,
+  }),
+  delete_channel: successDeletedOutput,
+  list_emojis: z.array(emojiOutput),
+  create_emoji: emojiOutput,
+  edit_emoji: emojiOutput,
+  delete_emoji: successDeletedOutput,
+  list_events: z.array(eventOutput),
+  create_event: eventOutput,
+  edit_event: eventOutput,
+  delete_event: successDeletedOutput,
+  update_guild: z.strictObject({
+    id: discordSnowflakeSchema,
+    name: z.string(),
+    description: z.string().nullable(),
+  }),
+  get_guild_preview: z.strictObject({
+    id: discordSnowflakeSchema,
+    name: z.string(),
+    description: z.string().nullable(),
+    memberCount: z.number().int(),
+    onlineCount: z.number().int(),
+    features: z.array(z.string()),
+  }),
+  get_vanity_url: z.discriminatedUnion("configured", [
+    z.strictObject({ configured: z.literal(false) }),
+    z.strictObject({
+      configured: z.literal(true),
+      code: z.string(),
+      url: httpUrl,
+      uses: z.number().int(),
+    }),
+  ]),
+  list_invites: z.array(inviteOutput),
+  create_invite: compactInviteOutput,
+  delete_invite: successDeletedOutput,
+  ban_member: z.strictObject({ banned: z.literal(true), member_id: discordSnowflakeSchema }),
+  unban_member: z.strictObject({ unbanned: z.literal(true), user_id: discordSnowflakeSchema }),
+  list_bans: z.array(
+    z.strictObject({
+      userId: discordSnowflakeSchema,
+      username: z.string(),
+      reason: z.string().nullable(),
+    }),
+  ),
+  kick_member: z.strictObject({ kicked: z.literal(true), member_id: discordSnowflakeSchema }),
+  timeout_member: z.strictObject({
+    timeout_until: z.string(),
+    member_id: discordSnowflakeSchema,
+  }),
+  clear_timeout: z.strictObject({
+    timeout_cleared: z.literal(true),
+    member_id: discordSnowflakeSchema,
+  }),
+  get_member: z.union([
+    memberOutput.extend({ premiumSince: z.string().nullable(), avatar: httpUrl.nullable() }),
+    z.strictObject({ error: z.literal("Member not found") }),
+  ]),
+  set_nickname: z.strictObject({
+    success: z.literal(true),
+    member: discordSnowflakeSchema,
+    nickname: z.string().nullable(),
+  }),
+  add_member_to_platform: compactInviteOutput.omit({ channelId: true, temporary: true }),
+  remove_member_from_platform: z.strictObject({
+    removed: z.literal(true),
+    member_id: discordSnowflakeSchema,
+  }),
+  send_message: z.strictObject({
+    id: discordSnowflakeSchema,
+    channelId: discordSnowflakeSchema,
+    content: z.string(),
+  }),
+  delete_message: z.strictObject({ success: z.literal(true), deleted: discordSnowflakeSchema }),
+  pin_message: z.strictObject({ success: z.literal(true), pinned: discordSnowflakeSchema }),
+  unpin_message: z.strictObject({ success: z.literal(true), unpinned: discordSnowflakeSchema }),
+  add_reaction: z.strictObject({ success: z.literal(true), reacted: z.string() }),
+  get_message: messageOutput,
+  edit_message: z.strictObject({ id: discordSnowflakeSchema, content: z.string() }),
+  bulk_delete_messages: z.strictObject({
+    deleted: z.number().int().nonnegative(),
+    message_ids: z.array(discordSnowflakeSchema),
+  }),
+  crosspost_message: z.strictObject({ id: discordSnowflakeSchema, crossposted: z.literal(true) }),
+  remove_reaction: z.strictObject({ removed: z.literal(true) }),
+  remove_all_reactions: z.strictObject({ cleared: z.literal(true) }),
+  fetch_messages: z.array(messageOutput),
+  create_role: roleOutput,
+  edit_role: roleOutput,
+  delete_role: z.union([
+    successDeletedOutput,
+    z.strictObject({ error: z.literal("Role not found") }),
+  ]),
+  assign_role: z.strictObject({
+    success: z.literal(true),
+    member: discordSnowflakeSchema,
+    role: discordSnowflakeSchema,
+  }),
+  remove_role: z.strictObject({
+    success: z.literal(true),
+    member: discordSnowflakeSchema,
+    role: discordSnowflakeSchema,
+  }),
+  list_stickers: z.array(stickerOutput),
+  create_sticker: stickerOutput,
+  edit_sticker: stickerOutput,
+  delete_sticker: z.strictObject({
+    deleted: z.literal(true),
+    sticker_id: discordSnowflakeSchema,
+  }),
+  list_threads: z.array(threadOutput),
+  create_thread: threadOutput,
+  edit_thread: threadOutput,
+  delete_thread: successDeletedOutput,
+  list_webhooks: z.array(webhookOutput),
+  create_webhook: webhookOutput,
+  edit_webhook: webhookOutput,
+  delete_webhook: successDeletedOutput,
+} as const satisfies Record<DiscordCommandOperation, z.ZodType>;
+
+export type DiscordCommandOutput<K extends DiscordCommandOperation> = z.output<
+  (typeof DISCORD_COMMAND_OUTPUT_SCHEMAS)[K]
+>;
+
+export function decodeDiscordCommandOutput<K extends DiscordCommandOperation>(
+  operation: K,
+  value: unknown,
+): Result<DiscordCommandOutput<K>, InvalidInput> {
+  const parsed = DISCORD_COMMAND_OUTPUT_SCHEMAS[operation].safeParse(value);
+  return parsed.success
+    ? // oxlint-disable-next-line typescript/consistent-type-assertions -- operation indexes the corresponding output schema.
+      Result.ok(parsed.data as DiscordCommandOutput<K>)
+    : invalid(`Discord ${operation} output`, parsed.error);
+}
+
 export type DiscordCommand = {
   [K in DiscordCommandOperation]: {
     readonly operation: K;
