@@ -143,19 +143,32 @@ values. Eve advertises them and owns `load_skill` and loaded-turn context. A
 migration canary must prove the installed Eve runtime gives each integration
 subagent a usable sandbox context for dynamic-skill materialization and reload.
 If that canary fails, stop and resolve the Eve-native lifecycle; do not add a
-second loader. `justbash()` is sufficient for the file-only lifecycle canary,
-but it is an optional peer backed by an app-local cache. Keep Eve's
-`defaultBackend()` for the deployed path unless a production canary also proves
-a pinned just-bash cache can be written and restored across turns.
+second loader. An isolated Eve 0.29.5 eval has already proven the framework
+path with `just-bash@3.0.0`: `defineDynamic` materialized a `defineSkill`
+package and sibling file, native `load_skill({ skill: "probe" })` returned the
+exact Markdown, and the mock-model turn passed all three lifecycle gates. This
+proves local API/backend feasibility, not deployed durability. `just-bash` is
+an optional peer backed by an app-local cache, so keep Eve's `defaultBackend()`
+for deployment unless a production canary also proves a pinned just-bash cache
+can be written and restored across turns.
 
 The tool catalog resolves separately on `step.started` from current role,
 integration readiness, and the existing tool descriptor policy. It does not
 read model messages or `load_skill` results. All permitted tools may therefore
 be visible before a skill is loaded; approval and execution revalidation remain
-unchanged. Measure the largest catalogs (Vercel 166, GitHub 119, Discord 68)
-during `eve info` and a representative model call. If the native tool payload
-is unacceptable, stop and seek approval for native Eve connections or a
-subagent partition; do not recreate a custom loader.
+unchanged.
+
+This intentionally trades the custom activation protocol for a larger
+library-native tool catalog. A source-level JSON Schema estimate for an
+organizer measured GitHub at 109 visible tools / 64,642 serialized bytes
+(current base: 4 / 2,672; largest base-plus-one-skill: 16 / 9,872) and Vercel at
+166 / 60,471 bytes (current base: 8 / 3,966; largest: 42 / 15,697). Provider
+tokenization will differ, but the direction is material. Approving Group A
+therefore accepts policy-visible tools being present before `load_skill`, as
+Eve documents, in exchange for deleting activation markers, history parsing,
+and the parallel loader. If that prompt/tool-selection cost is unacceptable,
+stop Group A and seek separate approval for native Eve connections or a
+subagent partition; do not recreate a custom loader by accident.
 
 **Delete after parity passes**
 
