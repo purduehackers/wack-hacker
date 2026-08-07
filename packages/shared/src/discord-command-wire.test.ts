@@ -1,3 +1,4 @@
+/* oxlint-disable unicorn/no-null -- Discord JSON projections use null for explicit absence. */
 import { describe, expect, test } from "bun:test";
 
 import {

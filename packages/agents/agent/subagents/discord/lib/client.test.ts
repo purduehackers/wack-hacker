@@ -12,7 +12,8 @@ const { Transient, UpstreamError } = await import("@repo/shared/errors");
 
 function clientReturning(status: number, body: unknown) {
   const fetch = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
-    expect(input.toString()).toBe("https://bot.example.test/internal/discord-command");
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    expect(url).toBe("https://bot.example.test/internal/discord-command");
     expect(init?.method).toBe("POST");
     expect(init?.headers).toEqual({
       "Content-Type": "application/json",
