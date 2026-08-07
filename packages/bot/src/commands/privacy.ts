@@ -14,7 +14,7 @@ import { Result } from "@repo/shared/result";
 import { MessageFlags, SlashCommandBuilder } from "discord.js";
 import type { ChatInputCommandInteraction } from "discord.js";
 
-import { defineCommand } from "../framework/commands.ts";
+import type { SlashCommand } from "../framework/commands.ts";
 import {
   MODE_LABELS,
   PROJECT_LABELS,
@@ -91,7 +91,8 @@ export function globalModeNotice(mode: PrivacyMode): string {
   );
 }
 
-export const builder = new SlashCommandBuilder()
+export const builder = new SlashCommandBuilder();
+builder
   .setName("privacy")
   .setDescription("Manage your privacy preferences across Purdue Hackers projects")
   .addSubcommand((sub) =>
@@ -205,7 +206,7 @@ async function run(
 }
 
 export function privacyCommand(client: PrivacyClient) {
-  return defineCommand({
+  return {
     builder,
     execute: async (interaction) => {
       // Preferences are personal, so nothing here is posted publicly.
@@ -217,5 +218,5 @@ export function privacyCommand(client: PrivacyClient) {
       await interaction.editReply(outcome.value);
       return Result.ok(undefined);
     },
-  });
+  } satisfies SlashCommand;
 }

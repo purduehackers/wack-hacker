@@ -19,7 +19,7 @@ import { Result } from "@repo/shared/result";
 import { MessageFlags, SlashCommandBuilder } from "discord.js";
 import type { ChatInputCommandInteraction } from "discord.js";
 
-import { defineCommand } from "../framework/commands.ts";
+import type { SlashCommand } from "../framework/commands.ts";
 import { roleOf } from "../utils/roles.ts";
 
 /** 🌙 — the channel's resting state between hack nights. */
@@ -56,7 +56,8 @@ export interface DashboardWriter {
   readonly setVersion: (version: string) => Promise<Result<undefined, HackNightError>>;
 }
 
-export const builder = new SlashCommandBuilder()
+export const builder = new SlashCommandBuilder();
+builder
   .setName("hack-night")
   .setDescription("Set up or reset hack night (organizers only)")
   .addSubcommand((sub) =>
@@ -158,7 +159,7 @@ async function run(
 }
 
 export function hackNightCommand(dashboard: DashboardWriter) {
-  return defineCommand({
+  return {
     builder,
     execute: async (interaction) => {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -169,5 +170,5 @@ export function hackNightCommand(dashboard: DashboardWriter) {
       await interaction.editReply(outcome.value);
       return Result.ok(undefined);
     },
-  });
+  } satisfies SlashCommand;
 }

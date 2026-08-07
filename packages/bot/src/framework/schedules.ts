@@ -32,10 +32,6 @@ export interface Schedule {
   readonly run: (context: ScheduleContext) => Promise<Result<void, KnownError>>;
 }
 
-export function defineSchedule(schedule: Schedule): Schedule {
-  return schedule;
-}
-
 export interface SchedulerDeps {
   readonly schedules: readonly Schedule[];
   readonly client: Client<true>;

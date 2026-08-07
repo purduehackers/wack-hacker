@@ -2,7 +2,7 @@ import { NotFound } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { SlashCommandBuilder } from "discord.js";
 
-import { defineCommand } from "../framework/commands.ts";
+import type { SlashCommand } from "../framework/commands.ts";
 
 /** Discord's epoch, the offset every snowflake timestamp is relative to. */
 const DISCORD_EPOCH = 1_420_070_400_000n;
@@ -25,7 +25,7 @@ export function latencyFromSnowflake(id: string, now: number): Result<number, No
   return Result.ok(now - Number((raw >> 22n) + DISCORD_EPOCH));
 }
 
-export const ping = defineCommand({
+export const ping = {
   builder: new SlashCommandBuilder().setName("ping").setDescription("Health check"),
   execute: async (interaction) => {
     const latency = latencyFromSnowflake(interaction.id, Date.now());
@@ -41,4 +41,4 @@ export const ping = defineCommand({
     await interaction.reply(body);
     return Result.ok(undefined);
   },
-});
+} satisfies SlashCommand;

@@ -16,7 +16,7 @@ import { Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { MessageType, ThreadAutoArchiveDuration } from "discord.js";
 
-import { defineSchedule } from "../framework/schedules.ts";
+import type { Schedule } from "../framework/schedules.ts";
 import { generateEventSlug } from "../integrations/hack-night.ts";
 import type { ThreadSlugStore } from "../integrations/hack-night.ts";
 import { indianaDate } from "../time/indiana.ts";
@@ -53,7 +53,7 @@ export function hackNightPhotographyThread(deps: {
   const now = deps.now ?? (() => new Date());
   const random = deps.random ?? Math.random;
 
-  return defineSchedule({
+  return {
     name: "hack-night-photography-thread",
     // Friday at 20:00 local. The former cron said "0 0 * * 6" because Vercel
     // evaluates in UTC; running in-process with an explicit timezone means the
@@ -102,5 +102,5 @@ export function hackNightPhotographyThread(deps: {
             detail: cause instanceof Error ? cause.message : String(cause),
           }),
       }),
-  });
+  } satisfies Schedule;
 }

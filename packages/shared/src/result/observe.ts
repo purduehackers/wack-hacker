@@ -80,11 +80,6 @@ export function observe<T, E>(op: string, reporter: Reporter, result: Result<T, 
   });
 }
 
-/** Data-last form, for the end of a pipeline. */
-export function observeWith(op: string, reporter: Reporter) {
-  return <T, E>(result: Result<T, E>): Result<T, E> => observe(op, reporter, result);
-}
-
 /**
  * Wraps a unit of work so it emits exactly one wide event either way, with a
  * duration. `now` is injected so a caller can supply a monotonic clock.

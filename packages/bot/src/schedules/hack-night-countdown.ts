@@ -24,7 +24,7 @@ import { Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import type { Client } from "discord.js";
 
-import { defineSchedule } from "../framework/schedules.ts";
+import type { Schedule } from "../framework/schedules.ts";
 import { indianaWallClock, nextIndianaMidnight } from "../time/indiana.ts";
 
 const lightning = new LightningTime();
@@ -203,7 +203,7 @@ export function hackNightCountdown(deps: CountdownDeps = {}) {
   const sleep =
     deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
 
-  return defineSchedule({
+  return {
     name: "hack-night-countdown",
     // 23:58 on hack night. Two minutes before midnight, which is two minutes
     // before Lightning Time rolls over to 0~0~0|0.
@@ -259,5 +259,5 @@ export function hackNightCountdown(deps: CountdownDeps = {}) {
             detail: cause instanceof Error ? cause.message : String(cause),
           }),
       }),
-  });
+  } satisfies Schedule;
 }

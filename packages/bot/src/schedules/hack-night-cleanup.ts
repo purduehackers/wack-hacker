@@ -14,7 +14,7 @@ import { DISCORD_IDS } from "@repo/shared/discord";
 import { Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 
-import { defineSchedule } from "../framework/schedules.ts";
+import type { Schedule } from "../framework/schedules.ts";
 import { rankPhotographers } from "../integrations/cms.ts";
 import type { CmsClient, HackNightImage } from "../integrations/cms.ts";
 import { fridayOf, resolveEventSlug } from "../integrations/hack-night.ts";
@@ -42,7 +42,7 @@ export function hackNightCleanup(deps: {
 }) {
   const now = deps.now ?? (() => new Date());
 
-  return defineSchedule({
+  return {
     name: "hack-night-cleanup",
     cron: "0 18 * * 0",
     run: async ({ client }) =>
@@ -93,5 +93,5 @@ export function hackNightCleanup(deps: {
                 detail: cause instanceof Error ? cause.message : String(cause),
               }),
       }),
-  });
+  } satisfies Schedule;
 }

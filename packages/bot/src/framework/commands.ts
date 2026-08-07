@@ -18,23 +18,7 @@ import type { KnownError } from "@repo/shared/errors";
 import type { Result } from "@repo/shared/result";
 import type { ChatInputCommandInteraction, SlashCommandBuilder } from "discord.js";
 
-/** The discord.js builder surface the framework needs. */
-export type CommandBuilder = Pick<SlashCommandBuilder, "name" | "toJSON">;
-
 export interface SlashCommand {
-  readonly builder: CommandBuilder;
+  readonly builder: SlashCommandBuilder;
   readonly execute: (interaction: ChatInputCommandInteraction) => Promise<Result<void, KnownError>>;
-}
-
-/** Identity, but it pins the shape so a malformed command fails at authoring. */
-export function defineCommand(command: SlashCommand): SlashCommand {
-  return command;
-}
-
-export function commandName(command: SlashCommand): string {
-  return command.builder.name;
-}
-
-export function toRegistrationBody(command: SlashCommand): ReturnType<CommandBuilder["toJSON"]> {
-  return command.builder.toJSON();
 }
