@@ -6,4 +6,5 @@ export default defineDomainAuditHook({
   domain: "vercel",
   isToolName: VERCEL_RUNTIME.isToolName,
   label: "Vercel",
+  redactInput: true,
 });

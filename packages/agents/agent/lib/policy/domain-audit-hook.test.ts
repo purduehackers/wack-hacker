@@ -30,7 +30,7 @@ function context(): HookContext {
   };
 }
 
-test("parameterized domain audit hook preserves Requested ownership and deterministic ids", async () => {
+test("parameterized domain audit hook preserves Requested ownership, ids, and redaction", async () => {
   const auditRecords: ActionAuditRecord[] = [];
   const hook = defineDomainAuditHook(
     {
@@ -43,6 +43,7 @@ test("parameterized domain audit hook preserves Requested ownership and determin
       domain: "test",
       isToolName: (value): value is "known" => value === "known",
       label: "Test",
+      redactInput: true,
     },
     async () => ({
       record: async (entry) => {
@@ -72,7 +73,7 @@ test("parameterized domain audit hook preserves Requested ownership and determin
     decision: "requested",
     delegate: "test",
     id: "event-1:call-1",
-    input: { value: "one" },
+    input: { redacted: true },
     tool: "known",
   });
 });

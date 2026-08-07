@@ -6,4 +6,5 @@ export default defineDomainAuditHook({
   domain: "sentry",
   isToolName: SENTRY_RUNTIME.isToolName,
   label: "Sentry",
+  redactInput: true,
 });

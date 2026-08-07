@@ -6,4 +6,5 @@ export default defineDomainAuditHook({
   domain: "github",
   isToolName: GITHUB_RUNTIME.isToolName,
   label: "GitHub",
+  redactInput: true,
 });

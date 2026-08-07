@@ -15,6 +15,7 @@ export interface DomainAuditHookAdapter<N extends string> {
   readonly domain: string;
   readonly isToolName: (value: string) => value is N;
   readonly label: string;
+  readonly redactInput?: boolean;
 }
 
 export function defineDomainAuditHook<N extends string>(
@@ -42,7 +43,7 @@ export function defineDomainAuditHook<N extends string>(
             delegate: adapter.domain,
             tool: action.toolName,
             risk: descriptor.risk,
-            input: action.input,
+            input: adapter.redactInput ? { redacted: true } : action.input,
             decision: REQUESTED,
           });
           if (Result.isError(recorded)) {
