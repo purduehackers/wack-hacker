@@ -13,6 +13,9 @@ Wack Hacker is Purdue Hackers' Discord bot and durable Eve agent.
 
 There is no compatibility path for the serverless Workflow/Queue architecture or agent-owned Discord rendering.
 
+The proposed simplified system diagram and module boundaries are documented in
+[`docs/architecture.md`](docs/architecture.md).
+
 ## Development
 
 ```bash
