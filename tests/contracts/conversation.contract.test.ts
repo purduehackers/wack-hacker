@@ -9,6 +9,7 @@ import {
 } from "../../packages/agents/agent/lib/discord/coordination.ts";
 import { createRenderPublisher } from "../../packages/agents/agent/lib/discord/render-intent.ts";
 import type { AgentClient } from "../../packages/bot/src/agent/client.ts";
+import { createHitlStore, type HitlClaimInput } from "../../packages/bot/src/agent/hitl/store.ts";
 import { createTurnQueue, DELIVERY_LEASE_MS } from "../../packages/bot/src/agent/queue.ts";
 import { createRenderCoordinator } from "../../packages/bot/src/agent/render/coordinator.ts";
 import type { DiscordRest } from "../../packages/bot/src/agent/render/discord-rest.ts";
@@ -214,6 +215,74 @@ contractTest("delivery admission recovers lost responses and fences ambiguous wo
   } finally {
     recoveryLog.mockRestore();
   }
+  await queue.purge(continuationKey);
+});
+
+contractTest("HITL Lua admits one answer and reset makes the control stale", async () => {
+  const redis = contractRedis();
+  const queue = createTurnQueue({ redis });
+  const continuationKey = "30000000000000020";
+  const source = message("40000000000000030", "approval", continuationKey);
+  await queue.enqueue(source);
+  const claimed = await queue.claim(continuationKey);
+  if (Result.isError(claimed)) throw claimed.error;
+  const delivery = claimed.value?.payload;
+  if (delivery === undefined) throw new Error("HITL delivery was not claimed");
+
+  const attemptId = crypto.randomUUID();
+  expect((await startTurnDelivery(redis, delivery, attemptId)).status).toBe("start");
+  const publisher = createRenderPublisher({
+    redis,
+    botUrl: "http://bot.invalid",
+    botSecret: "contract-secret",
+    fetch: Object.assign(async () => new Response(undefined, { status: 204 }), {
+      preconnect: globalThis.fetch.preconnect,
+    }),
+  });
+  expect(
+    await publisher.publish({
+      dispatchId: delivery.dispatchId,
+      continuationKey,
+      messageId: delivery.messageId,
+      sessionId: "session-hitl",
+      eveTurnId: "turn-hitl",
+      revision: 1,
+      phase: "streaming",
+      text: "Choose",
+      activity: "Waiting",
+      inputRequests: [
+        {
+          requestId: "approval-1",
+          recipientUserId: "10000000000000000",
+          prompt: "Continue?",
+          kind: "question",
+          display: "confirmation",
+        },
+      ],
+    }),
+  ).toBe(true);
+
+  const hitl = createHitlStore(redis);
+  const approval: HitlClaimInput = {
+    dispatchId: delivery.dispatchId,
+    continuationKey,
+    revision: 1,
+    requestIndex: 0,
+    requestId: "approval-1",
+    recipientUserId: "10000000000000000",
+    interactionId: "40000000000000031",
+  };
+  const contender = { ...approval, interactionId: "40000000000000032" };
+  const outcomes = await Promise.all([hitl.claim(approval), hitl.claim(contender)]);
+  expect([...outcomes].sort()).toEqual(["acquired", "claimed"]);
+
+  const winner = outcomes[0] === "acquired" ? approval : contender;
+  const loser = winner === approval ? contender : approval;
+  expect(await hitl.complete(winner.dispatchId, winner.revision, winner.interactionId)).toBe(true);
+  expect(await hitl.complete(loser.dispatchId, loser.revision, loser.interactionId)).toBe(false);
+
+  await queue.beginReset(continuationKey);
+  expect(await hitl.claim(approval)).toBe("stale");
   await queue.purge(continuationKey);
 });
 
