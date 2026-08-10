@@ -16,7 +16,7 @@ Use when the user asks about Purdue Hackers events, RSVP lists, unsubscribe requ
 
 - `events` holds name, start/end, eventType ('hack-night' by default), location, description (richText), published flag, and an email-send pipeline (send / sentAt).
 - `publish_event` and `unpublish_event` flip `published` — they are NOT approval-gated but are publicly visible, so confirm before flipping.
-- `send_blast` flips `send: true` on an event and Payload's afterChange hook dispatches real emails to all non-unsubscribed RSVPs. Approval-gated. Confirm the event + draft first.
+- `send_blast` flips `send: true` on an event and Payload's afterChange hook dispatches real emails to all non-unsubscribed RSVPs via Cloudflare. Approval-gated. Confirm the event + draft first.
   </events>
 
 <rsvps>
@@ -29,6 +29,6 @@ Use when the user asks about Purdue Hackers events, RSVP lists, unsubscribe requ
 <emails>
 
 - `emails` are standalone email-blast drafts tied to an event (subject + body).
-- Creating an email doesn't send it. `send_email` flips `send: true` and Payload's afterChange hook fires the blast, then resets `send` to false.
+- Creating an email doesn't send it. `send_email` flips `send: true` and Payload's afterChange hook fires the blast via Cloudflare, then resets `send` to false.
 - Both `send_email` and `send_blast` (the event-scoped equivalent) are approval-gated. Use `send_email` when there's already a drafted email row; use `send_blast` when the event's own `send` flag is the pipeline.
   </emails>

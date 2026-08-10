@@ -71,7 +71,6 @@ export const env = createEnv({
     HUNTER_API_KEY: secret.optional(),
     SENTRY_AUTH_TOKEN: secret.optional(),
     SENTRY_ORG: identifier.optional(),
-    SENTRY_PROJECT: identifier.optional(),
     VERCEL_API_TOKEN: secret.optional(),
 
     /**

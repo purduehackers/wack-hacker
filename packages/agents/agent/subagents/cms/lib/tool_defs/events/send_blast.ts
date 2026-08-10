@@ -6,7 +6,7 @@ import { projectEvent } from "../../constants.ts";
 
 export const send_blast = defineTool({
   description:
-    "Fire the email blast for this event to all active RSVPs (sets `send: true`). Payload's afterChange hook sends the real emails and resets `send` to false afterwards. Destructive external side effect — use only after explicit confirmation.",
+    "Fire the email blast for this event to all active RSVPs (sets `send: true`). Payload's afterChange hook sends the real emails via Cloudflare and resets `send` to false afterwards. Destructive external side effect — use only after explicit confirmation.",
   access: { risk: "destructive" },
   input: z.strictObject({ id: documentId }),
   execute: async ({ id }) => {

@@ -15,9 +15,9 @@ Mongo and both reach us on the wire, so ids are `z.union([z.string(), z.number()
 
 ## Shape of the API
 
-The mail provider is Payload's business, not ours — this repo holds no key for
-it and cannot retry, observe, or cancel a send. Do not name the provider in a
-tool description; it can change on the CMS side without anything here noticing.
+Payload sends through Cloudflare, the same provider `outreach` and the
+`cloudflare` domain use — but with Payload's own credentials. This repo holds no
+key for it and cannot retry, observe, or cancel a send once the flag is set.
 
 Sending is a **flag, not a call**. `send_blast` and `send_email` set
 `send: true` and Payload's own `afterChange` hook dispatches the mail, then
