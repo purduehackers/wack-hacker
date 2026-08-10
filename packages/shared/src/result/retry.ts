@@ -73,18 +73,7 @@ const MAX_DELAY_MS = 5_000;
  * Full jitter — anywhere in `[0, capped]` — spreads a thundering herd better
  * than a narrow band around the target delay. `attempt` is 1-based.
  */
-export function exponentialWithJitter(attempt: number, random: () => number = Math.random): number {
+function exponentialWithJitter(attempt: number): number {
   const capped = Math.min(BASE_DELAY_MS * 2 ** Math.max(0, attempt - 1), MAX_DELAY_MS);
-  return Math.round(capped * random());
-}
-
-/**
- * Adds an abort signal to a policy so a cancelled turn stops retrying.
- *
- * eve gives tools `ctx.abortSignal`, which fires when the active turn is
- * cancelled. Without this, a cancelled turn would keep burning attempts against
- * an upstream nobody is waiting on.
- */
-export function withSignal<E>(policy: RetryPolicy<E>, signal: AbortSignal): RetryPolicy<E> {
-  return { ...policy, signal };
+  return Math.round(capped * Math.random());
 }

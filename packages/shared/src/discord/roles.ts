@@ -23,6 +23,8 @@
  * convention, since its workflow step bundles ran in strip-only type mode.
  */
 
+import { z } from "zod";
+
 import { DISCORD_IDS } from "./constants.ts";
 
 export const UserRole = {
@@ -55,7 +57,13 @@ export function roleFromMemberRoles(memberRoles?: readonly string[]): UserRole {
   return UserRole.Public;
 }
 
-/** Narrows an untrusted string — a stored snapshot, a wire payload. */
+/**
+ * Narrows an untrusted string — a stored snapshot, a wire payload. Derived from
+ * the tier object rather than restating its members, so a new tier is covered
+ * the moment it is declared.
+ */
+const userRoleSchema = z.enum(UserRole);
+
 export function isUserRole(value: unknown): value is UserRole {
-  return value === UserRole.Public || value === UserRole.Organizer || value === UserRole.Admin;
+  return userRoleSchema.safeParse(value).success;
 }

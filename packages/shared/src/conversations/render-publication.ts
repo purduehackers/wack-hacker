@@ -88,7 +88,7 @@ redis.call("SADD", KEYS[3], ARGV[6])
 return settledRevision
 `;
 
-export interface RenderPublication {
+interface RenderPublication {
   readonly accepted: boolean;
   readonly shouldWake: boolean;
 }

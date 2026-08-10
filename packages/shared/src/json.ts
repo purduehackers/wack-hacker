@@ -1,0 +1,43 @@
+/**
+ * JSON at the Redis boundary.
+ *
+ * Upstash returns a value either as JSON text or already deserialized,
+ * depending on how it was written and which client wrote it, so both shapes
+ * have to decode. A codec keeps the two directions in one declaration:
+ * `stored(schema)` reads either form, and `z.encode(jsonCodec(schema), value)`
+ * produces exactly the text that reads back — the encode half is validated
+ * against the same schema, so a record can no longer be written in a shape its
+ * own reader rejects.
+ */
+
+import { z } from "zod";
+
+/** JSON text ⇄ a value of `schema`. */
+export function jsonCodec<S extends z.ZodType>(schema: S): z.ZodCodec<z.ZodString, S> {
+  return z.codec(z.string(), schema, {
+    decode: (text, payload): z.input<S> => {
+      try {
+        return JSON.parse(text);
+      } catch (cause) {
+        payload.issues.push({
+          code: "invalid_format",
+          format: "json",
+          input: text,
+          message: cause instanceof Error ? cause.message : "value was not valid JSON",
+        });
+        return z.NEVER;
+      }
+    },
+    encode: (value) => JSON.stringify(value),
+  });
+}
+
+/** JSON text ⇄ an unvalidated value, for readers that validate further downstream. */
+export const jsonText = jsonCodec(z.unknown());
+
+/** A record read back from Redis: JSON text, or the value itself. */
+export function stored<S extends z.ZodType>(
+  schema: S,
+): z.ZodUnion<[z.ZodCodec<z.ZodString, S>, S]> {
+  return z.union([jsonCodec(schema), schema]);
+}

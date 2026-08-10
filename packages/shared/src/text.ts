@@ -12,7 +12,7 @@
  */
 
 /** Discord's hard limit is 2000; the default leaves room for a footer. */
-export const DEFAULT_MAX_CHARS = 1_900;
+const DEFAULT_MAX_CHARS = 1_900;
 
 const SENTENCE_ENDINGS = [". ", "! ", "? "] as const;
 

@@ -33,18 +33,11 @@
 
 import { z } from "zod";
 
+import { ConfirmMode, ScheduleActionType } from "./db/enums.ts";
+import { UserRole } from "./discord/roles.ts";
 import { InvalidInput } from "./errors.ts";
+import { discordSnowflake as snowflake, shortId, traceparent } from "./formats.ts";
 import { Result } from "./result/index.ts";
-
-/** Discord snowflakes are numeric strings; bounds keep obvious junk out. */
-const snowflake = z.string().regex(/^\d{17,20}$/, "expected a Discord snowflake");
-/** W3C trace context persisted through the durable Redis handoff. */
-const traceparent = z
-  .string()
-  .regex(
-    /^(?!ff)[0-9a-f]{2}-(?!0{32})[0-9a-f]{32}-(?!0{16})[0-9a-f]{16}-[0-9a-f]{2}$/,
-    "expected a W3C traceparent",
-  );
 
 /** Discord's own ceiling is 4000 characters for a user message. */
 const MAX_CONTENT_CHARS = 4_000;
@@ -54,11 +47,11 @@ const MAX_SCHEDULE_CONTENT_CHARS = 9_000;
 const MAX_LEADIN_MESSAGES = 20;
 const MAX_ATTACHMENTS = 10;
 
-export const principalSchema = z.strictObject({
+const principalSchema = z.strictObject({
   userId: snowflake,
-  username: z.string().min(1).max(64),
+  username: z.string().trim().min(1).max(64),
   /** Guild display name, which is what the agent should address the user by. */
-  nickname: z.string().min(1).max(64),
+  nickname: z.string().trim().min(1).max(64),
   /**
    * Raw role snowflakes, resolved to an access tier by the agent. Re-sent on
    * every turn rather than cached: a follow-up from a different person must be
@@ -67,38 +60,35 @@ export const principalSchema = z.strictObject({
   memberRoles: z.array(snowflake).max(64),
 });
 
-export const channelRefSchema = z.strictObject({
+const channelRefSchema = z.strictObject({
   id: snowflake,
-  name: z.string().min(1).max(128),
+  name: z.string().trim().min(1).max(128),
   /** Used to suppress dashboard mirroring for internal categories. */
   categoryId: snowflake.optional(),
 });
 
-export const threadRefSchema = z.strictObject({
+const threadRefSchema = z.strictObject({
   id: snowflake,
   parentId: snowflake,
-  parentName: z.string().min(1).max(128),
+  parentName: z.string().trim().min(1).max(128),
 });
 
-export const attachmentSchema = z.strictObject({
-  url: z.string().url(),
-  filename: z.string().min(1).max(256),
-  contentType: z.string().min(1).max(128).optional(),
-  size: z.number().int().nonnegative(),
+const attachmentSchema = z.strictObject({
+  url: z.url(),
+  filename: z.string().trim().min(1).max(256),
+  contentType: z.string().trim().min(1).max(128).optional(),
+  size: z.int().nonnegative(),
 });
 
 /**
  * A Discord turn. `mention` opens with user lead-in, `followup` continues a live
  * conversation, and `scheduled` is a bot-materialized proactive occurrence.
  */
-export const messagePayloadSchema = z
+const messagePayloadSchema = z
   .strictObject({
     kind: z.enum(["mention", "followup", "scheduled"]),
     scheduleId: z.uuid().optional(),
-    occurrenceId: z
-      .string()
-      .regex(/^[A-Za-z0-9_-]{22}$/)
-      .optional(),
+    occurrenceId: shortId.optional(),
     continuationKey: snowflake,
     /** The bot has already stripped its own leading mention. */
     content: z.string().max(MAX_SCHEDULE_CONTENT_CHARS),
@@ -150,68 +140,83 @@ export const messagePayloadSchema = z
   });
 
 /** Bot-assigned idempotency/fencing epoch for one queue delivery. */
-export const deliveryPayloadSchema = messagePayloadSchema.extend({
+const deliveryPayloadSchema = messagePayloadSchema.extend({
   dispatchId: z.uuid(),
 });
 
-export const renderInputOptionSchema = z.strictObject({
+const renderInputOptionSchema = z.strictObject({
+  /** Opaque: it round-trips through a Discord component id, so it is not trimmed. */
   id: z.string().min(1).max(512),
-  label: z.string().min(1).max(256),
+  label: z.string().trim().min(1).max(256),
   description: z.string().max(1_000).optional(),
   style: z.enum(["primary", "danger", "default"]).optional(),
 });
 
 /** Safe, presentation-only projection of one Eve HITL request. */
-export const renderInputRequestSchema = z
+const renderInputRequestSchema = z
   .strictObject({
+    /** Opaque: the bot matches it byte-for-byte against the pending request. */
     requestId: z.string().min(1).max(512),
     recipientUserId: snowflake,
-    prompt: z.string().min(1).max(2_000),
+    prompt: z.string().trim().min(1).max(2_000),
     kind: z.enum(["question", "session-limit", "tool-approval"]),
     display: z.enum(["confirmation", "select", "text"]).optional(),
     allowFreeform: z.boolean().optional(),
-    toolName: z.string().min(1).max(256).optional(),
-    inputPreview: z.string().min(1).max(2_000).optional(),
+    toolName: z.string().trim().min(1).max(256).optional(),
+    inputPreview: z.string().trim().min(1).max(2_000).optional(),
     options: z.array(renderInputOptionSchema).max(100).optional(),
-    /** Trusted projection of the policy record; never sourced from a component id. */
-    approvalMode: z.enum(["self", "second-party"]).optional(),
-    approverMinRole: z.enum(["organizer", "admin"]).optional(),
+    /**
+     * Trusted projection of the policy record; never sourced from a component
+     * id. Both come from the storage enums so a tier cannot drift out of the
+     * set the policy engine actually persists.
+     */
+    approvalMode: z.enum(ConfirmMode).exclude(["None"]).optional(),
+    approverMinRole: z.enum(UserRole).exclude(["Public"]).optional(),
   })
   .superRefine((request, ctx) => {
     if (request.approvalMode !== undefined && request.kind !== "tool-approval") {
-      ctx.addIssue({ code: "custom", message: "approval policy is only valid for tool approval" });
+      ctx.addIssue({
+        code: "custom",
+        path: ["approvalMode"],
+        message: "approval policy is only valid for tool approval",
+      });
     }
     if ((request.approvalMode === "second-party") !== (request.approverMinRole !== undefined)) {
       ctx.addIssue({
         code: "custom",
+        path: ["approverMinRole"],
         message: "second-party approval requires exactly one minimum approver role",
       });
     }
   });
 
 /** Link-free public authorization affordance stored with render intent. */
-export const renderAuthorizationSchema = z.strictObject({
-  id: z.string().regex(/^[A-Za-z0-9_-]{22}$/),
-  name: z.string().min(1).max(128),
+const renderAuthorizationSchema = z.strictObject({
+  id: shortId,
+  name: z.string().trim().min(1).max(128),
   recipientUserId: snowflake,
-  displayName: z.string().min(1).max(128).optional(),
+  displayName: z.string().trim().min(1).max(128).optional(),
 });
 
+/**
+ * `abort` matters here: without it a value that is not a URL at all still
+ * reaches the refinement, where `new URL` throws rather than failing the parse.
+ */
 const privateAuthorizationUrl = z
-  .string()
-  .url()
+  .url({ protocol: /^https$/u, abort: true })
   .max(2_048)
   .refine((value) => {
     const url = new URL(value);
-    return url.protocol === "https:" && url.username === "" && url.password === "";
+    return url.username === "" && url.password === "";
   }, "expected an HTTPS URL without embedded credentials");
 
 /** Short-lived private connection challenge, never materialized in public paint. */
-export const authorizationChallengeSchema = z.strictObject({
+const authorizationChallengeSchema = z.strictObject({
   description: z.string().max(1_000),
   url: privateAuthorizationUrl.optional(),
-  userCode: z.string().min(1).max(128).optional(),
-  expiresAt: z.string().min(1).max(64).optional(),
+  userCode: z.string().trim().min(1).max(128).optional(),
+  /** Provider-supplied and only ever `Date.parse`d, so not narrowed to ISO 8601. */
+  expiresAt: z.string().trim().min(1).max(64).optional(),
   instructions: z.string().max(1_000).optional(),
 });
 
@@ -219,18 +224,19 @@ export const authorizationChallengeSchema = z.strictObject({
  * A component or modal submission resolving one pending human-input request.
  * The bot has already validated the current render revision and intended user.
  */
-export const interactionPayloadSchema = z
+const interactionPayloadSchema = z
   .strictObject({
     continuationKey: snowflake,
     interactionId: snowflake,
     dispatchId: z.uuid(),
-    renderRevision: z.number().int().positive(),
+    renderRevision: z.int().positive(),
     requestId: z.string().min(1).max(512),
     /** Immutable policy target recovered by the bot from the Redis render target. */
     authChannelId: snowflake,
     authThreadId: snowflake.optional(),
+    /** Opaque: it must equal the option id the render intent published. */
     optionId: z.string().min(1).max(512).optional(),
-    freeform: z.string().min(1).max(MAX_CONTENT_CHARS).optional(),
+    freeform: z.string().trim().min(1).max(MAX_CONTENT_CHARS).optional(),
     principal: principalSchema,
     /** Current requester roles re-fetched by the bot for a second-party decision. */
     approvalRequester: z
@@ -242,6 +248,7 @@ export const interactionPayloadSchema = z
     if ((value.optionId === undefined) === (value.freeform === undefined)) {
       ctx.addIssue({
         code: "custom",
+        path: ["optionId"],
         message: "exactly one option or freeform response is required",
       });
     }
@@ -249,19 +256,24 @@ export const interactionPayloadSchema = z
       value.approvalRequester !== undefined &&
       value.approvalRequester.userId === value.principal.userId
     ) {
-      ctx.addIssue({ code: "custom", message: "second-party approver must differ from requester" });
+      ctx.addIssue({
+        code: "custom",
+        path: ["approvalRequester", "userId"],
+        message: "second-party approver must differ from requester",
+      });
     }
   });
 
 /** Retires the session so the next message starts fresh. */
-export const resetPayloadSchema = z.strictObject({
+const resetPayloadSchema = z.strictObject({
   continuationKey: snowflake,
-  reason: z.string().min(1).max(256),
+  reason: z.string().trim().min(1).max(256),
   principal: principalSchema,
 });
 
 /** Bot-internal reset request after a durable queue cutover has been installed. */
-export const resetRequestPayloadSchema = resetPayloadSchema.extend({
+const resetRequestPayloadSchema = z.strictObject({
+  ...resetPayloadSchema.shape,
   resetId: z.uuid(),
 });
 
@@ -273,8 +285,9 @@ export const resetRequestPayloadSchema = resetPayloadSchema.extend({
  * is a resume handle, not a mailbox — so ordering is the bot's job. Without
  * this signal the bot cannot know when it is safe to send the next turn.
  */
-export const parkedPayloadSchema = z.strictObject({
+const parkedPayloadSchema = z.strictObject({
   continuationKey: snowflake,
+  /** Opaque Eve handles, compared for equality by the Redis transitions. */
   sessionId: z.string().min(1).max(128),
   /** Discord user message for the exact turn that parked. */
   messageId: snowflake,
@@ -285,7 +298,7 @@ export const parkedPayloadSchema = z.strictObject({
 });
 
 /** Immutable bot-authored Discord target for a queued delivery. */
-export const renderTargetSchema = z.strictObject({
+const renderTargetSchema = z.strictObject({
   dispatchId: z.uuid(),
   continuationKey: snowflake,
   messageId: snowflake,
@@ -299,13 +312,13 @@ export const renderTargetSchema = z.strictObject({
 });
 
 /** Latest desired Discord presentation for one delivery. */
-export const renderIntentSchema = z.strictObject({
+const renderIntentSchema = z.strictObject({
   dispatchId: z.uuid(),
   continuationKey: snowflake,
   messageId: snowflake,
   sessionId: z.string().min(1).max(128),
   eveTurnId: z.string().min(1).max(128),
-  revision: z.number().int().positive(),
+  revision: z.int().positive(),
   phase: z.enum(["streaming", "completed", "failed"]),
   text: z.string().max(12_000),
   activity: z.string().max(1_000),
@@ -317,56 +330,73 @@ export const renderIntentSchema = z.strictObject({
 });
 
 /** Agent → bot low-latency wakeup. Redis remains the durable source of truth. */
-export const renderWakePayloadSchema = z.strictObject({
+const renderWakePayloadSchema = z.strictObject({
   dispatchId: z.uuid(),
 });
 
 /** Agent-owned desired state for one stable scheduled occurrence. */
-export const scheduledFirePayloadSchema = z.strictObject({
+const scheduledFirePayloadSchema = z.strictObject({
   scheduleId: z.uuid(),
-  occurrenceId: z.string().regex(/^[A-Za-z0-9_-]{22}$/),
+  occurrenceId: shortId,
   ownerId: snowflake,
   channelId: snowflake,
-  description: z.string().min(1).max(256),
-  actionType: z.enum(["agent", "message"]),
-  prompt: z.string().min(1).max(8_000),
+  description: z.string().trim().min(1).max(256),
+  actionType: z.enum(ScheduleActionType),
+  prompt: z.string().trim().min(1).max(8_000),
   /** Creation snapshot; used only when current Discord roles cannot be fetched. */
   memberRoles: z.array(snowflake).max(64).optional(),
   /** Originating schedule span, retained if bot admission retries later. */
   traceparent: traceparent.optional(),
   /** One-based delivery attempt, used only for accurate user-visible remediation. */
-  attemptNumber: z.number().int().min(1).max(100),
+  attemptNumber: z.int().min(1).max(100),
   /** True when another automatic retry will not be scheduled after this attempt. */
   finalAttempt: z.boolean(),
   scheduledFor: z.iso.datetime({ offset: true }),
 });
 
-export type Principal = z.infer<typeof principalSchema>;
-export type ChannelRef = z.infer<typeof channelRefSchema>;
-export type ThreadRef = z.infer<typeof threadRefSchema>;
-export type Attachment = z.infer<typeof attachmentSchema>;
-export type MessagePayload = z.infer<typeof messagePayloadSchema>;
-export type DeliveryPayload = z.infer<typeof deliveryPayloadSchema>;
-export type InteractionPayload = z.infer<typeof interactionPayloadSchema>;
-export type RenderInputOption = z.infer<typeof renderInputOptionSchema>;
-export type RenderInputRequest = z.infer<typeof renderInputRequestSchema>;
-export type RenderAuthorization = z.infer<typeof renderAuthorizationSchema>;
-export type AuthorizationChallenge = z.infer<typeof authorizationChallengeSchema>;
-export type ResetPayload = z.infer<typeof resetPayloadSchema>;
-export type ResetRequestPayload = z.infer<typeof resetRequestPayloadSchema>;
-export type ParkedPayload = z.infer<typeof parkedPayloadSchema>;
-export type RenderTarget = z.infer<typeof renderTargetSchema>;
-export type RenderIntent = z.infer<typeof renderIntentSchema>;
-export type RenderWakePayload = z.infer<typeof renderWakePayloadSchema>;
-export type ScheduledFirePayload = z.infer<typeof scheduledFirePayloadSchema>;
+export type Principal = z.output<typeof principalSchema>;
+export type ChannelRef = z.output<typeof channelRefSchema>;
+export type ThreadRef = z.output<typeof threadRefSchema>;
+export type MessagePayload = z.output<typeof messagePayloadSchema>;
+export type DeliveryPayload = z.output<typeof deliveryPayloadSchema>;
+export type InteractionPayload = z.output<typeof interactionPayloadSchema>;
+export type RenderInputOption = z.output<typeof renderInputOptionSchema>;
+export type RenderInputRequest = z.output<typeof renderInputRequestSchema>;
+export type RenderAuthorization = z.output<typeof renderAuthorizationSchema>;
+export type AuthorizationChallenge = z.output<typeof authorizationChallengeSchema>;
+export type ResetPayload = z.output<typeof resetPayloadSchema>;
+export type ResetRequestPayload = z.output<typeof resetRequestPayloadSchema>;
+export type ParkedPayload = z.output<typeof parkedPayloadSchema>;
+export type RenderTarget = z.output<typeof renderTargetSchema>;
+export type RenderIntent = z.output<typeof renderIntentSchema>;
+type RenderWakePayload = z.output<typeof renderWakePayloadSchema>;
+export type ScheduledFirePayload = z.output<typeof scheduledFirePayloadSchema>;
 
 /**
  * What the agent answers with. A discriminated union rather than a serialized
  * `Result`, so the failure branch keeps a readable tag and message.
+ *
+ * The schema lives here with the type derived from it, so the bot's decoder and
+ * the agent's producer cannot restate the contract differently.
+ *
+ * Deliberately not `strictObject`, unlike the payload schemas above. Those are
+ * durable records the writer and reader agree on before either is deployed;
+ * this is a live response read by whatever bot generation happens to be running
+ * when the agent deploys. An additive field on the acknowledgement must not
+ * make every older bot treat a successful turn as a contract violation.
  */
-export type WireResponse =
-  | { readonly ok: true; readonly sessionId: string; readonly continuationToken: string }
-  | { readonly ok: false; readonly tag: string; readonly message: string };
+export const wireResponseSchema = z
+  .discriminatedUnion("ok", [
+    z.object({
+      ok: z.literal(true),
+      sessionId: z.string().min(1),
+      continuationToken: z.string().min(1),
+    }),
+    z.object({ ok: z.literal(false), tag: z.string(), message: z.string() }),
+  ])
+  .readonly();
+
+export type WireResponse = z.output<typeof wireResponseSchema>;
 
 /**
  * Every route on the agent's custom Discord channel.
@@ -390,7 +420,11 @@ export const BOT_ROUTES = {
   health: "/health",
 } as const;
 
-function decode<T>(schema: z.ZodType<T>, subject: string, input: unknown): Result<T, InvalidInput> {
+function decode<S extends z.ZodType>(
+  schema: S,
+  subject: string,
+  input: unknown,
+): Result<z.output<S>, InvalidInput> {
   const parsed = schema.safeParse(input);
   if (parsed.success) return Result.ok(parsed.data);
 
@@ -403,20 +437,12 @@ function decode<T>(schema: z.ZodType<T>, subject: string, input: unknown): Resul
   return Result.err(new InvalidInput({ subject, issues }));
 }
 
-export function decodeMessagePayload(input: unknown): Result<MessagePayload, InvalidInput> {
-  return decode(messagePayloadSchema, "message payload", input);
-}
-
 export function decodeDeliveryPayload(input: unknown): Result<DeliveryPayload, InvalidInput> {
   return decode(deliveryPayloadSchema, "delivery payload", input);
 }
 
 export function decodeInteractionPayload(input: unknown): Result<InteractionPayload, InvalidInput> {
   return decode(interactionPayloadSchema, "interaction payload", input);
-}
-
-export function decodeResetPayload(input: unknown): Result<ResetPayload, InvalidInput> {
-  return decode(resetPayloadSchema, "reset payload", input);
 }
 
 export function decodeResetRequestPayload(

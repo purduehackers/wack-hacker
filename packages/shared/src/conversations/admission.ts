@@ -1,5 +1,8 @@
 /** Redis half of the bot↔agent delivery and parked-turn handshake. */
 
+import { z } from "zod";
+
+import { stored } from "../json.ts";
 import type { RedisClient } from "../redis/client.ts";
 import type { DeliveryPayload } from "../wire.ts";
 import { activeKey, ingressKey, resetKey } from "./keys.ts";
@@ -7,7 +10,7 @@ import { activeKey, ingressKey, resetKey } from "./keys.ts";
 /** Atomic Redis scripting surface used by delivery coordination. */
 type AdmissionRedis = Pick<RedisClient, "eval">;
 
-export const DELIVERY_ADMISSION_TTL_MS = 15 * 60_000;
+const DELIVERY_ADMISSION_TTL_MS = 15 * 60_000;
 
 const START_DELIVERY_SCRIPT = `
 -- wack:start-delivery
@@ -65,45 +68,38 @@ redis.call("DEL", KEYS[1])
 return 1
 `;
 
-export type DeliveryAdmission =
-  | { readonly status: "start"; readonly admissionAttemptId: string }
-  | { readonly status: "accepted"; readonly sessionId: string }
-  | { readonly status: "in-progress" | "recovery-required" | "resetting" | "stale" };
+/**
+ * Every shape `wack:start-delivery` can answer with. One discriminated union
+ * replaces a hand-written guard chain that restated each field, and it decodes
+ * whichever form Upstash returns — JSON text, or an already-deserialized value.
+ */
+const admissionSchema = z
+  .discriminatedUnion("status", [
+    z.strictObject({ status: z.literal("start"), admissionAttemptId: z.string() }),
+    z.strictObject({ status: z.literal("accepted"), sessionId: z.string() }),
+    z.strictObject({
+      status: z.literal(["in-progress", "recovery-required", "resetting", "stale"]),
+    }),
+  ])
+  .readonly();
+
+type DeliveryAdmission = z.output<typeof admissionSchema>;
 
 function parseAdmission(raw: unknown): DeliveryAdmission {
-  const value: unknown = typeof raw === "string" ? JSON.parse(raw) : raw;
-  if (typeof value !== "object" || value === null || !("status" in value)) {
-    throw new Error("Redis returned an invalid delivery admission");
-  }
-  const status = value.status;
-  if (
-    status === "start" &&
-    "admissionAttemptId" in value &&
-    typeof value.admissionAttemptId === "string"
-  ) {
-    return { status, admissionAttemptId: value.admissionAttemptId };
-  }
-  if (
-    status === "in-progress" ||
-    status === "recovery-required" ||
-    status === "resetting" ||
-    status === "stale"
-  ) {
-    return { status };
-  }
-  if (status === "accepted" && "sessionId" in value && typeof value.sessionId === "string") {
-    return { status, sessionId: value.sessionId };
-  }
-  throw new Error("Redis returned an invalid delivery admission");
+  const parsed = stored(admissionSchema).safeParse(raw);
+  if (!parsed.success) throw new Error("Redis returned an invalid delivery admission");
+  return parsed.data;
 }
 
 /** Fences overlapping bot POSTs before either is allowed to call Eve `send`. */
 async function startDelivery(
   redis: AdmissionRedis,
   payload: DeliveryPayload,
-  /** Stable within one route invocation, and therefore across Upstash retries. */
-  admissionAttemptId: string = crypto.randomUUID(),
 ): Promise<DeliveryAdmission> {
+  // Fresh per call, so it identifies this attempt only. A retried route
+  // invocation arrives with a new id and is fenced by `phase`/`admissionOwner`
+  // in the script above, not by matching this value.
+  const admissionAttemptId = crypto.randomUUID();
   const raw: unknown = await redis.eval(
     START_DELIVERY_SCRIPT,
     [
@@ -164,8 +160,7 @@ async function confirmDelivery(
 
 export function createAdmissionTransitions(redis: AdmissionRedis) {
   return {
-    start: (payload: DeliveryPayload, admissionAttemptId?: string): Promise<DeliveryAdmission> =>
-      startDelivery(redis, payload, admissionAttemptId),
+    start: (payload: DeliveryPayload): Promise<DeliveryAdmission> => startDelivery(redis, payload),
     finish: (continuationKey: string, admissionAttemptId: string): Promise<boolean> =>
       finishAdmission(redis, continuationKey, admissionAttemptId),
     confirm: (payload: DeliveryPayload, sessionId: string): Promise<boolean> =>

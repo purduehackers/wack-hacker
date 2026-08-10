@@ -54,12 +54,6 @@ export interface Reporter {
   ) => void;
 }
 
-/** Discards everything. For code paths that must not report. */
-export const silentReporter: Reporter = {
-  emit: () => {},
-  captureDefect: () => {},
-};
-
 /**
  * Classifies a failure and routes it, returning the result unchanged.
  *
@@ -82,17 +76,16 @@ export function observe<T, E>(op: string, reporter: Reporter, result: Result<T, 
 
 /**
  * Wraps a unit of work so it emits exactly one wide event either way, with a
- * duration. `now` is injected so a caller can supply a monotonic clock.
+ * duration.
  */
 export async function instrument<T, E>(
   op: string,
   reporter: Reporter,
   work: () => Promise<Result<T, E>>,
-  now: () => number = () => Date.now(),
 ): Promise<Result<T, E>> {
-  const startedAt = now();
+  const startedAt = Date.now();
   const result = await work();
-  const durationMs = now() - startedAt;
+  const durationMs = Date.now() - startedAt;
 
   if (result.status === "ok") {
     reporter.emit({ op, status: "ok", durationMs });

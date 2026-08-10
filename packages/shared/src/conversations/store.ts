@@ -28,16 +28,10 @@ import { createRenderPublicationTransitions } from "./render-publication.ts";
 import { createRenderTransitions } from "./render.ts";
 import { createScheduledFireTransitions } from "./scheduled-fire.ts";
 
-export interface ConversationStoreDeps {
-  readonly redis: RedisClient;
-  readonly newToken?: () => string;
-  readonly now?: () => number;
-}
-
-export function createConversationStore(deps: ConversationStoreDeps) {
+export function createConversationStore(deps: { readonly redis: RedisClient }) {
   const { redis } = deps;
   return {
-    queue: createQueueTransitions(deps),
+    queue: createQueueTransitions(redis),
     admission: createAdmissionTransitions(redis),
     render: createRenderTransitions(redis),
     renderPublication: createRenderPublicationTransitions(redis),

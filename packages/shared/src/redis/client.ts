@@ -4,8 +4,8 @@
  * `RedisClient` is a `Pick` of the upstream `Redis` surface rather than a
  * hand-written "redis-like" interface, so a signature change in
  * `@upstash/redis` is a compile error here instead of a runtime failure in
- * production, and any in-memory stand-in satisfies the same type without
- * module mocking.
+ * production. The `Pick` also keeps the surface a caller may reach for narrow:
+ * each transition module further narrows it to the commands it actually issues.
  *
  * `eval` is in the set because two operations need atomicity that plain
  * commands cannot express: releasing a lock only if we still hold it, and the
@@ -41,7 +41,7 @@ export type RedisClient = Pick<
   | "ltrim"
 >;
 
-export type RedisConfig = Readonly<{
+type RedisConfig = Readonly<{
   [K in "token" | "url"]: NonNullable<RedisConfigNodejs[K]>;
 }>;
 

@@ -38,7 +38,7 @@ export type Db = ReturnType<typeof drizzle<typeof schema>>;
 export type TursoConfig = Pick<Parameters<typeof createClient>[0], "authToken" | "url">;
 
 /** Wraps a caller-supplied client, for example a local `file:` database. */
-export function buildDb(client: Client): Db {
+function buildDb(client: Client): Db {
   return drizzle(client, { schema });
 }
 

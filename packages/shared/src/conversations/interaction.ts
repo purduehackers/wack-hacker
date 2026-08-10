@@ -11,7 +11,7 @@ import {
   resetKey,
 } from "./keys.ts";
 
-export const INTERACTION_RECEIPT_TTL_SECONDS = 7 * 24 * 60 * 60;
+const INTERACTION_RECEIPT_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 const CLAIM_INTERACTION_SCRIPT = `
 -- wack:claim-interaction
@@ -78,7 +78,7 @@ redis.call("SET", KEYS[5], ARGV[13], "PX", tonumber(ARGV[14]))
 return 1
 `;
 
-export interface InteractionReceiptIdentity {
+interface InteractionReceiptIdentity {
   readonly dispatchId: string;
   readonly renderRevision: number;
   readonly requestId: string;
@@ -88,7 +88,14 @@ export interface InteractionReceiptIdentity {
   readonly authThreadId?: string;
 }
 
-export interface InteractionClaim {
+/** Terminal receipt written once the claimed interaction has a session. */
+interface AcceptedInteractionReceipt extends InteractionReceiptIdentity {
+  readonly status: "accepted";
+  readonly sessionId: string;
+  readonly continuationToken: string;
+}
+
+interface InteractionClaim {
   /** 1: acquired, 0: forwarding duplicate, 2: accepted retry, -1: stale/conflict. */
   readonly claim: number;
   readonly receiptIdentity: InteractionReceiptIdentity;
@@ -162,11 +169,16 @@ export function createInteractionTransitions(redis: Pick<RedisClient, "eval" | "
       receiptIdentity: InteractionReceiptIdentity,
       sessionId: string,
       continuationToken: string,
-    ): Promise<unknown> =>
-      redis.set(
-        interactionReceiptKey(interactionId),
-        { status: "accepted", ...receiptIdentity, sessionId, continuationToken },
-        { ex: INTERACTION_RECEIPT_TTL_SECONDS },
-      ),
+    ): Promise<"OK" | AcceptedInteractionReceipt | null> => {
+      const receipt: AcceptedInteractionReceipt = {
+        status: "accepted",
+        ...receiptIdentity,
+        sessionId,
+        continuationToken,
+      };
+      return redis.set(interactionReceiptKey(interactionId), receipt, {
+        ex: INTERACTION_RECEIPT_TTL_SECONDS,
+      });
+    },
   };
 }

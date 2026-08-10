@@ -3,6 +3,8 @@
 import { z } from "zod";
 
 import { InvalidInput } from "../errors.ts";
+import { contentHash, discordSnowflake } from "../formats.ts";
+import { jsonCodec, stored } from "../json.ts";
 import type { RedisClient } from "../redis/client.ts";
 import { Result } from "../result/index.ts";
 import { decodeAuthorizationChallenge, decodeRenderIntent, decodeRenderTarget } from "../wire.ts";
@@ -18,31 +20,27 @@ import {
   renderProjectionKey,
   renderTargetKey,
 } from "./keys.ts";
-const contentHashSchema = z.string().regex(/^[A-Za-z0-9_-]{16}$/);
 const renderProjectionSchema = z.object({
-  anchorMessageId: z
-    .string()
-    .regex(/^\d{17,20}$/)
-    .optional(),
-  anchorContentHash: contentHashSchema.optional(),
+  anchorMessageId: discordSnowflake.optional(),
+  anchorContentHash: contentHash.optional(),
   overflow: z
-    .array(
-      z.object({
-        messageId: z.string().regex(/^\d{17,20}$/),
-        contentHash: contentHashSchema.optional(),
-      }),
-    )
+    .array(z.object({ messageId: discordSnowflake, contentHash: contentHash.optional() }))
     .max(10),
-  appliedRevision: z.number().int().nonnegative(),
+  appliedRevision: z.int().nonnegative(),
 });
 
-interface RenderProjection {
-  anchorMessageId?: string;
-  anchorContentHash?: string;
-  overflow: { messageId: string; contentHash?: string }[];
-}
+/**
+ * One declaration owns both directions of the projection round trip, so the
+ * record can no longer be written in a shape its own reader rejects — a bad
+ * message id now fails at the write instead of poisoning the key until the
+ * next read.
+ */
+const projectionCodec = jsonCodec(renderProjectionSchema);
 
-type StoredRenderProjection = z.infer<typeof renderProjectionSchema>;
+type StoredRenderProjection = z.output<typeof renderProjectionSchema>;
+
+/** What the bot has painted. `appliedRevision` is stamped on at write time. */
+type RenderProjection = Omit<StoredRenderProjection, "appliedRevision">;
 
 const CLAIM_TTL_MS = 45_000;
 const PROJECTION_TTL_SECONDS = 7 * 24 * 60 * 60;
@@ -119,7 +117,7 @@ return 1
 `;
 
 function decodeProjection(raw: unknown): Result<StoredRenderProjection, InvalidInput> {
-  const parsed = renderProjectionSchema.safeParse(raw);
+  const parsed = stored(renderProjectionSchema).safeParse(raw);
   return parsed.success
     ? Result.ok(parsed.data)
     : Result.err(
@@ -130,7 +128,7 @@ function decodeProjection(raw: unknown): Result<StoredRenderProjection, InvalidI
       );
 }
 
-function renderIds(values: readonly unknown[]): readonly string[] {
+function renderIds(values: readonly string[]): readonly string[] {
   return values.flatMap((candidate) => {
     const dispatchId = dispatchIdFromRenderMember(candidate);
     return dispatchId === undefined ? [] : [dispatchId];
@@ -150,7 +148,6 @@ async function readOptional<T>(
   decode: (raw: unknown) => Result<T, InvalidInput>,
 ): Promise<Result<T | undefined, InvalidInput>> {
   const raw: unknown = await redis.get(key);
-  // oxlint-disable-next-line unicorn/no-null -- Redis missing key is null
   return raw === null || raw === undefined ? Result.ok(undefined) : decode(raw);
 }
 
@@ -160,7 +157,6 @@ async function readProjection(
   anchorMessageId?: string,
 ): Promise<Result<StoredRenderProjection, InvalidInput>> {
   const raw: unknown = await redis.get(renderProjectionKey(dispatchId));
-  // oxlint-disable-next-line unicorn/no-null -- Redis missing key is null
   if (raw === null || raw === undefined) {
     return Result.ok({
       ...(anchorMessageId === undefined ? {} : { anchorMessageId }),
@@ -197,7 +193,7 @@ async function completeRender(
       ],
       [
         claimToken,
-        JSON.stringify(storedProjection(projection, appliedRevision)),
+        z.encode(projectionCodec, storedProjection(projection, appliedRevision)),
         appliedRevision,
         renderMember(dispatchId),
         PROJECTION_TTL_SECONDS,
@@ -259,7 +255,7 @@ export function createRenderTransitions(redis: RedisClient) {
           [renderClaimKey(dispatchId), renderProjectionKey(dispatchId)],
           [
             claimToken,
-            JSON.stringify(storedProjection(projection, appliedRevision)),
+            z.encode(projectionCodec, storedProjection(projection, appliedRevision)),
             PROJECTION_TTL_SECONDS,
             CLAIM_TTL_MS,
           ],
@@ -284,8 +280,10 @@ export function createRenderTransitions(redis: RedisClient) {
       return raw === "applied" || raw === "discarded" ? raw : undefined;
     },
 
-    ready: async (): Promise<readonly string[]> =>
-      renderIds(await redis.smembers(AGENT_RENDER_READY_SET_KEY)),
+    ready: async (): Promise<readonly string[]> => {
+      const members = await redis.smembers(AGENT_RENDER_READY_SET_KEY);
+      return renderIds(members);
+    },
 
     discard: async (dispatchId: string): Promise<void> => {
       await redis.eval(

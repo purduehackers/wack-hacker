@@ -1,11 +1,13 @@
 #!/usr/bin/env bun
 
 import { Redis } from "@upstash/redis";
+import { z } from "zod";
 
-import { BOT_ACTIVE_GENERATION_KEY, decodeActiveBotGeneration } from "../src/bot-generation.ts";
-import { readyHealthReportSchema } from "../src/bot-health.ts";
+import { BOT_ACTIVE_GENERATION_KEY, decodeActiveBotGeneration } from "../src/bot/generation.ts";
+import { readyHealthReportSchema } from "../src/bot/health.ts";
+import { redisEnv } from "../src/env/scripts.ts";
+import { vcrDigestImage } from "../src/formats.ts";
 
-const IMAGE_PATTERN = /^vcr\.vercel\.com\/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$/u;
 function usage(): never {
   console.error(`usage:
   bun packages/shared/scripts/release-check.ts image <vcr-image@sha256:digest>
@@ -14,12 +16,13 @@ function usage(): never {
 }
 
 function requireImage(value: string | undefined): string {
-  if (value === undefined || !IMAGE_PATTERN.test(value)) {
+  const parsed = vcrDigestImage.safeParse(value);
+  if (!parsed.success) {
     throw new Error(
       "image must be a lowercase vcr.vercel.com repository followed by @sha256:<64 lowercase hex>",
     );
   }
-  return value;
+  return parsed.data;
 }
 
 async function checkImage(image: string): Promise<void> {
@@ -45,11 +48,7 @@ async function checkImage(image: string): Promise<void> {
 }
 
 async function smoke(expectedImage: string): Promise<void> {
-  const url = process.env["UPSTASH_REDIS_REST_URL"];
-  const token = process.env["UPSTASH_REDIS_REST_TOKEN"];
-  if (!url || !token) throw new Error("UPSTASH_REDIS_REST_URL and token are required");
-
-  const redis = new Redis({ url, token });
+  const redis = new Redis(redisEnv());
   const active = decodeActiveBotGeneration(await redis.get(BOT_ACTIVE_GENERATION_KEY));
   if (active === undefined) throw new Error("active bot generation is missing");
   if (active.image !== expectedImage) {
@@ -66,7 +65,11 @@ async function smoke(expectedImage: string): Promise<void> {
   });
   if (!response.ok) throw new Error(`bot health returned ${response.status}`);
   const parsedHealth = readyHealthReportSchema.safeParse(await response.json());
-  if (!parsedHealth.success) throw new Error("bot health payload is invalid or not ready");
+  if (!parsedHealth.success) {
+    throw new Error(
+      `bot health payload is invalid or not ready:\n${z.prettifyError(parsedHealth.error)}`,
+    );
+  }
   const health = parsedHealth.data;
   console.info(
     JSON.stringify({

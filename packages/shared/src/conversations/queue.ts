@@ -6,7 +6,10 @@
  * so no stale/replayed turn can advance a newer one.
  */
 
+import { z } from "zod";
+
 import { InvalidInput } from "../errors.ts";
+import { jsonText } from "../json.ts";
 import type { RedisClient } from "../redis/client.ts";
 import { Result } from "../result/index.ts";
 import { decodeDeliveryPayload, decodeParkedPayload } from "../wire.ts";
@@ -29,9 +32,9 @@ import {
 } from "./keys.ts";
 
 /** Short claim lease is safe because ingress fences one admission per dispatch. */
-export const DELIVERY_LEASE_MS = 30_000;
+const DELIVERY_LEASE_MS = 30_000;
 /** Completed Discord-message tombstones are only needed across plausible retries. */
-export const SEEN_TTL_SECONDS = 7 * 24 * 60 * 60;
+const SEEN_TTL_SECONDS = 7 * 24 * 60 * 60;
 const ADMISSION_RECOVERY_EVE_TURN_ID = "delivery-admission-recovery";
 export const ADMISSION_RECOVERY_TEXT =
   "I couldn't safely finish starting this turn, so I stopped rather than risk running it twice.";
@@ -262,49 +265,36 @@ redis.call("SREM", KEYS[5], ARGV[2])
 return 1
 `;
 
-export interface QueueRecoveryStore {
-  readonly eval: (script: string, keys: string[], args: (string | number)[]) => Promise<unknown>;
-}
-
-export interface QueueDeps {
-  readonly redis: RedisClient;
-  readonly newToken?: () => string;
-  readonly now?: () => number;
-}
-
-export interface ClaimedTurn {
+interface ClaimedTurn {
   readonly payload: DeliveryPayload;
   readonly claimToken: string;
 }
 
-export type CompletionStatus = "completed" | "missing" | "pending" | "stale";
+type CompletionStatus = "completed" | "missing" | "pending" | "stale";
 
+/** Upstash returns a stored entry as JSON text or already deserialized. */
 function parseStored<T>(
   raw: unknown,
   subject: string,
   decode: (input: unknown) => Result<T, InvalidInput>,
 ): Result<T, InvalidInput> {
-  if (typeof raw !== "string") return decode(raw);
-  const parsed = Result.try({
-    try: (): unknown => JSON.parse(raw),
-    catch: () => new InvalidInput({ subject, issues: ["entry was not valid JSON"] }),
-  });
-  return Result.isError(parsed) ? parsed : decode(parsed.value);
+  const text = z.string().safeParse(raw);
+  if (!text.success) return decode(raw);
+  const parsed = jsonText.safeParse(text.data);
+  return parsed.success
+    ? decode(parsed.data)
+    : Result.err(new InvalidInput({ subject, issues: ["entry was not valid JSON"] }));
 }
 
-function continuationKeys(values: readonly unknown[]): readonly string[] {
+function continuationKeys(values: readonly string[]): readonly string[] {
   return values.flatMap((candidate) => {
     const key = continuationKeyFromQueueMember(candidate);
     return key === undefined ? [] : [key];
   });
 }
 
-async function enqueueTurn(
-  redis: RedisClient,
-  newToken: () => string,
-  payload: MessagePayload,
-): Promise<void> {
-  const delivery: DeliveryPayload = { ...payload, dispatchId: newToken() };
+async function enqueueTurn(redis: RedisClient, payload: MessagePayload): Promise<void> {
+  const delivery: DeliveryPayload = { ...payload, dispatchId: crypto.randomUUID() };
   const target: RenderTarget = {
     dispatchId: delivery.dispatchId,
     continuationKey: delivery.continuationKey,
@@ -339,12 +329,10 @@ async function enqueueTurn(
 
 async function claimTurn(
   redis: RedisClient,
-  newToken: () => string,
-  now: () => number,
   continuationKey: string,
 ): Promise<Result<ClaimedTurn | undefined, InvalidInput>> {
-  const claimToken = newToken();
-  const claimedAt = now();
+  const claimToken = crypto.randomUUID();
+  const claimedAt = Date.now();
   const raw: unknown = await redis.eval(
     CLAIM_SCRIPT,
     [
@@ -361,14 +349,13 @@ async function claimTurn(
       queueMember(continuationKey),
     ],
   );
-  // oxlint-disable-next-line unicorn/no-null -- Redis nil is returned as null
   if (raw === null || raw === undefined) return Result.ok(undefined);
   const parsed = parseStored(raw, "queued delivery", decodeDeliveryPayload);
   return Result.isError(parsed) ? parsed : Result.ok({ payload: parsed.value, claimToken });
 }
 
-export async function recoverAdmission(
-  redis: QueueRecoveryStore,
+async function recoverAdmission(
+  redis: Pick<RedisClient, "eval">,
   continuationKey: string,
 ): Promise<Result<DeliveryPayload | undefined, InvalidInput>> {
   const raw: unknown = await redis.eval(
@@ -381,7 +368,6 @@ export async function recoverAdmission(
     ],
     [ADMISSION_RECOVERY_EVE_TURN_ID, ADMISSION_RECOVERY_TEXT, ADMISSION_RECOVERY_FOOTER],
   );
-  // oxlint-disable-next-line unicorn/no-null -- Redis nil is returned as null
   if (raw === null || raw === undefined) return Result.ok(undefined);
   return parseStored(raw, "recovery-required delivery", decodeDeliveryPayload);
 }
@@ -431,26 +417,20 @@ async function readParked(
   continuationKey: string,
 ): Promise<Result<ParkedPayload | undefined, InvalidInput>> {
   const raw: unknown = await redis.get(parkedKey(continuationKey));
-  // oxlint-disable-next-line unicorn/no-null -- Redis missing key is null
   if (raw === null || raw === undefined) return Result.ok(undefined);
   return parseStored(raw, "parked marker", decodeParkedPayload);
 }
 
-async function beginReset(
-  redis: RedisClient,
-  newToken: () => string,
-  continuationKey: string,
-): Promise<string> {
-  const token = newToken();
+async function beginReset(redis: RedisClient, continuationKey: string): Promise<string> {
+  const token = crypto.randomUUID();
   const result: unknown = await redis.eval(
     BEGIN_RESET_SCRIPT,
     [resetKey(continuationKey)],
     [token],
   );
-  if (typeof result !== "string" || result === "") {
-    throw new Error("Redis returned an invalid reset token");
-  }
-  return result;
+  const owner = z.string().min(1).safeParse(result);
+  if (!owner.success) throw new Error("Redis returned an invalid reset token");
+  return owner.data;
 }
 
 async function commitReset(
@@ -497,34 +477,32 @@ async function purgeTurns(redis: RedisClient, continuationKey: string): Promise<
   );
 }
 
-export function createQueueTransitions(deps: QueueDeps) {
-  const newToken = deps.newToken ?? (() => crypto.randomUUID());
-  const now = deps.now ?? (() => Date.now());
-
+export function createQueueTransitions(redis: RedisClient) {
   return {
-    enqueue: (payload: MessagePayload): Promise<void> => enqueueTurn(deps.redis, newToken, payload),
+    enqueue: (payload: MessagePayload): Promise<void> => enqueueTurn(redis, payload),
     claim: (continuationKey: string): Promise<Result<ClaimedTurn | undefined, InvalidInput>> =>
-      claimTurn(deps.redis, newToken, now, continuationKey),
+      claimTurn(redis, continuationKey),
     recoverAdmission: (
       continuationKey: string,
     ): Promise<Result<DeliveryPayload | undefined, InvalidInput>> =>
-      recoverAdmission(deps.redis, continuationKey),
+      recoverAdmission(redis, continuationKey),
     confirm: (continuationKey: string, claimToken: string, sessionId: string): Promise<boolean> =>
-      confirmTurn(deps.redis, continuationKey, claimToken, sessionId),
-    complete: (payload: ParkedPayload): Promise<CompletionStatus> =>
-      completeTurn(deps.redis, payload),
-    keys: async (): Promise<readonly string[]> =>
-      continuationKeys(await deps.redis.smembers(QUEUE_INDEX_KEY)),
-    readyKeys: async (): Promise<readonly string[]> =>
-      continuationKeys(await deps.redis.smembers(AGENT_READY_SET_KEY)),
+      confirmTurn(redis, continuationKey, claimToken, sessionId),
+    complete: (payload: ParkedPayload): Promise<CompletionStatus> => completeTurn(redis, payload),
+    keys: async (): Promise<readonly string[]> => {
+      const members = await redis.smembers(QUEUE_INDEX_KEY);
+      return continuationKeys(members);
+    },
+    readyKeys: async (): Promise<readonly string[]> => {
+      const members = await redis.smembers(AGENT_READY_SET_KEY);
+      return continuationKeys(members);
+    },
     parked: (continuationKey: string): Promise<Result<ParkedPayload | undefined, InvalidInput>> =>
-      readParked(deps.redis, continuationKey),
-    depth: (continuationKey: string): Promise<number> =>
-      deps.redis.llen(pendingKey(continuationKey)),
-    beginReset: (continuationKey: string): Promise<string> =>
-      beginReset(deps.redis, newToken, continuationKey),
+      readParked(redis, continuationKey),
+    depth: (continuationKey: string): Promise<number> => redis.llen(pendingKey(continuationKey)),
+    beginReset: (continuationKey: string): Promise<string> => beginReset(redis, continuationKey),
     commitReset: (continuationKey: string, resetId: string): Promise<boolean> =>
-      commitReset(deps.redis, continuationKey, resetId),
-    purge: (continuationKey: string): Promise<void> => purgeTurns(deps.redis, continuationKey),
+      commitReset(redis, continuationKey, resetId),
+    purge: (continuationKey: string): Promise<void> => purgeTurns(redis, continuationKey),
   };
 }

@@ -15,23 +15,7 @@
 
 import { Result } from "better-result";
 
-export {
-  Err,
-  Ok,
-  Panic,
-  Result,
-  ResultDeserializationError,
-  ResultSerializationError,
-  TaggedError,
-  UnhandledException,
-  isPanic,
-  isTaggedError,
-  matchError,
-  matchErrorPartial,
-  panic,
-} from "better-result";
-
-export type { InferErr, InferOk, SerializedResult } from "better-result";
+export { Result, TaggedError } from "better-result";
 
 /**
  * Converts framework-mandated absence into a typed failure.
@@ -43,7 +27,6 @@ export type { InferErr, InferOk, SerializedResult } from "better-result";
  */
 export function fromNullable<T, E>(value: T | null | undefined, onAbsent: () => E): Result<T, E> {
   if (value === undefined) return Result.err(onAbsent());
-  // oxlint-disable-next-line unicorn/no-null -- this function exists to absorb framework `null` at the boundary
   if (value === null) return Result.err(onAbsent());
   return Result.ok(value);
 }

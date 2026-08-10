@@ -20,7 +20,7 @@ function credentialOf(header: string | undefined): string {
 }
 
 /** True when `presented` equals `expected`, in time independent of the content. */
-export function secretMatches(presented: string, expected: string): boolean {
+function secretMatches(presented: string, expected: string): boolean {
   // An unset expected secret must never authenticate anyone. Without this an
   // empty header would match an empty configured value.
   if (expected === "" || presented.length !== expected.length) return false;

@@ -1,23 +1,28 @@
 #!/usr/bin/env bun
 
 import { createClient } from "@libsql/client";
+import type { Row } from "@libsql/client";
 import { readMigrationFiles } from "drizzle-orm/migrator";
+import { z } from "zod";
 
-const url = process.env["TURSO_DATABASE_URL"];
-if (!url) throw new Error("TURSO_DATABASE_URL is required");
-const authToken = process.env["TURSO_AUTH_TOKEN"];
-const client = createClient(authToken ? { url, authToken } : { url });
+import { tursoEnv } from "../src/env/scripts.ts";
+
+const { url, authToken } = tursoEnv();
+const client = createClient(authToken === undefined ? { url } : { url, authToken });
 
 const migrations = readMigrationFiles({
-  migrationsFolder: new URL("../drizzle", import.meta.url).pathname,
+  migrationsFolder: new URL("../migrations", import.meta.url).pathname,
 }).sort((left, right) => left.folderMillis - right.folderMillis);
 const latest = migrations.at(-1);
 if (latest === undefined) throw new Error("repository has no database migrations");
 
-function rowName(row: Record<string, unknown>): string {
-  const name = row["name"];
-  if (typeof name !== "string") throw new Error("SQLite returned a malformed column name");
-  return name;
+/** `PRAGMA table_info` names every column; a non-string means a broken driver. */
+const columnNameSchema = z.string();
+
+function rowName(row: Row): string {
+  const name = columnNameSchema.safeParse(row["name"]);
+  if (!name.success) throw new Error("SQLite returned a malformed column name");
+  return name.data;
 }
 
 try {

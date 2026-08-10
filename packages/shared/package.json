@@ -6,26 +6,25 @@
   "exports": {
     "./bearer": "./src/bearer.ts",
     "./errors": "./src/errors.ts",
+    "./formats": "./src/formats.ts",
+    "./json": "./src/json.ts",
+    "./env/scripts": "./src/env/scripts.ts",
+    "./text": "./src/text.ts",
+    "./wire": "./src/wire.ts",
     "./result": "./src/result/index.ts",
     "./result/observe": "./src/result/observe.ts",
     "./result/retry": "./src/result/retry.ts",
+    "./bot/generation": "./src/bot/generation.ts",
+    "./bot/health": "./src/bot/health.ts",
     "./discord": "./src/discord/index.ts",
-    "./discord-command-wire": "./src/discord-command-wire.ts",
-    "./db": "./src/db/index.ts",
-    "./redis": "./src/redis/client.ts",
     "./conversations": "./src/conversations/index.ts",
-    "./wire": "./src/wire.ts",
-    "./text": "./src/text.ts",
-    "./bot-generation": "./src/bot-generation.ts",
-    "./bot-health": "./src/bot-health.ts"
+    "./db": "./src/db/index.ts",
+    "./redis": "./src/redis/client.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push",
-    "db:baseline-legacy": "bun scripts/baseline-legacy-migrations.ts",
-    "test": "bun test"
+    "db:push": "drizzle-kit push"
   },
   "dependencies": {
     "@libsql/client": "^0.17.4",

@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "45a48cef-aef9-4975-aa87-39f1dd91e562",
-  "prevId": "ace581ca-0c1e-45b1-b74b-15ef57a72827",
+  "id": "e3239eda-3036-49aa-8ad8-0914631a7d03",
+  "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "action_audit": {
       "name": "action_audit",
@@ -133,8 +133,8 @@
           "notNull": true,
           "autoincrement": false
         },
-        "user_id": {
-          "name": "user_id",
+        "owner_id": {
+          "name": "owner_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -154,18 +154,33 @@
           "notNull": true,
           "autoincrement": false
         },
-        "schedule_type": {
-          "name": "schedule_type",
+        "action_type": {
+          "name": "action_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'agent'"
+        },
+        "prompt": {
+          "name": "prompt",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "run_at": {
-          "name": "run_at",
+        "member_roles": {
+          "name": "member_roles",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
+          "autoincrement": false
+        },
+        "schedule_type": {
+          "name": "schedule_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
           "autoincrement": false
         },
         "cron": {
@@ -177,20 +192,6 @@
         },
         "timezone": {
           "name": "timezone",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "action": {
-          "name": "action",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "member_roles": {
-          "name": "member_roles",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -208,18 +209,47 @@
           "name": "next_run_at",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "autoincrement": false
         },
-        "queue_message_id": {
-          "name": "queue_message_id",
+        "available_at": {
+          "name": "available_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "lease_token": {
+          "name": "lease_token",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "last_fired_at": {
-          "name": "last_fired_at",
+        "lease_expires_at": {
+          "name": "lease_expires_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "attempt_count": {
+          "name": "attempt_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "last_error": {
+          "name": "last_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_dispatched_at": {
+          "name": "last_dispatched_at",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -232,13 +262,6 @@
           "notNull": true,
           "autoincrement": false,
           "default": 0
-        },
-        "max_drift_ms": {
-          "name": "max_drift_ms",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
         },
         "created_at": {
           "name": "created_at",
@@ -258,21 +281,38 @@
         }
       },
       "indexes": {
-        "scheduled_tasks_user_status_idx": {
-          "name": "scheduled_tasks_user_status_idx",
-          "columns": ["user_id", "status"],
+        "scheduled_tasks_due_idx": {
+          "name": "scheduled_tasks_due_idx",
+          "columns": ["status", "available_at", "lease_expires_at"],
           "isUnique": false
         },
-        "scheduled_tasks_status_next_run_idx": {
-          "name": "scheduled_tasks_status_next_run_idx",
-          "columns": ["status", "next_run_at"],
+        "scheduled_tasks_owner_idx": {
+          "name": "scheduled_tasks_owner_idx",
+          "columns": ["owner_id", "status", "created_at"],
           "isUnique": false
         }
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "scheduled_tasks_action_type_check": {
+          "name": "scheduled_tasks_action_type_check",
+          "value": "\"scheduled_tasks\".\"action_type\" IN ('agent', 'message')"
+        },
+        "scheduled_tasks_shape_check": {
+          "name": "scheduled_tasks_shape_check",
+          "value": "(\"scheduled_tasks\".\"schedule_type\" = 'once' AND \"scheduled_tasks\".\"cron\" IS NULL AND \"scheduled_tasks\".\"timezone\" IS NULL) OR (\"scheduled_tasks\".\"schedule_type\" = 'recurring' AND \"scheduled_tasks\".\"cron\" IS NOT NULL AND \"scheduled_tasks\".\"timezone\" IS NOT NULL)"
+        },
+        "scheduled_tasks_attempt_count_check": {
+          "name": "scheduled_tasks_attempt_count_check",
+          "value": "\"scheduled_tasks\".\"attempt_count\" >= 0"
+        },
+        "scheduled_tasks_fire_count_check": {
+          "name": "scheduled_tasks_fire_count_check",
+          "value": "\"scheduled_tasks\".\"fire_count\" >= 0"
+        }
+      }
     },
     "shopping_cart_items": {
       "name": "shopping_cart_items",

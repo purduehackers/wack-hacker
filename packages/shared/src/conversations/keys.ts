@@ -1,5 +1,20 @@
 /** Private Redis key catalog for the persisted conversation aggregate. */
 
+import { z } from "zod";
+
+/**
+ * Index members carry their own prefix so a set can be read back without a
+ * second lookup. The two schemas below are the only readers of that shape, and
+ * naming them keeps the parse from being a bare regex plus a `typeof` guard.
+ *
+ * These stay one-way on purpose. A codec would validate the *write* side too,
+ * and `queueMember`/`renderMember` are called with keys that operators pass in
+ * on the command line — turning a malformed argument into a throw at the key
+ * builder would change what `ops-inspect` does.
+ */
+const queueMemberSchema = z.stringFormat("queue-member", /^k:\d{17,20}$/u);
+const renderMemberSchema = z.stringFormat("render-member", /^r:[0-9a-f-]{36}$/iu);
+
 export const QUEUE_INDEX_KEY = "agent:queues";
 export const AGENT_READY_SET_KEY = "agent:ready";
 export const AGENT_RENDER_READY_SET_KEY = "agent:render-ready";
@@ -37,8 +52,8 @@ export function queueMember(continuationKey: string): string {
 }
 
 export function continuationKeyFromQueueMember(member: unknown): string | undefined {
-  if (typeof member !== "string" || !/^k:\d{17,20}$/.test(member)) return undefined;
-  return member.slice(2);
+  const parsed = queueMemberSchema.safeParse(member);
+  return parsed.success ? parsed.data.slice(2) : undefined;
 }
 
 export function renderTargetKey(dispatchId: string): string {
@@ -66,8 +81,8 @@ export function renderMember(dispatchId: string): string {
 }
 
 export function dispatchIdFromRenderMember(member: unknown): string | undefined {
-  if (typeof member !== "string" || !/^r:[0-9a-f-]{36}$/i.test(member)) return undefined;
-  return member.slice(2);
+  const parsed = renderMemberSchema.safeParse(member);
+  return parsed.success ? parsed.data.slice(2) : undefined;
 }
 
 export function hitlClaimKey(dispatchId: string): string {

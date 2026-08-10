@@ -2,9 +2,12 @@
 
 import { createClient } from "@libsql/client";
 import { Redis } from "@upstash/redis";
+import { z } from "zod";
 
-import { BOT_ACTIVE_GENERATION_KEY, BOT_SUPERVISOR_MUTEX_KEY } from "../src/bot-generation.ts";
+import { BOT_ACTIVE_GENERATION_KEY, BOT_SUPERVISOR_MUTEX_KEY } from "../src/bot/generation.ts";
 import { createConversationStore } from "../src/conversations/index.ts";
+import { redisEnv, tursoEnv } from "../src/env/scripts.ts";
+import { jsonText } from "../src/json.ts";
 
 function usage(): never {
   console.error(`usage:
@@ -21,24 +24,89 @@ function option(arguments_: readonly string[], name: string): string | undefined
   return value;
 }
 
+/** Redis keys are built by interpolation, so an argument's shape is a guard. */
+const continuationKeySchema = z
+  .string()
+  .max(256)
+  .regex(/^[^\r\n]*$/u);
+const dispatchIdSchema = z.stringFormat("dispatch-id", /^[A-Za-z0-9_-]{1,128}$/u);
+
+function check<S extends z.ZodType<string, string>>(
+  schema: S,
+  value: string | undefined,
+): string | undefined {
+  if (value === undefined) return undefined;
+  const parsed = schema.safeParse(value);
+  if (!parsed.success) throw new Error(z.prettifyError(parsed.error));
+  return parsed.data;
+}
+
+/** Any keyed blob; the fields wanted differ per key, so none are declared. */
+const anyRecordSchema = z.looseObject({});
+
+/**
+ * Picks fields out of an arbitrary Redis blob for display. Nothing here is
+ * validated beyond "is it a keyed object", so the result stays `unknown`: it is
+ * the any-barrier over `JSON.parse`/`Object.fromEntries`, not an erasure. The
+ * only consumer is `JSON.stringify`.
+ */
 function summary(raw: unknown, fields: readonly string[]): unknown {
-  let value: unknown = raw;
-  if (typeof raw === "string") {
-    try {
-      value = JSON.parse(raw);
-    } catch {
-      return { present: true, malformed: true };
-    }
+  const text = z.string().safeParse(raw);
+  if (text.success) {
+    const decoded = jsonText.safeParse(text.data);
+    if (!decoded.success) return { present: true, malformed: true };
+    return pick(decoded.data, fields);
   }
-  if (typeof value !== "object" || value === null) {
-    return { present: value !== undefined && value !== null };
-  }
+  return pick(raw, fields);
+}
+
+function pick(value: unknown, fields: readonly string[]): unknown {
+  const record = anyRecordSchema.safeParse(value);
+  if (!record.success) return { present: value !== undefined && value !== null };
   return Object.fromEntries(
     fields.flatMap((fieldName) => {
-      const candidate = Reflect.get(value, fieldName);
+      const candidate = record.data[fieldName];
       return candidate === undefined ? [] : [[fieldName, candidate]];
     }),
   );
+}
+
+interface ConversationReport {
+  readonly key: string;
+  readonly pendingDepth: number;
+  readonly resetPendingDepth: number;
+  readonly ingressPresent: boolean;
+  readonly resetPresent: boolean;
+  readonly readyMember: boolean;
+  readonly active: unknown;
+  readonly parked: unknown;
+}
+
+interface RenderReport {
+  readonly dispatchId: string;
+  readonly readyMember: boolean;
+  readonly targetPresent: boolean;
+  readonly intentPresent: boolean;
+  readonly projectionPresent: boolean;
+  readonly claimPresent: boolean;
+  readonly claimTtlMs: number;
+  readonly outcome: "applied" | "discarded" | undefined;
+}
+
+interface OpsReport {
+  readonly at: string;
+  readonly supervisor: {
+    readonly active: unknown;
+    readonly mutexPresent: boolean;
+    readonly mutexTtlMs: number;
+  };
+  readonly indexes: {
+    readonly conversations: number;
+    readonly ready: number;
+    readonly renderReady: number;
+  };
+  conversation?: ConversationReport;
+  render?: RenderReport;
 }
 
 async function inspectRedis(arguments_: readonly string[]): Promise<void> {
@@ -46,19 +114,10 @@ async function inspectRedis(arguments_: readonly string[]): Promise<void> {
   for (let index = 0; index < arguments_.length; index += 2) {
     if (!allowed.has(arguments_[index] ?? "") || arguments_[index + 1] === undefined) usage();
   }
-  const continuation = option(arguments_, "--continuation");
-  const dispatch = option(arguments_, "--dispatch");
-  if (continuation !== undefined && (continuation.length > 256 || /[\r\n]/u.test(continuation))) {
-    throw new Error("continuation key is invalid");
-  }
-  if (dispatch !== undefined && !/^[A-Za-z0-9_-]{1,128}$/u.test(dispatch)) {
-    throw new Error("dispatch id is invalid");
-  }
+  const continuation = check(continuationKeySchema, option(arguments_, "--continuation"));
+  const dispatch = check(dispatchIdSchema, option(arguments_, "--dispatch"));
 
-  const url = process.env["UPSTASH_REDIS_REST_URL"];
-  const token = process.env["UPSTASH_REDIS_REST_TOKEN"];
-  if (!url || !token) throw new Error("UPSTASH_REDIS_REST_URL and token are required");
-  const redis = new Redis({ url, token });
+  const redis = new Redis(redisEnv());
   const conversations = createConversationStore({ redis });
 
   const [active, mutexExists, mutexTtlMs, indexes] = await Promise.all([
@@ -67,7 +126,7 @@ async function inspectRedis(arguments_: readonly string[]): Promise<void> {
     redis.pttl(BOT_SUPERVISOR_MUTEX_KEY),
     conversations.inspectIndexes(),
   ]);
-  const report: Record<string, unknown> = {
+  const report: OpsReport = {
     at: new Date().toISOString(),
     supervisor: {
       active: summary(active, [
@@ -87,7 +146,7 @@ async function inspectRedis(arguments_: readonly string[]): Promise<void> {
 
   if (continuation !== undefined) {
     const state = await conversations.inspectConversation(continuation);
-    report["conversation"] = {
+    report.conversation = {
       key: continuation,
       pendingDepth: state.depth,
       resetPendingDepth: state.resetPending,
@@ -108,7 +167,7 @@ async function inspectRedis(arguments_: readonly string[]): Promise<void> {
 
   if (dispatch !== undefined) {
     const state = await conversations.inspectRender(dispatch);
-    report["render"] = {
+    report.render = {
       dispatchId: dispatch,
       readyMember: state.ready === 1,
       targetPresent: state.target === 1,
@@ -125,10 +184,8 @@ async function inspectRedis(arguments_: readonly string[]): Promise<void> {
 }
 
 async function inspectSchedules(): Promise<void> {
-  const url = process.env["TURSO_DATABASE_URL"];
-  if (!url) throw new Error("TURSO_DATABASE_URL is required");
-  const authToken = process.env["TURSO_AUTH_TOKEN"];
-  const client = createClient(authToken ? { url, authToken } : { url });
+  const { url, authToken } = tursoEnv();
+  const client = createClient(authToken === undefined ? { url } : { url, authToken });
   try {
     const result = await client.execute(`
       SELECT

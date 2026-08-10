@@ -2,14 +2,12 @@
  * Column enumerations for the Turso schema.
  *
  * These live in `db/` rather than beside the policy logic that consumes them
- * because they are part of the *storage contract*: rows already written carry
- * these exact strings. The agent's policy modules import them from here so a
- * value can never drift away from what is persisted.
+ * because they are part of the *storage contract*: persisted rows carry these
+ * exact strings. The agent's policy modules import them from here so a value
+ * can never drift away from what is written.
  *
- * All are `as const` objects. The prior implementation used real TS `enum`s for
- * `ScheduleType` and `ScheduledTaskStatus`; `erasableSyntaxOnly` forbids that
- * because an enum emits runtime code. The string values are unchanged, so
- * existing rows are unaffected.
+ * All are `as const` objects rather than TS `enum`s, which `erasableSyntaxOnly`
+ * forbids because an enum emits runtime code.
  */
 
 /** What a tool does to the world. Drives the role and confirmation defaults. */

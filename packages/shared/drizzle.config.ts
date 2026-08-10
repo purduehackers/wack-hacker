@@ -6,10 +6,9 @@ import { defineConfig } from "drizzle-kit";
  * correct: a migration against an unset database must fail loudly before it can
  * touch anything.
  *
- * The first three migrations describe the carried-over production tables. The
- * gold architecture adds one data-preserving scheduled-task migration after
- * that baseline. Generating a migration that recreates unrelated tables would
- * mean the schema drifted — treat that as a bug, not a fresh baseline.
+ * `migrations/` starts from a single generated baseline. There is no prior
+ * production database to preserve, so a migration that recreates unrelated
+ * tables means the schema drifted — treat that as a bug, not a new baseline.
  */
 const url = process.env["TURSO_DATABASE_URL"];
 if (url === undefined || url === "") {
@@ -21,6 +20,6 @@ const authToken = process.env["TURSO_AUTH_TOKEN"];
 export default defineConfig({
   dialect: "turso",
   schema: "./src/db/schemas/*.ts",
-  out: "./drizzle",
+  out: "./migrations",
   dbCredentials: authToken === undefined ? { url } : { url, authToken },
 });
