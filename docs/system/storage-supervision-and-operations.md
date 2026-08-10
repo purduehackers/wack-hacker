@@ -399,8 +399,7 @@ The source of truth for commands and failure handling remains:
 
 - [production deployment and rollback](../operations/deployment.md);
 - [database migration and recovery](../operations/database.md);
-- [supply-chain controls](../operations/supply-chain.md);
-- [migration/deployment evidence](../operations/migration-audit.md).
+- [supply-chain controls](../operations/supply-chain.md).
 
 ## Operational caveats
 
@@ -411,8 +410,6 @@ The source of truth for commands and failure handling remains:
   `BOT_URL`. Do not ad hoc delete generation/fence keys to force recovery.
 - VCR repositories are project-scoped and must align with the agent project.
 - Bot health can be 200 during Redis, provider or scheduler incidents.
-- The current migration-audit checklist is recorded evidence, not a live probe of
-  credentials, funding or production enablement.
 - Hosted Eve `defaultBackend()` reattachment remains an unmet deployment
   cutover canary: current workflows/runbooks do not execute it, and local
   correctness does not prove it.
