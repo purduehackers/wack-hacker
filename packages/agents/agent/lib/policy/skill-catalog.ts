@@ -22,20 +22,6 @@ export interface IntegrationSkillDefinition {
 }
 
 /**
- * The pre-markdown shape, still used by domains awaiting conversion.
- *
- * Removed once the last `skills/catalog.ts` stops declaring prose inline.
- */
-export interface LegacySkillDefinition {
-  readonly name: string;
-  readonly description: string;
-  readonly criteria: string;
-  readonly minRole: UserRole;
-  readonly tools: readonly string[];
-  readonly instructions: string;
-}
-
-/**
  * Splits leading frontmatter off a skill document.
  *
  * Only `description` is read, because that is all `defineSkill` takes besides
@@ -52,12 +38,6 @@ export function parseSkillDoc(doc: string): { description: string; markdown: str
   return { description, markdown: doc.slice(match[0].length).trim() };
 }
 
-/** The document a legacy definition would have been, had it been a file. */
-function legacyMarkdown(skill: LegacySkillDefinition): string {
-  const tools = skill.tools.map((name) => `\`${name}\``).join(", ");
-  return `## When to use\n\n${skill.criteria}\n\n## Relevant tools\n\n${tools}\n\n## Instructions\n\n${skill.instructions}`;
-}
-
 /**
  * Converts the current principal's catalog into Eve-native loadable skills.
  *
@@ -68,7 +48,7 @@ function legacyMarkdown(skill: LegacySkillDefinition): string {
  */
 export function resolveIntegrationSkills(
   current: SessionAuthContext | null | undefined,
-  definitions: readonly (IntegrationSkillDefinition | LegacySkillDefinition)[],
+  definitions: readonly IntegrationSkillDefinition[],
 ) {
   const principal = requirePrincipal(current);
   if (Result.isError(principal)) return {};
@@ -77,10 +57,7 @@ export function resolveIntegrationSkills(
     definitions
       .filter((skill) => roleAtLeast(principal.value.role, skill.minRole))
       .map((skill) => {
-        const { description, markdown } =
-          "doc" in skill
-            ? parseSkillDoc(skill.doc)
-            : { description: skill.description, markdown: legacyMarkdown(skill) };
+        const { description, markdown } = parseSkillDoc(skill.doc);
         return [
           skill.name,
           defineSkill({ description, markdown, metadata: { minRole: skill.minRole } }),

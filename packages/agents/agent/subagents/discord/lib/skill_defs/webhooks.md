@@ -1,0 +1,33 @@
+---
+description: List, create, edit, and delete webhooks.
+---
+
+## When to use
+
+Use when the user wants to manage webhooks — listing, creating, editing, moving, or deleting them.
+
+## Relevant tools
+
+`list_webhooks`, `create_webhook`, `delete_webhook`, `edit_webhook`
+
+## Instructions
+
+<listing>
+- Can filter by channel_id or return all server webhooks.
+- Webhook URLs and tokens are sensitive capabilities and are never returned; tools expose only non-secret metadata.
+</listing>
+
+<creating>
+- Requires a channel_id and name. Avatar is optional.
+- Resolve the channel name to an ID via list_channels first.
+- Only text-based channels support webhooks.
+</creating>
+
+<editing>
+- Can change the name, avatar, or target channel.
+- Only modify the fields the user asked to change.
+</editing>
+
+<deleting>
+- Confirm before deleting — integrations using the webhook URL will break.
+</deleting>

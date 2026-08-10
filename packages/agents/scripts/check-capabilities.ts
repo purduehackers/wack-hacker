@@ -31,17 +31,14 @@ import { normalizeReadme, renderSubagentReadme, type SkillDoc } from "./lib/suba
 const packageRoot = fileURLToPath(new URL("..", import.meta.url));
 const agentRoot = join(packageRoot, "agent");
 
-/** The legacy shape: prose inline in `skills/catalog.ts`. */
-const legacySkillSchema = z.strictObject({
-  name: z.string().trim().min(1),
-  minRole: z.enum(UserRole),
-  description: z.string().trim().min(1),
-  criteria: z.string().trim().min(1),
-  tools: z.array(z.string()),
-  instructions: z.string().trim().min(1),
-});
-
-/** The current shape: policy in `lib/registry.ts`, prose in `lib/skill_defs/<name>.md`. */
+/**
+ * A skill as declared today: policy here, prose in `lib/skill_defs/<name>.md`.
+ *
+ * Converted domains export these as `<DOMAIN>_SKILLS` from `lib/registry.ts`
+ * alongside the tools; the rest still export `<DOMAIN>_SKILL_DEFINITIONS` from
+ * `skills/catalog.ts` until their tools are split. The shape is the same either
+ * way — only the module differs.
+ */
 const registrySkillSchema = z.strictObject({
   name: z.string().trim().min(1),
   minRole: z.enum(UserRole),
@@ -144,9 +141,9 @@ async function checkDomain(domain: string): Promise<DomainSurface> {
   const toolSpecs = z.record(z.string(), toolSpecSchema).parse(registryModule[`${constant}_TOOLS`]);
   const tools = Object.keys(toolSpecs);
 
-  const skills = converted
-    ? z.array(registrySkillSchema).parse(skillModule[`${constant}_SKILLS`])
-    : z.array(legacySkillSchema).parse(skillModule[`${constant}_SKILL_DEFINITIONS`]);
+  const skills = z
+    .array(registrySkillSchema)
+    .parse(skillModule[converted ? `${constant}_SKILLS` : `${constant}_SKILL_DEFINITIONS`]);
 
   assertUnique(`${domain} base tools`, baseTools);
   assertUnique(
@@ -175,12 +172,10 @@ async function checkDomain(domain: string): Promise<DomainSurface> {
     throw new Error(`${domain} registry tools lack skill/base coverage: ${uncovered.join(",")}`);
   }
 
-  if (converted) {
-    // Re-parsed rather than narrowed: `skills` is a union across both shapes
-    // for the checks above, and only the registry shape carries `doc`.
-    const registrySkills = z.array(registrySkillSchema).parse(skillModule[`${constant}_SKILLS`]);
-    await checkConvertedDomain(domain, root, registrySkills, baseTools, toolSpecs);
-  }
+  // Prose lives in files for every domain now, so these run everywhere; the
+  // README check is the only part that waits for `lib/registry.ts`.
+  await checkSkillDocs(domain, root, skills);
+  if (converted) await checkReadme(domain, root, skills, baseTools, toolSpecs);
 
   return { name: domain, toolCount: tools.length, skillCount: skills.length, converted };
 }
@@ -190,15 +185,12 @@ type ToolSpecs =
   z.output<typeof toolSpecSchema> extends infer Spec ? Readonly<Record<string, Spec>> : never;
 
 /** The invariants that only exist once prose and policy live in separate files. */
-async function checkConvertedDomain(
+/** Prose and policy are separate files; neither may name a skill the other lacks. */
+async function checkSkillDocs(
   domain: string,
   root: string,
   skills: readonly RegistrySkill[],
-  baseTools: readonly string[],
-  toolSpecs: ToolSpecs,
 ): Promise<void> {
-  // Prose and policy are separate files; neither may reference a skill the
-  // other does not have.
   const declared = skills.map((entry) => entry.name).sort((a, b) => a.localeCompare(b));
   const documented = await skillDocNames(root);
   const missingDoc = declared.filter((name) => !documented.includes(name));
@@ -210,16 +202,28 @@ async function checkConvertedDomain(
         (orphanDoc.length > 0 ? `; no registry entry for: ${orphanDoc.join(",")}` : ""),
     );
   }
-
-  const docs: SkillDoc[] = skills.map((entry) => {
-    const { description } = parseSkillDoc(entry.doc);
-    if (description === "") {
+  for (const entry of skills) {
+    if (parseSkillDoc(entry.doc).description === "") {
       throw new Error(`${domain}/${entry.name}.md needs a \`description\` in its frontmatter`);
     }
-    return { name: entry.name, minRole: entry.minRole, tools: entry.tools, description };
-  });
+  }
+}
 
-  // The README's tool table is derived, so it cannot be allowed to rot.
+/** The README's tool table is derived, so it cannot be allowed to rot. */
+async function checkReadme(
+  domain: string,
+  root: string,
+  skills: readonly RegistrySkill[],
+  baseTools: readonly string[],
+  toolSpecs: ToolSpecs,
+): Promise<void> {
+  const docs: SkillDoc[] = skills.map((entry) => ({
+    name: entry.name,
+    minRole: entry.minRole,
+    tools: entry.tools,
+    description: parseSkillDoc(entry.doc).description,
+  }));
+
   const readmePath = join(root, "README.md");
   if (!(await fileExists(readmePath))) {
     throw new Error(`${readmePath} is required; run \`bun run readmes\` to create it`);
