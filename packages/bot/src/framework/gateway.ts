@@ -13,10 +13,10 @@ import { ActivityType, Client, Events, GatewayIntentBits, Partials } from "disco
 
 import { onShutdown } from "./lifecycle.ts";
 
-export interface GatewayDeps {
+interface GatewayDeps {
   readonly token: string;
   /** Reports gateway-level failures that are nobody's request. */
-  readonly onError: (error: unknown, context: { readonly op: string }) => void;
+  readonly onError: (error: Error, context: { readonly op: string }) => void;
 }
 
 export function createClient(): Client {

@@ -13,7 +13,7 @@
  */
 
 import { bearerMatches } from "@repo/shared/bearer";
-import type { HealthReport } from "@repo/shared/bot-health";
+import type { HealthReport } from "@repo/shared/bot/health";
 import { Result } from "@repo/shared/result";
 import {
   BOT_ROUTES,
@@ -24,30 +24,22 @@ import {
 import type { ScheduledFirePayload } from "@repo/shared/wire";
 import type { Client } from "discord.js";
 
-import {
-  DISCORD_COMMAND_ROUTE,
-  handleDiscordCommandRequest,
-} from "../agent/discord-commands/route.ts";
 import { onShutdown } from "./lifecycle.ts";
 import { continueTrace, traceOperation } from "./observability.ts";
 
-export function healthOf(
-  client: Client,
-  operationalReady = true,
-  now: () => number = () => Date.now(),
-): HealthReport {
+function healthOf(client: Client, operationalReady: boolean): HealthReport {
   const ready = client.isReady() && operationalReady;
   const readyAt = client.readyTimestamp;
   const ping = client.ws.ping;
   return {
     ready,
     websocketPingMs: Number.isFinite(ping) ? Math.round(ping) : -1,
-    // oxlint-disable-next-line unicorn/no-null -- discord.js reports "never ready" as null
-    uptimeSeconds: ready && readyAt !== null ? Math.floor((now() - readyAt) / 1_000) : 0,
+    // discord.js reports "never ready" as null.
+    uptimeSeconds: ready && readyAt !== null ? Math.floor((Date.now() - readyAt) / 1_000) : 0,
   };
 }
 
-export interface ConversationSink {
+interface ConversationSink {
   readonly wake: (hint: {
     readonly dispatchId?: string;
     readonly continuationKey?: string;
@@ -55,14 +47,14 @@ export interface ConversationSink {
   readonly admitSchedule: (payload: ScheduledFirePayload) => Promise<void>;
 }
 
-export interface ServerDeps {
+interface ServerDeps {
   readonly port: number;
   readonly client: Client;
   readonly conversations: ConversationSink;
   /** Bearer the agent must present on internal callbacks. */
   readonly ingressSecret: string;
   /** Final startup latch: recovery, handlers, and schedules must all be attached. */
-  readonly operationalReady?: () => boolean;
+  readonly operationalReady: () => boolean;
 }
 
 /**
@@ -79,13 +71,10 @@ async function handleRequestInTrace(request: Request, deps: ServerDeps): Promise
   const { pathname } = new URL(request.url);
 
   if (pathname === BOT_ROUTES.health) {
-    const report = healthOf(deps.client, deps.operationalReady?.() ?? true);
+    const report = healthOf(deps.client, deps.operationalReady());
     return Response.json(report, { status: report.ready ? 200 : 503 });
   }
 
-  if (pathname === DISCORD_COMMAND_ROUTE) {
-    return handleDiscordCommandRequest(request, deps);
-  }
   if (pathname === BOT_ROUTES.parked) {
     return handleParked(request, deps);
   }
@@ -99,7 +88,7 @@ async function handleRequestInTrace(request: Request, deps: ServerDeps): Promise
   return new Response("not found", { status: 404 });
 }
 
-export async function handleRequest(request: Request, deps: ServerDeps): Promise<Response> {
+async function handleRequest(request: Request, deps: ServerDeps): Promise<Response> {
   const traceparent = request.headers.get("traceparent") ?? undefined;
   if (traceparent === undefined) return handleRequestInTrace(request, deps);
   const pathname = new URL(request.url).pathname;
@@ -180,7 +169,7 @@ async function handleScheduled(request: Request, deps: ServerDeps): Promise<Resp
   }
 }
 
-export interface RunningServer {
+interface RunningServer {
   /** The bound port. Differs from the requested one when asking for port 0. */
   readonly port: number;
   readonly stop: () => Promise<void>;

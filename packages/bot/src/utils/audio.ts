@@ -52,7 +52,7 @@ const CRC_TABLE: Uint32Array = (() => {
  * no final xor. Using a stock implementation here produces checksums every
  * decoder rejects.
  */
-export function oggCrc32(data: Uint8Array): number {
+function oggCrc32(data: Uint8Array): number {
   let crc = 0;
   for (const byte of data) {
     const index = ((crc >>> 24) ^ byte) & 0xff;
@@ -70,7 +70,6 @@ function writeU32LE(buffer: Uint8Array, offset: number, value: number): void {
 
 export interface OggSplitOptions {
   readonly targetBytes?: number;
-  readonly maxChunks?: number;
 }
 
 /** Assembles one self-contained stream from the shared headers plus a group. */
@@ -119,7 +118,6 @@ export function splitOggOpus(
   options?: OggSplitOptions,
 ): Result<readonly Uint8Array[], InvalidInput> {
   const targetBytes = options?.targetBytes ?? DEFAULT_TARGET_BYTES;
-  const maxChunks = options?.maxChunks ?? DEFAULT_MAX_CHUNKS;
 
   if (buffer.byteLength <= targetBytes) return Result.ok([buffer]);
 
@@ -177,11 +175,11 @@ export function splitOggOpus(
   }
   groups.push(current);
 
-  if (groups.length > maxChunks) {
+  if (groups.length > DEFAULT_MAX_CHUNKS) {
     return Result.err(
       new InvalidInput({
         subject: "ogg opus stream",
-        issues: [`would split into ${groups.length} chunks, over the ${maxChunks} limit`],
+        issues: [`would split into ${groups.length} chunks, over the ${DEFAULT_MAX_CHUNKS} limit`],
       }),
     );
   }

@@ -31,7 +31,7 @@ function isMedia(contentType: string | undefined): boolean {
 }
 
 /** Message content plus any forwarded snapshot content, in order. */
-export function shipContent(message: Message): string {
+function shipContent(message: Message): string {
   const sections = [message.content];
   for (const snapshot of message.messageSnapshots.values()) {
     if (snapshot.content !== undefined && snapshot.content !== "") sections.push(snapshot.content);
@@ -39,7 +39,7 @@ export function shipContent(message: Message): string {
   return sections.filter((value) => value !== "").join("\n");
 }
 
-export function shipAttachments(message: Message): readonly ShipAttachmentInput[] {
+function shipAttachments(message: Message): readonly ShipAttachmentInput[] {
   const collected: ShipAttachmentInput[] = [];
 
   const add = (attachment: {
@@ -70,7 +70,7 @@ export function shipAttachments(message: Message): readonly ShipAttachmentInput[
 }
 
 /** First line, truncated. `undefined` when the post is media with no text. */
-export function shipTitle(content: string): string | undefined {
+function shipTitle(content: string): string | undefined {
   const firstLine = content.split("\n")[0]?.trim() ?? "";
   if (firstLine === "") return undefined;
   return firstLine.length > MAX_TITLE_CHARS
@@ -78,7 +78,7 @@ export function shipTitle(content: string): string | undefined {
     : firstLine;
 }
 
-export function avatarUrlFor(userId: string, avatarHash: string | null): string {
+function avatarUrlFor(userId: string, avatarHash: string | null): string {
   if (avatarHash !== null) {
     return `https://cdn.discordapp.com/avatars/${userId}/${avatarHash}.png?size=128`;
   }

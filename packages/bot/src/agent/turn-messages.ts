@@ -16,10 +16,11 @@
 import { Transient } from "@repo/shared/errors";
 import type { RedisClient } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
+import { z } from "zod";
 
 const TTL_SECONDS = 7 * 24 * 60 * 60;
 
-export interface TurnMessage {
+interface TurnMessage {
   /** The durable session the reply belongs to. */
   readonly sessionId: string;
   /** Joins feedback to the exact Eve turn. */
@@ -28,7 +29,14 @@ export interface TurnMessage {
   readonly requesterUserId: string;
 }
 
-export function turnMessageKey(messageId: string): string {
+/** The stored entry, field for field. Anything else reads as a miss. */
+const turnMessageSchema = z.object({
+  sessionId: z.string(),
+  eveTurnId: z.string(),
+  requesterUserId: z.string(),
+});
+
+function turnMessageKey(messageId: string): string {
   return `turn-message:${messageId}`;
 }
 
@@ -41,25 +49,11 @@ export function turnMessageKey(messageId: string): string {
 export function createTurnMessageStore(redis: RedisClient) {
   return {
     get: async (messageId: string): Promise<TurnMessage | undefined> => {
-      const raw = await redis
-        .get<Record<string, unknown>>(turnMessageKey(messageId))
-        .catch(() => undefined);
-
-      // oxlint-disable-next-line unicorn/no-null -- Upstash reports a missing key as null
-      if (raw === null || raw === undefined) return undefined;
-
-      const sessionId = raw["sessionId"];
-      const eveTurnId = raw["eveTurnId"];
-      const requesterUserId = raw["requesterUserId"];
-      if (
-        typeof sessionId !== "string" ||
-        typeof eveTurnId !== "string" ||
-        typeof requesterUserId !== "string"
-      ) {
-        return undefined;
-      }
-
-      return { sessionId, eveTurnId, requesterUserId };
+      // Upstash reports a missing key as null and a decode failure as a throw;
+      // the schema rejects both alongside a malformed entry.
+      const raw = await redis.get(turnMessageKey(messageId)).catch(() => undefined);
+      const parsed = turnMessageSchema.safeParse(raw);
+      return parsed.success ? parsed.data : undefined;
     },
 
     record: async (messageId: string, turn: TurnMessage): Promise<Result<undefined, Transient>> =>
@@ -77,6 +71,6 @@ export function createTurnMessageStore(redis: RedisClient) {
   };
 }
 
-export type TurnMessageStore = ReturnType<typeof createTurnMessageStore>;
+type TurnMessageStore = ReturnType<typeof createTurnMessageStore>;
 export type TurnMessageReader = Pick<TurnMessageStore, "get">;
 export type TurnMessageWriter = Pick<TurnMessageStore, "record">;

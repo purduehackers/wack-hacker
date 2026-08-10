@@ -17,15 +17,16 @@ import { Result } from "@repo/shared/result";
 import type { Schedule } from "../framework/schedules.ts";
 import { rankPhotographers } from "../integrations/cms.ts";
 import type { CmsClient, HackNightImage } from "../integrations/cms.ts";
-import { fridayOf, resolveEventSlug } from "../integrations/hack-night.ts";
+import { resolveEventSlug } from "../integrations/hack-night.ts";
 import type { ThreadSlugStore } from "../integrations/hack-night.ts";
+import { fridayOfWeek } from "../utils/dates.ts";
 
 /** Enough to find the thread-bearing announcement from the last event. */
 const ANNOUNCEMENT_LOOKBACK = 10;
 
 const LEADERBOARD_SIZE = 5;
 
-export function leaderboardMessage(images: readonly HackNightImage[]): string | undefined {
+function leaderboardMessage(images: readonly HackNightImage[]): string | undefined {
   const ranked = rankPhotographers(images).slice(0, LEADERBOARD_SIZE);
   if (ranked.length === 0) return undefined;
 
@@ -38,10 +39,7 @@ export function leaderboardMessage(images: readonly HackNightImage[]): string | 
 export function hackNightCleanup(deps: {
   readonly slugStore: ThreadSlugStore;
   readonly cms: CmsClient;
-  readonly now?: () => Date;
 }) {
-  const now = deps.now ?? (() => new Date());
-
   return {
     name: "hack-night-cleanup",
     cron: "0 18 * * 0",
@@ -62,7 +60,7 @@ export function hackNightCleanup(deps: {
 
           // Sunday, so the slug belongs to Friday. A stored slug wins, because a
           // hack night that ran past midnight is dated to when it started.
-          const slug = await resolveEventSlug(deps.slugStore, thread.id, fridayOf(now()));
+          const slug = await resolveEventSlug(deps.slugStore, thread.id, fridayOfWeek(new Date()));
 
           const listed = await deps.cms.listImages(slug);
           if (Result.isError(listed)) throw listed.error;

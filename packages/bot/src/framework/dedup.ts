@@ -14,22 +14,52 @@
  * twice is not. The structured error is an operational alert.
  */
 
+import type { RedisClient } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
+import { z } from "zod";
 
 import type { Deduplicator } from "./events.ts";
 
-export const DEDUP_TTL_MS = 300_000;
+const DEDUP_TTL_MS = 300_000;
 
-/** The one Redis operation deduplication needs, kept narrow for strict fakes. */
-export interface DedupStore {
-  readonly set: (
-    key: string,
-    value: string,
-    options: { readonly nx: true; readonly px: number },
-  ) => Promise<unknown>;
+/**
+ * `z.number()` rejects the non-finite doubles that `typeof` still calls
+ * numbers, so `NaN` and both infinities are matched alongside it. Without them
+ * a non-finite rejection would be reported as an object.
+ */
+const numberSchema = z.union([
+  z.number(),
+  z.nan(),
+  z.literal(Number.POSITIVE_INFINITY),
+  z.literal(Number.NEGATIVE_INFINITY),
+]);
+
+const stringSchema = z.string();
+const booleanSchema = z.boolean();
+const bigintSchema = z.bigint();
+const symbolSchema = z.symbol();
+const functionSchema = z.function();
+
+/**
+ * The name this alert has always carried for a non-`Error` rejection.
+ *
+ * The vocabulary is `typeof`'s, because operators grep for these exact words;
+ * it is derived from positive tests over the disjoint primitive sets instead.
+ * `null` is not special-cased on purpose — `typeof null` is `"object"`, and the
+ * final fallthrough reports every remaining value, `null` included, as one.
+ */
+function failureTypeOf(cause: unknown): string {
+  if (cause === undefined) return "undefined";
+  if (stringSchema.safeParse(cause).success) return "string";
+  if (booleanSchema.safeParse(cause).success) return "boolean";
+  if (numberSchema.safeParse(cause).success) return "number";
+  if (bigintSchema.safeParse(cause).success) return "bigint";
+  if (symbolSchema.safeParse(cause).success) return "symbol";
+  if (functionSchema.safeParse(cause).success) return "function";
+  return "object";
 }
 
-export function createDeduplicator(redis: DedupStore): Deduplicator {
+export function createDeduplicator(redis: RedisClient): Deduplicator {
   return {
     claim: async (key: string) => {
       const claimed = await Result.tryPromise({
@@ -42,7 +72,8 @@ export function createDeduplicator(redis: DedupStore): Deduplicator {
           JSON.stringify({
             event: "discord.dedup.unavailable",
             key,
-            failureType: claimed.error instanceof Error ? claimed.error.name : typeof claimed.error,
+            failureType:
+              claimed.error instanceof Error ? claimed.error.name : failureTypeOf(claimed.error),
           }),
         );
         return false;
@@ -50,30 +81,6 @@ export function createDeduplicator(redis: DedupStore): Deduplicator {
 
       // Upstash answers "OK" on a successful NX set and null when the key existed.
       return claimed.value === "OK";
-    },
-  };
-}
-
-/**
- * In-memory deduplication, for a single process with no Redis configured.
- *
- * Loses its state on restart, which is exactly when duplicates are most likely,
- * so it is a development convenience rather than a substitute.
- */
-export function createMemoryDeduplicator(now: () => number = () => Date.now()): Deduplicator {
-  const seen = new Map<string, number>();
-
-  return {
-    claim: async (key: string) => {
-      const currentTime = now();
-      // Opportunistic sweep: without it the map grows for the life of the process.
-      for (const [existing, expiresAt] of seen) {
-        if (expiresAt <= currentTime) seen.delete(existing);
-      }
-
-      if (seen.has(key)) return false;
-      seen.set(key, currentTime + DEDUP_TTL_MS);
-      return true;
     },
   };
 }

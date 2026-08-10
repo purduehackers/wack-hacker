@@ -15,32 +15,28 @@ import type { Reporter } from "@repo/shared/result/observe";
 import { Cron } from "croner";
 import type { Client } from "discord.js";
 
-import { indianaMinuteId } from "../time/indiana.ts";
+import { minuteId, TIME_ZONE } from "../utils/dates.ts";
 import { traceOperation } from "./observability.ts";
 
-/** Purdue Hackers is in Indiana; every schedule below is local to it. */
-export const SCHEDULE_TIMEZONE = "America/Indiana/Indianapolis";
-
-export interface ScheduleContext {
+interface ScheduleContext {
   readonly client: Client<true>;
 }
 
 export interface Schedule {
   readonly name: string;
-  /** Five-field cron expression, evaluated in `SCHEDULE_TIMEZONE`. */
+  /** Five-field cron expression, evaluated in `TIME_ZONE`. */
   readonly cron: string;
   readonly run: (context: ScheduleContext) => Promise<Result<void, KnownError>>;
 }
 
-export interface SchedulerDeps {
+interface SchedulerDeps {
   readonly schedules: readonly Schedule[];
   readonly client: Client<true>;
   readonly reporter: Reporter;
   readonly redis: RedisClient;
-  readonly now?: () => Date;
 }
 
-export interface RunningScheduler {
+interface RunningScheduler {
   /** Stops every job. Safe to call more than once. */
   readonly stop: () => void;
   /** Next fire time per job, for logging at startup. */
@@ -49,14 +45,14 @@ export interface RunningScheduler {
 
 const SCHEDULE_CLAIM_TTL_SECONDS = 14 * 24 * 60 * 60;
 
-export async function claimScheduleFire(
+async function claimScheduleFire(
   redis: RedisClient,
   scheduleName: string,
   at: Date,
 ): Promise<Result<boolean, Transient>> {
   return Result.tryPromise({
     try: async () =>
-      (await redis.set(`bot:schedule:${scheduleName}:${indianaMinuteId(at)}`, "1", {
+      (await redis.set(`bot:schedule:${scheduleName}:${minuteId(at)}`, "1", {
         nx: true,
         ex: SCHEDULE_CLAIM_TTL_SECONDS,
       })) === "OK",
@@ -74,7 +70,7 @@ export function startScheduler(deps: SchedulerDeps): RunningScheduler {
       schedule.cron,
       {
         name: schedule.name,
-        timezone: SCHEDULE_TIMEZONE,
+        timezone: TIME_ZONE,
         // A job that overruns its interval must not stack up a second copy.
         protect: true,
         // croner would otherwise swallow a throw; everything is reported.
@@ -88,11 +84,7 @@ export function startScheduler(deps: SchedulerDeps): RunningScheduler {
           op,
           () =>
             instrument(op, deps.reporter, async () => {
-              const claimed = await claimScheduleFire(
-                deps.redis,
-                schedule.name,
-                (deps.now ?? (() => new Date()))(),
-              );
+              const claimed = await claimScheduleFire(deps.redis, schedule.name, new Date());
               if (Result.isError(claimed)) return claimed;
               if (!claimed.value) return Result.ok(undefined);
               const ran = await Result.tryPromise({

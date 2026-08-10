@@ -15,11 +15,11 @@ import type { RedisClient } from "@repo/shared/redis";
 import type { Reporter } from "@repo/shared/result/observe";
 
 import { createTurnMessageStore } from "../agent/turn-messages.ts";
-import type { ConversationFlow } from "../conversations/flow.ts";
 import type { AnyEventHandler } from "../framework/events.ts";
 import { createCmsClient } from "../integrations/cms.ts";
 import { createThreadSlugStore } from "../integrations/hack-night.ts";
 import { createShipsClient } from "../integrations/ships.ts";
+import type { ConversationFlow } from "../utils/conversation/index.ts";
 import { agentChat, conversationDone } from "./agent-chat.ts";
 import { autoThread } from "./auto-thread.ts";
 import { chatFeedback } from "./chat-indexer.ts";
@@ -43,14 +43,12 @@ export function buildEventHandlers(deps: EventDeps): readonly AnyEventHandler[] 
   const cms = createCmsClient({ apiKey: deps.cmsApiKey });
   const slugStore = createThreadSlugStore(deps.redis);
   const ships = createShipsClient({ apiKey: deps.shipApiKey });
+  const turnMessages = createTurnMessageStore(deps.redis);
 
   return [
     agentChat({ agent: deps.agent }),
-    conversationDone({ agent: deps.agent, turnMessages: createTurnMessageStore(deps.redis) }),
-    chatFeedback({
-      turnMessages: createTurnMessageStore(deps.redis),
-      reporter: deps.reporter,
-    }),
+    conversationDone({ agent: deps.agent, turnMessages }),
+    chatFeedback({ turnMessages, reporter: deps.reporter }),
     praise,
     autoThread,
     emitShipMessage(ships),

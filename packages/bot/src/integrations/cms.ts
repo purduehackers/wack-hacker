@@ -41,12 +41,12 @@ const mediaDocSchema = z.object({
 });
 const mediaListSchema = z.object({
   docs: z.array(mediaDocSchema),
-  totalPages: z.number().int().nonnegative(),
+  totalPages: z.int().nonnegative(),
 });
 const mediaMutationSchema = z.object({ doc: mediaDocSchema });
 const mediaDeleteSchema = z.object({ docs: z.array(mediaDocSchema) });
 
-type MediaDoc = z.infer<typeof mediaDocSchema>;
+type MediaDoc = z.output<typeof mediaDocSchema>;
 
 function project(doc: MediaDoc): HackNightImage {
   return {
@@ -76,10 +76,9 @@ function toCmsError(operation: string) {
 
 export interface CmsDeps {
   readonly apiKey: string;
-  readonly baseUrl?: string;
 }
 
-export const CMS_URL = "https://cms.purduehackers.com";
+const CMS_URL = "https://cms.purduehackers.com";
 
 function mediaUrl(baseUrl: string, query: Readonly<Record<string, string>> = {}): URL {
   const url = new URL(`/api/${COLLECTION}`, baseUrl);
@@ -87,12 +86,12 @@ function mediaUrl(baseUrl: string, query: Readonly<Record<string, string>> = {})
   return url;
 }
 
-async function payloadRequest<T>(
-  schema: z.ZodType<T>,
+async function payloadRequest<S extends z.ZodType>(
+  schema: S,
   url: URL,
   apiKey: string,
   init: RequestInit = {},
-): Promise<T> {
+): Promise<z.output<S>> {
   const headers = new Headers(init.headers);
   headers.set("Authorization", `users API-Key ${apiKey}`);
   const response = await fetch(url, {
@@ -259,7 +258,7 @@ function deleteImagesForMessage(
 }
 
 export function createCmsClient(deps: CmsDeps) {
-  const cms = { apiKey: deps.apiKey, baseUrl: deps.baseUrl ?? CMS_URL };
+  const cms = { apiKey: deps.apiKey, baseUrl: CMS_URL };
   return {
     listImages: (slug: string) => listImages(cms, slug),
     uploadImage: (input: UploadImageInput) => uploadImage(cms, input),

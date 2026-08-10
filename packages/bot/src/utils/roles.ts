@@ -17,7 +17,7 @@ import type { Interaction, Message } from "discord.js";
 
 type WithMember = Pick<Interaction, "member"> | Pick<Message, "member">;
 
-export function memberRoleIds(source: WithMember): readonly string[] {
+function memberRoleIds(source: WithMember): readonly string[] {
   const { member } = source;
   // Absent for a DM, or when Discord could not resolve the member.
   if (!member) return [];

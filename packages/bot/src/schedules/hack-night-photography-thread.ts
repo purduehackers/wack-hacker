@@ -19,7 +19,7 @@ import { MessageType, ThreadAutoArchiveDuration } from "discord.js";
 import type { Schedule } from "../framework/schedules.ts";
 import { generateEventSlug } from "../integrations/hack-night.ts";
 import type { ThreadSlugStore } from "../integrations/hack-night.ts";
-import { indianaDate } from "../time/indiana.ts";
+import { calendarDate } from "../utils/dates.ts";
 
 const ANNOUNCEMENTS = [
   "Happy Hack Night! :D",
@@ -40,19 +40,12 @@ const THREAD_ARCHIVE_DURATION = ThreadAutoArchiveDuration.OneDay;
 const PIN_NOTICE_LOOKBACK = 5;
 
 /** `MM/DD`, matching the established thread naming so archives stay consistent. */
-export function threadDateLabel(date: Date): string {
-  const { month, day } = indianaDate(date);
+function threadDateLabel(date: Date): string {
+  const { month, day } = calendarDate(date);
   return `${String(month).padStart(2, "0")}/${String(day).padStart(2, "0")}`;
 }
 
-export function hackNightPhotographyThread(deps: {
-  readonly slugStore: ThreadSlugStore;
-  readonly now?: () => Date;
-  readonly random?: () => number;
-}) {
-  const now = deps.now ?? (() => new Date());
-  const random = deps.random ?? Math.random;
-
+export function hackNightPhotographyThread(deps: { readonly slugStore: ThreadSlugStore }) {
   return {
     name: "hack-night-photography-thread",
     // Friday at 20:00 local. The former cron said "0 0 * * 6" because Vercel
@@ -67,7 +60,7 @@ export function hackNightPhotographyThread(deps: {
             throw new Error("hack night channel is not a guild text channel");
           }
 
-          const greeting = ANNOUNCEMENTS[Math.floor(random() * ANNOUNCEMENTS.length)];
+          const greeting = ANNOUNCEMENTS[Math.floor(Math.random() * ANNOUNCEMENTS.length)];
           const announcement = await channel.send(
             `${greeting} \u{1F389}\n\nShare your pictures from the night in this thread!`,
           );
@@ -82,7 +75,7 @@ export function hackNightPhotographyThread(deps: {
           );
           if (notice !== undefined) await notice.delete();
 
-          const today = now();
+          const today = new Date();
           const thread = await announcement.startThread({
             name: `Hack Night Images - ${threadDateLabel(today)}`,
             autoArchiveDuration: THREAD_ARCHIVE_DURATION,

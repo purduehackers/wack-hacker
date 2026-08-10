@@ -8,6 +8,7 @@ import type {
   RESTPatchAPIChannelMessageJSONBody,
   RESTPostAPIChannelMessageJSONBody,
 } from "discord.js";
+import { z } from "zod";
 
 export type DiscordError = RateLimited | Transient | UpstreamError;
 type RestClient = Pick<Client["rest"], "delete" | "patch" | "post">;
@@ -24,22 +25,20 @@ function toDiscordError(operation: string) {
   };
 }
 
-export type PostedMessage = Pick<APIMessage, "content" | "id">;
+type PostedMessage = Pick<APIMessage, "content" | "id">;
 
+/** The only fields this module reads back from a created message. */
+const postedMessageSchema = z.object({ id: z.string().min(1), content: z.string() });
+
+/** `REST#post` is declared as `Promise<unknown>`, so this is the parse boundary. */
 function readPostedMessage(created: unknown): Result<PostedMessage, DiscordError> {
-  const id =
-    typeof created === "object" && created !== undefined
-      ? Reflect.get(Object(created), "id")
-      : undefined;
-  if (typeof id === "string" && id !== "") {
-    const content = Reflect.get(Object(created), "content");
-    if (typeof content === "string") return Result.ok({ id, content });
-  }
+  const parsed = postedMessageSchema.safeParse(created);
+  if (parsed.success) return Result.ok(parsed.data);
   return Result.err(
     new UpstreamError({
       service: "discord",
       status: 200,
-      detail: "message response carried no id",
+      detail: `invalid message response: ${z.prettifyError(parsed.error)}`,
     }),
   );
 }

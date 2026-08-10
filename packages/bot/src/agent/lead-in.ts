@@ -16,6 +16,8 @@
 
 import type { Message } from "discord.js";
 
+import { TIME_ZONE } from "../utils/dates.ts";
+
 /** Messages of channel backscroll pulled in ahead of the mention. */
 const MAX_RECENT_MESSAGES = 15;
 
@@ -47,12 +49,18 @@ function ellipsize(content: string): string {
  * A string rather than a structured object because each entry crosses the wire
  * as one `context` item, and eve appends each as its own user message. Keeping
  * the shape flat means the model sees a transcript rather than serialized JSON.
+ *
+ * The zone is passed explicitly because the process runs in UTC. These lines are
+ * the model's only clock for the conversation it is joining, so an unqualified
+ * `toLocaleTimeString` would label evening hack-night backscroll with the next
+ * morning's hours and make every time-relative answer wrong.
  */
-export function renderLeadInLine(message: Message): string {
+function renderLeadInLine(message: Message): string {
   const author = message.author.globalName ?? message.author.username;
   const time = message.createdAt.toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
+    timeZone: TIME_ZONE,
   });
   // Attachment-only and sticker messages arrive with no text. A placeholder
   // keeps the line meaningful instead of ending at a dangling `author:`.
@@ -66,7 +74,7 @@ export function renderLeadInLine(message: Message): string {
  * Discord returns newest-first, so the order is reversed — a transcript the
  * model reads backwards is worse than no transcript.
  */
-export async function fetchRecentMessages(message: Message): Promise<readonly Message[]> {
+async function fetchRecentMessages(message: Message): Promise<readonly Message[]> {
   try {
     const fetched = await message.channel.messages.fetch({
       before: message.id,
@@ -87,7 +95,7 @@ export async function fetchRecentMessages(message: Message): Promise<readonly Me
  * The anchor is kept last even when it has no text, so "last entry is the reply
  * target" always holds.
  */
-export async function fetchReferencedContext(
+async function fetchReferencedContext(
   message: Message,
   referencedMessageId: string,
 ): Promise<readonly Message[]> {
@@ -110,7 +118,7 @@ export async function fetchReferencedContext(
   }
 }
 
-export interface LeadIn {
+interface LeadIn {
   readonly recentMessages: readonly string[];
   readonly referencedContext: readonly string[];
 }

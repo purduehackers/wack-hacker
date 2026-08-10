@@ -9,12 +9,12 @@ import type { RESTPostAPIChannelMessageJSONBody } from "discord.js";
 
 import type { DiscordError, DiscordRest } from "./discord-rest.ts";
 
-export const MAX_MESSAGE_CHARS = 1_900;
-export const MAX_MESSAGES = 5;
+const MAX_MESSAGE_CHARS = 1_900;
+const MAX_MESSAGES = 5;
 const LIVE_CONTINUES = "-# response continues…";
 const TRUNCATED = "-# response truncated";
 
-export interface OverflowProjection {
+interface OverflowProjection {
   messageId: string;
   contentHash?: string;
 }
@@ -25,7 +25,7 @@ export interface RendererProjection {
   overflow: OverflowProjection[];
 }
 
-export interface RenderInput {
+interface RenderInput {
   readonly text: string;
   readonly activity: string;
   readonly footer?: string;
@@ -34,7 +34,7 @@ export interface RenderInput {
   readonly terminal: boolean;
 }
 
-export function renderBody(input: Omit<RenderInput, "terminal">): string {
+function renderBody(input: Omit<RenderInput, "terminal">): string {
   const sections: string[] = [];
   if (input.activity !== "") sections.push(`-# ${input.activity}`);
   if (input.text !== "") sections.push(input.text);
@@ -86,9 +86,9 @@ function nonce(messageId: string, index: number): string {
   return `${messageId}:${index}`;
 }
 
-export type RenderWriteError = DiscordError | Transient;
+type RenderWriteError = DiscordError | Transient;
 
-export interface RendererDeps {
+interface RendererDeps {
   readonly rest: DiscordRest;
   readonly channelId: string;
   readonly sourceMessageId: string;

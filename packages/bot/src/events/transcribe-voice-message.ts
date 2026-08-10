@@ -21,12 +21,12 @@ import { serializeError } from "@repo/shared/errors";
 import { Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { splitWithFooter } from "@repo/shared/text";
-import { experimental_transcribe as transcribe } from "ai";
+import { transcribe } from "ai";
 import { MessageFlags } from "discord.js";
 import type { Message } from "discord.js";
 
-import { splitOggOpus } from "../audio/ogg.ts";
 import { defineEvent } from "../framework/events.ts";
+import { splitOggOpus } from "../utils/audio.ts";
 
 const MICROPHONE = "\u{1F399}\u{FE0F}";
 const FAILED_NOTICE = "Sorry, I couldn't transcribe that audio message.";
@@ -41,16 +41,14 @@ const TOO_LARGE_PATTERN = /\b413\b|too large|payload|exceeds|size limit|too big/
 
 export interface TranscriberDeps {
   readonly apiKey: string;
-  readonly sleep?: (ms: number) => Promise<void>;
 }
 
 export function createTranscriber(deps: TranscriberDeps) {
   const groq = createGroq({ apiKey: deps.apiKey });
-  const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
 
   const once = async (audio: Uint8Array): Promise<string> => {
     const result = await transcribe({
-      model: groq.transcription("whisper-large-v3"),
+      model: groq.transcription("whisper-large-v3-turbo"),
       audio,
       providerOptions: { groq: { language: "en" } },
     });
@@ -73,7 +71,7 @@ export function createTranscriber(deps: TranscriberDeps) {
           return await once(segment);
         } catch {
           // One retry: these failures are usually transient upstream capacity.
-          await sleep(CHUNK_RETRY_DELAY_MS);
+          await new Promise<void>((r) => setTimeout(r, CHUNK_RETRY_DELAY_MS));
           try {
             return await once(segment);
           } catch (cause) {

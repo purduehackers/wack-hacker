@@ -28,7 +28,7 @@ const POSITIVE_EMOJI = new Set(["👍", "❤️", "🔥", "💯", "✅"]);
 /** Thumbs-down, cross mark. */
 const NEGATIVE_EMOJI = new Set(["👎", "❌"]);
 
-export type Sentiment = "positive" | "negative" | "unknown";
+type Sentiment = "positive" | "negative" | "unknown";
 
 /**
  * Classifies a reaction.
@@ -37,7 +37,7 @@ export type Sentiment = "positive" | "negative" | "unknown";
  * actually react with is worth knowing, and guessing sentiment from an arbitrary
  * emoji would make the positive and negative counts untrustworthy.
  */
-export function sentimentOf(emoji: string): Sentiment {
+function sentimentOf(emoji: string): Sentiment {
   if (POSITIVE_EMOJI.has(emoji)) return "positive";
   if (NEGATIVE_EMOJI.has(emoji)) return "negative";
   return "unknown";
@@ -55,7 +55,7 @@ export function chatFeedback(deps: ChatIndexerDeps) {
     dedupKey: ({ reaction, user }) => `${reaction.message.id}:${user.id}:${reaction.emoji.name}`,
     handle: async ({ reaction, user }) => {
       const emoji = reaction.emoji.name;
-      // oxlint-disable-next-line unicorn/no-null -- discord.js reports a custom emoji with no name as null
+      // discord.js reports a custom emoji with no name as null.
       if (emoji === null || emoji === undefined) return Result.ok(undefined);
 
       const turn = await deps.turnMessages.get(reaction.message.id);

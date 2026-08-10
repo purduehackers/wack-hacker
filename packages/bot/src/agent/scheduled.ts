@@ -13,13 +13,13 @@ import type {
 } from "@repo/shared/wire";
 import { RESTJSONErrorCodes } from "discord-api-types/v10";
 import type { Client, Guild, GuildBasedChannel, GuildMember } from "discord.js";
+import { z } from "zod";
 
 import type { AgentError } from "./client.ts";
 
 const PLACEHOLDER = "> Scheduled task is starting…";
-export interface ScheduledFireDeps {
+interface ScheduledFireDeps {
   readonly client: Client;
-  readonly guildId?: string;
 }
 
 export interface ScheduledDiscordAdapter {
@@ -29,8 +29,16 @@ export interface ScheduledDiscordAdapter {
   ): Promise<void>;
 }
 
+/**
+ * A usable channel name, or `unknown`.
+ *
+ * discord.js types `name` as a string, but the raw gateway payload omits it for
+ * some channel types, so the value is validated rather than trusted.
+ */
+const channelNameSchema = z.string().min(1).catch("unknown");
+
 function channelName(channel: Pick<GuildBasedChannel, "name">): string {
-  return typeof channel.name === "string" && channel.name !== "" ? channel.name : "unknown";
+  return channelNameSchema.parse(channel.name);
 }
 
 function principalOf(member: GuildMember, guildId: string): Principal {
@@ -71,13 +79,15 @@ const TRANSIENT_NETWORK_CODES = new Set([
   "UND_ERR_SOCKET",
 ]);
 
+/** Node and undici hang a string `code` off the transport error they throw. */
+const codedCauseSchema = z.looseObject({ code: z.string() });
+
 function errorCode(cause: unknown): string | undefined {
-  if (typeof cause !== "object" || cause === null || !("code" in cause)) return undefined;
-  return typeof cause.code === "string" ? cause.code : undefined;
+  return codedCauseSchema.safeParse(cause).data?.code;
 }
 
 /** Narrow fail-closed classifier for outages where a role snapshot is permitted. */
-export function isTransientDiscordFailure(cause: unknown): boolean {
+function isTransientDiscordFailure(cause: unknown): boolean {
   if (cause instanceof DiscordAPIError) return cause.status === 429 || cause.status >= 500;
   if (cause instanceof DOMException) {
     return cause.name === "AbortError" || cause.name === "TimeoutError";
@@ -164,7 +174,7 @@ function scheduledPrompt(payload: ScheduledFirePayload): string {
   ].join("\n\n");
 }
 
-export function scheduledFailureMessage(payload: ScheduledFirePayload): string {
+function scheduledFailureMessage(payload: ScheduledFirePayload): string {
   return payload.finalAttempt
     ? "⚠️ This scheduled task could not start after its final automatic attempt. Ask me to list scheduled tasks, then cancel or replace it after fixing its destination or permissions."
     : "⚠️ This scheduled task could not start. It will retry automatically. Ask me to list scheduled tasks if the problem continues.";
@@ -264,7 +274,7 @@ async function admitOccurrence(
 }
 
 export function createScheduledDiscordAdapter(deps: ScheduledFireDeps): ScheduledDiscordAdapter {
-  const guildId = deps.guildId ?? DISCORD_GUILD_ID;
+  const guildId = DISCORD_GUILD_ID;
   return {
     admit: (payload, submit) => admitOccurrence(deps, guildId, payload, submit),
   };

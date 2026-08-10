@@ -34,7 +34,6 @@ import { createDiscordRest } from "./agent/render/discord-rest.ts";
 import { createScheduledDiscordAdapter } from "./agent/scheduled.ts";
 import { createTurnMessageStore } from "./agent/turn-messages.ts";
 import { buildCommands } from "./commands/index.ts";
-import { createConversationFlow } from "./conversations/flow.ts";
 import { env } from "./env.ts";
 import { buildEventHandlers } from "./events/index.ts";
 import type { SlashCommand } from "./framework/commands.ts";
@@ -47,6 +46,7 @@ import { consoleReporter } from "./framework/observability.ts";
 import { startScheduler } from "./framework/schedules.ts";
 import { startServer } from "./framework/server.ts";
 import { buildSchedules } from "./schedules/index.ts";
+import { createConversationFlow } from "./utils/conversation/index.ts";
 
 function attachInteractionDispatcher(
   client: ReturnType<typeof createClient>,

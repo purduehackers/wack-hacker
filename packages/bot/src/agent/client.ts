@@ -1,7 +1,7 @@
 /**
  * The bot's HTTP client for the agent.
  *
- * Four calls, one per route on the agent's custom Discord channel. Everything
+ * Three calls, one per route on the agent's custom Discord channel. Everything
  * the bot knows about the agent is here and in `@repo/shared/wire`.
  *
  * The retry policy differs per route on purpose, and the distinction is
@@ -11,39 +11,38 @@
  *   after its lease only until agent ingress atomically fences it as live. Once
  *   live, completion or explicit reset is required; ambiguous redelivery would
  *   risk invoking Eve twice.
- * - Reactions and reset retry because they are naturally idempotent. HITL input
- *   retries with the same Discord interaction id; agent ingress receipts return
- *   the accepted acknowledgement or wedge the ambiguous admission window.
+ * - Reset retries because it is naturally idempotent. HITL input retries with
+ *   the same Discord interaction id; agent ingress receipts return the accepted
+ *   acknowledgement or wedge the ambiguous admission window.
  */
 
-import { context, isSpanContextValid, trace } from "@opentelemetry/api";
 import { Transient, UpstreamError, httpStatusOf } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { noRetry, quickRetry } from "@repo/shared/result/retry";
 import type { RetryPolicy } from "@repo/shared/result/retry";
-import { WIRE_ROUTES } from "@repo/shared/wire";
+import { WIRE_ROUTES, wireResponseSchema } from "@repo/shared/wire";
 import type {
   InteractionPayload,
   DeliveryPayload,
   ResetRequestPayload,
   WireResponse,
 } from "@repo/shared/wire";
+import { z } from "zod";
+
+import { activeTraceparent } from "../framework/observability.ts";
 
 export type AgentError = Transient | UpstreamError;
 
-export type AgentAck = Omit<Extract<WireResponse, { readonly ok: true }>, "ok">;
+/** Every body this client posts. Only the reset route carries no trace context. */
+type AgentRequestPayload = DeliveryPayload | InteractionPayload | ResetRequestPayload;
 
-export type AgentFetch = (
-  ...args: Parameters<typeof globalThis.fetch>
-) => ReturnType<typeof globalThis.fetch>;
+type AgentAck = Omit<Extract<WireResponse, { readonly ok: true }>, "ok">;
 
-export interface AgentClientDeps {
+interface AgentClientDeps {
   /** Base URL of the eve deployment, without a trailing slash. */
   readonly baseUrl: string;
   /** Bearer presented on every request. */
   readonly secret: string;
-  /** Injected so tests and a dev harness need no network. */
-  readonly fetch?: AgentFetch;
 }
 
 /**
@@ -78,30 +77,22 @@ function toAgentError(operation: string) {
   };
 }
 
+/** The payload's own parent when it carries one, otherwise the active span's. */
 function traceHeaders(explicit?: string): Readonly<Record<string, string>> {
-  if (explicit !== undefined) return { traceparent: explicit };
-  const span = trace.getSpan(context.active());
-  if (span === undefined) return {};
-  const spanContext = span.spanContext();
-  if (!isSpanContextValid(spanContext)) return {};
-  const flags = spanContext.traceFlags.toString(16).padStart(2, "0");
-  return { traceparent: `00-${spanContext.traceId}-${spanContext.spanId}-${flags}` };
+  const traceparent = explicit ?? activeTraceparent();
+  return traceparent === undefined ? {} : { traceparent };
 }
 
-function traceparentOf(payload: unknown): string | undefined {
-  if (typeof payload !== "object" || payload === null) return undefined;
-  const value = Reflect.get(payload, "traceparent");
-  return typeof value === "string" ? value : undefined;
+function traceparentOf(payload: AgentRequestPayload): string | undefined {
+  return "traceparent" in payload ? payload.traceparent : undefined;
 }
 
 export function createAgentClient(deps: AgentClientDeps) {
-  const doFetch = deps.fetch ?? globalThis.fetch;
-
   const post = async <T>(
     route: string,
-    payload: unknown,
+    payload: AgentRequestPayload,
     operation: string,
-    policy: RetryPolicy<unknown>,
+    policy: RetryPolicy<AgentError>,
     decodeSuccess: (body: unknown, status: number) => T,
   ): Promise<Result<T, AgentError>> =>
     Result.tryPromise({
@@ -116,16 +107,17 @@ export function createAgentClient(deps: AgentClientDeps) {
           body: JSON.stringify(payload),
           signal: AbortSignal.timeout(10_000),
         });
-        const response = await doFetch(request);
+        const response = await globalThis.fetch(request);
 
         if (!response.ok) throw await errorFor(response, operation);
 
         const body: unknown = await response.json();
-        if (isWireResponse(body) && !body.ok) {
+        const wire = wireResponseSchema.safeParse(body);
+        if (wire.success && !wire.data.ok) {
           throw new UpstreamError({
             service: "agent",
             status: response.status,
-            detail: `${body.tag}: ${body.message}`,
+            detail: `${wire.data.tag}: ${wire.data.message}`,
           });
         }
         return decodeSuccess(body, response.status);
@@ -156,36 +148,21 @@ function invalidWireResponse(status: number): UpstreamError {
 }
 
 function decodeSessionAck(value: unknown, status: number): AgentAck {
-  if (!isWireResponse(value) || !value.ok) throw invalidWireResponse(status);
-  return { sessionId: value.sessionId, continuationToken: value.continuationToken };
+  const parsed = wireResponseSchema.safeParse(value);
+  if (!parsed.success || !parsed.data.ok) throw invalidWireResponse(status);
+  return { sessionId: parsed.data.sessionId, continuationToken: parsed.data.continuationToken };
 }
+
+/**
+ * The reset route's acknowledgement: `ok: true`, with an advisory status.
+ *
+ * Not `wireResponseSchema` — the reset route answers with a status string in
+ * place of the session pair, so it is a different body on the same route family.
+ */
+const commandAckSchema = z.object({ ok: z.literal(true), status: z.string().optional() });
 
 function decodeCommandAck(value: unknown, status: number): undefined {
-  if (typeof value !== "object" || value === null) throw invalidWireResponse(status);
-  const candidate: Record<string, unknown> = { ...value };
-  if (
-    typeof candidate["ok"] !== "boolean" ||
-    !candidate["ok"] ||
-    (candidate["status"] !== undefined && typeof candidate["status"] !== "string")
-  ) {
-    throw invalidWireResponse(status);
-  }
-}
-
-function isWireResponse(value: unknown): value is WireResponse {
-  if (typeof value !== "object" || value === null) return false;
-  const candidate: Record<string, unknown> = { ...value };
-  const ok = candidate["ok"];
-  if (typeof ok !== "boolean") return false;
-  if (ok) {
-    return (
-      typeof candidate["sessionId"] === "string" &&
-      candidate["sessionId"] !== "" &&
-      typeof candidate["continuationToken"] === "string" &&
-      candidate["continuationToken"] !== ""
-    );
-  }
-  return typeof candidate["tag"] === "string" && typeof candidate["message"] === "string";
+  if (!commandAckSchema.safeParse(value).success) throw invalidWireResponse(status);
 }
 
 export type AgentClient = ReturnType<typeof createAgentClient>;

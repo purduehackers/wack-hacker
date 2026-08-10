@@ -4,10 +4,9 @@
  * Two handlers, kept together because they are the two ends of one behaviour: a
  * mention starts a conversation, and a ✅ on the reply ends it.
  *
- *
- * What remains is the part that was always ours: deciding *where* the
- * conversation lives, gathering context the agent cannot see, and giving the
- * person immediate feedback that something is happening.
+ * The bot's share of the work is deciding *where* the conversation lives,
+ * gathering context the agent cannot see, and giving the person immediate
+ * feedback that something is happening.
  */
 
 import { ADMISSION_RECOVERY_FOOTER, ADMISSION_RECOVERY_TEXT } from "@repo/shared/conversations";
@@ -16,14 +15,14 @@ import { Result } from "@repo/shared/result";
 import { continuationKeyFor } from "@repo/shared/wire";
 import type { MessagePayload, Principal } from "@repo/shared/wire";
 import { ChannelType } from "discord.js";
-import type { Message } from "discord.js";
+import type { AnyThreadChannel, Message } from "discord.js";
 
 import { fetchLeadIn } from "../agent/lead-in.ts";
 import type { TurnMessageReader } from "../agent/turn-messages.ts";
-import type { ConversationFlow } from "../conversations/flow.ts";
 import type { ReactorLike } from "../framework/events.ts";
 import { defineEvent } from "../framework/events.ts";
 import { activeTraceparent } from "../framework/observability.ts";
+import type { ConversationFlow } from "../utils/conversation/index.ts";
 import { stripBotMention } from "../utils/mention.ts";
 
 /** Shown until the agent's first tokens replace it. */
@@ -75,7 +74,8 @@ async function principalOfReactor(
 ): Promise<Principal> {
   // A partial user carries no username, so the snowflake is the only name
   // available until the member fetch below fills it in.
-  const name = typeof user.username === "string" && user.username !== "" ? user.username : user.id;
+  const username = user.username ?? "";
+  const name = username === "" ? user.id : username;
   const member = await message.guild?.members.fetch(user.id).catch(() => undefined);
 
   return {
@@ -218,21 +218,27 @@ async function postPlaceholder(
 }
 
 /**
+ * Everything the channel reference can be built from: the channel a message
+ * arrived in, or the parent a thread hangs off.
+ */
+type NameableChannel = Message["channel"] | NonNullable<AnyThreadChannel["parent"]>;
+
+/**
  * A channel's name, as a plain string.
  *
  * discord.js types a name as nullable and omits it entirely on DM channels, and
  * the wire schema requires a non-empty string. Everything unnameable collapses
  * to one placeholder here so no caller has to re-derive the same three checks.
  */
-function nameOf(channel: object): string {
-  const name = "name" in channel ? channel.name : undefined;
-  return typeof name === "string" && name !== "" ? name : "unknown";
+function nameOf(channel: NameableChannel): string {
+  const name = ("name" in channel ? channel.name : undefined) ?? "";
+  return name === "" ? "unknown" : name;
 }
 
 /** A channel's category, or undefined when it has none or cannot have one. */
-function categoryOf(channel: object): string | undefined {
+function categoryOf(channel: NameableChannel): string | undefined {
   const parentId = "parentId" in channel ? channel.parentId : undefined;
-  return typeof parentId === "string" ? parentId : undefined;
+  return parentId ?? undefined;
 }
 
 function channelRefOf(message: Message): MessagePayload["channel"] {
@@ -272,14 +278,14 @@ function threadRefOf(
   };
 }
 
-export interface ConversationResetInput {
+interface ConversationResetInput {
   readonly continuationKey: string;
   readonly requesterUserId: string;
   readonly principal: Principal;
 }
 
-/** Security decision kept independent from Discord fetching for focused tests. */
-export async function resetConversationForPrincipal(
+/** The authorization decision, kept independent of how the principal was fetched. */
+async function resetConversationForPrincipal(
   agent: Pick<ConversationFlow, "reset">,
   input: ConversationResetInput,
 ) {

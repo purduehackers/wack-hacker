@@ -23,7 +23,7 @@ import { Result } from "@repo/shared/result";
 import { upstreamRetry } from "@repo/shared/result/retry";
 import { z } from "zod";
 
-export const PRIVACY_DB_URL = "https://pdb.purduehackers.com";
+const PRIVACY_DB_URL = "https://pdb.purduehackers.com";
 
 export const PrivacyMode = {
   OptIn: "opt_in",
@@ -68,21 +68,32 @@ export const PROJECT_LABELS: Record<PrivacyProject, string> = {
   [PrivacyProject.Ships]: "Ships",
 };
 
+const modeSchema = z.enum(PrivacyMode);
+
 const preferencesSchema = z.object({
   user_id: z.string(),
-  mode: z.enum([PrivacyMode.OptIn, PrivacyMode.OptOutPrivacy, PrivacyMode.OptOutCollection]),
+  mode: modeSchema,
   /** Unknown project keys are tolerated: the service may add one before we do. */
   overrides: z.record(z.string(), z.string()),
 });
 
-export type UserPreferences = z.infer<typeof preferencesSchema>;
+export type UserPreferences = z.output<typeof preferencesSchema>;
 
 export type PrivacyError = InvalidInput | RateLimited | Transient | UpstreamError;
 
 export interface PrivacyClientDeps {
   readonly apiKey: string;
-  readonly baseUrl?: string;
-  readonly fetchImpl?: typeof fetch;
+}
+
+/**
+ * The only body the service is ever sent: every write is a mode change with an
+ * optional reason. `reason` stays `string | undefined` rather than an optional
+ * property, because the callers always pass the key and `JSON.stringify` is what
+ * drops it when it is undefined.
+ */
+interface PreferenceUpdate {
+  readonly mode: PrivacyMode;
+  readonly reason: string | undefined;
 }
 
 function classify(status: number, detail: string): PrivacyError {
@@ -92,18 +103,15 @@ function classify(status: number, detail: string): PrivacyError {
 }
 
 export function createPrivacyClient(deps: PrivacyClientDeps) {
-  const baseUrl = (deps.baseUrl ?? PRIVACY_DB_URL).replace(/\/$/, "");
-  const doFetch = deps.fetchImpl ?? fetch;
-
   async function request(
     method: string,
     path: string,
-    body?: unknown,
+    body?: PreferenceUpdate,
   ): Promise<Result<unknown, PrivacyError>> {
     return Result.tryPromise(
       {
         try: async () => {
-          const response = await doFetch(`${baseUrl}${path}`, {
+          const response = await fetch(`${PRIVACY_DB_URL}${path}`, {
             method,
             headers: {
               Authorization: `Bearer ${deps.apiKey}`,
@@ -147,7 +155,11 @@ export function createPrivacyClient(deps: PrivacyClientDeps) {
         return Result.err(
           new InvalidInput({
             subject: "privacy-db preferences response",
-            issues: parsed.error.issues.map((failure) => failure.message),
+            // The path, not just the message: "mode: invalid option" names the
+            // field the service changed, which a bare message does not.
+            issues: parsed.error.issues.map(({ message, path }) =>
+              path.length === 0 ? message : `${path.join(".")}: ${message}`,
+            ),
           }),
         );
       }

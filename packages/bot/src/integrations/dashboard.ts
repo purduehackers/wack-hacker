@@ -11,9 +11,8 @@
  * reads. This is the same HTTP call the SDK used to make, without depending on a
  * large SDK for one request.
  *
- * Kept behind the `DashboardWriter` interface the command depends on, so the
- * command is testable without a Vercel token and this file is the only thing
- * that knows Edge Config exists.
+ * Kept behind the `DashboardWriter` interface the command depends on, so this
+ * file is the only thing that knows Edge Config exists.
  */
 
 import { Transient, UpstreamError } from "@repo/shared/errors";
@@ -29,7 +28,6 @@ export interface DashboardDeps {
   readonly vercelToken: string;
   /** The dashboard's Edge Config connection string, not the bot's own. */
   readonly connectionString: string;
-  readonly fetchImpl?: typeof fetch;
 }
 
 /**
@@ -39,7 +37,7 @@ export interface DashboardDeps {
  * string fails at startup instead of the first time an organizer runs the
  * command during a hack night.
  */
-export function edgeConfigIdFrom(connectionString: string): Result<string, UpstreamError> {
+function edgeConfigIdFrom(connectionString: string): Result<string, UpstreamError> {
   const connection = parseConnectionString(connectionString);
   if (!connection) {
     return Result.err(
@@ -57,7 +55,6 @@ export function createDashboardWriter(deps: DashboardDeps): Result<DashboardWrit
   const edgeConfigId = edgeConfigIdFrom(deps.connectionString);
   if (Result.isError(edgeConfigId)) return edgeConfigId;
 
-  const doFetch = deps.fetchImpl ?? fetch;
   const url = `${VERCEL_API}/v1/edge-config/${edgeConfigId.value}/items`;
 
   return Result.ok({
@@ -65,7 +62,7 @@ export function createDashboardWriter(deps: DashboardDeps): Result<DashboardWrit
       Result.tryPromise(
         {
           try: async () => {
-            const response = await doFetch(url, {
+            const response = await fetch(url, {
               method: "PATCH",
               headers: {
                 Authorization: `Bearer ${deps.vercelToken}`,

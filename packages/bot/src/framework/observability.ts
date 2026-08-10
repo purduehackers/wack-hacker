@@ -10,10 +10,8 @@ import { context, isSpanContextValid, trace } from "@opentelemetry/api";
 import type { Attributes, Reporter, WideEvent } from "@repo/shared/result/observe";
 import * as Sentry from "@sentry/bun";
 
-type MetricSink = Pick<typeof Sentry.metrics, "count" | "distribution">;
-
-/** Pure formatter kept exported so the accounting/log contract can be tested. */
-export function wideEventLine(event: WideEvent, traceId?: string): string {
+/** Pure formatter for the wide event's one-line log form. */
+function wideEventLine(event: WideEvent, traceId?: string): string {
   return JSON.stringify({
     ...event.attributes,
     event: "operation.completed",
@@ -27,15 +25,12 @@ export function wideEventLine(event: WideEvent, traceId?: string): string {
 }
 
 /** One counter per terminal operation and one latency sample when available. */
-export function recordOperationMetrics(
-  event: WideEvent,
-  metrics: MetricSink = Sentry.metrics,
-): void {
+function recordOperationMetrics(event: WideEvent): void {
   const attributes: Record<string, string> = { op: event.op, status: event.status };
   if (event.errorTag !== undefined) attributes["errorTag"] = event.errorTag;
-  metrics.count("bot.operation", 1, { attributes });
+  Sentry.metrics.count("bot.operation", 1, { attributes });
   if (event.durationMs !== undefined) {
-    metrics.distribution("bot.operation.duration", event.durationMs, {
+    Sentry.metrics.distribution("bot.operation.duration", event.durationMs, {
       unit: "millisecond",
       attributes: { op: event.op, status: event.status },
     });

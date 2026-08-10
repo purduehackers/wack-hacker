@@ -6,9 +6,7 @@
   "scripts": {
     "dev": "bun --watch --preload ./src/instrument.ts run src/index.ts",
     "start": "bun --preload ./src/instrument.ts run src/index.ts",
-    "typecheck": "tsc --noEmit",
-    "register-commands": "bun run src/framework/register.ts",
-    "test": "bun test"
+    "register-commands": "bun scripts/register-commands.ts"
   },
   "dependencies": {
     "@ai-sdk/groq": "^4.0.24",

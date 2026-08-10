@@ -24,7 +24,7 @@ const CHECK = "✅";
 const CROSS = "❌";
 
 /** The photo thread, and not some other thread under the same channel. */
-export function isPhotoThread(message: Message): boolean {
+function isPhotoThread(message: Message): boolean {
   const { channel } = message;
   if (!channel.isThread()) return false;
   if (channel.parentId !== DISCORD_IDS.channels.HACK_NIGHT) return false;

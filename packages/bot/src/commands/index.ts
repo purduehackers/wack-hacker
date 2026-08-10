@@ -7,8 +7,8 @@
  * is one line longer and cannot do that.
  *
  * Dependencies are passed in rather than read from module-level singletons, so
- * construction failures surface at one call site and the registration script
- * builds the same list the running bot does.
+ * construction failures surface at one call site during startup rather than the
+ * first time someone runs the command.
  */
 
 import type { UpstreamError } from "@repo/shared/errors";
@@ -47,6 +47,3 @@ export function buildCommands(deps: CommandDeps): Result<readonly SlashCommand[]
     hackNightCommand(dashboard.value),
   ]);
 }
-
-export { ping };
-export type { SlashCommand } from "../framework/commands.ts";

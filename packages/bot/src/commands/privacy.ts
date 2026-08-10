@@ -53,7 +53,7 @@ function badOption(name: string, value: string): InvalidInput {
   });
 }
 
-export function renderPreferences(preferences: {
+function renderPreferences(preferences: {
   readonly mode: string;
   readonly overrides: Readonly<Record<string, string>>;
 }): string {
@@ -79,7 +79,7 @@ export function renderPreferences(preferences: {
  * points at the non-destructive alternative — carried over verbatim, because it
  * is the one place this command can cause data loss.
  */
-export function globalModeNotice(mode: PrivacyMode): string {
+function globalModeNotice(mode: PrivacyMode): string {
   const base = `Your global privacy mode has been set to **${MODE_LABELS[mode]}**.`;
   if (mode !== PrivacyMode.OptOutCollection) return base;
 

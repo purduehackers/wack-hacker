@@ -10,6 +10,7 @@ import type {
   Principal,
   RenderAuthorization,
   RenderInputRequest,
+  RenderTarget,
 } from "@repo/shared/wire";
 import {
   ActionRowBuilder,
@@ -22,14 +23,14 @@ import {
 } from "discord.js";
 import type { GuildMember, Interaction } from "discord.js";
 
-import type { ConversationFlow } from "../../conversations/flow.ts";
 import { activeTraceparent } from "../../framework/observability.ts";
+import type { ConversationFlow } from "../../utils/conversation/index.ts";
 import { modalCustomId, parseLocator } from "./components.ts";
 import type { HitlLocator } from "./components.ts";
 
 const ANSWER_FIELD_ID = "answer";
 
-export interface HitlInteractionDeps {
+interface HitlInteractionDeps {
   readonly flow: ConversationFlow;
   readonly renders: ConversationStore["render"];
   readonly reporter: Reporter;
@@ -162,23 +163,108 @@ interface LoadedInput {
   readonly approvalRequester?: InteractionPayload["approvalRequester"];
 }
 
-// oxlint-disable-next-line oxclippy/cognitive-complexity -- linear validation keeps the HITL admission checks auditable
+/** Either the admitted request or the ephemeral message explaining the refusal. */
+type LoadInputOutcome =
+  | { readonly ok: true; readonly input: LoadedInput }
+  | { readonly ok: false; readonly rejection: string };
+
+function rejectInput(rejection: string): LoadInputOutcome {
+  return { ok: false, rejection };
+}
+
+/** Either the approver context to record, or the ephemeral message explaining the refusal. */
+type ApproverOutcome =
+  | { readonly ok: true; readonly approvalRequester: LoadedInput["approvalRequester"] }
+  | { readonly ok: false; readonly rejection: string };
+
+/**
+ * Decides whether this interaction's user is allowed to answer the request.
+ *
+ * A second-party approval needs two distinct people who both still hold the
+ * minimum role — the original requester's authority is re-checked here, because
+ * it may have been revoked since the request was raised. Every other request is
+ * answerable only by the person it was addressed to.
+ */
+async function resolveApprover(
+  deps: HitlInteractionDeps,
+  interaction: Interaction,
+  request: RenderInputRequest,
+  target: RenderTarget,
+  principal: Principal,
+): Promise<ApproverOutcome> {
+  if (request.approvalMode === "second-party") {
+    const minimum = request.approverMinRole === "admin" ? UserRole.Admin : UserRole.Organizer;
+    const requesterMember = await interaction.guild?.members
+      .fetch(target.requesterUserId)
+      .catch(() => undefined);
+    const requesterRoles = memberRoles(requesterMember, deps.guildId);
+    if (!roleAtLeast(roleFromMemberRoles(requesterRoles), minimum)) {
+      return { ok: false, rejection: "The requester is no longer authorized for this action." };
+    }
+    if (
+      interaction.user.id === target.requesterUserId ||
+      !roleAtLeast(roleFromMemberRoles(principal.memberRoles), minimum)
+    ) {
+      return { ok: false, rejection: `A different ${minimum} must answer this approval request.` };
+    }
+    return {
+      ok: true,
+      approvalRequester: { userId: target.requesterUserId, memberRoles: requesterRoles },
+    };
+  }
+
+  if (
+    interaction.user.id !== target.requesterUserId ||
+    interaction.user.id !== request.recipientUserId
+  ) {
+    return {
+      ok: false,
+      rejection: "Only the person who started this turn can answer this request.",
+    };
+  }
+  return { ok: true, approvalRequester: undefined };
+}
+
+/**
+ * Confirms the interaction came from the message that currently carries the
+ * render, so a click on a superseded message cannot answer a live request.
+ */
+async function checkSourceMessage(
+  deps: HitlInteractionDeps,
+  interaction: Interaction,
+  locator: Extract<HitlLocator, { readonly kind: "input" }>,
+  target: RenderTarget,
+): Promise<string | undefined> {
+  const sourceMessageId = messageIdOf(interaction);
+  if (sourceMessageId === undefined) return undefined;
+
+  const projection = await deps.renders.projection(locator.dispatchId, target.anchorMessageId);
+  if (Result.isError(projection)) {
+    report(deps, "agent.hitl.decode-projection", projection.error);
+    return "This input request is temporarily unavailable.";
+  }
+  if (projection.value.anchorMessageId !== sourceMessageId) {
+    return "This input request is no longer active.";
+  }
+  return undefined;
+}
+
 async function loadInput(
   deps: HitlInteractionDeps,
   interaction: Interaction,
   locator: Extract<HitlLocator, { readonly kind: "input" }>,
-): Promise<LoadedInput | string> {
+): Promise<LoadInputOutcome> {
   const [intentResult, targetResult] = await Promise.all([
     deps.renders.intent(locator.dispatchId),
     deps.renders.target(locator.dispatchId),
   ]);
   if (Result.isError(intentResult)) {
     report(deps, "agent.hitl.decode-intent", intentResult.error);
-    return "This input request is temporarily unavailable.";
+    return rejectInput("This input request is temporarily unavailable.");
   }
   if (Result.isError(targetResult)) {
     report(deps, "agent.hitl.decode-target", targetResult.error);
-    return "This input request is temporarily unavailable.";
+    return rejectInput("This input request is temporarily unavailable.");
   }
   const intent = intentResult.value;
   const target = targetResult.value;
@@ -190,57 +276,33 @@ async function loadInput(
     intent.continuationKey !== target.continuationKey ||
     intent.revision !== locator.revision
   ) {
-    return "This input request is stale or has already been handled.";
+    return rejectInput("This input request is stale or has already been handled.");
   }
   const request = intent.inputRequests?.[locator.requestIndex];
-  if (request === undefined) return "This input request is stale or has already been handled.";
+  if (request === undefined) {
+    return rejectInput("This input request is stale or has already been handled.");
+  }
   if (interaction.guildId !== deps.guildId || interaction.channelId !== target.channelId) {
-    return "This input request is not valid in this channel.";
+    return rejectInput("This input request is not valid in this channel.");
   }
 
   const principal = await principalOf(interaction, deps.guildId);
-  let approvalRequester: LoadedInput["approvalRequester"];
-  if (request.approvalMode === "second-party") {
-    const minimum = request.approverMinRole === "admin" ? UserRole.Admin : UserRole.Organizer;
-    const requesterMember = await interaction.guild?.members
-      .fetch(target.requesterUserId)
-      .catch(() => undefined);
-    const requesterRoles = memberRoles(requesterMember, deps.guildId);
-    if (!roleAtLeast(roleFromMemberRoles(requesterRoles), minimum)) {
-      return "The requester is no longer authorized for this action.";
-    }
-    if (
-      interaction.user.id === target.requesterUserId ||
-      !roleAtLeast(roleFromMemberRoles(principal.memberRoles), minimum)
-    ) {
-      return `A different ${minimum} must answer this approval request.`;
-    }
-    approvalRequester = { userId: target.requesterUserId, memberRoles: requesterRoles };
-  } else if (
-    interaction.user.id !== target.requesterUserId ||
-    interaction.user.id !== request.recipientUserId
-  ) {
-    return "Only the person who started this turn can answer this request.";
-  }
+  const approver = await resolveApprover(deps, interaction, request, target, principal);
+  if (!approver.ok) return rejectInput(approver.rejection);
+  const { approvalRequester } = approver;
 
-  const sourceMessageId = messageIdOf(interaction);
-  if (sourceMessageId !== undefined) {
-    const projection = await deps.renders.projection(locator.dispatchId, target.anchorMessageId);
-    if (Result.isError(projection)) {
-      report(deps, "agent.hitl.decode-projection", projection.error);
-      return "This input request is temporarily unavailable.";
-    }
-    if (projection.value.anchorMessageId !== sourceMessageId) {
-      return "This input request is no longer active.";
-    }
-  }
+  const staleSource = await checkSourceMessage(deps, interaction, locator, target);
+  if (staleSource !== undefined) return rejectInput(staleSource);
   return {
-    request,
-    continuationKey: intent.continuationKey,
-    authChannelId: target.authChannelId,
-    ...(target.authThreadId === undefined ? {} : { authThreadId: target.authThreadId }),
-    principal,
-    ...(approvalRequester === undefined ? {} : { approvalRequester }),
+    ok: true,
+    input: {
+      request,
+      continuationKey: intent.continuationKey,
+      authChannelId: target.authChannelId,
+      ...(target.authThreadId === undefined ? {} : { authThreadId: target.authThreadId }),
+      principal,
+      ...(approvalRequester === undefined ? {} : { approvalRequester }),
+    },
   };
 }
 
@@ -249,12 +311,13 @@ async function handleInput(
   interaction: Interaction,
   locator: Extract<HitlLocator, { readonly kind: "input" }>,
 ): Promise<void> {
-  const loaded = await loadInput(deps, interaction, locator);
-  if (typeof loaded === "string") {
-    await ephemeral(interaction, loaded);
+  const outcome = await loadInput(deps, interaction, locator);
+  if (!outcome.ok) {
+    await ephemeral(interaction, outcome.rejection);
     return;
   }
 
+  const loaded = outcome.input;
   const { request } = loaded;
   const optionIndex = selectedOptionIndex(interaction, locator);
   const freeform = freeformAnswer(interaction, locator);

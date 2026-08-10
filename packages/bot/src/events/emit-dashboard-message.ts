@@ -30,11 +30,19 @@ import remarkRehype from "remark-rehype";
 import { unified } from "unified";
 
 import { defineEvent } from "../framework/events.ts";
+import { TIME_ZONE } from "../utils/dates.ts";
 
-export const DASHBOARD_URL = "https://api.purduehackers.com/discord/bot";
+const DASHBOARD_URL = "https://api.purduehackers.com/discord/bot";
 
-/** Indiana, matching how timestamps read to people in the room. */
-const DISPLAY_TIMEZONE = "America/Indiana/Indianapolis";
+/**
+ * The single value the upstream `Resolver` contract defines for "unresolved".
+ *
+ * Every resolver method below answers with this, so the one `null` this module
+ * owes `@purduehackers/discord-markdown-utils` lives here rather than at each
+ * return site.
+ */
+// oxlint-disable-next-line unicorn/no-null -- the upstream Resolver contract uses null for "unresolved"
+const UNRESOLVED = null;
 
 /**
  * Hydrates Discord mention nodes from the REST API.
@@ -43,27 +51,24 @@ const DISPLAY_TIMEZONE = "America/Indiana/Indianapolis";
  * generic form. A deleted role or a member who left must not stop the whole
  * message from being mirrored.
  */
-export function createResolver(client: Client, guildId: string): Resolver {
+function createResolver(client: Client, guildId: string): Resolver {
   return {
     user: async ({ id }) => {
       const guild = await client.guilds.fetch(guildId).catch(() => undefined);
       const member = await guild?.members.fetch(id).catch(() => undefined);
-      // oxlint-disable-next-line unicorn/no-null -- the resolver contract uses null for "unresolved"
-      return member?.nickname ?? member?.user.globalName ?? member?.user.username ?? null;
+      return member?.nickname ?? member?.user.globalName ?? member?.user.username ?? UNRESOLVED;
     },
 
     channel: async ({ id }) => {
       const channel = await client.channels.fetch(id).catch(() => undefined);
-      // oxlint-disable-next-line unicorn/no-null -- resolver contract
-      if (!channel || !("name" in channel) || channel.name === null) return null;
+      if (!channel || !("name" in channel) || channel.name === null) return UNRESOLVED;
       return channel.name;
     },
 
     role: async ({ id }) => {
       const guild = await client.guilds.fetch(guildId).catch(() => undefined);
       const role = await guild?.roles.fetch(id).catch(() => undefined);
-      // oxlint-disable-next-line unicorn/no-null -- resolver contract
-      if (!role) return null;
+      if (!role) return UNRESOLVED;
       // Discord uses 0 for "no colour", which must not render as #000000.
       const color = role.color === 0 ? undefined : `#${role.color.toString(16).padStart(6, "0")}`;
       return color === undefined ? { name: role.name } : { name: role.name, color };
@@ -72,11 +77,11 @@ export function createResolver(client: Client, guildId: string): Resolver {
     emoji: async ({ id, animated }) =>
       `https://cdn.discordapp.com/emojis/${id}.${animated ? "gif" : "png"}`,
 
-    timestamp: async ({ date }) => date.toLocaleString("en-us", { timeZone: DISPLAY_TIMEZONE }),
+    timestamp: async ({ date }) => date.toLocaleString("en-us", { timeZone: TIME_ZONE }),
   };
 }
 
-export async function renderHtml(content: string, resolver: Resolver): Promise<string> {
+async function renderHtml(content: string, resolver: Resolver): Promise<string> {
   const processor = unified()
     .use(remarkParse)
     .use(remarkDiscord, { resolver })
@@ -93,7 +98,7 @@ export async function renderHtml(content: string, resolver: Resolver): Promise<s
  * internal, because the cost of wrongly publishing a private message is far
  * higher than the cost of missing a public one.
  */
-export function isPubliclyMirrorable(message: Message): boolean {
+function isPubliclyMirrorable(message: Message): boolean {
   if (!message.inGuild()) return false;
 
   if (message.channel.isThread() && message.channel.type === ChannelType.PrivateThread)

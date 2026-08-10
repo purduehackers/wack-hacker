@@ -14,7 +14,7 @@ import { Result } from "@repo/shared/result";
 import { upstreamRetry } from "@repo/shared/result/retry";
 import { z } from "zod";
 
-export const SHIPS_URL = "https://ships.purduehackers.com";
+const SHIPS_URL = "https://ships.purduehackers.com";
 
 export interface ShipAttachmentInput {
   readonly sourceUrl: string;
@@ -44,37 +44,38 @@ export type ShipsError = InvalidInput | RateLimited | Transient | UpstreamError;
 const createResponseSchema = z
   .looseObject({
     id: z.union([z.string(), z.number()]).transform(String),
-    alreadyExists: z.boolean().optional(),
+    alreadyExists: z.boolean().default(false),
   })
-  .transform(({ id, alreadyExists }) => ({ id, alreadyExists: alreadyExists ?? false }) as const);
+  .transform(({ id, alreadyExists }) => ({ id, alreadyExists }) as const);
 
 const deleteResponseSchema = z
   .looseObject({
-    ok: z.boolean().optional(),
+    ok: z.boolean().default(false),
     id: z.string().optional(),
-    attachmentsRemoved: z.number().optional(),
+    attachmentsRemoved: z.number().default(0),
   })
   .transform(
-    ({ ok, id, attachmentsRemoved }) =>
-      ({ deleted: ok ?? false, id, attachmentsRemoved: attachmentsRemoved ?? 0 }) as const,
+    ({ ok, id, attachmentsRemoved }) => ({ deleted: ok, id, attachmentsRemoved }) as const,
   );
 
 export type CreateShipResult = z.output<typeof createResponseSchema>;
 export type DeleteShipResult = z.output<typeof deleteResponseSchema>;
 
-function parseOr<T>(schema: z.ZodType<T>, subject: string, value: unknown): T {
+function parseOr<S extends z.ZodType>(schema: S, subject: string, value: unknown): z.output<S> {
   const parsed = schema.safeParse(value);
   if (parsed.success) return parsed.data;
+  // The path, not just the message: "alreadyExists: expected boolean" is
+  // actionable where a bare "expected boolean" is not.
   throw new InvalidInput({
     subject,
-    issues: parsed.error.issues.map((failure) => failure.message),
+    issues: parsed.error.issues.map(({ message, path }) =>
+      path.length === 0 ? message : `${path.join(".")}: ${message}`,
+    ),
   });
 }
 
 export interface ShipsDeps {
   readonly apiKey: string;
-  readonly baseUrl?: string;
-  readonly fetchImpl?: typeof fetch;
 }
 
 function classify(status: number, detail: string): ShipsError {
@@ -83,10 +84,24 @@ function classify(status: number, detail: string): ShipsError {
   return new UpstreamError({ service: "ships", status, detail });
 }
 
-// oxlint-disable-next-line oxclippy/too-many-lines -- two symmetric API methods share authentication and error policy
+/**
+ * Passes a failure `classify` or `parseOr` already typed straight through;
+ * anything else reached us as a transport fault, which is retryable.
+ */
+function toShipsError(operation: string) {
+  return (cause: unknown): ShipsError =>
+    cause instanceof InvalidInput ||
+    cause instanceof RateLimited ||
+    cause instanceof Transient ||
+    cause instanceof UpstreamError
+      ? cause
+      : new Transient({
+          operation,
+          detail: cause instanceof Error ? cause.message : String(cause),
+        });
+}
+
 export function createShipsClient(deps: ShipsDeps) {
-  const baseUrl = (deps.baseUrl ?? SHIPS_URL).replace(/\/$/, "");
-  const doFetch = deps.fetchImpl ?? fetch;
   const headers = {
     Authorization: `Bearer ${deps.apiKey}`,
     "Content-Type": "application/json",
@@ -97,7 +112,7 @@ export function createShipsClient(deps: ShipsDeps) {
       Result.tryPromise(
         {
           try: async () => {
-            const response = await doFetch(`${baseUrl}/api/ships`, {
+            const response = await fetch(`${SHIPS_URL}/api/ships`, {
               method: "POST",
               headers,
               body: JSON.stringify(input),
@@ -112,16 +127,7 @@ export function createShipsClient(deps: ShipsDeps) {
 
             return parseOr(createResponseSchema, "ships create response", await response.json());
           },
-          catch: (cause) =>
-            cause instanceof InvalidInput ||
-            cause instanceof RateLimited ||
-            cause instanceof Transient ||
-            cause instanceof UpstreamError
-              ? cause
-              : new Transient({
-                  operation: "create ship",
-                  detail: cause instanceof Error ? cause.message : String(cause),
-                }),
+          catch: toShipsError("create ship"),
         },
         upstreamRetry,
       ),
@@ -139,8 +145,8 @@ export function createShipsClient(deps: ShipsDeps) {
       Result.tryPromise(
         {
           try: async () => {
-            const response = await doFetch(
-              `${baseUrl}/api/ships/${encodeURIComponent(messageId)}`,
+            const response = await fetch(
+              `${SHIPS_URL}/api/ships/${encodeURIComponent(messageId)}`,
               { method: "DELETE", headers },
             );
 
@@ -156,16 +162,7 @@ export function createShipsClient(deps: ShipsDeps) {
 
             return parseOr(deleteResponseSchema, "ships delete response", await response.json());
           },
-          catch: (cause) =>
-            cause instanceof InvalidInput ||
-            cause instanceof RateLimited ||
-            cause instanceof Transient ||
-            cause instanceof UpstreamError
-              ? cause
-              : new Transient({
-                  operation: "delete ship",
-                  detail: cause instanceof Error ? cause.message : String(cause),
-                }),
+          catch: toShipsError("delete ship"),
         },
         upstreamRetry,
       ),

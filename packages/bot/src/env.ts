@@ -18,7 +18,30 @@
 import { createEnv } from "@t3-oss/env-core";
 import { z } from "zod";
 
+/**
+ * A credential, presented verbatim.
+ *
+ * Deliberately *not* trimmed, matching `packages/agents/agent/env.ts`.
+ * `AGENT_INGRESS_SECRET` and `BOT_INGRESS_SECRET` are compared byte for byte by
+ * `bearerMatches`, and the agent's Sandbox supervisor injects the *same raw
+ * string* into this process that the agent itself holds. Trimming on one side
+ * only would turn a value with stray whitespace — which both sides previously
+ * agreed on — into a 401 on every request in both directions.
+ */
 const secret = z.string().min(1);
+
+/**
+ * A decimal port, parsed rather than coerced.
+ *
+ * `z.coerce.number()` runs `Number()`, which happily accepts `" 8080 "`, `0x1F`
+ * and `1e3`. Requiring the digits first means the value in the environment is
+ * the value the process binds.
+ */
+const port = z
+  .string()
+  .regex(z.regexes.integer)
+  .transform((value) => Number.parseInt(value, 10))
+  .pipe(z.int().positive());
 
 export const env = createEnv({
   server: {
@@ -28,20 +51,20 @@ export const env = createEnv({
     DISCORD_BOT_CLIENT_ID: secret,
 
     /** Base URL of the eve deployment. No trailing slash. */
-    AGENT_URL: z.string().url(),
+    AGENT_URL: z.url({ protocol: /^https?$/u }),
     /** Bearer the bot presents to the agent. */
     AGENT_INGRESS_SECRET: secret,
     /** Bearer the agent must present on the parked callback. */
     BOT_INGRESS_SECRET: secret,
 
-    UPSTASH_REDIS_REST_URL: z.string().url(),
+    UPSTASH_REDIS_REST_URL: z.url({ protocol: /^https?$/u }),
     UPSTASH_REDIS_REST_TOKEN: secret,
 
     /**
      * Health server port. The Vercel Sandbox supervisor polls it, and Fly or a
      * homelab host uses it as a liveness probe — the same endpoint serves both.
      */
-    PORT: z.coerce.number().int().positive().default(8080),
+    PORT: port.default(8080),
 
     /** `/privacy`, backed by pdb.purduehackers.com. */
     PRIVACY_DB_API_KEY: secret,
@@ -59,10 +82,10 @@ export const env = createEnv({
     /** Mirroring public messages to the dashboard at api.purduehackers.com. */
     PHACK_API_TOKEN: secret,
 
-    /** Voice-message transcription via Groq whisper-large-v3. */
+    /** Voice-message transcription via Groq whisper-large-v3-turbo. */
     GROQ_API_KEY: secret,
 
-    SENTRY_DSN: z.string().url().optional(),
+    SENTRY_DSN: z.url({ protocol: /^https?$/u }).optional(),
   },
   runtimeEnv: process.env,
   /**

@@ -22,7 +22,7 @@
 import { DISCORD_IDS } from "@repo/shared/discord";
 import { Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
-import type { Message } from "discord.js";
+import type { AnyThreadChannel, Message } from "discord.js";
 
 import { defineEvent } from "../framework/events.ts";
 
@@ -64,18 +64,18 @@ const AUTO_ARCHIVE_MINUTES = 4_320;
 /** Thread names are capped at 100; 54 leaves room for the author prefix. */
 const THREAD_TITLE_CHARS = 54;
 
-function randomItem<T>(items: readonly T[], random: () => number = Math.random): T | undefined {
-  return items[Math.floor(random() * items.length)];
+function randomItem<T>(items: readonly T[]): T | undefined {
+  return items[Math.floor(Math.random() * items.length)];
 }
 
 /**
  * Whether the message shows work.
  *
- * Exported because the forwarded-snapshot case is the subtle part: a forwarded
- * message keeps its URL and attachments in the snapshot, so checking only the
- * body would delete legitimate forwards.
+ * The forwarded-snapshot case is the subtle part: a forwarded message keeps its
+ * URL and attachments in the snapshot, so checking only the body would delete
+ * legitimate forwards.
  */
-export function showsWork(message: Message): boolean {
+function showsWork(message: Message): boolean {
   if (URL_PATTERN.test(message.content)) return true;
   if (message.attachments.size > 0) return true;
 
@@ -88,7 +88,7 @@ export function showsWork(message: Message): boolean {
 }
 
 /** The text DM'd back so a deleted post is never simply lost. */
-export function savedMessageNotice(channelId: string, content: string): string {
+function savedMessageNotice(channelId: string, content: string): string {
   return (
     `Hey there, it looks like you tried to send a message in <#${channelId}> without an attachment or URL!! D:\n\n` +
     `It's okay!! I saved your message for you!! \u{1F643}\u{200D}\u{2195}\u{FE0F}\n\n` +
@@ -101,7 +101,7 @@ export function savedMessageNotice(channelId: string, content: string): string {
 
 async function celebrate(
   message: Message,
-  thread: { send: (content: string) => Promise<unknown> },
+  thread: AnyThreadChannel,
   responses: readonly string[],
   emojis: readonly string[],
 ): Promise<void> {

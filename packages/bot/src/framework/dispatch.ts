@@ -24,7 +24,7 @@ import type { HitlInteractionHandler } from "../agent/hitl/interaction.ts";
 import type { SlashCommand } from "./commands.ts";
 import { traceOperation } from "./observability.ts";
 
-export interface DispatchDeps {
+interface DispatchDeps {
   readonly commands: readonly SlashCommand[];
   readonly reporter: Reporter;
   readonly hitl: HitlInteractionHandler;
@@ -48,7 +48,7 @@ async function notify(interaction: ChatInputCommandInteraction, body: string): P
 
 const INTERACTION_CLAIM_TTL_SECONDS = 24 * 60 * 60;
 
-export async function claimCommandInteraction(
+async function claimCommandInteraction(
   redis: RedisClient,
   interactionId: string,
 ): Promise<Result<boolean, Transient>> {

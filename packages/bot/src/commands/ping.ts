@@ -14,7 +14,7 @@ const DISCORD_EPOCH = 1_420_070_400_000n;
  * the interesting number is how long the round trip took, and our clock and
  * Discord's are not the same clock.
  */
-export function latencyFromSnowflake(id: string, now: number): Result<number, NotFound> {
+function latencyFromSnowflake(id: string, now: number): Result<number, NotFound> {
   // Parsed as a BigInt throughout: a real snowflake is a 64-bit value well past
   // Number.MAX_SAFE_INTEGER, so any Number-based validation rejects all of them.
   if (!/^\d+$/.test(id)) return Result.err(new NotFound({ kind: "snowflake", id }));

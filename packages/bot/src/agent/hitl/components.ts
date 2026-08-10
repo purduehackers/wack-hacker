@@ -12,6 +12,7 @@ import type {
   APIComponentInMessageActionRow,
 } from "discord.js";
 import { ButtonStyle, ComponentType } from "discord.js";
+import { z } from "zod";
 
 const MAX_ROWS = 5;
 
@@ -31,7 +32,7 @@ export type HitlLocator =
       readonly authorizationIndex: number;
     };
 
-export interface HitlView {
+interface HitlView {
   readonly notice?: string;
   readonly components: APIActionRowComponent<APIComponentInMessageActionRow>[];
 }
@@ -191,11 +192,14 @@ export function renderHitl(intent: RenderIntent): HitlView {
   };
 }
 
+/**
+ * The same schema the wire contract declares `dispatchId` with, so a custom id
+ * this bot minted is never rejected by a stricter local copy of the format.
+ */
+const dispatchId = z.uuid();
+
 function isDispatchId(value: string | undefined): value is string {
-  return (
-    value !== undefined &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(value)
-  );
+  return dispatchId.safeParse(value).success;
 }
 
 function parseInputCustomId(customId: string): HitlLocator | undefined {

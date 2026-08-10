@@ -33,7 +33,7 @@ export type HackNightError = Forbidden | InvalidInput | Transient | UpstreamErro
  * Only one leading pictographic character is stripped, so a name that never had
  * a prefix simply gains one and repeated runs do not accumulate emoji.
  */
-export function withEmojiPrefix(currentName: string, emoji: string): string {
+function withEmojiPrefix(currentName: string, emoji: string): string {
   return `${emoji}${currentName.replace(/^\p{Extended_Pictographic}/u, "")}`;
 }
 
@@ -43,12 +43,12 @@ export function withEmojiPrefix(currentName: string, emoji: string): string {
  * Discord accepts almost anything in a channel name, so an unchecked value here
  * would let a typo rename the busiest channel in the server to arbitrary text.
  */
-export function isSingleEmoji(value: string): boolean {
+function isSingleEmoji(value: string): boolean {
   return /^\p{Extended_Pictographic}$/u.test(value);
 }
 
 /** Semver-ish, matching the dashboard's own expectation (for example `6.17`). */
-export function isVersionString(value: string): boolean {
+function isVersionString(value: string): boolean {
   return /^\d+\.\d+(\.\d+)?$/.test(value);
 }
 

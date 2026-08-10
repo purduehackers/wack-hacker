@@ -38,19 +38,18 @@ import { traceOperation } from "./observability.ts";
  * addressed to the bot. Keeping it a separate kind is what lets the router order
  * the two groups.
  */
-export type EventKind = "mention" | "message" | "messageDelete" | "reactionAdd" | "reactionRemove";
+type EventKind = "mention" | "message" | "messageDelete" | "reactionAdd" | "reactionRemove";
 
-export interface EventContext {
+interface EventContext {
   readonly client: Client<true>;
   readonly botUserId: string;
   /** True when this message also matched a mention handler. */
   readonly isBotMention: boolean;
 }
 
-export type ReactionLike = ClientEvents[Events.MessageReactionAdd][0];
 export type ReactorLike = ClientEvents[Events.MessageReactionAdd][1];
 
-export interface EventPayloads {
+interface EventPayloads {
   mention: ClientEvents[Events.MessageCreate][0];
   message: ClientEvents[Events.MessageCreate][0];
   messageDelete: ClientEvents[Events.MessageDelete][0];
@@ -67,11 +66,15 @@ export interface EventPayloads {
 /**
  * The payload-independent part of an event handler.
  *
- * `EventHandler` below pins this to Discord's payload for production. Keeping
- * the router core generic lets focused tests exercise ordering and deduplication
- * without manufacturing structurally invalid discord.js objects.
+ * `EventHandler` below pins this to the payload of a single kind. The router's
+ * internals stay parameterized on the payload alone, which is load-bearing:
+ * `mention` and `message` are distinct kinds over the same payload, so
+ * `runEventHandlerGroups` takes both buckets in one call. Keying those helpers
+ * on `EventKind` instead would demand `EventHandler<"mention" | "message">`,
+ * which neither bucket satisfies — each declares the narrower `kind` literal —
+ * and only a cast would bridge that.
  */
-export interface RoutedEventHandler<P> {
+interface RoutedEventHandler<P> {
   /** Used in logs and metric dimensions. */
   readonly name: string;
   readonly kind: EventKind;
@@ -83,7 +86,7 @@ export interface RoutedEventHandler<P> {
   readonly handle: (payload: P, context: EventContext) => Promise<Result<void, KnownError>>;
 }
 
-export interface EventHandler<K extends EventKind = EventKind> extends RoutedEventHandler<
+interface EventHandler<K extends EventKind = EventKind> extends RoutedEventHandler<
   EventPayloads[K]
 > {
   readonly kind: K;
@@ -106,19 +109,15 @@ export function defineEvent<K extends EventKind>(handler: EventHandler<K>): Even
 /**
  * Claims a key for the first caller and rejects later ones.
  *
- * Injected rather than importing Redis directly, so the router does not depend
- * on a store being reachable and a single-process deployment can pass an
- * in-memory implementation.
+ * Declared here and injected rather than importing Redis directly, so the
+ * router itself carries no dependency on a store being reachable.
  */
 export interface Deduplicator {
   /** True when this caller is the first to claim the key. */
   readonly claim: (key: string) => Promise<boolean>;
 }
 
-/** Never deduplicates. Correct only where every handler is idempotent. */
-export const noDedup: Deduplicator = { claim: async () => true };
-
-export interface RouterDeps {
+interface RouterDeps {
   readonly handlers: readonly AnyEventHandler[];
   readonly reporter: Reporter;
   readonly dedup: Deduplicator;
@@ -202,12 +201,8 @@ async function runAll<P>(
   await Promise.all(bucket.map((handler) => runHandler(handler, payload, context, deps)));
 }
 
-/**
- * Runs handler groups in declaration order while keeping siblings concurrent.
- * Mention and message handlers use this seam so the ordering guarantee is both
- * explicit and independently testable.
- */
-export async function runEventHandlerGroups<P>(
+/** Runs handler groups in declaration order while keeping siblings concurrent. */
+async function runEventHandlerGroups<P>(
   handlerGroups: readonly (readonly RoutedEventHandler<P>[])[],
   payload: P,
   context: EventContext,

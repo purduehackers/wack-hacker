@@ -18,23 +18,13 @@ import { Transient } from "@repo/shared/errors";
 import type { RedisClient } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
 
-import { fridayOfIndianaWeek, indianaDate } from "../time/indiana.ts";
+import { calendarDate } from "../utils/dates.ts";
 
 const THREAD_SLUG_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 export function generateEventSlug(date: Date): string {
-  const { year, month, day } = indianaDate(date);
+  const { year, month, day } = calendarDate(date);
   return `hack-night-${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-}
-
-/**
- * The Friday of the hack night week containing `date`.
- *
- * `(day + 2) % 7` maps Sunday to 2 and Saturday to 1, so both weekend days walk
- * back to the Friday that started the event rather than forward to the next one.
- */
-export function fridayOf(date: Date): Date {
-  return fridayOfIndianaWeek(date);
 }
 
 export interface ThreadSlugStore {

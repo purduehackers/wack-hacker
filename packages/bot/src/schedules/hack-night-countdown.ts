@@ -25,43 +25,22 @@ import { Result } from "@repo/shared/result";
 import type { Client } from "discord.js";
 
 import type { Schedule } from "../framework/schedules.ts";
-import { indianaWallClock, nextIndianaMidnight } from "../time/indiana.ts";
+import { nextMidnight, wallClockDate } from "../utils/dates.ts";
 
 const lightning = new LightningTime();
-
-/** The final spark of the day: the instant charges start ticking toward zero. */
-export const FINAL_SPARK = "f~f~f|0";
 
 /** 16 bolts × 16 zaps × 16 sparks = 4096 sparks in a day, so 21093.75 ms each. */
 const SPARK_MS = 86_400_000 / (16 * 16 * 16);
 
 /**
- * When the final spark begins, in local time.
+ * Current Lightning Time, for example `f~f~a|4`.
  *
- * Computed backwards from the next local midnight rather than via
- * `convertFromLightning(FINAL_SPARK)`, which truncates to whole seconds and so
- * returns 23:59:38.000 — nine hundred milliseconds early, while the clock still
- * reads `f~f~e|f`. Editing the message before the spark it announces has
- * actually begun is exactly the sort of off-by-a-bit that makes a countdown
- * feel wrong.
- *
- * Deriving from local midnight also keeps it correct across a DST boundary,
- * where the day is not 24 hours long.
- *
- * Rounded *up*: a spark is 21093.75 ms, so the boundary falls on a quarter
- * millisecond that `Date` cannot represent. Truncating would land at
- * 23:59:38.906, a hair before the spark, where the clock still reads
- * `f~f~e|f`. Ceiling lands on 23:59:38.907, the first millisecond that actually
- * reads `f~f~f|0`.
+ * Via `wallClockDate` because the library reads local component getters off the
+ * Date it is given: the process runs in UTC, so a raw instant would render UTC's
+ * Lightning Time and the countdown would never roll over to `0~0~0|0`.
  */
-export function finalSparkAt(at: Date): Date {
-  const midnight = nextIndianaMidnight(at);
-  return new Date(Math.ceil(midnight.getTime() - SPARK_MS));
-}
-
-/** Current Lightning Time, for example `f~f~a|4`. */
-export function lightningNow(at: Date): string {
-  return lightning.convertToLightning(indianaWallClock(at)).lightningString;
+function lightningNow(at: Date): string {
+  return lightning.convertToLightning(wallClockDate(at)).lightningString;
 }
 
 /**
@@ -70,7 +49,7 @@ export function lightningNow(at: Date): string {
  * No role ping on purpose: the Friday announcement already pings
  * `HACK_NIGHT_PING`, and twice in one evening is how a role gets muted.
  */
-export const UPCOMING_MESSAGE = "countdown is in two minutes!! ⚡⚡";
+const UPCOMING_MESSAGE = "countdown is in two minutes!! ⚡⚡";
 
 /**
  * The live message during the countdown.
@@ -80,7 +59,7 @@ export const UPCOMING_MESSAGE = "countdown is in two minutes!! ⚡⚡";
  * ticking *is* the countdown, which is why this message is re-edited on every
  * charge rather than written once.
  */
-export function happeningMessage(at: Date): string {
+function happeningMessage(at: Date): string {
   return `**countdown is happening!!** ⚡⚡\n\`${lightningNow(at)}\``;
 }
 
@@ -96,9 +75,21 @@ const CHARGES_PER_SPARK = 16;
  *
  * Absolute instants rather than repeated fixed sleeps, so a slow edit cannot
  * make the clock drift behind the real time it is displaying.
+ *
+ * Counted backwards from the next Indiana midnight rather than via
+ * `convertFromLightning`, which truncates to whole seconds and so returns
+ * 23:59:38.000 — nine hundred milliseconds early, while the clock still reads
+ * `f~f~e|f`. Deriving from that midnight also stays correct across a DST
+ * boundary, where the day is not 24 hours long.
+ *
+ * Each boundary is rounded *up*: a spark is 21093.75 ms, so it falls on a
+ * quarter millisecond that `Date` cannot represent. Truncating would land at
+ * 23:59:38.906, a hair before the spark, where the clock still reads
+ * `f~f~e|f`. Ceiling lands on 23:59:38.907, the first millisecond that actually
+ * reads `f~f~f|0`.
  */
-export function countdownTicks(at: Date): readonly Date[] {
-  const midnight = nextIndianaMidnight(at);
+function countdownTicks(at: Date): readonly Date[] {
+  const midnight = nextMidnight(at);
   const sparkStart = midnight.getTime() - SPARK_MS;
 
   const ticks: Date[] = [];
@@ -134,7 +125,7 @@ const MAX_LEAD_MS = CHARGE_MS / 4;
  * uniformly a little late still reads as a smooth countdown; one that is
  * centred but jittery reads as skipping.
  */
-export function leadFrom(samplesMs: readonly number[]): number {
+function leadFrom(samplesMs: readonly number[]): number {
   const usable = samplesMs.filter((sample) => Number.isFinite(sample) && sample >= 0);
   if (usable.length === 0) return 0;
 
@@ -150,7 +141,10 @@ const LEAD_SAMPLES = 3;
 const LEAD_SAMPLE_GAP_MS = 250;
 
 /** How long before the first charge to start probing. Covers the probe run. */
-export const LEAD_WARMUP_MS = 2_000;
+const LEAD_WARMUP_MS = 2_000;
+
+const now = () => new Date();
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /**
  * Measures round-trip time to Discord's REST API, and warms the connection.
@@ -173,36 +167,24 @@ export const LEAD_WARMUP_MS = 2_000;
  * That is the better direction to miss in: uniformly late reads as smooth,
  * early reads as the clock jumping ahead of itself.
  */
-export async function measureLead(
-  rest: Pick<Client["rest"], "get">,
-  deps: { readonly now: () => Date; readonly sleep: (ms: number) => Promise<void> },
-): Promise<number> {
+async function measureLead(rest: Pick<Client["rest"], "get">): Promise<number> {
   const samples: number[] = [];
 
   for (let probe = 0; probe < LEAD_SAMPLES; probe += 1) {
-    const startedAt = deps.now().getTime();
+    const startedAt = now().getTime();
     try {
       await rest.get("/users/@me");
-      samples.push(deps.now().getTime() - startedAt);
+      samples.push(now().getTime() - startedAt);
     } catch {
       // A failed probe tells us nothing about latency; the median covers it.
     }
-    if (probe < LEAD_SAMPLES - 1) await deps.sleep(LEAD_SAMPLE_GAP_MS);
+    if (probe < LEAD_SAMPLES - 1) await sleep(LEAD_SAMPLE_GAP_MS);
   }
 
   return leadFrom(samples);
 }
 
-export interface CountdownDeps {
-  readonly now?: () => Date;
-  readonly sleep?: (ms: number) => Promise<void>;
-}
-
-export function hackNightCountdown(deps: CountdownDeps = {}) {
-  const now = deps.now ?? (() => new Date());
-  const sleep =
-    deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
-
+export function hackNightCountdown() {
   return {
     name: "hack-night-countdown",
     // 23:58 on hack night. Two minutes before midnight, which is two minutes
@@ -228,7 +210,7 @@ export function hackNightCountdown(deps: CountdownDeps = {}) {
           const untilWarmup = firstTick.getTime() - LEAD_WARMUP_MS - now().getTime();
           if (untilWarmup > 0) await sleep(untilWarmup);
 
-          const lead = await measureLead(client.rest, { now, sleep });
+          const lead = await measureLead(client.rest);
 
           // Absolute instants, so a slow edit shortens the next wait instead of
           // pushing the whole countdown late. The cron fires on the minute; the

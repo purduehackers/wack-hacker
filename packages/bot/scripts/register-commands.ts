@@ -5,18 +5,34 @@ import { UpstreamError, httpStatusOf, serializeError } from "@repo/shared/errors
 import { Result } from "@repo/shared/result";
 import { REST, Routes } from "discord.js";
 import type { RESTPostAPIChatInputApplicationCommandsJSONBody } from "discord.js";
+import { z } from "zod";
 
-import { builder as hackNight } from "../commands/hack-night.ts";
-import { ping } from "../commands/ping.ts";
-import { builder as privacy } from "../commands/privacy.ts";
+import { builder as hackNight } from "../src/commands/hack-night.ts";
+import { ping } from "../src/commands/ping.ts";
+import { builder as privacy } from "../src/commands/privacy.ts";
 
-export const registrationBody: readonly RESTPostAPIChatInputApplicationCommandsJSONBody[] = [
+/**
+ * Only the two variables this script needs.
+ *
+ * `src/env.ts` validates the bot's *whole* environment, which this script does
+ * not have and must not require: registering commands needs a token and an
+ * application id, not a Groq key.
+ *
+ * Untrimmed, for the same reason `src/env.ts` leaves a credential untrimmed:
+ * the value presented to Discord is the value that was configured.
+ */
+const credentialsSchema = z.object({
+  DISCORD_BOT_TOKEN: z.string().min(1),
+  DISCORD_BOT_CLIENT_ID: z.string().min(1),
+});
+
+const registrationBody: readonly RESTPostAPIChatInputApplicationCommandsJSONBody[] = [
   ping.builder.toJSON(),
   privacy.toJSON(),
   hackNight.toJSON(),
 ];
 
-export async function registerCommands(deps: {
+async function registerCommands(deps: {
   readonly token: string;
   readonly applicationId: string;
   readonly guildId: string;
@@ -45,17 +61,16 @@ async function main(): Promise<void> {
     process.exitCode = 1;
     return;
   }
-  const token = process.env["DISCORD_BOT_TOKEN"];
-  const applicationId = process.env["DISCORD_BOT_CLIENT_ID"];
-  if (!token || !applicationId) {
+  const credentials = credentialsSchema.safeParse(process.env);
+  if (!credentials.success) {
     console.error("DISCORD_BOT_TOKEN and DISCORD_BOT_CLIENT_ID are required");
     process.exitCode = 1;
     return;
   }
 
   const outcome = await registerCommands({
-    token,
-    applicationId,
+    token: credentials.data.DISCORD_BOT_TOKEN,
+    applicationId: credentials.data.DISCORD_BOT_CLIENT_ID,
     guildId: DISCORD_GUILD_ID,
     body: registrationBody,
   });
