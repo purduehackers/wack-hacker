@@ -9,6 +9,7 @@
     "check:serialization": "bun scripts/check-serialization-boundaries.ts",
     "dev": "eve dev",
     "info": "eve info",
+    "readmes": "bun scripts/render-subagent-readmes.ts",
     "sandbox": "bun scripts/sandbox-admin.ts",
     "start": "eve start"
   },

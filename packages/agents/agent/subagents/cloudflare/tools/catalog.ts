@@ -1,8 +1,8 @@
 import { defineDynamic, defineTool } from "eve/tools";
 
 import { guardToolExecution } from "../../../lib/core/serialization.ts";
+import { CLOUDFLARE_TOOLS } from "../lib/registry.ts";
 import { CLOUDFLARE_RUNTIME } from "../lib/runtime.ts";
-import { CLOUDFLARE_TOOLS } from "../lib/tool-registry.ts";
 
 const CLOUDFLARE_TOOL_NAMES = Object.keys(CLOUDFLARE_TOOLS);
 
