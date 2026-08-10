@@ -7,7 +7,7 @@ import {
   redactProviderSecrets,
   redactProviderText,
 } from "../../../lib/policy/provider-redaction.ts";
-import { VERCEL_TOOLS } from "./tool-registry.ts";
+import { VERCEL_TOOLS } from "./registry.ts";
 
 export const VERCEL_RUNTIME = createDomainRuntime({
   domain: "vercel",

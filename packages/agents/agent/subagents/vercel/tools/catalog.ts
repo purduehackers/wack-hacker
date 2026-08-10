@@ -1,8 +1,8 @@
 import { defineDynamic, defineTool } from "eve/tools";
 
 import { guardToolExecution } from "../../../lib/core/serialization.ts";
+import { VERCEL_TOOLS } from "../lib/registry.ts";
 import { VERCEL_RUNTIME } from "../lib/runtime.ts";
-import { VERCEL_TOOLS } from "../lib/tool-registry.ts";
 
 const VERCEL_TOOL_NAMES = Object.keys(VERCEL_TOOLS);
 
@@ -28,7 +28,7 @@ export default defineDynamic({
                   async () => await VERCEL_RUNTIME.executeTool(toolName, input, toolCtx),
                 ),
             }),
-          ] as const;
+          ];
         }),
       );
     },

@@ -1,0 +1,22 @@
+import { z } from "zod";
+
+import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
+import { vercel } from "../../client.ts";
+import { pageLimit, TEAM } from "../../constants.ts";
+
+export const list_flags = defineTool({
+  description: "List Vercel feature flags for a project.",
+  access: { risk: "read" },
+  input: z.strictObject({
+    project_id_or_name: z.string(),
+    limit: pageLimit.optional(),
+  }),
+  execute: async ({ project_id_or_name, limit }) => {
+    const result = await vercel().featureFlags.listFlags({
+      ...TEAM,
+      projectIdOrName: project_id_or_name,
+      limit,
+    });
+    return JSON.stringify(result);
+  },
+});

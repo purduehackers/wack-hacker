@@ -1,6 +1,6 @@
 import { Vercel } from "@vercel/sdk";
 
-import { env } from "./config.ts";
+import { env } from "./constants.ts";
 
 let client: Vercel | undefined;
 
