@@ -75,38 +75,82 @@ Guild commands register automatically after a merge to `main`. To register from 
 cd packages/bot && CONFIRM_COMMAND_GUILD=772576325897945119 bun run register-commands
 ```
 
-### Checks
+## Deploying to Vercel
+
+One Vercel project, rooted at `packages/agents`. The bot is **not** a Vercel project — it is a container the agent starts and supervises.
+
+`eve deploy` cannot resolve the `@repo/shared` workspace dependency, so the project must build from the repository root.
+
+### 1. Create the project
 
 ```bash
-bun run lint     # oxlint — type-aware, so this reports TypeScript errors too
-bun run format   # oxfmt
-bun run build
+bunx vercel link            # from the repository root
 ```
 
-There is no separate `typecheck` script: oxlint runs the type checker. There is no test suite — see [What this does not have](#what-this-does-not-have).
+In project settings:
 
-## Container
+| Setting                                  | Value                                                  |
+| ---------------------------------------- | ------------------------------------------------------ |
+| Root Directory                           | `packages/agents`                                      |
+| Include files outside the root directory | **enabled** — required for `@repo/shared`              |
+| Install Command                          | `bun install --frozen-lockfile` (run at the repo root) |
+| Build Command                            | `bun run build`                                        |
 
-The bot image is host-agnostic. Build from the repository root so the shared workspace is in context:
+### 2. Set environment variables
+
+`.env.example` documents every variable and which capability it unlocks. The minimum for a running agent:
 
 ```bash
-docker build -f packages/bot/Dockerfile -t wack-hacker-bot .
-docker run --env-file packages/bot/.env.local -p 8080:8080 wack-hacker-bot
+bunx vercel env add AGENT_INGRESS_SECRET production   # bot → agent bearer
+bunx vercel env add BOT_INGRESS_SECRET production     # agent → bot bearer
+bunx vercel env add UPSTASH_REDIS_REST_URL production
+bunx vercel env add UPSTASH_REDIS_REST_TOKEN production
+bunx vercel env add TURSO_DATABASE_URL production
+bunx vercel env add TURSO_AUTH_TOKEN production
+bunx vercel env add DISCORD_BOT_TOKEN production
 ```
 
-Vercel Sandbox is the primary host; the same image runs on any persistent container host. Sandbox has a 24-hour cap, so an Eve schedule in `packages/agents` rotates the container before it expires. Persistent hosts do not need that — leave `BOT_SANDBOX_ENABLED=false`.
+Provider credentials are optional. A domain whose credential is absent stays visible to role policy and fails closed at execution — it is not silently hidden.
 
-## Deployment
+### 3. Apply the database schema
 
-The Eve Vercel project is rooted at `packages/agents` and is the only Vercel project here. Promoting a reviewed bot digest is an _agent_ deployment, because `BOT_IMAGE` is agent configuration read by the bot-supervisor schedule.
+```bash
+cd packages/shared && bun run db:migrate
+```
 
-Do not use abbreviated CLI recipes for production. Reviewed promotion, database quiescence and recovery, supervision cutover, smoke, and rollback are documented in the [operations runbooks](docs/operations/README.md).
+### 4. Deploy the agent
 
-## What this does not have
+```bash
+bunx vercel deploy --prod
+```
 
-**No automated tests.** The previous suite characterized an architecture that no longer exists and was blocking the consolidation it was meant to protect. Skill and tool lifecycle behavior has no automated coverage and is verified by hand. The gates are formatting, type-aware lint, two structural checks (`check:capabilities`, `check:serialization`), a dependency audit, a migration check, and the build.
+### 5. Point it at a bot
 
-Known limitations are documented rather than elided — authored tool approvals have a fail-closed projection limitation, model-controlled media fetch has no host allowlist, and the renderer shares Discord rate-limit buckets with the agent's message tools. See [System internals](docs/system/README.md).
+The agent needs somewhere to send turns. Two options:
+
+**A persistent container host** (Fly, Railway, a VM) — simplest. Run the bot image under that host's restart and health policy, then:
+
+```bash
+bunx vercel env add BOT_URL production              # https://your-bot-host
+bunx vercel env add BOT_SANDBOX_ENABLED production  # false
+```
+
+**Vercel Sandbox** — no separate host, but Sandbox caps instances at 24 hours, so the agent runs a five-minute `bot-supervisor` schedule that rotates them. Set `BOT_SANDBOX_ENABLED=true` and `BOT_IMAGE` to a digest-pinned VCR reference:
+
+```bash
+bunx vercel vcr login docker
+docker buildx build --platform linux/amd64 -f packages/bot/Dockerfile \
+  --output "type=image,name=vcr.vercel.com/<team>/<project>/wack-hacker-bot:$(git rev-parse HEAD),push=true" .
+bunx vercel env add BOT_IMAGE production   # vcr.vercel.com/...@sha256:<digest>
+```
+
+VCR images are project-scoped: build and log in with the _same_ project whose credentials start the sandbox, or Sandbox creation fails with image-not-found. `BOT_IMAGE` must be a full `@sha256:` digest, never a tag.
+
+### Releasing after the first deploy
+
+Do not repeat the manual steps above for production changes. Merging to `main` builds, scans, signs and attests a bot image (`image.yml`) without touching production. Promotion is a separate reviewed dispatch (`promote.yml`) gated on a protected `production` GitHub environment, which sets `BOT_IMAGE`, deploys the agent, and then waits for the supervisor to adopt the digest and report healthy.
+
+That flow, its required GitHub variables and secrets, the smoke check, and rollback are documented in the [operations runbooks](docs/operations/README.md). A successful Vercel deployment is not a successful bot release until the smoke check passes.
 
 ## Contributing
 
