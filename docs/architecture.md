@@ -140,7 +140,9 @@ packages/agents/agent
 │   ├── tools/catalog.ts                  # direct inline Eve defineTool declarations
 │   ├── skills/catalog.ts                 # defineDynamic + defineSkill skill map
 │   ├── hooks/                            # thin Eve-discovered policy hook exports
-│   └── lib/{tool-registry,runtime}.ts    # provider specs and narrow runtime adapter
+│   └── lib/{registry,runtime}.ts        # tools + skill policy, narrow runtime adapter
+│       lib/tool_defs/<bundle>/<tool>.ts # one file per tool
+│       lib/skill_defs/<name>.md         # skill prose, imported as text
 │       └── operations/*.ts               # (discord) REST calls + response projections
 └── schedules/                            # durable schedules and dispatch
 
@@ -267,8 +269,8 @@ resolver and provide an inline `execute` closure. This source shape is required
 for Eve replay reconstruction; a factory must not hide `defineTool`. The inline
 closure delegates to the shared runtime. GitHub, Sentry, and Vercel retain
 provider-secret redaction for requested actions, execution audit input, errors,
-and output. Feature parity remains exact across 11 native domains, 659 tools,
-104 skills, and 13 subagents.
+and output. Feature parity remains exact across 12 native domains, 689 tools,
+109 skills, and 14 subagents.
 
 ## Shared deployment and schedule decoders
 

@@ -27,16 +27,20 @@ scripts/              check-capabilities, check-serialization-boundaries, sandbo
 
 ## Subagents
 
-Eleven native provider domains plus two auxiliary (`code`, `docs`) — **659 tools across 104 skills**.
+Twelve native provider domains plus two auxiliary (`code`, `docs`) — **689 tools across 109 skills**.
 
-| Domain   | Tools | Skills |     | Domain   | Tools | Skills |
-| -------- | ----: | -----: | --- | -------- | ----: | -----: |
-| vercel   |   166 |     11 |     | linear   |    64 |     16 |
-| github   |   119 |     16 |     | cms      |    54 |      6 |
-| discord  |    68 |     14 |     | outreach |    41 |      8 |
-| sentry   |    68 |     15 |     | figma    |    33 |      7 |
-| notion   |    24 |      4 |     | finance  |    16 |      6 |
-| shopping |     6 |      1 |     |          |       |        |
+| Domain  | Tools | Skills |     | Domain     | Tools | Skills |
+| ------- | ----: | -----: | --- | ---------- | ----: | -----: |
+| vercel  |   166 |     11 |     | outreach   |    42 |      8 |
+| github  |   119 |     16 |     | figma      |    33 |      7 |
+| discord |    68 |     14 |     | cloudflare |    29 |      5 |
+| sentry  |    68 |     15 |     | notion     |    24 |      4 |
+| linear  |    64 |     16 |     | finance    |    16 |      6 |
+| cms     |    54 |      6 |     | shopping   |     6 |      1 |
+
+Each domain's own `README.md` carries its skill tree and full tool table,
+generated from its registry; `AGENTS.md` beside it holds what the next person
+adding a tool there needs to know about the upstream API.
 
 Each domain has the same shape:
 
@@ -44,7 +48,9 @@ Each domain has the same shape:
 subagents/<domain>/
   agent.ts              dynamic resolver — returns the subagent, or hides it
   instructions.md       the subagent's system prompt
-  lib/tool-registry.ts  every operation, as defineDomainTool entries
+  lib/registry.ts       every operation and skill, in one registry
+  lib/tool_defs/        one file per tool, in skill-named bundles
+  lib/skill_defs/       skill prose as markdown, imported as text
   lib/runtime.ts        the domain's policy runtime adapter
   skills/catalog.ts     skills: name, minRole, criteria, tool membership
   tools/catalog.ts      dynamic tool resolution against current auth
@@ -118,7 +124,8 @@ It deliberately does **not** snapshot the surface. A `minRole` change is one lin
 
 ## Conventions
 
-Schemas are canonical zod 4 — top-level string formats, `z.int()`, `z.strictObject()` on every model-facing input, `z.codec()` for genuinely bidirectional conversions, `z.stringFormat()` for named formats so a rejection reports _which_ format failed. See [`docs/zod-4-anti-patterns.md`](../../docs/zod-4-anti-patterns.md).
+Schemas are canonical zod 4 — top-level string formats, `z.int()`, `z.strictObject()` on every model-facing input, `z.codec()` for genuinely bidirectional conversions, `z.stringFormat()` for named formats so a rejection reports _which_ format failed. The `rayhanadev/*` rules in `.oxlintrc.json` enforce this; a violation is a
+lint error, not a review comment.
 
 ## Upstream patches
 

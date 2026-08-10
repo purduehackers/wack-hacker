@@ -2,7 +2,7 @@
 
 AI agent for [Purdue Hackers](https://purduehackers.com), living in Discord. Mention it in a thread and it can read and act across the services the club runs on — GitHub, Linear, Notion, Vercel, Sentry, Figma, the CMS, the bank — without anyone leaving the channel.
 
-- **Talk to your tools.** 659 provider operations behind 104 role-gated skills, in one conversation.
+- **Talk to your tools.** 689 provider operations behind 109 role-gated skills, in one conversation.
 - **Conversations survive everything.** Threads persist across messages, restarts and deploys. Come back hours later and pick up where you left off.
 - **Permissions follow your Discord role.** Public users get safe reads; organizers unlock writes; admins get destructive operations. Every decision is fail-closed and audited.
 - **It schedules.** Ask for a reminder, a recurring post, or a one-off task at a specific time. Recurring jobs survive redeploys.
@@ -25,7 +25,7 @@ flowchart LR
   subgraph agents["packages/agents — Eve"]
     CH["Discord channel"]
     SE["session + policy"]
-    TO["11 domain subagents"]
+    TO["12 domain subagents"]
   end
 
   ST["ConversationStore"]
@@ -154,4 +154,4 @@ That flow, its required GitHub variables and secrets, the smoke check, and rollb
 
 ## Contributing
 
-Read [`AGENTS.md`](AGENTS.md) first — it carries the project conventions, including the lint policy. In short: schemas are canonical zod 4, type erasures are not accepted, and a lint suppression must be inline, single-rule, and carry its reason. [`docs/zod-4-anti-patterns.md`](docs/zod-4-anti-patterns.md) catalogues the patterns this codebase rejects and what to write instead.
+Read [`AGENTS.md`](AGENTS.md) first — it carries the project conventions, including the lint policy. In short: schemas are canonical zod 4, type erasures are not accepted, and a lint suppression must be inline, single-rule, and carry its reason. The zod rules are enforced by `@rayhanadev/ox`, not by a checklist.
