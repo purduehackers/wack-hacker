@@ -2,7 +2,7 @@ import { UpstreamError } from "@repo/shared/errors";
 
 import { env } from "../../../env.ts";
 import { createDomainRuntime } from "../../../lib/policy/domain-runtime.ts";
-import { LINEAR_TOOLS } from "./tool-registry.ts";
+import { LINEAR_TOOLS } from "./registry.ts";
 
 export const LINEAR_RUNTIME = createDomainRuntime({
   domain: "linear",

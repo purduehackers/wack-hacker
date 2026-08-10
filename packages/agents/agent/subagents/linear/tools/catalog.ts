@@ -1,8 +1,8 @@
 import { defineDynamic, defineTool } from "eve/tools";
 
 import { guardToolExecution } from "../../../lib/core/serialization.ts";
+import { LINEAR_TOOLS } from "../lib/registry.ts";
 import { LINEAR_RUNTIME } from "../lib/runtime.ts";
-import { LINEAR_TOOLS } from "../lib/tool-registry.ts";
 
 const LINEAR_TOOL_NAMES = Object.keys(LINEAR_TOOLS);
 

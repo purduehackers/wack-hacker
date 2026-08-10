@@ -1,4 +1,18 @@
+import {
+  InitiativeStatus,
+  InitiativeUpdateHealthType,
+  ProjectUpdateHealthType,
+  UserRoleType,
+} from "@linear/sdk";
 import { z } from "zod";
+
+/**
+ * Input fields, enums and response sentinels shared across this domain's tools.
+ *
+ * Anything more than one tool file needs lives here rather than being copied:
+ * the issue field set alone is read by two write tools, and a field that drifts
+ * between create and update is a bug the type system cannot see.
+ */
 
 export const issueRelationSchema = z
   .array(
@@ -43,3 +57,32 @@ export const issueFields = {
   cycleId: z.string().exactOptional(),
   parentId: z.string().exactOptional().describe("Parent issue ID for sub-issues"),
 };
+
+/** Health on a project update; distinct from the initiative-update enum. */
+export const projectUpdateHealth = z.enum(ProjectUpdateHealthType).exactOptional();
+
+/** Health on an initiative update; distinct from the project-update enum. */
+export const initiativeUpdateHealth = z.enum(InitiativeUpdateHealthType).exactOptional();
+
+export const initiativeStatus = z.enum(InitiativeStatus);
+
+/**
+ * The invite roles this domain offers, mapped to Linear's enum. "member" is
+ * Linear's `User`, and the rename is deliberate: nobody asks to invite someone
+ * as a "user".
+ */
+export const INVITE_ROLE: Record<"admin" | "member" | "guest", UserRoleType> = {
+  admin: UserRoleType.Admin,
+  member: UserRoleType.User,
+  guest: UserRoleType.Guest,
+};
+
+/**
+ * Value the label projections report for a workspace-wide label, which has no
+ * team. Every label in a list keeps the same key set so the model can compare
+ * rows, which means "no team" has to serialize as an explicit null rather than
+ * a missing key. One named sentinel keeps the label tools under the no-null
+ * rule.
+ */
+// oxlint-disable-next-line unicorn/no-null -- serialized label rows keep a stable key set, so an unscoped label is an explicit null
+export const NO_TEAM = null;
