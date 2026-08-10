@@ -10,7 +10,7 @@ public site the moment it is saved — `published` and `visible` are the only
 things standing between a draft and a visitor.
 
 It does not own mail delivery. Payload's `afterChange` hooks dispatch through
-Resend; this domain only flips the flag that starts them. One-off transactional
+the CMS itself; this domain only flips the flag that starts them. One-off transactional
 mail belongs to the `cloudflare` subagent's Email Sending tools, and CRM
 outreach belongs to `outreach`, which honors Do Not Contact and records the
 send. It also does not own the websites themselves — the events site and the
@@ -68,7 +68,7 @@ Manage events, RSVPs, and email blasts on cms.purduehackers.com
 | `list_rsvps`      | read        | public    | List RSVPs across events.                                                                                              |
 | `publish_event`   | destructive | organizer | Mark an event as published (visible on the website).                                                                   |
 | `send_blast`      | destructive | organizer | Fire the email blast for this event to all active RSVPs (sets `send: true`).                                           |
-| `send_email`      | destructive | organizer | Fire the email blast (flips `send: true`, Payload's afterChange hook dispatches real emails via Resend, then resets s… |
+| `send_email`      | destructive | organizer | Fire the email blast (flips `send: true`, Payload's afterChange hook dispatches the real emails, then resets send to … |
 | `unpublish_event` | destructive | organizer | Mark an event as unpublished (hidden from the website).                                                                |
 | `update_email`    | write       | organizer | Update an email draft's subject/body or retarget it to a different event.                                              |
 | `update_event`    | write       | organizer | Update an event by ID.                                                                                                 |

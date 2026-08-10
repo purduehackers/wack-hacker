@@ -12,7 +12,7 @@ export default defineDynamic({
       }
       return defineAgent({
         description:
-          "Drive the Notion-based CRM — query Companies/Contacts/Deals, enrich leads with emails, send outreach via Resend, and track send/open/click/bounce state. When the user asks about the CRM, sponsorships, donors, leads, outreach emails, Deals, or sales pipeline activity.",
+          "Drive the Notion-based CRM — query Companies/Contacts/Deals, enrich leads with verified email addresses, and send individual outreach mail recorded against the row that received it. When the user asks about the CRM, sponsorships, donors, leads, outreach emails, Deals, or sales pipeline activity.",
         model: "deepseek/deepseek-v4-flash-0731",
         modelOptions: {
           providerOptions: {

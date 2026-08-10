@@ -269,8 +269,8 @@ resolver and provide an inline `execute` closure. This source shape is required
 for Eve replay reconstruction; a factory must not hide `defineTool`. The inline
 closure delegates to the shared runtime. GitHub, Sentry, and Vercel retain
 provider-secret redaction for requested actions, execution audit input, errors,
-and output. Feature parity remains exact across 12 native domains, 689 tools,
-109 skills, and 14 subagents.
+and output. Feature parity remains exact across 12 native domains, 670 tools,
+106 skills, and 14 subagents.
 
 ## Shared deployment and schedule decoders
 

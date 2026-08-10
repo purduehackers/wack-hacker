@@ -1,5 +1,5 @@
 ---
-description: Send one outreach email to one person, and inspect individual sends.
+description: Send one outreach email to one person, from the CRM row that identifies them.
 ---
 
 ## When to use
@@ -8,7 +8,7 @@ Use when the user wants to email a specific company or contact, check the delive
 
 ## Relevant tools
 
-`send_outreach_email`, `get_email`, `cancel_email`
+`send_outreach_email`
 
 ## Instructions
 
@@ -19,8 +19,8 @@ Use when the user wants to email a specific company or contact, check the delive
 - On success it writes the message id and status back to the Notion row itself. Do not write those properties by hand.
 </sending>
 
-<inspecting>
-- get_email returns the current delivery status (sent, delivered, bounced, complained, opened, clicked).
-- cancel_email only works on scheduled emails that haven't sent yet.
-- For mass campaigns use the broadcasts skill, not this one.
-</inspecting>
+<after-sending>
+- Cloudflare returns a `message_id`, which the tool writes to the row's `Last Outreach ID`.
+- Nothing here looks a send up afterwards. `Sent` means "we sent it", not "it was delivered" — say so rather than implying delivery.
+- There is no scheduled send and therefore nothing to cancel.
+</after-sending>

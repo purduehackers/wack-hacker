@@ -27,11 +27,11 @@ scripts/              check-capabilities, check-serialization-boundaries, sandbo
 
 ## Subagents
 
-Twelve native provider domains plus two auxiliary (`code`, `docs`) — **689 tools across 109 skills**.
+Twelve native provider domains plus two auxiliary (`code`, `docs`) — **670 tools across 106 skills**.
 
 | Domain  | Tools | Skills |     | Domain     | Tools | Skills |
 | ------- | ----: | -----: | --- | ---------- | ----: | -----: |
-| vercel  |   166 |     11 |     | outreach   |    42 |      8 |
+| vercel  |   166 |     11 |     | outreach   |    23 |      5 |
 | github  |   119 |     16 |     | figma      |    33 |      7 |
 | discord |    68 |     14 |     | cloudflare |    29 |      5 |
 | sentry  |    68 |     15 |     | notion     |    24 |      4 |

@@ -28,7 +28,6 @@ export const OUTREACH_RUNTIME = createDomainRuntime({
     CLOUDFLARE_API_TOKEN: env.CLOUDFLARE_API_TOKEN,
     HUNTER_API_KEY: env.HUNTER_API_KEY,
     NOTION_TOKEN: env.NOTION_TOKEN,
-    RESEND_API_KEY: env.RESEND_API_KEY,
   },
   configurationError: (name, input) => {
     const derivesDomainFromNotion =

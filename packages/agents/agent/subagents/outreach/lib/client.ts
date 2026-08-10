@@ -1,19 +1,10 @@
 import { UpstreamError } from "@repo/shared/errors";
-import { Resend } from "resend";
 import { z } from "zod";
 
 import { env } from "../../../env.ts";
 import { notion } from "../../notion/lib/client.ts";
 
 export { notion };
-
-let resendClient: Resend | undefined;
-
-/** Lazy Resend client — constructed on first use so importing this module never needs the key. */
-export function resend(): Resend {
-  if (!resendClient) resendClient = new Resend(env.RESEND_API_KEY ?? "");
-  return resendClient;
-}
 
 export async function hunter<S extends z.ZodType>(
   path: string,

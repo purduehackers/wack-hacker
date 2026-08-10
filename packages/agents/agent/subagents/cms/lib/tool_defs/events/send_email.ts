@@ -6,7 +6,7 @@ import { projectEmail } from "../../constants.ts";
 
 export const send_email = defineTool({
   description:
-    "Fire the email blast (flips `send: true`, Payload's afterChange hook dispatches real emails via Resend, then resets send to false). Destructive external side effect — confirm the draft is final before calling.",
+    "Fire the email blast (flips `send: true`, Payload's afterChange hook dispatches the real emails, then resets send to false). Destructive external side effect — confirm the draft is final before calling.",
   access: { risk: "destructive" },
   input: z.strictObject({ id: documentId }),
   execute: async ({ id }) => {

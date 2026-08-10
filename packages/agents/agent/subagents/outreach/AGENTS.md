@@ -7,16 +7,24 @@ upstream API does and where it will surprise you.
 ## Upstream
 
 Three upstreams in one domain: Notion (the CRM, via `../../notion/lib/client.ts`),
-Hunter.io (`HUNTER_API_KEY`, email finding), Resend (`RESEND_API_KEY`, audiences
-and broadcasts) and Cloudflare (`CLOUDFLARE_API_TOKEN`, the 1:1 send).
+Hunter.io (`HUNTER_API_KEY`, email finding) and Cloudflare
+(`CLOUDFLARE_API_TOKEN`, the 1:1 send).
 
 Each tool declares what it needs with `requires` on its spec, and the runtime
 resolves it against the `credentials` map. Do not add another name-keyed `Set`
 in `configurationError` — the hook is for conditions a single env key cannot
 express, and there is one such case left.
 
-The Resend audience and broadcast tools are slated to move to Payload
-collections; do not build new work on them.
+**There is no bulk-mail tooling here.** Resend and its 19 tools — audiences,
+broadcasts, sending domains, and email status lookup — were removed rather than
+carried. Audience and campaign management is meant to return as Payload
+collections alongside `events` and `rsvps`, so that the CMS owns both the roster
+and the blast; until those collections exist, this domain sends to one named
+person at a time and nothing else.
+
+One consequence worth knowing: `send_outreach_email` records Cloudflare's
+`message_id` on the CRM row, and nothing in this repo can look that id up.
+`Sent` means "we handed it to Cloudflare", not "it was delivered".
 
 ## Shape of the API
 

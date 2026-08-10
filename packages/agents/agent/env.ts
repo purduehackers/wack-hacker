@@ -68,8 +68,6 @@ export const env = createEnv({
     EXA_API_KEY: secret.optional(),
     PHACK_ASK_API_KEY: secret.optional(),
     PAYLOAD_CMS_API_KEY: secret.optional(),
-    RESEND_API_KEY: secret.optional(),
-    RESEND_WEBHOOK_SECRET: secret.optional(),
     HUNTER_API_KEY: secret.optional(),
     SENTRY_AUTH_TOKEN: secret.optional(),
     SENTRY_ORG: identifier.optional(),

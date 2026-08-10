@@ -51,7 +51,7 @@ selection is hosted Vercel Sandbox, then local Docker, microsandbox, or just-bas
 according to availability. Sandbox application environment/credentials are not
 forwarded, but the default egress policy is `allow-all`. Root and ordinary
 provider/docs subagents do not currently disable or restrict all default
-shell/file/web tools. Therefore their effective surface is broader than the 689
+shell/file/web tools. Therefore their effective surface is broader than the 670
 project provider tools. The code subagent is the exception: it explicitly
 disables the generic defaults and replaces them with bounded capabilities and an
 allowlisted sandbox policy.
@@ -124,7 +124,7 @@ provider domain can contain raw tool descriptors with lower minimum roles, but
 those do not bypass the outer subagent discovery gate in ordinary root use.
 
 `bun run check:capabilities` reports the surface it validates: 12 native
-domains, 689 tools, 109 skills, and 14 subagents.
+domains, 670 tools, 106 skills, and 14 subagents.
 
 | Domain     | Tools | Skills |
 | ---------- | ----: | -----: |
@@ -136,7 +136,7 @@ domains, 689 tools, 109 skills, and 14 subagents.
 | GitHub     |   119 |     16 |
 | Linear     |    64 |     16 |
 | Notion     |    24 |      4 |
-| Outreach   |    42 |      8 |
+| Outreach   |    23 |      5 |
 | Sentry     |    68 |     15 |
 | Shopping   |     6 |      1 |
 | Vercel     |   166 |     11 |
@@ -330,7 +330,7 @@ not a commit fence.
 | GitHub   | Installation-scoped Octokit/GitHub App; public search where applicable; sealed Actions secrets |
 | Linear   | Official SDK and app token                                                                     |
 | Notion   | Official SDK and integration token                                                             |
-| Outreach | Notion CRM plus Resend and Hunter clients                                                      |
+| Outreach | Notion CRM plus Hunter and Cloudflare clients                                                  |
 | Sentry   | `@sentry/api` plus explicit organization-scoped HTTP endpoints                                 |
 | Shopping | SerpAPI product search plus the Turso global cart                                              |
 | Vercel   | Official SDK/bearer and fixed Purdue Hackers team identity                                     |
