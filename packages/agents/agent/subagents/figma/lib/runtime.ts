@@ -2,7 +2,7 @@ import { UpstreamError } from "@repo/shared/errors";
 
 import { env } from "../../../env.ts";
 import { createDomainRuntime } from "../../../lib/policy/domain-runtime.ts";
-import { FIGMA_TOOLS } from "./tool-registry.ts";
+import { FIGMA_TOOLS } from "./registry.ts";
 
 export const FIGMA_RUNTIME = createDomainRuntime({
   domain: "figma",

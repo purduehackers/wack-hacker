@@ -1,0 +1,18 @@
+import type { WebhookV2 } from "@figma/rest-api-spec";
+import { z } from "zod";
+
+import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
+import { figma } from "../../client.ts";
+import { summarizeWebhook } from "../../constants.ts";
+
+export const get_webhook = defineTool({
+  description: "Get a webhook's details by ID.",
+  access: { risk: "read", minRole: "admin" },
+  input: z.strictObject({
+    webhook_id: z.string().describe("The webhook ID"),
+  }),
+  execute: async ({ webhook_id }) => {
+    const data = await figma.get<WebhookV2>(`/v2/webhooks/${webhook_id}`);
+    return summarizeWebhook(data);
+  },
+});

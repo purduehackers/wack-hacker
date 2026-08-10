@@ -1,15 +1,16 @@
 import type { GetFileVersionsResponse } from "@figma/rest-api-spec";
 import { z } from "zod";
 
-import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
-import { figma } from "./client.ts";
+import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
+import { figma } from "../../client.ts";
+import { fileKey } from "../../constants.ts";
 
 export const list_versions = defineTool({
   description:
     "List version history of a Figma file. Returns version IDs, labels, descriptions, timestamps, and the user who created each version.",
   access: { risk: "read" },
   input: z.strictObject({
-    file_key: z.string().describe("The file key"),
+    file_key: fileKey,
     page_size: z
       .int()
       .min(1)

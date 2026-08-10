@@ -1,13 +1,18 @@
-import type {
-  GetLocalVariablesResponse,
-  GetPublishedVariablesResponse,
-  PostVariablesRequestBody,
-  PostVariablesResponse,
-} from "@figma/rest-api-spec";
+import type { PostVariablesRequestBody, PostVariablesResponse } from "@figma/rest-api-spec";
 import { z } from "zod";
 
-import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
-import { figma } from "./client.ts";
+import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
+import { figma } from "../../client.ts";
+import { fileKey } from "../../constants.ts";
+
+/**
+ * The mutation grammar Figma's variables endpoint speaks.
+ *
+ * One POST carries collection, mode and variable changes together, each entry
+ * tagged with an action. The generated request types are wide unions, so these
+ * schemas are declared against them with `satisfies` — the model gets a schema
+ * rejection naming the supported fields rather than a 400 from Figma.
+ */
 
 type VariableCollectionChange = NonNullable<
   PostVariablesRequestBody["variableCollections"]
@@ -117,42 +122,12 @@ const variableChangeSchema = z.discriminatedUnion("action", [
   }),
 ]) satisfies z.ZodType<VariableChange>;
 
-export const get_local_variables = defineTool({
-  description:
-    "Get all local variables and variable collections in a Figma file, including unpublished ones. Variables have modes (e.g., Light/Dark) with per-mode values.",
-  access: { risk: "read" },
-  input: z.strictObject({
-    file_key: z.string().describe("The file key"),
-  }),
-  execute: async ({ file_key }) => {
-    const data = await figma.get<GetLocalVariablesResponse>(
-      `/v1/files/${file_key}/variables/local`,
-    );
-    return data.meta;
-  },
-});
-
-export const get_published_variables = defineTool({
-  description:
-    "Get published variables and variable collections in a Figma file. Only returns variables that have been published and are visible to consumers.",
-  access: { risk: "read" },
-  input: z.strictObject({
-    file_key: z.string().describe("The file key"),
-  }),
-  execute: async ({ file_key }) => {
-    const data = await figma.get<GetPublishedVariablesResponse>(
-      `/v1/files/${file_key}/variables/published`,
-    );
-    return data.meta;
-  },
-});
-
 export const modify_variables = defineTool({
   description:
     'Bulk create, update, or delete variables and variable collections in a Figma file. Each entry specifies an action ("CREATE", "UPDATE", or "DELETE"). Read current variables first before modifying.',
   access: { risk: "destructive" },
   input: z.strictObject({
-    file_key: z.string().describe("The file key"),
+    file_key: fileKey,
     variable_collections: z
       .array(variableCollectionChangeSchema)
       .optional()
