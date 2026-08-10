@@ -77,7 +77,7 @@ export const CLOUDFLARE_SKILL_DEFINITIONS = [
     description: "Onboard and inspect domains authorized to send mail.",
     criteria:
       "Use when the user wants to start sending from a new domain, or asks why sending from a domain is failing.",
-    minRole: "admin",
+    minRole: "organizer",
     tools: [
       "list_sending_subdomains",
       "get_sending_subdomain",
