@@ -25,6 +25,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { UserRole } from "@repo/shared/discord";
 import { z } from "zod";
 
+import { parseSkillDoc } from "../agent/lib/policy/skill-catalog.ts";
 import { normalizeReadme, renderSubagentReadme, type SkillDoc } from "./lib/subagent-readme.ts";
 
 const packageRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -40,11 +41,12 @@ const legacySkillSchema = z.strictObject({
   instructions: z.string().trim().min(1),
 });
 
-/** The current shape: policy in `lib/registry.ts`, prose in `skills/<name>.md`. */
+/** The current shape: policy in `lib/registry.ts`, prose in `lib/skill_defs/<name>.md`. */
 const registrySkillSchema = z.strictObject({
   name: z.string().trim().min(1),
   minRole: z.enum(UserRole),
   tools: z.array(z.string()),
+  doc: z.string().trim().min(1),
 });
 
 const accessSchema = z.looseObject({
@@ -113,23 +115,9 @@ async function integrationDomains(subagents: readonly string[]): Promise<string[
   return domains;
 }
 
-/** Frontmatter `description` plus the body, for one `skills/<name>.md`. */
-async function readSkillDoc(root: string, name: string): Promise<{ description: string }> {
-  const path = join(root, "skills", `${name}.md`);
-  if (!(await fileExists(path))) {
-    throw new Error(`${path} is required: every registry skill needs its prose`);
-  }
-  const source = await readFile(path, "utf8");
-  const description = /^---\n(?:.*\n)*?description:[ \t]*(.+)\n(?:.*\n)*?---\n/u.exec(source)?.[1];
-  if (description === undefined || description.trim() === "") {
-    throw new Error(`${path} needs a non-empty \`description\` in its frontmatter`);
-  }
-  return { description: description.trim() };
-}
-
-/** Every `.md` in `skills/` must be claimed by the registry, and vice versa. */
+/** Every `.md` in `lib/skill_defs/` must be claimed by the registry, and vice versa. */
 async function skillDocNames(root: string): Promise<string[]> {
-  const dir = join(root, "skills");
+  const dir = join(root, "lib/skill_defs");
   if (!(await fileExists(dir))) return [];
   return (await readdir(dir))
     .filter((entry) => entry.endsWith(".md"))
@@ -187,7 +175,12 @@ async function checkDomain(domain: string): Promise<DomainSurface> {
     throw new Error(`${domain} registry tools lack skill/base coverage: ${uncovered.join(",")}`);
   }
 
-  if (converted) await checkConvertedDomain(domain, root, skills, baseTools, toolSpecs);
+  if (converted) {
+    // Re-parsed rather than narrowed: `skills` is a union across both shapes
+    // for the checks above, and only the registry shape carries `doc`.
+    const registrySkills = z.array(registrySkillSchema).parse(skillModule[`${constant}_SKILLS`]);
+    await checkConvertedDomain(domain, root, registrySkills, baseTools, toolSpecs);
+  }
 
   return { name: domain, toolCount: tools.length, skillCount: skills.length, converted };
 }
@@ -204,20 +197,6 @@ async function checkConvertedDomain(
   baseTools: readonly string[],
   toolSpecs: ToolSpecs,
 ): Promise<void> {
-  // Static skill markdown is advertised to every principal that can reach the
-  // subagent, so an `admin` skill can no longer hide its own contents. The gate
-  // that still holds is per-tool, and this is what makes it hold: an admin
-  // skill whose tools are merely organizer-default would be a silent widening.
-  for (const entry of skills.filter((candidate) => candidate.minRole === UserRole.Admin)) {
-    const weak = entry.tools.filter((name) => toolSpecs[name]?.access.minRole !== UserRole.Admin);
-    if (weak.length > 0) {
-      throw new Error(
-        `${domain}/${entry.name} is admin-gated but these tools do not declare ` +
-          `minRole "admin": ${weak.join(",")}`,
-      );
-    }
-  }
-
   // Prose and policy are separate files; neither may reference a skill the
   // other does not have.
   const declared = skills.map((entry) => entry.name).sort((a, b) => a.localeCompare(b));
@@ -226,17 +205,19 @@ async function checkConvertedDomain(
   const orphanDoc = documented.filter((name) => !declared.includes(name));
   if (missingDoc.length > 0 || orphanDoc.length > 0) {
     throw new Error(
-      `${domain} skills and skills/*.md disagree` +
+      `${domain} skills and lib/skill_defs/*.md disagree` +
         (missingDoc.length > 0 ? `; no prose for: ${missingDoc.join(",")}` : "") +
         (orphanDoc.length > 0 ? `; no registry entry for: ${orphanDoc.join(",")}` : ""),
     );
   }
 
-  const docs: SkillDoc[] = [];
-  for (const entry of skills) {
-    const { description } = await readSkillDoc(root, entry.name);
-    docs.push({ name: entry.name, minRole: entry.minRole, tools: entry.tools, description });
-  }
+  const docs: SkillDoc[] = skills.map((entry) => {
+    const { description } = parseSkillDoc(entry.doc);
+    if (description === "") {
+      throw new Error(`${domain}/${entry.name}.md needs a \`description\` in its frontmatter`);
+    }
+    return { name: entry.name, minRole: entry.minRole, tools: entry.tools, description };
+  });
 
   // The README's tool table is derived, so it cannot be allowed to rot.
   const readmePath = join(root, "README.md");

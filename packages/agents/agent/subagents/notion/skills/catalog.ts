@@ -2,7 +2,7 @@ import { defineDynamic } from "eve/skills";
 
 import {
   resolveIntegrationSkills,
-  type IntegrationSkillDefinition,
+  type LegacySkillDefinition,
 } from "../../../lib/policy/skill-catalog.ts";
 
 export const NOTION_BASE_TOOL_NAMES = [
@@ -70,7 +70,7 @@ export const NOTION_SKILL_DEFINITIONS = [
     instructions:
       '<creating>\n- Determine the parent: database (entry/row) or page (subpage).\n- For database parents: always retrieve_database first for the property schema.\n- For page parents: search_notion to find the parent page by name.\n- Body content via the `markdown` parameter — write as Notion-flavored markdown.\n- Only set properties the user explicitly asked for.\n\nProperty value formats:\n\n- title: `{ "title": [{ "text": { "content": "text" } }] }`\n- rich_text: `{ "rich_text": [{ "text": { "content": "text" } }] }`\n- number: `{ "number": 42 }`\n- select: `{ "select": { "name": "Option" } }`\n- multi_select: `{ "multi_select": [{ "name": "Tag1" }] }`\n- status: `{ "status": { "name": "In Progress" } }`\n- date: `{ "date": { "start": "2024-01-15" } }`\n- checkbox: `{ "checkbox": true }`\n- url: `{ "url": "https://..." }`\n- people: `{ "people": [{ "id": "user-uuid" }] }` (resolve via list_users)\n- relation: `{ "relation": [{ "id": "page-uuid" }] }`\n  </creating>\n\n<content>\nPage body is read/written as Notion-flavored markdown:\n- `read_page_content`: Returns full page body as markdown.\n- `update_page_content` with mode "replace_content": Replaces entire body.\n- `update_page_content` with mode "update_content": Search-and-replace specific text.\n\nNotion markdown supports: headings, lists, to-dos, blockquotes, code blocks, dividers, callouts, toggles, columns, tables (HTML), equations, media, page/database references, and mentions.\n</content>\n\n<updating>\n- Update only properties the user asked for.\n- To clear a property: `{ "select": null }`, `{ "rich_text": [] }`.\n- archive_page is the explicit wrapper for soft-deleting a page.\n- For targeted edits, use "update_content" mode with old_str/new_str.\n</updating>',
   },
-] as const satisfies readonly IntegrationSkillDefinition[];
+] as const satisfies readonly LegacySkillDefinition[];
 
 export default defineDynamic({
   events: {

@@ -2,7 +2,7 @@ import { defineDynamic } from "eve/skills";
 
 import {
   resolveIntegrationSkills,
-  type IntegrationSkillDefinition,
+  type LegacySkillDefinition,
 } from "../../../lib/policy/skill-catalog.ts";
 
 export const VERCEL_BASE_TOOL_NAMES = [
@@ -305,7 +305,7 @@ export const VERCEL_SKILL_DEFINITIONS = [
     instructions:
       "<members>\n- `remove_team_member` requires the user id. Use `list_team_members` to resolve names to ids.\n- Team creation/invite/role-change tools are deliberately not exposed — they have complex request bodies that don't translate well from LLM inputs.\n</members>\n\n<access-groups>\n- Groups bundle project roles. Deleting a group revokes its members' access to all attached projects.\n</access-groups>\n\n<webhooks>\n- Deleting a webhook stops delivery. Any downstream consumer breaks.\n</webhooks>\n\n<routes>\n- Read-only from this subagent. Route writes require a Routing Middleware deploy anyway.\n</routes>\n\n<billing>\n- `list_billing_charges` requires `from` and `to` ISO 8601 UTC date-time strings.\n- `list_contract_commitments` is team-scoped, no date required.\n</billing>\n\n<custom-environments>\n- Custom environments are per-project branch-bound preview contexts.\n- `remove_custom_environment` can also delete unassigned env vars if `deleteUnassignedEnvironmentVariables: true` — be deliberate.\n</custom-environments>",
   },
-] as const satisfies readonly IntegrationSkillDefinition[];
+] as const satisfies readonly LegacySkillDefinition[];
 
 export default defineDynamic({
   events: {

@@ -2,7 +2,7 @@ import { defineDynamic } from "eve/skills";
 
 import {
   resolveIntegrationSkills,
-  type IntegrationSkillDefinition,
+  type LegacySkillDefinition,
 } from "../../../lib/policy/skill-catalog.ts";
 
 export const SENTRY_BASE_TOOL_NAMES = [
@@ -214,7 +214,7 @@ export const SENTRY_SKILL_DEFINITIONS = [
     instructions:
       "<traces>\n- get_trace returns the full trace waterfall for a specific trace ID.\n- Includes all transactions, spans, errors, and performance issues.\n- Trace IDs are 32-character hex strings.\n</traces>\n\n<searching>\n- list_traces searches for traces via the Discover API.\n- Filter by transaction name, duration, or other event fields.\n- Results include trace ID, transaction name, and timestamps.\n</searching>",
   },
-] as const satisfies readonly IntegrationSkillDefinition[];
+] as const satisfies readonly LegacySkillDefinition[];
 
 export default defineDynamic({
   events: {

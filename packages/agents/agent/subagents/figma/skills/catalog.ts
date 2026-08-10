@@ -2,7 +2,7 @@ import { defineDynamic } from "eve/skills";
 
 import {
   resolveIntegrationSkills,
-  type IntegrationSkillDefinition,
+  type LegacySkillDefinition,
 } from "../../../lib/policy/skill-catalog.ts";
 
 export const FIGMA_BASE_TOOL_NAMES = [
@@ -104,7 +104,7 @@ export const FIGMA_SKILL_DEFINITIONS = [
     instructions:
       "<listing>\n- list_team_webhooks returns all webhooks configured for the team.\n- get_webhook returns details for a specific webhook by ID.\n</listing>\n\n<creating>\n- create_webhook requires event_type, endpoint (callback URL), and passcode. Optionally accepts description.\n- The team is determined automatically from the configured environment; do not ask the user for a team_id.\n- Event types include: FILE_UPDATE, FILE_DELETE, FILE_VERSION_UPDATE, LIBRARY_PUBLISH, and more.\n</creating>\n\n<managing>\n- update_webhook can change the endpoint, passcode, description, or status (ACTIVE/PAUSED).\n- delete_webhook removes a webhook permanently.\n- Always confirm before deleting or creating webhooks.\n</managing>",
   },
-] as const satisfies readonly IntegrationSkillDefinition[];
+] as const satisfies readonly LegacySkillDefinition[];
 
 export default defineDynamic({
   events: {

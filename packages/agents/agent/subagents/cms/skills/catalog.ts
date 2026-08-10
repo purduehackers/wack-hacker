@@ -2,7 +2,7 @@ import { defineDynamic } from "eve/skills";
 
 import {
   resolveIntegrationSkills,
-  type IntegrationSkillDefinition,
+  type LegacySkillDefinition,
 } from "../../../lib/policy/skill-catalog.ts";
 
 export const CMS_BASE_TOOL_NAMES = [
@@ -125,7 +125,7 @@ export const CMS_SKILL_DEFINITIONS = [
     instructions:
       '<roles>\n\n- The CMS defines these roles: `admin`, `editor`, `viewer`, `hack_night_dashboard`, `events_website`, `wack_hacker`.\n- Hierarchy is enforced server-side: `admin` implies `editor` implies `viewer`. The specialized roles (`hack_night_dashboard`, `events_website`, `wack_hacker`) are additive.\n- `update_user({ roles: [...] })` REPLACES the role set — not a merge. Read the current roles with `get_user` first when adding/removing a single role.\n  </roles>\n\n<writes>\n\n- `create_user` needs an email and an initial password (≥ 8 chars). The user can change it on first login.\n- `delete_user` is approval-gated AND admin-gated. Prefer `update_user({ roles: ["viewer"] })` to strip editorial access instead — keeps audit trail + sessions table intact.\n  </writes>\n\n<visibility>\n\n- This sub-skill is admin-only. Organizers cannot load it; they cannot see user-management tools in the menu.\n  </visibility>',
   },
-] as const satisfies readonly IntegrationSkillDefinition[];
+] as const satisfies readonly LegacySkillDefinition[];
 
 export default defineDynamic({
   events: {

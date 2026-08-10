@@ -120,4 +120,17 @@ It deliberately does **not** snapshot the surface. A `minRole` change is one lin
 
 Schemas are canonical zod 4 — top-level string formats, `z.int()`, `z.strictObject()` on every model-facing input, `z.codec()` for genuinely bidirectional conversions, `z.stringFormat()` for named formats so a rejection reports _which_ format failed. See [`docs/zod-4-anti-patterns.md`](../../docs/zod-4-anti-patterns.md).
 
+## Upstream patches
+
+`patches/eve@0.29.5.patch` relaxes one Eve discovery rule so skill prose can
+live in `lib/skill_defs/*.md` next to the registry that imports it. Eve
+otherwise raises an error-severity diagnostic for any non-module file anywhere
+under `lib/`. The patch only silences the diagnostic — markdown is still never
+collected as a source — and
+[`docs/upstream/eve-lib-markdown.md`](../../docs/upstream/eve-lib-markdown.md)
+records the reproduction and the fix to propose upstream.
+
+`nitro.config.ts` is the other half: it teaches rolldown to load `.md` as text,
+which Eve exposes no hook for.
+
 Before adding an integration, check `eve registry search <query>` — and read the installed Eve docs at `node_modules/eve/docs/` rather than guessing at the API.

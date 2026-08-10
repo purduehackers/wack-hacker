@@ -2,7 +2,7 @@ import { defineDynamic } from "eve/skills";
 
 import {
   resolveIntegrationSkills,
-  type IntegrationSkillDefinition,
+  type LegacySkillDefinition,
 } from "../../../lib/policy/skill-catalog.ts";
 
 export const OUTREACH_BASE_TOOL_NAMES = [
@@ -119,7 +119,7 @@ export const OUTREACH_SKILL_DEFINITIONS = [
     instructions:
       '<reading>\n- `get_email_status` returns `Last Outreach ID`, `Outreach Status`, `Outreach Last Event At`, and `Do Not Contact` for a given page.\n- `send_outreach_email` is what writes them, at send time. Nothing updates them afterwards, so `Sent` means "we sent it", not "it was delivered" — say so rather than implying delivery.\n- To find out what actually happened to a specific send, take the `Last Outreach ID` and call `get_email` in the emails skill.\n</reading>\n\n<scope>\n- This skill is read-only. Use `crm-writes` to change any property manually.\n</scope>',
   },
-] as const satisfies readonly IntegrationSkillDefinition[];
+] as const satisfies readonly LegacySkillDefinition[];
 
 export default defineDynamic({
   events: {

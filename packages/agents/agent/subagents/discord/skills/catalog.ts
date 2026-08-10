@@ -2,7 +2,7 @@ import { defineDynamic } from "eve/skills";
 
 import {
   resolveIntegrationSkills,
-  type IntegrationSkillDefinition,
+  type LegacySkillDefinition,
 } from "../../../lib/policy/skill-catalog.ts";
 
 export const DISCORD_BASE_TOOL_NAMES = [
@@ -194,7 +194,7 @@ export const DISCORD_SKILL_DEFINITIONS = [
     instructions:
       "<listing>\n- Can filter by channel_id or return all server webhooks.\n- Webhook URLs and tokens are sensitive capabilities and are never returned; tools expose only non-secret metadata.\n</listing>\n\n<creating>\n- Requires a channel_id and name. Avatar is optional.\n- Resolve the channel name to an ID via list_channels first.\n- Only text-based channels support webhooks.\n</creating>\n\n<editing>\n- Can change the name, avatar, or target channel.\n- Only modify the fields the user asked to change.\n</editing>\n\n<deleting>\n- Confirm before deleting — integrations using the webhook URL will break.\n</deleting>",
   },
-] as const satisfies readonly IntegrationSkillDefinition[];
+] as const satisfies readonly LegacySkillDefinition[];
 
 export default defineDynamic({
   events: {

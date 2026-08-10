@@ -18,6 +18,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { UserRole } from "@repo/shared/discord";
 import { z } from "zod";
 
+import { parseSkillDoc } from "../agent/lib/policy/skill-catalog.ts";
 import { normalizeReadme, renderSubagentReadme, type SkillDoc } from "./lib/subagent-readme.ts";
 
 const packageRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -27,6 +28,7 @@ const skillSchema = z.strictObject({
   name: z.string(),
   minRole: z.enum(UserRole),
   tools: z.array(z.string()),
+  doc: z.string(),
 });
 const toolSpecSchema = z.looseObject({
   description: z.string(),
@@ -60,17 +62,13 @@ for (const domain of domains) {
   const baseTools = z.array(z.string()).parse(registry[`${constant}_BASE_TOOL_NAMES`]);
   const tools = z.record(z.string(), toolSpecSchema).parse(registry[`${constant}_TOOLS`]);
 
-  const docs: SkillDoc[] = [];
-  for (const skill of skills) {
-    const source = await readFile(join(root, "skills", `${skill.name}.md`), "utf8");
-    const description = /^---\n(?:.*\n)*?description:[ \t]*(.+)\n(?:.*\n)*?---\n/u
-      .exec(source)?.[1]
-      ?.trim();
-    if (description === undefined) {
+  const docs: SkillDoc[] = skills.map((skill) => {
+    const { description } = parseSkillDoc(skill.doc);
+    if (description === "") {
       throw new Error(`${domain}/${skill.name}.md needs a \`description\` in its frontmatter`);
     }
-    docs.push({ name: skill.name, minRole: skill.minRole, tools: skill.tools, description });
-  }
+    return { name: skill.name, minRole: skill.minRole, tools: skill.tools, description };
+  });
 
   const readmePath = join(root, "README.md");
   const existing = (await exists(readmePath)) ? await readFile(readmePath, "utf8") : undefined;

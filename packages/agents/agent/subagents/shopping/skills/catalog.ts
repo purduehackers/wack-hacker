@@ -2,7 +2,7 @@ import { defineDynamic } from "eve/skills";
 
 import {
   resolveIntegrationSkills,
-  type IntegrationSkillDefinition,
+  type LegacySkillDefinition,
 } from "../../../lib/policy/skill-catalog.ts";
 
 export const SHOPPING_BASE_TOOL_NAMES = ["search_products", "view_cart"] as const;
@@ -18,7 +18,7 @@ export const SHOPPING_SKILL_DEFINITIONS = [
     instructions:
       "<adding>\n- Use the ASIN, title, and price returned by `search_products`. Never invent an ASIN.\n- If `price` was `null` in the search result, ask the user for a price or skip the item.\n- Adding the same ASIN again merges quantities — this is expected.\n</adding>\n\n<removing>\n- `remove_from_cart` takes an ASIN. If the user names an item by title, look it up with `view_cart` first.\n</removing>\n\n<updating>\n- `update_quantity` with `quantity: 0` removes the item.\n- Quantities are integers only.\n</updating>\n\n<clearing>\n- `clear_cart` wipes every item for everyone. Always confirm before calling.\n</clearing>",
   },
-] as const satisfies readonly IntegrationSkillDefinition[];
+] as const satisfies readonly LegacySkillDefinition[];
 
 export default defineDynamic({
   events: {

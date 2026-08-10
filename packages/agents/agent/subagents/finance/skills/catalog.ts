@@ -2,7 +2,7 @@ import { defineDynamic } from "eve/skills";
 
 import {
   resolveIntegrationSkills,
-  type IntegrationSkillDefinition,
+  type LegacySkillDefinition,
 } from "../../../lib/policy/skill-catalog.ts";
 
 export const FINANCE_BASE_TOOL_NAMES = [
@@ -79,7 +79,7 @@ export const FINANCE_SKILL_DEFINITIONS = [
     instructions:
       "<listing>\n\n- list_transfers shows sender + receiver (org name or slug), amount_cents, status, memo, and created_at.\n- These are specifically **inter-org** HCB transfers — for regular card charges or reimbursements, use `card-charges` or `transactions`.\n  </listing>",
   },
-] as const satisfies readonly IntegrationSkillDefinition[];
+] as const satisfies readonly LegacySkillDefinition[];
 
 export default defineDynamic({
   events: {

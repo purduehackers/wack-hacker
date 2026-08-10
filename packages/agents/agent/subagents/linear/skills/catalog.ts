@@ -2,7 +2,7 @@ import { defineDynamic } from "eve/skills";
 
 import {
   resolveIntegrationSkills,
-  type IntegrationSkillDefinition,
+  type LegacySkillDefinition,
 } from "../../../lib/policy/skill-catalog.ts";
 
 export const LINEAR_BASE_TOOL_NAMES = [
@@ -199,7 +199,7 @@ export const LINEAR_SKILL_DEFINITIONS = [
     instructions:
       '<lookup>\n- list_users returns all workspace members.\n- get_user returns a single user\'s full profile.\n- get_user_teams shows which teams a user belongs to.\n- get_user_assigned_issues shows their open issues.\n- When resolving "me", use user.nickname from execution context via suggest_property_values.\n</lookup>\n\n<admin>\nAdmin tools require workspace admin privileges. Only use when explicitly asked.\n\n- suspend_user disables access. Data is preserved. Always confirm identity first.\n- unsuspend_user restores access.\n- invite_user sends an email invite. Never guess or fabricate an email.\n- Role defaults to "member". Can invite as "admin" or "guest".\n- list_invites shows pending invites. delete_invite revokes a pending invite.\n  </admin>',
   },
-] as const satisfies readonly IntegrationSkillDefinition[];
+] as const satisfies readonly LegacySkillDefinition[];
 
 export default defineDynamic({
   events: {

@@ -2,7 +2,7 @@ import { defineDynamic } from "eve/skills";
 
 import {
   resolveIntegrationSkills,
-  type IntegrationSkillDefinition,
+  type LegacySkillDefinition,
 } from "../../../lib/policy/skill-catalog.ts";
 
 export const GITHUB_BASE_TOOL_NAMES = [
@@ -290,7 +290,7 @@ export const GITHUB_SKILL_DEFINITIONS = [
     instructions:
       "- create_ref expects the full ref with `refs/` prefix (e.g. 'refs/heads/new-branch').\n- update_ref and delete_ref expect the path WITHOUT `refs/` (e.g. 'heads/main').\n- Force-update a branch with update_ref force:true (effectively a force-push).\n- delete_ref on 'heads/main' (or any default branch) will fail — GitHub requires changing the default first.",
   },
-] as const satisfies readonly IntegrationSkillDefinition[];
+] as const satisfies readonly LegacySkillDefinition[];
 
 export default defineDynamic({
   events: {

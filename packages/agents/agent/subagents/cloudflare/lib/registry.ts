@@ -7,11 +7,17 @@
  * mirrors the skill list exactly, and `check:capabilities` fails if it stops
  * doing so.
  *
- * Skill prose lives in `skills/<name>.md`, not here.
+ * Skill prose lives in `lib/skill_defs/<name>.md` and is imported as text, so the
+ * markdown is a real document while policy stays here next to the tools.
  */
 
 import type { DomainToolSpec } from "../../../lib/policy/domain-tools.ts";
-import type { IntegrationSkill } from "../../../lib/policy/registry.ts";
+import type { IntegrationSkillDefinition } from "../../../lib/policy/skill-catalog.ts";
+import destinationAddressesDoc from "./skill_defs/destination-addresses.md" with { type: "text" };
+import dnsRecordsDoc from "./skill_defs/dns-records.md" with { type: "text" };
+import emailRoutingDoc from "./skill_defs/email-routing.md" with { type: "text" };
+import emailSendingDoc from "./skill_defs/email-sending.md" with { type: "text" };
+import sendingDomainsDoc from "./skill_defs/sending-domains.md" with { type: "text" };
 import { get_zone } from "./tool_defs/base/get_zone.ts";
 import { list_zones } from "./tool_defs/base/list_zones.ts";
 import { create_destination_address } from "./tool_defs/destination-addresses/create_destination_address.ts";
@@ -82,6 +88,7 @@ export const CLOUDFLARE_SKILLS = [
   {
     name: "dns-records",
     minRole: "organizer",
+    doc: dnsRecordsDoc,
     tools: [
       "list_dns_records",
       "get_dns_record",
@@ -94,6 +101,7 @@ export const CLOUDFLARE_SKILLS = [
   {
     name: "email-routing",
     minRole: "organizer",
+    doc: emailRoutingDoc,
     tools: [
       "get_routing_settings",
       "enable_email_routing",
@@ -111,6 +119,7 @@ export const CLOUDFLARE_SKILLS = [
   {
     name: "destination-addresses",
     minRole: "organizer",
+    doc: destinationAddressesDoc,
     tools: [
       "list_destination_addresses",
       "get_destination_address",
@@ -121,11 +130,13 @@ export const CLOUDFLARE_SKILLS = [
   {
     name: "email-sending",
     minRole: "organizer",
+    doc: emailSendingDoc,
     tools: ["send_email"],
   },
   {
     name: "sending-domains",
     minRole: "organizer",
+    doc: sendingDomainsDoc,
     tools: [
       "list_sending_subdomains",
       "get_sending_subdomain",
@@ -134,4 +145,4 @@ export const CLOUDFLARE_SKILLS = [
       "get_sending_dns_records",
     ],
   },
-] as const satisfies readonly IntegrationSkill[];
+] as const satisfies readonly IntegrationSkillDefinition[];

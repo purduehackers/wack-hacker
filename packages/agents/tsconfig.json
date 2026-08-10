@@ -6,5 +6,5 @@
     "module": "esnext",
     "esModuleInterop": true
   },
-  "include": ["agent/**/*.ts", "scripts/**/*.ts"]
+  "include": ["agent/**/*.ts", "scripts/**/*.ts", "types/**/*.d.ts"]
 }
