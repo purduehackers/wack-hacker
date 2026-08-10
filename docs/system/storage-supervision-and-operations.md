@@ -10,7 +10,7 @@ Two durable services have deliberately different jobs:
   audit, and the global shopping cart.
 
 The bot has Redis credentials but no Turso credentials. Eve has both. The
-optional supervisor has Redis and container-management credentials but no Turso.
+bot supervision adds container-management credentials to the agent deployment.
 
 ## Redis ownership outside the conversation aggregate
 
@@ -27,9 +27,9 @@ families. Adjacent owners use these additional families:
 | `agent:turn-tokens:<sessionId>:<turnId>` | Eve telemetry          | 24-hour token total; adjacent event-ID set deduplicates usage events |
 | `policy:approval:<sessionId>:<callId>`   | policy runtime         | 15-minute second-party authority record                              |
 | `budget:tokens:<UTC date>:<userId>`      | usage/policy runtime   | 48-hour counter retention; public daily threshold 250,000            |
-| `wack:bot-sandbox:active:v1`             | supervisor             | Validated/canonical current bot generation record                    |
-| `wack:bot-sandbox:supervisor:v1`         | supervisor             | Owner/generation mutex, ten-minute renewable TTL                     |
-| `wack:bot-sandbox:fence:v1`              | supervisor             | Monotonic generation counter                                         |
+| `wack:bot-sandbox:active:v1`             | bot-supervisor sched.  | Validated/canonical current bot generation record                    |
+| `wack:bot-sandbox:supervisor:v1`         | bot-supervisor sched.  | Owner/generation mutex, ten-minute renewable TTL                     |
+| `wack:bot-sandbox:fence:v1`              | bot-supervisor sched.  | Monotonic generation counter                                         |
 
 No runtime uses `KEYS *` for recovery. Durable sets and narrow known keys are
 read through their owner APIs.
@@ -77,33 +77,27 @@ lines.
 
 ## Migration history
 
-Migrations are forward-only files in `packages/shared/drizzle`:
+Migrations are forward-only files in `packages/shared/migrations`:
 
-| Migration                                 | Effect                                                                                       |
-| ----------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `0000_cuddly_sunfire.sql`                 | Global shopping cart and unique line-item index                                              |
-| `0001_silly_dorian_gray.sql`              | Original scheduled-task table                                                                |
-| `0002_tiny_norman_osborn.sql`             | Action audit table/indexes                                                                   |
-| `0003_young_thena.sql`                    | Rebuild schedule rows around owner/prompt, stable next/available time, leases/retries/checks |
-| `0004_naive_madame_hydra.sql`             | Add explicit action type and normalize legacy JSON action/member-role data                   |
-| `0005_preserve_legacy_schedule_roles.sql` | Restore verified legacy role snapshots from the baseline sidecar, then remove sidecar        |
+| Migration                | Effect                                                                        |
+| ------------------------ | ----------------------------------------------------------------------------- |
+| `0000_normal_zombie.sql` | Baseline: action audit, scheduled tasks, shopping cart and carts, all indexes |
 
-Applied `0003`, `0004`, and `0005` are immutable. A fix after application must be
-a new migration, never an edit. That immutability is enforced by policy, review,
-and rehearsal evidence, not by a committed per-file checksum manifest for all
-historical migrations. Current verification checks the repository's latest
-migration hash/ledger state and a required schema subset.
+There is one migration because there is no deployed database to preserve. Once
+this baseline is applied anywhere real it becomes immutable: a fix after
+application must be a new migration, never an edit. That immutability is
+enforced by policy, review, and rehearsal evidence, not by a committed per-file
+checksum manifest. Verification checks the repository's latest migration
+hash/ledger state and a required schema subset.
 
-A carried-over production database can contain 0000–0002 schema without a
-Drizzle ledger. `baseline-legacy-migrations.ts` first verifies every expected
-column/index and stages the role sidecar needed by later migration; only then may
-it insert baseline history. Operators must never hand-write a ledger marker.
-`verify-database.ts` checks quick integrity, repository migration hash/ledger,
-and required tables/columns.
+`db:migrate` applies whatever the Drizzle ledger has not recorded; on an empty
+database that is this baseline and nothing else. Operators must never hand-write
+a ledger marker. `verify-database.ts` checks quick integrity, repository
+migration hash/ledger, and required tables/columns.
 
 The production workflow asks an operator to assert stopped ingress/drained
-writes, verifies database identity, creates a point-in-time clone, runs baseline
-and forward migrations, verifies integrity, and only then deploys Eve. The
+writes, verifies database identity, creates a point-in-time clone, runs forward
+migrations, verifies integrity, and only then deploys Eve. The
 assertion is not a technical fence: stopping the bot leaves the once-per-minute
 Eve schedule dispatcher able to claim/fail due Turso rows. Routine migration is
 therefore blocked until the whole agent writer set is externally proven idle or
@@ -112,39 +106,49 @@ re-enable; current schedule create/cancel smoke is separately blocked by the
 approval projection limitation. The exact warnings are in the
 [database runbook](../operations/database.md).
 
-## Optional bot Sandbox supervisor
+## Optional bot Sandbox supervision
 
 ### Why it exists
 
 The Discord gateway needs one always-on process, while Vercel Sandbox has a
-24-hour maximum lifetime. `packages/supervisor` is a separate credential-isolated
-Vercel project whose five-minute cron ensures a healthy, digest-pinned candidate
-and rotates before expiry.
+24-hour maximum lifetime. `agent/schedules/bot-supervisor.ts` is a five-minute
+Eve schedule in the agent deployment that ensures a healthy, digest-pinned
+candidate and rotates before expiry.
 
-It is not needed on Fly, Railway, a VM, or another persistent host. The
-application code and bot image remain the same.
+It is not needed on Fly, Railway, a VM, or another persistent host: leave
+`BOT_SANDBOX_ENABLED=false` and the tick returns immediately. The application
+code and bot image remain the same.
 
-Do not conflate three Sandbox surfaces:
+Do not conflate three Sandbox surfaces, which now share one deployment:
 
-1. supervisor-created bot host containers;
+1. schedule-created bot host containers, tagged
+   `managedBy=wack-hacker, workload=discord-bot`;
 2. Eve-owned 30-minute code-subagent sandboxes;
 3. Vercel provider tools that inspect/manage team Sandboxes.
 
-They have separate credentials, lifetime and policy. Before a destructive Vercel
-provider tool acts on a Sandbox, operators should compare its name against the
-active bot generation; provider tools do not automatically exempt the
-supervisor-managed bot.
+They have separate lifetimes and policy, and only the first is fenced by the
+generation record. Before a destructive Vercel provider tool acts on a Sandbox,
+operators should compare its name against the active bot generation; provider
+tools do not automatically exempt the supervised bot.
 
 ### Entry and configuration
 
-Vercel Cron calls `/api/ensure-bot` every five minutes; the function maximum is
-300 seconds. `ensureBot()`:
+There is no HTTP entry point and no separate deployment. Eve compiles
+`agent/schedules/bot-supervisor.ts` into a Nitro task registered on the `*/5`
+cron; each tick:
 
-1. checks `CRON_SECRET` with constant-time bearer matching;
-2. returns 204 immediately when supervision is disabled;
-3. requires a digest-pinned image and complete bot environment when enabled;
-4. constructs `createBotSandboxSupervisor(...).ensure()`;
-5. logs the resulting status/generation/name/expiry.
+1. returns immediately when `BOT_SANDBOX_ENABLED` is false;
+2. assembles and validates the bot container environment per tick
+   (`agent/lib/bot/supervisor-config.ts`), so a missing credential, a mutable
+   image tag, or two of three Vercel variables fails this schedule alone and
+   leaves channels, tools, and dispatch serving;
+3. calls `createBotSandboxSupervisor(...).ensure()`;
+4. emits `bot.sandbox.ensure` with status/generation/name/image/expiry, or the
+   error tag, plus an `agent.bot_sandbox.ensure` counter.
+
+Because the trigger is a schedule rather than a request, there is no on-demand
+reconcile: promotion waits for the next tick. A missed tick costs at most five
+minutes, and a concurrent one loses the Redis mutex race harmlessly.
 
 `BOT_IMAGE` must be a valid lowercase repository ending in
 `@sha256:<64 lowercase hex>`. Mutable tags and bare repositories fail.
@@ -220,7 +224,7 @@ ensure()
 └─ releaseLease()
 ```
 
-Vercel custom images do not execute Docker CMD automatically. The supervisor
+Vercel custom images do not execute Docker CMD automatically. The reconcile
 runs `bun --preload src/instrument.ts run src/index.ts` at
 `/app/packages/bot`. Health polling allows two minutes, every two seconds, with a
 five-second request timeout; it requires HTTPS, no redirect, exact 200, JSON,
@@ -238,10 +242,12 @@ response is to inspect active state and health—not blindly delete or retry.
 
 Orphan cleanup lists only managed tags, preserves the active name, and ignores
 missing/malformed or newer generation tags. A stale pass cannot delete a newer
-candidate. Supervisor observability is currently limited to function logs and
-the inspector's active/mutex summary: there are no dedicated supervisor metrics
-or traces, and `ensureBot()` does not attach the structured error code to the
-failure log.
+candidate. Supervision observability is limited to the agent deployment's task
+logs (`bot.sandbox.ensure`), the `agent.bot_sandbox.ensure` counter, and the
+inspector's active/mutex summary from `ops-inspect.ts redis` plus
+`bun run sandbox list`. There is no status endpoint and no dedicated trace: the
+schedule has no HTTP surface at all, so an operator reads its outcome from logs
+and Redis rather than by querying it.
 
 ### Bot image
 
@@ -251,7 +257,9 @@ The two-stage Alpine image:
 - installs frozen production dependencies filtered to bot/shared;
 - copies no agent dependency tree;
 - runs as unprivileged `bun`;
-- uses Indiana timezone and port 8080;
+- sets no `TZ`, so the process runs in UTC; the schedule zone is pinned in code
+  as `TIME_ZONE` in `packages/bot/src/utils/dates.ts`, not per host;
+- listens on port 8080;
 - includes a loopback `/health` Docker HEALTHCHECK;
 - must be built from repository root for workspace context and for linux/amd64
   when published to VCR.
@@ -340,7 +348,7 @@ and omits queued bodies, prompts, tokens and credentials. Reports include:
 - up to 100 active/failed schedule summaries.
 
 Never use `KEYS *`, flush Redis, or delete key families during diagnosis. Inspect
-health, supervisor/function logs and Sentry first. Follow the
+health, the agent deployment logs and Sentry first. Follow the
 [incident runbook](../operations/incidents.md) for stuck queue/render, schedule,
 or Sandbox recovery decisions.
 
@@ -351,13 +359,19 @@ or Sandbox recovery decisions.
 `.github/workflows/ci.yml` uses pinned actions and Bun 1.3.14 to run:
 
 1. frozen install;
-2. formatting and full validation (type/parity/serialization, lint, tests);
-3. native skill and two-turn tool lifecycle canaries;
-4. isolated real-Redis Docker contracts;
+2. formatting check;
+3. lint, which is type-aware and reports TypeScript errors as well;
+4. the capability-surface and serialization-boundary gates;
 5. production dependency audit;
 6. fresh database migration check/apply;
 7. application build/Eve build;
 8. linux/amd64 bot image build.
+
+CI runs no automated tests: there is no unit-test suite, no skill/tool lifecycle
+canary step and no real-Redis Docker contract step. Merges are gated only by the
+static checks and builds listed above, so a merge can introduce a runtime
+regression — including in conversation-queue Lua and other Redis behavior — with
+CI still green. Treat recent merges as live suspects during incident triage.
 
 ### Image publication
 
@@ -377,8 +391,8 @@ database/deployment process.
 and change ticket, and receives a human gate only when required reviewers are
 configured in GitHub settings. It verifies VCR platform/digest, Cosign workflow identity and
 attestations, rescans the exact digest, records previous active image, updates
-and deploys the supervisor, invokes ensure, then checks active image plus validated
-bot readiness. Rollback is promotion of a previously retained verified digest,
+and deploys the agent, waits for the `bot-supervisor` schedule to adopt the
+digest, then checks active image plus validated bot readiness. Rollback is promotion of a previously retained verified digest,
 not tag mutation.
 
 The source of truth for commands and failure handling remains:
@@ -390,12 +404,12 @@ The source of truth for commands and failure handling remains:
 
 ## Operational caveats
 
-- Supervisor cron detection can take about five minutes plus candidate startup;
-  there is no direct command-death watcher.
+- Schedule detection can take about five minutes plus candidate startup, and
+  there is no direct command-death watcher or on-demand reconcile trigger.
 - Moving to a persistent host requires a reviewed retirement of the active
   generation record; a present expired record prevents agent fallback to
   `BOT_URL`. Do not ad hoc delete generation/fence keys to force recovery.
-- VCR repositories are project-scoped and must align with the supervisor project.
+- VCR repositories are project-scoped and must align with the agent project.
 - Bot health can be 200 during Redis, provider or scheduler incidents.
 - The current migration-audit checklist is recorded evidence, not a live probe of
   credentials, funding or production enablement.

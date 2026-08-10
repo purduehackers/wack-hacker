@@ -3,18 +3,24 @@
 ## Why there is a supervisor
 
 The bot is one always-on container because it owns the Discord gateway. Vercel
-Sandbox has a 24-hour maximum lifetime, so `packages/supervisor` is a separate,
-credential-isolated Vercel project whose five-minute cron replaces an expiring
-sandbox. It holds a Redis fencing lock, starts a digest-pinned candidate, waits
-for its structured `/health` readiness response, atomically publishes the new
-generation, drains the old command, and removes safe orphans. The Eve deployment
-never receives the Discord token; the supervisor receives it only to inject it
-into the bot container.
+Sandbox has a 24-hour maximum lifetime, so the agent deployment runs a
+five-minute Eve schedule — `packages/agents/agent/schedules/bot-supervisor.ts` —
+that replaces an expiring sandbox. It holds a Redis fencing lock, starts a
+digest-pinned candidate, waits for its structured `/health` readiness response,
+atomically publishes the new generation, drains the old command, and removes
+safe orphans.
 
-This extra control plane exists **only** to bridge Vercel Sandbox's 24-hour
-turnover. On Fly, Railway, a VM, or another persistent container host, run the
-same bot image under that host's restart/health policy, set the agent's `BOT_URL`
-to the persistent service, and do not deploy `packages/supervisor`.
+It lives in the agent because Eve already owns a durable cron surface and
+because the agent is already the _reader_ of the generation record
+(`agent/lib/bot/endpoint.ts`). One deployment owns both sides of that record.
+The cost of that choice is deliberate coupling: promoting a bot image is an
+agent deployment, and rolling back the agent rolls back the configured bot
+image with it.
+
+This supervision exists **only** to bridge Vercel Sandbox's 24-hour turnover. On
+Fly, Railway, a VM, or another persistent container host, run the same bot image
+under that host's restart/health policy, set the agent's `BOT_URL` to the
+persistent service, and leave `BOT_SANDBOX_ENABLED=false`.
 
 Sandbox instances are deliberately **nonpersistent** and replace-on-crash. Redis,
 not a sandbox filesystem, owns queues, render intent/projection, receipts, and
@@ -30,8 +36,8 @@ Configure these before using the release workflows:
 
 - Variables: `VCR_IMAGE` (repository only, for example
   `vcr.vercel.com/team/project/wack-hacker-bot`), `VCR_PROJECT`, `VERCEL_SCOPE`,
-  `SUPERVISOR_VERCEL_PROJECT`, `SUPERVISOR_URL`, and `AGENT_VERCEL_PROJECT`.
-- Secrets: `VERCEL_TOKEN`, `CRON_SECRET`, `UPSTASH_REDIS_REST_URL`,
+  and `AGENT_VERCEL_PROJECT`.
+- Secrets: `VERCEL_TOKEN`, `UPSTASH_REDIS_REST_URL`,
   `UPSTASH_REDIS_REST_TOKEN`, `TURSO_API_TOKEN`, `TURSO_DATABASE_URL`, and
   `TURSO_AUTH_TOKEN`.
 - A protected GitHub environment named `production` with required reviewers.
@@ -39,10 +45,11 @@ Configure these before using the release workflows:
   described in the repository README. Neither package can be uploaded alone
   because both use the `@repo/shared` workspace.
 
-`BOT_IMAGE` belongs only to the supervisor project and must be a full
+`BOT_IMAGE` belongs to the agent project and must be a full
 `vcr.vercel.com/...@sha256:<64 lowercase hex>` reference. VCR images are
-project-scoped: build/login with `VCR_PROJECT` set to the supervisor project and
-use that project's repository path, or Sandbox creation fails with image-not-found.
+project-scoped: build/login with `VCR_PROJECT` set to the project whose
+credentials start the sandbox and use that project's repository path, or Sandbox
+creation fails with image-not-found.
 
 ## Eve hosted-lifecycle cutover gap
 
@@ -64,9 +71,11 @@ Do not replace it with a second loader or infer it from bot `/health`.
    reference and the change ticket. The `production` environment is the human
    approval gate. The job re-verifies VCR availability, platform, signature,
    and vulnerabilities before changing `BOT_IMAGE`.
-4. Promotion deploys the supervisor, calls `/api/ensure-bot`, then reads the
-   fenced active-generation record and verifies both the exact image and the
-   bot's ready `/health` payload. Do not call a successful Vercel deployment a
+4. Promotion sets `BOT_IMAGE` on the agent project and deploys it, then waits
+   for the `bot-supervisor` schedule to adopt the digest — up to five minutes
+   for the next tick plus candidate startup. It then reads the fenced
+   active-generation record and verifies both the exact image and the bot's
+   ready `/health` payload. Do not call a successful Vercel deployment a
    successful bot release until this smoke check passes.
 5. Verify one non-destructive Discord command and inspect Sentry/logs for
    `bot.sandbox.ensure`, gateway reconnects, schedule failures, and render
@@ -84,16 +93,20 @@ Promotion is replace-before-drain: an unhealthy candidate never becomes active.
 If smoke fails after commit, **do not rebuild a tag**. Re-dispatch `promote.yml`
 with the last known-good, already reviewed digest. This creates a new fenced
 generation from the old immutable image and is the bot rollback. Then repeat the
-Discord check. Roll back the supervisor deployment with `vercel rollback
-<deployment-url>` only when the supervisor code itself is faulty; rolling back
-its deployment does not by itself change the already active sandbox.
+Discord check.
 
-If `ensure-bot` fails, preserve its logs and the read-only snapshot before
+Because supervision now ships with the agent, `vercel rollback <deployment-url>`
+on the agent also reverts the `BOT_IMAGE` that deployment carried — but it does
+**not** by itself replace the running sandbox, which only the next scheduled
+reconcile does. Prefer re-dispatching `promote.yml` for a bot rollback, and
+reserve `vercel rollback` for agent code faults.
+
+If a reconcile fails, preserve its logs and the read-only snapshot before
 repairing anything:
 
 ```bash
 bun packages/shared/scripts/ops-inspect.ts redis
-(cd packages/supervisor && bun scripts/sandbox-admin.ts list)
+(cd packages/agents && bun run sandbox list)
 ```
 
 - A digest that VCR cannot inspect was never ready for promotion.
@@ -104,30 +117,31 @@ bun packages/shared/scripts/ops-inspect.ts redis
 
 ## Manual sandbox cleanup
 
-The supervisor normally sweeps only its own tagged, fenced orphans. The admin
+The schedule normally sweeps only its own tagged, fenced orphans. The admin
 script is dry-run by default and uses the same tags. Run it from
-`packages/supervisor` so Bun loads that package's ignored `.env.local`; it needs
+`packages/agents` so Bun loads that package's ignored `.env.local`; it needs
 the Redis REST pair plus `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, and
 `VERCEL_PROJECT_ID`. It preserves the Redis active name and refuses generations
 newer than the active fence:
 
 ```bash
-cd packages/supervisor
-bun scripts/sandbox-admin.ts list
-bun scripts/sandbox-admin.ts cleanup
-bun scripts/sandbox-admin.ts cleanup --apply
+cd packages/agents
+bun run sandbox list
+bun run sandbox cleanup
+bun run sandbox cleanup --apply
 ```
 
-Run `--apply` only after confirming no deploy/ensure is in flight. For a DB
-maintenance quiesce, first deploy the supervisor with
-`BOT_SANDBOX_ENABLED=false`, wait for any ensure request to finish, capture the
-active name with `list`, and explicitly stop it:
+Run `--apply` only after confirming no deploy or reconcile is in flight. For a DB
+maintenance quiesce, first redeploy the agent with `BOT_SANDBOX_ENABLED=false` —
+the schedule then returns immediately while the rest of the agent keeps serving —
+wait for any in-flight reconcile to finish, capture the active name with `list`,
+and explicitly stop it:
 
 ```bash
-bun scripts/sandbox-admin.ts stop-active --confirm <exact-active-sandbox-name> --apply
+bun run sandbox stop-active --confirm <exact-active-sandbox-name> --apply
 ```
 
 The active Redis record intentionally remains as evidence. Once supervision is
-re-enabled, the next ensure sees the missing sandbox and safely advances to a
-new generation. Never delete the supervisor fence counter or active-generation
-key to force recovery.
+re-enabled, the next reconcile sees the missing sandbox and safely advances to a
+new generation. Never delete the fence counter or active-generation key to force
+recovery.

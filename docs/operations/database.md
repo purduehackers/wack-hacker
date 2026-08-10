@@ -22,7 +22,7 @@ supplies a second human gate only when required reviewers are configured in the
 repository settings.
 
 The job refuses a URL/name mismatch, creates a provider-side point-in-time clone
-before mutation, runs the guarded legacy baseline, applies Drizzle migrations,
+before mutation, applies Drizzle migrations,
 runs `PRAGMA quick_check`, verifies that the latest repository migration hash is
 in the ledger and that required tables/columns exist, and only then deploys the
 agent. The Turso and Vercel CLIs are exact versions; the Turso archive checksum
@@ -43,14 +43,9 @@ is verified. On any failure, the bot stays quiesced for operator action.
 2. Record the current agent deployment URL, exact bot digest, database name,
    UTC time, and change ticket. Choose a **new** backup database name; Turso PITR
    cannot restore over an existing database.
-3. Run `database.yml`. Do not insert Drizzle ledger rows by hand. On a carried
-   legacy DB with an empty ledger, `db:baseline-legacy` checks every expected
-   legacy column and index, transactionally preserves each schedule's legacy
-   `member_roles` in a sidecar, and records migration 0002. Re-running it while
-   the verified schema is still at 0002 refreshes that backup safely. Migration
-   0005 restores the snapshots after the immutable 0003/0004 reshape and drops
-   the sidecar. Once the schema has advanced, the baseline command is a no-op.
-   `db:migrate` then applies only later migrations.
+3. Run `database.yml`. Do not insert Drizzle ledger rows by hand. `db:migrate`
+   applies every migration the ledger has not recorded; on an empty database
+   that is the `0000` baseline and nothing else.
 4. Review the workflow's database verification and Vercel deployment URL.
    Re-enable supervision, then run `promote.yml` with the last reviewed bot
    digest to create a fresh sandbox against the new agent deployment.

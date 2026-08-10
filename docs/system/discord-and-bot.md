@@ -2,18 +2,19 @@
 
 ## Discord ownership
 
-`packages/bot` is the only Discord principal. It holds the bot token, owns the
-single discord.js gateway client, and performs every Discord REST effect. The
-Eve application can request only one of the strict semantic operations described
-below; it cannot send an arbitrary route, method, body, webhook credential, or
-Discord token.
+`packages/bot` owns the single discord.js gateway client and is the only writer
+of the agent's own replies. It is **not** the only Discord principal: the agent
+deployment holds the same `DISCORD_BOT_TOKEN` as an optional provider credential
+and calls Discord REST directly from its Discord domain tools, described under
+[Discord operations](#discord-operations). Those tools are bounded by the shared
+policy runtime rather than by a wire contract, and they never render agent
+replies.
 
-The same bot process contains three distinct application surfaces:
+The bot process contains two distinct application surfaces:
 
 1. **conversation surface** — addressed messages, placeholder/render/HITL/reset,
    covered in [Conversation engine](conversation-engine.md);
-2. **semantic Discord RPC** — agent tools to allowlisted raw REST operations;
-3. **community surface** — slash commands, gateway automations, and local cron.
+2. **community surface** — slash commands, gateway automations, and local cron.
 
 They share the Discord client and telemetry, not authorization or state machines.
 
@@ -78,101 +79,56 @@ Every executed handler is wrapped by `instrument()`. Expected typed errors are
 counted/logged; invariant/untyped defects also reach Sentry. One sibling's
 failure cannot cancel another.
 
-## Semantic Discord command RPC
+## Discord operations
 
-### End-to-end path
+### Where they run
+
+Every Discord operation the model can invoke is an ordinary domain tool in the
+Discord subagent, executed against the agent deployment's own Discord REST
+identity — the same shape as Linear, Notion, GitHub, or Vercel. There is no RPC
+hop and no hand-written request/response contract.
 
 ```mermaid
 sequenceDiagram
   participant M as Eve model
   participant T as Discord dynamic tool
   participant P as Shared policy runtime
-  participant C as Agent Discord client
-  participant B as Bot HTTP route
-  participant H as Exhaustive handler
+  participant O as subagents/discord/lib/operations/*
   participant R as Discord REST
 
   M->>T: operation-specific input
   T->>P: approval / execute revalidation
-  P->>C: discordCommand(operation, parsed input)
-  C->>B: POST /internal/discord-command + bearer
-  B->>B: ready check + strict union decode
-  B->>H: executeDiscordCommand(rest, command)
-  H->>R: allowlisted Routes.* request
-  R-->>H: Discord API value/error
-  H-->>B: strict semantic summary
-  B-->>C: strict success/failure envelope
-  C->>C: envelope + operation output decode
-  C-->>P: typed Result
+  P->>O: tool execute(input)
+  O->>R: Routes.* request with the agent's REST token
+  R-->>O: Discord API value/error
+  O-->>P: projected summary or typed failure
   P-->>M: plain JSON projection + audit
 ```
 
-### Agent client
+The bot keeps the Discord work only it can do: the gateway connection, community
+handlers and slash commands, HITL interaction responses, and **rendering** —
+`agent/render/discord-rest.ts` writing the agent's replies with nonce-enforced
+idempotency. Those never crossed this seam and are unaffected.
 
-`subagents/discord/lib/client.ts::createDiscordCommandClient()`:
+The tradeoff taken deliberately: the renderer and the agent's message tools are
+now two REST clients with independent rate-limit bucket state on the same
+channel routes. Both honour `retry_after`; at this guild's volume the collision
+risk is accepted in exchange for deleting the RPC layer.
 
-- resolves the current bot base URL from the active generation record or
-  configured fallback;
-- POSTs `{ operation, input }` with `BOT_INGRESS_SECRET`;
-- applies a 30-second timeout;
-- strictly decodes the response envelope even on non-2xx;
-- maps 429 to `RateLimited`, 5xx/transport to `Transient`, and provider 4xx to
-  `UpstreamError`;
-- strictly decodes `data` with the schema for the exact operation;
-- maps malformed HTTP-200 success to a 502 upstream failure.
+### Operation modules
 
-### Bot route
+`subagents/discord/lib/operations/` holds the 68 operations, grouped by surface:
+`members.ts`, `roles-channels.ts`, `assets.ts` (emoji/sticker/webhook),
+`guild.ts` (guild/events/invites/audit/automod), and `messages.ts`
+(messages/reactions/threads). Each entry is a `defineDomainTool` carrying its
+`access` descriptor, so authorization, approval, budget, and audit are the
+shared policy spine — identical to every other domain.
 
-`agent/discord-commands/route.ts::handleDiscordCommandRequest()`:
+Missing configuration is declined by the runtime's `configurationError`: without
+`DISCORD_BOT_TOKEN` the tools stay visible to role policy and fail closed at
+execution, exactly like a missing `LINEAR_API_KEY`.
 
-1. requires POST;
-2. constant-time bearer check;
-3. rejects while the gateway is not ready;
-4. decodes the strict discriminated operation union;
-5. calls the handler with `client.rest`;
-6. returns a bounded strict success/error envelope.
-
-The route normalizes invalid upstream statuses to 502 and never exposes a raw
-exception or REST object.
-
-### Handler boundary
-
-`DiscordRest` is derived as the narrow raw-method subset of discord.js client
-REST: `delete`, `get`, `patch`, `post`, and `put`. The exhaustive switch uses
-`discord-api-types` request/response types and `Routes.*`; it does not use
-manager caches or entity semantics.
-
-Static Discord types are not runtime validation. The handler therefore:
-
-- checks objects/arrays and required nested fields fail-closed;
-- projects provider-owned values to small project summaries;
-- validates the final operation-specific output schema;
-- ends the switch exhaustively (`command satisfies never`).
-
-Input schema keys, output schema keys, `DISCORD_TOOLS`, the agent registry, and
-bot switch are checked for exact 68-operation parity.
-
-### Operation inventory
-
-| Capability group     | Exact operations                                                                                                                                                                                                          |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Core read operations | `get_server_info`, `list_channels`, `list_roles`, `search_members`                                                                                                                                                        |
-| Audit log            | `get_audit_log`                                                                                                                                                                                                           |
-| Auto moderation      | `list_auto_mod_rules`, `get_auto_mod_rule`, `create_auto_mod_rule`, `update_auto_mod_rule`, `delete_auto_mod_rule`                                                                                                        |
-| Channels             | `create_channel`, `edit_channel`, `delete_channel`, `get_channel`, `follow_announcement_channel`                                                                                                                          |
-| Emoji/stickers       | `list_emojis`, `create_emoji`, `edit_emoji`, `delete_emoji`, `list_stickers`, `create_sticker`, `edit_sticker`, `delete_sticker`                                                                                          |
-| Scheduled events     | `list_events`, `create_event`, `edit_event`, `delete_event`                                                                                                                                                               |
-| Guild                | `update_guild`, `get_guild_preview`, `get_vanity_url`                                                                                                                                                                     |
-| Invites              | `list_invites`, `create_invite`, `delete_invite`                                                                                                                                                                          |
-| Member moderation    | `ban_member`, `unban_member`, `list_bans`, `kick_member`, `timeout_member`, `clear_timeout`                                                                                                                               |
-| Members              | `get_member`, `set_nickname`                                                                                                                                                                                              |
-| Membership           | `add_member_to_platform`, `remove_member_from_platform`                                                                                                                                                                   |
-| Messages             | `send_message`, `delete_message`, `edit_message`, `bulk_delete_messages`, `crosspost_message`, `get_message`, `pin_message`, `unpin_message`, `add_reaction`, `remove_reaction`, `remove_all_reactions`, `fetch_messages` |
-| Roles                | `create_role`, `edit_role`, `delete_role`, `assign_role`, `remove_role`                                                                                                                                                   |
-| Threads              | `list_threads`, `create_thread`, `edit_thread`, `delete_thread`                                                                                                                                                           |
-| Webhooks             | `list_webhooks`, `create_webhook`, `delete_webhook`, `edit_webhook`                                                                                                                                                       |
-
-### Important endpoint semantics
+### Endpoint semantics that still matter
 
 - Archived thread listing requires a channel. It follows public, private, and
   joined-private routes with each route's native cursor, deduplicates IDs, caps
@@ -183,24 +139,33 @@ bot switch are checked for exact 68-operation parity.
   description from explicit `null`.
 - Role-position tools summarize the role returned by Discord's position update,
   not a guessed local value.
-- Real timestamp fields use ISO schemas. The legacy snowflake-valued
-  `createdAt` compatibility fields and provider-owned automod nested JSON remain
-  explicitly pass-through where the public wire already requires it.
+- Real timestamp fields use ISO schemas. Provider-owned automod nested JSON
+  remains explicitly pass-through where the public wire already requires it.
 - Webhook results never project credentials/tokens.
-- Emoji/event/role/webhook/sticker media URLs may name arbitrary HTTP(S)
-  hosts. The fetch follows redirects and has a 15-second timeout, MIME checks,
-  and operation-specific declared/actual byte bounds, but no host/private-IP
-  allowlist. Without `Content-Length`, `arrayBuffer()` buffers the body before
-  the actual-size rejection. Several URL-taking operations are write-risk and
-  therefore default to no confirmation; the model controls the URL after the
-  organizer-only outer Discord subagent gate. This is a no-HITL SSRF/GET-side-
-  effect and potentially unbounded-memory surface in the process holding all bot
-  credentials.
+
+### Model-controlled media fetch
+
+Emoji, sticker, role-icon, webhook-avatar, and scheduled-event image operations
+take an `httpUrl` the model supplies. `operations/common.ts::download()` rejects
+embedded credentials and non-HTTP(S) schemes, follows redirects, times out after
+15 seconds, checks the MIME type, and enforces both the declared `Content-Length`
+and the actual byte length. It has **no host or private-IP allowlist**, and
+without `Content-Length` the body is fully buffered by `arrayBuffer()` before the
+actual-size rejection can fire.
+
+These operations declare `risk: "write"`, whose default confirmation is `none`,
+so there is no per-URL human gate: the only gate is the organizer-only Discord
+subagent descriptor. Moving the operations out of the bot did not shrink this
+surface — it moved the fetch into the agent process, which holds every provider
+credential rather than only the Discord token. This is a described limitation,
+not a claim that it is desirable.
 
 ## Slash command system
 
-Commands are built at startup but guild registration is an explicit operator
-command, not an automatic boot side effect:
+Commands are built at startup, but registration is never a boot side effect. It
+is a standalone script, `packages/bot/scripts/register-commands.ts`, run by the
+`register-commands` CI job after a merge to `main` and available to an operator
+directly:
 
 ```bash
 cd packages/bot
@@ -208,7 +173,9 @@ CONFIRM_COMMAND_GUILD=772576325897945119 bun run register-commands
 ```
 
 Registration PUTs exactly `/ping`, `/privacy`, and `/hack-night` to the fixed
-guild and refuses a mismatched confirmation guild.
+guild and refuses a mismatched confirmation guild, so the CI job cannot reach a
+different guild even with a misconfigured secret. The PUT replaces the whole
+command set, which is what makes repeating it on every merge safe.
 
 ### Common interaction dispatch
 
@@ -332,7 +299,7 @@ by the visible ❌; the outer handler currently returns an instrumented success.
 ### Voice transcription
 
 A Discord voice message with a `.ogg` attachment reacts 🎙️, downloads audio,
-and uses Groq `whisper-large-v3` in English. Small files try whole-audio first;
+and uses Groq `whisper-large-v3-turbo` in English. Small files try whole-audio first;
 size-class failures or files over 24 MiB use Ogg Opus chunks near 20 MiB.
 
 `splitOggOpus()` preserves headers, sequence numbers, EOS bits and CRC. At most
@@ -412,14 +379,10 @@ These details matter when diagnosing effects:
 These are descriptions of the current implementation, not promises that the
 limitations are desirable.
 
-## Tests and parity
+## Parity
 
-- `framework/events.test.ts`, `dedup.test.ts`, `server.test.ts` characterize
-  routing/order/dedup/HTTP;
-- `framework/observability.test.ts` characterizes metrics/defect accounting;
-- command/event unit tests cover authorization and provider projections;
-- `agent/discord-commands/handler.test.ts` covers nested malformed data,
-  stickers, role positions, legacy routes and archive pagination;
-- `shared/src/discord-command-wire.test.ts` proves strict operation output
-  contracts;
-- agent feature-parity and tool-policy tests prove the exact 68-key registry.
+- the operation modules preserve nested malformed-data handling, stickers, role
+  positions, legacy routes and archive pagination;
+- the Discord operation modules project every response explicitly, so provider
+  output contracts are visible in the source rather than inferred;
+- `bun run check:capabilities` in `packages/agents` proves the exact 68-key registry.

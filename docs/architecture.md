@@ -23,7 +23,6 @@ flowchart LR
     DiscordClient["discord.js Client"]
     Flow["Conversation Flow<br/>single orchestration point"]
     Projector["Discord Projector<br/>messages • components • terminal paint"]
-    CommandBoundary["Discord Command Boundary<br/>DiscordRest • 68 strict operations"]
     Features["Community Features<br/>commands • handlers • local schedules"]
   end
 
@@ -36,7 +35,6 @@ flowchart LR
   end
 
   Store["Conversation Store<br/>one shared Redis-facing API"]
-  CommandWire["Strict Discord Command Wire<br/>input • output • envelope schemas"]
   Redis[("Redis<br/>conversation coordination")]
   Turso[("Turso<br/>schedules • audit • shopping cart")]
   APIs[External APIs]
@@ -60,9 +58,7 @@ flowchart LR
   Policy --> Tools
   Policy --> Turso
   Tools --> APIs
-  Tools --> CommandWire
-  CommandWire --> CommandBoundary
-  CommandBoundary --> DiscordClient
+  Tools -->|"agent's own REST token"| Discord
 
   Schedule <--> Turso
   Schedule -->|"scheduled occurrence"| Flow
@@ -117,12 +113,9 @@ queued turn.
 ```text
 packages/bot/src
 ├── index.ts                              # composition root
-├── conversations/flow.ts                # the only conversation reconciler
+├── utils/conversation/                    # the only conversation reconciler
 ├── agent/
 │   ├── client.ts                         # thin typed Eve HTTP transport
-│   ├── discord-commands/
-│   │   ├── route.ts                      # authenticated strict request/response adapter
-│   │   └── handler.ts                    # narrow DiscordRest + exhaustive operation switch
 │   ├── render/{renderer,discord-rest}.ts # Discord projection adapter
 │   ├── hitl/interaction.ts               # Discord interaction adapter
 │   └── scheduled.ts                      # Discord schedule materialization
@@ -140,7 +133,7 @@ packages/agents/agent
 │   │   ├── {usage-hook,domain-audit-hook}.ts
 │   │   │                                 # shared hook implementations
 │   │   └── provider-redaction.ts         # provider secret/error/output projection
-│   └── schedule-store.ts                 # strict Zod libSQL row boundary and lease SQL
+│   └── schedule/store.ts                 # strict Zod libSQL row boundary and lease SQL
 ├── tools/                                # root capabilities
 ├── subagents/<domain>/
 │   ├── agent.ts                          # native Eve subagent declaration
@@ -148,6 +141,7 @@ packages/agents/agent
 │   ├── skills/catalog.ts                 # defineDynamic + defineSkill skill map
 │   ├── hooks/                            # thin Eve-discovered policy hook exports
 │   └── lib/{tool-registry,runtime}.ts    # provider specs and narrow runtime adapter
+│       └── operations/*.ts               # (discord) REST calls + response projections
 └── schedules/                            # durable schedules and dispatch
 
 packages/shared/src
@@ -156,18 +150,21 @@ packages/shared/src
 │   ├── store.ts                          # only exported Redis-facing API
 │   ├── render.ts                         # validates the stored render projection
 │   └── *.ts                              # private keys, eval/Lua, and local record shapes
-├── discord-command-wire.ts               # 68 strict semantic Discord contracts
-├── bot-health.ts                         # shared bot health schemas and output types
-├── bot-generation.ts                     # shared active-generation schema/decoder/reader
+├── discord/                              # guild identifiers, roles, constants
+├── bot/health.ts                         # shared bot health schemas and output types
+├── bot/generation.ts                     # shared active-generation schema/decoder/reader
 ├── wire.ts                               # other cross-process schemas, not Redis keys
 ├── errors.ts                             # project error taxonomy
 └── domain data                           # only genuinely shared shapes
 ```
 
-An optional process supervisor may start or replace the bot container, but it is
-not part of the application data flow and should not shape application APIs. It
-and release/operations scripts consume the shared health and active-generation
-decoders rather than restating those external records.
+Bot container supervision is an Eve schedule in the agent
+(`agent/schedules/bot-supervisor.ts`). It may start or replace the bot
+container, but it is not part of the application data flow and must not shape
+application APIs: no tool, subagent, or channel route reaches it, and it shares
+nothing with reasoning except the Redis client. It and release/operations
+scripts consume the shared health and active-generation decoders rather than
+restating those external records.
 
 ## Eve-native subagent skills
 
@@ -185,10 +182,12 @@ enforced again at approval and execution. Missing provider configuration remains
 a typed execution-time failure. No tool resolver reads `load_skill` results or
 model-message history.
 
-A compiled lifecycle canary proves local `defaultBackend()` materialization,
-repeated native loads on one preserved session, and removal after the resolver
-returns `{}`. The compiled manifest also contains the skill and tool resolver
-for every integration subagent. Hosted sandbox reattachment remains a required
+Local `defaultBackend()` materialization, repeated native loads on one preserved
+session, and removal after the resolver returns `{}` are Eve framework behavior
+that no repository check currently proves — the compiled lifecycle canary that
+did was removed with the test suite, so a resolver change must be verified by
+hand. The compiled manifest still contains the skill and tool resolver for
+every integration subagent. Hosted sandbox reattachment remains a required
 deployment canary, but no current workflow or runbook executes it automatically.
 Production cutover cannot claim this evidence until an explicit hosted check is
 reviewed and run; the fallback is not a second loader.
@@ -206,23 +205,30 @@ flowchart LR
   Context --> Model
 ```
 
-## Discord command boundary
+## Discord domain tools
 
-The agent-to-bot Discord seam is a strict semantic RPC with exactly 68 operation
-keys. The input schemas, output schemas, Discord tool registry, and exhaustive
-bot switch are checked for exact key parity. Requests are a strict discriminated
-union; response envelopes are strict; both the bot and the agent decode the
-operation-specific project output. Malformed Discord results fail closed as a
-typed upstream error instead of becoming `{}`, `[]`, or a partial success.
+Discord is an ordinary provider domain: its 68 operations live in
+`subagents/discord/lib/operations/` and call Discord's API with the agent
+deployment's own REST identity, exactly as the Linear domain calls the Linear
+SDK. There is no cross-process hop and no hand-written request/response
+contract. Each operation owns its Zod input, its `Routes.*` call, and its
+response projection, and each is a `defineDomainTool` carrying an `access`
+descriptor, so authorization, approval, budget, and audit are the same shared
+policy spine every domain uses. Malformed Discord results fail closed as a typed
+upstream error instead of becoming `{}`, `[]`, or a partial success.
 
-The bot deliberately accepts a narrow
-`DiscordRest = Pick<Client["rest"], "delete" | "get" | "patch" | "post" | "put">`
-and uses `Routes`, discord.js-exported v10 REST types, small fail-closed object and
-array guards, and strict project-owned projection schemas. It did **not** adopt
-discord.js managers or cache semantics: the boundary covers raw endpoints and
-requires current REST results, so managers would add a second behavior model
-without simplifying the seam. The centralized switch remains readable and ends
-with `command satisfies never`.
+What stays on the bot is _paint_: the renderer in
+`packages/bot/src/agent/render/discord-rest.ts` writes the agent's own replies
+with nonce-enforced idempotency, because those share rate-limit buckets with the
+gateway client and need a single writer for visible-commit convergence. The
+accepted tradeoff is two REST clients with independent bucket state on the same
+channel routes; both honour `retry_after`.
+
+The operation modules use `Routes`, discord.js-exported v10 REST types, small
+fail-closed object and array guards, and strict project-owned projection
+schemas. They deliberately do **not** adopt discord.js managers or cache
+semantics: the operations cover raw endpoints and require current REST results,
+so managers would add a second behavior model without simplifying anything.
 
 Archived threads follow each applicable public/private/joined route's native
 cursor, reject missing or nonadvancing cursors, cap pagination, and deduplicate

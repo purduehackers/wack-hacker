@@ -8,8 +8,10 @@ The image workflow is the release record:
   version remains in the reference for readability.
 - The Bun and Vercel CLI versions are exact. The database workflow verifies the
   exact Turso CLI archive SHA-256 before execution.
-- `bun install --frozen-lockfile`, format/type/lint/test, production dependency
-  audit, migration validation, and a `linux/amd64` image build run in CI.
+- `bun install --frozen-lockfile`, format/type/lint, production dependency audit,
+  migration validation, and a `linux/amd64` image build run in CI. There is no
+  automated test suite, so a signed image is attested by static checks and builds
+  only, never by a passing test run.
 - BuildKit emits maximum SLSA provenance. A checksum-pinned Syft binary exports a
   reviewable SPDX JSON SBOM. Trivy blocks fixable HIGH/CRITICAL findings.
 - Cosign signs the immutable VCR digest keylessly using the workflow's GitHub

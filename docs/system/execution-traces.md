@@ -18,7 +18,7 @@ container command / local bun run dev
    ├─ createConversationSeam()
    │  ├─ createAgentClient()                           packages/bot/src/agent/client.ts
    │  ├─ createDiscordRest()                           packages/bot/src/agent/render/discord-rest.ts
-   │  ├─ createConversationFlow()                      packages/bot/src/conversations/flow.ts
+   │  ├─ createConversationFlow()                      packages/bot/src/utils/conversation/index.ts
    │  └─ createHitlInteractionHandler()                packages/bot/src/agent/hitl/interaction.ts
    ├─ startServer()                                    packages/bot/src/framework/server.ts
    ├─ connect() -> client.login() -> ClientReady       packages/bot/src/framework/gateway.ts
@@ -44,7 +44,7 @@ Discord gateway MESSAGE_CREATE
             ├─ stripBotMention()
             ├─ Promise.all(openThread, fetchLeadIn)
             ├─ postPlaceholder(nonce=<source>:0)
-            └─ ConversationFlow.submit(payload)        packages/bot/src/conversations/flow.ts
+            └─ ConversationFlow.submit(payload)        packages/bot/src/utils/conversation/queue.ts
                ├─ store.queue.enqueue(payload)         packages/shared/src/conversations/queue.ts
                │  └─ ENQUEUE_SCRIPT: dedup + FIFO + target + indexes
                └─ kick(continuationKey)
@@ -78,7 +78,7 @@ Eve lifecycle event (message.appended/actions.requested/input.requested/...)
             ⇢ bot handleRender()                       packages/bot/src/framework/server.ts
                └─ flow.wake({dispatchId})
                   ⇢ sweep/renderDispatches()
-                     └─ applyLatest(dispatchId)         packages/bot/src/conversations/flow.ts
+                     └─ applyLatest(dispatchId)         packages/bot/src/utils/conversation/render.ts
                         ├─ store.render.claim()         packages/shared/src/conversations/render.ts
                         ├─ loadWork(intent,target,projection)
                         ├─ createRenderer().write()     packages/bot/src/agent/render/renderer.ts
@@ -205,11 +205,11 @@ cannot project the self-approval control, as described in trace 5.
 
 ```text
 model -> schedule_task
-└─ approveScheduleMutation()                         packages/agents/agent/lib/schedule-owner.ts
+└─ approveScheduleMutation()                         packages/agents/agent/lib/schedule/owner.ts
    └─ current organizer/write/self policy -> human approval
 ⇢ tool replay execute()
 └─ requireScheduleMutationOwner()                    current role recheck
-└─ getScheduleStore().create(owner,input)            packages/agents/agent/lib/schedule-store.ts
+└─ getScheduleStore().create(owner,input)            packages/agents/agent/lib/schedule/store.ts
    ├─ validate future instant or Croner/IANA recurrence
    └─ INSERT scheduled_tasks RETURNING strict view
 ```
@@ -289,32 +289,27 @@ The approval path and domain `actions.requested` hook are separate audit
 producers; confirmation-gated calls can currently produce two Requested rows
 with different IDs before later lifecycle states.
 
-## 11. Semantic Discord tool
+## 11. Discord tool
 
 ```text
 model -> Discord inline tool
 └─ shared domain policy (trace 9/10)
-└─ registry spec -> discordCommand(operation,input)
-   └─ createDiscordCommandClient()                   packages/agents/agent/subagents/discord/lib/client.ts
-      ├─ resolveBotBaseUrl(active generation or absent-record fallback)
-      ├─ POST /internal/discord-command (30s, synchronous cross-process HTTP)
-      │  └─ handleDiscordCommandRequest()            packages/bot/src/agent/discord-commands/route.ts
-      │     ├─ service bearer + gateway ready + strict correlated union
-      │     └─ executeDiscordCommand(client.rest)    packages/bot/src/agent/discord-commands/handler.ts
-      │        ├─ fixed-guild/entity preflight
-      │        ├─ exhaustive operation switch
-      │        ├─ Discord Routes.* REST call(s)
-      │        ├─ fail-closed provider guards
-      │        └─ operation-specific output decoder
-      │     └─ return strict success/error envelope
-      ├─ verify HTTP/envelope agreement
-      └─ operation-specific output decoder again
+└─ registry spec -> tool execute(input)
+   └─ subagents/discord/lib/operations/{members,roles-channels,assets,guild,messages}.ts
+      ├─ discordRest()                               agent's own REST token, v10
+      ├─ fixed-guild/entity preflight
+      ├─ Discord Routes.* REST call(s)
+      ├─ fail-closed provider guards
+      └─ explicit response projection
+   └─ DISCORD_RUNTIME.mapFailure -> RateLimited | Transient | UpstreamError
 ```
 
-The bot route trusts the agent service bearer for the whole 68-operation
-allowlist; it does not receive/re-evaluate end-user RBAC. Mutations have no RPC
-idempotency receipt, so a timeout after Discord commits is ambiguous and is not
-automatically retried.
+There is no cross-process hop: the operation runs in the agent, and a missing
+`DISCORD_BOT_TOKEN` is declined by the runtime's `configurationError` rather than
+by a transport error. The bot's renderer keeps its own REST client for painting.
+
+Mutations have no idempotency receipt, so a timeout after Discord commits is
+ambiguous and is not automatically retried.
 
 ## 12. Ordinary community message
 
@@ -357,10 +352,11 @@ Turso-backed user schedule system.
 ## 13. Supervisor generation rotation
 
 ```text
-Vercel Cron */5
-└─ ensureBot()                                       packages/supervisor/api/ensure-bot.ts
-   ├─ CRON_SECRET + enabled/image/env validation
-   └─ supervisor.ensure()                            packages/supervisor/src/bot-sandbox.ts
+Eve schedule */5                                     agents/agent/schedules/bot-supervisor.ts
+└─ reconcileBotSandbox()
+   ├─ returns immediately when BOT_SANDBOX_ENABLED=false
+   ├─ botSupervisionConfig(env)                      agents/agent/lib/bot/supervisor-config.ts
+   └─ supervisor.ensure()                            agents/agent/lib/bot/supervisor.ts
       ├─ acquireLease()                              Lua fence INCR + mutex
       └─ reconcile()
          ├─ read strict active generation
@@ -390,13 +386,8 @@ reviewed manual workflow on main                         .github/workflows/datab
    ├─ install checksum-pinned Turso CLI
    ├─ verify provider database URL == approved TURSO_DATABASE_URL
    ├─ create timestamped pre-change PITR clone and verify it exists
-   ├─ guarded baseline                                 packages/shared/scripts/baseline-legacy-migrations.ts
-   │  ├─ read migration ledger
-   │  ├─ if empty/exactly through 0002: inspect legacy schema and reject drift
-   │  │  └─ stage role sidecar + insert verified 0000-0002 baseline
-   │  └─ if any newer entry exists: no-op (not a full advanced-history audit)
-   ├─ Drizzle migrate                                  packages/shared/drizzle/*.sql
-   │  └─ forward 0003 -> 0004 -> 0005 as needed
+   ├─ Drizzle migrate                                  packages/shared/migrations/*.sql
+   │  └─ apply whatever the ledger has not recorded
    ├─ verify database                                  packages/shared/scripts/verify-database.ts
    │  └─ quick integrity + ledger/latest hash + required schema subset
    ├─ Vercel pull/link configured agent project

@@ -15,8 +15,8 @@ stacks name the production modules that own each behavior.
 4. [Eve, policy, and integrations](eve-policy-and-integrations.md) — sessions,
    native skills/tools, authorization, provider domains, schedules, and the code
    sandbox.
-5. [Discord and bot features](discord-and-bot.md) — gateway routing, semantic
-   Discord RPC, commands, community handlers, and bot-local schedules.
+5. [Discord and bot features](discord-and-bot.md) — gateway routing, the agent's
+   Discord domain tools, commands, community handlers, and bot-local schedules.
 6. [Storage, supervision, and operations](storage-supervision-and-operations.md) —
    Redis/Turso ownership, migrations, bot sandbox rotation, health, telemetry,
    CI, deployment, and incident inspection.
@@ -44,7 +44,7 @@ flowchart LR
     Gateway[discord.js Client]
     Router[commands and event router]
     Flow[ConversationFlow]
-    Paint[render and Discord-command adapters]
+    Paint[render adapter]
     BotHTTP[Bun HTTP server]
   end
 
@@ -56,8 +56,8 @@ flowchart LR
     Dispatcher[durable schedule dispatcher]
   end
 
-  subgraph Control[packages/supervisor — optional control plane]
-    Ensure[ensure-bot function]
+  subgraph Control[bot supervision — Eve schedule inside packages/agents]
+    Ensure[bot-supervisor schedule, */5]
     Sandbox[Vercel Sandbox SDK]
   end
 
@@ -72,7 +72,8 @@ flowchart LR
   Flow <--> Shared <--> Redis
   Flow <-->|strict authenticated HTTP| Channel
   Channel --> Session --> Policy --> Catalogs --> Providers
-  Catalogs -->|strict semantic Discord RPC| BotHTTP --> Paint --> Discord
+  Catalogs -->|agent's own REST token| Discord
+  Flow --> Paint --> Discord
   Policy --> Turso
   Dispatcher <--> Turso
   Dispatcher -->|scheduled occurrence admission| BotHTTP
@@ -82,16 +83,16 @@ flowchart LR
 
 ## Non-negotiable ownership rules
 
-| Concern                                 | Sole production owner                                | Why                                                                                                                           |
-| --------------------------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Discord gateway and REST token          | `packages/bot`                                       | Reasoning and provider tools cannot impersonate the bot or bypass its semantic boundary.                                      |
-| Eve sessions, model state, tool replay  | `packages/agents` and Eve                            | The bot sends semantic deliveries; it does not emulate an agent runtime.                                                      |
-| Conversation keys and Lua transitions   | `packages/shared/src/conversations`                  | Bot and agent use the same key spelling and atomic state machine.                                                             |
-| Reconciliation and Discord paint        | `ConversationFlow` in `packages/bot`                 | One loop advances queues only after durable terminal visibility.                                                              |
-| Project core/provider capability policy | `packages/agents/agent/lib/policy`                   | Project catalogs recheck current authority at discovery, approval, and execution; Eve defaults remain framework-owned.        |
-| Durable schedules and action audit      | agent-side Turso access                              | The bot deliberately has no database credentials.                                                                             |
-| Active bot generation                   | fenced Redis record written by `packages/supervisor` | Container handoff cannot be decided by mutable host-local state.                                                              |
-| Cross-process shapes                    | validated schemas/decoders in `packages/shared`      | Main wire unions are strict; health/generation intentionally ignore additive fields; static TypeScript alone is insufficient. |
+| Concern                                 | Sole production owner                                      | Why                                                                                                                           |
+| --------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Discord gateway and reply rendering     | `packages/bot`                                             | One writer converges nonces and the visible-commit barrier; the agent's Discord tools are a separate provider identity.       |
+| Eve sessions, model state, tool replay  | `packages/agents` and Eve                                  | The bot sends semantic deliveries; it does not emulate an agent runtime.                                                      |
+| Conversation keys and Lua transitions   | `packages/shared/src/conversations`                        | Bot and agent use the same key spelling and atomic state machine.                                                             |
+| Reconciliation and Discord paint        | `ConversationFlow` in `packages/bot`                       | One loop advances queues only after durable terminal visibility.                                                              |
+| Project core/provider capability policy | `packages/agents/agent/lib/policy`                         | Project catalogs recheck current authority at discovery, approval, and execution; Eve defaults remain framework-owned.        |
+| Durable schedules and action audit      | agent-side Turso access                                    | The bot deliberately has no database credentials.                                                                             |
+| Active bot generation                   | fenced Redis record written by the bot-supervisor schedule | Container handoff cannot be decided by mutable host-local state.                                                              |
+| Cross-process shapes                    | validated schemas/decoders in `packages/shared`            | Main wire unions are strict; health/generation intentionally ignore additive fields; static TypeScript alone is insufficient. |
 
 ## Current implementation limitations
 

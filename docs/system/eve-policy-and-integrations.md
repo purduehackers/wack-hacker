@@ -123,8 +123,8 @@ is admin-only, and documentation is public only when its API is configured. A
 provider domain can contain raw tool descriptors with lower minimum roles, but
 those do not bypass the outer subagent discovery gate in ordinary root use.
 
-The integration feature-parity manifest is executable documentation. The checker
-requires exactly 11 native domains, 659 tools, 104 skills, and 13 subagents.
+`bun run check:capabilities` reports the surface it validates: 11 native
+domains, 659 tools, 104 skills, and 13 subagents.
 
 | Domain   | Tools | Skills |
 | -------- | ----: | -----: |
@@ -160,7 +160,9 @@ subagents/<domain>/
 At the catalog lifecycle event, current auth is evaluated and an authorized map
 of `defineSkill` values is returned. Eve owns the `load_skill` tool and adds the
 selected instructions to context. Repeated loads and removal on later downgrade
-are framework behavior proven by the compiled lifecycle canary.
+are framework behavior. No repository check currently exercises them: the
+compiled lifecycle canary that did was removed with the test suite, so a change
+to a catalog resolver must be verified by hand.
 
 Loading a skill never grants authority. It does not mutate a local tool registry
 or become an authorization record. Tool visibility is independently rebuilt from
@@ -243,7 +245,8 @@ catalog.
 
 `executeTool()` never trusts prior discovery or approval alone:
 
-1. `principalForExecution()` obtains current authority;
+1. `requirePrincipal()` and `resolveExecutionAuthority()` obtain current
+   authority;
 2. second-party calls reread and verify the persisted policy, original requester,
    distinct current approver, both current roles, tool/risk/session/call binding;
 3. policy executes again and rejects `!execute` or `approve=deny`;
@@ -445,8 +448,8 @@ tools fail closed (framework defaults remain outside that policy).
 
 `message` actions take a different path: the bot posts their stored content
 directly before any owner fetch, so they do not revalidate current membership or
-role. Model-created rows are currently `agent`, but migrated/legacy rows can
-retain `message` semantics.
+role. Every row the model creates is `agent`; `message` remains a supported
+storage contract that no current writer produces.
 
 ## Code subagent
 
@@ -464,11 +467,22 @@ limitation above, so this describes the executor boundary rather than a working
 Discord end-to-end path.
 
 Unsafe generic Eve tools (`bash`, `read_file`, `write_file`, `glob`, `grep`,
-`web_fetch`, and `web_search`) are disabled. One dynamic `capabilities.ts` catalog exposes the
-project's bounded replacements according to workspace phase and current policy.
-The first visible capability is approved repository checkout; afterward the
-agent can boundedly read, glob, grep, execute, write/edit/remove, and finish.
-Publication is terminal.
+`web_fetch`, and `web_search`) are disabled. Two dynamic project tools replace
+them, each resolved per step from `session.auth.current` and the workspace
+phase, so a non-admin sees neither:
+
+- `tools/code_task.ts` delegates one bounded instruction to a Codex agent
+  running in this session's own sandbox. It checks the repository out, edits it,
+  and runs the repository's own checks; it never commits, pushes, or opens a
+  pull request. Later calls resume the same parked sandbox, so they build on the
+  earlier edits.
+- `tools/post_finish.ts` exposes `code_post_finish`, which publishes from that
+  same parked sandbox. It is offered only once `code_task` has parked one, since
+  otherwise there is no checkout to publish.
+
+Both require current-admin approval on every call. Publication is terminal: once
+the workspace records one, `code_task` stops being offered and
+`decideCodeCapability` denies every capability except `code_post_finish` itself.
 
 Safety constraints include canonical repository confinement, symlink escape and
 secret-path rejection, no process environment forwarding, a fail-closed shell
@@ -496,11 +510,27 @@ errors cross as explicit `{ ok: false, error: { tag, message, ... } }` data.
 
 ## Validation surfaces
 
-- `scripts/check-feature-parity.ts` — domain/tool/skill/subagent inventory;
-- `scripts/check-serialization-boundaries.ts` — inline guarded boundary syntax;
-- `scripts/test-native-skill-lifecycle.ts` — compiled discovery, native load,
-  repeated load and downgrade removal on `defaultBackend()`;
-- `scripts/test-native-tool-lifecycle.ts` — two-step reconstruction of inline
-  dynamic executors;
-- policy, authority, schedule store and code-sandbox tests under `agent/lib`;
+- `scripts/check-capabilities.ts` — cross-file invariants over the capability
+  surface: a skill may not reference a tool the registry does not define, a
+  registry tool must be reachable from the base set or some skill, names must be
+  unique, and a subagent must declare both `agent.ts` and `instructions.md` (and
+  both a skill catalog and a tool registry, or neither);
+- `scripts/check-serialization-boundaries.ts` — inline guarded boundary syntax,
+  including the count of integration catalogs that remain inline;
 - `eve build` and `eve info` — compilation and discovery diagnostics.
+
+CI runs the two scripts as separate steps; between them they report inventory
+counts and boundary counts only. TypeScript errors are reported by `bun run
+lint`, which is type-aware — there is no separate `tsc` pass.
+
+The capability surface is deliberately _not_ snapshotted. A `minRole` or
+instruction change is one line in a `skills/catalog.ts` and appears in the diff
+on its own; pinning a generated copy of it only adds a second file to update and
+invites regenerating past the change the pin was meant to surface.
+
+Skill and tool lifecycle behavior has no automated coverage. The compiled
+canaries that exercised native load, repeated load and downgrade removal on
+`defaultBackend()`, and two-step replay reconstruction were removed along with
+the repository test suite, and nothing in `bun run lint` or CI replaces
+them. Changes to a `skills/catalog.ts` resolver or to an inline `defineTool`
+executor must be verified by hand.

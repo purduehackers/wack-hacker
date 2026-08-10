@@ -4,7 +4,14 @@ This is the evidence checkpoint for the bot-owned Discord/Eve migration. It
 separates completed engineering work from production actions that are blocked by
 credentials, billing, or a human interaction.
 
-> **Later documentation-audit correction:** component/unit evidence below does
+> **Later corrections.** The supervisor has since moved out of its own project
+> and into the agent deployment as the `bot-supervisor` Eve schedule, so the
+> Discord token and the bot environment now live alongside Eve; see
+> [Production deployment](deployment.md#why-there-is-a-supervisor). The
+> repository test suite named as evidence below has also been removed, so those
+> behaviors are now held by review rather than by a passing run.
+>
+> **Documentation-audit correction:** component/unit evidence below does
 > not prove the authored approval path end to end. Discord self approvals lack a
 > policy record and proxied child approvals look up the wrong session identity,
 > so these controls currently fail closed before rendering. Root/non-code Eve
@@ -49,15 +56,19 @@ credentials, billing, or a human interaction.
 - **Operations:** trace continuation, usage/cost accounting, structured logs,
   readiness, release/rollback/database runbooks, pinned CI actions/base image,
   SBOM, provenance, scanning, signing, and guarded cleanup automation exist.
-- **Credential isolation:** the Vercel Sandbox supervisor is a separate project;
-  Eve never receives the Discord token. Sandboxes are deliberately
-  nonpersistent because Redis owns durable state.
+- **Credential isolation:** Sandbox credentials are reachable only from
+  `agent/schedules/bot-supervisor.ts` and `agent/lib/bot/supervisor-config.ts`,
+  and no tool exposes them. Sandboxes are deliberately nonpersistent because
+  Redis owns durable state.
 
 ## Validation evidence
 
 - Clean implementation commit: `fac6ddc` on `migration/eve-bot-split`.
 - `bun install --frozen-lockfile`, `bun run validate`, `bun run build`, and
-  `bun run audit` pass.
+  `bun run audit` pass. The aggregate `validate` and `audit` scripts have since
+  been removed; CI now runs `oxfmt --check .`, `bun run lint`,
+  `bun run check:capabilities`, and `bun audit` as separate steps. There is no `tsc`
+  pass: oxlint is type-aware and reports TypeScript errors itself.
 - Tests pass: agents 122, bot 29, shared 8, supervisor 9.
 - `eve info`: zero diagnostics, 13 subagents, four root tools, one schedule.
 - `drizzle-kit check`, fresh migration, verification, and repeated migration

@@ -16,7 +16,7 @@ conversation engine supplies those missing application semantics:
 
 All Redis keys and atomic transitions are private to
 `packages/shared/src/conversations`. Both runtimes construct the same
-`ConversationStore` from `store.ts`. `packages/bot/src/conversations/flow.ts`
+`ConversationStore` from `store.ts`. `packages/bot/src/utils/conversation/`
 contains the single reconciler that calls it. Atomic transitions execute the
 literal production Lua through the injected Redis client's `eval` API. There is
 no script-cache wrapper; adopting one would require equivalent injected-port and
@@ -372,15 +372,11 @@ process to remain alive, or callbacks to arrive in order.
 | Admission ambiguity                | Visible `RecoveryRequired`; require reset instead of replay                     |
 | HITL forwarding fails after claim  | Claim/receipt remain; later clicks do not retry; reset is practical remediation |
 
-## Tests that characterize the state machine
+## Where the state machine is defined
 
-- unit characterization under `packages/shared/src/conversations/*.test.ts`;
-- `packages/bot/src/conversations/flow*.test.ts` for lifecycle orchestration;
-- `packages/bot/src/agent/client.test.ts` for retry semantics;
-- `packages/bot/src/agent/scheduled.test.ts` for role refresh/fallback;
-- `tests/contracts/conversation.contract.test.ts` against a real loopback Redis
-  and the production Lua strings.
-
-The Docker contract runner creates randomly named isolated services, uses only
-loopback exposure, runs serially, and unconditionally removes containers and
-networks.
+- `packages/shared/src/conversations/` owns admission, the queue transitions, and
+  the Lua strings that make each transition atomic;
+- `packages/bot/src/utils/conversation/` is the only reconciler that turns
+  stored desired state into Discord effects;
+- `packages/bot/src/agent/client.ts` owns retry semantics;
+- `packages/bot/src/agent/scheduled.ts` owns role refresh and fallback.
