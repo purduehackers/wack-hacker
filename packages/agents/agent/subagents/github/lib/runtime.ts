@@ -7,7 +7,7 @@ import {
   redactProviderSecrets,
   redactProviderText,
 } from "../../../lib/policy/provider-redaction.ts";
-import { GITHUB_TOOLS } from "./tool-registry.ts";
+import { GITHUB_TOOLS } from "./registry.ts";
 
 export const GITHUB_RUNTIME = createDomainRuntime({
   domain: "github",

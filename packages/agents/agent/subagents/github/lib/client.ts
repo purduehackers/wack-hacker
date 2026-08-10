@@ -2,7 +2,7 @@ import { createAppAuth } from "@octokit/auth-app";
 import { Octokit } from "octokit";
 import { z } from "zod";
 
-import { env } from "./config.ts";
+import { env } from "./constants.ts";
 
 let client: Octokit | undefined;
 

@@ -1,8 +1,8 @@
 import { defineDynamic, defineTool } from "eve/tools";
 
 import { guardToolExecution } from "../../../lib/core/serialization.ts";
+import { GITHUB_TOOLS } from "../lib/registry.ts";
 import { GITHUB_RUNTIME } from "../lib/runtime.ts";
-import { GITHUB_TOOLS } from "../lib/tool-registry.ts";
 
 const GITHUB_TOOL_NAMES = Object.keys(GITHUB_TOOLS);
 
