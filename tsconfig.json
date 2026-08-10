@@ -1,9 +1,8 @@
 {
   // Solution-style root: each workspace package owns its own typecheck via
   // `turbo typecheck`. This file exists so editors and oxlint's type-aware
-  // pass can resolve a root config, and deliberately compiles nothing —
-  // otherwise `tsc` here would glob `old/`, the legacy reference tree.
+  // pass can resolve a root config, and deliberately compiles nothing.
   "extends": "./tsconfig.base.json",
   "files": [],
-  "exclude": ["node_modules", "old"]
+  "exclude": ["node_modules"]
 }

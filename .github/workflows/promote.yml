@@ -34,9 +34,7 @@ jobs:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_SCOPE: ${{ vars.VERCEL_SCOPE }}
       VCR_PROJECT: ${{ vars.VCR_PROJECT }}
-      SUPERVISOR_PROJECT: ${{ vars.SUPERVISOR_VERCEL_PROJECT }}
-      SUPERVISOR_URL: ${{ vars.SUPERVISOR_URL }}
-      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+      AGENT_PROJECT: ${{ vars.AGENT_VERCEL_PROJECT }}
       UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
       UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
     steps:
@@ -56,9 +54,7 @@ jobs:
           test -n "$VERCEL_TOKEN"
           test -n "$VERCEL_SCOPE"
           test -n "$VCR_PROJECT"
-          test -n "$SUPERVISOR_PROJECT"
-          test -n "$SUPERVISOR_URL"
-          test -n "$CRON_SECRET"
+          test -n "$AGENT_PROJECT"
 
       - name: Log in to VCR
         run: >-
@@ -99,26 +95,38 @@ jobs:
           ')"
           echo "image=$previous" >> "$GITHUB_OUTPUT"
 
-      - name: Link supervisor project
+      - name: Link agent project
         run: >-
           bunx vercel@${VERCEL_CLI_VERSION} pull --yes --environment production
-          --project "$SUPERVISOR_PROJECT" --scope "$VERCEL_SCOPE" --token "$VERCEL_TOKEN"
+          --project "$AGENT_PROJECT" --scope "$VERCEL_SCOPE" --token "$VERCEL_TOKEN"
 
-      - name: Set reviewed digest and deploy supervisor
+      - name: Set reviewed digest and deploy the agent
         id: deploy
         run: |
           set -euo pipefail
-          bunx vercel@${VERCEL_CLI_VERSION} env add BOT_IMAGE production             --value "$IMAGE" --yes --force --no-sensitive             --scope "$VERCEL_SCOPE" --token "$VERCEL_TOKEN"
+          bunx vercel@${VERCEL_CLI_VERSION} env add BOT_IMAGE production \
+            --value "$IMAGE" --yes --force --no-sensitive \
+            --scope "$VERCEL_SCOPE" --token "$VERCEL_TOKEN"
           deployment_url="$(bunx vercel@${VERCEL_CLI_VERSION} deploy --prod --yes --scope "$VERCEL_SCOPE" --token "$VERCEL_TOKEN")"
           echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
 
-      - name: Reconcile sandbox generation
+      # There is no on-demand reconcile endpoint: the agent's bot-supervisor
+      # schedule is the only writer of the generation record, and it fires every
+      # five minutes. Promotion therefore waits for a tick plus candidate
+      # startup rather than triggering one, and fails if the reviewed digest has
+      # not become active within that window.
+      - name: Wait for the scheduled reconcile, then verify image and readiness
         run: |
           set -euo pipefail
-          curl --fail --show-error --silent             --retry 3 --retry-all-errors --max-time 290             -H "Authorization: Bearer $CRON_SECRET"             "${SUPERVISOR_URL%/}/api/ensure-bot"
-
-      - name: Verify active image and bot readiness
-        run: bun packages/shared/scripts/release-check.ts smoke "$IMAGE"
+          deadline=$(( SECONDS + 900 ))
+          until bun packages/shared/scripts/release-check.ts smoke "$IMAGE"; do
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "reviewed digest did not become active within 15 minutes" >&2
+              exit 1
+            fi
+            echo "waiting for the bot-supervisor schedule to adopt $IMAGE…"
+            sleep 30
+          done
 
       - name: Release record
         run: |

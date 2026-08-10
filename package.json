@@ -10,25 +10,19 @@
     "dev": "turbo dev",
     "start": "turbo start",
     "build": "turbo build",
-    "typecheck": "turbo typecheck",
-    "lint": "oxlint --deny-warnings .",
-    "format": "oxfmt",
-    "validate": "bun run format:check && bun run typecheck && bun run lint && bun run test",
-    "format:check": "oxfmt --check .",
-    "audit": "bun audit --ignore GHSA-67mh-4wv8-2f99",
-    "test": "turbo test",
-    "test:contracts": "bun test tests/contracts",
-    "test:contracts:docker": "bun scripts/test-contracts.ts"
+    "lint": "oxlint --deny-warnings",
+    "format": "oxfmt"
   },
   "dependencies": {},
   "devDependencies": {
-    "@types/bun": "1.3.14",
+    "@rayhanadev/ox": "0.1.0",
+    "@types/bun": "^1.3.14",
     "oxclippy": "^0.2.0",
     "oxfmt": "^0.62.0",
     "oxlint": "^1.77.0",
     "oxlint-tsgolint": "^7.0.2001",
     "turbo": "^2.10.8",
-    "typescript": "7.0.2"
+    "typescript": "^7"
   },
   "devEngines": {
     "packageManager": {

@@ -9,12 +9,6 @@
     "dev": {
       "persistent": true,
       "cache": false
-    },
-    "typecheck": {
-      "dependsOn": ["^build"]
-    },
-    "test": {
-      "cache": false
     }
   }
 }

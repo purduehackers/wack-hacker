@@ -100,12 +100,9 @@ jobs:
           turso db show "$BACKUP_DATABASE" --url >/dev/null
           echo "at=$backup_at" >> "$GITHUB_OUTPUT"
 
-      - name: Guarded baseline and forward migration
+      - name: Forward migration
         working-directory: packages/shared
-        run: |
-          set -euo pipefail
-          bun run db:baseline-legacy
-          bun run db:migrate
+        run: bun run db:migrate
 
       - name: Verify ledger, schema, and database integrity
         run: bun packages/shared/scripts/verify-database.ts

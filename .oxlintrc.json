@@ -66,12 +66,20 @@
     "oxclippy/enum-variant-names": "warn",
     "oxclippy/struct-field-names": "warn",
     "oxclippy/unreadable-literal": "warn",
-    "oxclippy/bool-to-int-with-if": "warn"
+    "oxclippy/bool-to-int-with-if": "warn",
+    "rayhanadev/no-type-erasure": "error",
+    "rayhanadev/no-typeof": "error"
   },
   "env": {
     "builtin": true
   },
-  "jsPlugins": ["oxclippy"],
+  "jsPlugins": [
+    "oxclippy",
+    {
+      "name": "rayhanadev",
+      "specifier": "@rayhanadev/ox"
+    }
+  ],
   "options": {
     "typeAware": true,
     "typeCheck": true

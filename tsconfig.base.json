@@ -24,9 +24,8 @@
     "noFallthroughCasesInSwitch": true,
 
     // Bans `enum`, `namespace`, and parameter properties — syntax that emits
-    // runtime code. The legacy app avoided `enum` by convention because
-    // workflow step bundles run in strip-only type mode; this makes it a
-    // compiler error instead of tribal knowledge. Use `as const` objects.
+    // runtime code, which breaks any bundler running in strip-only type mode.
+    // A compiler error beats tribal knowledge. Use `as const` objects.
     "erasableSyntaxOnly": true,
 
     // Unused locals/params are reported by oxlint, not tsc, so a work in
