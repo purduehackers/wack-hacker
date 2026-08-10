@@ -43,6 +43,7 @@ export const OUTREACH_TOOLS = {
   remove_contact_from_audience: m_audiences.remove_contact_from_audience,
   retrieve_crm_schema: m_schema.retrieve_crm_schema,
   send_broadcast: m_broadcasts.send_broadcast,
+  send_outreach_email: m_outreach.send_outreach_email,
   update_company_email: m_companies.update_company_email,
   update_company_next_followup: m_companies.update_company_next_followup,
   update_company_status: m_companies.update_company_status,

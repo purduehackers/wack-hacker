@@ -7,3 +7,15 @@
 export const COMPANIES_DATA_SOURCE_ID = "50e03139-7a46-4877-b2b7-710ff51cc068";
 export const CONTACTS_DATA_SOURCE_ID = "8b79755b-242b-4524-961a-d309b080db67";
 export const DEALS_DATA_SOURCE_ID = "723bf767-d942-4c55-ab11-f759ce39f4da";
+
+/**
+ * Verified Cloudflare sending address for 1:1 outreach.
+ *
+ * The apex is already onboarded for Cloudflare Email Sending — `cf-bounce`
+ * carries the MX and SPF records and `cf-bounce._domainkey` the DKIM key — so
+ * mail from this address authenticates without any further DNS work.
+ */
+export const OUTREACH_FROM_EMAIL = "hello@purduehackers.com";
+
+/** Reply-To header — where recipient replies should land. */
+export const OUTREACH_REPLY_TO_EMAIL = "phackers@purdue.edu";

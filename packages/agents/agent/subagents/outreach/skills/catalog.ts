@@ -101,13 +101,13 @@ export const OUTREACH_SKILL_DEFINITIONS = [
   },
   {
     name: "emails",
-    description: "Look up and cancel individual Resend emails.",
+    description: "Send one outreach email to one person, and inspect individual sends.",
     criteria:
-      "Use when the user wants to check delivery status of a sent email or cancel a scheduled one.",
+      "Use when the user wants to email a specific company or contact, check the delivery status of a sent email, or cancel a scheduled one.",
     minRole: "organizer",
-    tools: ["get_email", "cancel_email"],
+    tools: ["send_outreach_email", "get_email", "cancel_email"],
     instructions:
-      "- get_email returns the current delivery status (sent, delivered, bounced, complained, opened, clicked).\n- cancel_email only works on scheduled emails that haven't sent yet.\n- For mass campaigns use the broadcasts skill, not this one.",
+      "<sending>\n- `send_outreach_email` is the only way to email one person. It is approval-gated and cannot be undone.\n- Always `verify_email` first, and never send to an address whose status is undeliverable, risky, or disposable.\n- The tool refuses on its own when `Do Not Contact` is set or the row is from the wrong data source. Treat a refusal as final — do not retry with a different target.\n- On success it writes the message id and status back to the Notion row itself. Do not write those properties by hand.\n</sending>\n\n<inspecting>\n- get_email returns the current delivery status (sent, delivered, bounced, complained, opened, clicked).\n- cancel_email only works on scheduled emails that haven't sent yet.\n- For mass campaigns use the broadcasts skill, not this one.\n</inspecting>",
   },
   {
     name: "status-tracking",
@@ -117,7 +117,7 @@ export const OUTREACH_SKILL_DEFINITIONS = [
     minRole: "organizer",
     tools: ["get_email_status"],
     instructions:
-      "<reading>\n- `get_email_status` returns `Last Outreach ID`, `Outreach Status`, `Outreach Last Event At`, and `Do Not Contact` for a given page.\n- The Resend webhook is authoritative — these values reflect the latest event received.\n</reading>\n\n<event-mapping>\n- `email.sent` -> `Outreach Status` = Sent\n- `email.delivered` -> Delivered\n- `email.opened` -> Opened (monotonic; never regressed past Clicked)\n- `email.clicked` -> Clicked\n- `email.bounced` / `email.complained` -> Bounced + `Do Not Contact` flipped to true\n</event-mapping>\n\n<scope>\n- This skill is read-only. Use `crm-writes` to change any property manually.\n</scope>",
+      '<reading>\n- `get_email_status` returns `Last Outreach ID`, `Outreach Status`, `Outreach Last Event At`, and `Do Not Contact` for a given page.\n- `send_outreach_email` is what writes them, at send time. Nothing updates them afterwards, so `Sent` means "we sent it", not "it was delivered" — say so rather than implying delivery.\n- To find out what actually happened to a specific send, take the `Last Outreach ID` and call `get_email` in the emails skill.\n</reading>\n\n<scope>\n- This skill is read-only. Use `crm-writes` to change any property manually.\n</scope>',
   },
 ] as const satisfies readonly IntegrationSkillDefinition[];
 
