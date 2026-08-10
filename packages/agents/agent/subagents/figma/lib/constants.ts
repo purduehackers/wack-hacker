@@ -25,9 +25,7 @@ import { figmaFileUrl } from "./client.ts";
  * listing or a single lookup.
  */
 
-export const fileKey = z
-  .string()
-  .describe("Figma file key — resolve a file name to one with search_files");
+export const fileKey = z.string().describe("The file key (from the Figma URL)");
 
 export function summarizeFile(
   file: GetProjectFilesResponse["files"][number],
