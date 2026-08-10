@@ -30,6 +30,16 @@ jobs:
           node-version-file: .node-version
       - run: bun install --frozen-lockfile
       - run: bunx oxfmt --check .
+      # `--deny-warnings` is CLI-only — oxlint's config has no equivalent — and it is the
+      # difference between the ~50 warn-level oxclippy rules gating CI and gating nothing.
+      # It has been dropped from the script twice; fail loudly rather than quietly weaken.
+      - name: Lint gate is intact
+        run: |
+          lint=$(bun -e 'console.log((await Bun.file("package.json").json()).scripts.lint)')
+          case "$lint" in
+            *--deny-warnings*) ;;
+            *) echo "::error::lint script lost --deny-warnings; warn-level rules would stop gating CI"; exit 1 ;;
+          esac
       # oxlint is type-aware (tsgolint), so it reports TS errors too — there is no separate tsc pass.
       - run: bun run lint
       # Cross-file invariants a code review cannot see: a skill referencing a tool the registry

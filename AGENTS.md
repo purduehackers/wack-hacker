@@ -104,4 +104,22 @@ bun --hot ./index.ts
 
 For more information, read the Bun API docs in `node_modules/bun-types/docs/**.mdx`.
 
-You must never disable or suppress lint rules.
+## Lint rules
+
+Never waive a rule wholesale in `.oxlintrc.json`, and never weaken the config to
+make a diff pass. Never reach for a suppression before trying to fix the code:
+in practice almost every violation has a correct form, and a suppression added
+under time pressure is indistinguishable from one added for a real reason.
+
+An exception is allowed only where the alternative would be wrong — an upstream
+wire format that requires `null` to clear a field, a generic whose identity the
+type system cannot recover. It must be inline, scoped to a single rule, and
+carry its reason:
+
+```ts
+// oxlint-disable-next-line unicorn/no-null -- Discord uses null to clear this field
+```
+
+All 22 suppressions in `packages/` today are of that shape. `bun run lint` must
+keep `--deny-warnings`; without it the warn-level `oxclippy` rules gate nothing,
+and CI checks that the flag is still there.
