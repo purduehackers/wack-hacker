@@ -23,7 +23,8 @@ the change is live, so a tool that reports success is reporting acceptance, not
 completion. Anything built here should say which of the two it means.
 
 Read tokens and integration secrets come back on list and get calls;
-`lib/redact.ts` drops them and new tools must route through it.
+`redactTokens` and `redactEnvValues` in `lib/constants.ts` drop them and new
+tools must route through whichever one matches the field they surface.
 
 ## Adding a tool
 

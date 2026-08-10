@@ -6,13 +6,12 @@ import { sentryOpts, sentryOrg } from "../../client.ts";
 
 /**
  * `role` is returned by Sentry but absent from the generated response type.
- *
- * Narrowed to the one field this tool reads. `.catch(undefined)` matters because
- * the projection is read through a throwing `.parse`: an unexpected shape must
- * degrade to "absent" rather than fail an invite that Sentry already accepted.
+ * `.catch` keeps the "can never fail" property the previous `z.unknown()` had:
+ * this projection is read through a throwing `.parse`, so a shape `z.json()`
+ * rejects must degrade to "absent" rather than fail the invite.
  */
 const invitedMemberProjectionSchema = z.looseObject({
-  role: z.string().nullish().catch(undefined),
+  role: z.json().optional().catch(undefined),
 });
 
 export const add_member_to_platform = defineTool({

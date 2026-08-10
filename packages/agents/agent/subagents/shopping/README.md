@@ -23,9 +23,9 @@ is a request that someone still has to act on by hand.
 
 ## Skills
 
-| Skill                    | Role      | Tools | Description                                                |
-| ------------------------ | --------- | ----: | ---------------------------------------------------------- |
-| [`cart`](skills/cart.md) | organizer |     4 | Add, remove, update quantities, and clear the shared cart. |
+| Skill                            | Role      | Tools | Description                                                |
+| -------------------------------- | --------- | ----: | ---------------------------------------------------------- |
+| [`cart`](lib/skill_defs/cart.md) | organizer |     4 | Add, remove, update quantities, and clear the shared cart. |
 
 ## Always available
 

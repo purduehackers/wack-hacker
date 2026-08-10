@@ -30,12 +30,12 @@ exist", and the two are indistinguishable from here.
 
 ## Skills
 
-| Skill                              | Role      | Tools | Description                                                                                      |
-| ---------------------------------- | --------- | ----: | ------------------------------------------------------------------------------------------------ |
-| [`blocks`](skills/blocks.md)       | organizer |     5 | Read and modify individual Notion blocks — retrieve, update, archive, list children, and append. |
-| [`comments`](skills/comments.md)   | organizer |     3 | Create and list comments on pages and blocks.                                                    |
-| [`databases`](skills/databases.md) | organizer |     4 | Query database entries with filters/sorts; create and update databases.                          |
-| [`pages`](skills/pages.md)         | organizer |     8 | Create, update, read, and edit pages — properties and Notion-flavored markdown content.          |
+| Skill                                      | Role      | Tools | Description                                                                                      |
+| ------------------------------------------ | --------- | ----: | ------------------------------------------------------------------------------------------------ |
+| [`blocks`](lib/skill_defs/blocks.md)       | organizer |     5 | Read and modify individual Notion blocks — retrieve, update, archive, list children, and append. |
+| [`comments`](lib/skill_defs/comments.md)   | organizer |     3 | Create and list comments on pages and blocks.                                                    |
+| [`databases`](lib/skill_defs/databases.md) | organizer |     4 | Query database entries with filters/sorts; create and update databases.                          |
+| [`pages`](lib/skill_defs/pages.md)         | organizer |     8 | Create, update, read, and edit pages — properties and Notion-flavored markdown content.          |
 
 ## Always available
 

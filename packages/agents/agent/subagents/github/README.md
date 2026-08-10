@@ -29,24 +29,24 @@ rather than the current default branch.
 
 ## Skills
 
-| Skill                                                      | Role      | Tools | Description                                                                             |
-| ---------------------------------------------------------- | --------- | ----: | --------------------------------------------------------------------------------------- |
-| [`actions`](skills/actions.md)                             | organizer |     8 | List and manage workflows, workflow runs, jobs, and artifacts.                          |
-| [`collaborators`](skills/collaborators.md)                 | admin     |     5 | Manage direct repository collaborators and pending invitations (admin only for writes). |
-| [`contents`](skills/contents.md)                           | organizer |     7 | Read and write file contents; browse directory trees; view commits and diffs.           |
-| [`deployments`](skills/deployments.md)                     | organizer |     6 | Manage deployments, deployment statuses, and GitHub Pages.                              |
-| [`environments`](skills/environments.md)                   | organizer |     4 | Manage deployment environments — protection rules, wait timers, required reviewers.     |
-| [`issues`](skills/issues.md)                               | organizer |    12 | Create, update, and manage issues; manage labels and milestones.                        |
-| [`membership`](skills/membership.md)                       | admin     |     2 | Invite or remove members from the purduehackers GitHub organization (admin only).       |
-| [`organization`](skills/organization.md)                   | organizer |    14 | View organization members and teams; manage team membership and webhooks.               |
-| [`packages`](skills/packages.md)                           | organizer |     4 | List, inspect, and manage organization packages.                                        |
-| [`projects`](skills/projects.md)                           | organizer |     6 | Manage GitHub Projects v2 — list projects, view and manage items.                       |
-| [`pull-requests`](skills/pull-requests.md)                 | organizer |    10 | Create, update, review, and merge pull requests.                                        |
-| [`reactions`](skills/reactions.md)                         | organizer |     4 | Add or remove reaction emojis on issues and issue/PR comments.                          |
-| [`releases`](skills/releases.md)                           | organizer |     6 | Manage GitHub releases — list, create, update, and delete releases and their assets.    |
-| [`repositories`](skills/repositories.md)                   | organizer |     9 | Create, update, and delete repositories; manage branches and branch protection.         |
-| [`secrets-and-variables`](skills/secrets-and-variables.md) | organizer |    12 | Manage repository and organization secrets and variables for GitHub Actions.            |
-| [`tags-refs`](skills/tags-refs.md)                         | organizer |     6 | Manage git refs (branches and tags) — list, create, update, and delete.                 |
+| Skill                                                              | Role      | Tools | Description                                                                             |
+| ------------------------------------------------------------------ | --------- | ----: | --------------------------------------------------------------------------------------- |
+| [`actions`](lib/skill_defs/actions.md)                             | organizer |     8 | List and manage workflows, workflow runs, jobs, and artifacts.                          |
+| [`collaborators`](lib/skill_defs/collaborators.md)                 | admin     |     5 | Manage direct repository collaborators and pending invitations (admin only for writes). |
+| [`contents`](lib/skill_defs/contents.md)                           | organizer |     7 | Read and write file contents; browse directory trees; view commits and diffs.           |
+| [`deployments`](lib/skill_defs/deployments.md)                     | organizer |     6 | Manage deployments, deployment statuses, and GitHub Pages.                              |
+| [`environments`](lib/skill_defs/environments.md)                   | organizer |     4 | Manage deployment environments — protection rules, wait timers, required reviewers.     |
+| [`issues`](lib/skill_defs/issues.md)                               | organizer |    12 | Create, update, and manage issues; manage labels and milestones.                        |
+| [`membership`](lib/skill_defs/membership.md)                       | admin     |     2 | Invite or remove members from the purduehackers GitHub organization (admin only).       |
+| [`organization`](lib/skill_defs/organization.md)                   | organizer |    14 | View organization members and teams; manage team membership and webhooks.               |
+| [`packages`](lib/skill_defs/packages.md)                           | organizer |     4 | List, inspect, and manage organization packages.                                        |
+| [`projects`](lib/skill_defs/projects.md)                           | organizer |     6 | Manage GitHub Projects v2 — list projects, view and manage items.                       |
+| [`pull-requests`](lib/skill_defs/pull-requests.md)                 | organizer |    10 | Create, update, review, and merge pull requests.                                        |
+| [`reactions`](lib/skill_defs/reactions.md)                         | organizer |     4 | Add or remove reaction emojis on issues and issue/PR comments.                          |
+| [`releases`](lib/skill_defs/releases.md)                           | organizer |     6 | Manage GitHub releases — list, create, update, and delete releases and their assets.    |
+| [`repositories`](lib/skill_defs/repositories.md)                   | organizer |     9 | Create, update, and delete repositories; manage branches and branch protection.         |
+| [`secrets-and-variables`](lib/skill_defs/secrets-and-variables.md) | organizer |    12 | Manage repository and organization secrets and variables for GitHub Actions.            |
+| [`tags-refs`](lib/skill_defs/tags-refs.md)                         | organizer |     6 | Manage git refs (branches and tags) — list, create, update, and delete.                 |
 
 ## Always available
 

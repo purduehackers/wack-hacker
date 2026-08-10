@@ -25,19 +25,19 @@ call comes first.
 
 ## Skills
 
-| Skill                                      | Role      | Tools | Description                                                                                                            |
-| ------------------------------------------ | --------- | ----: | ---------------------------------------------------------------------------------------------------------------------- |
-| [`artifacts`](skills/artifacts.md)         | organizer |     3 | Inspect the Turborepo remote cache — status, artifact existence, and usage.                                            |
-| [`deployments`](skills/deployments.md)     | organizer |    11 | Inspect and control deployments — list, view events, cancel, delete, promote, rollback.                                |
-| [`domains`](skills/domains.md)             | organizer |    20 | Aliases, team domains, DNS records, registrar queries (availability, pricing, auth code), and TLS certs.               |
-| [`edge-platform`](skills/edge-platform.md) | organizer |    34 | Global Config stores/items/tokens/backups, edge cache invalidation, native Vercel feature flags.                       |
-| [`integrations`](skills/integrations.md)   | organizer |    12 | Browse installed integrations, provision new marketplace stores (Turso, Upstash Redis, Neon Postgres, Vercel Blob), a… |
-| [`observability`](skills/observability.md) | organizer |    13 | Runtime logs, log/data drains, API Observability settings, and team audit events.                                      |
-| [`projects`](skills/projects.md)           | organizer |    18 | Inspect and mutate Vercel projects — lifecycle, env vars (value-stripped on list), project domains, members.           |
-| [`rollouts`](skills/rollouts.md)           | organizer |    12 | Rolling releases (canary rollouts) and deployment checks.                                                              |
-| [`sandboxes`](skills/sandboxes.md)         | organizer |    11 | Vercel Sandbox lifecycle, shell commands, snapshots.                                                                   |
-| [`security`](skills/security.md)           | organizer |     8 | Firewall configuration, attack challenge mode, bypass IPs, auth tokens.                                                |
-| [`team-admin`](skills/team-admin.md)       | organizer |    22 | Team members, access groups, webhooks, project routes, connect networks, microfrontends, billing, custom environments. |
+| Skill                                              | Role      | Tools | Description                                                                                                            |
+| -------------------------------------------------- | --------- | ----: | ---------------------------------------------------------------------------------------------------------------------- |
+| [`artifacts`](lib/skill_defs/artifacts.md)         | organizer |     3 | Inspect the Turborepo remote cache — status, artifact existence, and usage.                                            |
+| [`deployments`](lib/skill_defs/deployments.md)     | organizer |    11 | Inspect and control deployments — list, view events, cancel, delete, promote, rollback.                                |
+| [`domains`](lib/skill_defs/domains.md)             | organizer |    20 | Aliases, team domains, DNS records, registrar queries (availability, pricing, auth code), and TLS certs.               |
+| [`edge-platform`](lib/skill_defs/edge-platform.md) | organizer |    34 | Global Config stores/items/tokens/backups, edge cache invalidation, native Vercel feature flags.                       |
+| [`integrations`](lib/skill_defs/integrations.md)   | organizer |    12 | Browse installed integrations, provision new marketplace stores (Turso, Upstash Redis, Neon Postgres, Vercel Blob), a… |
+| [`observability`](lib/skill_defs/observability.md) | organizer |    13 | Runtime logs, log/data drains, API Observability settings, and team audit events.                                      |
+| [`projects`](lib/skill_defs/projects.md)           | organizer |    18 | Inspect and mutate Vercel projects — lifecycle, env vars (value-stripped on list), project domains, members.           |
+| [`rollouts`](lib/skill_defs/rollouts.md)           | organizer |    12 | Rolling releases (canary rollouts) and deployment checks.                                                              |
+| [`sandboxes`](lib/skill_defs/sandboxes.md)         | organizer |    11 | Vercel Sandbox lifecycle, shell commands, snapshots.                                                                   |
+| [`security`](lib/skill_defs/security.md)           | organizer |     8 | Firewall configuration, attack challenge mode, bypass IPs, auth tokens.                                                |
+| [`team-admin`](lib/skill_defs/team-admin.md)       | organizer |    22 | Team members, access groups, webhooks, project routes, connect networks, microfrontends, billing, custom environments. |
 
 ## Always available
 

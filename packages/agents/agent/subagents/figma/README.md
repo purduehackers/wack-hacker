@@ -25,15 +25,15 @@ weeks, so they are for looking at now, not for embedding in anything durable.
 
 ## Skills
 
-| Skill                                      | Role      | Tools | Description                                                                        |
-| ------------------------------------------ | --------- | ----: | ---------------------------------------------------------------------------------- |
-| [`comments`](skills/comments.md)           | organizer |     5 | List, create, and delete comments and reactions on files.                          |
-| [`components`](skills/components.md)       | organizer |     8 | Browse published components, component sets, and styles across the team and files. |
-| [`dev-resources`](skills/dev-resources.md) | organizer |     4 | Manage dev resource links attached to design nodes.                                |
-| [`nodes`](skills/nodes.md)                 | organizer |     3 | Inspect specific nodes within a file and export images.                            |
-| [`variables`](skills/variables.md)         | organizer |     3 | Inspect and modify design variables and collections.                               |
-| [`versions`](skills/versions.md)           | organizer |     1 | View file version history.                                                         |
-| [`webhooks`](skills/webhooks.md)           | admin     |     5 | List, create, update, and delete team webhooks.                                    |
+| Skill                                              | Role      | Tools | Description                                                                        |
+| -------------------------------------------------- | --------- | ----: | ---------------------------------------------------------------------------------- |
+| [`comments`](lib/skill_defs/comments.md)           | organizer |     5 | List, create, and delete comments and reactions on files.                          |
+| [`components`](lib/skill_defs/components.md)       | organizer |     8 | Browse published components, component sets, and styles across the team and files. |
+| [`dev-resources`](lib/skill_defs/dev-resources.md) | organizer |     4 | Manage dev resource links attached to design nodes.                                |
+| [`nodes`](lib/skill_defs/nodes.md)                 | organizer |     3 | Inspect specific nodes within a file and export images.                            |
+| [`variables`](lib/skill_defs/variables.md)         | organizer |     3 | Inspect and modify design variables and collections.                               |
+| [`versions`](lib/skill_defs/versions.md)           | organizer |     1 | View file version history.                                                         |
+| [`webhooks`](lib/skill_defs/webhooks.md)           | admin     |     5 | List, create, update, and delete team webhooks.                                    |
 
 ## Always available
 

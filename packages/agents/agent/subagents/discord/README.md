@@ -20,22 +20,22 @@ independent rate-limit buckets on the same channel routes; both honour
 
 ## Skills
 
-| Skill                                              | Role      | Tools | Description                                                                               |
-| -------------------------------------------------- | --------- | ----: | ----------------------------------------------------------------------------------------- |
-| [`audit-log`](skills/audit-log.md)                 | organizer |     1 | View the Discord server audit log — who performed admin actions.                          |
-| [`auto-moderation`](skills/auto-moderation.md)     | organizer |     5 | Manage Discord auto-moderation rules — keyword filters, spam detection, mention flooding. |
-| [`channels`](skills/channels.md)                   | organizer |     5 | Create, edit, and delete channels and categories.                                         |
-| [`emojis`](skills/emojis.md)                       | organizer |     8 | Manage custom emojis and stickers — list, create, edit, and delete.                       |
-| [`events`](skills/events.md)                       | organizer |     4 | List, create, edit, and delete scheduled events.                                          |
-| [`guild`](skills/guild.md)                         | admin     |     3 | View and update server-level settings (admin only for updates).                           |
-| [`invites`](skills/invites.md)                     | admin     |     3 | List, create, and delete server invites.                                                  |
-| [`member-management`](skills/member-management.md) | admin     |     6 | Moderate members — ban, kick, timeout, and manage the ban list (admin only).              |
-| [`members`](skills/members.md)                     | organizer |     2 | View detailed member info and manage nicknames.                                           |
-| [`membership`](skills/membership.md)               | admin     |     2 | Add or remove members from the Discord server (admin only).                               |
-| [`messages`](skills/messages.md)                   | organizer |    12 | Send, delete, pin/unpin messages, add reactions, and fetch message history.               |
-| [`roles`](skills/roles.md)                         | organizer |     5 | Create, edit, delete roles, and assign/remove roles from members.                         |
-| [`threads`](skills/threads.md)                     | organizer |     4 | List, create, edit, and delete threads in channels.                                       |
-| [`webhooks`](skills/webhooks.md)                   | organizer |     4 | List, create, edit, and delete webhooks.                                                  |
+| Skill                                                      | Role      | Tools | Description                                                                               |
+| ---------------------------------------------------------- | --------- | ----: | ----------------------------------------------------------------------------------------- |
+| [`audit-log`](lib/skill_defs/audit-log.md)                 | organizer |     1 | View the Discord server audit log — who performed admin actions.                          |
+| [`auto-moderation`](lib/skill_defs/auto-moderation.md)     | organizer |     5 | Manage Discord auto-moderation rules — keyword filters, spam detection, mention flooding. |
+| [`channels`](lib/skill_defs/channels.md)                   | organizer |     5 | Create, edit, and delete channels and categories.                                         |
+| [`emojis`](lib/skill_defs/emojis.md)                       | organizer |     8 | Manage custom emojis and stickers — list, create, edit, and delete.                       |
+| [`events`](lib/skill_defs/events.md)                       | organizer |     4 | List, create, edit, and delete scheduled events.                                          |
+| [`guild`](lib/skill_defs/guild.md)                         | admin     |     3 | View and update server-level settings (admin only for updates).                           |
+| [`invites`](lib/skill_defs/invites.md)                     | admin     |     3 | List, create, and delete server invites.                                                  |
+| [`member-management`](lib/skill_defs/member-management.md) | admin     |     6 | Moderate members — ban, kick, timeout, and manage the ban list (admin only).              |
+| [`members`](lib/skill_defs/members.md)                     | organizer |     2 | View detailed member info and manage nicknames.                                           |
+| [`membership`](lib/skill_defs/membership.md)               | admin     |     2 | Add or remove members from the Discord server (admin only).                               |
+| [`messages`](lib/skill_defs/messages.md)                   | organizer |    12 | Send, delete, pin/unpin messages, add reactions, and fetch message history.               |
+| [`roles`](lib/skill_defs/roles.md)                         | organizer |     5 | Create, edit, delete roles, and assign/remove roles from members.                         |
+| [`threads`](lib/skill_defs/threads.md)                     | organizer |     4 | List, create, edit, and delete threads in channels.                                       |
+| [`webhooks`](lib/skill_defs/webhooks.md)                   | organizer |     4 | List, create, edit, and delete webhooks.                                                  |
 
 ## Always available
 

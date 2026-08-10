@@ -23,13 +23,13 @@ Zone ids are what the tools take and domain names are what people say, so
 
 ## Skills
 
-| Skill                                                      | Role      | Tools | Description                                                |
-| ---------------------------------------------------------- | --------- | ----: | ---------------------------------------------------------- |
-| [`dns-records`](skills/dns-records.md)                     | organizer |     6 | Read and change DNS records on a Cloudflare zone.          |
-| [`email-routing`](skills/email-routing.md)                 | organizer |    11 | Manage where inbound mail for a domain is forwarded.       |
-| [`destination-addresses`](skills/destination-addresses.md) | organizer |     4 | Manage the account's verified Email Routing destinations.  |
-| [`email-sending`](skills/email-sending.md)                 | organizer |     1 | Send a one-off transactional email from a verified domain. |
-| [`sending-domains`](skills/sending-domains.md)             | organizer |     5 | Onboard and inspect domains authorized to send mail.       |
+| Skill                                                              | Role      | Tools | Description                                                |
+| ------------------------------------------------------------------ | --------- | ----: | ---------------------------------------------------------- |
+| [`dns-records`](lib/skill_defs/dns-records.md)                     | organizer |     6 | Read and change DNS records on a Cloudflare zone.          |
+| [`email-routing`](lib/skill_defs/email-routing.md)                 | organizer |    11 | Manage where inbound mail for a domain is forwarded.       |
+| [`destination-addresses`](lib/skill_defs/destination-addresses.md) | organizer |     4 | Manage the account's verified Email Routing destinations.  |
+| [`email-sending`](lib/skill_defs/email-sending.md)                 | organizer |     1 | Send a one-off transactional email from a verified domain. |
+| [`sending-domains`](lib/skill_defs/sending-domains.md)             | organizer |     5 | Onboard and inspect domains authorized to send mail.       |
 
 ## Always available
 

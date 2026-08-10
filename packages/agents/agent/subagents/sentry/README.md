@@ -23,23 +23,23 @@ from the UI is a short id and is not accepted in its place.
 
 ## Skills
 
-| Skill                                                  | Role      | Tools | Description                                                                                     |
-| ------------------------------------------------------ | --------- | ----: | ----------------------------------------------------------------------------------------------- |
-| [`alerts`](skills/alerts.md)                           | organizer |     7 | List, create, update, and delete issue and metric alert rules.                                  |
-| [`events`](skills/events.md)                           | organizer |     4 | List and inspect error events, stack traces, and breadcrumbs.                                   |
-| [`issue-management`](skills/issue-management.md)       | organizer |     5 | Update, resolve, ignore, assign, delete, and tag issues.                                        |
-| [`log-search`](skills/log-search.md)                   | organizer |     2 | Search structured logs and inspect log volume over time.                                        |
-| [`members`](skills/members.md)                         | organizer |    11 | List and manage organization members and teams; view team membership.                           |
-| [`membership`](skills/membership.md)                   | admin     |     2 | Invite new members to the Sentry organization or remove existing ones (admin only).             |
-| [`metrics`](skills/metrics.md)                         | organizer |     4 | Query custom metrics — counters, distributions, gauges, and sets.                               |
-| [`monitors`](skills/monitors.md)                       | organizer |     5 | Manage cron monitors — view schedules, check-in history, and configure runtime limits.          |
-| [`performance`](skills/performance.md)                 | organizer |     3 | Query transaction performance, latency, throughput, and span data.                              |
-| [`profiling`](skills/profiling.md)                     | organizer |     2 | View CPU profiling data — flamegraphs and slowest functions.                                    |
-| [`projects-management`](skills/projects-management.md) | admin     |     7 | Create, update, and delete Sentry projects; manage project environments and client keys (DSNs). |
-| [`releases`](skills/releases.md)                       | organizer |     6 | Create and manage releases and deploys; view release health and commits.                        |
-| [`replays`](skills/replays.md)                         | organizer |     2 | View session replays — user session recordings with error context.                              |
-| [`stats`](skills/stats.md)                             | organizer |     2 | View organization and project usage statistics — event volume, quotas, and trends.              |
-| [`traces`](skills/traces.md)                           | organizer |     2 | View distributed traces — full request waterfalls across services.                              |
+| Skill                                                          | Role      | Tools | Description                                                                                     |
+| -------------------------------------------------------------- | --------- | ----: | ----------------------------------------------------------------------------------------------- |
+| [`alerts`](lib/skill_defs/alerts.md)                           | organizer |     7 | List, create, update, and delete issue and metric alert rules.                                  |
+| [`events`](lib/skill_defs/events.md)                           | organizer |     4 | List and inspect error events, stack traces, and breadcrumbs.                                   |
+| [`issue-management`](lib/skill_defs/issue-management.md)       | organizer |     5 | Update, resolve, ignore, assign, delete, and tag issues.                                        |
+| [`log-search`](lib/skill_defs/log-search.md)                   | organizer |     2 | Search structured logs and inspect log volume over time.                                        |
+| [`members`](lib/skill_defs/members.md)                         | organizer |    11 | List and manage organization members and teams; view team membership.                           |
+| [`membership`](lib/skill_defs/membership.md)                   | admin     |     2 | Invite new members to the Sentry organization or remove existing ones (admin only).             |
+| [`metrics`](lib/skill_defs/metrics.md)                         | organizer |     4 | Query custom metrics — counters, distributions, gauges, and sets.                               |
+| [`monitors`](lib/skill_defs/monitors.md)                       | organizer |     5 | Manage cron monitors — view schedules, check-in history, and configure runtime limits.          |
+| [`performance`](lib/skill_defs/performance.md)                 | organizer |     3 | Query transaction performance, latency, throughput, and span data.                              |
+| [`profiling`](lib/skill_defs/profiling.md)                     | organizer |     2 | View CPU profiling data — flamegraphs and slowest functions.                                    |
+| [`projects-management`](lib/skill_defs/projects-management.md) | admin     |     7 | Create, update, and delete Sentry projects; manage project environments and client keys (DSNs). |
+| [`releases`](lib/skill_defs/releases.md)                       | organizer |     6 | Create and manage releases and deploys; view release health and commits.                        |
+| [`replays`](lib/skill_defs/replays.md)                         | organizer |     2 | View session replays — user session recordings with error context.                              |
+| [`stats`](lib/skill_defs/stats.md)                             | organizer |     2 | View organization and project usage statistics — event volume, quotas, and trends.              |
+| [`traces`](lib/skill_defs/traces.md)                           | organizer |     2 | View distributed traces — full request waterfalls across services.                              |
 
 ## Always available
 

@@ -27,14 +27,14 @@ receipt" is that link.
 
 ## Skills
 
-| Skill                                    | Role      | Tools | Description                                                                                     |
-| ---------------------------------------- | --------- | ----: | ----------------------------------------------------------------------------------------------- |
-| [`card-charges`](skills/card-charges.md) | organizer |     1 | List Hack Club Bank card charges with optional cardholder filter for microgrant spend tracking. |
-| [`donations`](skills/donations.md)       | organizer |     3 | List Hack Club Bank donations and total them over a date range for fundraising reporting.       |
-| [`invoices`](skills/invoices.md)         | organizer |     3 | List Hack Club Bank invoices and surface outstanding (unpaid) ones for sponsor follow-ups.      |
-| [`receipts`](skills/receipts.md)         | organizer |     2 | Check which Hack Club Bank transactions are missing an attached receipt.                        |
-| [`transactions`](skills/transactions.md) | organizer |     3 | List, inspect, and search Hack Club Bank transactions by memo, amount, or date range.           |
-| [`transfers`](skills/transfers.md)       | organizer |     2 | View Hack Club Bank inter-org transfers (disbursements between HCB organizations).              |
+| Skill                                            | Role      | Tools | Description                                                                                     |
+| ------------------------------------------------ | --------- | ----: | ----------------------------------------------------------------------------------------------- |
+| [`card-charges`](lib/skill_defs/card-charges.md) | organizer |     1 | List Hack Club Bank card charges with optional cardholder filter for microgrant spend tracking. |
+| [`donations`](lib/skill_defs/donations.md)       | organizer |     3 | List Hack Club Bank donations and total them over a date range for fundraising reporting.       |
+| [`invoices`](lib/skill_defs/invoices.md)         | organizer |     3 | List Hack Club Bank invoices and surface outstanding (unpaid) ones for sponsor follow-ups.      |
+| [`receipts`](lib/skill_defs/receipts.md)         | organizer |     2 | Check which Hack Club Bank transactions are missing an attached receipt.                        |
+| [`transactions`](lib/skill_defs/transactions.md) | organizer |     3 | List, inspect, and search Hack Club Bank transactions by memo, amount, or date range.           |
+| [`transfers`](lib/skill_defs/transfers.md)       | organizer |     2 | View Hack Club Bank inter-org transfers (disbursements between HCB organizations).              |
 
 ## Always available
 

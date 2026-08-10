@@ -175,6 +175,7 @@ async function checkDomain(domain: string): Promise<DomainSurface> {
   // Prose lives in files for every domain now, so these run everywhere; the
   // README check is the only part that waits for `lib/registry.ts`.
   await checkSkillDocs(domain, root, skills);
+  await checkToolLayout(domain, root, skills, baseTools, tools);
   if (converted) await checkReadme(domain, root, skills, baseTools, toolSpecs);
 
   return { name: domain, toolCount: tools.length, skillCount: skills.length, converted };
@@ -185,6 +186,68 @@ type ToolSpecs =
   z.output<typeof toolSpecSchema> extends infer Spec ? Readonly<Record<string, Spec>> : never;
 
 /** The invariants that only exist once prose and policy live in separate files. */
+/**
+ * `lib/tool_defs/` must mirror the skill list: one directory per skill plus
+ * `base`, one file per tool, each file in the bundle whose skill lists it.
+ *
+ * Nothing else enforces this. The registry compiles whatever it imports, so an
+ * orphan file, a tool filed under the wrong skill, or a directory named after a
+ * skill that no longer exists all ship silently — the exact drift the split was
+ * done to remove.
+ */
+async function checkToolLayout(
+  domain: string,
+  root: string,
+  skills: readonly RegistrySkill[],
+  baseTools: readonly string[],
+  toolNames: readonly string[],
+): Promise<void> {
+  const defsRoot = join(root, "lib/tool_defs");
+  if (!(await fileExists(defsRoot))) return;
+
+  const expectedBundles = new Set(skills.map((entry) => entry.name));
+  if (baseTools.length > 0) expectedBundles.add("base");
+
+  // A tool may be listed by more than one skill, so it may legitimately live in
+  // any bundle that claims it.
+  const claimedBy = new Map<string, Set<string>>();
+  const claim = (tool: string, bundle: string) =>
+    claimedBy.set(tool, (claimedBy.get(tool) ?? new Set()).add(bundle));
+  for (const entry of skills) for (const name of entry.tools) claim(name, entry.name);
+  for (const name of baseTools) claim(name, "base");
+
+  const problems: string[] = [];
+  const seen = new Set<string>();
+  for (const bundle of await readdir(defsRoot, { withFileTypes: true })) {
+    if (!bundle.isDirectory()) {
+      problems.push(`lib/tool_defs/${bundle.name} is not a bundle directory`);
+      continue;
+    }
+    if (!expectedBundles.has(bundle.name)) {
+      problems.push(`lib/tool_defs/${bundle.name}/ matches no skill`);
+      continue;
+    }
+    for (const file of await readdir(join(defsRoot, bundle.name))) {
+      if (!file.endsWith(".ts")) continue;
+      const tool = file.slice(0, -3);
+      seen.add(tool);
+      const owners = claimedBy.get(tool);
+      if (owners === undefined) problems.push(`${tool} is not in the registry`);
+      else if (!owners.has(bundle.name)) {
+        problems.push(
+          `${tool} sits in ${bundle.name}/ but only ${[...owners].join(", ")} claims it`,
+        );
+      }
+    }
+  }
+  const unfiled = toolNames.filter((name) => !seen.has(name));
+  if (unfiled.length > 0) problems.push(`no tool_defs file for: ${unfiled.join(",")}`);
+
+  if (problems.length > 0) {
+    throw new Error(`${domain} tool_defs layout:\n  ${problems.join("\n  ")}`);
+  }
+}
+
 /** Prose and policy are separate files; neither may name a skill the other lacks. */
 async function checkSkillDocs(
   domain: string,

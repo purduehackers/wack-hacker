@@ -27,14 +27,14 @@ opaque and come from a list call rather than being constructed.
 
 ## Skills
 
-| Skill                                            | Role      | Tools | Description                                                                              |
-| ------------------------------------------------ | --------- | ----: | ---------------------------------------------------------------------------------------- |
-| [`events`](skills/events.md)                     | organizer |    19 | Manage events, RSVPs, and email blasts on cms.purduehackers.com                          |
-| [`hack-nights`](skills/hack-nights.md)           | organizer |     7 | Create, update, and publish hack night session records on cms.purduehackers.com          |
-| [`media`](skills/media.md)                       | organizer |     4 | List, fetch, upload, and delete image/file assets in the CMS media library               |
-| [`service-accounts`](skills/service-accounts.md) | organizer |     5 | Manage service-account (API-key-only) identities in the CMS — bots and integrations      |
-| [`showcases`](skills/showcases.md)               | organizer |    14 | Manage the ugrants (microgrants) and shelter-projects showcases on cms.purduehackers.com |
-| [`users`](skills/users.md)                       | admin     |     5 | Admin-only management of CMS user accounts — invite, update roles, remove                |
+| Skill                                                    | Role      | Tools | Description                                                                              |
+| -------------------------------------------------------- | --------- | ----: | ---------------------------------------------------------------------------------------- |
+| [`events`](lib/skill_defs/events.md)                     | organizer |    19 | Manage events, RSVPs, and email blasts on cms.purduehackers.com                          |
+| [`hack-nights`](lib/skill_defs/hack-nights.md)           | organizer |     7 | Create, update, and publish hack night session records on cms.purduehackers.com          |
+| [`media`](lib/skill_defs/media.md)                       | organizer |     4 | List, fetch, upload, and delete image/file assets in the CMS media library               |
+| [`service-accounts`](lib/skill_defs/service-accounts.md) | organizer |     5 | Manage service-account (API-key-only) identities in the CMS — bots and integrations      |
+| [`showcases`](lib/skill_defs/showcases.md)               | organizer |    14 | Manage the ugrants (microgrants) and shelter-projects showcases on cms.purduehackers.com |
+| [`users`](lib/skill_defs/users.md)                       | admin     |     5 | Admin-only management of CMS user accounts — invite, update roles, remove                |
 
 ## Always available
 

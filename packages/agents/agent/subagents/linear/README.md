@@ -30,24 +30,24 @@ workspace settings are not reachable from a chat message.
 
 ## Skills
 
-| Skill                                                | Role      | Tools | Description                                                                        |
-| ---------------------------------------------------- | --------- | ----: | ---------------------------------------------------------------------------------- |
-| [`comments`](skills/comments.md)                     | organizer |     3 | Post, edit, and delete comments on issues.                                         |
-| [`customer-requests`](skills/customer-requests.md)   | organizer |     3 | Create, update, list, and analyze customer requests.                               |
-| [`cycles`](skills/cycles.md)                         | organizer |     5 | List, create, update, and archive Linear cycles (sprints).                         |
-| [`documents`](skills/documents.md)                   | organizer |     2 | Create and update documents attached to a project, initiative, issue, or cycle.    |
-| [`initiative-updates`](skills/initiative-updates.md) | organizer |     3 | Query, create, and update initiative status updates.                               |
-| [`initiatives`](skills/initiatives.md)               | organizer |     4 | Create/update initiatives; query initiative activity and history.                  |
-| [`issue-views`](skills/issue-views.md)               | organizer |     1 | Query and analyze issue views in list or insight mode, with filters.               |
-| [`issues`](skills/issues.md)                         | organizer |     6 | Create, update, delete issues; query issue activity and history.                   |
-| [`labels`](skills/labels.md)                         | organizer |     5 | List, create, update, and delete Linear issue labels.                              |
-| [`membership`](skills/membership.md)                 | admin     |     2 | Invite new members to the Linear workspace or remove existing ones (admin only).   |
-| [`project-updates`](skills/project-updates.md)       | organizer |     3 | Query, create, and update project status updates.                                  |
-| [`project-views`](skills/project-views.md)           | organizer |     1 | Query and analyze project views in list or count mode, with filters.               |
-| [`projects`](skills/projects.md)                     | organizer |    10 | Create/update projects and milestones; query project activity.                     |
-| [`reminders`](skills/reminders.md)                   | organizer |     1 | Set a reminder for the current user on an issue, document, project, or initiative. |
-| [`teams`](skills/teams.md)                           | organizer |     3 | List team members and manage team membership.                                      |
-| [`users`](skills/users.md)                           | organizer |     9 | List, inspect, and manage workspace users — profiles, teams, workload, invites.    |
+| Skill                                                        | Role      | Tools | Description                                                                        |
+| ------------------------------------------------------------ | --------- | ----: | ---------------------------------------------------------------------------------- |
+| [`comments`](lib/skill_defs/comments.md)                     | organizer |     3 | Post, edit, and delete comments on issues.                                         |
+| [`customer-requests`](lib/skill_defs/customer-requests.md)   | organizer |     3 | Create, update, list, and analyze customer requests.                               |
+| [`cycles`](lib/skill_defs/cycles.md)                         | organizer |     5 | List, create, update, and archive Linear cycles (sprints).                         |
+| [`documents`](lib/skill_defs/documents.md)                   | organizer |     2 | Create and update documents attached to a project, initiative, issue, or cycle.    |
+| [`initiative-updates`](lib/skill_defs/initiative-updates.md) | organizer |     3 | Query, create, and update initiative status updates.                               |
+| [`initiatives`](lib/skill_defs/initiatives.md)               | organizer |     4 | Create/update initiatives; query initiative activity and history.                  |
+| [`issue-views`](lib/skill_defs/issue-views.md)               | organizer |     1 | Query and analyze issue views in list or insight mode, with filters.               |
+| [`issues`](lib/skill_defs/issues.md)                         | organizer |     6 | Create, update, delete issues; query issue activity and history.                   |
+| [`labels`](lib/skill_defs/labels.md)                         | organizer |     5 | List, create, update, and delete Linear issue labels.                              |
+| [`membership`](lib/skill_defs/membership.md)                 | admin     |     2 | Invite new members to the Linear workspace or remove existing ones (admin only).   |
+| [`project-updates`](lib/skill_defs/project-updates.md)       | organizer |     3 | Query, create, and update project status updates.                                  |
+| [`project-views`](lib/skill_defs/project-views.md)           | organizer |     1 | Query and analyze project views in list or count mode, with filters.               |
+| [`projects`](lib/skill_defs/projects.md)                     | organizer |    10 | Create/update projects and milestones; query project activity.                     |
+| [`reminders`](lib/skill_defs/reminders.md)                   | organizer |     1 | Set a reminder for the current user on an issue, document, project, or initiative. |
+| [`teams`](lib/skill_defs/teams.md)                           | organizer |     3 | List team members and manage team membership.                                      |
+| [`users`](lib/skill_defs/users.md)                           | organizer |     9 | List, inspect, and manage workspace users — profiles, teams, workload, invites.    |
 
 ## Always available
 

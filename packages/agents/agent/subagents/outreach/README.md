@@ -24,13 +24,13 @@ The CRM's property names and select options are live workspace state, so
 
 ## Skills
 
-| Skill                                            | Role      | Tools | Description                                                                   |
-| ------------------------------------------------ | --------- | ----: | ----------------------------------------------------------------------------- |
-| [`crm-writes`](skills/crm-writes.md)             | organizer |     9 | Update Company and Contact fields — status, email, next follow-up.            |
-| [`deals-management`](skills/deals-management.md) | organizer |     3 | Create and update Deal rows in the CRM.                                       |
-| [`email-enrichment`](skills/email-enrichment.md) | organizer |     2 | Find and verify email addresses via Hunter.io.                                |
-| [`emails`](skills/emails.md)                     | organizer |     1 | Send one outreach email to one person, from the CRM row that identifies them. |
-| [`status-tracking`](skills/status-tracking.md)   | organizer |     1 | Read the outreach tracking properties off a Company or Contact row.           |
+| Skill                                                    | Role      | Tools | Description                                                                   |
+| -------------------------------------------------------- | --------- | ----: | ----------------------------------------------------------------------------- |
+| [`crm-writes`](lib/skill_defs/crm-writes.md)             | organizer |     9 | Update Company and Contact fields — status, email, next follow-up.            |
+| [`deals-management`](lib/skill_defs/deals-management.md) | organizer |     3 | Create and update Deal rows in the CRM.                                       |
+| [`email-enrichment`](lib/skill_defs/email-enrichment.md) | organizer |     2 | Find and verify email addresses via Hunter.io.                                |
+| [`emails`](lib/skill_defs/emails.md)                     | organizer |     1 | Send one outreach email to one person, from the CRM row that identifies them. |
+| [`status-tracking`](lib/skill_defs/status-tracking.md)   | organizer |     1 | Read the outreach tracking properties off a Company or Contact row.           |
 
 ## Always available
 

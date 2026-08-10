@@ -28,7 +28,7 @@ export default defineDynamic({
                   async () => await FIGMA_RUNTIME.executeTool(toolName, input, toolCtx),
                 ),
             }),
-          ] as const;
+          ];
         }),
       );
     },

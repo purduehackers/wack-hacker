@@ -114,7 +114,7 @@ export function renderSubagentReadme(input: ReadmeInput): string {
   lines.push("| Skill | Role | Tools | Description |", "| --- | --- | ---: | --- |");
   for (const skill of skills) {
     lines.push(
-      `| [\`${skill.name}\`](skills/${skill.name}.md) | ${skill.minRole} | ` +
+      `| [\`${skill.name}\`](lib/skill_defs/${skill.name}.md) | ${skill.minRole} | ` +
         `${skill.tools.length} | ${summarize(skill.description)} |`,
     );
   }
