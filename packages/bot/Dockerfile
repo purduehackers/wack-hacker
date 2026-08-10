@@ -34,6 +34,11 @@ COPY packages/bot/package.json packages/bot/
 COPY packages/shared/package.json packages/shared/
 COPY packages/agents/package.json packages/agents/
 
+# The root manifest declares `patchedDependencies`, so bun resolves the patch
+# file even for a --filter that excludes the package it patches. Copying the
+# directory is cheaper than teaching the image which patches it can skip.
+COPY patches/ patches/
+
 # --filter keeps the agent's dependency tree (eve, the AI SDK) out of the bot
 # image, which would otherwise be installed just by being in the workspace.
 # --frozen-lockfile fails the build when the lockfile and manifests disagree,
