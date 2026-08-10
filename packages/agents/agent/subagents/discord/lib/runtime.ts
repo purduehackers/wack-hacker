@@ -2,7 +2,7 @@ import { RateLimited, Transient, UpstreamError } from "@repo/shared/errors";
 
 import { env } from "../../../env.ts";
 import { createDomainRuntime } from "../../../lib/policy/domain-runtime.ts";
-import { DISCORD_TOOLS } from "./tool-registry.ts";
+import { DISCORD_TOOLS } from "./registry.ts";
 
 export const DISCORD_RUNTIME = createDomainRuntime({
   domain: "discord",

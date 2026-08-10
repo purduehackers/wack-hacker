@@ -1,27 +1,15 @@
-import { Result } from "@repo/shared/result";
 import { defineAgent, defineDynamic } from "eve";
-import type { SessionAuthContext } from "eve/context";
 
 import { SUBAGENT_OUTPUT_SCHEMA } from "../../lib/core/subagent-output.ts";
-import { decideCapability, requirePrincipal } from "../../lib/policy/index.ts";
+import { subagentDiscoverable } from "../../lib/policy/index.ts";
 import { DISCORD_RUNTIME } from "./lib/runtime.ts";
-
-/**
- * Discovery is a function of role policy: an unauthenticated delivery and a
- * principal whose policy withholds discovery are both simply "not discoverable",
- * which keeps the resolver to a single hidden-capability exit.
- */
-function discoverable(current: SessionAuthContext | null | undefined): boolean {
-  const principal = requirePrincipal(current);
-  if (Result.isError(principal)) return false;
-  const decision = decideCapability(principal.value, DISCORD_RUNTIME.subagentDescriptor);
-  return !Result.isError(decision) && decision.value.discover;
-}
 
 export default defineDynamic({
   events: {
     "turn.started": (_event, ctx) => {
-      if (!discoverable(ctx.session.auth.current)) return undefined;
+      if (!subagentDiscoverable(ctx.session.auth.current, DISCORD_RUNTIME.subagentDescriptor)) {
+        return undefined;
+      }
       return defineAgent({
         description:
           "Manage the Discord server — channels, roles, members, messages, webhooks, scheduled events, " +

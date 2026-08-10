@@ -1,8 +1,8 @@
 import { defineDynamic, defineTool } from "eve/tools";
 
 import { guardToolExecution } from "../../../lib/core/serialization.ts";
+import { DISCORD_TOOLS } from "../lib/registry.ts";
 import { DISCORD_RUNTIME } from "../lib/runtime.ts";
-import { DISCORD_TOOLS } from "../lib/tool-registry.ts";
 
 const DISCORD_TOOL_NAMES = Object.keys(DISCORD_TOOLS);
 
