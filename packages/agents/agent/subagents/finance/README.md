@@ -19,26 +19,6 @@ It does not own receipt files either. HCB reports only a
 in the HCB web UI at `hcb.hackclub.com/hcb/{id}`, and the answer to "send me the
 receipt" is that link.
 
-## Sharp edges
-
-Balances are not one number. Cleared balance, incoming (pending) balance, and
-fee balance are separate figures that a reconciliation question needs
-distinguished; a `pending: true` charge has not moved money yet, and quoting a
-month-end total that includes it is wrong.
-
-The list endpoints take no server-side filters, so `find_transactions`,
-`list_open_invoices`, `donation_totals`, and a filtered `list_card_charges` walk
-pages and filter locally under a cap — a few hundred records, not the full
-history. A result set that reaches the cap is a truncated answer, not an
-exhaustive one, and totals derived from it understate.
-
-Donor identity is protected in one place only: an anonymous donation projects
-its name as `(anonymous)` and drops the email. That masking lives in the
-projection, so a tool that returns a raw donation record leaks the donor.
-
-Only organizations in Transparency Mode are visible at all. A 404 usually means
-the slug is wrong or the org is not transparent, not that the resource is gone.
-
 <!-- generated: do not edit below this line -->
 
 ## Surface

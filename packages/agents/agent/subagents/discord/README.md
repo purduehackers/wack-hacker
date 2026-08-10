@@ -12,22 +12,6 @@ API, on the same policy spine as GitHub or Linear. The two clients keep
 independent rate-limit buckets on the same channel routes; both honour
 `retry_after`.
 
-## Sharp edges
-
-Discord has no undo. A deleted channel takes its message history with it, a
-deleted role silently strips every permission granted through it, and a ban is
-visible to the person banned. The four skills that can change who has access —
-`guild`, `invites`, `member-management`, and `membership` — are gated `admin`
-rather than `organizer` for that reason, and their destructive tools carry
-`confirm: "second-party"` so the requester cannot approve their own call.
-
-Bulk message deletion only works on messages under 14 days old; Discord rejects
-the rest, and a partial failure leaves the channel half-cleared. Say which
-messages actually went.
-
-`audit-log` is read-only and is usually the right first call when someone asks
-what happened to a channel, a role, or a member.
-
 <!-- generated: do not edit below this line -->
 
 ## Surface

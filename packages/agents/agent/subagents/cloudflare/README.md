@@ -15,18 +15,6 @@ transactional only.
 Zone ids are what the tools take and domain names are what people say, so
 `list_zones` is almost always the first call.
 
-## Sharp edges
-
-MX records and the TXT records holding SPF, DKIM and DMARC break mail for an
-entire domain when they are wrong, and the failure is silent — mail keeps being
-accepted and quietly filed as spam. A domain may hold only **one** SPF record,
-so a new sender is authorized by adding an `include:` to the existing record,
-never by creating a second. Enabling Email Routing takes over the zone's MX
-records, which stops any other mail provider on that domain from receiving mail.
-
-Deliberately absent: `create_zone` and `delete_zone`. Moving a domain's
-authoritative DNS should not be reachable from a chat message.
-
 <!-- generated: do not edit below this line -->
 
 ## Surface

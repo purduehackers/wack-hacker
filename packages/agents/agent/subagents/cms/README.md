@@ -19,29 +19,6 @@ hack night dashboard read this data but are deployed elsewhere.
 Payload assigns numeric ids on Postgres and string ids on Mongo, so ids are
 opaque and come from a list call rather than being constructed.
 
-## Sharp edges
-
-`send_blast` and `send_email` send real email to every non-unsubscribed RSVP the
-moment they set `send: true`, and Payload resets the flag afterwards — there is
-no draft state to recall and no second confirmation downstream.
-
-`publish_event`, `publish_hack_night_session`, `publish_ugrant` and
-`publish_shelter_project`, and their `unpublish_*` counterparts, change what the
-public sees immediately. Unpublishing is the only undo.
-
-Deletion loses history that nothing else holds. `delete_event` detaches the
-RSVPs and sent-email records attached to it; `delete_media` leaves every
-showcase entry that referenced the asset without an image; `delete_rsvp` and
-`delete_service_account` destroy an audit trail that `unsubscribed: true` and
-`revoked: true` would have preserved.
-
-`upload_media` fetches an operator-supplied URL from the agent's network and
-stores whatever comes back, so the URL is untrusted input, not a citation.
-
-The `users` skill is admin-only because it grants and revokes CMS access:
-`update_user` replaces a role set rather than merging into it, so omitting a
-role removes it.
-
 <!-- generated: do not edit below this line -->
 
 ## Surface

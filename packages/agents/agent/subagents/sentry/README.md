@@ -15,26 +15,6 @@ Projects are addressed by slug and `list_projects` is how a slug is found.
 Issues are addressed by their numeric id; the `PROJECT-123` form users quote
 from the UI is a short id and is not accepted in its place.
 
-## Sharp edges
-
-Sentry's destructive operations fail quietly. Nothing errors when monitoring
-stops — the dashboards simply go calm, and calm is indistinguishable from
-healthy. `delete_project_key` retires a DSN that deployed SDKs are still using,
-so events stop arriving from code nobody has touched. `delete_alert_rule` and
-`delete_monitor` leave the underlying service running and unwatched. Each is
-noticed at the next incident rather than at the time of the change.
-
-`delete_project` removes a project's entire event history along with its
-configuration and cannot be undone; it requires a second party to confirm.
-`delete_issue` discards one issue's events permanently, and
-`bulk_update_issues` applies a single status change across an arbitrary list in
-one call, which makes a wrong query a wrong mass edit.
-
-`add_member_to_platform`, `remove_member_from_platform` and `update_member_role`
-change real organization membership and privileges. Membership is admin-gated
-and separated from the read-only `members` skill for that reason. A member id
-is resolved with `list_members` first; an email address is not a member id.
-
 <!-- generated: do not edit below this line -->
 
 ## Surface

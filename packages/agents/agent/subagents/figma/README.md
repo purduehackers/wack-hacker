@@ -17,24 +17,6 @@ can write is metadata around the design: comments, dev resource links, variables
 and webhooks. Images come back as temporary export URLs that expire in about two
 weeks, so they are for looking at now, not for embedding in anything durable.
 
-## Sharp edges
-
-`modify_variables` is a bulk mutation with no dry run. One POST carries
-collection, mode and variable changes together, each entry naming its own
-`CREATE`, `UPDATE` or `DELETE`, and a `DELETE` takes the variable out of every
-file that consumes it — a design token deleted here is a token missing from
-every component bound to it. Read the current variables first; there is no undo
-short of a designer restoring a version by hand.
-
-Webhooks are admin-only and team-wide. `create_webhook` starts delivering every
-matching event in the team to an endpoint along with a passcode, and
-`update_webhook` is a full replacement rather than a patch — an omitted
-`description` or `status` is dropped, not preserved.
-
-Comments are visible to everyone in the file and carry the token owner's
-identity, not the requester's, so a comment posted here reads as coming from
-whoever the integration authenticates as.
-
 <!-- generated: do not edit below this line -->
 
 ## Surface

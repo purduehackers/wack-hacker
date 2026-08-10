@@ -17,39 +17,6 @@ Deployments are addressed by `dpl_…` id or by hostname, projects by `prj_…` 
 name, and almost nothing accepts the name a person actually says, so a `list_*`
 call comes first.
 
-## Sharp edges
-
-Traffic moves asynchronously. `promote_deployment`, `rollback_deployment`,
-`approve_rolling_release_stage` and `complete_rolling_release` all return before
-the shift has happened, and each shifts real production traffic; the result is
-confirmed with `list_promote_aliases` or `get_rolling_release`, not inferred
-from the call succeeding.
-
-Secrets travel through this domain and are stripped on the way out.
-`list_project_env_vars` never returns a `value`, and the Global Config token
-tools never return a `token` — `get_project_env_var` is the single tool that
-returns a decrypted value, and its output belongs in no channel. Creating a
-Global Config token returns the id only; the secret is retrieved from the Vercel
-dashboard.
-
-Deletion here removes hosting, not just a record. `delete_project` takes every
-deployment under it and requires a second party to confirm. `delete_domain`,
-`delete_alias` and `remove_project_domain` take a live site off its hostname the
-moment they land. `delete_integration_resource` drops the provisioned store — a
-database and its contents — and `create_integration_store_direct` provisions a
-billed resource, so the plan is surfaced before it runs.
-`update_attack_challenge_mode` and `delete_auth_token` change who can reach the
-platform at all.
-
-The `dangerously_delete_edge_cache_*` tools purge rather than invalidate, and
-cost a full origin refill; `invalidate_edge_cache_*` is the intended verb unless
-storage has to be freed immediately.
-
-Deliberately absent: creating deployments, projects, domains or firewall rules.
-Provisioning new infrastructure and shipping new code do not start from a chat
-message; `create_flag` and `update_flag` are absent for a duller reason, their
-nested variant payloads do not survive a flat tool schema.
-
 <!-- generated: do not edit below this line -->
 
 ## Surface

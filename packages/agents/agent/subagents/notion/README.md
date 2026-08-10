@@ -22,21 +22,6 @@ The integration only sees pages a human explicitly shared with it. An empty
 `search_notion` result means "not shared", as often as it means "does not
 exist", and the two are indistinguishable from here.
 
-## Sharp edges
-
-`update_database` deletes a property when its value is set to null, and that
-takes every value in that column, on every row, with it. Notion's trash holds
-archived pages and databases; it does not hold a deleted property.
-
-Everything else destructive here is soft. `archive_page`, `archive_database`
-and `delete_block` set the trash flag rather than removing anything, and a human
-can restore them from the Notion UI — the tools say "delete" because users do.
-The recoverable-but-unpleasant pair is `update_block`, which replaces a block's
-content rather than merging into it, and `update_page_content` in
-`replace_content` mode, which does the same to an entire page body. Read the
-current state first: `retrieve_block` before the one, `read_page_content`
-before the other.
-
 <!-- generated: do not edit below this line -->
 
 ## Surface

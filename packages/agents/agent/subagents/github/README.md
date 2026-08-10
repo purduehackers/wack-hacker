@@ -21,30 +21,6 @@ that put a site online. Vercel is the `vercel` subagent, runtime errors are
 returns snippets fast across the whole org but reflects grep.app's index
 rather than the current default branch.
 
-## Sharp edges
-
-`delete_repository` destroys code, issues, and history, and nothing restores
-it; it is the one tool in this domain that requires a second party to confirm.
-`transfer_repository` moves a repository out of the organization, after which
-none of these tools can reach it again.
-
-`set_branch_protection` replaces the whole rule set. Every rule left out of
-the call is sent as an explicit clear, not left alone, so a request that
-means to raise the review count also removes the required status checks.
-Read the current rules with `get_branch_protection` first and resend them.
-`update_ref` with `force` and `delete_ref` rewrite and remove branches; both
-are ordinary force-pushes as far as anyone's clone is concerned.
-
-Secret values are write-only — `list_repo_secrets` returns names, never
-values, and a secret is encrypted to the repository's public key before it
-leaves this process. An organization secret created with visibility `all` is
-readable by every workflow in every repository in the org, including a fork's
-workflow if one is ever allowed to run.
-
-`remove_member_from_platform`, `remove_org_member`, and `remove_collaborator`
-revoke access immediately and silently; the person is not notified.
-`merge_pull_request` and `delete_package_version` have no undo.
-
 <!-- generated: do not edit below this line -->
 
 ## Surface

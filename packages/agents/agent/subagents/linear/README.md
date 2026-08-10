@@ -22,25 +22,6 @@ CI belong to the `github` subagent, deploys to `vercel`, and errors to
 Nor does it own workspace administration beyond membership: billing, SSO and
 workspace settings are not reachable from a chat message.
 
-## Sharp edges
-
-Membership is the dangerous surface. `add_member_to_platform` and `invite_user`
-send a real email to a real address, and a fabricated or misheard address is an
-invitation to a stranger — the address is confirmed with the user verbatim,
-never inferred. `remove_member_from_platform`, `suspend_user` and
-`add_user_to_team` change what a person can see, and the `membership` skill sits
-behind `admin` for that reason.
-
-Deletion is not archival. `delete_issue`, `delete_project` and `delete_label`
-are irreversible: deleting a label silently strips it from every issue carrying
-it, and deleting a project takes the work item with it. `archive_issue` and
-`archive_project` are the intended verbs, and `delete_project` additionally
-requires second-party confirmation.
-
-Writes are cheap to issue and loud to undo — every mutation lands in a workspace
-other people are reading, and a status update or comment posted early is visible
-before it can be retracted.
-
 <!-- generated: do not edit below this line -->
 
 ## Surface

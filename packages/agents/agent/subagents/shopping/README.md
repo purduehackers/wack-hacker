@@ -15,20 +15,6 @@ It does not own purchasing or reimbursement. No tool in this repository spends
 money — `finance` reads Hack Club Bank and writes nothing back — so a cart entry
 is a request that someone still has to act on by hand.
 
-## Sharp edges
-
-`clear_cart` empties the shared cart for everyone at once, and the rows are
-deleted rather than tombstoned, so there is nothing to undo it with.
-`remove_from_cart` and `update_quantity` are global in the same way: an item
-another organizer added disappears with no notice to them. Both rewrite the
-entire item set inside one transaction, so a quantity change is a delete and
-re-insert, not an update in place.
-
-Prices are scraped and go stale. A stored price is whatever SerpAPI reported at
-the moment of the add, and SerpAPI omits the price entirely for "check on
-Amazon" listings — `add_to_cart` requires a number and will store whichever one
-it is given, including one a user supplied by hand.
-
 <!-- generated: do not edit below this line -->
 
 ## Surface

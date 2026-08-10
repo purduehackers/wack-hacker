@@ -19,25 +19,6 @@ Sending.
 The CRM's property names and select options are live workspace state, so
 `retrieve_crm_schema` is the first call before any write.
 
-## Sharp edges
-
-`send_outreach_email` puts mail in front of a real person under the Purdue
-Hackers name, and nothing recalls it. Two checks stand in front of it and both
-fail closed: the target page must belong to the CRM data source the caller
-named, so a mistyped `target` cannot mail a row out of an unrelated database,
-and a checked `Do Not Contact` refuses the send outright. Neither check is
-advisory, and neither should be worked around by reaching for a different tool.
-Cloudflare reports a permanent bounce in the success body rather than as an
-error, so a send to a dead address is refused rather than recorded.
-
-`send_broadcast` reaches an entire audience at once and cannot be undone after
-dispatch. `delete_domain` stops all sending from that domain immediately, which
-breaks every in-flight campaign using it.
-
-The write tools address Notion properties by exact name — `"Next Follow-up"`,
-`"Outreach Status"`, `"Do Not Contact"`. A renamed property in the workspace
-does not fail loudly; it writes nothing the CRM reads.
-
 <!-- generated: do not edit below this line -->
 
 ## Surface
