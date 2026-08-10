@@ -68,7 +68,23 @@
     "oxclippy/unreadable-literal": "warn",
     "oxclippy/bool-to-int-with-if": "warn",
     "rayhanadev/no-type-erasure": "error",
-    "rayhanadev/no-typeof": "error"
+    "rayhanadev/no-typeof": "error",
+    "rayhanadev/cross-field-issue-without-path": "error",
+    "rayhanadev/json-parse-argument-of-safeparse": "error",
+    "rayhanadev/number-int-method": "error",
+    "rayhanadev/object-strict-method": "error",
+    "rayhanadev/optional-default-redundant": "error",
+    "rayhanadev/record-string-unknown": "error",
+    "rayhanadev/shape-spread-drops-refinements": "error",
+    "rayhanadev/throwing-zod-refine": "error",
+    "rayhanadev/tool-input-integer-as-number": "error",
+    "rayhanadev/tool-input-not-strict": "error",
+    "rayhanadev/trim-after-string-constraint": "error",
+    "rayhanadev/union-of-literals-to-literal-array": "error",
+    "rayhanadev/zinfer-instead-of-zoutput": "error",
+    "rayhanadev/zod3-string-format-method": "error",
+    "rayhanadev/zodtype-annotation-instead-of-satisfies": "error",
+    "rayhanadev/zodtype-t-generic-helper": "error"
   },
   "env": {
     "builtin": true

@@ -14,6 +14,7 @@ export const update_project_item = defineTool({
     value: z
       .xor([
         z.strictObject({ text: z.string() }),
+        // oxlint-disable-next-line rayhanadev/tool-input-integer-as-number -- GitHub's ProjectV2FieldValue.number is a Float, documented to accept up to 8 decimal places
         z.strictObject({ number: z.number() }),
         z.strictObject({ date: isoDateOrDateTime }),
         z.strictObject({ singleSelectOptionId: z.string() }),
