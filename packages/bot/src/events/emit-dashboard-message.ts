@@ -20,6 +20,8 @@ import {
 } from "@purduehackers/discord-markdown-utils";
 import { DISCORD_IDS } from "@repo/shared/discord";
 import { Transient } from "@repo/shared/errors";
+import { isOptedOut } from "@repo/shared/privacy";
+import type { RedisClient } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
 import { upstreamRetry } from "@repo/shared/result/retry";
 import { ChannelType, PermissionFlagsBits } from "discord.js";
@@ -113,7 +115,10 @@ function isPubliclyMirrorable(message: Message): boolean {
   return parent.permissionsFor(everyone)?.has(PermissionFlagsBits.ViewChannel) ?? false;
 }
 
-export function emitDashboardMessage(deps: { readonly apiToken: string }) {
+export function emitDashboardMessage(deps: {
+  readonly apiToken: string;
+  readonly redis: RedisClient;
+}) {
   return defineEvent({
     name: "emit-dashboard-message",
     kind: "message",
@@ -122,6 +127,7 @@ export function emitDashboardMessage(deps: { readonly apiToken: string }) {
       if (context.isBotMention) return Result.ok(undefined);
       if (!isPubliclyMirrorable(message)) return Result.ok(undefined);
       if (!message.inGuild()) return Result.ok(undefined);
+      if (await isOptedOut(deps.redis, message.author.id)) return Result.ok(undefined);
 
       const html = await renderHtml(
         message.content,

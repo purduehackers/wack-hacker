@@ -4,8 +4,8 @@
   "type": "module",
   "module": "src/index.ts",
   "scripts": {
-    "dev": "bun --watch --preload ./src/instrument.ts run src/index.ts",
-    "start": "bun --preload ./src/instrument.ts run src/index.ts",
+    "dev": "bun run --watch --preload ./src/instrument.ts src/index.ts",
+    "start": "bun run --preload ./src/instrument.ts src/index.ts",
     "register-commands": "bun scripts/register-commands.ts"
   },
   "dependencies": {

@@ -51,11 +51,11 @@ export function buildEventHandlers(deps: EventDeps): readonly AnyEventHandler[] 
     chatFeedback({ turnMessages, reporter: deps.reporter }),
     praise,
     autoThread,
-    emitShipMessage(ships),
+    emitShipMessage(ships, deps.redis),
     deleteShipMessage(ships),
-    hackNightImages({ cms, slugStore }),
+    hackNightImages({ cms, slugStore, redis: deps.redis }),
     hackNightImageRemoval({ cms, slugStore }),
-    emitDashboardMessage({ apiToken: deps.dashboardApiToken }),
+    emitDashboardMessage({ apiToken: deps.dashboardApiToken, redis: deps.redis }),
     transcribeVoiceMessage(createTranscriber({ apiKey: deps.groqApiKey })),
   ];
 }

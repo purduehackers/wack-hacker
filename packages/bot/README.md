@@ -33,7 +33,7 @@ src/
   events/           agent chat, auto-thread, praise, ship + dashboard mirrors,
                     voice transcription, hack-night images, chat indexer
   schedules/        hack-night countdown, photography thread, cleanup
-  integrations/     ships, dashboard, CMS, privacy DB, hack-night
+  integrations/     ships, dashboard, CMS, hack-night
 scripts/
   register-commands.ts   explicit guild registration; never runs at startup
 ```

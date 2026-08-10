@@ -11,6 +11,8 @@
  */
 
 import { DISCORD_IDS, UserRole, roleAtLeast, roleFromMemberRoles } from "@repo/shared/discord";
+import { isOptedOut } from "@repo/shared/privacy";
+import type { RedisClient } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
 import type { Message } from "discord.js";
 
@@ -34,6 +36,7 @@ function isPhotoThread(message: Message): boolean {
 export function hackNightImages(deps: {
   readonly cms: CmsClient;
   readonly slugStore: ThreadSlugStore;
+  readonly redis: RedisClient;
 }) {
   return defineEvent({
     name: "hack-night-images",
@@ -42,6 +45,9 @@ export function hackNightImages(deps: {
     handle: async (message, context) => {
       if (context.isBotMention) return Result.ok(undefined);
       if (!isPhotoThread(message)) return Result.ok(undefined);
+      // The archive is public, so an opted-out photographer's uploads are
+      // skipped entirely rather than filed and hidden.
+      if (await isOptedOut(deps.redis, message.author.id)) return Result.ok(undefined);
 
       const images = [...message.attachments.values()].filter(
         (attachment) => attachment.contentType?.startsWith("image/") ?? false,

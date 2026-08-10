@@ -203,17 +203,16 @@ reports gateway ping.
 
 ### `/privacy`
 
-Self-scoped, always ephemeral, backed by `pdb.purduehackers.com`:
+Self-scoped, always ephemeral. One toggle — `view`, `opt-out`, `opt-in` —
+stored as a Redis set of opted-out user ids (`@repo/shared/privacy`).
 
-- `view` — global preference and project overrides;
-- `set` — `opt_in`, `opt_out_privacy`, or destructive
-  `opt_out_collection`, with optional reason;
-- `set-project` — override `commit-overflow` or `ships`;
-- `reset` / `reset-project` — return to default/global behavior.
+The user id always comes from the interaction, never from an option, so the
+command cannot read or change anyone else's setting and needs no role gate.
 
-Inputs and provider responses are Zod-validated. The bot is only the preference
-management UI: its local dashboard/ship handlers do not read these preferences;
-downstream services own enforcement.
+Enforcement is local and lives at the three publish points, each checking
+`isOptedOut` before it uploads: `emit-ship-message`, `emit-dashboard-message`,
+and `hack-night-images`. Opting out is forward-looking — it stops future
+uploads and does not delete what is already public.
 
 ### `/hack-night`
 
@@ -363,7 +362,8 @@ These details matter when diagnosing effects:
   can race with dashboard publication.
 - Dashboard and ships do not synchronize edits; dashboard does not synchronize
   deletion.
-- Local mirror handlers do not query `/privacy` preferences.
+- `/privacy` is forward-looking only: opting out stops future uploads and
+  does not retract anything already published.
 - A prior reaction by the same user/message can suppress photo ❌ removal for
   five minutes because that handler's dedup key omits emoji.
 - Payload attachment errors are collapsed into an outer success plus ❌ signal.

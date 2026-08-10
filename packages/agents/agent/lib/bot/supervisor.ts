@@ -265,7 +265,6 @@ export type BotProcessEnvironment = Readonly<Record<string, string>> & {
   readonly BOT_INGRESS_SECRET: string;
   readonly UPSTASH_REDIS_REST_URL: string;
   readonly UPSTASH_REDIS_REST_TOKEN: string;
-  readonly PRIVACY_DB_API_KEY: string;
   readonly VERCEL_API_TOKEN: string;
   readonly DASHBOARD_EDGE_CONFIG: string;
   readonly PAYLOAD_CMS_API_KEY: string;
@@ -282,7 +281,6 @@ const REQUIRED_BOT_ENV_KEYS = [
   "BOT_INGRESS_SECRET",
   "UPSTASH_REDIS_REST_URL",
   "UPSTASH_REDIS_REST_TOKEN",
-  "PRIVACY_DB_API_KEY",
   "VERCEL_API_TOKEN",
   "DASHBOARD_EDGE_CONFIG",
   "PAYLOAD_CMS_API_KEY",

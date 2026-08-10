@@ -537,7 +537,7 @@ input: z.strictObject({ id: documentId, ...z.object(ugrantFields).partial().shap
 **Wrong:** `packages/agents/agent/lib/policy/engine.ts:18` — `z.enum([UserRole.Public, UserRole.Organizer, UserRole.Admin])`.
 **Right:** `z.enum(UserRole)`.
 **Buys:** the member list is a hand-maintained copy — adding a fourth `UserRole` silently leaves the policy engine's input schema accepting only three, with **no tsc error anywhere**. The codebase already contradicts itself: `lib/core/audit-log.ts:38` writes `z.enum(UserRole)` while `engine.ts:18` spells the members out. All 9 lists were verified exhaustive against their source object today (UserRole 3/3, PolicySource 2/2, CapabilityKind 3/3, RiskLevel 3/3, ConfirmMode 3/3, PrivacyMode 3/3, ScheduleType 2/2, ScheduleActionType 2/2, ScheduledTaskStatus 4/4), so the rewrite is inert now and drift-proof after.
-**Sites:** `policy/engine.ts:18,23,29,32,34` · `bot/src/integrations/privacy.ts:73` · `schedule/store.ts:187,190,193`. The three `store.ts` sites are worse: they reference 8 module-local `"once" satisfies …` constants re-declaring three enums from `@repo/shared/db`; importing the objects deletes all 8.
+**Sites:** `policy/engine.ts:18,23,29,32,34` · `schedule/store.ts:187,190,193`. The three `store.ts` sites are worse: they reference 8 module-local `"once" satisfies …` constants re-declaring three enums from `@repo/shared/db`; importing the objects deletes all 8.
 **Gotcha this change carries:** object-derived enums key entries by **property name**, so any future `.exclude()`/`.extract()` takes `["Public"]`, not `["public"]`. Zero such call sites today.
 **Detection:** `z.enum` whose argument is an `ArrayExpression` where every element is a `MemberExpression` with the same object identifier. Higher-confidence tier (auto-fixable): also require that the object resolves to `= {…} as const` and that the listed members equal `Object.keys(X)`.
 
@@ -750,7 +750,7 @@ if (decoded.success) {
 **Buys:** `safeParse` cannot catch a throw raised while evaluating its own argument. A corrupt persisted `resumeState` throws a `SyntaxError` out of `openSession` and never reaches the `if (decoded.success)` fall-through that exists precisely to recover by starting a fresh session — **the parked-sandbox recovery path is unreachable for the most likely corruption mode.** The try/catch at `:311` is _inside_ the success branch.
 **Sites:** `harness.ts:309` (unguarded — the defect) · `cms/lib/client.ts:191` and `channels/discord.ts:181` (already try/catch-wrapped, so correct today) · `check-capabilities.ts:185` (build script, throwing is fine).
 **Detection:** `<schema>.safeParse(JSON.parse(…))` — a `CallExpression` `JSON.parse` as the direct argument of `.safeParse`/`.parse`, not enclosed in a `TryStatement`.
-**Must not flag:** `bot/src/integrations/privacy.ts:128` — the `JSON.parse` sits inside `Result.tryPromise` whose catch already maps any throw to `Transient`.
+**Must not flag:** a `JSON.parse` sitting inside a `Result.tryPromise` whose catch already maps any throw to a typed error — the throw is handled, just not by a `TryStatement` the rule can see.
 
 ### `iso-string-to-date-by-hand` — 6 sites + 2 bidirectional clusters · judgment · **BLOCKED, read this before you write the rule**
 
@@ -978,7 +978,7 @@ if (status === "start" && "admissionAttemptId" in value && typeof value.admissio
 **Wrong (b) — path-dropping**, `domain-runtime.ts:342`: `parsed.error.issues.map((issue) => issue.message).join("; ")`.
 **Right:** `z.prettifyError(parsed.error)` — already used at `cms/lib/client.ts:202` and `bot/integrations/cms.ts:113`; it renders `✖ Invalid input: expected string, received number\n  → at status`.
 **Buys:** the `.issues.map(i => i.message)` variant **drops `issue.path`**, so a 15-field payload reports "Invalid input: expected string, received number" with no indication of which field drifted — and `wire.ts:398` and `render.ts:128` hand-roll the path back in, proving the omission is unintentional rather than policy. The five fully-discarding sites replace the error with a fixed string, so an upstream drift produces a log line with **zero** diagnostic content. `domain-runtime.ts:342` is the highest-value fix: that string is what the **model** reads when a tool input is rejected.
-**Sites:** `domain-runtime.ts:342` · `lib/core/audit-log.ts:128-131` · `lib/core/web-search.ts:128-131` · `lib/core/edge-config.ts:54-60` · `lib/core/documentation.ts:36-43` · `bot/src/agent/render/discord-rest.ts:35-43` · `bot/src/integrations/ships.ts:70` · `bot/src/integrations/privacy.ts:156`.
+**Sites:** `domain-runtime.ts:342` · `lib/core/audit-log.ts:128-131` · `lib/core/web-search.ts:128-131` · `lib/core/edge-config.ts:54-60` · `lib/core/documentation.ts:36-43` · `bot/src/agent/render/discord-rest.ts:35-43` · `bot/src/integrations/ships.ts:70`.
 **Detection:** a `!parsed.success` branch whose thrown/returned message is a `StringLiteral` or template containing no reference to `parsed.error`, OR contains `.issues.map(… => … .message)` without `.path`.
 **Format caveat:** where the consumer joins issues into a one-line message (`InvalidInput` joins with `"; "`), `z.prettifyError` is multi-line — use path-prefixed lines instead, matching `shared/src/conversations/render.ts:128`.
 

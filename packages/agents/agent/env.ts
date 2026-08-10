@@ -88,7 +88,6 @@ export const env = createEnv({
     DISCORD_BOT_TOKEN: secret.optional(),
     DISCORD_BOT_CLIENT_ID: secret.optional(),
     AGENT_URL: httpUrl.optional(),
-    PRIVACY_DB_API_KEY: secret.optional(),
     DASHBOARD_EDGE_CONFIG: secret.optional(),
     SHIP_API_KEY: secret.optional(),
     PHACK_API_TOKEN: secret.optional(),

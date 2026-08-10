@@ -8,6 +8,7 @@
     "./errors": "./src/errors.ts",
     "./formats": "./src/formats.ts",
     "./json": "./src/json.ts",
+    "./privacy": "./src/privacy.ts",
     "./env/scripts": "./src/env/scripts.ts",
     "./text": "./src/text.ts",
     "./wire": "./src/wire.ts",

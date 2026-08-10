@@ -12,17 +12,17 @@
  */
 
 import type { UpstreamError } from "@repo/shared/errors";
+import type { RedisClient } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
 
 import type { SlashCommand } from "../framework/commands.ts";
 import { createDashboardWriter } from "../integrations/dashboard.ts";
-import { createPrivacyClient } from "../integrations/privacy.ts";
 import { hackNightCommand } from "./hack-night.ts";
 import { ping } from "./ping.ts";
 import { privacyCommand } from "./privacy.ts";
 
 export interface CommandDeps {
-  readonly privacyApiKey: string;
+  readonly redis: RedisClient;
   readonly vercelToken: string;
   readonly dashboardEdgeConfig: string;
 }
@@ -41,9 +41,5 @@ export function buildCommands(deps: CommandDeps): Result<readonly SlashCommand[]
   });
   if (Result.isError(dashboard)) return dashboard;
 
-  return Result.ok([
-    ping,
-    privacyCommand(createPrivacyClient({ apiKey: deps.privacyApiKey })),
-    hackNightCommand(dashboard.value),
-  ]);
+  return Result.ok([ping, privacyCommand(deps.redis), hackNightCommand(dashboard.value)]);
 }

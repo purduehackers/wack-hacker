@@ -11,6 +11,8 @@
  */
 
 import { DISCORD_IDS } from "@repo/shared/discord";
+import { isOptedOut } from "@repo/shared/privacy";
+import type { RedisClient } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
 import type { Message } from "discord.js";
 
@@ -87,7 +89,7 @@ function avatarUrlFor(userId: string, avatarHash: string | null): string {
   return `https://cdn.discordapp.com/embed/avatars/${index}.png`;
 }
 
-export function emitShipMessage(ships: ShipsClient) {
+export function emitShipMessage(ships: ShipsClient, redis: RedisClient) {
   return defineEvent({
     name: "emit-ship-message",
     kind: "message",
@@ -95,6 +97,7 @@ export function emitShipMessage(ships: ShipsClient) {
     handle: async (message, context) => {
       if (context.isBotMention) return Result.ok(undefined);
       if (message.channelId !== DISCORD_IDS.channels.SHIP) return Result.ok(undefined);
+      if (await isOptedOut(redis, message.author.id)) return Result.ok(undefined);
 
       const shipText = shipContent(message);
       const attachments = shipAttachments(message);

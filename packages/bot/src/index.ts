@@ -117,8 +117,15 @@ async function main(): Promise<void> {
   });
 
   const client = createClient();
+
+  // These HTTP clients make no connection before the callback server binds.
+  const redis = getRedis({
+    url: env.UPSTASH_REDIS_REST_URL,
+    token: env.UPSTASH_REDIS_REST_TOKEN,
+  });
+
   const built = buildCommands({
-    privacyApiKey: env.PRIVACY_DB_API_KEY,
+    redis,
     vercelToken: env.VERCEL_API_TOKEN,
     dashboardEdgeConfig: env.DASHBOARD_EDGE_CONFIG,
   });
@@ -127,12 +134,6 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   const commands = built.value;
-
-  // These HTTP clients make no connection before the callback server binds.
-  const redis = getRedis({
-    url: env.UPSTASH_REDIS_REST_URL,
-    token: env.UPSTASH_REDIS_REST_TOKEN,
-  });
 
   let operationalReady = false;
   const conversations = createConversationStore({ redis });
