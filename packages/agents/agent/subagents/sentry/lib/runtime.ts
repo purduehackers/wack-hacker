@@ -7,7 +7,7 @@ import {
   redactProviderSecrets,
   redactProviderText,
 } from "../../../lib/policy/provider-redaction.ts";
-import { SENTRY_TOOLS } from "./tool-registry.ts";
+import { SENTRY_TOOLS } from "./registry.ts";
 
 export const SENTRY_RUNTIME = createDomainRuntime({
   domain: "sentry",

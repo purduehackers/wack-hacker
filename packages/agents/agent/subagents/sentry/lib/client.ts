@@ -2,7 +2,7 @@ import { UpstreamError } from "@repo/shared/errors";
 import { retrieveAProject, unwrapResult } from "@sentry/api";
 import { z } from "zod";
 
-import { env } from "./config.ts";
+import { env } from "./constants.ts";
 
 /** A single value a Sentry query parameter can carry before serialization. */
 type SentryQueryScalar = string | number | boolean | Date;

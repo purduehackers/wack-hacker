@@ -1,8 +1,8 @@
 import { defineDynamic, defineTool } from "eve/tools";
 
 import { guardToolExecution } from "../../../lib/core/serialization.ts";
+import { SENTRY_TOOLS } from "../lib/registry.ts";
 import { SENTRY_RUNTIME } from "../lib/runtime.ts";
-import { SENTRY_TOOLS } from "../lib/tool-registry.ts";
 
 const SENTRY_TOOL_NAMES = Object.keys(SENTRY_TOOLS);
 
