@@ -126,25 +126,33 @@ bunx vercel deploy --prod
 
 ### 5. Point it at a bot
 
-The agent needs somewhere to send turns. Two options:
-
-**A persistent container host** (Fly, Railway, a VM) — simplest. Run the bot image under that host's restart and health policy, then:
-
-```bash
-bunx vercel env add BOT_URL production              # https://your-bot-host
-bunx vercel env add BOT_SANDBOX_ENABLED production  # false
-```
-
-**Vercel Sandbox** — no separate host, but Sandbox caps instances at 24 hours, so the agent runs a five-minute `bot-supervisor` schedule that rotates them. Set `BOT_SANDBOX_ENABLED=true` and `BOT_IMAGE` to a digest-pinned VCR reference:
+The agent needs somewhere to send turns. On Vercel that is a **Sandbox**: no
+separate host, but Sandbox caps an instance at 24 hours, so the agent runs a
+five-minute `bot-supervisor` schedule that starts a replacement and retires the
+old one behind a Redis fence.
 
 ```bash
 bunx vercel vcr login docker
 docker buildx build --platform linux/amd64 -f packages/bot/Dockerfile \
-  --output "type=image,name=vcr.vercel.com/<team>/<project>/wack-hacker-bot:$(git rev-parse HEAD),push=true" .
-bunx vercel env add BOT_IMAGE production   # vcr.vercel.com/...@sha256:<digest>
+  --output "type=image,name=vcr.vercel.com/<team>/<project>/wack-hacker:$(git rev-parse HEAD),push=true" .
+
+bunx vercel env add BOT_SANDBOX_ENABLED production   # true
+bunx vercel env add BOT_IMAGE production             # vcr.vercel.com/...@sha256:<digest>
 ```
 
-VCR images are project-scoped: build and log in with the _same_ project whose credentials start the sandbox, or Sandbox creation fails with image-not-found. `BOT_IMAGE` must be a full `@sha256:` digest, never a tag.
+Take the digest from the `exporting manifest list` line, not `exporting
+manifest` — the list is what carries the platform index the supervisor resolves
+through. `bun packages/shared/scripts/release-check.ts image <ref>` confirms the
+registry serves that exact digest and that it contains `linux/amd64`.
+
+`BOT_IMAGE` must be a full `@sha256:` digest, never a tag. VCR images are
+project-scoped, so build and log in with the _same_ project whose credentials
+start the sandbox, or Sandbox creation fails with image-not-found.
+
+Running the bot locally instead — the normal loop while developing — needs
+neither variable: set `BOT_SANDBOX_ENABLED=false`, leave `BOT_IMAGE` empty, and
+point `BOT_URL` at your machine. `BOT_SANDBOX_ENABLED=true` with an empty
+`BOT_IMAGE` fails the reconcile rather than starting a broken bot.
 
 ### Releasing after the first deploy
 

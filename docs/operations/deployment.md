@@ -17,10 +17,11 @@ The cost of that choice is deliberate coupling: promoting a bot image is an
 agent deployment, and rolling back the agent rolls back the configured bot
 image with it.
 
-This supervision exists **only** to bridge Vercel Sandbox's 24-hour turnover. On
-Fly, Railway, a VM, or another persistent container host, run the same bot image
-under that host's restart/health policy, set the agent's `BOT_URL` to the
-persistent service, and leave `BOT_SANDBOX_ENABLED=false`.
+This supervision exists **only** to bridge Vercel Sandbox's 24-hour turnover.
+`BOT_SANDBOX_ENABLED=false` makes the tick return immediately, which is what a
+developer running the bot on their own machine wants: set `BOT_URL` to that
+machine and no image is needed. The supervisor is not removed by that flag, only
+idled, so nothing about the deployment changes when it is flipped back.
 
 Sandbox instances are deliberately **nonpersistent** and replace-on-crash. Redis,
 not a sandbox filesystem, owns queues, render intent/projection, receipts, and

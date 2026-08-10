@@ -101,7 +101,7 @@ That only helps if it is actually called, so `lib/core/serialization-boundaries.
 Two different things share the name:
 
 - **`schedules/dispatch.ts`** — the durable dispatcher. Scheduled tasks live in Turso; an occurrence becomes a queued turn through the bot's normal flow, with `message` actions posting directly and `agent` actions creating a placeholder-backed turn.
-- **`schedules/bot-supervisor.ts`** — infrastructure, not a feature. Holds a Redis fence, starts a digest-pinned bot container, rotates it before Vercel Sandbox's 24-hour cap. Off by default (`BOT_SANDBOX_ENABLED=false`); persistent container hosts do not need it.
+- **`schedules/bot-supervisor.ts`** — infrastructure, not a feature. Holds a Redis fence, starts a digest-pinned bot container, rotates it before Vercel Sandbox's 24-hour cap. Off by default (`BOT_SANDBOX_ENABLED=false`), which is what local development uses — the tick returns immediately and the bot runs on your machine.
 
 ## Checks
 

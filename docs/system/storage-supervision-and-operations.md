@@ -115,9 +115,9 @@ The Discord gateway needs one always-on process, while Vercel Sandbox has a
 Eve schedule in the agent deployment that ensures a healthy, digest-pinned
 candidate and rotates before expiry.
 
-It is not needed on Fly, Railway, a VM, or another persistent host: leave
-`BOT_SANDBOX_ENABLED=false` and the tick returns immediately. The application
-code and bot image remain the same.
+It is not needed when the bot already runs somewhere that stays up — a
+developer's machine during local work: leave `BOT_SANDBOX_ENABLED=false` and the
+tick returns immediately. The application code and bot image remain the same.
 
 Do not conflate three Sandbox surfaces, which now share one deployment:
 
@@ -405,9 +405,10 @@ The source of truth for commands and failure handling remains:
 
 - Schedule detection can take about five minutes plus candidate startup, and
   there is no direct command-death watcher or on-demand reconcile trigger.
-- Moving to a persistent host requires a reviewed retirement of the active
-  generation record; a present expired record prevents agent fallback to
-  `BOT_URL`. Do not ad hoc delete generation/fence keys to force recovery.
+- Turning `BOT_SANDBOX_ENABLED` off while a generation record still exists
+  requires retiring that record first: a present-but-expired record prevents the
+  agent falling back to `BOT_URL`, so the agent keeps addressing a sandbox that
+  is gone. Do not ad hoc delete generation/fence keys to force recovery.
 - VCR repositories are project-scoped and must align with the agent project.
 - Bot health can be 200 during Redis, provider or scheduler incidents.
 - Hosted Eve `defaultBackend()` reattachment remains an unmet deployment
