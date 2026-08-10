@@ -1,7 +1,8 @@
 # Eve rejects non-module files anywhere under `lib/`
 
-**Status:** patched locally via `patches/eve@0.29.5.patch`. Not yet filed upstream.
-**Affects:** eve 0.29.5 and 0.31.3 (verified byte-identical discovery code).
+**Status:** patched locally via `patches/eve@0.31.3.patch`. Not yet filed upstream.
+**Affects:** eve 0.31.3 (latest) and 0.29.5 — the discovery code is byte-identical
+between them, so upgrading does not resolve it.
 
 ## Summary
 
@@ -95,7 +96,7 @@ slot.
 
 ## Our local patch
 
-`patches/eve@0.29.5.patch` relaxes only the diagnostic gate:
+`patches/eve@0.31.3.patch` relaxes only the diagnostic gate:
 
 ```diff
 -let u=getSupportedModuleBaseName(c.name)!==null,d=a.allowMarkdown&&c.name.endsWith(`.md`);

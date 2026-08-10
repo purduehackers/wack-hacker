@@ -122,7 +122,7 @@ Schemas are canonical zod 4 — top-level string formats, `z.int()`, `z.strictOb
 
 ## Upstream patches
 
-`patches/eve@0.29.5.patch` relaxes one Eve discovery rule so skill prose can
+`patches/eve@0.31.3.patch` relaxes one Eve discovery rule so skill prose can
 live in `lib/skill_defs/*.md` next to the registry that imports it. Eve
 otherwise raises an error-severity diagnostic for any non-module file anywhere
 under `lib/`. The patch only silences the diagnostic — markdown is still never

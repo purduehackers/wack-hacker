@@ -13,8 +13,10 @@
  *    downstream capability gate — which subagents exist, which tools are visible,
  *    which skills appear — reads from it. Getting the attributes right here is
  *    what makes the permission model work at all.
- * 2. **Addressing.** `continuationToken` is the Discord thread or channel id, so
- *    a conversation maps to a durable session with nothing else to look up.
+ * 2. **Addressing.** The channel-local address is the Discord thread or channel
+ *    id, so a conversation maps to a durable session with nothing else to look
+ *    up. `continuationKey` on the wire is that address; it reaches Eve through
+ *    `from(address)` and `resolveSession(address)`.
  * 3. **Delivery.** The `events` map drives durable, coalesced render intent.
  */
 
@@ -327,7 +329,7 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
 
   routes: [
     /** A user turn: a mention that opens a conversation, or a follow-up. */
-    POST(WIRE_ROUTES.message, async (request, { resolveActiveSession, send }) => {
+    POST(WIRE_ROUTES.message, async (request, { from, resolveSession }) => {
       if (!botAuthenticated(request)) {
         return createUnauthorizedResponse({ status: 401, message: "bad bearer" });
       }
@@ -338,7 +340,7 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
 
       // Context is durable history. Add the lead-in only when this delivery
       // creates the session; resending it on every follow-up duplicates history.
-      const active = await resolveActiveSession({ continuationToken: payload.continuationKey });
+      const active = await resolveSession(payload.continuationKey);
       const context =
         active === undefined
           ? [...(payload.recentMessages ?? []), ...(payload.referencedContext ?? [])]
@@ -377,29 +379,23 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
       }
 
       try {
-        const session = await send(
-          {
-            message: messageContent(payload),
-            ...(context.length === 0 ? {} : { context }),
-          },
-          {
-            // Eve refreshes current auth on every delivery even though state seeds
-            // are ignored for existing sessions. Transport targeting therefore
-            // rides in this trusted assertion and is adopted at `turn.started`.
-            auth: authFor(payload.principal, {
-              channelId: payload.channel.id,
-              ...(payload.thread === undefined ? {} : { threadId: payload.thread.id }),
-              messageId: payload.messageId,
-              dispatchId: payload.dispatchId,
-              renderChannelId,
-              source: payload.kind === "scheduled" ? "scheduled" : "chat",
-              ...(payload.scheduleId === undefined ? {} : { scheduleId: payload.scheduleId }),
-              ...(payload.occurrenceId === undefined ? {} : { occurrenceId: payload.occurrenceId }),
-            }),
-            continuationToken: payload.continuationKey,
-            state: stateForMessage(payload),
-          },
-        );
+        const session = await from(payload.continuationKey).send(messageContent(payload), {
+          // Eve refreshes current auth on every delivery even though state seeds
+          // are ignored for existing sessions. Transport targeting therefore
+          // rides in this trusted assertion and is adopted at `turn.started`.
+          auth: authFor(payload.principal, {
+            channelId: payload.channel.id,
+            ...(payload.thread === undefined ? {} : { threadId: payload.thread.id }),
+            messageId: payload.messageId,
+            dispatchId: payload.dispatchId,
+            renderChannelId,
+            source: payload.kind === "scheduled" ? "scheduled" : "chat",
+            ...(payload.scheduleId === undefined ? {} : { scheduleId: payload.scheduleId }),
+            ...(payload.occurrenceId === undefined ? {} : { occurrenceId: payload.occurrenceId }),
+          }),
+          ...(context.length === 0 ? {} : { context }),
+          state: stateForMessage(payload),
+        });
 
         const confirmed = await conversations.admission.confirm(payload, session.id);
         if (!confirmed) {
@@ -419,7 +415,7 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
     }),
 
     /** A component click answering a pending approval or question. */
-    POST(WIRE_ROUTES.interaction, async (request, { send }) => {
+    POST(WIRE_ROUTES.interaction, async (request, { from }) => {
       if (!botAuthenticated(request)) {
         return createUnauthorizedResponse({ status: 401, message: "bad bearer" });
       }
@@ -444,16 +440,14 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
       }
 
       try {
-        const session = await send(
-          {
-            inputResponses: [
-              {
-                requestId: payload.requestId,
-                ...(payload.optionId === undefined ? {} : { optionId: payload.optionId }),
-                ...(payload.freeform === undefined ? {} : { text: payload.freeform }),
-              },
-            ],
-          },
+        const session = await from(payload.continuationKey).respond(
+          [
+            {
+              requestId: payload.requestId,
+              ...(payload.optionId === undefined ? {} : { optionId: payload.optionId }),
+              ...(payload.freeform === undefined ? {} : { text: payload.freeform }),
+            },
+          ],
           {
             auth: authFor(payload.principal, {
               channelId: payload.authChannelId,
@@ -463,10 +457,6 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
                 ? {}
                 : { approvalRequester: payload.approvalRequester }),
             }),
-            continuationToken: payload.continuationKey,
-            // Seed state is ignored once a session exists. The Redis CAS above
-            // rejects stale controls before Eve can reinterpret them as user text.
-            state: { ...initialDiscordState(), channelId: payload.continuationKey },
           },
         );
 
@@ -483,7 +473,7 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
     }),
 
     /** Explicit `/new`-style retirement. */
-    POST(WIRE_ROUTES.reset, async (request, { reset }) => {
+    POST(WIRE_ROUTES.reset, async (request, { from }) => {
       if (!botAuthenticated(request)) {
         return createUnauthorizedResponse({ status: 401, message: "bad bearer" });
       }
@@ -508,8 +498,7 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
         );
       }
 
-      const outcome = await reset({
-        continuationToken: decoded.value.continuationKey,
+      const outcome = await from(decoded.value.continuationKey).reset({
         reason: decoded.value.reason,
       });
       return Response.json({ ok: true, status: outcome.status });

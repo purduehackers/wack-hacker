@@ -170,7 +170,7 @@ current auth on `step.started`, then approval and execution re-evaluate.
 
 ### Replay constraint
 
-Eve 0.29.5 reconstructs dynamic tools by scanning authored source syntax.
+Eve 0.31.3 reconstructs dynamic tools by scanning authored source syntax.
 Consequently every integration tool catalog keeps:
 
 - an inline `defineDynamic` expression;
