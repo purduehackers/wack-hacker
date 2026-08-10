@@ -7,9 +7,9 @@ export const query_project_view = defineTool({
   description:
     "List projects with lead/status/URL, or get a total count. Use list mode for 'which projects are...' and count mode for 'how many projects...'.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     mode: z.enum(["list", "count"]).default("list"),
-    first: z.number().optional().default(25).describe("Max 50, list mode only"),
+    first: z.int().min(1).default(25).describe("Max 50, list mode only"),
   }),
   execute: async ({ mode, first }) => {
     const projects = await linear.projects({ first: Math.min(first, 50) });

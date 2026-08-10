@@ -18,97 +18,46 @@ type VariableCreate = Extract<VariableChange, { readonly action: "CREATE" }>;
 type VariableScope = NonNullable<VariableCreate["scopes"]>[number];
 type VariableCodeSyntax = NonNullable<VariableCreate["codeSyntax"]>;
 
-const variableCollectionChangeInputSchema = z.discriminatedUnion("action", [
+const variableCollectionChangeSchema = z.discriminatedUnion("action", [
   z.strictObject({
     action: z.literal("CREATE"),
-    id: z.string().optional(),
+    id: z.string().exactOptional(),
     name: z.string(),
-    initialModeId: z.string().optional(),
-    hiddenFromPublishing: z.boolean().optional(),
-    parentVariableCollectionId: z.string().optional(),
-    initialModeIdToParentModeIdMapping: z.record(z.string(), z.string()).optional(),
+    initialModeId: z.string().exactOptional(),
+    hiddenFromPublishing: z.boolean().exactOptional(),
+    parentVariableCollectionId: z.string().exactOptional(),
+    initialModeIdToParentModeIdMapping: z.record(z.string(), z.string()).exactOptional(),
   }),
   z.strictObject({
     action: z.literal("UPDATE"),
     id: z.string(),
-    name: z.string().optional(),
-    hiddenFromPublishing: z.boolean().optional(),
+    name: z.string().exactOptional(),
+    hiddenFromPublishing: z.boolean().exactOptional(),
   }),
   z.strictObject({
     action: z.literal("DELETE"),
     id: z.string(),
   }),
-]);
-const variableCollectionChangeSchema = variableCollectionChangeInputSchema.transform(
-  (change): VariableCollectionChange => {
-    if (change.action === "DELETE") return change;
-    if (change.action === "UPDATE") {
-      return {
-        action: change.action,
-        id: change.id,
-        ...(change.name === undefined ? {} : { name: change.name }),
-        ...(change.hiddenFromPublishing === undefined
-          ? {}
-          : { hiddenFromPublishing: change.hiddenFromPublishing }),
-      };
-    }
-    return {
-      action: change.action,
-      name: change.name,
-      ...(change.id === undefined ? {} : { id: change.id }),
-      ...(change.initialModeId === undefined ? {} : { initialModeId: change.initialModeId }),
-      ...(change.hiddenFromPublishing === undefined
-        ? {}
-        : { hiddenFromPublishing: change.hiddenFromPublishing }),
-      ...(change.parentVariableCollectionId === undefined
-        ? {}
-        : { parentVariableCollectionId: change.parentVariableCollectionId }),
-      ...(change.initialModeIdToParentModeIdMapping === undefined
-        ? {}
-        : {
-            initialModeIdToParentModeIdMapping: change.initialModeIdToParentModeIdMapping,
-          }),
-    };
-  },
-) satisfies z.ZodType<VariableCollectionChange>;
+]) satisfies z.ZodType<VariableCollectionChange>;
 
-const variableModeChangeInputSchema = z.discriminatedUnion("action", [
+const variableModeChangeSchema = z.discriminatedUnion("action", [
   z.strictObject({
     action: z.literal("CREATE"),
-    id: z.string().optional(),
+    id: z.string().exactOptional(),
     name: z.string(),
     variableCollectionId: z.string(),
   }),
   z.strictObject({
     action: z.literal("UPDATE"),
     id: z.string(),
-    name: z.string().optional(),
+    name: z.string().exactOptional(),
     variableCollectionId: z.string(),
   }),
   z.strictObject({
     action: z.literal("DELETE"),
     id: z.string(),
   }),
-]);
-const variableModeChangeSchema = variableModeChangeInputSchema.transform(
-  (change): VariableModeChange => {
-    if (change.action === "DELETE") return change;
-    if (change.action === "UPDATE") {
-      return {
-        action: change.action,
-        id: change.id,
-        variableCollectionId: change.variableCollectionId,
-        ...(change.name === undefined ? {} : { name: change.name }),
-      };
-    }
-    return {
-      action: change.action,
-      name: change.name,
-      variableCollectionId: change.variableCollectionId,
-      ...(change.id === undefined ? {} : { id: change.id }),
-    };
-  },
-) satisfies z.ZodType<VariableModeChange>;
+]) satisfies z.ZodType<VariableModeChange>;
 
 const variableScopeSchema = z.enum([
   "ALL_SCOPES",
@@ -135,74 +84,44 @@ const variableScopeSchema = z.enum([
   "PARAGRAPH_INDENT",
   "FONT_VARIATIONS",
 ]) satisfies z.ZodType<VariableScope>;
-const variableCodeSyntaxInputSchema = z.strictObject({
-  WEB: z.string().optional(),
-  ANDROID: z.string().optional(),
-  iOS: z.string().optional(),
-});
-const variableCodeSyntaxSchema = variableCodeSyntaxInputSchema.transform(
-  (syntax): VariableCodeSyntax => ({
-    ...(syntax.WEB === undefined ? {} : { WEB: syntax.WEB }),
-    ...(syntax.ANDROID === undefined ? {} : { ANDROID: syntax.ANDROID }),
-    ...(syntax.iOS === undefined ? {} : { iOS: syntax.iOS }),
-  }),
-) satisfies z.ZodType<VariableCodeSyntax>;
+const variableCodeSyntaxSchema = z.strictObject({
+  WEB: z.string().exactOptional(),
+  ANDROID: z.string().exactOptional(),
+  iOS: z.string().exactOptional(),
+}) satisfies z.ZodType<VariableCodeSyntax>;
 
-const variableChangeInputSchema = z.discriminatedUnion("action", [
+const variableMutableFields = {
+  name: z.string().exactOptional(),
+  description: z.string().exactOptional(),
+  hiddenFromPublishing: z.boolean().exactOptional(),
+  scopes: z.array(variableScopeSchema).exactOptional(),
+  codeSyntax: variableCodeSyntaxSchema.exactOptional(),
+};
+const variableChangeSchema = z.discriminatedUnion("action", [
   z.strictObject({
+    ...variableMutableFields,
     action: z.literal("CREATE"),
-    id: z.string().optional(),
+    id: z.string().exactOptional(),
     name: z.string(),
     variableCollectionId: z.string(),
     resolvedType: z.enum(["BOOLEAN", "FLOAT", "STRING", "COLOR"]),
-    description: z.string().optional(),
-    hiddenFromPublishing: z.boolean().optional(),
-    scopes: z.array(variableScopeSchema).optional(),
-    codeSyntax: variableCodeSyntaxSchema.optional(),
   }),
   z.strictObject({
+    ...variableMutableFields,
     action: z.literal("UPDATE"),
     id: z.string(),
-    name: z.string().optional(),
-    description: z.string().optional(),
-    hiddenFromPublishing: z.boolean().optional(),
-    scopes: z.array(variableScopeSchema).optional(),
-    codeSyntax: variableCodeSyntaxSchema.optional(),
   }),
   z.strictObject({
     action: z.literal("DELETE"),
     id: z.string(),
   }),
-]);
-const variableChangeSchema = variableChangeInputSchema.transform((change): VariableChange => {
-  if (change.action === "DELETE") return change;
-  const optionalFields = {
-    ...(change.name === undefined ? {} : { name: change.name }),
-    ...(change.description === undefined ? {} : { description: change.description }),
-    ...(change.hiddenFromPublishing === undefined
-      ? {}
-      : { hiddenFromPublishing: change.hiddenFromPublishing }),
-    ...(change.scopes === undefined ? {} : { scopes: change.scopes }),
-    ...(change.codeSyntax === undefined ? {} : { codeSyntax: change.codeSyntax }),
-  };
-  if (change.action === "UPDATE") {
-    return { action: change.action, id: change.id, ...optionalFields };
-  }
-  return {
-    action: change.action,
-    name: change.name,
-    variableCollectionId: change.variableCollectionId,
-    resolvedType: change.resolvedType,
-    ...(change.id === undefined ? {} : { id: change.id }),
-    ...optionalFields,
-  };
-}) satisfies z.ZodType<VariableChange>;
+]) satisfies z.ZodType<VariableChange>;
 
 export const get_local_variables = defineTool({
   description:
     "Get all local variables and variable collections in a Figma file, including unpublished ones. Variables have modes (e.g., Light/Dark) with per-mode values.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     file_key: z.string().describe("The file key"),
   }),
   execute: async ({ file_key }) => {
@@ -217,7 +136,7 @@ export const get_published_variables = defineTool({
   description:
     "Get published variables and variable collections in a Figma file. Only returns variables that have been published and are visible to consumers.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     file_key: z.string().describe("The file key"),
   }),
   execute: async ({ file_key }) => {
@@ -232,7 +151,7 @@ export const modify_variables = defineTool({
   description:
     'Bulk create, update, or delete variables and variable collections in a Figma file. Each entry specifies an action ("CREATE", "UPDATE", or "DELETE"). Read current variables first before modifying.',
   access: { risk: "destructive" },
-  input: z.object({
+  input: z.strictObject({
     file_key: z.string().describe("The file key"),
     variable_collections: z
       .array(variableCollectionChangeSchema)

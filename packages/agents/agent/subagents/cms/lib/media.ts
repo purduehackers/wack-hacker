@@ -3,6 +3,7 @@ import { z } from "zod";
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import {
   cmsAdminUrl,
+  documentId,
   paginationQuery,
   payload,
   type PayloadDocument,
@@ -40,7 +41,7 @@ export const list_media = defineTool({
   description:
     "List media assets uploaded to Payload CMS. Supports filtering by `source` ('manual' / 'hack-night') and `batch_id` (to group hack-night uploads).",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     ...paginationInputShape,
     source: z.string().optional(),
     batch_id: z.string().optional(),
@@ -71,7 +72,7 @@ export const list_media = defineTool({
 export const get_media = defineTool({
   description: "Fetch a single media asset by ID.",
   access: { risk: "read" },
-  input: z.object({ id: z.union([z.string(), z.number()]) }),
+  input: z.strictObject({ id: documentId }),
   execute: async ({ id }) => {
     try {
       const doc = await payload.findByID({ collection: COLLECTION, id });
@@ -86,8 +87,10 @@ export const upload_media = defineTool({
   description:
     "Upload an image from a public URL to the CMS media library. Fetches the URL, then posts to Payload's media collection with the given alt text. Returns the created media record (including its new `id` and `url`).",
   access: { risk: "write" },
-  input: z.object({
-    url: z.string().url().describe("Publicly reachable URL to fetch the image from"),
+  input: z.strictObject({
+    url: z
+      .url({ protocol: /^https?$/u })
+      .describe("Publicly reachable http(s) URL to fetch the image from"),
     alt: z.string(),
     filename: z.string().optional(),
     source: z
@@ -127,11 +130,13 @@ export const upload_media = defineTool({
       const blob = await response.blob();
       const resolvedFilename = filename ?? deriveFilenameFromUrl(url);
       const file = new File([blob], resolvedFilename, { type: blob.type });
-      const data: Record<string, unknown> = { alt };
-      if (source !== undefined) data.source = source;
-      if (batch_id !== undefined) data.batchId = batch_id;
-      if (discord_message_id !== undefined) data.discordMessageId = discord_message_id;
-      if (discord_user_id !== undefined) data.discordUserId = discord_user_id;
+      const data = {
+        alt,
+        ...(source !== undefined && { source }),
+        ...(batch_id !== undefined && { batchId: batch_id }),
+        ...(discord_message_id !== undefined && { discordMessageId: discord_message_id }),
+        ...(discord_user_id !== undefined && { discordUserId: discord_user_id }),
+      };
       const doc = await payload.create({
         collection: COLLECTION,
         data,
@@ -148,7 +153,7 @@ export const delete_media = defineTool({
   description:
     "Delete a media asset permanently. Referenced pages/posts will lose their image until relinked.",
   access: { risk: "destructive" },
-  input: z.object({ id: z.union([z.string(), z.number()]) }),
+  input: z.strictObject({ id: documentId }),
   execute: async ({ id }) => {
     try {
       const doc = await payload.delete({ collection: COLLECTION, id });

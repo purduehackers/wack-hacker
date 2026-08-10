@@ -14,7 +14,7 @@ export const list_users = defineTool({
   description:
     "List all workspace members. Returns name, display name, email, role flags (admin/owner/guest), active status, and profile URL.",
   access: { risk: "read" },
-  input: z.object({}),
+  input: z.strictObject({}),
   execute: async () => {
     const r = await linear.users();
     return JSON.stringify(
@@ -37,7 +37,7 @@ export const get_user = defineTool({
   description:
     "Get a user's full profile by ID — name, email, display name, roles, timezone, current status, issue count, and profile URL.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     id: z.string().describe("User UUID"),
   }),
   execute: async ({ id }) => {
@@ -63,7 +63,7 @@ export const get_user = defineTool({
 export const get_user_teams = defineTool({
   description: "List the teams a user belongs to. Returns team ID, name, and key.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     id: z.string().describe("User UUID"),
   }),
   execute: async ({ id }) => {
@@ -77,9 +77,9 @@ export const get_user_assigned_issues = defineTool({
   description:
     "List open issues assigned to a user. Returns identifier, title, priority, state, and URL. Use for 'what's X working on?' or 'show my issues'.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     id: z.string().describe("User UUID"),
-    first: z.number().optional().default(25).describe("Max results (default 25)"),
+    first: z.int().min(1).default(25).describe("Max results (default 25)"),
   }),
   execute: async ({ id, first }) => {
     const u = await linear.user(id);
@@ -105,7 +105,7 @@ export const suspend_user = defineTool({
   description:
     "Suspend a user, disabling their access. Data is preserved. Resolve user identity first — never suspend on ambiguous input.",
   access: { risk: "destructive", minRole: "admin" },
-  input: z.object({
+  input: z.strictObject({
     id: z.string().describe("User UUID to suspend"),
   }),
   execute: async ({ id }) => {
@@ -118,7 +118,7 @@ export const suspend_user = defineTool({
 export const unsuspend_user = defineTool({
   description: "Restore a suspended user's access.",
   access: { risk: "destructive", minRole: "admin" },
-  input: z.object({
+  input: z.strictObject({
     id: z.string().describe("User UUID to unsuspend"),
   }),
   execute: async ({ id }) => {
@@ -132,8 +132,8 @@ export const invite_user = defineTool({
   description:
     "Send a workspace invite by email. Role can be admin, member (default), or guest. Guest users only see teams they're explicitly added to.",
   access: { risk: "destructive", minRole: "admin" },
-  input: z.object({
-    email: z.string().describe("Email address to invite"),
+  input: z.strictObject({
+    email: z.email().describe("Email address to invite"),
     role: z
       .enum(["admin", "member", "guest"])
       .optional()
@@ -158,7 +158,7 @@ export const invite_user = defineTool({
 export const list_invites = defineTool({
   description: "List all pending workspace invites with email, role, who sent it, and expiry date.",
   access: { risk: "read", minRole: "admin" },
-  input: z.object({}),
+  input: z.strictObject({}),
   execute: async () => {
     const r = await linear.organizationInvites();
     const results = await Promise.all(
@@ -181,7 +181,7 @@ export const list_invites = defineTool({
 export const delete_invite = defineTool({
   description: "Revoke a pending invite by ID. Use list_invites first to find the ID.",
   access: { risk: "destructive", minRole: "admin" },
-  input: z.object({
+  input: z.strictObject({
     id: z.string().describe("Invite UUID to revoke"),
   }),
   execute: async ({ id }) => {

@@ -1,12 +1,12 @@
 import { UpstreamError } from "@repo/shared/errors";
 import { z } from "zod";
 
-import { env } from "../env.ts";
+import { env } from "../../env.ts";
 import { readEdgeConfigItems } from "./edge-config.ts";
 
 const ORGANIZER_KEY_PREFIX = "organizer_";
 
-export const organizerPlatformSchema = z.enum([
+const organizerPlatformSchema = z.enum([
   "discord",
   "linear",
   "notion",

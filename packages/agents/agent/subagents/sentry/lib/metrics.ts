@@ -8,7 +8,7 @@ export const list_metrics = defineTool({
   description:
     "List available custom metrics (counters, distributions, gauges, sets) in the Sentry organization.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_slug: z.string().optional().describe("Filter by project slug"),
   }),
   execute: async ({ project_slug }) => {
@@ -24,7 +24,7 @@ export const query_metrics = defineTool({
   description:
     "Query custom metrics data with aggregation. Supports counters, distributions, gauges, and sets.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     mri: z
       .string()
       .describe(
@@ -62,7 +62,7 @@ export const query_metrics = defineTool({
 export const list_metric_tags = defineTool({
   description: "List tag keys available for custom metrics filtering and grouping.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_slug: z.string().optional().describe("Filter by project slug"),
     metric: z.string().optional().describe("Filter by metric MRI"),
   }),
@@ -79,7 +79,7 @@ export const list_metric_tags = defineTool({
 export const get_metric_tag_values = defineTool({
   description: "Get values for a specific metric tag key.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     tag_key: z.string().describe("Tag key to list values for"),
     project_slug: z.string().optional().describe("Filter by project slug"),
     metric: z.string().optional().describe("Filter by metric MRI"),

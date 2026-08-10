@@ -3,14 +3,14 @@ import { z } from "zod";
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { octokit } from "./client.ts";
 import { env } from "./config.ts";
-import { perPageField } from "./constants.ts";
+import { perPageField, repoField, resourceId } from "./constants.ts";
 
 export const list_collaborators = defineTool({
   description:
     "List collaborators with direct access to a repository. Returns login, permissions, and role.",
   access: { risk: "read" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
+  input: z.strictObject({
+    repo: repoField,
     affiliation: z.enum(["outside", "direct", "all"]).optional(),
     per_page: perPageField,
   }),
@@ -35,9 +35,9 @@ export const add_collaborator = defineTool({
   description:
     "Add a user as a direct collaborator on a repository. Permission defaults to 'push' (write). Options: pull, triage, push, maintain, admin.",
   access: { risk: "destructive", minRole: "admin" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    username: z.string().describe("GitHub username"),
+  input: z.strictObject({
+    repo: repoField,
+    username: z.string().min(1).describe("GitHub username"),
     permission: z
       .enum(["pull", "triage", "push", "maintain", "admin"])
       .optional()
@@ -61,9 +61,9 @@ export const add_collaborator = defineTool({
 export const remove_collaborator = defineTool({
   description: "Remove a collaborator from a repository. Revokes their direct access.",
   access: { risk: "destructive", minRole: "admin" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    username: z.string().describe("GitHub username to remove"),
+  input: z.strictObject({
+    repo: repoField,
+    username: z.string().min(1).describe("GitHub username to remove"),
   }),
   execute: async ({ repo, username }) => {
     await octokit().rest.repos.removeCollaborator({
@@ -79,8 +79,8 @@ export const list_repo_invitations = defineTool({
   description:
     "List pending collaborator invitations for a repository. Returns inviter, invitee, permission, and URL.",
   access: { risk: "read", minRole: "admin" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
+  input: z.strictObject({
+    repo: repoField,
     per_page: perPageField,
   }),
   execute: async ({ repo, per_page }) => {
@@ -105,9 +105,9 @@ export const list_repo_invitations = defineTool({
 export const cancel_repo_invitation = defineTool({
   description: "Revoke a pending collaborator invitation by ID.",
   access: { risk: "destructive", minRole: "admin" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    invitation_id: z.number().describe("Invitation ID"),
+  input: z.strictObject({
+    repo: repoField,
+    invitation_id: resourceId.describe("Invitation ID"),
   }),
   execute: async ({ repo, invitation_id }) => {
     await octokit().rest.repos.deleteInvitation({

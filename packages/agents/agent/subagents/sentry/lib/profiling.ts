@@ -10,7 +10,7 @@ export const get_flamegraph = defineTool({
   description:
     "Get flamegraph profiling data for a transaction. Shows CPU time distribution across function calls. Useful for identifying performance bottlenecks.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_slug: z.string().describe("Project slug"),
     transaction: z.string().describe("Transaction name (e.g. 'GET /api/users')"),
     stat_period: z
@@ -33,7 +33,7 @@ export const list_profiled_functions = defineTool({
   description:
     "List the slowest profiled functions. Shows function name, package, self-time, and total-time. Useful for finding CPU-heavy code.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_slug: z.string().describe("Project slug"),
     transaction: z.string().optional().describe("Filter by transaction name"),
     sort: z

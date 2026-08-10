@@ -12,15 +12,20 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { sentryOpts, sentryOrg } from "./client.ts";
+import { sentryNumericId } from "./constants.ts";
 
-const metricAlertProjectionSchema = z.looseObject({ status: z.string().nullish() });
+// Read-only projection over a field the generated SDK type omits: an unexpected
+// shape must degrade to "absent" rather than fail the tool.
+const metricAlertProjectionSchema = z.looseObject({
+  status: z.string().nullish().catch(undefined),
+});
 const issueAlertActionMatchSchema = z.enum(["all", "any", "none"]);
 
 /** List issue alert rules for a project. */
 export const list_alert_rules = defineTool({
   description: "List issue alert rules for a Sentry project.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_slug: z.string().describe("Project slug"),
   }),
   execute: async ({ project_slug }) => {
@@ -52,9 +57,9 @@ export const list_alert_rules = defineTool({
 export const get_alert_rule = defineTool({
   description: "Get full details for a Sentry issue alert rule, including conditions and actions.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_slug: z.string().describe("Project slug"),
-    rule_id: z.string().describe("Alert rule ID"),
+    rule_id: sentryNumericId.describe("Alert rule ID"),
   }),
   execute: async ({ project_slug, rule_id }) => {
     const result = await deprecatedRetrieveAnIssueAlertRuleForAProject({
@@ -75,20 +80,20 @@ export const create_alert_rule = defineTool({
   description:
     "Create a new Sentry issue alert rule. Requires project slug, name, conditions, actions, and frequency.",
   access: { risk: "write" },
-  input: z.object({
+  input: z.strictObject({
     project_slug: z.string().describe("Project slug"),
     name: z.string().describe("Alert rule name"),
     conditions: z
-      .array(z.record(z.string(), z.unknown()))
+      .array(z.record(z.string(), z.json()))
       .describe("Array of condition objects (e.g. new issue, event frequency)"),
     actions: z
-      .array(z.record(z.string(), z.unknown()))
+      .array(z.record(z.string(), z.json()))
       .describe("Array of action objects (e.g. send notification)"),
     action_match: z
       .enum(["all", "any", "none"])
       .optional()
       .describe("How conditions are combined (default: 'all')"),
-    frequency: z.number().optional().describe("Minimum minutes between alerts (default: 30)"),
+    frequency: z.int().min(1).optional().describe("Minimum minutes between alerts (default: 30)"),
     environment: z.string().optional().describe("Environment filter"),
   }),
   execute: async ({
@@ -124,14 +129,14 @@ export const create_alert_rule = defineTool({
 export const update_alert_rule = defineTool({
   description: "Update an existing Sentry issue alert rule.",
   access: { risk: "write" },
-  input: z.object({
+  input: z.strictObject({
     project_slug: z.string().describe("Project slug"),
-    rule_id: z.string().describe("Alert rule ID"),
+    rule_id: sentryNumericId.describe("Alert rule ID"),
     name: z.string().optional(),
-    conditions: z.array(z.record(z.string(), z.unknown())).optional(),
-    actions: z.array(z.record(z.string(), z.unknown())).optional(),
+    conditions: z.array(z.record(z.string(), z.json())).optional(),
+    actions: z.array(z.record(z.string(), z.json())).optional(),
     action_match: z.enum(["all", "any", "none"]).optional(),
-    frequency: z.number().optional(),
+    frequency: z.int().min(1).optional(),
     environment: z.string().optional(),
   }),
   execute: async ({ project_slug, rule_id, ...input }) => {
@@ -174,9 +179,9 @@ export const update_alert_rule = defineTool({
 export const delete_alert_rule = defineTool({
   description: "Permanently delete a Sentry issue alert rule. This action cannot be undone.",
   access: { risk: "destructive", minRole: "admin" },
-  input: z.object({
+  input: z.strictObject({
     project_slug: z.string().describe("Project slug"),
-    rule_id: z.string().describe("Alert rule ID"),
+    rule_id: sentryNumericId.describe("Alert rule ID"),
   }),
   execute: async ({ project_slug, rule_id }) => {
     const result = await deprecatedDeleteAnIssueAlertRule({
@@ -197,7 +202,7 @@ export const list_metric_alert_rules = defineTool({
   description:
     "List metric alert rules for the Sentry organization. Metric alerts trigger on aggregate data like error count or latency.",
   access: { risk: "read" },
-  input: z.object({}),
+  input: z.strictObject({}),
   execute: async () => {
     const result = await deprecatedListAnOrganization_sMetricAlertRules({
       ...sentryOpts(),
@@ -225,8 +230,8 @@ export const get_metric_alert_rule = defineTool({
   description:
     "Get full details for a Sentry metric alert rule, including triggers and thresholds.",
   access: { risk: "read" },
-  input: z.object({
-    alert_rule_id: z.string().describe("Metric alert rule ID"),
+  input: z.strictObject({
+    alert_rule_id: sentryNumericId.describe("Metric alert rule ID"),
   }),
   execute: async ({ alert_rule_id }) => {
     const result = await deprecatedRetrieveAMetricAlertRuleForAnOrganization({

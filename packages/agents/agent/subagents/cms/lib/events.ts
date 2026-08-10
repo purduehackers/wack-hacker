@@ -3,17 +3,30 @@ import { z } from "zod";
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import {
   cmsAdminUrl,
+  documentId,
   paginationQuery,
   payload,
   type PayloadDocument,
   wrapPayloadError,
 } from "./client.ts";
-import { paginationInputShape } from "./constants.ts";
+import { cmsDatetime, paginationInputShape } from "./constants.ts";
 import { richTextParagraph } from "./richtext.ts";
 
 const COLLECTION = "events";
 
 type PayloadEvent = PayloadDocument<"events">;
+
+/** Writable event fields. `create_event` requires them; `update_event` takes the partial. */
+const eventFields = {
+  name: z.string(),
+  start: cmsDatetime.describe("ISO 8601 datetime for event start"),
+  end: cmsDatetime.optional().describe("ISO 8601 datetime for event end"),
+  event_type: z.string().optional().describe("Event type (default 'hack-night')"),
+  location_name: z.string().optional(),
+  location_url: z.url().optional(),
+  description: z.string().describe("Plain text description"),
+  published: z.boolean().optional(),
+};
 
 function projectEvent(e: PayloadEvent) {
   return {
@@ -38,7 +51,7 @@ export const list_events = defineTool({
   description:
     "List events from the CMS. Supports pagination and sort (prefix field with '-' for descending, e.g. '-start'). Includes published flag, start/end, location, and email-send status.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     ...paginationInputShape,
     published_only: z
       .boolean()
@@ -67,7 +80,7 @@ export const list_events = defineTool({
 export const get_event = defineTool({
   description: "Fetch a single event by ID.",
   access: { risk: "read" },
-  input: z.object({ id: z.union([z.string(), z.number()]).describe("Event ID") }),
+  input: z.strictObject({ id: documentId.describe("Event ID") }),
   execute: async ({ id }) => {
     try {
       const doc = await payload.findByID({ collection: COLLECTION, id });
@@ -82,19 +95,10 @@ export const create_event = defineTool({
   description:
     "Create a new event. `description` accepts plain text and is wrapped as a single Lexical paragraph. Set `published: true` only when the event is ready to appear on the website.",
   access: { risk: "write" },
-  input: z.object({
-    name: z.string(),
-    start: z.string().describe("ISO datetime for event start"),
-    end: z.string().optional().describe("ISO datetime for event end"),
-    event_type: z.string().optional().describe("Event type (default 'hack-night')"),
-    location_name: z.string().optional(),
-    location_url: z.string().optional(),
-    description: z.string().describe("Plain text description"),
-    published: z.boolean().optional(),
-  }),
+  input: z.strictObject(eventFields),
   execute: async ({ event_type, description, ...rest }) => {
     try {
-      const data: Record<string, unknown> = {
+      const data = {
         ...rest,
         eventType: event_type ?? "hack-night",
         description: richTextParagraph(description),
@@ -112,22 +116,14 @@ export const update_event = defineTool({
   description:
     "Update an event by ID. Only fields you pass are changed. `description` (if set) is wrapped as a single Lexical paragraph — omit it when you don't want to overwrite existing richText.",
   access: { risk: "write" },
-  input: z.object({
-    id: z.union([z.string(), z.number()]),
-    name: z.string().optional(),
-    start: z.string().optional(),
-    end: z.string().optional(),
-    event_type: z.string().optional(),
-    location_name: z.string().optional(),
-    location_url: z.string().optional(),
-    description: z.string().optional(),
-    published: z.boolean().optional(),
-  }),
+  input: z.strictObject({ id: documentId, ...z.object(eventFields).partial().shape }),
   execute: async ({ id, event_type, description, ...rest }) => {
     try {
-      const data: Record<string, unknown> = { ...rest };
-      if (event_type !== undefined) data.eventType = event_type;
-      if (description !== undefined) data.description = richTextParagraph(description);
+      const data = {
+        ...rest,
+        ...(event_type !== undefined && { eventType: event_type }),
+        ...(description !== undefined && { description: richTextParagraph(description) }),
+      };
       const doc = await payload.update({
         collection: COLLECTION,
         id,
@@ -143,7 +139,7 @@ export const update_event = defineTool({
 export const delete_event = defineTool({
   description: "Delete an event permanently. Also detaches RSVPs and sent-email records.",
   access: { risk: "destructive" },
-  input: z.object({ id: z.union([z.string(), z.number()]) }),
+  input: z.strictObject({ id: documentId }),
   execute: async ({ id }) => {
     try {
       const doc = await payload.delete({ collection: COLLECTION, id });
@@ -157,7 +153,7 @@ export const delete_event = defineTool({
 export const publish_event = defineTool({
   description: "Mark an event as published (visible on the website).",
   access: { risk: "destructive" },
-  input: z.object({ id: z.union([z.string(), z.number()]) }),
+  input: z.strictObject({ id: documentId }),
   execute: async ({ id }) => {
     try {
       const doc = await payload.update({
@@ -175,7 +171,7 @@ export const publish_event = defineTool({
 export const unpublish_event = defineTool({
   description: "Mark an event as unpublished (hidden from the website).",
   access: { risk: "destructive" },
-  input: z.object({ id: z.union([z.string(), z.number()]) }),
+  input: z.strictObject({ id: documentId }),
   execute: async ({ id }) => {
     try {
       const doc = await payload.update({
@@ -194,7 +190,7 @@ export const send_blast = defineTool({
   description:
     "Fire the email blast for this event to all active RSVPs (sets `send: true`). Payload's afterChange hook sends real emails via Resend and resets `send` to false afterwards. Destructive external side effect — use only after explicit confirmation.",
   access: { risk: "destructive" },
-  input: z.object({ id: z.union([z.string(), z.number()]) }),
+  input: z.strictObject({ id: documentId }),
   execute: async ({ id }) => {
     try {
       const doc = await payload.update({

@@ -2,16 +2,15 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { vercel } from "./client.ts";
-import { VERCEL_TEAM_ID, VERCEL_TEAM_SLUG } from "./constants.ts";
-
-const TEAM = { teamId: VERCEL_TEAM_ID, slug: VERCEL_TEAM_SLUG } as const;
+import { TEAM, VERCEL_TEAM_ID, VERCEL_TEAM_SLUG } from "./constants.ts";
+import { epochMillis, isoTimestamp, pageLimit } from "./fields.ts";
 
 // ──────────────── TEAM ────────────────
 
 export const get_team = defineTool({
   description: "Retrieve a team by id or slug.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     team_id_or_slug: z.string().optional().describe("Defaults to the active team"),
   }),
   execute: async ({ team_id_or_slug }) => {
@@ -26,10 +25,10 @@ export const get_team = defineTool({
 export const list_team_members = defineTool({
   description: "List members of the active team.",
   access: { risk: "read" },
-  input: z.object({
-    limit: z.number().optional(),
-    since: z.number().optional(),
-    until: z.number().optional(),
+  input: z.strictObject({
+    limit: pageLimit.optional(),
+    since: epochMillis.optional(),
+    until: epochMillis.optional(),
     role: z.enum(["OWNER", "MEMBER", "DEVELOPER", "VIEWER", "BILLING", "CONTRIBUTOR"]).optional(),
     excludeProject: z.string().optional(),
     eligibleMembersForProjectId: z.string().optional(),
@@ -62,7 +61,7 @@ export const list_team_members = defineTool({
 export const remove_team_member = defineTool({
   description: "Remove a member from the active team.",
   access: { risk: "destructive" },
-  input: z.object({ uid: z.string(), newDefaultTeamId: z.string().optional() }),
+  input: z.strictObject({ uid: z.string(), newDefaultTeamId: z.string().optional() }),
   execute: async ({ uid, newDefaultTeamId }) => {
     const result = await vercel().teams.removeTeamMember({
       ...TEAM,
@@ -76,7 +75,7 @@ export const remove_team_member = defineTool({
 export const delete_team_invite_code = defineTool({
   description: "Delete a pending team invite code.",
   access: { risk: "destructive" },
-  input: z.object({ inviteId: z.string() }),
+  input: z.strictObject({ inviteId: z.string() }),
   execute: async ({ inviteId }) => {
     const result = await vercel().teams.deleteTeamInviteCode({
       ...TEAM,
@@ -91,12 +90,12 @@ export const delete_team_invite_code = defineTool({
 export const list_access_groups = defineTool({
   description: "List access groups on the team.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     projectId: z.string().optional(),
     search: z.string().optional(),
-    membersLimit: z.number().optional(),
-    projectsLimit: z.number().optional(),
-    limit: z.number().optional(),
+    membersLimit: pageLimit.optional(),
+    projectsLimit: pageLimit.optional(),
+    limit: pageLimit.optional(),
     next: z.string().optional(),
   }),
   execute: async (input) => {
@@ -108,7 +107,7 @@ export const list_access_groups = defineTool({
 export const get_access_group = defineTool({
   description: "Retrieve an access group by id or name.",
   access: { risk: "read" },
-  input: z.object({ access_group_id_or_name: z.string() }),
+  input: z.strictObject({ access_group_id_or_name: z.string() }),
   execute: async ({ access_group_id_or_name }) => {
     const result = await vercel().accessGroups.readAccessGroup({
       ...TEAM,
@@ -121,7 +120,7 @@ export const get_access_group = defineTool({
 export const delete_access_group = defineTool({
   description: "Delete an access group.",
   access: { risk: "destructive" },
-  input: z.object({ access_group_id_or_name: z.string() }),
+  input: z.strictObject({ access_group_id_or_name: z.string() }),
   execute: async ({ access_group_id_or_name }) => {
     await vercel().accessGroups.deleteAccessGroup({
       ...TEAM,
@@ -134,9 +133,9 @@ export const delete_access_group = defineTool({
 export const list_access_group_members = defineTool({
   description: "List members of an access group.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     access_group_id_or_name: z.string(),
-    limit: z.number().optional(),
+    limit: pageLimit.optional(),
     next: z.string().optional(),
   }),
   execute: async ({ access_group_id_or_name, limit, next }) => {
@@ -155,7 +154,7 @@ export const list_access_group_members = defineTool({
 export const list_webhooks = defineTool({
   description: "List team webhooks.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     projectId: z.string().optional(),
   }),
   execute: async ({ projectId }) => {
@@ -167,7 +166,7 @@ export const list_webhooks = defineTool({
 export const get_webhook = defineTool({
   description: "Retrieve a team webhook by id.",
   access: { risk: "read" },
-  input: z.object({ webhook_id: z.string() }),
+  input: z.strictObject({ webhook_id: z.string() }),
   execute: async ({ webhook_id }) => {
     const result = await vercel().webhooks.getWebhook({ ...TEAM, id: webhook_id });
     return JSON.stringify(result);
@@ -177,7 +176,7 @@ export const get_webhook = defineTool({
 export const delete_webhook = defineTool({
   description: "Delete a team webhook.",
   access: { risk: "destructive" },
-  input: z.object({ webhook_id: z.string() }),
+  input: z.strictObject({ webhook_id: z.string() }),
   execute: async ({ webhook_id }) => {
     await vercel().webhooks.deleteWebhook({ ...TEAM, id: webhook_id });
     return JSON.stringify({ ok: true, id: webhook_id });
@@ -189,7 +188,7 @@ export const delete_webhook = defineTool({
 export const list_project_routes = defineTool({
   description: "List routing rules for a project (from the Routing Middleware subsystem).",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_id: z.string(),
   }),
   execute: async ({ project_id }) => {
@@ -204,7 +203,7 @@ export const list_project_routes = defineTool({
 export const list_project_route_versions = defineTool({
   description: "List historical versions of a project's routing rules.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_id: z.string(),
   }),
   execute: async ({ project_id }) => {
@@ -221,7 +220,7 @@ export const list_project_route_versions = defineTool({
 export const list_connect_networks = defineTool({
   description: "List Vercel Connect private networks on the team.",
   access: { risk: "read" },
-  input: z.object({}),
+  input: z.strictObject({}),
   execute: async () => {
     const result = await vercel().connect.listNetworks({ ...TEAM });
     return JSON.stringify(result);
@@ -231,7 +230,7 @@ export const list_connect_networks = defineTool({
 export const get_connect_network = defineTool({
   description: "Retrieve a Vercel Connect network by id.",
   access: { risk: "read" },
-  input: z.object({ network_id: z.string() }),
+  input: z.strictObject({ network_id: z.string() }),
   execute: async ({ network_id }) => {
     const result = await vercel().connect.readNetwork({
       ...TEAM,
@@ -244,7 +243,7 @@ export const get_connect_network = defineTool({
 export const delete_connect_network = defineTool({
   description: "Delete a Vercel Connect private network.",
   access: { risk: "destructive" },
-  input: z.object({ network_id: z.string() }),
+  input: z.strictObject({ network_id: z.string() }),
   execute: async ({ network_id }) => {
     await vercel().connect.deleteNetwork({ ...TEAM, networkId: network_id });
     return JSON.stringify({ ok: true, id: network_id });
@@ -256,7 +255,7 @@ export const delete_connect_network = defineTool({
 export const list_microfrontend_groups = defineTool({
   description: "List microfrontend groups on the team.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     limit: z.string().optional(),
     since: z.string().optional(),
   }),
@@ -275,9 +274,9 @@ export const list_billing_charges = defineTool({
   description:
     "List billing charges for the team between `from` and `to` (ISO 8601 UTC date-time strings).",
   access: { risk: "read" },
-  input: z.object({
-    from: z.string().describe("ISO 8601 UTC date-time — inclusive start"),
-    to: z.string().describe("ISO 8601 UTC date-time — exclusive end"),
+  input: z.strictObject({
+    from: isoTimestamp.describe("ISO 8601 UTC date-time — inclusive start"),
+    to: isoTimestamp.describe("ISO 8601 UTC date-time — exclusive end"),
   }),
   execute: async ({ from, to }) => {
     const result = await vercel().billing.listBillingCharges({ ...TEAM, from, to });
@@ -288,8 +287,8 @@ export const list_billing_charges = defineTool({
 export const list_contract_commitments = defineTool({
   description: "List contractual billing commitments.",
   access: { risk: "read" },
-  input: z.object({
-    limit: z.number().optional(),
+  input: z.strictObject({
+    limit: pageLimit.optional(),
   }),
   execute: async (input) => {
     const result = await vercel().billing.listContractCommitments({ ...TEAM, ...input });
@@ -303,7 +302,7 @@ export const list_custom_environments = defineTool({
   description:
     "List custom preview environments for a project. Custom environments support per-branch URL schemes, custom domains, and environment-specific variables.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_id_or_name: z.string(),
     gitBranch: z.string().optional(),
   }),
@@ -320,7 +319,7 @@ export const list_custom_environments = defineTool({
 export const get_custom_environment = defineTool({
   description: "Get a specific custom environment by id or slug.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_id_or_name: z.string(),
     environment_id_or_slug: z.string(),
   }),
@@ -337,7 +336,7 @@ export const get_custom_environment = defineTool({
 export const remove_custom_environment = defineTool({
   description: "Remove a custom preview environment from a project.",
   access: { risk: "destructive" },
-  input: z.object({
+  input: z.strictObject({
     project_id_or_name: z.string(),
     environment_id_or_slug: z.string(),
     deleteUnassignedEnvironmentVariables: z.boolean().optional(),

@@ -3,9 +3,11 @@ import { z } from "zod";
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import {
   cmsAdminUrl,
+  documentId,
   paginationQuery,
   payload,
   type PayloadDocument,
+  relationship,
   wrapPayloadError,
 } from "./client.ts";
 import { paginationInputShape } from "./constants.ts";
@@ -14,17 +16,20 @@ const COLLECTION = "rsvps";
 
 type PayloadRsvp = PayloadDocument<"rsvps">;
 
-function eventIdOf(event: PayloadRsvp["event"]): number | string | undefined {
-  if (typeof event === "object" && event !== null) return event.id;
-  return event;
-}
+/** Writable RSVP fields. `create_rsvp` requires them; `update_rsvp` takes the partial. */
+const rsvpFields = {
+  event_id: documentId,
+  email: z.email(),
+  name: z.string(),
+  unsubscribed: z.boolean().optional(),
+};
 
 function projectRsvp(r: PayloadRsvp) {
   return {
     id: r.id,
     email: r.email,
     name: r.name,
-    event_id: eventIdOf(r.event),
+    event_id: relationship(r.event).id,
     unsubscribed: r.unsubscribed,
     created_at: r.createdAt,
     updated_at: r.updatedAt,
@@ -36,9 +41,9 @@ export const list_rsvps = defineTool({
   description:
     "List RSVPs across events. Optionally filter by event_id, email, or unsubscribed flag. Useful for attendance reports and unsubscribe audits.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     ...paginationInputShape,
-    event_id: z.union([z.string(), z.number()]).optional(),
+    event_id: documentId.optional(),
     email: z.email().optional(),
     unsubscribed: z.boolean().optional().describe("Filter by unsubscribed status (true/false)"),
   }),
@@ -69,7 +74,7 @@ export const list_rsvps = defineTool({
 export const get_rsvp = defineTool({
   description: "Fetch a single RSVP by ID.",
   access: { risk: "read" },
-  input: z.object({ id: z.union([z.string(), z.number()]) }),
+  input: z.strictObject({ id: documentId }),
   execute: async ({ id }) => {
     try {
       const doc = await payload.findByID({ collection: COLLECTION, id });
@@ -83,12 +88,7 @@ export const get_rsvp = defineTool({
 export const create_rsvp = defineTool({
   description: "Create an RSVP for an event on behalf of a user.",
   access: { risk: "write" },
-  input: z.object({
-    event_id: z.union([z.string(), z.number()]),
-    email: z.email(),
-    name: z.string(),
-    unsubscribed: z.boolean().optional(),
-  }),
+  input: z.strictObject(rsvpFields),
   execute: async ({ event_id, email, name, unsubscribed }) => {
     try {
       const doc = await payload.create({
@@ -111,17 +111,13 @@ export const update_rsvp = defineTool({
   description:
     "Update an RSVP. Commonly used to toggle `unsubscribed: true` when someone asks off the list.",
   access: { risk: "write" },
-  input: z.object({
-    id: z.union([z.string(), z.number()]),
-    email: z.email().optional(),
-    name: z.string().optional(),
-    unsubscribed: z.boolean().optional(),
-    event_id: z.union([z.string(), z.number()]).optional(),
-  }),
+  input: z.strictObject({ id: documentId, ...z.object(rsvpFields).partial().shape }),
   execute: async ({ id, event_id, ...rest }) => {
     try {
-      const data: Record<string, unknown> = { ...rest };
-      if (event_id !== undefined) data.event = event_id;
+      const data = {
+        ...rest,
+        ...(event_id !== undefined && { event: event_id }),
+      };
       const doc = await payload.update({
         collection: COLLECTION,
         id,
@@ -138,7 +134,7 @@ export const delete_rsvp = defineTool({
   description:
     "Delete an RSVP permanently. Prefer `update_rsvp({ unsubscribed: true })` when the user just wants to opt out — deletion loses the audit trail.",
   access: { risk: "destructive" },
-  input: z.object({ id: z.union([z.string(), z.number()]) }),
+  input: z.strictObject({ id: documentId }),
   execute: async ({ id }) => {
     try {
       const doc = await payload.delete({ collection: COLLECTION, id });

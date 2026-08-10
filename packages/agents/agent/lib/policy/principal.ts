@@ -2,13 +2,20 @@ import { UserRole, isUserRole, roleFromMemberRoles } from "@repo/shared/discord"
 import { Unauthenticated } from "@repo/shared/errors";
 import { fromNullable, Result } from "@repo/shared/result";
 import type { SessionAuthContext } from "eve/context";
+import { z } from "zod";
 
 import { PolicySource, type PolicyPrincipal } from "./types.ts";
 
-function stringArray(value: unknown): readonly string[] | undefined {
-  return Array.isArray(value) && value.every((entry) => typeof entry === "string")
-    ? value
-    : undefined;
+/**
+ * One entry of Eve's authenticated attribute bag: a single string or a list of
+ * strings. The narrowing below is therefore load-bearing, not a formality.
+ */
+type AuthAttribute = SessionAuthContext["attributes"][string];
+
+const stringArraySchema = z.array(z.string());
+
+function stringArray(value: AuthAttribute | undefined): readonly string[] | undefined {
+  return stringArraySchema.safeParse(value).data;
 }
 
 /**

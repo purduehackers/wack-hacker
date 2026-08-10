@@ -5,9 +5,9 @@ import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools
 import { firstDataSourceId, notion, richTextToPlain } from "./client.ts";
 import { cursorPaginationInputShape } from "./shared-constants.ts";
 
-/** Extract a title string from an SDK search result (page or data source). */
 type SearchResult = SearchResponse["results"][number];
 
+/** Extract a title string from an SDK search result (page or data source). */
 function extractTitle(result: SearchResult) {
   if ("title" in result) return richTextToPlain(result.title);
   if ("properties" in result) {
@@ -20,7 +20,7 @@ function extractTitle(result: SearchResult) {
 export const search_notion = defineTool({
   description: `Search the Notion workspace by keyword. Returns matching pages and databases with title, URL, and last edited time. Use type filter to narrow results.`,
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     query: z.string().describe("Search query"),
     filter: z
       .enum(["page", "data_source"])
@@ -53,7 +53,7 @@ export const search_notion = defineTool({
 export const retrieve_page = defineTool({
   description: `Get a page's properties and metadata — title, URL, parent, timestamps, icon, cover, and all property values. Use to inspect a page before modifying it.`,
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     page_id: z.string().describe("Page UUID or URL"),
   }),
   execute: async ({ page_id }) => {
@@ -76,7 +76,7 @@ export const retrieve_page = defineTool({
 export const retrieve_database = defineTool({
   description: `Get a database's schema — title, property definitions (types, options), and URL. Always call this before querying or creating entries to understand the schema.`,
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     database_id: z.string().describe("Database UUID or URL"),
   }),
   execute: async ({ database_id }) => {
@@ -100,7 +100,7 @@ export const retrieve_user = defineTool({
   description:
     "Get a single Notion user by ID. Returns name, email (for people), type (person or bot), and avatar URL.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     user_id: z.string().describe("Notion user UUID"),
   }),
   execute: async ({ user_id }) => {
@@ -119,7 +119,7 @@ export const retrieve_bot_user = defineTool({
   description:
     "Get info about the bot user backing this integration — useful for confirming which workspace and user the integration is acting as.",
   access: { risk: "read" },
-  input: z.object({}),
+  input: z.strictObject({}),
   execute: async () => {
     const me = await notion.users.me({});
     return {
@@ -134,7 +134,7 @@ export const retrieve_bot_user = defineTool({
 export const list_users = defineTool({
   description: `List workspace users. Returns name, email, type (person or bot), and avatar URL. Use to resolve user names to IDs for people properties.`,
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     ...cursorPaginationInputShape,
   }),
   execute: async ({ start_cursor, page_size }) => {

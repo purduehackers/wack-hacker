@@ -4,7 +4,7 @@ import type {
   RichTextItemResponse,
 } from "@notionhq/client/build/src/api-endpoints";
 
-import { env } from "../../../lib/env.ts";
+import { env } from "../../../env.ts";
 
 export const notion = new Client(env.NOTION_TOKEN === undefined ? {} : { auth: env.NOTION_TOKEN });
 

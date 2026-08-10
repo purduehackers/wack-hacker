@@ -10,13 +10,13 @@ export const search_products = defineTool({
   description:
     "Search Amazon for products matching a query. Returns a list of products with ASIN, title, price (USD), rating, image URL, and product URL. Use the ASIN when adding to the cart.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     query: z
       .string()
+      .trim()
       .min(1)
       .describe("What to search Amazon for (e.g., 'mechanical keyboard', 'usb-c hub')"),
     max_results: z
-      .number()
       .int()
       .min(1)
       .max(HARD_MAX_RESULTS)

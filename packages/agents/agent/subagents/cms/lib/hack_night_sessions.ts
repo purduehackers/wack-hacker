@@ -3,17 +3,28 @@ import { z } from "zod";
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import {
   cmsAdminUrl,
+  documentId,
   paginationQuery,
   payload,
   type PayloadDocument,
   wrapPayloadError,
 } from "./client.ts";
-import { paginationInputShape } from "./constants.ts";
+import { cmsDatetime, paginationInputShape } from "./constants.ts";
 import { richTextParagraph } from "./richtext.ts";
 
 const COLLECTION = "hack-night-sessions";
 
 type PayloadHackNightSession = PayloadDocument<"hack-night-sessions">;
+
+/** Writable session fields. Create requires them; update takes the partial. */
+const sessionFields = {
+  title: z.string(),
+  date: cmsDatetime.describe("ISO 8601 datetime"),
+  host_preferred_name: z.string(),
+  host_discord_id: z.string(),
+  description: z.string(),
+  published: z.boolean().optional(),
+};
 
 function projectSession(s: PayloadHackNightSession) {
   return {
@@ -32,7 +43,7 @@ export const list_hack_night_sessions = defineTool({
   description:
     "List hack night session records. Each has a title, date, host {preferred_name, discord_id}, and published flag.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     ...paginationInputShape,
     published_only: z.boolean().optional(),
   }),
@@ -58,7 +69,7 @@ export const list_hack_night_sessions = defineTool({
 export const get_hack_night_session = defineTool({
   description: "Fetch a single hack night session by ID.",
   access: { risk: "read" },
-  input: z.object({ id: z.union([z.string(), z.number()]) }),
+  input: z.strictObject({ id: documentId }),
   execute: async ({ id }) => {
     try {
       const doc = await payload.findByID({
@@ -76,14 +87,7 @@ export const create_hack_night_session = defineTool({
   description:
     "Create a new hack night session entry. Pass host as { preferred_name, discord_id }.",
   access: { risk: "write" },
-  input: z.object({
-    title: z.string(),
-    date: z.string().describe("ISO datetime"),
-    host_preferred_name: z.string(),
-    host_discord_id: z.string(),
-    description: z.string(),
-    published: z.boolean().optional(),
-  }),
+  input: z.strictObject(sessionFields),
   execute: async ({
     title,
     date,
@@ -115,15 +119,7 @@ export const update_hack_night_session = defineTool({
     "Update a hack night session. Only fields you pass are changed. If updating host, pass both host_preferred_name and host_discord_id (Payload treats the host group as a replace-on-write object; a partial patch would clobber the other subfield). Description (if provided) is wrapped as a single Lexical paragraph.",
   access: { risk: "write" },
   input: z
-    .object({
-      id: z.union([z.string(), z.number()]),
-      title: z.string().optional(),
-      date: z.string().optional(),
-      host_preferred_name: z.string().optional(),
-      host_discord_id: z.string().optional(),
-      description: z.string().optional(),
-      published: z.boolean().optional(),
-    })
+    .strictObject({ id: documentId, ...z.object(sessionFields).partial().shape })
     .refine(
       ({ host_preferred_name, host_discord_id }) =>
         (host_preferred_name === undefined) === (host_discord_id === undefined),
@@ -135,11 +131,14 @@ export const update_hack_night_session = defineTool({
     ),
   execute: async ({ id, host_preferred_name, host_discord_id, description, ...rest }) => {
     try {
-      const data: Record<string, unknown> = { ...rest };
-      if (host_preferred_name !== undefined && host_discord_id !== undefined) {
-        data.host = { preferred_name: host_preferred_name, discord_id: host_discord_id };
-      }
-      if (description !== undefined) data.description = richTextParagraph(description);
+      const data = {
+        ...rest,
+        ...(host_preferred_name !== undefined &&
+          host_discord_id !== undefined && {
+            host: { preferred_name: host_preferred_name, discord_id: host_discord_id },
+          }),
+        ...(description !== undefined && { description: richTextParagraph(description) }),
+      };
       const doc = await payload.update({
         collection: COLLECTION,
         id,
@@ -155,7 +154,7 @@ export const update_hack_night_session = defineTool({
 export const delete_hack_night_session = defineTool({
   description: "Delete a hack night session record permanently.",
   access: { risk: "destructive" },
-  input: z.object({ id: z.union([z.string(), z.number()]) }),
+  input: z.strictObject({ id: documentId }),
   execute: async ({ id }) => {
     try {
       const doc = await payload.delete({
@@ -172,7 +171,7 @@ export const delete_hack_night_session = defineTool({
 export const publish_hack_night_session = defineTool({
   description: "Publish a hack night session (makes it visible on the hack night dashboard).",
   access: { risk: "destructive" },
-  input: z.object({ id: z.union([z.string(), z.number()]) }),
+  input: z.strictObject({ id: documentId }),
   execute: async ({ id }) => {
     try {
       const doc = await payload.update({
@@ -190,7 +189,7 @@ export const publish_hack_night_session = defineTool({
 export const unpublish_hack_night_session = defineTool({
   description: "Unpublish a hack night session.",
   access: { risk: "destructive" },
-  input: z.object({ id: z.union([z.string(), z.number()]) }),
+  input: z.strictObject({ id: documentId }),
   execute: async ({ id }) => {
     try {
       const doc = await payload.update({

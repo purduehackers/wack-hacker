@@ -2,8 +2,12 @@
 
 import type { DeliveryPayload, RenderAuthorization, RenderInputRequest } from "@repo/shared/wire";
 import type { SessionAuthContext } from "eve/context";
+import { z } from "zod";
 
 type AuthAttributes = SessionAuthContext["attributes"];
+
+/** Attributes are string-or-list valued, and a blank transport id is no id at all. */
+const presentAttribute = z.string().min(1);
 
 export interface DiscordChannelState {
   channelId: string;
@@ -76,8 +80,7 @@ export function stateForMessage(payload: DeliveryPayload): DiscordChannelState {
 }
 
 function stringAttribute(attributes: AuthAttributes, key: string): string | undefined {
-  const value = attributes[key];
-  return typeof value === "string" && value !== "" ? value : undefined;
+  return presentAttribute.safeParse(attributes[key]).data;
 }
 
 /**

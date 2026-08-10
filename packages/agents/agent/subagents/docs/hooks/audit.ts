@@ -3,8 +3,8 @@ import { serializeError } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { defineHook } from "eve/hooks";
 
+import { env } from "../../../env.ts";
 import { CORE_TOOL_DESCRIPTORS } from "../../../lib/core/descriptors.ts";
-import { env } from "../../../lib/env.ts";
 import { createAuditStore, requirePrincipal } from "../../../lib/policy/index.ts";
 
 const audit = createAuditStore({

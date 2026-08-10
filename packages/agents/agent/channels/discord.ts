@@ -28,6 +28,7 @@ import { getRedis } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
 import { sliceText } from "@repo/shared/text";
 import {
+  BOT_ROUTES,
   decodeDeliveryPayload,
   decodeInteractionPayload,
   decodeResetRequestPayload,
@@ -46,8 +47,11 @@ import type { UserContent } from "ai";
 import { defineChannel, POST } from "eve/channels";
 import { createUnauthorizedResponse } from "eve/channels/auth";
 import type { SessionAuthContext, SessionContext } from "eve/context";
+import { z } from "zod";
 
-import { resolveBotBaseUrl } from "../lib/bot-endpoint.ts";
+import { env } from "../env.ts";
+import { resolveBotBaseUrl } from "../lib/bot/endpoint.ts";
+import { discordSnowflake, storedInt, storedJson } from "../lib/core/schema.ts";
 import { applyInputRequests } from "../lib/discord/input-requests.ts";
 import { createRenderPublisher, renderFooter } from "../lib/discord/render-intent.ts";
 import {
@@ -59,7 +63,6 @@ import {
   stateForMessage,
 } from "../lib/discord/state.ts";
 import type { DiscordChannelState } from "../lib/discord/state.ts";
-import { env } from "../lib/env.ts";
 import { ApprovalPolicyStore } from "../lib/policy/approval-record.ts";
 import { currentTraceparent, traceHeaders, turnTokenKey } from "../lib/telemetry.ts";
 
@@ -122,7 +125,7 @@ interface DiscordAuthTarget {
   approvalRequester?: InteractionPayload["approvalRequester"];
 }
 
-export function authFor(principal: Principal, target: DiscordAuthTarget): SessionAuthContext {
+function authFor(principal: Principal, target: DiscordAuthTarget): SessionAuthContext {
   return {
     authenticator: "discord",
     principalType: "user",
@@ -160,30 +163,29 @@ function ok(sessionId: string, continuationToken: string): Response {
   return Response.json(body);
 }
 
-function failed(error: unknown, status = 400): Response {
+function failed(error: Error, status = 400): Response {
   const { tag, message } = serializeError(error);
   const body: WireResponse = { ok: false, tag, message };
   return Response.json(body, { status });
 }
 
+/**
+ * The fields `conversations.interactions.accept` writes that an accepted retry
+ * replays. Redis hands the receipt back either already deserialized or as the
+ * raw JSON text it stored, so `storedJson` accepts both.
+ */
+const acceptedReceiptSchema = storedJson(
+  z.object({ sessionId: z.string(), continuationToken: z.string() }),
+);
+
 async function acceptedInteractionResponse(interactionId: string): Promise<Response> {
-  const raw = await conversations.interactions.read(interactionId);
-  let receipt: unknown = raw;
-  if (typeof raw === "string") {
-    try {
-      receipt = JSON.parse(raw);
-    } catch {
-      return failed(new Error("accepted interaction receipt is malformed"), 500);
-    }
+  const receipt = acceptedReceiptSchema.safeParse(
+    await conversations.interactions.read(interactionId),
+  );
+  if (!receipt.success) {
+    return failed(new Error("accepted interaction receipt is malformed"), 500);
   }
-  if (typeof receipt === "object" && receipt !== null) {
-    const sessionId = Reflect.get(receipt, "sessionId");
-    const continuationToken = Reflect.get(receipt, "continuationToken");
-    if (typeof sessionId === "string" && typeof continuationToken === "string") {
-      return ok(sessionId, continuationToken);
-    }
-  }
-  return failed(new Error("accepted interaction receipt is malformed"), 500);
+  return ok(receipt.data.sessionId, receipt.data.continuationToken);
 }
 
 /** What `context` builds, and therefore what the `channel` argument carries. */
@@ -195,23 +197,26 @@ const RENDER_PUBLISH_INTERVAL_MS = 1_500;
 const LIVE_TEXT_CHARS = 4_000;
 const FINAL_TEXT_CHARS = 12_000;
 
-const DISCORD_ID = /^\d{17,20}$/;
-
 function currentUserId(ctx: Pick<SessionContext, "session">): string | undefined {
-  const principalId = ctx.session.auth.current?.principalId;
-  return principalId !== undefined && DISCORD_ID.test(principalId) ? principalId : undefined;
+  return discordSnowflake.safeParse(ctx.session.auth.current?.principalId).data;
 }
 
-function safeAuthorizationUrl(value: string | undefined): string | undefined {
-  if (value === undefined || value.length > 2_048) return undefined;
-  try {
+/**
+ * `abort: true` matters: without it the credential refinement below still runs
+ * on a string the URL check already rejected, and `new URL` throws there.
+ * `normalize: true` supplies the normalized href the caller used to build by
+ * hand with `url.toString()`.
+ */
+const authorizationUrlSchema = z
+  .url({ protocol: /^https$/u, normalize: true, abort: true })
+  .max(2_048)
+  .refine((value) => {
     const url = new URL(value);
-    return url.protocol === "https:" && url.username === "" && url.password === ""
-      ? url.toString()
-      : undefined;
-  } catch {
-    return undefined;
-  }
+    return url.username === "" && url.password === "";
+  }, "expected an HTTPS URL without embedded credentials");
+
+function safeAuthorizationUrl(value: string | undefined): string | undefined {
+  return authorizationUrlSchema.safeParse(value).data;
 }
 
 function safeExpiration(value: string | undefined): string | undefined {
@@ -639,8 +644,8 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
           case "remote-agent-call":
             return `asking ${action.remoteAgentName}`;
           case "load-skill": {
-            const name = action.input["name"];
-            return typeof name === "string" ? `loading ${name}` : "loading a skill";
+            const name = z.string().safeParse(action.input["name"]).data;
+            return name === undefined ? "loading a skill" : `loading ${name}`;
           }
         }
       });
@@ -733,12 +738,12 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
   },
 });
 
+const turnTokensSchema = storedInt.pipe(z.int().positive());
+
 async function readTurnTokens(sessionId: string, turnId: string): Promise<number | undefined> {
   const key = turnTokenKey(sessionId, turnId);
   try {
-    const value: unknown = await redis.get(key);
-    const tokens = typeof value === "number" ? value : Number(value);
-    return Number.isSafeInteger(tokens) && tokens > 0 ? tokens : undefined;
+    return turnTokensSchema.safeParse(await redis.get<number | string>(key)).data;
   } catch {
     return undefined;
   }
@@ -799,7 +804,7 @@ async function settleAndNotifyParked(
 
   try {
     const botUrl = await resolveBotBaseUrl(redis, env.BOT_URL);
-    const response = await fetch(new URL("/internal/agent/parked", botUrl), {
+    const response = await fetch(new URL(BOT_ROUTES.parked, botUrl), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

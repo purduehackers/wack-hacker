@@ -3,12 +3,22 @@ import { z } from "zod";
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { octokit } from "./client.ts";
 import { env } from "./config.ts";
-import { paginationInputShape } from "./constants.ts";
+import {
+  paginationInputShape,
+  repoField,
+  repoPaginatedInputShape,
+  resourceId,
+} from "./constants.ts";
+
+const username = z.string().min(1).describe("GitHub username");
+const teamSlug = z.string().min(1).describe("Team slug");
+const hookId = resourceId.describe("Webhook ID");
+const webhookUrl = z.url({ protocol: /^https?$/u }).describe("Webhook payload URL");
 
 export const list_org_members = defineTool({
   description: `List members of the purduehackers organization. Optionally filter by role (all, admin, member). Returns login, ID, avatar URL, and profile URL.`,
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     role: z.enum(["all", "admin", "member"]).optional(),
     ...paginationInputShape,
   }),
@@ -33,8 +43,8 @@ export const list_org_members = defineTool({
 export const get_org_member = defineTool({
   description: `Get organization membership details for a GitHub user. Returns role (admin or member) and state (active or pending).`,
   access: { risk: "read" },
-  input: z.object({
-    username: z.string().describe("GitHub username"),
+  input: z.strictObject({
+    username,
   }),
   execute: async ({ username }) => {
     const { data } = await octokit().rest.orgs.getMembershipForUser({
@@ -52,7 +62,7 @@ export const get_org_member = defineTool({
 export const list_teams = defineTool({
   description: `List teams in the purduehackers organization. Returns ID, name, slug, description, privacy, and URL.`,
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     ...paginationInputShape,
   }),
   execute: async ({ per_page, page }) => {
@@ -77,8 +87,8 @@ export const list_teams = defineTool({
 export const get_team = defineTool({
   description: `Get details for a team by slug. Returns ID, name, description, privacy, and URL.`,
   access: { risk: "read" },
-  input: z.object({
-    team_slug: z.string().describe("Team slug (e.g. 'engineering')"),
+  input: z.strictObject({
+    team_slug: teamSlug.describe("Team slug (e.g. 'engineering')"),
   }),
   execute: async ({ team_slug }) => {
     const { data } = await octokit().rest.teams.getByName({
@@ -99,8 +109,8 @@ export const get_team = defineTool({
 export const list_team_members = defineTool({
   description: `List members of a team. Optionally filter by role (all, member, maintainer). Returns login, ID, and profile URL.`,
   access: { risk: "read" },
-  input: z.object({
-    team_slug: z.string().describe("Team slug"),
+  input: z.strictObject({
+    team_slug: teamSlug,
     role: z.enum(["all", "member", "maintainer"]).optional(),
     ...paginationInputShape,
   }),
@@ -119,10 +129,7 @@ export const list_team_members = defineTool({
 export const list_repo_webhooks = defineTool({
   description: `List webhooks configured for a repository. Returns ID, active status, subscribed events, and config URL.`,
   access: { risk: "read" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    ...paginationInputShape,
-  }),
+  input: z.strictObject(repoPaginatedInputShape),
   execute: async ({ repo, per_page, page }) => {
     const { data } = await octokit().rest.repos.listWebhooks({
       owner: env.GITHUB_ORG,
@@ -145,8 +152,8 @@ export const list_repo_webhooks = defineTool({
 export const invite_org_member = defineTool({
   description: `Invite a GitHub user to the purduehackers organization or update their role. Role can be "admin" or "member" (default).`,
   access: { risk: "destructive", minRole: "admin" },
-  input: z.object({
-    username: z.string().describe("GitHub username to invite"),
+  input: z.strictObject({
+    username: username.describe("GitHub username to invite"),
     role: z.enum(["admin", "member"]).optional().describe("Org role (default: member)"),
   }),
   execute: async ({ username, role }) => {
@@ -166,8 +173,8 @@ export const invite_org_member = defineTool({
 export const remove_org_member = defineTool({
   description: `Remove a user from the purduehackers organization. This revokes all their access to org repos.`,
   access: { risk: "destructive", minRole: "admin" },
-  input: z.object({
-    username: z.string().describe("GitHub username to remove"),
+  input: z.strictObject({
+    username: username.describe("GitHub username to remove"),
   }),
   execute: async ({ username }) => {
     await octokit().rest.orgs.removeMembershipForUser({
@@ -181,9 +188,9 @@ export const remove_org_member = defineTool({
 export const add_team_member = defineTool({
   description: `Add a user to a team or update their team role. Role can be "member" (default) or "maintainer".`,
   access: { risk: "destructive", minRole: "admin" },
-  input: z.object({
-    team_slug: z.string().describe("Team slug"),
-    username: z.string().describe("GitHub username"),
+  input: z.strictObject({
+    team_slug: teamSlug,
+    username,
     role: z.enum(["member", "maintainer"]).optional().describe("Team role (default: member)"),
   }),
   execute: async ({ team_slug, username, role }) => {
@@ -200,9 +207,9 @@ export const add_team_member = defineTool({
 export const remove_team_member = defineTool({
   description: `Remove a user from a team. They keep org membership but lose team-specific repo access.`,
   access: { risk: "destructive", minRole: "admin" },
-  input: z.object({
-    team_slug: z.string().describe("Team slug"),
-    username: z.string().describe("GitHub username"),
+  input: z.strictObject({
+    team_slug: teamSlug,
+    username,
   }),
   execute: async ({ team_slug, username }) => {
     await octokit().rest.teams.removeMembershipForUserInOrg({
@@ -217,11 +224,11 @@ export const remove_team_member = defineTool({
 export const create_webhook = defineTool({
   description: `Create a webhook for a repository. Specify payload URL, events, and optional secret for signature verification.`,
   access: { risk: "destructive" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    url: z.string().describe("Webhook payload URL"),
+  input: z.strictObject({
+    repo: repoField,
+    url: webhookUrl,
     content_type: z.enum(["json", "form"]).optional(),
-    secret: z.string().optional().describe("Webhook secret for signature verification"),
+    secret: z.string().exactOptional().describe("Webhook secret for signature verification"),
     events: z.array(z.string()).describe("Events to subscribe to (e.g. ['push', 'pull_request'])"),
     active: z.boolean().optional(),
   }),
@@ -234,7 +241,7 @@ export const create_webhook = defineTool({
         content_type: content_type ?? "json",
         ...(secret === undefined ? {} : { secret }),
       },
-      ...(events === undefined ? {} : { events }),
+      events,
       active: active ?? true,
     });
     return JSON.stringify({
@@ -248,27 +255,29 @@ export const create_webhook = defineTool({
 export const update_webhook = defineTool({
   description: `Update a repository webhook's URL, events, secret, or active status. Only provided fields are changed.`,
   access: { risk: "destructive" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    hook_id: z.number().describe("Webhook ID"),
-    url: z.string().optional(),
-    content_type: z.enum(["json", "form"]).optional(),
-    secret: z.string().optional(),
-    events: z.array(z.string()).optional(),
-    active: z.boolean().optional(),
+  input: z.strictObject({
+    repo: repoField,
+    hook_id: hookId,
+    url: webhookUrl.exactOptional(),
+    content_type: z.enum(["json", "form"]).exactOptional(),
+    // An empty secret is not "leave it alone" — GitHub reads it as "clear the
+    // signing secret", so it is rejected rather than forwarded.
+    secret: z.string().min(1).exactOptional(),
+    events: z.array(z.string()).exactOptional(),
+    active: z.boolean().exactOptional(),
   }),
-  execute: async ({ repo, hook_id, url, content_type, secret, events, active }) => {
-    const config: Record<string, string> = {};
-    if (url) config.url = url;
-    if (content_type) config.content_type = content_type;
-    if (secret) config.secret = secret;
+  execute: async ({ repo, hook_id, url, content_type, secret, ...fields }) => {
+    const config = {
+      ...(url === undefined ? {} : { url }),
+      ...(content_type === undefined ? {} : { content_type }),
+      ...(secret === undefined ? {} : { secret }),
+    };
     const { data } = await octokit().rest.repos.updateWebhook({
       owner: env.GITHUB_ORG,
       repo,
       hook_id,
       ...(Object.keys(config).length === 0 ? {} : { config }),
-      ...(events === undefined ? {} : { events }),
-      ...(active === undefined ? {} : { active }),
+      ...fields,
     });
     return JSON.stringify({
       id: data.id,
@@ -281,9 +290,9 @@ export const update_webhook = defineTool({
 export const delete_webhook = defineTool({
   description: `Delete a repository webhook. Irreversible — the webhook stops receiving events immediately.`,
   access: { risk: "destructive" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    hook_id: z.number().describe("Webhook ID"),
+  input: z.strictObject({
+    repo: repoField,
+    hook_id: hookId,
   }),
   execute: async ({ repo, hook_id }) => {
     await octokit().rest.repos.deleteWebhook({
@@ -298,7 +307,7 @@ export const delete_webhook = defineTool({
 export const list_org_webhooks = defineTool({
   description: `List webhooks configured for the purduehackers organization. Returns ID, active status, subscribed events, and config URL.`,
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     ...paginationInputShape,
   }),
   execute: async ({ per_page, page }) => {

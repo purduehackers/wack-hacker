@@ -2,24 +2,23 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { vercel } from "./client.ts";
-import { VERCEL_TEAM_ID, VERCEL_TEAM_SLUG } from "./constants.ts";
-
-const TEAM = { teamId: VERCEL_TEAM_ID, slug: VERCEL_TEAM_SLUG } as const;
+import { TEAM } from "./constants.ts";
+import { epochMillis, pageLimit } from "./fields.ts";
 
 export const list_deployments = defineTool({
   description:
     "List deployments for the active team. Optional filters: `projectId`, `target` (production/preview), `state` (comma-separated states like 'BUILDING,READY'), branch/commit, and time window. Paginate with `from`, `to`, `until`, `since`, and `limit`.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     projectId: z.string().optional(),
     app: z.string().optional().describe("Project name"),
     target: z.enum(["production", "preview"]).optional(),
     state: z.string().optional(),
-    limit: z.number().max(100).optional(),
-    from: z.number().optional().describe("Unix ms lower bound (cursor)"),
-    to: z.number().optional().describe("Unix ms upper bound (cursor)"),
-    since: z.number().optional(),
-    until: z.number().optional(),
+    limit: pageLimit.max(100).optional(),
+    from: epochMillis.optional().describe("Unix ms lower bound (cursor)"),
+    to: epochMillis.optional().describe("Unix ms upper bound (cursor)"),
+    since: epochMillis.optional(),
+    until: epochMillis.optional(),
     users: z.string().optional().describe("Comma-separated creator user ids"),
     branch: z.string().optional(),
     sha: z.string().optional(),
@@ -35,7 +34,7 @@ export const get_deployment = defineTool({
   description:
     "Retrieve a deployment by its id (dpl_…) or URL hostname. Returns full metadata, build info, creator, alias assignment, commit details.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     id_or_url: z.string().describe("Deployment id (dpl_…) or hostname (my-app-abc123.vercel.app)"),
     withGitRepoInfo: z.enum(["true", "false"]).optional(),
   }),
@@ -53,17 +52,17 @@ export const get_deployment_events = defineTool({
   description:
     "Fetch build events / logs for a deployment in JSON mode. Returns an array of events (stdout, stderr, stage transitions). Hard-capped at `limit` (max 200).",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     deployment_id: z.string(),
-    limit: z.number().max(200).optional(),
-    since: z.number().optional(),
-    until: z.number().optional(),
-    follow: z.number().optional().describe("1 to follow (stream); 0 for one-shot"),
-    builds: z.number().optional(),
+    limit: pageLimit.max(200).optional(),
+    since: epochMillis.optional(),
+    until: epochMillis.optional(),
+    follow: z.literal([0, 1]).optional().describe("1 to follow (stream); 0 for one-shot"),
+    builds: z.int().optional(),
     direction: z.enum(["backward", "forward"]).optional(),
     name: z.string().optional(),
     statusCode: z.string().optional(),
-    delimiter: z.number().optional(),
+    delimiter: z.int().optional(),
   }),
   execute: async ({ deployment_id, limit, ...query }) => {
     const cappedLimit = limit !== undefined ? Math.min(limit, 200) : 200;
@@ -80,7 +79,7 @@ export const get_deployment_events = defineTool({
 export const list_deployment_files = defineTool({
   description: "List the file tree of a deployment's source code.",
   access: { risk: "read" },
-  input: z.object({ deployment_id: z.string() }),
+  input: z.strictObject({ deployment_id: z.string() }),
   execute: async ({ deployment_id }) => {
     const result = await vercel().deployments.listDeploymentFiles({ ...TEAM, id: deployment_id });
     return JSON.stringify(result);
@@ -90,7 +89,7 @@ export const list_deployment_files = defineTool({
 export const get_deployment_file_contents = defineTool({
   description: "Get the contents of a specific file from a deployment. Response is base64-encoded.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     deployment_id: z.string(),
     file_id: z.string(),
     path: z.string().optional(),
@@ -110,7 +109,7 @@ export const cancel_deployment = defineTool({
   description:
     "Cancel an in-flight deployment (state must be BUILDING / QUEUED / INITIALIZING). Returns the deployment's new state.",
   access: { risk: "destructive" },
-  input: z.object({ deployment_id: z.string() }),
+  input: z.strictObject({ deployment_id: z.string() }),
   execute: async ({ deployment_id }) => {
     const result = await vercel().deployments.cancelDeployment({ ...TEAM, id: deployment_id });
     return JSON.stringify(result);
@@ -121,7 +120,7 @@ export const delete_deployment = defineTool({
   description:
     "Permanently delete a deployment by id or URL. Irreversible. Cannot be used on the active production deployment.",
   access: { risk: "destructive" },
-  input: z.object({
+  input: z.strictObject({
     id_or_url: z.string(),
     url: z.string().optional(),
   }),
@@ -138,7 +137,7 @@ export const delete_deployment = defineTool({
 export const update_integration_deployment_action = defineTool({
   description: "Update the deployment integration action state for a specific integration install.",
   access: { risk: "write" },
-  input: z.object({
+  input: z.strictObject({
     deployment_id: z.string(),
     integrationConfigurationId: z.string(),
     resourceId: z.string(),
@@ -163,7 +162,7 @@ export const promote_deployment = defineTool({
   description:
     "Promote a deployment to production without rebuilding it. Returns immediately; the actual traffic shift is async — check `list_promote_aliases` for status.",
   access: { risk: "destructive" },
-  input: z.object({
+  input: z.strictObject({
     project_id: z.string(),
     deployment_id: z.string(),
   }),
@@ -186,7 +185,7 @@ export const rollback_deployment = defineTool({
   description:
     "Roll production traffic back to an older deployment. Async — check `list_promote_aliases` for completion.",
   access: { risk: "destructive" },
-  input: z.object({
+  input: z.strictObject({
     project_id: z.string(),
     deployment_id: z.string(),
   }),
@@ -208,7 +207,7 @@ export const rollback_deployment = defineTool({
 export const update_rollback_description = defineTool({
   description: "Update the description (reason) attached to an active rollback.",
   access: { risk: "write" },
-  input: z.object({
+  input: z.strictObject({
     project_id: z.string(),
     deployment_id: z.string(),
     description: z.string(),

@@ -1,6 +1,10 @@
+import { UpstreamError } from "@repo/shared/errors";
 import { z } from "zod";
 
+import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { octokit } from "./client.ts";
+import { env } from "./config.ts";
+import { paginationInputShape, repoField } from "./constants.ts";
 
 const grepAppResponseSchema = z.looseObject({
   facets: z.looseObject({ count: z.number().optional() }).optional(),
@@ -19,16 +23,22 @@ const grepAppResponseSchema = z.looseObject({
     })
     .optional(),
 });
-import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
-import { env } from "./config.ts";
-import { paginationInputShape } from "./constants.ts";
+
+/**
+ * The issue search endpoint returns a label as either a bare name or a label
+ * object, so the two shapes are decoded rather than branched on at runtime. A
+ * label we cannot read is dropped instead of failing the whole search.
+ */
+const issueLabelNameSchema = z
+  .union([z.string(), z.looseObject({ name: z.string().optional() }).transform((l) => l.name)])
+  .catch(undefined);
 
 /** List repositories in the purduehackers organization with optional filters. */
 export const list_repositories = defineTool({
   description:
     "List repositories in the purduehackers org. Returns name, description, language, URL, and activity dates. Supports filtering by type and sorting.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     type: z.enum(["all", "public", "private", "forks", "sources", "member"]).optional(),
     sort: z.enum(["created", "updated", "pushed", "full_name"]).optional(),
     ...paginationInputShape,
@@ -64,8 +74,8 @@ export const get_repository = defineTool({
   description:
     "Get full details for a repository — description, branches, topics, visibility, license, issue/wiki/pages status, and URLs.",
   access: { risk: "read" },
-  input: z.object({
-    repo: z.string().describe("Repository name (e.g. 'my-repo')"),
+  input: z.strictObject({
+    repo: repoField.describe("Repository name (e.g. 'my-repo')"),
   }),
   execute: async ({ repo }) => {
     const { data } = await octokit().rest.repos.get({
@@ -102,7 +112,7 @@ export const search_code = defineTool({
   description:
     "Search code across purduehackers repositories using grep.app. Returns matching file paths, code snippets with line numbers, and repository info. Supports language and path filters.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     query: z.string().describe("Code search query (e.g. 'useState', 'import express')"),
     language: z
       .string()
@@ -130,7 +140,15 @@ export const search_code = defineTool({
       return `Code search failed (${response.status}).`;
     }
 
-    const data = grepAppResponseSchema.parse(await response.json());
+    const parsed = grepAppResponseSchema.safeParse(await response.json());
+    if (!parsed.success) {
+      throw new UpstreamError({
+        service: "grep.app",
+        status: 502,
+        detail: `invalid response: ${z.prettifyError(parsed.error)}`,
+      });
+    }
+    const data = parsed.data;
 
     const matches = data.hits?.hits ?? [];
     if (matches.length === 0) return "No code matches found.";
@@ -157,7 +175,7 @@ export const search_issues = defineTool({
   description:
     "Search issues and pull requests across purduehackers repos. Supports GitHub search qualifiers like 'is:open', 'is:pr', 'label:bug', 'is:merged'. Returns number, title, state, URL, labels, and dates.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     query: z
       .string()
       .describe("Search query with GitHub qualifiers (e.g. 'bug is:open', 'is:pr is:merged')"),
@@ -181,7 +199,7 @@ export const search_issues = defineTool({
         state: i.state,
         html_url: i.html_url,
         user: i.user?.login,
-        labels: i.labels.map((l) => (typeof l === "string" ? l : l.name)),
+        labels: i.labels.map((label) => issueLabelNameSchema.parse(label)),
         created_at: i.created_at,
         updated_at: i.updated_at,
         is_pull_request: !!i.pull_request,

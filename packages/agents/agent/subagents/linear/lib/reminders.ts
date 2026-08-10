@@ -7,9 +7,9 @@ export const set_reminder = defineTool({
   description:
     "Set a reminder on an issue. Triggers a Linear notification at the specified time. One reminder per issue (replaces any existing). Resolve the issue ID via search_entities first.",
   access: { risk: "write" },
-  input: z.object({
+  input: z.strictObject({
     issueId: z.string(),
-    reminderAt: z.string().describe("ISO 8601 datetime"),
+    reminderAt: z.iso.datetime({ offset: true }).describe("ISO 8601 datetime"),
   }),
   execute: async ({ issueId, reminderAt }) => {
     const payload = await linear.issueReminder(issueId, new Date(reminderAt));

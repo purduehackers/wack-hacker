@@ -17,10 +17,12 @@ import { z } from "zod";
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { sentryOpts, sentryOrg } from "./client.ts";
 
+// Read-only projection over fields the generated SDK type omits: an unexpected
+// shape must degrade to "absent" rather than fail the tool.
 const memberProjectionSchema = z.looseObject({
-  role: z.string().nullish(),
-  roleName: z.string().nullish(),
-  teams: z.array(z.unknown()).nullish(),
+  role: z.string().nullish().catch(undefined),
+  roleName: z.string().nullish().catch(undefined),
+  teams: z.array(z.json()).nullish().catch(undefined),
 });
 const updateTeamBodySchema = z.object({ name: z.string().optional(), slug: z.string() });
 
@@ -29,7 +31,7 @@ export const list_members = defineTool({
   description:
     "List members in the Sentry organization. Returns name, email, role, pending status, and team slugs.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     cursor: z.string().optional().describe("Pagination cursor"),
   }),
   execute: async ({ cursor }) => {
@@ -63,7 +65,7 @@ export const list_members = defineTool({
 export const get_member = defineTool({
   description: "Get full details for a Sentry organization member by their member ID.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     member_id: z.string().describe("Member ID"),
   }),
   execute: async ({ member_id }) => {
@@ -97,7 +99,7 @@ export const list_teams = defineTool({
   description:
     "List teams in the Sentry organization. Returns slug, name, member count, and date created.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     cursor: z.string().optional().describe("Pagination cursor"),
   }),
   execute: async ({ cursor }) => {
@@ -123,7 +125,7 @@ export const list_teams = defineTool({
 export const get_team = defineTool({
   description: "Get full details for a Sentry team by slug.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     team_slug: z.string().describe("Team slug"),
   }),
   execute: async ({ team_slug }) => {
@@ -143,7 +145,7 @@ export const get_team = defineTool({
 export const list_team_members = defineTool({
   description: "List members of a Sentry team.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     team_slug: z.string().describe("Team slug"),
     cursor: z.string().optional().describe("Pagination cursor"),
   }),
@@ -173,7 +175,7 @@ export const list_team_members = defineTool({
 export const create_team = defineTool({
   description: "Create a new team in the Sentry organization.",
   access: { risk: "write", minRole: "admin" },
-  input: z.object({
+  input: z.strictObject({
     name: z.string().describe("Team name"),
     slug: z.string().optional().describe("Team slug (auto-generated from name if omitted)"),
   }),
@@ -192,7 +194,7 @@ export const create_team = defineTool({
 export const update_team = defineTool({
   description: "Update a Sentry team's name or slug.",
   access: { risk: "write", minRole: "admin" },
-  input: z.object({
+  input: z.strictObject({
     team_slug: z.string().describe("Current team slug"),
     name: z.string().optional().describe("New team name"),
     slug: z.string().optional().describe("New team slug"),
@@ -216,7 +218,7 @@ export const update_team = defineTool({
 export const delete_team = defineTool({
   description: "Permanently delete a Sentry team. This action cannot be undone.",
   access: { risk: "destructive", minRole: "admin" },
-  input: z.object({
+  input: z.strictObject({
     team_slug: z.string().describe("Team slug"),
   }),
   execute: async ({ team_slug }) => {
@@ -236,7 +238,7 @@ export const delete_team = defineTool({
 export const add_team_member = defineTool({
   description: "Add an organization member to a Sentry team.",
   access: { risk: "destructive", minRole: "admin" },
-  input: z.object({
+  input: z.strictObject({
     member_id: z.string().describe("Organization member ID"),
     team_slug: z.string().describe("Team slug"),
   }),
@@ -258,7 +260,7 @@ export const add_team_member = defineTool({
 export const remove_team_member = defineTool({
   description: "Remove a member from a Sentry team.",
   access: { risk: "destructive", minRole: "admin" },
-  input: z.object({
+  input: z.strictObject({
     member_id: z.string().describe("Organization member ID"),
     team_slug: z.string().describe("Team slug"),
   }),
@@ -281,7 +283,7 @@ export const update_member_role = defineTool({
   description:
     "Update a Sentry organization member's role. Common roles: owner, manager, admin, member, billing.",
   access: { risk: "destructive", minRole: "admin" },
-  input: z.object({
+  input: z.strictObject({
     member_id: z.string().describe("Organization member ID"),
     role: z
       .enum(["owner", "manager", "admin", "member", "billing"])

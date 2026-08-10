@@ -3,15 +3,14 @@ import { z } from "zod";
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { octokit } from "./client.ts";
 import { env } from "./config.ts";
-import { paginationInputShape, perPageField } from "./constants.ts";
+import { perPageField, repoField, repoPaginatedInputShape } from "./constants.ts";
+
+const commitSha = z.stringFormat("git-object-sha", /^[0-9a-fA-F]{40}$/u);
 
 export const list_tags = defineTool({
   description: "List tags for a repository. Returns tag name, commit SHA, and commit URL.",
   access: { risk: "read" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    ...paginationInputShape,
-  }),
+  input: z.strictObject(repoPaginatedInputShape),
   execute: async ({ repo, per_page, page }) => {
     const { data } = await octokit().rest.repos.listTags({
       owner: env.GITHUB_ORG,
@@ -33,8 +32,8 @@ export const list_refs = defineTool({
   description:
     "List git refs (branches or tags) matching a prefix. Use 'heads/' for branches, 'tags/' for tags. Returns ref names and their target SHAs.",
   access: { risk: "read" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
+  input: z.strictObject({
+    repo: repoField,
     namespace: z.enum(["heads", "tags"]).describe("heads for branches, tags for tags"),
     per_page: perPageField,
   }),
@@ -58,9 +57,9 @@ export const list_refs = defineTool({
 export const get_ref = defineTool({
   description: "Get a single git ref (branch or tag) by its full name (e.g. 'heads/main').",
   access: { risk: "read" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    ref: z.string().describe("Ref path (e.g. 'heads/main', 'tags/v1.0.0')"),
+  input: z.strictObject({
+    repo: repoField,
+    ref: z.string().min(1).describe("Ref path (e.g. 'heads/main', 'tags/v1.0.0')"),
   }),
   execute: async ({ repo, ref }) => {
     const { data } = await octokit().rest.git.getRef({
@@ -76,10 +75,12 @@ export const create_ref = defineTool({
   description:
     "Create a new branch or tag. For branches use ref='refs/heads/my-branch'; for tags use 'refs/tags/v1.0.0'. Requires the target commit SHA.",
   access: { risk: "write" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    ref: z.string().describe("Full ref name (e.g. 'refs/heads/new-branch')"),
-    sha: z.string().describe("Target commit SHA"),
+  input: z.strictObject({
+    repo: repoField,
+    ref: z
+      .templateLiteral(["refs/", z.enum(["heads", "tags"]), "/", z.string().min(1)])
+      .describe("Full ref name (e.g. 'refs/heads/new-branch')"),
+    sha: commitSha.describe("Target commit SHA"),
   }),
   execute: async ({ repo, ref, sha }) => {
     const { data } = await octokit().rest.git.createRef({
@@ -96,19 +97,17 @@ export const update_ref = defineTool({
   description:
     "Update a ref to point to a different commit SHA. For branches, equivalent to a fast-forward or force-push (set force=true for non-fast-forward).",
   access: { risk: "destructive" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    ref: z.string().describe("Ref path WITHOUT the 'refs/' prefix (e.g. 'heads/main')"),
-    sha: z.string().describe("New target SHA"),
-    force: z.boolean().optional().describe("Allow non-fast-forward (default false)"),
+  input: z.strictObject({
+    repo: repoField,
+    ref: z.string().min(1).describe("Ref path WITHOUT the 'refs/' prefix (e.g. 'heads/main')"),
+    sha: commitSha.describe("New target SHA"),
+    force: z.boolean().default(false).describe("Allow non-fast-forward (default false)"),
   }),
-  execute: async ({ repo, ref, sha, force }) => {
+  execute: async ({ repo, ...fields }) => {
     const { data } = await octokit().rest.git.updateRef({
       owner: env.GITHUB_ORG,
       repo,
-      ref,
-      sha,
-      force: force ?? false,
+      ...fields,
     });
     return JSON.stringify({ ref: data.ref, sha: data.object.sha });
   },
@@ -118,9 +117,9 @@ export const delete_ref = defineTool({
   description:
     "Delete a git ref (branch or tag). Irreversible. Ref path without 'refs/' prefix (e.g. 'heads/old-branch').",
   access: { risk: "destructive" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    ref: z.string().describe("Ref path (e.g. 'heads/old-branch')"),
+  input: z.strictObject({
+    repo: repoField,
+    ref: z.string().min(1).describe("Ref path (e.g. 'heads/old-branch')"),
   }),
   execute: async ({ repo, ref }) => {
     await octokit().rest.git.deleteRef({

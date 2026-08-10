@@ -9,15 +9,15 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { sentryOpts, sentryOrg } from "./client.ts";
-import { perPageField } from "./constants.ts";
+import { perPageField, sentryNumericId } from "./constants.ts";
 
 /** List events (occurrences) for a Sentry issue. */
 export const list_issue_events = defineTool({
   description:
     "List events (occurrences) for a Sentry issue. Returns event ID, title, timestamp, and tags.",
   access: { risk: "read" },
-  input: z.object({
-    issue_id: z.string().describe("Sentry issue ID (numeric)"),
+  input: z.strictObject({
+    issue_id: sentryNumericId.describe("Sentry issue ID (numeric)"),
     cursor: z.string().optional().describe("Pagination cursor"),
   }),
   execute: async ({ issue_id, cursor }) => {
@@ -47,7 +47,7 @@ export const get_event = defineTool({
   description:
     "Get full event detail including stack trace, breadcrumbs, and contexts. Requires both project slug and event ID.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_slug: z.string().describe("Project slug"),
     event_id: z.string().describe("Event ID"),
   }),
@@ -81,8 +81,8 @@ export const get_latest_event = defineTool({
   description:
     "Get the most recent event for a Sentry issue. Returns full event detail including stack trace and breadcrumbs.",
   access: { risk: "read" },
-  input: z.object({
-    issue_id: z.string().describe("Sentry issue ID (numeric)"),
+  input: z.strictObject({
+    issue_id: sentryNumericId.describe("Sentry issue ID (numeric)"),
   }),
   execute: async ({ issue_id }) => {
     const result = await retrieveAnIssueEvent({
@@ -114,7 +114,7 @@ export const list_project_events = defineTool({
   description:
     "List recent events for a Sentry project. Returns event ID, title, timestamp, and tags.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_slug: z.string().describe("Project slug"),
     query: z.string().optional().describe("Search query to filter events"),
     per_page: perPageField,

@@ -36,12 +36,11 @@ export const add_to_cart = defineTool({
   description:
     "Add a product to the shared cart. If the ASIN is already in the cart, the quantity is increased. Use search_products first to get the ASIN, title, and price.",
   access: { risk: "write" },
-  input: z.object({
-    asin: z.string().min(1).describe("Amazon ASIN from search_products"),
-    title: z.string().min(1).describe("Product title"),
+  input: z.strictObject({
+    asin: z.string().trim().min(1).describe("Amazon ASIN from search_products"),
+    title: z.string().trim().min(1).describe("Product title"),
     price: z.number().min(0).describe("Unit price in USD"),
     quantity: z
-      .number()
       .int()
       .min(1)
       .default(1)
@@ -56,8 +55,8 @@ export const add_to_cart = defineTool({
 export const remove_from_cart = defineTool({
   description: "Remove a product from the cart by ASIN.",
   access: { risk: "write", confirm: "self" },
-  input: z.object({
-    asin: z.string().min(1).describe("ASIN of the item to remove"),
+  input: z.strictObject({
+    asin: z.string().trim().min(1).describe("ASIN of the item to remove"),
   }),
   execute: async ({ asin }) => {
     const result = await removeCartItem(asin);
@@ -73,9 +72,9 @@ export const update_quantity = defineTool({
   description:
     "Set the quantity of an item in the cart. Quantity of 0 removes the item. Item must already be in the cart.",
   access: { risk: "write" },
-  input: z.object({
-    asin: z.string().min(1).describe("ASIN of the item to update"),
-    quantity: z.number().int().min(0).describe("New quantity (0 removes the item)"),
+  input: z.strictObject({
+    asin: z.string().trim().min(1).describe("ASIN of the item to update"),
+    quantity: z.int().min(0).describe("New quantity (0 removes the item)"),
   }),
   execute: async ({ asin, quantity }) => {
     const result = await setCartItemQuantity(asin, quantity);
@@ -88,9 +87,8 @@ export const view_cart = defineTool({
   description:
     "View the shared cart. Items are paginated to keep Discord messages short — pass `page` (1-indexed) to navigate when there are many items.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     page: z
-      .number()
       .int()
       .min(1)
       .default(1)
@@ -116,7 +114,7 @@ export const clear_cart = defineTool({
   description:
     "Remove every item from the shared cart. This is irreversible — always confirm with the user before calling.",
   access: { risk: "write", confirm: "self" },
-  input: z.object({}),
+  input: z.strictObject({}),
   execute: async () => {
     await clearCart();
     return { cleared: true };

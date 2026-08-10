@@ -1,8 +1,16 @@
-/* oxlint-disable unicorn/no-null -- Hunter projections use null to represent external fields with no value. */
 import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { hunter, notion } from "./client.ts";
+
+/**
+ * Value these tools report for a Hunter field the API left out of its response.
+ * The model has to see "Hunter was asked and returned nothing" rather than a
+ * missing key, so the JSON output carries an explicit null. One named sentinel
+ * keeps the rest of this module under the no-null rule.
+ */
+// oxlint-disable-next-line unicorn/no-null -- serialized tool output distinguishes an unresolved field from an absent key
+const ABSENT = null;
 
 const emailFinderResponseSchema = z.object({
   data: z
@@ -43,9 +51,9 @@ const emailVerifierResponseSchema = z.object({
     })
     .optional(),
 });
-type EmailFinderResponse = z.infer<typeof emailFinderResponseSchema>;
-type DomainSearchResponse = z.infer<typeof domainSearchResponseSchema>;
-type EmailVerifierResponse = z.infer<typeof emailVerifierResponseSchema>;
+type EmailFinderResponse = z.output<typeof emailFinderResponseSchema>;
+type DomainSearchResponse = z.output<typeof domainSearchResponseSchema>;
+type EmailVerifierResponse = z.output<typeof emailVerifierResponseSchema>;
 
 function extractDomain(urlOrDomain: string | undefined): string | undefined {
   if (!urlOrDomain) return undefined;
@@ -75,7 +83,7 @@ async function domainFromNotionPage(pageId: string): Promise<string | undefined>
 export const find_email_for_lead = defineTool({
   description: `Look up an email address via Hunter. If full_name is provided, uses /v2/email-finder with the domain. Otherwise uses /v2/domain-search. You may pass a Notion page_id to derive the domain from the Company's Website property.`,
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     domain: z.string().optional().describe("Company domain (e.g. example.com)"),
     page_id: z.string().optional().describe("Notion page id to read Website from"),
     full_name: z.string().optional().describe("Full name of target contact"),
@@ -103,9 +111,9 @@ export const find_email_for_lead = defineTool({
       );
       return {
         domain: resolvedDomain,
-        email: result.data?.email ?? null,
-        score: result.data?.score ?? null,
-        verification: result.data?.verification?.status ?? null,
+        email: result.data?.email ?? ABSENT,
+        score: result.data?.score ?? ABSENT,
+        verification: result.data?.verification?.status ?? ABSENT,
       };
     }
 
@@ -116,11 +124,11 @@ export const find_email_for_lead = defineTool({
     );
     return {
       domain: resolvedDomain,
-      organization: result.data?.organization ?? null,
+      organization: result.data?.organization ?? ABSENT,
       emails: (result.data?.emails ?? []).map((e) => ({
         value: e.value,
-        type: e.type ?? null,
-        confidence: e.confidence ?? null,
+        type: e.type ?? ABSENT,
+        confidence: e.confidence ?? ABSENT,
       })),
     };
   },
@@ -129,7 +137,7 @@ export const find_email_for_lead = defineTool({
 export const verify_email = defineTool({
   description: `Verify an email address via Hunter /v2/email-verifier. Returns status ("deliverable", "undeliverable", "risky", "unknown") plus score. Treat "risky" and "undeliverable" as blockers unless the user overrides.`,
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     email: z.email(),
   }),
   execute: async ({ email }) => {
@@ -140,10 +148,10 @@ export const verify_email = defineTool({
     );
     return {
       email,
-      status: result.data?.status ?? null,
-      result: result.data?.result ?? null,
-      score: result.data?.score ?? null,
-      disposable: result.data?.disposable ?? null,
+      status: result.data?.status ?? ABSENT,
+      result: result.data?.result ?? ABSENT,
+      score: result.data?.score ?? ABSENT,
+      disposable: result.data?.disposable ?? ABSENT,
     };
   },
 });

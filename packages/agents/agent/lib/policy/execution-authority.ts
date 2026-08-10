@@ -5,9 +5,17 @@ import {
   type UserRole as UserRoleValue,
 } from "@repo/shared/discord";
 import { Result } from "@repo/shared/result";
+import type { SessionAuthContext } from "eve/context";
+import { z } from "zod";
 
 import type { ApprovalPolicyStore } from "./approval-record.ts";
 import { PolicySource, type PolicyPrincipal, type RiskLevel } from "./types.ts";
+
+/**
+ * One entry of Eve's authenticated attribute bag: a single string or a list of
+ * strings. The narrowing below is therefore load-bearing, not a formality.
+ */
+type AuthAttribute = SessionAuthContext["attributes"][string];
 
 export interface ExecutionAuthority {
   readonly principal: PolicyPrincipal;
@@ -16,8 +24,8 @@ export interface ExecutionAuthority {
 
 export interface ExecutionAuthorityInput {
   readonly current: PolicyPrincipal;
-  readonly approvalRequesterId: unknown;
-  readonly approvalRequesterMemberRoles: unknown;
+  readonly approvalRequesterId: AuthAttribute | undefined;
+  readonly approvalRequesterMemberRoles: AuthAttribute | undefined;
   readonly sessionId: string;
   readonly callId: string;
   readonly tool: string;
@@ -38,15 +46,10 @@ function expectedApproverRole(requesterMinRole: UserRoleValue): Exclude<UserRole
 export async function resolveExecutionAuthority(
   input: ExecutionAuthorityInput,
 ): Promise<ExecutionAuthority | undefined> {
-  const requesterId = input.approvalRequesterId;
-  if (typeof requesterId !== "string") return { principal: input.current };
-  const freshMemberRoles = input.approvalRequesterMemberRoles;
-  if (
-    !Array.isArray(freshMemberRoles) ||
-    !freshMemberRoles.every((role): role is string => typeof role === "string")
-  ) {
-    return undefined;
-  }
+  const requesterId = z.string().safeParse(input.approvalRequesterId).data;
+  if (requesterId === undefined) return { principal: input.current };
+  const freshMemberRoles = z.array(z.string()).safeParse(input.approvalRequesterMemberRoles).data;
+  if (freshMemberRoles === undefined) return undefined;
 
   const policy = await input.approvalPolicies.read(input.sessionId, input.callId);
   if (

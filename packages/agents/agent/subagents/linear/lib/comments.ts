@@ -7,7 +7,7 @@ export const create_comment = defineTool({
   description:
     "Post a Markdown comment on an issue. Requires the issue's UUID (resolve via search_entities first).",
   access: { risk: "write" },
-  input: z.object({ issueId: z.string(), body: z.string() }),
+  input: z.strictObject({ issueId: z.string(), body: z.string() }),
   execute: async (input) => {
     const payload = await linear.createComment(input);
     const comment = await payload.comment;
@@ -19,7 +19,7 @@ export const create_comment = defineTool({
 export const edit_comment = defineTool({
   description: "Edit an existing comment's body by comment ID. Replaces the full body.",
   access: { risk: "write" },
-  input: z.object({ id: z.string(), body: z.string() }),
+  input: z.strictObject({ id: z.string(), body: z.string() }),
   execute: async ({ id, body }) => {
     const payload = await linear.updateComment(id, { body });
     const comment = await payload.comment;
@@ -31,7 +31,7 @@ export const edit_comment = defineTool({
 export const delete_comment = defineTool({
   description: "Delete a comment by ID. Only use when explicitly asked.",
   access: { risk: "destructive" },
-  input: z.object({ id: z.string() }),
+  input: z.strictObject({ id: z.string() }),
   execute: async ({ id }) => {
     const payload = await linear.deleteComment(id);
     return JSON.stringify({ success: payload.success });

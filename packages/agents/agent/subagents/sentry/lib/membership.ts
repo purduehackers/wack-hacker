@@ -4,13 +4,19 @@ import { z } from "zod";
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { sentryOpts, sentryOrg } from "./client.ts";
 
-const memberProjectionSchema = z.looseObject({ role: z.unknown().optional() });
+/**
+ * `role` is returned by Sentry but absent from the generated response type.
+ * `.catch` keeps the "can never fail" property the previous `z.unknown()` had:
+ * this projection is read through a throwing `.parse`, so a shape `z.json()`
+ * rejects must degrade to "absent" rather than fail the invite.
+ */
+const memberProjectionSchema = z.looseObject({ role: z.json().optional().catch(undefined) });
 
 export const add_member_to_platform = defineTool({
   description:
     "Invite a new member to the Sentry organization by email. Role defaults to 'member'; other roles include 'admin', 'manager', 'owner', 'billing'. Optionally assign to teams by slug. Never fabricate emails — confirm the exact address first.",
   access: { risk: "destructive", minRole: "admin" },
-  input: z.object({
+  input: z.strictObject({
     email: z.email().describe("Email to invite"),
     role: z
       .enum(["owner", "manager", "admin", "member", "billing"])
@@ -18,7 +24,7 @@ export const add_member_to_platform = defineTool({
       .describe("Organization role (default: member)"),
     team_roles: z
       .array(
-        z.object({
+        z.strictObject({
           team_slug: z.string(),
           role: z.string().nullable().optional(),
         }),
@@ -43,10 +49,10 @@ export const add_member_to_platform = defineTool({
     const { data } = unwrapResult(result, "addMember");
     const d = memberProjectionSchema.parse(data);
     return JSON.stringify({
-      id: d.id,
-      email: d.email,
+      id: data.id,
+      email: data.email,
       role: d.role,
-      pending: d.pending,
+      pending: data.pending,
     });
   },
 });
@@ -55,7 +61,7 @@ export const remove_member_from_platform = defineTool({
   description:
     "Remove a member from the Sentry organization by their member ID. Resolve the member ID via list_members first — never remove on ambiguous input.",
   access: { risk: "destructive", minRole: "admin" },
-  input: z.object({
+  input: z.strictObject({
     member_id: z.string().describe("Sentry member ID (not the user's email)"),
   }),
   execute: async ({ member_id }) => {

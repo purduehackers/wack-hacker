@@ -9,7 +9,7 @@ export const get_trace = defineTool({
   description:
     "Get a full distributed trace by trace ID. Returns the complete trace waterfall with all transactions, spans, errors, and performance issues.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     trace_id: z.string().describe("Trace ID (32-character hex string)"),
     project_slug: z.string().optional().describe("Project slug to scope the trace lookup"),
   }),
@@ -27,7 +27,7 @@ export const list_traces = defineTool({
   description:
     "Search for traces in the organization. Returns trace IDs with summary info like duration, span count, and root transaction.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_slug: z.string().describe("Project slug"),
     query: z.string().optional().describe("Filter query (e.g. 'transaction:GET /api/users')"),
     sort: z.string().optional().describe("Sort field (e.g. '-timestamp', '-duration')"),

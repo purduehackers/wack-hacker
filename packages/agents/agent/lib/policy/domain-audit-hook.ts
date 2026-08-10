@@ -18,18 +18,15 @@ export interface DomainAuditHookAdapter<N extends string> {
   readonly redactInput?: boolean;
 }
 
-export function defineDomainAuditHook<N extends string>(
-  adapter: DomainAuditHookAdapter<N>,
-  loadAuditStore: () => Promise<Pick<AuditStore, "record">> = getAuditStore,
-) {
+export function defineDomainAuditHook<N extends string>(adapter: DomainAuditHookAdapter<N>) {
   return defineHook({
     events: {
       async "actions.requested"(event, ctx) {
         const principal = requirePrincipal(ctx.session.auth.current);
         if (Result.isError(principal)) return;
-        let audit: Pick<AuditStore, "record">;
+        let audit: AuditStore;
         try {
-          audit = await loadAuditStore();
+          audit = await getAuditStore();
         } catch (cause) {
           console.warn(`${adapter.label} action audit hook unavailable`, cause);
           return;

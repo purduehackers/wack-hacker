@@ -1,6 +1,7 @@
 import { UpstreamError } from "@repo/shared/errors";
+import { z } from "zod";
 
-import { env } from "../../../lib/env.ts";
+import { env } from "../../../env.ts";
 import { createDomainRuntime } from "../../../lib/policy/domain-runtime.ts";
 import { OUTREACH_TOOLS, type OutreachToolName } from "./tool-registry.ts";
 
@@ -49,6 +50,16 @@ const NOTION_TOOL_NAMES = new Set<OutreachToolName>([
 ]);
 const HUNTER_TOOL_NAMES = new Set<OutreachToolName>(["find_email_for_lead", "verify_email"]);
 
+/**
+ * `find_email_for_lead` only reaches Notion when it has to derive the company
+ * domain from a CRM page: a page id is present and no usable domain came with
+ * the call. Matched against the raw arguments, before the tool schema parses.
+ */
+const notionDerivedLeadSchema = z.looseObject({
+  page_id: z.string(),
+  domain: z.literal("").optional(),
+});
+
 export const OUTREACH_RUNTIME = createDomainRuntime({
   domain: "outreach",
   label: "Outreach",
@@ -71,11 +82,7 @@ export const OUTREACH_RUNTIME = createDomainRuntime({
     }
     const usesNotion =
       NOTION_TOOL_NAMES.has(name) ||
-      (name === "find_email_for_lead" &&
-        typeof input === "object" &&
-        input !== null &&
-        "page_id" in input &&
-        !("domain" in input && typeof input.domain === "string" && input.domain.length > 0));
+      (name === "find_email_for_lead" && notionDerivedLeadSchema.safeParse(input).success);
     if (usesNotion && env.NOTION_TOKEN === undefined) {
       return new UpstreamError({
         service: "Outreach",

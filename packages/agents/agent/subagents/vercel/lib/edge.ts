@@ -2,9 +2,9 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { vercel } from "./client.ts";
-import { VERCEL_TEAM_ID, VERCEL_TEAM_SLUG } from "./constants.ts";
-
-const TEAM = { teamId: VERCEL_TEAM_ID, slug: VERCEL_TEAM_SLUG } as const;
+import { TEAM } from "./constants.ts";
+import { pageLimit } from "./fields.ts";
+import { dropKeyDeep } from "./redact.ts";
 
 /**
  * Strip the secret `token` field from Edge Config token payloads. The Vercel
@@ -13,16 +13,7 @@ const TEAM = { teamId: VERCEL_TEAM_ID, slug: VERCEL_TEAM_SLUG } as const;
  * as a non-secret reference, so we keep it along with label/createdAt.
  */
 function redactTokens(input: unknown): unknown {
-  if (Array.isArray(input)) return input.map((item) => redactTokens(item));
-  if (input && typeof input === "object") {
-    const out: Record<string, unknown> = {};
-    for (const [entryKey, entryValue] of Object.entries(input)) {
-      if (entryKey === "token") continue;
-      out[entryKey] = redactTokens(entryValue);
-    }
-    return out;
-  }
-  return input;
+  return dropKeyDeep(input, "token");
 }
 
 // ──────────────── EDGE CONFIG — STORES ────────────────
@@ -30,7 +21,7 @@ function redactTokens(input: unknown): unknown {
 export const list_edge_configs = defineTool({
   description: "List every Edge Config store in the team.",
   access: { risk: "read" },
-  input: z.object({}),
+  input: z.strictObject({}),
   execute: async () => {
     const result = await vercel().edgeConfig.getEdgeConfigs({ ...TEAM });
     return JSON.stringify(result);
@@ -40,7 +31,7 @@ export const list_edge_configs = defineTool({
 export const get_edge_config = defineTool({
   description: "Retrieve a single Edge Config by id.",
   access: { risk: "read" },
-  input: z.object({ edge_config_id: z.string() }),
+  input: z.strictObject({ edge_config_id: z.string() }),
   execute: async ({ edge_config_id }) => {
     const result = await vercel().edgeConfig.getEdgeConfig({
       ...TEAM,
@@ -53,7 +44,7 @@ export const get_edge_config = defineTool({
 export const create_edge_config = defineTool({
   description: "Create a new Edge Config store.",
   access: { risk: "write" },
-  input: z.object({
+  input: z.strictObject({
     slug: z.string(),
   }),
   execute: async ({ slug }) => {
@@ -68,7 +59,7 @@ export const create_edge_config = defineTool({
 export const update_edge_config = defineTool({
   description: "Rename an Edge Config.",
   access: { risk: "destructive" },
-  input: z.object({
+  input: z.strictObject({
     edge_config_id: z.string(),
     slug: z.string(),
   }),
@@ -85,7 +76,7 @@ export const update_edge_config = defineTool({
 export const delete_edge_config = defineTool({
   description: "Permanently delete an Edge Config store.",
   access: { risk: "destructive" },
-  input: z.object({ edge_config_id: z.string() }),
+  input: z.strictObject({ edge_config_id: z.string() }),
   execute: async ({ edge_config_id }) => {
     await vercel().edgeConfig.deleteEdgeConfig({
       ...TEAM,
@@ -100,7 +91,7 @@ export const delete_edge_config = defineTool({
 export const list_edge_config_items = defineTool({
   description: "List all items in an Edge Config.",
   access: { risk: "read" },
-  input: z.object({ edge_config_id: z.string() }),
+  input: z.strictObject({ edge_config_id: z.string() }),
   execute: async ({ edge_config_id }) => {
     const result = await vercel().edgeConfig.getEdgeConfigItems({
       ...TEAM,
@@ -113,7 +104,7 @@ export const list_edge_config_items = defineTool({
 export const get_edge_config_item = defineTool({
   description: "Get a single item by key from an Edge Config.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     edge_config_id: z.string(),
     key: z.string(),
   }),
@@ -131,11 +122,11 @@ export const patch_edge_config_items = defineTool({
   description:
     "Upsert or delete items in an Edge Config. Pass an array of operations: { operation: 'create'|'update'|'upsert'|'delete', key, value? }.",
   access: { risk: "destructive" },
-  input: z.object({
+  input: z.strictObject({
     edge_config_id: z.string(),
     items: z
       .array(
-        z.object({
+        z.strictObject({
           operation: z.enum(["create", "update", "upsert", "delete"]),
           key: z.string(),
           value: z.unknown().optional(),
@@ -158,7 +149,7 @@ export const patch_edge_config_items = defineTool({
 export const get_edge_config_schema = defineTool({
   description: "Get the JSON Schema for an Edge Config (validates future writes).",
   access: { risk: "read" },
-  input: z.object({ edge_config_id: z.string() }),
+  input: z.strictObject({ edge_config_id: z.string() }),
   execute: async ({ edge_config_id }) => {
     const result = await vercel().edgeConfig.getEdgeConfigSchema({
       ...TEAM,
@@ -171,7 +162,7 @@ export const get_edge_config_schema = defineTool({
 export const delete_edge_config_schema = defineTool({
   description: "Delete the schema definition on an Edge Config.",
   access: { risk: "destructive" },
-  input: z.object({ edge_config_id: z.string() }),
+  input: z.strictObject({ edge_config_id: z.string() }),
   execute: async ({ edge_config_id }) => {
     await vercel().edgeConfig.deleteEdgeConfigSchema({
       ...TEAM,
@@ -185,7 +176,7 @@ export const list_edge_config_tokens = defineTool({
   description:
     "List read tokens for an Edge Config. **Always strips the raw `token` field** — returns id/label/createdAt metadata only. The Vercel dashboard is the only path for retrieving an existing token's secret.",
   access: { risk: "read" },
-  input: z.object({ edge_config_id: z.string() }),
+  input: z.strictObject({ edge_config_id: z.string() }),
   execute: async ({ edge_config_id }) => {
     const result = await vercel().edgeConfig.getEdgeConfigTokens({
       ...TEAM,
@@ -199,7 +190,7 @@ export const get_edge_config_token = defineTool({
   description:
     "Retrieve a specific Edge Config read token's metadata. **Strips the raw `token` field** from the response.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     edge_config_id: z.string(),
     token: z.string(),
   }),
@@ -217,7 +208,7 @@ export const create_edge_config_token = defineTool({
   description:
     "Create a new read token for an Edge Config. **Does NOT return the token value** — only its id and label. Retrieve the secret from the Vercel dashboard to avoid leaking it into Discord/logs.",
   access: { risk: "write" },
-  input: z.object({
+  input: z.strictObject({
     edge_config_id: z.string(),
     label: z.string(),
   }),
@@ -227,9 +218,11 @@ export const create_edge_config_token = defineTool({
       edgeConfigId: edge_config_id,
       requestBody: { label },
     });
-    const safe = z.record(z.string(), z.unknown()).parse(redactTokens(result));
+    // The SDK models the response as `{ token, id }`, so naming the one
+    // non-secret field is a tighter guarantee than deep-dropping `token` — a
+    // future secret-bearing field cannot leak through an explicit projection.
     return JSON.stringify({
-      ...safe,
+      id: result.id,
       note: "Token value redacted. Retrieve it from the Vercel dashboard under Edge Config → Tokens.",
     });
   },
@@ -238,7 +231,7 @@ export const create_edge_config_token = defineTool({
 export const delete_edge_config_tokens = defineTool({
   description: "Delete one or more Edge Config read tokens.",
   access: { risk: "destructive" },
-  input: z.object({
+  input: z.strictObject({
     edge_config_id: z.string(),
     tokens: z.array(z.string()).min(1),
   }),
@@ -255,9 +248,9 @@ export const delete_edge_config_tokens = defineTool({
 export const list_edge_config_backups = defineTool({
   description: "List automatic backups for an Edge Config.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     edge_config_id: z.string(),
-    limit: z.number().optional(),
+    limit: pageLimit.optional(),
   }),
   execute: async ({ edge_config_id, limit }) => {
     const result = await vercel().edgeConfig.getEdgeConfigBackups({
@@ -272,7 +265,7 @@ export const list_edge_config_backups = defineTool({
 export const get_edge_config_backup = defineTool({
   description: "Retrieve a specific Edge Config backup.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     edge_config_id: z.string(),
     backup_version_id: z.string(),
   }),
@@ -291,7 +284,7 @@ export const get_edge_config_backup = defineTool({
 export const invalidate_edge_cache_by_tags = defineTool({
   description: "Invalidate Vercel Edge Cache entries tagged with any of the given tags.",
   access: { risk: "write" },
-  input: z.object({
+  input: z.strictObject({
     project_id_or_name: z.string(),
     tags: z.array(z.string()).min(1),
   }),
@@ -309,7 +302,7 @@ export const dangerously_delete_edge_cache_by_tags = defineTool({
   description:
     "Forcefully delete (not just invalidate) cache entries by tag. Use invalidate first unless you need storage freed immediately.",
   access: { risk: "destructive" },
-  input: z.object({
+  input: z.strictObject({
     project_id_or_name: z.string(),
     tags: z.array(z.string()).min(1),
   }),
@@ -326,9 +319,9 @@ export const dangerously_delete_edge_cache_by_tags = defineTool({
 export const invalidate_edge_cache_by_src_images = defineTool({
   description: "Invalidate the image optimizer cache for specific source image URLs.",
   access: { risk: "write" },
-  input: z.object({
+  input: z.strictObject({
     project_id_or_name: z.string(),
-    srcImages: z.array(z.string().url()).min(1),
+    srcImages: z.array(z.url()).min(1),
   }),
   execute: async ({ project_id_or_name, srcImages }) => {
     await vercel().edgeCache.invalidateBySrcImages({
@@ -343,9 +336,9 @@ export const invalidate_edge_cache_by_src_images = defineTool({
 export const dangerously_delete_edge_cache_by_src_images = defineTool({
   description: "Forcefully delete image optimizer cache entries for source URLs.",
   access: { risk: "destructive" },
-  input: z.object({
+  input: z.strictObject({
     project_id_or_name: z.string(),
-    srcImages: z.array(z.string().url()).min(1),
+    srcImages: z.array(z.url()).min(1),
   }),
   execute: async ({ project_id_or_name, srcImages }) => {
     await vercel().edgeCache.dangerouslyDeleteBySrcImages({
@@ -362,9 +355,9 @@ export const dangerously_delete_edge_cache_by_src_images = defineTool({
 export const list_flags = defineTool({
   description: "List Vercel feature flags for a project.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_id_or_name: z.string(),
-    limit: z.number().optional(),
+    limit: pageLimit.optional(),
   }),
   execute: async ({ project_id_or_name, limit }) => {
     const result = await vercel().featureFlags.listFlags({
@@ -379,7 +372,7 @@ export const list_flags = defineTool({
 export const get_flag = defineTool({
   description: "Get a feature flag by id.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_id_or_name: z.string(),
     flag_id: z.string(),
   }),
@@ -396,7 +389,7 @@ export const get_flag = defineTool({
 export const delete_flag = defineTool({
   description: "Permanently delete a feature flag.",
   access: { risk: "destructive" },
-  input: z.object({
+  input: z.strictObject({
     project_id_or_name: z.string(),
     flag_id: z.string(),
   }),
@@ -413,10 +406,10 @@ export const delete_flag = defineTool({
 export const list_flag_versions = defineTool({
   description: "List historical versions of a feature flag.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_id_or_name: z.string(),
     flag_id: z.string(),
-    limit: z.number().optional(),
+    limit: pageLimit.optional(),
   }),
   execute: async ({ project_id_or_name, flag_id, limit }) => {
     const result = await vercel().featureFlags.listFlagVersions({
@@ -432,7 +425,7 @@ export const list_flag_versions = defineTool({
 export const get_flag_settings = defineTool({
   description: "Get flag settings for a project.",
   access: { risk: "read" },
-  input: z.object({ project_id_or_name: z.string() }),
+  input: z.strictObject({ project_id_or_name: z.string() }),
   execute: async ({ project_id_or_name }) => {
     const result = await vercel().featureFlags.getFlagSettings({
       ...TEAM,
@@ -445,7 +438,7 @@ export const get_flag_settings = defineTool({
 export const list_team_flag_settings = defineTool({
   description: "List feature-flag settings across every project on the team.",
   access: { risk: "read" },
-  input: z.object({}),
+  input: z.strictObject({}),
   execute: async () => {
     const result = await vercel().featureFlags.listTeamFlagSettings({ ...TEAM });
     return JSON.stringify(result);
@@ -455,7 +448,7 @@ export const list_team_flag_settings = defineTool({
 export const list_team_flags = defineTool({
   description: "List every feature flag across the team's projects.",
   access: { risk: "read" },
-  input: z.object({ limit: z.number().optional() }),
+  input: z.strictObject({ limit: pageLimit.optional() }),
   execute: async ({ limit }) => {
     const result = await vercel().featureFlags.listTeamFlags({ ...TEAM, limit });
     return JSON.stringify(result);
@@ -465,7 +458,7 @@ export const list_team_flags = defineTool({
 export const list_flag_segments = defineTool({
   description: "List targeting segments for feature flags on a project.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_id_or_name: z.string(),
   }),
   execute: async ({ project_id_or_name }) => {
@@ -480,7 +473,7 @@ export const list_flag_segments = defineTool({
 export const get_flag_segment = defineTool({
   description: "Get a specific flag segment.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_id_or_name: z.string(),
     segment_id: z.string(),
     withMetadata: z.boolean().optional(),
@@ -499,7 +492,7 @@ export const get_flag_segment = defineTool({
 export const delete_flag_segment = defineTool({
   description: "Delete a targeting segment.",
   access: { risk: "destructive" },
-  input: z.object({
+  input: z.strictObject({
     project_id_or_name: z.string(),
     segment_id: z.string(),
   }),
@@ -516,7 +509,7 @@ export const delete_flag_segment = defineTool({
 export const get_deployment_feature_flags = defineTool({
   description: "Get the feature flags evaluated during a specific deployment.",
   access: { risk: "read" },
-  input: z.object({ deployment_id: z.string() }),
+  input: z.strictObject({ deployment_id: z.string() }),
   execute: async ({ deployment_id }) => {
     const result = await vercel().featureFlags.getDeploymentFeatureFlags({
       ...TEAM,
@@ -529,7 +522,7 @@ export const get_deployment_feature_flags = defineTool({
 export const list_sdk_keys = defineTool({
   description: "List SDK keys for Vercel feature flags on a project.",
   access: { risk: "read" },
-  input: z.object({ project_id_or_name: z.string() }),
+  input: z.strictObject({ project_id_or_name: z.string() }),
   execute: async ({ project_id_or_name }) => {
     const result = await vercel().featureFlags.getSDKKeys({
       ...TEAM,
@@ -542,7 +535,7 @@ export const list_sdk_keys = defineTool({
 export const create_sdk_key = defineTool({
   description: "Create a new feature-flags SDK key for a project.",
   access: { risk: "destructive" },
-  input: z.object({
+  input: z.strictObject({
     project_id_or_name: z.string(),
     sdkKeyType: z.enum(["server", "client"]),
     environment: z.string(),
@@ -561,7 +554,7 @@ export const create_sdk_key = defineTool({
 export const delete_sdk_key = defineTool({
   description: "Delete a feature-flags SDK key.",
   access: { risk: "destructive" },
-  input: z.object({
+  input: z.strictObject({
     project_id_or_name: z.string(),
     key_id: z.string(),
   }),

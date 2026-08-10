@@ -11,7 +11,7 @@ import {
 export const retrieve_crm_schema = defineTool({
   description: `Retrieve the live schema for all three CRM data sources (Companies, Contacts, Deals). Returns property names, types, and options. Call this before any write so field names and select options are exact.`,
   access: { risk: "read" },
-  input: z.object({}),
+  input: z.strictObject({}),
   execute: async () => {
     const [companies, contacts, deals] = await Promise.all([
       notion.dataSources.retrieve({ data_source_id: COMPANIES_DATA_SOURCE_ID }),

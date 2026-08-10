@@ -1,27 +1,17 @@
 import { z } from "zod";
 
-export const perPageField = z
-  .number()
-  .int()
-  .min(1)
-  .max(100)
-  .optional()
-  .describe("Page size (default 50)");
-
-export const pageField = z.number().int().min(1).optional().describe("Page number (default 1)");
-
-/** Offset-style pagination. Spread into a tool's `z.object({...})`. */
-export const paginationInputShape = {
-  per_page: perPageField,
-  page: pageField,
-};
-
-export const pageSizeField = z.number().int().min(1).max(100).optional();
-
-export const startCursorField = z.string().optional();
-
-/** Cursor-style pagination (Notion, Sales SDK). Spread into a tool's `z.object({...})`. */
+/** Cursor-style pagination (Notion, Sales SDK). Spread into a tool's `z.strictObject({...})`. */
 export const cursorPaginationInputShape = {
-  page_size: pageSizeField,
-  start_cursor: startCursorField,
+  page_size: z.int().min(1).max(100).optional(),
+  start_cursor: z.string().optional(),
 };
+
+/**
+ * A Notion data-source sort target. The API wants exactly one of `property` or
+ * `timestamp`; `isQuerySorts` enforces that exclusivity once the input parses.
+ */
+export const notionSortSchema = z.strictObject({
+  property: z.string().optional(),
+  timestamp: z.enum(["created_time", "last_edited_time"]).optional(),
+  direction: z.enum(["ascending", "descending"]),
+});

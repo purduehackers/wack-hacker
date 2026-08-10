@@ -10,8 +10,9 @@ import { getRedis } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
 import type { SessionAuthContext } from "eve/context";
 import type { ToolContext } from "eve/tools";
+import { z } from "zod";
 
-import { env } from "../env.ts";
+import { env } from "../../env.ts";
 import { BudgetStore } from "../policy/budget.ts";
 import { decideCapability } from "../policy/engine.ts";
 import { requirePrincipal } from "../policy/principal.ts";
@@ -20,6 +21,11 @@ import { CORE_TOOL_DESCRIPTORS, type CoreToolName } from "./descriptors.ts";
 import { isEdgeConfigConnectionConfigured } from "./edge-config.ts";
 
 let budgetStore: BudgetStore | undefined;
+
+/** The audit log needs a real database URL, not merely a declared one. */
+const configuredUrl = z.string().min(1);
+/** Redis credentials are passed through verbatim; only their presence is in question. */
+const configuredCredential = z.string();
 
 function integrationConfigured(name: CoreToolName): boolean {
   switch (name) {
@@ -30,20 +36,16 @@ function integrationConfigured(name: CoreToolName): boolean {
     case "resolve_organizer":
       return env.EDGE_CONFIG !== undefined && isEdgeConfigConnectionConfigured(env.EDGE_CONFIG);
     case "list_audit_log":
-      return typeof env.TURSO_DATABASE_URL === "string" && env.TURSO_DATABASE_URL.length > 0;
+      return configuredUrl.safeParse(env.TURSO_DATABASE_URL).success;
   }
 }
 
 async function evaluationContext(principal: PolicyPrincipal): Promise<PolicyEvaluationContext> {
-  if (
-    typeof env.UPSTASH_REDIS_REST_URL !== "string" ||
-    typeof env.UPSTASH_REDIS_REST_TOKEN !== "string"
-  ) {
-    return {};
-  }
-  budgetStore ??= new BudgetStore(
-    getRedis({ url: env.UPSTASH_REDIS_REST_URL, token: env.UPSTASH_REDIS_REST_TOKEN }),
-  );
+  const url = configuredCredential.safeParse(env.UPSTASH_REDIS_REST_URL);
+  if (!url.success) return {};
+  const token = configuredCredential.safeParse(env.UPSTASH_REDIS_REST_TOKEN);
+  if (!token.success) return {};
+  budgetStore ??= new BudgetStore(getRedis({ url: url.data, token: token.data }));
   const budget = await budgetStore.read(principal.userId);
   if (Result.isError(budget)) {
     // Budget is the policy spine's sole fail-open dependency.

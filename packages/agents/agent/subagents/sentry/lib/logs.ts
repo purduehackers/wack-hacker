@@ -14,7 +14,7 @@ export const search_logs = defineTool({
   description:
     "Search structured log entries across Sentry projects. Supports filtering by log level, message content, and tags.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_slug: z.string().describe("Project slug"),
     query: z.string().optional().describe("Search query (e.g. 'level:error', 'message:*timeout*')"),
     fields: z
@@ -54,7 +54,7 @@ export const get_log_stats = defineTool({
   description:
     "Get log volume over time, optionally grouped by severity level. Useful for spotting log spikes.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_slug: z.string().describe("Project slug"),
     query: z.string().optional().describe("Filter query"),
     y_axis: z

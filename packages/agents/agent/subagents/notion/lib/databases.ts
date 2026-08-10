@@ -14,26 +14,18 @@ import {
   isQuerySorts,
   isUpdateDataSourceProperties,
 } from "./notion-input.ts";
-import { cursorPaginationInputShape } from "./shared-constants.ts";
+import { cursorPaginationInputShape, notionSortSchema } from "./shared-constants.ts";
 
 export const query_database = defineTool({
   description: `Query a database with optional filters and sorts. Returns matching pages with their properties. Always call retrieve_database first to understand the schema before building filters. Supports pagination via start_cursor.`,
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     database_id: z.string().describe("Database UUID"),
     filter: z
-      .record(z.string(), z.unknown())
+      .record(z.string(), z.json())
       .optional()
       .describe("Notion filter object (see skill guidance for syntax)"),
-    sorts: z
-      .array(
-        z.object({
-          property: z.string().optional(),
-          timestamp: z.enum(["created_time", "last_edited_time"]).optional(),
-          direction: z.enum(["ascending", "descending"]),
-        }),
-      )
-      .optional(),
+    sorts: z.array(notionSortSchema).optional(),
     ...cursorPaginationInputShape,
   }),
   execute: async ({ database_id, filter, sorts, page_size, start_cursor }) => {
@@ -70,11 +62,11 @@ export const query_database = defineTool({
 export const create_database = defineTool({
   description: `Create a new database as a child of a page. Requires a title property at minimum. Define the property schema — supported types: title, rich_text, number, select, multi_select, status, date, checkbox, people, url, email, relation.`,
   access: { risk: "write" },
-  input: z.object({
+  input: z.strictObject({
     parent_page_id: z.string().describe("Parent page UUID"),
     title: z.string().describe("Database title"),
     properties: z
-      .record(z.string(), z.unknown())
+      .record(z.string(), z.json())
       .describe(
         "Property schema (e.g. { Name: { title: {} }, Status: { select: { options: [...] } } })",
       ),
@@ -101,11 +93,11 @@ export const create_database = defineTool({
 export const update_database = defineTool({
   description: `Update a database's title or property schema. To add a property, include it in properties. To rename, use the property ID as the key. To delete, set the property to null.`,
   access: { risk: "write" },
-  input: z.object({
+  input: z.strictObject({
     database_id: z.string().describe("Database UUID"),
     title: z.string().optional().describe("New database title"),
     properties: z
-      .record(z.string(), z.unknown())
+      .record(z.string(), z.json())
       .optional()
       .describe("Properties to add, update, or remove (set to null)"),
   }),
@@ -139,7 +131,7 @@ export const archive_database = defineTool({
   description:
     "Archive (soft-delete) a Notion database. The database and its pages become hidden from default views but can be restored from the Notion UI.",
   access: { risk: "destructive" },
-  input: z.object({
+  input: z.strictObject({
     database_id: z.string().describe("Database UUID"),
   }),
   execute: async ({ database_id }) => {

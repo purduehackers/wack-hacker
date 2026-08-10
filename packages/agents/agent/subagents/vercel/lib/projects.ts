@@ -2,36 +2,27 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { vercel } from "./client.ts";
-import { VERCEL_TEAM_ID, VERCEL_TEAM_SLUG } from "./constants.ts";
-
-const TEAM = { teamId: VERCEL_TEAM_ID, slug: VERCEL_TEAM_SLUG } as const;
+import { TEAM } from "./constants.ts";
+import { epochMillis, pageLimit } from "./fields.ts";
+import { dropKeyDeep } from "./redact.ts";
 
 const ENV_TARGETS = ["production", "preview", "development"] as const;
 const ENV_TYPES = ["system", "encrypted", "plain", "sensitive"] as const;
 
 /** Strip `value` from env var payloads. The Vercel SDK may return plaintext for `plain` scope. */
 function redactEnvValues(input: unknown): unknown {
-  if (Array.isArray(input)) return input.map((item) => redactEnvValues(item));
-  if (input && typeof input === "object") {
-    const out: Record<string, unknown> = {};
-    for (const [entryKey, entryValue] of Object.entries(input)) {
-      if (entryKey === "value") continue;
-      out[entryKey] = redactEnvValues(entryValue);
-    }
-    return out;
-  }
-  return input;
+  return dropKeyDeep(input, "value");
 }
 
 export const list_projects = defineTool({
   description:
     "List Vercel projects in the active team. Supports `search`, `from` (timestamp cursor), `limit`, and repo filters.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     search: z.string().optional(),
-    limit: z.number().max(100).optional(),
-    from: z.number().optional().describe("Unix ms timestamp for pagination cursor"),
-    repoUrl: z.string().optional(),
+    limit: pageLimit.max(100).optional(),
+    from: epochMillis.optional().describe("Unix ms timestamp for pagination cursor"),
+    repoUrl: z.url().optional().describe("Filter to projects linked to this git repository URL"),
     gitForkProtection: z.enum(["0", "1"]).optional(),
   }),
   execute: async ({ search, limit, from, repoUrl, gitForkProtection }) => {
@@ -50,7 +41,7 @@ export const list_projects = defineTool({
 export const get_project = defineTool({
   description: "Retrieve a single Vercel project by id or name (via search).",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_id_or_name: z.string().describe("Vercel project id (prj_…) or name"),
   }),
   execute: async ({ project_id_or_name }) => {
@@ -67,7 +58,7 @@ export const delete_project = defineTool({
   description:
     "Permanently delete a Vercel project and every deployment underneath it. Irreversible.",
   access: { risk: "destructive", confirm: "second-party" },
-  input: z.object({
+  input: z.strictObject({
     project_id_or_name: z.string(),
   }),
   execute: async ({ project_id_or_name }) => {
@@ -79,7 +70,7 @@ export const delete_project = defineTool({
 export const pause_project = defineTool({
   description: "Pause a project. Blocks the active production deployment until unpaused.",
   access: { risk: "destructive" },
-  input: z.object({ project_id: z.string() }),
+  input: z.strictObject({ project_id: z.string() }),
   execute: async ({ project_id }) => {
     await vercel().projects.pauseProject({ ...TEAM, projectId: project_id });
     return JSON.stringify({ ok: true, id: project_id, paused: true });
@@ -89,7 +80,7 @@ export const pause_project = defineTool({
 export const unpause_project = defineTool({
   description: "Unpause a previously paused project. Restores the active production deployment.",
   access: { risk: "destructive" },
-  input: z.object({ project_id: z.string() }),
+  input: z.strictObject({ project_id: z.string() }),
   execute: async ({ project_id }) => {
     await vercel().projects.unpauseProject({ ...TEAM, projectId: project_id });
     return JSON.stringify({ ok: true, id: project_id, paused: false });
@@ -100,7 +91,7 @@ export const create_project_transfer_request = defineTool({
   description:
     "Create a project transfer request. Returns a `code` that another team can redeem within 24h to complete the transfer.",
   access: { risk: "destructive" },
-  input: z.object({ project_id_or_name: z.string() }),
+  input: z.strictObject({ project_id_or_name: z.string() }),
   execute: async ({ project_id_or_name }) => {
     const result = await vercel().projects.createProjectTransferRequest({
       ...TEAM,
@@ -116,7 +107,7 @@ export const list_project_env_vars = defineTool({
   description:
     "List environment variables for a project. **Always strips the `value` field** — returns keys, targets, types only. Use `get_project_env_var` to fetch a specific decrypted value.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_id_or_name: z.string(),
     gitBranch: z.string().optional(),
   }),
@@ -134,7 +125,7 @@ export const get_project_env_var = defineTool({
   description:
     "Retrieve a single environment variable by its id, **including its decrypted value**. Use sparingly.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_id_or_name: z.string(),
     env_var_id: z.string(),
   }),
@@ -152,12 +143,12 @@ export const create_project_env_vars = defineTool({
   description:
     "Create one or more environment variables on a project. Pass `upsert: true` to update-if-exists.",
   access: { risk: "destructive" },
-  input: z.object({
+  input: z.strictObject({
     project_id_or_name: z.string(),
     upsert: z.boolean().optional(),
     entries: z
       .array(
-        z.object({
+        z.strictObject({
           key: z.string(),
           value: z.string(),
           type: z.enum(ENV_TYPES),
@@ -182,7 +173,7 @@ export const create_project_env_vars = defineTool({
 export const edit_project_env_var = defineTool({
   description: "Edit a single environment variable.",
   access: { risk: "destructive" },
-  input: z.object({
+  input: z.strictObject({
     project_id_or_name: z.string(),
     env_var_id: z.string(),
     key: z.string().optional(),
@@ -206,7 +197,7 @@ export const edit_project_env_var = defineTool({
 export const remove_project_env_var = defineTool({
   description: "Remove a single environment variable from a project by its id.",
   access: { risk: "destructive" },
-  input: z.object({
+  input: z.strictObject({
     project_id_or_name: z.string(),
     env_var_id: z.string(),
   }),
@@ -226,7 +217,7 @@ export const list_project_domains = defineTool({
   description:
     "List domains attached to a project. Returns name, git branch binding, redirect, verification state.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_id_or_name: z.string(),
     production: z.enum(["true", "false"]).optional(),
     target: z.enum(["production", "preview"]).optional(),
@@ -235,9 +226,9 @@ export const list_project_domains = defineTool({
     redirects: z.enum(["true", "false"]).optional(),
     redirect: z.string().optional(),
     verified: z.enum(["true", "false"]).optional(),
-    limit: z.number().max(100).optional(),
-    since: z.number().optional(),
-    until: z.number().optional(),
+    limit: pageLimit.max(100).optional(),
+    since: epochMillis.optional(),
+    until: epochMillis.optional(),
     order: z.enum(["ASC", "DESC"]).optional(),
   }),
   execute: async ({ project_id_or_name, ...query }) => {
@@ -253,9 +244,10 @@ export const list_project_domains = defineTool({
 export const get_project_domain = defineTool({
   description: "Get a single project domain's details.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_id_or_name: z.string(),
-    domain: z.string(),
+    // Not `z.hostname()`: project domains may be wildcards (`*.purduehackers.com`).
+    domain: z.string().describe("Project domain name, may be a wildcard like *.example.com"),
   }),
   execute: async ({ project_id_or_name, domain }) => {
     const result = await vercel().projects.getProjectDomain({
@@ -270,9 +262,10 @@ export const get_project_domain = defineTool({
 export const remove_project_domain = defineTool({
   description: "Remove a domain from a project.",
   access: { risk: "destructive" },
-  input: z.object({
+  input: z.strictObject({
     project_id_or_name: z.string(),
-    domain: z.string(),
+    // Not `z.hostname()`: project domains may be wildcards (`*.purduehackers.com`).
+    domain: z.string().describe("Project domain name, may be a wildcard like *.example.com"),
   }),
   execute: async ({ project_id_or_name, domain }) => {
     const result = await vercel().projects.removeProjectDomain({
@@ -287,9 +280,10 @@ export const remove_project_domain = defineTool({
 export const verify_project_domain = defineTool({
   description: "Trigger verification of a pending project domain.",
   access: { risk: "write" },
-  input: z.object({
+  input: z.strictObject({
     project_id_or_name: z.string(),
-    domain: z.string(),
+    // Not `z.hostname()`: project domains may be wildcards (`*.purduehackers.com`).
+    domain: z.string().describe("Project domain name, may be a wildcard like *.example.com"),
   }),
   execute: async ({ project_id_or_name, domain }) => {
     const result = await vercel().projects.verifyProjectDomain({
@@ -305,11 +299,11 @@ export const list_promote_aliases = defineTool({
   description:
     "List aliases from the most recent promote request. Use after `promote_deployment` to confirm traffic moved.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_id_or_name: z.string(),
-    limit: z.number().max(100).optional(),
-    since: z.number().optional(),
-    until: z.number().optional(),
+    limit: pageLimit.max(100).optional(),
+    since: epochMillis.optional(),
+    until: epochMillis.optional(),
   }),
   execute: async ({ project_id_or_name, limit, since, until }) => {
     const result = await vercel().projects.listPromoteAliases({
@@ -328,11 +322,11 @@ export const list_promote_aliases = defineTool({
 export const list_project_members = defineTool({
   description: "List members with access to a specific project.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_id_or_name: z.string(),
-    limit: z.number().max(100).optional(),
-    since: z.number().optional(),
-    until: z.number().optional(),
+    limit: pageLimit.max(100).optional(),
+    since: epochMillis.optional(),
+    until: epochMillis.optional(),
     search: z.string().optional(),
   }),
   execute: async ({ project_id_or_name, limit, since, until, search }) => {
@@ -351,7 +345,7 @@ export const list_project_members = defineTool({
 export const remove_project_member = defineTool({
   description: "Remove a member from a project.",
   access: { risk: "destructive" },
-  input: z.object({
+  input: z.strictObject({
     project_id_or_name: z.string(),
     uid: z.string(),
   }),

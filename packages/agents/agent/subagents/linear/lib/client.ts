@@ -1,6 +1,6 @@
 import { IssueRelationType, LinearClient } from "@linear/sdk";
 
-import { env } from "../../../lib/env.ts";
+import { env } from "../../../env.ts";
 import type { IssueRelation } from "./constants.ts";
 
 const linearApiKey = env.LINEAR_API_KEY ?? "missing-linear-api-key";

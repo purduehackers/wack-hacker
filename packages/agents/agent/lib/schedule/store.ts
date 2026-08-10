@@ -8,6 +8,8 @@ import { Result } from "@repo/shared/result";
 import { Cron } from "croner";
 import { z } from "zod";
 
+import { discordSnowflake, jsonCodec } from "../core/schema.ts";
+
 export const SCHEDULE_MAX_ATTEMPTS = 5;
 const MAX_LISTED_TASKS = 50;
 const MAX_ERROR_CHARS = 2_000;
@@ -44,7 +46,6 @@ export type CreateRecurringSchedule = CreateScheduleBase & {
 export type CreateScheduleInput = CreateOnceSchedule | CreateRecurringSchedule;
 
 type NormalizeSqlNull<Shape, Keys extends keyof Shape> = Omit<Shape, Keys> & {
-  // oxlint-disable-next-line unicorn/no-null -- schema-derived SQL NULL is normalized to optional absence
   readonly [Key in Keys]?: Exclude<Shape[Key], null>;
 };
 
@@ -104,11 +105,8 @@ export interface ClaimDueOptions {
   readonly now: Date;
 }
 
-export interface ScheduleStoreDeps {
+interface ScheduleStoreDeps {
   readonly db: Db;
-  readonly newId?: () => string;
-  readonly newLeaseToken?: () => string;
-  readonly now?: () => Date;
 }
 
 type LibsqlClient = Db["$client"];
@@ -152,10 +150,13 @@ function causeDetail(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
 
-function isLibsqlNull(value: unknown): value is null {
-  // oxlint-disable-next-line unicorn/no-null -- this adapter is the sole libSQL NULL boundary
+function isLibsqlNull<T>(value: T | null): value is null {
   return value === null;
 }
+
+/** libSQL models SQL NULL as `null`; `undefined` is not a bindable `InValue`. */
+// oxlint-disable-next-line unicorn/no-null -- sole SQL NULL bind argument in this module
+const SQL_NULL = null;
 
 function generatedString(
   generate: () => string,
@@ -188,64 +189,62 @@ function execute(
 const actionTypeSchema = z.enum([AGENT, MESSAGE]) satisfies z.ZodType<
   ScheduledTaskRow["actionType"]
 >;
-const scheduleTypeSchema = z.enum([ONCE, RECURRING]) satisfies z.ZodType<
-  ScheduledTaskRow["scheduleType"]
->;
 const statusSchema = z.enum([ACTIVE, CANCELLED, COMPLETED, FAILED]) satisfies z.ZodType<
   ScheduledTaskRow["status"]
 >;
-const nonNegativeIntegerSchema = z.number().int().nonnegative();
+const nonNegativeIntegerSchema = z.int().nonnegative();
 const nullableStringSchema = z.string().nullable();
+/** Written only by `createTask`, from `crypto.randomUUID()`. */
+const taskIdSchema = z.uuid();
+/** Written only by `iso()`, from `Date.prototype.toISOString`. */
+const anchorSchema = z.iso.datetime();
 
-function validateScheduleShape(
-  value: Pick<ScheduledTaskRow, "cron" | "scheduleType" | "timezone">,
-  context: z.RefinementCtx,
-): void {
-  const invalid =
-    (value.scheduleType === ONCE && (!isLibsqlNull(value.cron) || !isLibsqlNull(value.timezone))) ||
-    (value.scheduleType === RECURRING &&
-      (isLibsqlNull(value.cron) || isLibsqlNull(value.timezone)));
-  if (invalid) {
-    context.addIssue({
-      code: "custom",
-      path: ["scheduleType"],
-      message: "cron and timezone do not match its shape",
-    });
-  }
-}
+/**
+ * `scheduled_tasks_shape_check` in the durable schema already forbids the two
+ * mismatched combinations, so the discriminated union restates the SQL CHECK
+ * rather than adding a rule: `once` carries neither cron nor timezone,
+ * `recurring` carries both.
+ */
+const onceShape = {
+  scheduleType: z.literal(ONCE),
+  cron: z.null(),
+  timezone: z.null(),
+};
+const recurringShape = {
+  scheduleType: z.literal(RECURRING),
+  cron: z.string(),
+  timezone: z.string(),
+};
 
-const memberRolesSchema = z
-  .string()
-  .transform((value, context): unknown => {
-    try {
-      return JSON.parse(value);
-    } catch (cause) {
-      context.addIssue({ code: "custom", message: `invalid JSON: ${causeDetail(cause)}` });
-      return z.NEVER;
-    }
-  })
-  .pipe(z.array(z.string()))
-  .nullable();
+/**
+ * Elements stay bare strings. The column is documented as an advisory
+ * creation-time snapshot, and a claim batch aborts on the first undecodable
+ * row, so a stricter element format would let one odd row stall the dispatcher.
+ */
+const memberRolesJsonSchema = jsonCodec(z.array(z.string()));
+
+const taskViewBaseShape = {
+  id: taskIdSchema,
+  channelId: discordSnowflake,
+  description: z.string(),
+  actionType: actionTypeSchema,
+  prompt: z.string(),
+  status: statusSchema,
+  nextRunAt: anchorSchema,
+  lastError: nullableStringSchema,
+  lastDispatchedAt: nullableStringSchema,
+  fireCount: nonNegativeIntegerSchema,
+  // `created_at`/`updated_at` default to SQL `CURRENT_TIMESTAMP`, which is not
+  // ISO 8601, so these stay plain strings even though our writer always is.
+  createdAt: z.string(),
+  updatedAt: z.string(),
+};
 
 const taskViewRowSchema = z
-  .strictObject({
-    id: z.string(),
-    channelId: z.string(),
-    description: z.string(),
-    actionType: actionTypeSchema,
-    prompt: z.string(),
-    scheduleType: scheduleTypeSchema,
-    cron: nullableStringSchema,
-    timezone: nullableStringSchema,
-    status: statusSchema,
-    nextRunAt: z.string(),
-    lastError: nullableStringSchema,
-    lastDispatchedAt: nullableStringSchema,
-    fireCount: nonNegativeIntegerSchema,
-    createdAt: z.string(),
-    updatedAt: z.string(),
-  })
-  .superRefine(validateScheduleShape)
+  .discriminatedUnion("scheduleType", [
+    z.strictObject({ ...taskViewBaseShape, ...onceShape }),
+    z.strictObject({ ...taskViewBaseShape, ...recurringShape }),
+  ])
   .transform(({ cron, timezone, lastError, lastDispatchedAt, ...view }) => ({
     ...view,
     ...(isLibsqlNull(cron) ? {} : { cron }),
@@ -254,23 +253,24 @@ const taskViewRowSchema = z
     ...(isLibsqlNull(lastDispatchedAt) ? {} : { lastDispatchedAt }),
   })) satisfies z.ZodType<ScheduledTaskView>;
 
+const claimedBaseShape = {
+  id: taskIdSchema,
+  ownerId: discordSnowflake,
+  channelId: discordSnowflake,
+  description: z.string(),
+  actionType: actionTypeSchema,
+  prompt: z.string(),
+  memberRoles: memberRolesJsonSchema.nullable(),
+  nextRunAt: anchorSchema,
+  leaseToken: z.uuid(),
+  attemptCount: nonNegativeIntegerSchema,
+};
+
 const claimedScheduleRowSchema = z
-  .strictObject({
-    id: z.string(),
-    ownerId: z.string(),
-    channelId: z.string(),
-    description: z.string(),
-    actionType: actionTypeSchema,
-    prompt: z.string(),
-    memberRoles: memberRolesSchema,
-    scheduleType: scheduleTypeSchema,
-    cron: nullableStringSchema,
-    timezone: nullableStringSchema,
-    nextRunAt: z.string(),
-    leaseToken: z.string(),
-    attemptCount: nonNegativeIntegerSchema,
-  })
-  .superRefine(validateScheduleShape)
+  .discriminatedUnion("scheduleType", [
+    z.strictObject({ ...claimedBaseShape, ...onceShape }),
+    z.strictObject({ ...claimedBaseShape, ...recurringShape }),
+  ])
   .transform(({ cron, timezone, memberRoles, ...claim }) => ({
     ...claim,
     ...(isLibsqlNull(cron) ? {} : { cron }),
@@ -285,7 +285,10 @@ function malformedRow(error: z.ZodError): InvariantViolated {
   return invalidRow(field === undefined ? "row" : String(field), issue?.message ?? "invalid row");
 }
 
-function decodeRow<T>(schema: z.ZodType<T>, row: LibsqlRow): Result<T, InvariantViolated> {
+function decodeRow<S extends z.ZodType>(
+  schema: S,
+  row: LibsqlRow,
+): Result<z.output<S>, InvariantViolated> {
   const decoded = schema.safeParse(row);
   return decoded.success ? Result.ok(decoded.data) : Result.err(malformedRow(decoded.error));
 }
@@ -323,7 +326,7 @@ function recurringNextRun(cron: string, timezone: string, after: Date): Result<D
 }
 
 /** Stable across every retry of the same anchored occurrence. */
-export function scheduleOccurrenceId(taskId: string, nextRunAt: string): string {
+function scheduleOccurrenceId(taskId: string, nextRunAt: string): string {
   return createHash("sha256")
     .update(taskId)
     .update("\0")
@@ -364,10 +367,8 @@ async function createTask(
 
     const timestamp = yield* iso(createdAt, "schedule creation time");
     const nextRunAt = yield* iso(nextRun, "schedule first run");
-    // oxlint-disable-next-line unicorn/no-null -- libSQL bind args require null for SQL NULL
-    const cron = input.type === RECURRING ? input.cron : null;
-    // oxlint-disable-next-line unicorn/no-null -- libSQL bind args require null for SQL NULL
-    const timezone = input.type === RECURRING ? input.timezone : null;
+    const cron = input.type === RECURRING ? input.cron : SQL_NULL;
+    const timezone = input.type === RECURRING ? input.timezone : SQL_NULL;
     const id = yield* generatedString(newId, "scheduled task IDs can be generated");
     const result = yield* Result.await(
       execute(client, "create scheduled task", {
@@ -385,7 +386,8 @@ async function createTask(
           input.description,
           AGENT,
           input.prompt,
-          JSON.stringify(owner.memberRoles ?? []),
+          // Encoded through the same codec that decodes it back at claim time.
+          z.encode(memberRolesJsonSchema, owner.memberRoles ?? []),
           input.type,
           cron,
           timezone,
@@ -627,11 +629,11 @@ async function failTask(
   });
 }
 
-export function createScheduleStore(deps: ScheduleStoreDeps) {
+function createScheduleStore(deps: ScheduleStoreDeps) {
   const client = deps.db.$client;
-  const newId = deps.newId ?? (() => crypto.randomUUID());
-  const newLeaseToken = deps.newLeaseToken ?? (() => crypto.randomUUID());
-  const now = deps.now ?? (() => new Date());
+  const newId = () => crypto.randomUUID();
+  const newLeaseToken = () => crypto.randomUUID();
+  const now = () => new Date();
 
   return {
     create: (owner: ScheduleOwner, input: CreateScheduleInput) =>
@@ -652,7 +654,7 @@ let defaultStore: Promise<ScheduleStore> | undefined;
 
 /** Defers Drizzle/libSQL loading until execution; Eve evaluates authored modules at discovery. */
 export function getScheduleStore(): Promise<ScheduleStore> {
-  defaultStore ??= Promise.all([import("@repo/shared/db"), import("./env.ts")]).then(
+  defaultStore ??= Promise.all([import("@repo/shared/db"), import("../../env.ts")]).then(
     ([{ getDb }, { env }]) =>
       createScheduleStore({
         db: getDb({

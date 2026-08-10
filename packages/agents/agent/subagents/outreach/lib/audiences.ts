@@ -7,7 +7,7 @@ export const list_audiences = defineTool({
   description:
     "List Resend segments (audiences) used for grouping contacts. Returns each segment's id, name, and creation timestamp.",
   access: { risk: "read" },
-  input: z.object({}),
+  input: z.strictObject({}),
   execute: async () => {
     const result = await resend().segments.list();
     if (result.error) return { error: result.error.message };
@@ -18,7 +18,7 @@ export const list_audiences = defineTool({
 export const get_audience = defineTool({
   description: "Get a single Resend segment (audience) by ID.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     audience_id: z.string().describe("Resend segment ID"),
   }),
   execute: async ({ audience_id }) => {
@@ -31,7 +31,7 @@ export const get_audience = defineTool({
 export const create_audience = defineTool({
   description: "Create a new Resend segment (audience).",
   access: { risk: "write" },
-  input: z.object({
+  input: z.strictObject({
     name: z.string().describe("Segment name"),
   }),
   execute: async ({ name }) => {
@@ -45,7 +45,7 @@ export const delete_audience = defineTool({
   description:
     "Delete a Resend segment (audience). Contacts in the segment are not deleted; they lose their segment membership.",
   access: { risk: "destructive" },
-  input: z.object({
+  input: z.strictObject({
     audience_id: z.string().describe("Resend segment ID"),
   }),
   execute: async ({ audience_id }) => {
@@ -59,7 +59,7 @@ export const list_contacts_in_audience = defineTool({
   description:
     "List contacts in a Resend segment (audience). Returns each contact's id, email, first/last name, and subscription state.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     audience_id: z.string().describe("Resend segment ID"),
   }),
   execute: async ({ audience_id }) => {
@@ -72,7 +72,7 @@ export const list_contacts_in_audience = defineTool({
 export const add_contact_to_audience = defineTool({
   description: "Add a contact to a Resend segment (audience) by email. Creates the contact if new.",
   access: { risk: "write" },
-  input: z.object({
+  input: z.strictObject({
     audience_id: z.string().describe("Resend segment ID"),
     email: z.email().describe("Contact email"),
     first_name: z.string().optional(),
@@ -96,7 +96,7 @@ export const remove_contact_from_audience = defineTool({
   description:
     "Remove a contact from a Resend segment (audience). Provide either contact_id or email.",
   access: { risk: "destructive" },
-  input: z.object({
+  input: z.strictObject({
     audience_id: z.string().describe("Resend segment ID"),
     contact_id: z.string().optional().describe("Contact ID (preferred)"),
     email: z.email().optional().describe("Contact email (used if contact_id omitted)"),

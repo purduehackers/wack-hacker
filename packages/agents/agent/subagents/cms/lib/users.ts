@@ -3,26 +3,24 @@ import { z } from "zod";
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import {
   cmsAdminUrl,
+  documentId,
   paginationQuery,
   payload,
   type PayloadDocument,
   wrapPayloadError,
 } from "./client.ts";
-import { paginationInputShape } from "./constants.ts";
+import { cmsRole, paginationInputShape } from "./constants.ts";
 
 const COLLECTION = "users";
 
-/** Roles defined in purduehackers/cms src/collections/auth-utils.ts. */
-const USER_ROLES = [
-  "admin",
-  "editor",
-  "viewer",
-  "hack_night_dashboard",
-  "events_website",
-  "wack_hacker",
-] as const;
-
 type PayloadUser = PayloadDocument<"users">;
+
+/** Writable user fields. Create requires them; update takes the partial minus `password`. */
+const userFields = {
+  email: z.email(),
+  password: z.string().min(8).describe("Initial password (user can change it after login)"),
+  roles: z.array(cmsRole).min(1),
+};
 
 function projectUser(u: PayloadUser) {
   return {
@@ -39,7 +37,7 @@ export const list_users = defineTool({
   description:
     "List CMS user accounts (email + assigned roles). The `users` collection holds every human account regardless of role; filter by `email` to find one. Roles follow a hierarchy: admin > editor > viewer. Additional scoped roles: hack_night_dashboard, events_website, wack_hacker.",
   access: { risk: "read", minRole: "admin" },
-  input: z.object({
+  input: z.strictObject({
     ...paginationInputShape,
     email: z.email().optional().describe("Filter by exact email address"),
   }),
@@ -65,7 +63,7 @@ export const list_users = defineTool({
 export const get_user = defineTool({
   description: "Fetch a single CMS user by ID.",
   access: { risk: "read", minRole: "admin" },
-  input: z.object({ id: z.union([z.string(), z.number()]) }),
+  input: z.strictObject({ id: documentId }),
   execute: async ({ id }) => {
     try {
       const doc = await payload.findByID({
@@ -83,11 +81,7 @@ export const create_user = defineTool({
   description:
     "Invite a new CMS user. Assigns the given roles. Role hierarchy is enforced server-side (admin implies editor implies viewer).",
   access: { risk: "destructive", minRole: "admin" },
-  input: z.object({
-    email: z.email(),
-    password: z.string().min(8).describe("Initial password (user can change it after login)"),
-    roles: z.array(z.enum(USER_ROLES)).min(1),
-  }),
+  input: z.strictObject(userFields),
   execute: async ({ email, password, roles }) => {
     try {
       const doc = await payload.create({
@@ -105,16 +99,16 @@ export const update_user = defineTool({
   description:
     "Update a CMS user's email or roles. Pass `roles` to replace the user's role set entirely (not a merge).",
   access: { risk: "destructive", minRole: "admin" },
-  input: z.object({
-    id: z.union([z.string(), z.number()]),
-    email: z.email().optional(),
-    roles: z.array(z.enum(USER_ROLES)).min(1).optional(),
+  input: z.strictObject({
+    id: documentId,
+    ...z.object(userFields).omit({ password: true }).partial().shape,
   }),
   execute: async ({ id, email, roles }) => {
     try {
-      const data: Record<string, unknown> = {};
-      if (email !== undefined) data.email = email;
-      if (roles !== undefined) data.roles = roles;
+      const data = {
+        ...(email !== undefined && { email }),
+        ...(roles !== undefined && { roles }),
+      };
       const doc = await payload.update({
         collection: COLLECTION,
         id,
@@ -131,7 +125,7 @@ export const delete_user = defineTool({
   description:
     "Remove a CMS user permanently. Loses their sessions and audit trail — prefer updating roles to strip access when possible.",
   access: { risk: "destructive", minRole: "admin" },
-  input: z.object({ id: z.union([z.string(), z.number()]) }),
+  input: z.strictObject({ id: documentId }),
   execute: async ({ id }) => {
     try {
       const doc = await payload.delete({

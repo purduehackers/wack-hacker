@@ -5,14 +5,16 @@ import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools
 import { sentryOpts, sentryOrg, sentryProjectId } from "./client.ts";
 import { perPageField } from "./constants.ts";
 
-const replayProjectionSchema = z.looseObject({ title: z.string().nullish() });
+// Read-only projection over a field the generated SDK type omits: an unexpected
+// shape must degrade to "absent" rather than fail the tool.
+const replayProjectionSchema = z.looseObject({ title: z.string().nullish().catch(undefined) });
 
 /** List session replays. */
 export const list_replays = defineTool({
   description:
     "List session replays for the organization. Returns replay ID, duration, error count, URLs visited, user info, and browser/OS.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_slug: z.string().optional().describe("Filter by project slug"),
     query: z
       .string()
@@ -61,7 +63,7 @@ export const get_replay = defineTool({
   description:
     "Get full details for a session replay — duration, error count, URLs, user info, browser/OS, and segment count.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     replay_id: z.string().describe("Replay ID"),
   }),
   execute: async ({ replay_id }) => {

@@ -7,7 +7,7 @@ import { cursorPaginationInputShape } from "./shared-constants.ts";
 export const create_comment = defineTool({
   description: `Add a comment to a page or reply in an existing discussion thread. For new comments, use parent_type "page_id". For replies, use "discussion_id" (get the ID from list_comments).`,
   access: { risk: "write" },
-  input: z.object({
+  input: z.strictObject({
     parent_type: z.enum(["page_id", "discussion_id"]).describe("Comment target type"),
     parent_id: z.string().describe("Parent page UUID or discussion thread ID"),
     text: z.string().describe("Comment text (plain text)"),
@@ -32,7 +32,7 @@ export const retrieve_comment = defineTool({
   description:
     "Get a single Notion comment by ID. Returns text, author, discussion thread ID, and timestamp.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     comment_id: z.string().describe("Comment UUID"),
   }),
   execute: async ({ comment_id }) => {
@@ -50,7 +50,7 @@ export const retrieve_comment = defineTool({
 export const list_comments = defineTool({
   description: `List comments on a page. Returns comment text, author, timestamp, and discussion thread ID (for replies). Paginated.`,
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     block_id: z.string().describe("Page or block UUID"),
     ...cursorPaginationInputShape,
   }),

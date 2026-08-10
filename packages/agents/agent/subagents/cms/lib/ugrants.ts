@@ -3,9 +3,11 @@ import { z } from "zod";
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import {
   cmsAdminUrl,
+  documentId,
   paginationQuery,
   payload,
   type PayloadDocument,
+  relationship,
   wrapPayloadError,
 } from "./client.ts";
 import { paginationInputShape } from "./constants.ts";
@@ -14,20 +16,27 @@ const COLLECTION = "ugrants";
 
 type PayloadUgrant = PayloadDocument<"ugrants">;
 
-function imageIdOf(image: PayloadUgrant["image"]): number | string | undefined {
-  if (typeof image === "object" && image !== null) return image.id;
-  return image;
-}
+/** Writable ugrant fields. Create requires them; update takes the partial. */
+const ugrantFields = {
+  name: z.string(),
+  author: z.string(),
+  description: z.string(),
+  image_id: documentId,
+  author_url: z.url().optional(),
+  project_url: z.url().optional(),
+  visible: z.boolean().optional(),
+};
 
 function projectUgrant(u: PayloadUgrant) {
+  const image = relationship(u.image);
   return {
     id: u.id,
     visible: u.visible,
     name: u.name,
     author: u.author,
     description: u.description,
-    image_id: imageIdOf(u.image),
-    image_url: typeof u.image === "object" && u.image !== null ? u.image.url : undefined,
+    image_id: image.id,
+    image_url: image.url,
     author_url: u.authorUrl,
     project_url: u.projectUrl,
     created_at: u.createdAt,
@@ -40,7 +49,7 @@ export const list_ugrants = defineTool({
   description:
     'List microgrant ("ugrant") showcase entries. Each has name, author, description, project/author URLs, and a `visible` flag (true = shown publicly).',
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     ...paginationInputShape,
     visible_only: z.boolean().optional(),
   }),
@@ -66,7 +75,7 @@ export const list_ugrants = defineTool({
 export const get_ugrant = defineTool({
   description: "Fetch a single ugrant by ID.",
   access: { risk: "read" },
-  input: z.object({ id: z.union([z.string(), z.number()]) }),
+  input: z.strictObject({ id: documentId }),
   execute: async ({ id }) => {
     try {
       const doc = await payload.findByID({ collection: COLLECTION, id });
@@ -81,15 +90,7 @@ export const create_ugrant = defineTool({
   description:
     "Create a new ugrant showcase entry. `image_id` must point at an existing media asset (upload via `upload_media` first). Defaults to visible: false — flip with `publish_ugrant` when ready.",
   access: { risk: "write" },
-  input: z.object({
-    name: z.string(),
-    author: z.string(),
-    description: z.string(),
-    image_id: z.union([z.string(), z.number()]),
-    author_url: z.string().optional(),
-    project_url: z.string().optional(),
-    visible: z.boolean().optional(),
-  }),
+  input: z.strictObject(ugrantFields),
   execute: async ({ image_id, author_url, project_url, visible, ...rest }) => {
     try {
       const doc = await payload.create({
@@ -112,22 +113,15 @@ export const create_ugrant = defineTool({
 export const update_ugrant = defineTool({
   description: "Update a ugrant. Only fields you pass are changed.",
   access: { risk: "write" },
-  input: z.object({
-    id: z.union([z.string(), z.number()]),
-    name: z.string().optional(),
-    author: z.string().optional(),
-    description: z.string().optional(),
-    image_id: z.union([z.string(), z.number()]).optional(),
-    author_url: z.string().optional(),
-    project_url: z.string().optional(),
-    visible: z.boolean().optional(),
-  }),
+  input: z.strictObject({ id: documentId, ...z.object(ugrantFields).partial().shape }),
   execute: async ({ id, image_id, author_url, project_url, ...rest }) => {
     try {
-      const data: Record<string, unknown> = { ...rest };
-      if (image_id !== undefined) data.image = image_id;
-      if (author_url !== undefined) data.authorUrl = author_url;
-      if (project_url !== undefined) data.projectUrl = project_url;
+      const data = {
+        ...rest,
+        ...(image_id !== undefined && { image: image_id }),
+        ...(author_url !== undefined && { authorUrl: author_url }),
+        ...(project_url !== undefined && { projectUrl: project_url }),
+      };
       const doc = await payload.update({
         collection: COLLECTION,
         id,
@@ -143,7 +137,7 @@ export const update_ugrant = defineTool({
 export const delete_ugrant = defineTool({
   description: "Delete a ugrant permanently.",
   access: { risk: "destructive" },
-  input: z.object({ id: z.union([z.string(), z.number()]) }),
+  input: z.strictObject({ id: documentId }),
   execute: async ({ id }) => {
     try {
       const doc = await payload.delete({ collection: COLLECTION, id });
@@ -157,7 +151,7 @@ export const delete_ugrant = defineTool({
 export const publish_ugrant = defineTool({
   description: "Make a ugrant visible on the public showcase (visible: true).",
   access: { risk: "destructive" },
-  input: z.object({ id: z.union([z.string(), z.number()]) }),
+  input: z.strictObject({ id: documentId }),
   execute: async ({ id }) => {
     try {
       const doc = await payload.update({
@@ -175,7 +169,7 @@ export const publish_ugrant = defineTool({
 export const unpublish_ugrant = defineTool({
   description: "Hide a ugrant from the public showcase (visible: false).",
   access: { risk: "destructive" },
-  input: z.object({ id: z.union([z.string(), z.number()]) }),
+  input: z.strictObject({ id: documentId }),
   execute: async ({ id }) => {
     try {
       const doc = await payload.update({

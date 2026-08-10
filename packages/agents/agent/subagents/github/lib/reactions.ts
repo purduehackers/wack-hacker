@@ -3,6 +3,7 @@ import { z } from "zod";
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { octokit } from "./client.ts";
 import { env } from "./config.ts";
+import { repoField, resourceId } from "./constants.ts";
 
 const reactionSchema = z
   .enum(["+1", "-1", "laugh", "confused", "heart", "hooray", "rocket", "eyes"])
@@ -11,9 +12,9 @@ const reactionSchema = z
 export const add_issue_reaction = defineTool({
   description: "Add a reaction emoji to an issue. Returns the reaction ID for later removal.",
   access: { risk: "write" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    issue_number: z.number().describe("Issue number"),
+  input: z.strictObject({
+    repo: repoField,
+    issue_number: resourceId.describe("Issue number"),
     content: reactionSchema,
   }),
   execute: async ({ repo, issue_number, content }) => {
@@ -30,10 +31,10 @@ export const add_issue_reaction = defineTool({
 export const remove_issue_reaction = defineTool({
   description: "Remove a reaction from an issue by reaction ID.",
   access: { risk: "destructive" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    issue_number: z.number().describe("Issue number"),
-    reaction_id: z.number().describe("Reaction ID (from add_issue_reaction)"),
+  input: z.strictObject({
+    repo: repoField,
+    issue_number: resourceId.describe("Issue number"),
+    reaction_id: resourceId.describe("Reaction ID (from add_issue_reaction)"),
   }),
   execute: async ({ repo, issue_number, reaction_id }) => {
     await octokit().rest.reactions.deleteForIssue({
@@ -49,9 +50,9 @@ export const remove_issue_reaction = defineTool({
 export const add_comment_reaction = defineTool({
   description: "Add a reaction to an issue or PR comment.",
   access: { risk: "write" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    comment_id: z.number().describe("Comment ID"),
+  input: z.strictObject({
+    repo: repoField,
+    comment_id: resourceId.describe("Comment ID"),
     content: reactionSchema,
   }),
   execute: async ({ repo, comment_id, content }) => {
@@ -68,10 +69,10 @@ export const add_comment_reaction = defineTool({
 export const remove_comment_reaction = defineTool({
   description: "Remove a reaction from an issue or PR comment by reaction ID.",
   access: { risk: "destructive" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    comment_id: z.number().describe("Comment ID"),
-    reaction_id: z.number().describe("Reaction ID"),
+  input: z.strictObject({
+    repo: repoField,
+    comment_id: resourceId.describe("Comment ID"),
+    reaction_id: resourceId.describe("Reaction ID"),
   }),
   execute: async ({ repo, comment_id, reaction_id }) => {
     await octokit().rest.reactions.deleteForIssueComment({

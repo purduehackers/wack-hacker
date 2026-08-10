@@ -1,26 +1,30 @@
 import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
-import { octokit } from "./client.ts";
+import { octokit, octokitStatus } from "./client.ts";
 import { env } from "./config.ts";
-import { paginationInputShape } from "./constants.ts";
+import {
+  paginationInputShape,
+  repoField,
+  repoPaginatedInputShape,
+  resourceId,
+} from "./constants.ts";
 
 /** List deployments for a repository. */
 export const list_deployments = defineTool({
   description: `List deployments for a repository. Optionally filter by environment name or ref (branch/tag/SHA). Returns deployment ID, ref, environment, description, creator, and timestamps.`,
   access: { risk: "read" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    environment: z.string().optional().describe("Filter by environment"),
-    ref: z.string().optional().describe("Filter by ref"),
+  input: z.strictObject({
+    repo: repoField,
+    environment: z.string().exactOptional().describe("Filter by environment"),
+    ref: z.string().exactOptional().describe("Filter by ref"),
     ...paginationInputShape,
   }),
-  execute: async ({ repo, environment, ref, per_page, page }) => {
+  execute: async ({ repo, per_page, page, ...filters }) => {
     const { data } = await octokit().rest.repos.listDeployments({
       owner: env.GITHUB_ORG,
       repo,
-      ...(environment === undefined ? {} : { environment }),
-      ...(ref === undefined ? {} : { ref }),
+      ...filters,
       per_page: per_page ?? 20,
       page: page ?? 1,
     });
@@ -42,23 +46,19 @@ export const list_deployments = defineTool({
 export const create_deployment = defineTool({
   description: `Create a new deployment for a repository. Specify the ref (branch/tag/SHA) to deploy and optionally the target environment. Returns the deployment ID and details, or a message if required status checks haven't passed.`,
   access: { risk: "destructive" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
+  input: z.strictObject({
+    repo: repoField,
     ref: z.string().describe("Branch, tag, or SHA to deploy"),
-    environment: z.string().optional().describe("Environment (e.g. 'production', 'staging')"),
-    description: z.string().optional(),
-    auto_merge: z.boolean().optional(),
-    required_contexts: z.array(z.string()).optional(),
+    environment: z.string().exactOptional().describe("Environment (e.g. 'production', 'staging')"),
+    description: z.string().exactOptional(),
+    auto_merge: z.boolean().exactOptional(),
+    required_contexts: z.array(z.string()).exactOptional(),
   }),
-  execute: async ({ repo, ref, environment, description, auto_merge, required_contexts }) => {
+  execute: async ({ repo, ...fields }) => {
     const { data } = await octokit().rest.repos.createDeployment({
       owner: env.GITHUB_ORG,
       repo,
-      ref,
-      ...(environment === undefined ? {} : { environment }),
-      ...(description === undefined ? {} : { description }),
-      ...(auto_merge === undefined ? {} : { auto_merge }),
-      ...(required_contexts === undefined ? {} : { required_contexts }),
+      ...fields,
     });
     if ("id" in data) {
       return JSON.stringify({
@@ -76,25 +76,24 @@ export const create_deployment = defineTool({
 export const create_deployment_status = defineTool({
   description: `Create a status update for an existing deployment. Set the state (success, failure, in_progress, etc.) and optionally provide the deployed environment URL and log URL.`,
   access: { risk: "write" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    deployment_id: z.number().describe("Deployment ID"),
+  input: z.strictObject({
+    repo: repoField,
+    deployment_id: resourceId.describe("Deployment ID"),
     state: z
       .enum(["error", "failure", "inactive", "in_progress", "queued", "pending", "success"])
       .describe("Deployment state"),
-    description: z.string().optional(),
-    environment_url: z.string().optional().describe("URL of the deployed environment"),
-    log_url: z.string().optional(),
+    description: z.string().exactOptional(),
+    environment_url: z
+      .url({ protocol: /^https?$/u })
+      .exactOptional()
+      .describe("URL of the deployed environment"),
+    log_url: z.url({ protocol: /^https?$/u }).exactOptional(),
   }),
-  execute: async ({ repo, deployment_id, state, description, environment_url, log_url }) => {
+  execute: async ({ repo, ...fields }) => {
     const { data } = await octokit().rest.repos.createDeploymentStatus({
       owner: env.GITHUB_ORG,
       repo,
-      deployment_id,
-      state,
-      ...(description === undefined ? {} : { description }),
-      ...(environment_url === undefined ? {} : { environment_url }),
-      ...(log_url === undefined ? {} : { log_url }),
+      ...fields,
     });
     return JSON.stringify({
       id: data.id,
@@ -108,8 +107,8 @@ export const create_deployment_status = defineTool({
 export const get_pages_info = defineTool({
   description: `Get the GitHub Pages configuration for a repository, including the published URL, status, source branch/path, and HTTPS enforcement. Returns a message if Pages is not enabled.`,
   access: { risk: "read" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
+  input: z.strictObject({
+    repo: repoField,
   }),
   execute: async ({ repo }) => {
     try {
@@ -125,7 +124,7 @@ export const get_pages_info = defineTool({
         https_enforced: data.https_enforced,
       });
     } catch (e: unknown) {
-      if (typeof e === "object" && e !== null && "status" in e && e.status === 404)
+      if (octokitStatus(e) === 404)
         return JSON.stringify({
           enabled: false,
           message: "GitHub Pages is not enabled for this repository",
@@ -139,10 +138,7 @@ export const get_pages_info = defineTool({
 export const list_pages_builds = defineTool({
   description: `List GitHub Pages builds for a repository. Returns each build's status, error info, timestamps, and duration. Useful for debugging Pages deployment issues.`,
   access: { risk: "read" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    ...paginationInputShape,
-  }),
+  input: z.strictObject(repoPaginatedInputShape),
   execute: async ({ repo, per_page, page }) => {
     const { data } = await octokit().rest.repos.listPagesBuilds({
       owner: env.GITHUB_ORG,
@@ -166,8 +162,8 @@ export const list_pages_builds = defineTool({
 export const trigger_pages_build = defineTool({
   description: `Manually trigger a GitHub Pages build for a repository. Returns the build status and URL. Only works for repos with Pages enabled.`,
   access: { risk: "destructive" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
+  input: z.strictObject({
+    repo: repoField,
   }),
   execute: async ({ repo }) => {
     const { data } = await octokit().rest.repos.requestPagesBuild({

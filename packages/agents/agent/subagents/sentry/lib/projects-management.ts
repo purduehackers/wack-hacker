@@ -17,7 +17,7 @@ export const create_project = defineTool({
   description:
     "Create a new Sentry project under a team. Platform is the language/framework slug (e.g. 'javascript-nextjs', 'python-django', 'go'). Returns the new project's id, slug, and first DSN.",
   access: { risk: "write", minRole: "admin" },
-  input: z.object({
+  input: z.strictObject({
     team_slug: z.string().describe("Team slug that will own the project"),
     name: z.string().describe("Project name"),
     slug: z.string().optional().describe("Project slug (auto-generated from name if omitted)"),
@@ -45,14 +45,15 @@ export const update_project = defineTool({
   description:
     "Update a Sentry project's name, slug, platform, default environment, or resolve age settings.",
   access: { risk: "write" },
-  input: z.object({
+  input: z.strictObject({
     project_slug: z.string().describe("Current project slug"),
     name: z.string().optional(),
     slug: z.string().optional(),
     platform: z.string().optional(),
     default_environment: z.string().optional(),
     resolve_age: z
-      .number()
+      .int()
+      .min(0)
       .optional()
       .describe("Hours after which unhandled issues auto-resolve (0 to disable)"),
   }),
@@ -83,7 +84,7 @@ export const delete_project = defineTool({
   description:
     "Permanently delete a Sentry project. This removes all issues, events, and configuration. Irreversible.",
   access: { risk: "destructive", minRole: "admin", confirm: "second-party" },
-  input: z.object({
+  input: z.strictObject({
     project_slug: z.string().describe("Project slug"),
   }),
   execute: async ({ project_slug }) => {
@@ -103,7 +104,7 @@ export const list_project_environments = defineTool({
   description:
     "List environments configured for a Sentry project. Returns name, is_hidden, and environment ID.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_slug: z.string().describe("Project slug"),
   }),
   execute: async ({ project_slug }) => {
@@ -123,7 +124,7 @@ export const list_project_keys = defineTool({
   description:
     "List client keys (DSNs) for a Sentry project. Each key has a public DSN used by SDKs to send events.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_slug: z.string().describe("Project slug"),
   }),
   execute: async ({ project_slug }) => {
@@ -150,7 +151,7 @@ export const list_project_keys = defineTool({
 export const create_project_key = defineTool({
   description: "Create a new client key (DSN) for a Sentry project. Returns the new DSN.",
   access: { risk: "write" },
-  input: z.object({
+  input: z.strictObject({
     project_slug: z.string().describe("Project slug"),
     name: z.string().describe("Human-readable label for the key"),
   }),
@@ -172,7 +173,7 @@ export const delete_project_key = defineTool({
   description:
     "Delete a Sentry client key (DSN). All SDKs using this key will stop sending events. Irreversible.",
   access: { risk: "destructive" },
-  input: z.object({
+  input: z.strictObject({
     project_slug: z.string().describe("Project slug"),
     key_id: z.string().describe("Client key ID"),
   }),

@@ -7,10 +7,10 @@ import { BOT_ROUTES } from "@repo/shared/wire";
 import type { ScheduledFirePayload } from "@repo/shared/wire";
 import { defineSchedule } from "eve/schedules";
 
-import { resolveBotBaseUrl } from "../lib/bot-endpoint.ts";
-import { env } from "../lib/env.ts";
-import { getScheduleStore, SCHEDULE_MAX_ATTEMPTS } from "../lib/schedule-store.ts";
-import type { ClaimedSchedule, ScheduleStore, ScheduleStoreError } from "../lib/schedule-store.ts";
+import { env } from "../env.ts";
+import { resolveBotBaseUrl } from "../lib/bot/endpoint.ts";
+import { getScheduleStore, SCHEDULE_MAX_ATTEMPTS } from "../lib/schedule/store.ts";
+import type { ClaimedSchedule, ScheduleStore, ScheduleStoreError } from "../lib/schedule/store.ts";
 import {
   countAgentEvent,
   currentTraceparent,
@@ -99,7 +99,7 @@ function settlementFailure(job: ClaimedSchedule, error: unknown): void {
 async function settleFailedDelivery(
   scheduleStore: ScheduleStore,
   job: ClaimedSchedule,
-  deliveryError: unknown,
+  deliveryError: ScheduleStoreError | UpstreamError,
 ): Promise<void> {
   // The task view is user-visible. Persist only a stable public reason; the
   // failure class and trace retain the operational diagnosis.

@@ -13,7 +13,7 @@ export const get_org_stats = defineTool({
   description:
     "Get organization-level usage statistics — events received, dropped, filtered, and more. Useful for understanding Sentry quota usage and event volume.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     group: z
       .enum(["outcome", "category", "reason", "project"])
       .optional()
@@ -54,7 +54,7 @@ export const get_project_stats = defineTool({
   description:
     "Get event statistics for a specific Sentry project — volume over time broken down by outcome.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_slug: z.string().describe("Project slug"),
     stat: z
       .enum(["received", "rejected", "blacklisted"])

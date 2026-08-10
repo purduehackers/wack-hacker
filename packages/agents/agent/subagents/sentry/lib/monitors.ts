@@ -10,9 +10,11 @@ import { z } from "zod";
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { sentryOpts, sentryOrg, sentryProjectId, sentryPut } from "./client.ts";
 
+// Read-only projection over fields the generated SDK type omits: an unexpected
+// shape must degrade to "absent" rather than fail the tool.
 const monitorProjectionSchema = z.looseObject({
-  lastCheckIn: z.string().nullish(),
-  nextCheckIn: z.string().nullish(),
+  lastCheckIn: z.string().nullish().catch(undefined),
+  nextCheckIn: z.string().nullish().catch(undefined),
 });
 
 /** List cron monitors for the organization. */
@@ -20,7 +22,7 @@ export const list_monitors = defineTool({
   description:
     "List cron monitors (scheduled jobs) in the Sentry organization. Returns name, status, schedule, and last/next check-in times.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_slug: z.string().optional().describe("Filter by project slug"),
     cursor: z.string().optional().describe("Pagination cursor"),
   }),
@@ -60,7 +62,7 @@ export const get_monitor = defineTool({
   description:
     "Get full details for a Sentry cron monitor — schedule config, margins, runtime limits, and check-in history.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     monitor_slug: z.string().describe("Monitor slug"),
   }),
   execute: async ({ monitor_slug }) => {
@@ -81,7 +83,7 @@ export const list_monitor_checkins = defineTool({
   description:
     "List check-ins for a cron monitor. Shows status (ok, missed, error, in_progress), duration, and timestamps.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     monitor_slug: z.string().describe("Monitor slug"),
     cursor: z.string().optional().describe("Pagination cursor"),
   }),
@@ -103,23 +105,25 @@ export const list_monitor_checkins = defineTool({
 export const update_monitor = defineTool({
   description: "Update a Sentry cron monitor's name, schedule, or runtime configuration.",
   access: { risk: "write" },
-  input: z.object({
+  input: z.strictObject({
     monitor_slug: z.string().describe("Monitor slug"),
     name: z.string().optional().describe("New monitor name"),
     slug: z.string().optional().describe("New monitor slug"),
     schedule_type: z.enum(["crontab", "interval"]).optional().describe("Schedule type"),
     schedule: z
-      .union([z.string(), z.tuple([z.number(), z.enum(["minute", "hour", "day"])])])
+      .union([z.string(), z.tuple([z.int().min(1), z.enum(["minute", "hour", "day"])])])
       .optional()
       .describe(
         "Crontab expression string (e.g. '0 * * * *') or interval tuple (e.g. [10, 'minute'])",
       ),
     checkin_margin: z
-      .number()
+      .int()
+      .min(0)
       .optional()
       .describe("Minutes before a check-in is considered missed"),
     max_runtime: z
-      .number()
+      .int()
+      .min(1)
       .optional()
       .describe("Maximum runtime in minutes before marking as failed"),
     timezone: z.string().optional().describe("Timezone (e.g. 'America/New_York')"),
@@ -175,7 +179,7 @@ export const update_monitor = defineTool({
 export const delete_monitor = defineTool({
   description: "Permanently delete a Sentry cron monitor. This action cannot be undone.",
   access: { risk: "destructive", minRole: "admin" },
-  input: z.object({
+  input: z.strictObject({
     monitor_slug: z.string().describe("Monitor slug"),
   }),
   execute: async ({ monitor_slug }) => {

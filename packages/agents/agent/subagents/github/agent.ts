@@ -9,15 +9,20 @@ export default defineDynamic({
   events: {
     "turn.started": (_event, ctx) => {
       const principal = requirePrincipal(ctx.session.auth.current);
-      // oxlint-disable-next-line unicorn/no-null -- null hides a dynamic subagent
-      if (Result.isError(principal)) return null;
+      if (Result.isError(principal)) return undefined;
       const decision = decideCapability(principal.value, GITHUB_RUNTIME.subagentDescriptor);
-      // oxlint-disable-next-line unicorn/no-null -- null hides a dynamic subagent
-      if (Result.isError(decision) || !decision.value.discover) return null;
+      if (Result.isError(decision) || !decision.value.discover) return undefined;
       return defineAgent({
         description:
           "Manage GitHub repositories, issues, pull requests, CI/CD workflows, deployments, code browsing, packages, projects, and organization settings.",
-        model: "anthropic/claude-sonnet-5",
+        model: "deepseek/deepseek-v4-flash-0731",
+        modelOptions: {
+          providerOptions: {
+            // DeepSeek caches implicitly, so this only matters if the gateway
+            // ever falls back to a provider needing explicit cache markers.
+            gateway: { caching: "auto" },
+          },
+        },
         outputSchema: SUBAGENT_OUTPUT_SCHEMA,
       });
     },

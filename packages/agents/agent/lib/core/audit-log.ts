@@ -4,7 +4,7 @@ import { UserRole } from "@repo/shared/discord";
 import { UpstreamError } from "@repo/shared/errors";
 import { z } from "zod";
 
-import { env } from "../env.ts";
+import { env } from "../../env.ts";
 import { PolicySource, RiskLevel } from "../policy/types.ts";
 import { redactAuditPreview } from "./json.ts";
 
@@ -28,25 +28,27 @@ export const auditLogInputSchema = z.strictObject({
     .enum(AUDIT_DECISIONS)
     .optional()
     .describe("Filter by lifecycle stage (e.g. 'denied', 'executed', 'prompt_failed')"),
-  limit: z.number().int().min(1).max(100).optional().describe("Max rows to return (default 25)"),
+  limit: z.int().min(1).max(100).optional().describe("Max rows to return (default 25)"),
 });
 
-const auditRowSchema: z.ZodType<typeof actionAudit.$inferSelect> = z.strictObject({
+// `id` stays a bare string: `lib/policy/domain-audit-hook.ts` mints composite
+// `<eventId>:<callId>` ids, so a uuid format here would reject most real rows.
+const auditRowSchema = z.strictObject({
   id: z.string(),
-  at: z.string(),
+  at: z.iso.datetime(),
   userId: z.string(),
   role: z.enum(UserRole),
   source: z.enum(PolicySource),
   delegate: z.string().nullable(),
   tool: z.string(),
   risk: z.enum(RiskLevel),
-  inputHash: z.string(),
+  inputHash: z.hash("sha256"),
   inputPreview: z.string(),
   reason: z.string().nullable(),
   decision: z.enum(AUDIT_DECISIONS),
   decidedBy: z.string().nullable(),
   traceId: z.string().nullable(),
-});
+}) satisfies z.ZodType<typeof actionAudit.$inferSelect>;
 
 let auditClient: ReturnType<typeof createClient> | undefined;
 
@@ -63,7 +65,7 @@ function protectAuditRow(row: z.output<typeof auditRowSchema>) {
 }
 
 export async function queryAuditLog(input: z.output<typeof auditLogInputSchema>) {
-  if (typeof env.TURSO_DATABASE_URL !== "string" || env.TURSO_DATABASE_URL.length === 0) {
+  if (env.TURSO_DATABASE_URL.length === 0) {
     throw new UpstreamError({
       service: "Turso",
       status: 503,
@@ -127,7 +129,11 @@ export async function queryAuditLog(input: z.output<typeof auditLogInputSchema>)
   }));
   const parsed = z.array(auditRowSchema).safeParse(candidates);
   if (!parsed.success) {
-    throw new UpstreamError({ service: "Turso", status: 502, detail: "audit rows were invalid" });
+    throw new UpstreamError({
+      service: "Turso",
+      status: 502,
+      detail: `audit rows were invalid: ${z.prettifyError(parsed.error)}`,
+    });
   }
   if (parsed.data.length === 0) return "No audit rows match.";
   return parsed.data.map(protectAuditRow);

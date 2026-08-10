@@ -7,11 +7,13 @@ import {
 import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
-import { sentryGet, sentryOpts, sentryOrg, sentryProjectId } from "./client.ts";
-import { perPageField } from "./constants.ts";
+import { sentryGet, sentryOpts, sentryOrg, sentryProjectId, sentryResponse } from "./client.ts";
+import { perPageField, sentryNumericId } from "./constants.ts";
 
-const projectProjectionSchema = z.looseObject({ status: z.string().nullish() });
-const issueProjectionSchema = z.looseObject({ priority: z.string().nullish() });
+// These projections exist only to read a field the generated SDK type omits, so
+// an unexpected shape must degrade to "absent" rather than fail the whole tool.
+const projectProjectionSchema = z.looseObject({ status: z.string().nullish().catch(undefined) });
+const issueProjectionSchema = z.looseObject({ priority: z.string().nullish().catch(undefined) });
 const issueListResponseSchema = z.array(
   z.looseObject({
     id: z.string(),
@@ -33,7 +35,7 @@ export const list_projects = defineTool({
   description:
     "List all projects in the Sentry organization. Returns slug, name, platform, date created, and status.",
   access: { risk: "read" },
-  input: z.object({}),
+  input: z.strictObject({}),
   execute: async () => {
     const result = await listAnOrganization_sProjects({
       ...sentryOpts(),
@@ -58,7 +60,7 @@ export const get_project = defineTool({
   description:
     "Get full details for a Sentry project — platform, team, features, date created, and configuration.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_slug: z.string().describe("Project slug (e.g. 'my-nextjs-app')"),
   }),
   execute: async ({ project_slug }) => {
@@ -79,7 +81,7 @@ export const search_issues = defineTool({
   description:
     "Search Sentry issues across the organization. Supports Sentry search syntax (e.g. 'is:unresolved', 'assigned:me', 'level:error', 'first-seen:-24h'). Returns issue ID, short ID, title, status, level, count, first/last seen, and URL.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     query: z.string().optional().describe("Sentry search query (e.g. 'is:unresolved level:error')"),
     project_slug: z.string().optional().describe("Filter by project slug"),
     sort: z.enum(["date", "new", "freq", "priority"]).optional(),
@@ -88,7 +90,8 @@ export const search_issues = defineTool({
   }),
   execute: async ({ query, project_slug, sort, per_page, cursor }) => {
     const projectId = project_slug === undefined ? undefined : await sentryProjectId(project_slug);
-    const data = issueListResponseSchema.parse(
+    const data = sentryResponse(
+      issueListResponseSchema,
       await sentryGet(`/organizations/${sentryOrg()}/issues/`, {
         query,
         project: projectId,
@@ -120,8 +123,8 @@ export const get_issue = defineTool({
   description:
     "Get full details for a Sentry issue by its numeric ID. Returns title, metadata, status, assignee, tags, first/last seen, and activity.",
   access: { risk: "read" },
-  input: z.object({
-    issue_id: z.string().describe("Sentry issue ID (numeric)"),
+  input: z.strictObject({
+    issue_id: sentryNumericId.describe("Sentry issue ID (numeric)"),
   }),
   execute: async ({ issue_id }) => {
     const result = await retrieveAnIssue({

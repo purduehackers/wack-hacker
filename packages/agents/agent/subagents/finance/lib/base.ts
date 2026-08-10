@@ -20,14 +20,14 @@ const hcbOrganizationSchema = z.object({
     })
     .optional(),
 });
-type HcbOrganization = z.infer<typeof hcbOrganizationSchema>;
+type HcbOrganization = z.output<typeof hcbOrganizationSchema>;
 
 /** Get the Purdue Hackers HCB organization profile. */
 export const get_organization = defineTool({
   description:
     "Get the Hack Club Bank organization profile — name, slug, website, description, and whether Transparency Mode is enabled. Amounts are in cents.",
   access: { risk: "read" },
-  input: z.object({}),
+  input: z.strictObject({}),
   execute: async () => {
     const data: HcbOrganization = await hcbGet(
       `/organizations/${hcbOrgSlug()}`,
@@ -55,7 +55,7 @@ export const get_balance = defineTool({
   description:
     "Get the current Hack Club Bank balance summary for Purdue Hackers — cleared balance, incoming (pending) balance, fee balance, and total raised. All amounts in cents (negative = outflow).",
   access: { risk: "read" },
-  input: z.object({}),
+  input: z.strictObject({}),
   execute: async () => {
     const data: HcbOrganization = await hcbGet(
       `/organizations/${hcbOrgSlug()}`,

@@ -28,7 +28,7 @@ const hcbCardChargeSchema = z.object({
   receipts: z.object({ count: z.number().optional(), missing: z.boolean().optional() }).optional(),
   transaction_id: z.string().optional(),
 });
-type HcbCardCharge = z.infer<typeof hcbCardChargeSchema>;
+type HcbCardCharge = z.output<typeof hcbCardChargeSchema>;
 
 function projectCharge(c: HcbCardCharge) {
   return {
@@ -51,7 +51,7 @@ export const list_card_charges = defineTool({
   description:
     "List HCB card charges — merchant, user, amount_cents, and receipts summary {count, missing}. Supports an optional user filter (substring match on cardholder name or email) for microgrant recipient spend tracking.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     user: z
       .string()
       .optional()

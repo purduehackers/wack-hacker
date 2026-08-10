@@ -1,6 +1,6 @@
 import { UpstreamError } from "@repo/shared/errors";
 
-import { env } from "../../../lib/env.ts";
+import { env } from "../../../env.ts";
 import { createDomainRuntime } from "../../../lib/policy/domain-runtime.ts";
 import {
   projectProviderOutput,

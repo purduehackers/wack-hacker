@@ -3,9 +3,11 @@ import { z } from "zod";
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import {
   cmsAdminUrl,
+  documentId,
   paginationQuery,
   payload,
   type PayloadDocument,
+  relationship,
   wrapPayloadError,
 } from "./client.ts";
 import { paginationInputShape } from "./constants.ts";
@@ -14,15 +16,17 @@ const COLLECTION = "emails";
 
 type PayloadEmail = PayloadDocument<"emails">;
 
-function eventIdOf(event: PayloadEmail["event"]): number | string | undefined {
-  if (typeof event === "object" && event !== null) return event.id;
-  return event;
-}
+/** Writable email fields. `create_email` requires them; `update_email` takes the partial. */
+const emailFields = {
+  event_id: documentId,
+  subject: z.string(),
+  body: z.string().describe("Plain-text or HTML email body"),
+};
 
 function projectEmail(e: PayloadEmail) {
   return {
     id: e.id,
-    event_id: eventIdOf(e.event),
+    event_id: relationship(e.event).id,
     subject: e.subject,
     body: e.body,
     send: e.send,
@@ -37,12 +41,9 @@ export const list_emails = defineTool({
   description:
     "List email blast records. These are the `emails` collection rows — each is a subject/body tied to an event, with a `send` flag and `sentAt` timestamp when fired.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     ...paginationInputShape,
-    event_id: z
-      .union([z.string(), z.number()])
-      .optional()
-      .describe("Filter to emails tied to a specific event"),
+    event_id: documentId.optional().describe("Filter to emails tied to a specific event"),
   }),
   execute: async ({ event_id, ...input }) => {
     try {
@@ -66,7 +67,7 @@ export const list_emails = defineTool({
 export const get_email = defineTool({
   description: "Fetch a single email blast record by ID.",
   access: { risk: "read" },
-  input: z.object({ id: z.union([z.string(), z.number()]) }),
+  input: z.strictObject({ id: documentId }),
   execute: async ({ id }) => {
     try {
       const doc = await payload.findByID({ collection: COLLECTION, id });
@@ -81,11 +82,7 @@ export const create_email = defineTool({
   description:
     "Draft a new email blast tied to an event. `send: false` by default — the message won't fire until `send_email` flips the flag. Use this to prepare copy before getting approval to send.",
   access: { risk: "write" },
-  input: z.object({
-    event_id: z.union([z.string(), z.number()]),
-    subject: z.string(),
-    body: z.string().describe("Plain-text or HTML email body"),
-  }),
+  input: z.strictObject(emailFields),
   execute: async ({ event_id, subject, body }) => {
     try {
       const doc = await payload.create({
@@ -103,18 +100,14 @@ export const update_email = defineTool({
   description:
     "Update an email draft's subject/body or retarget it to a different event. Does NOT fire the email — use `send_email` for that.",
   access: { risk: "write" },
-  input: z.object({
-    id: z.union([z.string(), z.number()]),
-    event_id: z.union([z.string(), z.number()]).optional(),
-    subject: z.string().optional(),
-    body: z.string().optional(),
-  }),
+  input: z.strictObject({ id: documentId, ...z.object(emailFields).partial().shape }),
   execute: async ({ id, event_id, subject, body }) => {
     try {
-      const data: Record<string, unknown> = {};
-      if (event_id !== undefined) data.event = event_id;
-      if (subject !== undefined) data.subject = subject;
-      if (body !== undefined) data.body = body;
+      const data = {
+        ...(event_id !== undefined && { event: event_id }),
+        ...(subject !== undefined && { subject }),
+        ...(body !== undefined && { body }),
+      };
       const doc = await payload.update({
         collection: COLLECTION,
         id,
@@ -130,7 +123,7 @@ export const update_email = defineTool({
 export const delete_email = defineTool({
   description: "Delete an email draft record permanently.",
   access: { risk: "destructive" },
-  input: z.object({ id: z.union([z.string(), z.number()]) }),
+  input: z.strictObject({ id: documentId }),
   execute: async ({ id }) => {
     try {
       const doc = await payload.delete({ collection: COLLECTION, id });
@@ -145,7 +138,7 @@ export const send_email = defineTool({
   description:
     "Fire the email blast (flips `send: true`, Payload's afterChange hook dispatches real emails via Resend, then resets send to false). Destructive external side effect — confirm the draft is final before calling.",
   access: { risk: "destructive" },
-  input: z.object({ id: z.union([z.string(), z.number()]) }),
+  input: z.strictObject({ id: documentId }),
   execute: async ({ id }) => {
     try {
       const doc = await payload.update({

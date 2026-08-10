@@ -7,7 +7,7 @@ export const list_broadcasts = defineTool({
   description:
     "List Resend broadcasts (mass email campaigns). Returns each broadcast's id, name, status, audience, scheduled_at, and created_at.",
   access: { risk: "read" },
-  input: z.object({}),
+  input: z.strictObject({}),
   execute: async () => {
     const result = await resend().broadcasts.list();
     if (result.error) return { error: result.error.message };
@@ -18,7 +18,7 @@ export const list_broadcasts = defineTool({
 export const get_broadcast = defineTool({
   description: "Get a single Resend broadcast by ID, including content preview and status.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     broadcast_id: z.string().describe("Resend broadcast ID"),
   }),
   execute: async ({ broadcast_id }) => {
@@ -32,7 +32,7 @@ export const create_broadcast = defineTool({
   description:
     "Create a new Resend broadcast (mass email campaign) targeting a segment. Supply subject, content (html and/or text), and the segment to send to. The broadcast is created in draft state — call send_broadcast to dispatch.",
   access: { risk: "write" },
-  input: z.object({
+  input: z.strictObject({
     name: z.string().describe("Human-readable name for the broadcast"),
     audience_id: z.string().describe("Resend segment ID to send to"),
     from: z.email().describe("Sender email (must be on a verified domain)"),
@@ -63,7 +63,7 @@ export const send_broadcast = defineTool({
   description:
     "Dispatch a Resend broadcast to its target audience. Optionally schedule for a future time with scheduled_at (ISO 8601 or natural-language like 'in 1 hour'). Once sent, cannot be undone.",
   access: { risk: "destructive", confirm: "second-party" },
-  input: z.object({
+  input: z.strictObject({
     broadcast_id: z.string().describe("Resend broadcast ID"),
     scheduled_at: z
       .string()
@@ -83,7 +83,7 @@ export const send_broadcast = defineTool({
 export const delete_broadcast = defineTool({
   description: "Delete a Resend broadcast. Cannot delete a broadcast that has been sent.",
   access: { risk: "destructive" },
-  input: z.object({
+  input: z.strictObject({
     broadcast_id: z.string().describe("Resend broadcast ID"),
   }),
   execute: async ({ broadcast_id }) => {

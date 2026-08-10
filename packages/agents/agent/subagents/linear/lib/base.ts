@@ -7,7 +7,7 @@ export const search_entities = defineTool({
   description:
     "Search Linear entities by keyword. Use for finding issues, projects, documents, initiatives, users, teams, customers, or labels. Returns IDs, names/identifiers, and URLs. Use entityType 'User' to resolve a person's name to their Linear user ID.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     query: z.string(),
     entityType: z.enum([
       "Issue",
@@ -92,14 +92,15 @@ export const retrieve_entities = defineTool({
   description:
     "Fetch full details for one or more entities by ID, identifier (e.g. TEAM-123), or URL. Returns all fields including description, state, assignee, labels, relations, and URLs. Use this to get the full picture of an entity before acting on it.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     entities: z
       .array(
-        z.object({
+        z.strictObject({
           type: z.enum(["Issue", "Project", "Document", "User", "Team", "Initiative"]),
           id: z.string(),
         }),
       )
+      .min(1)
       .max(10),
   }),
   execute: async ({ entities }) => {
@@ -188,7 +189,7 @@ export const suggest_property_values = defineTool({
   description:
     "Resolve human-readable names to Linear UUIDs for entity fields. MUST be called before create/update to get valid IDs for assignee, team, status, project, cycle, labels, or milestone. Use field 'Issue.assigneeId' with a name query to find a user's ID.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     field: z.enum([
       "Issue.assigneeId",
       "Issue.stateId",
@@ -200,7 +201,7 @@ export const suggest_property_values = defineTool({
     ]),
     query: z.string().optional().describe("Filter by name"),
     scope: z
-      .object({
+      .strictObject({
         type: z.enum(["Team", "Project"]),
         id: z.string(),
       })
@@ -256,7 +257,7 @@ export const aggregate_issues = defineTool({
   description:
     "Get aggregated issue counts grouped by status, assignee, label, priority, project, or team. Returns CSV. Use for 'how many issues...', 'break down by...', or distribution questions. Supports optional filters by team, project, assignee, or state.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     groupBy: z.enum(["status", "assignee", "label", "priority", "project", "team"]),
     teamId: z.string().optional(),
     projectId: z.string().optional(),

@@ -1,5 +1,6 @@
 import { createAppAuth } from "@octokit/auth-app";
 import { Octokit } from "octokit";
+import { z } from "zod";
 
 import { env } from "./config.ts";
 
@@ -16,4 +17,12 @@ export function octokit(): Octokit {
     },
   });
   return client;
+}
+
+/** Octokit rejects a failed request with an error object carrying the HTTP status. */
+const octokitErrorSchema = z.looseObject({ status: z.int() });
+
+/** The HTTP status of a thrown Octokit error, or undefined when it is not one. */
+export function octokitStatus(error: unknown): number | undefined {
+  return octokitErrorSchema.safeParse(error).data?.status;
 }

@@ -1,8 +1,10 @@
-import { UserRole, isUserRole, type UserRole as UserRoleValue } from "@repo/shared/discord";
+import { UserRole, type UserRole as UserRoleValue } from "@repo/shared/discord";
 import { Transient } from "@repo/shared/errors";
 import type { RedisClient } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
+import { z } from "zod";
 
+import { storedJson } from "../core/schema.ts";
 import { RiskLevel, type RiskLevel as RiskLevelValue } from "./types.ts";
 
 const APPROVAL_TTL_SECONDS = 15 * 60;
@@ -15,7 +17,22 @@ export interface SecondPartyApprovalRecord {
   readonly risk: RiskLevelValue;
 }
 
-export function approvalPolicyKey(sessionId: string, callId: string): string {
+/**
+ * Exactly what `putSecondParty` writes. Upstash may return it as the stored JSON
+ * text rather than an object, so `storedJson` accepts both forms; the previous
+ * hand-written decoder rejected the text form outright.
+ */
+const secondPartyApprovalSchema = storedJson(
+  z.strictObject({
+    requesterUserId: z.string(),
+    mode: z.literal("second-party"),
+    minApproverRole: z.enum(UserRole).exclude(["Public"]),
+    tool: z.string(),
+    risk: z.enum(RiskLevel),
+  }),
+);
+
+function approvalPolicyKey(sessionId: string, callId: string): string {
   return `policy:approval:${sessionId}:${callId}`;
 }
 
@@ -50,24 +67,11 @@ export class ApprovalPolicyStore {
       try: async () => {
         const value: unknown = await this.redis.get(approvalPolicyKey(sessionId, callId));
         if (value === null || value === undefined) return undefined;
-        if (typeof value !== "object" || value === null)
-          throw new Error("approval policy is malformed");
-        const requesterUserId = Reflect.get(value, "requesterUserId");
-        const mode = Reflect.get(value, "mode");
-        const minApproverRole = Reflect.get(value, "minApproverRole");
-        const tool = Reflect.get(value, "tool");
-        const risk = Reflect.get(value, "risk");
-        if (
-          typeof requesterUserId !== "string" ||
-          mode !== "second-party" ||
-          !isUserRole(minApproverRole) ||
-          minApproverRole === UserRole.Public ||
-          typeof tool !== "string" ||
-          (risk !== RiskLevel.Read && risk !== RiskLevel.Write && risk !== RiskLevel.Destructive)
-        ) {
-          throw new Error("approval policy is malformed");
+        const parsed = secondPartyApprovalSchema.safeParse(value);
+        if (!parsed.success) {
+          throw new Error(`approval policy is malformed: ${z.prettifyError(parsed.error)}`);
         }
-        return { requesterUserId, mode, minApproverRole, tool, risk };
+        return parsed.data;
       },
       catch: (cause) =>
         new Transient({ operation: "read second-party approval policy", detail: String(cause) }),

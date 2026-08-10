@@ -13,18 +13,24 @@ export default defineDynamic({
         ctx.session.auth.current,
         CMS_TOOL_NAMES,
       );
-      const tools: Record<string, unknown> = {};
-      for (const toolName of visibleNames) {
-        const spec = CMS_TOOLS[toolName];
-        tools[toolName] = defineTool({
-          description: spec.description,
-          inputSchema: spec.input,
-          approval: async (approvalCtx) => await CMS_RUNTIME.approvalForTool(toolName, approvalCtx),
-          execute: async (input, toolCtx) =>
-            guardToolExecution(async () => await CMS_RUNTIME.executeTool(toolName, input, toolCtx)),
-        });
-      }
-      return tools;
+      return Object.fromEntries(
+        visibleNames.map((toolName) => {
+          const spec = CMS_TOOLS[toolName];
+          return [
+            toolName,
+            defineTool({
+              description: spec.description,
+              inputSchema: spec.input,
+              approval: async (approvalCtx) =>
+                await CMS_RUNTIME.approvalForTool(toolName, approvalCtx),
+              execute: async (input, toolCtx) =>
+                guardToolExecution(
+                  async () => await CMS_RUNTIME.executeTool(toolName, input, toolCtx),
+                ),
+            }),
+          ];
+        }),
+      );
     },
   },
 });

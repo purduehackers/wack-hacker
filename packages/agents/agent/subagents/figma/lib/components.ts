@@ -54,8 +54,8 @@ function summarizeStyle(s: PublishedStyle) {
 export const list_team_components = defineTool({
   description: "List published components across the team. Paginated.",
   access: { risk: "read" },
-  input: z.object({
-    page_size: z.number().max(100).optional().describe("Results per page (max 100)"),
+  input: z.strictObject({
+    page_size: z.int().min(1).max(100).optional().describe("Results per page (max 100)"),
     cursor: z.string().optional().describe("Pagination cursor from a previous response"),
   }),
   execute: async ({ page_size, cursor }) => {
@@ -77,7 +77,7 @@ export const list_team_components = defineTool({
 export const list_file_components = defineTool({
   description: "List components in a specific Figma file.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     file_key: z.string().describe("The file key"),
   }),
   execute: async ({ file_key }) => {
@@ -91,7 +91,7 @@ export const list_file_components = defineTool({
 export const get_component = defineTool({
   description: "Get full details of a published component by its key.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     component_key: z.string().describe("The component key"),
   }),
   execute: async ({ component_key }) => {
@@ -104,8 +104,8 @@ export const list_team_component_sets = defineTool({
   description:
     "List published component sets (variant groups) across the team. A component set groups variants of the same component.",
   access: { risk: "read" },
-  input: z.object({
-    page_size: z.number().max(100).optional().describe("Results per page (max 100)"),
+  input: z.strictObject({
+    page_size: z.int().min(1).max(100).optional().describe("Results per page (max 100)"),
     cursor: z.string().optional().describe("Pagination cursor"),
   }),
   execute: async ({ page_size, cursor }) => {
@@ -127,7 +127,7 @@ export const list_team_component_sets = defineTool({
 export const get_component_set = defineTool({
   description: "Get full details of a published component set by its key.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     component_set_key: z.string().describe("The component set key"),
   }),
   execute: async ({ component_set_key }) => {
@@ -145,8 +145,8 @@ export const get_component_set = defineTool({
 export const list_team_styles = defineTool({
   description: "List published styles (colors, text, effects, grids) across the team. Paginated.",
   access: { risk: "read" },
-  input: z.object({
-    page_size: z.number().max(100).optional().describe("Results per page (max 100)"),
+  input: z.strictObject({
+    page_size: z.int().min(1).max(100).optional().describe("Results per page (max 100)"),
     cursor: z.string().optional().describe("Pagination cursor"),
   }),
   execute: async ({ page_size, cursor }) => {
@@ -168,7 +168,7 @@ export const list_team_styles = defineTool({
 export const list_file_styles = defineTool({
   description: "List styles in a specific Figma file.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     file_key: z.string().describe("The file key"),
   }),
   execute: async ({ file_key }) => {
@@ -182,7 +182,7 @@ export const list_file_styles = defineTool({
 export const get_style = defineTool({
   description: "Get full details of a published style by its key.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     style_key: z.string().describe("The style key"),
   }),
   execute: async ({ style_key }) => {

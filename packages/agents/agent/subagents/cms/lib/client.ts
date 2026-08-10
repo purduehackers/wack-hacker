@@ -1,16 +1,18 @@
 import { z } from "zod";
 
-import { env } from "../../../lib/env.ts";
+import { env } from "../../../env.ts";
 
-export const CMS_WEB_ORIGIN = "https://cms.purduehackers.com";
+const CMS_WEB_ORIGIN = "https://cms.purduehackers.com";
 const CMS_AUTH_COLLECTION = "service-accounts";
 const REQUEST_TIMEOUT_MS = 15_000;
 
-type DocumentId = number | string;
+/** Payload assigns numeric ids on Postgres and string ids on Mongo; both reach us on the wire. */
+export const documentId = z.union([z.string(), z.number()]);
 
-const idSchema = z.union([z.string(), z.number()]);
+type DocumentId = z.output<typeof documentId>;
+
 const eventSchema = z.object({
-  id: idSchema.optional(),
+  id: documentId.optional(),
   name: z.string().optional(),
   published: z.boolean().optional(),
   eventType: z.string().optional(),
@@ -28,17 +30,17 @@ const eventSchema = z.object({
   updatedAt: z.string().optional(),
 });
 const rsvpSchema = z.object({
-  id: idSchema.optional(),
+  id: documentId.optional(),
   email: z.string().optional(),
   name: z.string().optional(),
-  event: z.union([idSchema, z.object({ id: idSchema.optional() })]).optional(),
+  event: z.union([documentId, z.object({ id: documentId.optional() })]).optional(),
   unsubscribed: z.boolean().optional(),
   createdAt: z.string().optional(),
   updatedAt: z.string().optional(),
 });
 const emailSchema = z.object({
-  id: idSchema.optional(),
-  event: z.union([idSchema, z.object({ id: idSchema.optional() })]).optional(),
+  id: documentId.optional(),
+  event: z.union([documentId, z.object({ id: documentId.optional() })]).optional(),
   subject: z.string().optional(),
   body: z.string().optional(),
   send: z.boolean().optional(),
@@ -47,7 +49,7 @@ const emailSchema = z.object({
   updatedAt: z.string().optional(),
 });
 const hackNightSessionSchema = z.object({
-  id: idSchema.optional(),
+  id: documentId.optional(),
   title: z.string().optional(),
   date: z.string().optional(),
   published: z.boolean().optional(),
@@ -60,7 +62,7 @@ const hackNightSessionSchema = z.object({
   updatedAt: z.string().optional(),
 });
 const mediaSchema = z.object({
-  id: idSchema.optional(),
+  id: documentId.optional(),
   alt: z.string().optional(),
   url: z.string().optional(),
   thumbnailURL: z.string().optional(),
@@ -77,13 +79,13 @@ const mediaSchema = z.object({
   updatedAt: z.string().optional(),
 });
 const ugrantSchema = z.object({
-  id: idSchema.optional(),
+  id: documentId.optional(),
   visible: z.boolean().optional(),
   name: z.string().optional(),
   author: z.string().optional(),
   description: z.string().optional(),
   image: z
-    .union([idSchema, z.object({ id: idSchema.optional(), url: z.string().optional() })])
+    .union([documentId, z.object({ id: documentId.optional(), url: z.string().optional() })])
     .optional(),
   authorUrl: z.string().optional(),
   projectUrl: z.string().optional(),
@@ -91,27 +93,27 @@ const ugrantSchema = z.object({
   updatedAt: z.string().optional(),
 });
 const shelterProjectSchema = z.object({
-  id: idSchema.optional(),
+  id: documentId.optional(),
   visible: z.boolean().optional(),
   name: z.string().optional(),
   last_division: z.string().optional(),
   last_owner: z.string().optional(),
   description: z.string().optional(),
   image: z
-    .union([idSchema, z.object({ id: idSchema.optional(), url: z.string().optional() })])
+    .union([documentId, z.object({ id: documentId.optional(), url: z.string().optional() })])
     .optional(),
   createdAt: z.string().optional(),
   updatedAt: z.string().optional(),
 });
 const userSchema = z.object({
-  id: idSchema.optional(),
+  id: documentId.optional(),
   email: z.string().optional(),
   roles: z.array(z.string()).optional(),
   createdAt: z.string().optional(),
   updatedAt: z.string().optional(),
 });
 const serviceAccountSchema = z.object({
-  id: idSchema.optional(),
+  id: documentId.optional(),
   name: z.string().optional(),
   revoked: z.boolean().optional(),
   roles: z.array(z.string()).optional(),
@@ -119,7 +121,7 @@ const serviceAccountSchema = z.object({
   updatedAt: z.string().optional(),
 });
 
-export const payloadDocumentSchemas = {
+const payloadDocumentSchemas = {
   events: eventSchema,
   rsvps: rsvpSchema,
   emails: emailSchema,
@@ -131,23 +133,50 @@ export const payloadDocumentSchemas = {
   "service-accounts": serviceAccountSchema,
 } as const;
 
-export type PayloadCollection = keyof typeof payloadDocumentSchemas;
-export type PayloadDocument<C extends PayloadCollection> = z.infer<
+type PayloadCollection = keyof typeof payloadDocumentSchemas;
+export type PayloadDocument<C extends PayloadCollection> = z.output<
   (typeof payloadDocumentSchemas)[C]
 >;
 const payloadPaginationSchema = z.object({
-  totalDocs: z.number().int().nonnegative(),
-  totalPages: z.number().int().nonnegative(),
-  page: z.number().int().positive().nullable(),
+  totalDocs: z.int().nonnegative(),
+  totalPages: z.int().nonnegative(),
+  page: z.int().positive().nullable(),
 });
 const payloadMutationEnvelopeSchema = z.object({ doc: z.unknown() });
-export type PayloadPage<C extends PayloadCollection> = z.infer<typeof payloadPaginationSchema> & {
+type PayloadPage<C extends PayloadCollection> = z.output<typeof payloadPaginationSchema> & {
   readonly docs: PayloadDocument<C>[];
 };
 
-type Where = Readonly<Record<string, { readonly equals: unknown }>>;
+/**
+ * A Payload relationship arrives either as a bare id or as the populated document,
+ * depending on the collection's `depth`. Both shapes project to the same pair.
+ */
+const relationshipSchema = z.union([
+  z.object({ id: documentId.optional(), url: z.string().optional() }),
+  documentId.transform((id) => ({ id, url: undefined })),
+]);
 
-export interface PayloadFindOptions<C extends PayloadCollection = PayloadCollection> {
+/** Read `{ id, url }` off a relationship field without caring which shape came back. */
+export function relationship(value: unknown): {
+  id?: DocumentId | undefined;
+  url?: string | undefined;
+} {
+  return relationshipSchema.safeParse(value).data ?? {};
+}
+
+/** Payload's `where[field][equals]` filter: scalar predicates stringified into the query. */
+type Where = Readonly<Record<string, { readonly equals: boolean | number | string }>>;
+
+/** Write-only inputs Payload accepts that never appear on a read projection. */
+interface PayloadWriteOnlyFields {
+  readonly users: { readonly password?: string | undefined };
+}
+
+/** Body accepted by a create/update on a collection: its document fields plus write-only inputs. */
+type PayloadWriteData<C extends PayloadCollection> = Partial<PayloadDocument<C>> &
+  (C extends keyof PayloadWriteOnlyFields ? PayloadWriteOnlyFields[C] : unknown);
+
+interface PayloadFindOptions<C extends PayloadCollection = PayloadCollection> {
   readonly collection: C;
   readonly limit?: number;
   readonly page?: number;
@@ -155,14 +184,14 @@ export interface PayloadFindOptions<C extends PayloadCollection = PayloadCollect
   readonly where?: Where;
 }
 
-export interface PayloadMutationOptions<C extends PayloadCollection = PayloadCollection> {
+interface PayloadMutationOptions<C extends PayloadCollection = PayloadCollection> {
   readonly collection: C;
   readonly id?: DocumentId;
-  readonly data?: Readonly<Record<string, unknown>>;
+  readonly data?: PayloadWriteData<C>;
   readonly file?: File;
 }
 
-export class PayloadCmsError extends Error {
+class PayloadCmsError extends Error {
   readonly status: number;
 
   constructor(status: number, detail: string) {
@@ -172,19 +201,34 @@ export class PayloadCmsError extends Error {
   }
 }
 
-function responseDetail(body: string, fallback: string): string {
-  const errorSchema = z.object({
+/** Decodes a JSON document, reporting malformed text as an issue instead of throwing. */
+const jsonText = z.string().transform((value, ctx): unknown => {
+  try {
+    return JSON.parse(value);
+  } catch (cause) {
+    ctx.issues.push({
+      code: "invalid_format",
+      format: "json",
+      input: value,
+      message: cause instanceof Error ? cause.message : "response body was not JSON",
+    });
+    return z.NEVER;
+  }
+});
+
+const errorBodySchema = jsonText.pipe(
+  z.object({
     message: z.string().optional(),
     errors: z.array(z.object({ message: z.string().optional() })).optional(),
-  });
-  try {
-    const parsed = errorSchema.safeParse(JSON.parse(body));
-    if (parsed.success) {
-      return parsed.data.errors?.[0]?.message ?? parsed.data.message ?? fallback;
-    }
-  } catch {
-    // The bounded response text below is still safe to surface.
+  }),
+);
+
+function responseDetail(body: string, fallback: string): string {
+  const parsed = errorBodySchema.safeParse(body);
+  if (parsed.success) {
+    return parsed.data.errors?.[0]?.message ?? parsed.data.message ?? fallback;
   }
+  // The bounded response text is still safe to surface.
   return body.slice(0, 500) || fallback;
 }
 
@@ -216,32 +260,31 @@ function appendQuery(url: URL, input: Omit<PayloadFindOptions, "collection">): v
   }
 }
 
-async function validatedJson<T>(response: Response, schema: z.ZodType<T>): Promise<T> {
+async function validatedJson<S extends z.ZodType>(
+  response: Response,
+  schema: S,
+): Promise<z.output<S>> {
   const body = await response.text();
   if (!response.ok) {
     throw new PayloadCmsError(response.status, responseDetail(body, response.statusText));
   }
-  let json: unknown;
-  try {
-    json = JSON.parse(body);
-  } catch {
-    throw new PayloadCmsError(502, "invalid JSON response");
-  }
-  const parsed = schema.safeParse(json);
+  const parsed = jsonText.pipe(schema).safeParse(body);
   if (!parsed.success) throw schemaFailure(parsed.error);
   return parsed.data;
 }
 
-export interface PayloadRestClientOptions {
-  readonly apiKey: string | (() => string | undefined);
-  readonly baseUrl?: string;
-  readonly fetch?: typeof globalThis.fetch;
+interface PayloadRestClientOptions {
+  readonly apiKey: () => string | undefined;
 }
 
 function authorizedRequest(options: PayloadRestClientOptions) {
-  const requestFetch = options.fetch ?? globalThis.fetch;
-  return async <T>(url: URL, schema: z.ZodType<T>, init: RequestInit = {}): Promise<T> => {
-    const apiKey = typeof options.apiKey === "function" ? options.apiKey() : options.apiKey;
+  const requestFetch = globalThis.fetch;
+  return async <S extends z.ZodType>(
+    url: URL,
+    schema: S,
+    init: RequestInit = {},
+  ): Promise<z.output<S>> => {
+    const apiKey = options.apiKey();
     if (apiKey === undefined || apiKey.length === 0) {
       throw new PayloadCmsError(401, "PAYLOAD_CMS_API_KEY is not configured");
     }
@@ -260,15 +303,15 @@ function authorizedRequest(options: PayloadRestClientOptions) {
 }
 
 /** Minimal Payload REST client: service-account auth, bounded fetches, and Zod-validated responses. */
-export function createPayloadRestClient(options: PayloadRestClientOptions) {
-  const baseUrl = options.baseUrl ?? CMS_WEB_ORIGIN;
+function createPayloadRestClient(options: PayloadRestClientOptions) {
+  const baseUrl = CMS_WEB_ORIGIN;
   const request = authorizedRequest(options);
 
-  async function mutation(
+  async function mutation<S extends z.ZodType>(
     operation: PayloadMutationOptions,
-    schema: z.ZodType,
+    schema: S,
     method: "POST" | "PATCH" | "DELETE",
-  ): Promise<unknown> {
+  ): Promise<z.output<S>> {
     let body: RequestInit["body"];
     let headers: RequestInit["headers"];
     if (operation.file !== undefined) {
@@ -301,7 +344,7 @@ export function createPayloadRestClient(options: PayloadRestClientOptions) {
   async function findByID(operation: {
     readonly collection: PayloadCollection;
     readonly id: DocumentId;
-  }): Promise<unknown> {
+  }): Promise<PayloadDocument<PayloadCollection>> {
     return await request(
       collectionUrl(baseUrl, operation.collection, operation.id),
       documentSchema(operation.collection),
@@ -311,7 +354,9 @@ export function createPayloadRestClient(options: PayloadRestClientOptions) {
   async function create<C extends PayloadCollection>(
     operation: PayloadMutationOptions<C>,
   ): Promise<PayloadDocument<C>>;
-  async function create(operation: PayloadMutationOptions): Promise<unknown> {
+  async function create(
+    operation: PayloadMutationOptions,
+  ): Promise<PayloadDocument<PayloadCollection>> {
     return await mutation(operation, documentSchema(operation.collection), "POST");
   }
 
@@ -320,7 +365,7 @@ export function createPayloadRestClient(options: PayloadRestClientOptions) {
   ): Promise<PayloadDocument<C>>;
   async function update(
     operation: PayloadMutationOptions & { readonly id: DocumentId },
-  ): Promise<unknown> {
+  ): Promise<PayloadDocument<PayloadCollection>> {
     return await mutation(operation, documentSchema(operation.collection), "PATCH");
   }
 
@@ -329,7 +374,7 @@ export function createPayloadRestClient(options: PayloadRestClientOptions) {
   ): Promise<PayloadDocument<C>>;
   async function deleteDocument(
     operation: PayloadMutationOptions & { readonly id: DocumentId },
-  ): Promise<unknown> {
+  ): Promise<PayloadDocument<PayloadCollection>> {
     return await mutation(operation, documentSchema(operation.collection), "DELETE");
   }
 
@@ -340,7 +385,8 @@ export function createPayloadRestClient(options: PayloadRestClientOptions) {
       const { collection, ...query } = operation;
       const url = collectionUrl(baseUrl, collection);
       appendQuery(url, query);
-      const schema = payloadPaginationSchema.extend({
+      const schema = z.object({
+        ...payloadPaginationSchema.shape,
         docs: z.array(documentSchema(collection)),
       });
       return await request(url, schema);

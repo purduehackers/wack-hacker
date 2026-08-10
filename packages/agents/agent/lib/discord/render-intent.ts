@@ -26,14 +26,11 @@ export function renderFooter(input: FooterInput): string {
 
 export interface RenderPublisherDeps {
   readonly store: ConversationStore["renderPublication"];
-  readonly botUrl: string | (() => Promise<string>);
+  readonly botUrl: () => Promise<string>;
   readonly botSecret: string;
-  readonly fetch?: typeof globalThis.fetch;
 }
 
 export function createRenderPublisher(deps: RenderPublisherDeps) {
-  const doFetch = deps.fetch ?? fetch;
-
   return {
     publish: async (intent: RenderIntent): Promise<boolean> => {
       const publication = await deps.store.publish(intent);
@@ -43,8 +40,8 @@ export function createRenderPublisher(deps: RenderPublisherDeps) {
       // Redis is the durable path. This small callback only avoids waiting for a
       // replacement bot's startup/periodic recovery sweep.
       try {
-        const botUrl = typeof deps.botUrl === "string" ? deps.botUrl : await deps.botUrl();
-        const response = await doFetch(new URL(BOT_ROUTES.render, botUrl), {
+        const botUrl = await deps.botUrl();
+        const response = await fetch(new URL(BOT_ROUTES.render, botUrl), {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -65,5 +62,3 @@ export function createRenderPublisher(deps: RenderPublisherDeps) {
       deps.store.settleAndPark(intent, parked),
   };
 }
-
-export type RenderPublisher = ReturnType<typeof createRenderPublisher>;

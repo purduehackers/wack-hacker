@@ -8,9 +8,14 @@ export const list_versions = defineTool({
   description:
     "List version history of a Figma file. Returns version IDs, labels, descriptions, timestamps, and the user who created each version.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     file_key: z.string().describe("The file key"),
-    page_size: z.number().max(100).optional().describe("Number of versions to return (max 100)"),
+    page_size: z
+      .int()
+      .min(1)
+      .max(100)
+      .optional()
+      .describe("Number of versions to return (max 100)"),
     before: z.string().optional().describe("Version ID to paginate before"),
     after: z.string().optional().describe("Version ID to paginate after"),
   }),

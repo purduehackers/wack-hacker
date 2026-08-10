@@ -1,4 +1,4 @@
-import { env as runtimeEnv } from "../../../lib/env.ts";
+import { env as runtimeEnv } from "../../../env.ts";
 
 /** Typed SDK configuration; execution is denied before these fallbacks can be used. */
 export const env = {

@@ -2,17 +2,11 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { hcbGet, hcbOrgSlug, hcbPaginate, hcbTxnUrl } from "./client.ts";
-
-const hcbTransactionSchema = z.object({
-  id: z.string().optional(),
-  date: z.string().optional(),
-  amount_cents: z.number().optional(),
-  memo: z.string().optional(),
-  type: z.string().optional(),
-  pending: z.boolean().optional(),
-  receipts: z.object({ count: z.number().optional(), missing: z.boolean().optional() }).optional(),
-});
-type HcbTransaction = z.infer<typeof hcbTransactionSchema>;
+import {
+  type HcbTransaction,
+  hcbTransactionSchema,
+  projectTransaction,
+} from "./transaction-shape.ts";
 
 /**
  * List transactions flagged as missing a receipt.
@@ -26,8 +20,8 @@ export const list_missing_receipts = defineTool({
   description:
     "List HCB transactions flagged as missing a receipt. Note: only HCB card charges and HCB reimbursements are tracked here — org-wide reimbursements through Purdue's BOSO portal are NOT in HCB. The HCB API does not expose receipt files themselves — only whether one is attached. Link users to hcb.hackclub.com/hcb/{id} to upload/view files.",
   access: { risk: "read" },
-  input: z.object({
-    limit: z.number().int().min(1).max(200).optional().describe("Max results (default 50)"),
+  input: z.strictObject({
+    limit: z.int().min(1).max(200).optional().describe("Max results (default 50)"),
   }),
   execute: async ({ limit }) => {
     const all: HcbTransaction[] = await hcbPaginate(
@@ -37,16 +31,7 @@ export const list_missing_receipts = defineTool({
       hcbTransactionSchema,
     );
     const missing = all.filter((t) => Boolean(t.receipts?.missing));
-    return missing.slice(0, limit ?? 50).map((t) => ({
-      id: t.id,
-      date: t.date,
-      amount_cents: t.amount_cents,
-      memo: t.memo,
-      type: t.type,
-      pending: t.pending,
-      receipts: t.receipts,
-      href: t.id ? hcbTxnUrl(t.id) : undefined,
-    }));
+    return missing.slice(0, limit ?? 50).map(projectTransaction);
   },
 });
 
@@ -55,7 +40,7 @@ export const get_receipt_status = defineTool({
   description:
     "Report whether a given HCB transaction has a receipt attached — returns { id, receipts: { count, missing }, href }. The HCB API does not expose the receipt file itself; to upload or view the actual image/PDF, visit hcb.hackclub.com/hcb/{id}.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     id: z.string().describe("HCB transaction id"),
   }),
   execute: async ({ id }) => {

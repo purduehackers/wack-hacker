@@ -1,27 +1,27 @@
 import { z } from "zod";
 
-export const perPageField = z
-  .number()
-  .int()
-  .min(1)
-  .max(100)
-  .optional()
-  .describe("Page size (default 50)");
-
-export const pageField = z.number().int().min(1).optional().describe("Page number (default 1)");
-
-/** Offset-style pagination. Spread into a tool's `z.object({...})`. */
-export const paginationInputShape = {
-  per_page: perPageField,
-  page: pageField,
+/** Cursor-style pagination (Notion, Sales SDK). Spread into a tool's `z.strictObject({...})`. */
+export const cursorPaginationInputShape = {
+  page_size: z.int().min(1).max(100).optional(),
+  start_cursor: z.string().optional(),
 };
 
-export const pageSizeField = z.number().int().min(1).max(100).optional();
+/**
+ * A Notion data-source sort target. The API wants exactly one of `property` or
+ * `timestamp`; `isQuerySorts` enforces that exclusivity once the input parses.
+ */
+export const notionSortSchema = z.strictObject({
+  property: z.string().optional(),
+  timestamp: z.enum(["created_time", "last_edited_time"]).optional(),
+  direction: z.enum(["ascending", "descending"]),
+});
 
-export const startCursorField = z.string().optional();
-
-/** Cursor-style pagination (Notion, Sales SDK). Spread into a tool's `z.object({...})`. */
-export const cursorPaginationInputShape = {
-  page_size: pageSizeField,
-  start_cursor: startCursorField,
+/**
+ * Filter/sort/paginate arguments every CRM list tool accepts. Spread it, then
+ * override `filter` with a data-source specific `.describe()` where it helps.
+ */
+export const crmQueryInputShape = {
+  filter: z.record(z.string(), z.json()).optional(),
+  sorts: z.array(notionSortSchema).optional(),
+  ...cursorPaginationInputShape,
 };

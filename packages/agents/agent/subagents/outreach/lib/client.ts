@@ -1,14 +1,15 @@
+import { UpstreamError } from "@repo/shared/errors";
 import { Resend } from "resend";
-import type { z } from "zod";
+import { z } from "zod";
 
-import { env } from "../../../lib/env.ts";
+import { env } from "../../../env.ts";
 import { notion } from "../../notion/lib/client.ts";
 
 export { notion };
 
 let resendClient: Resend | undefined;
 
-/** Lazy Resend client — instantiated on first access so tests can mock modules before import. */
+/** Lazy Resend client — constructed on first use so importing this module never needs the key. */
 export function resend(): Resend {
   if (!resendClient) resendClient = new Resend(env.RESEND_API_KEY ?? "");
   return resendClient;
@@ -30,5 +31,13 @@ export async function hunter<S extends z.ZodType>(
     const body = await response.text();
     throw new Error(`Hunter ${path} failed (${response.status}): ${body}`);
   }
-  return schema.parse(await response.json());
+  const parsed = schema.safeParse(await response.json());
+  if (!parsed.success) {
+    throw new UpstreamError({
+      service: "Hunter",
+      status: 502,
+      detail: `invalid ${path} response: ${z.prettifyError(parsed.error)}`,
+    });
+  }
+  return parsed.data;
 }

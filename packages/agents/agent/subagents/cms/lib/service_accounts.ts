@@ -3,26 +3,24 @@ import { z } from "zod";
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import {
   cmsAdminUrl,
+  documentId,
   paginationQuery,
   payload,
   type PayloadDocument,
   wrapPayloadError,
 } from "./client.ts";
-import { paginationInputShape } from "./constants.ts";
+import { cmsRole, paginationInputShape } from "./constants.ts";
 
 const COLLECTION = "service-accounts";
 
-/** Roles defined in purduehackers/cms src/collections/auth-utils.ts. */
-const SERVICE_ACCOUNT_ROLES = [
-  "admin",
-  "editor",
-  "viewer",
-  "hack_night_dashboard",
-  "events_website",
-  "wack_hacker",
-] as const;
-
 type PayloadServiceAccount = PayloadDocument<"service-accounts">;
+
+/** Writable service-account fields. Create requires them; update takes the partial. */
+const serviceAccountFields = {
+  name: z.string(),
+  roles: z.array(cmsRole).min(1),
+  revoked: z.boolean().optional(),
+};
 
 function projectServiceAccount(s: PayloadServiceAccount) {
   return {
@@ -40,7 +38,7 @@ export const list_service_accounts = defineTool({
   description:
     "List service accounts (API-key-only CMS identities used by bots and integrations). Each has a name, revoked flag, and role set.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     ...paginationInputShape,
     revoked_only: z
       .boolean()
@@ -69,7 +67,7 @@ export const list_service_accounts = defineTool({
 export const get_service_account = defineTool({
   description: "Fetch a single service account by ID.",
   access: { risk: "read" },
-  input: z.object({ id: z.union([z.string(), z.number()]) }),
+  input: z.strictObject({ id: documentId }),
   execute: async ({ id }) => {
     try {
       const doc = await payload.findByID({
@@ -87,11 +85,7 @@ export const create_service_account = defineTool({
   description:
     "Create a new service account. The API key itself is minted in the Payload admin UI after creation — this tool only provisions the identity and its roles.",
   access: { risk: "destructive" },
-  input: z.object({
-    name: z.string(),
-    roles: z.array(z.enum(SERVICE_ACCOUNT_ROLES)).min(1),
-    revoked: z.boolean().optional(),
-  }),
+  input: z.strictObject(serviceAccountFields),
   execute: async ({ name, roles, revoked }) => {
     try {
       const doc = await payload.create({
@@ -109,18 +103,17 @@ export const update_service_account = defineTool({
   description:
     "Update a service account. Set `revoked: true` to kill its API key without deleting the record (preserves audit trail).",
   access: { risk: "destructive" },
-  input: z.object({
-    id: z.union([z.string(), z.number()]),
-    name: z.string().optional(),
-    roles: z.array(z.enum(SERVICE_ACCOUNT_ROLES)).min(1).optional(),
-    revoked: z.boolean().optional(),
+  input: z.strictObject({
+    id: documentId,
+    ...z.object(serviceAccountFields).partial().shape,
   }),
   execute: async ({ id, ...rest }) => {
     try {
-      const data: Record<string, unknown> = {};
-      if (rest.name !== undefined) data.name = rest.name;
-      if (rest.roles !== undefined) data.roles = rest.roles;
-      if (rest.revoked !== undefined) data.revoked = rest.revoked;
+      const data = {
+        ...(rest.name !== undefined && { name: rest.name }),
+        ...(rest.roles !== undefined && { roles: rest.roles }),
+        ...(rest.revoked !== undefined && { revoked: rest.revoked }),
+      };
       const doc = await payload.update({
         collection: COLLECTION,
         id,
@@ -137,7 +130,7 @@ export const delete_service_account = defineTool({
   description:
     "Delete a service account permanently. Prefer `update_service_account({ revoked: true })` unless you're sure you don't need the audit trail.",
   access: { risk: "destructive" },
-  input: z.object({ id: z.union([z.string(), z.number()]) }),
+  input: z.strictObject({ id: documentId }),
   execute: async ({ id }) => {
     try {
       const doc = await payload.delete({

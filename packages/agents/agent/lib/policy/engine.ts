@@ -15,28 +15,26 @@ import {
   type PolicyPrincipal,
 } from "./types.ts";
 
-const roleSchema = z.enum([UserRole.Public, UserRole.Organizer, UserRole.Admin]);
+const roleSchema = z.enum(UserRole);
 const inputSchema = z.strictObject({
   principal: z.strictObject({
     userId: z.string().min(1),
     role: roleSchema,
-    source: z.enum([PolicySource.Chat, PolicySource.Scheduled]),
+    source: z.enum(PolicySource),
   }),
   budget: z
     .strictObject({ used: z.number().nonnegative(), limit: z.number().positive() })
     .optional(),
   capability: z.strictObject({
-    kind: z.enum([CapabilityKind.Subagent, CapabilityKind.Tool, CapabilityKind.Skill]),
+    kind: z.enum(CapabilityKind),
     name: z.string().min(1),
     minRole: roleSchema,
-    risk: z.enum([RiskLevel.Read, RiskLevel.Write, RiskLevel.Destructive]),
-    confirmation: z
-      .enum([Confirmation.None, Confirmation.Self, Confirmation.SecondParty])
-      .optional(),
+    risk: z.enum(RiskLevel),
+    confirmation: z.enum(Confirmation).optional(),
   }),
 });
 
-type PolicyInput = z.infer<typeof inputSchema>;
+type PolicyInput = z.output<typeof inputSchema>;
 const ROLE_LEVEL: Record<PolicyPrincipal["role"], number> = {
   [UserRole.Public]: 0,
   [UserRole.Organizer]: 1,

@@ -1,6 +1,6 @@
 import { getRedis } from "@repo/shared/redis";
 
-import { env } from "../env.ts";
+import { env } from "../../env.ts";
 import { ApprovalPolicyStore } from "./approval-record.ts";
 import type { AuditStore } from "./audit.ts";
 import { BudgetStore } from "./budget.ts";

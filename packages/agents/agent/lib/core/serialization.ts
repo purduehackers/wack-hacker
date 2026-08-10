@@ -1,4 +1,5 @@
 import { InvariantViolated } from "@repo/shared/errors";
+import { z } from "zod";
 
 export type JsonValue =
   | null
@@ -8,6 +9,71 @@ export type JsonValue =
   | readonly JsonValue[]
   | { readonly [key: string]: JsonValue };
 
+/** The two arms of `JsonValue` the walk recurses into, and the only values `ancestors` ever holds. */
+type JsonContainer = JsonValue[] | { readonly [key: string]: JsonValue };
+
+// Hoisted so the recursive walk reuses one schema per kind instead of rebuilding
+// them at every node.
+const stringSchema = z.string();
+const booleanSchema = z.boolean();
+const numberSchema = z.number();
+const nanSchema = z.nan();
+const bigintSchema = z.bigint();
+const symbolSchema = z.symbol();
+const functionSchema = z.function();
+
+function isString(value: unknown): value is string {
+  return stringSchema.safeParse(value).success;
+}
+
+function isBoolean(value: unknown): value is boolean {
+  return booleanSchema.safeParse(value).success;
+}
+
+/**
+ * Every number, including the ones JSON cannot carry.
+ *
+ * `z.number()` rejects `NaN` and both infinities, so they are matched
+ * separately — otherwise a non-finite number would fall past this guard and be
+ * reported as some other kind entirely, instead of as a non-finite number.
+ */
+function isNumber(value: unknown): value is number {
+  return (
+    numberSchema.safeParse(value).success ||
+    nanSchema.safeParse(value).success ||
+    value === Number.POSITIVE_INFINITY ||
+    value === Number.NEGATIVE_INFINITY
+  );
+}
+
+function isFunction(value: unknown): value is (...args: never[]) => unknown {
+  return functionSchema.safeParse(value).success;
+}
+
+/**
+ * Everything that is neither a primitive nor callable.
+ *
+ * `Object(value) === value` holds for exactly the objects; callables are then
+ * excluded so a function is reported as a function rather than walked as a
+ * record.
+ */
+function isJsonContainer(value: unknown): value is JsonContainer {
+  return Object(value) === value && !isFunction(value);
+}
+
+/**
+ * The kind name a rejected value carries into the boundary error.
+ *
+ * Only reached once `visit` has ruled out null, string, boolean, number,
+ * undefined and every container, which leaves exactly bigint, symbol and
+ * function.
+ */
+function rejectedKind(value: unknown): string {
+  if (bigintSchema.safeParse(value).success) return "bigint";
+  if (symbolSchema.safeParse(value).success) return "symbol";
+  return "function";
+}
+
 function fail(path: string, detail: string): never {
   throw new InvariantViolated({
     invariant: "Eve JSON serialization boundary",
@@ -15,23 +81,21 @@ function fail(path: string, detail: string): never {
   });
 }
 
-function constructorName(value: object): string {
+function constructorName(value: { readonly [key: string]: JsonValue }): string {
   const constructor = Object.getPrototypeOf(value)?.constructor;
-  return typeof constructor === "function" && constructor.name !== ""
-    ? constructor.name
-    : "class instance";
+  return isFunction(constructor) && constructor.name !== "" ? constructor.name : "class instance";
 }
 
-function isResult(value: object): boolean {
+function isResult(value: JsonContainer): boolean {
   if (!("status" in value) || !("isOk" in value) || !("isErr" in value)) return false;
   return (
     (value.status === "ok" || value.status === "error") &&
-    typeof value.isOk === "function" &&
-    typeof value.isErr === "function"
+    isFunction(value.isOk) &&
+    isFunction(value.isErr)
   );
 }
 
-function visitArray(value: unknown[], path: string, ancestors: Set<object>): JsonValue[] {
+function visitArray(value: unknown[], path: string, ancestors: Set<JsonContainer>): JsonValue[] {
   if (Object.getOwnPropertySymbols(value).length > 0) {
     fail(path, "symbol properties are silently omitted by JSON.stringify");
   }
@@ -68,9 +132,12 @@ function visitArray(value: unknown[], path: string, ancestors: Set<object>): Jso
   return output;
 }
 
-function visitRecord(value: object, path: string, ancestors: Set<object>): JsonValue {
+function visitRecord(
+  value: { readonly [key: string]: JsonValue },
+  path: string,
+  ancestors: Set<JsonContainer>,
+): JsonValue {
   const prototype = Object.getPrototypeOf(value);
-  // oxlint-disable-next-line unicorn/no-null -- Object.create(null) is still a data-only record
   if (prototype !== Object.prototype && prototype !== null) {
     fail(path, `${constructorName(value)} instances are not plain JSON objects`);
   }
@@ -98,15 +165,15 @@ function visitRecord(value: object, path: string, ancestors: Set<object>): JsonV
   return output;
 }
 
-function visit(value: unknown, path: string, ancestors: Set<object>): JsonValue {
-  if (value === null || typeof value === "string" || typeof value === "boolean") return value;
-  if (typeof value === "number") {
+function visit(value: unknown, path: string, ancestors: Set<JsonContainer>): JsonValue {
+  if (value === null || isString(value) || isBoolean(value)) return value;
+  if (isNumber(value)) {
     if (!Number.isFinite(value)) fail(path, "non-finite numbers are not JSON values");
     if (Object.is(value, -0)) fail(path, "negative zero does not survive a JSON round trip");
     return value;
   }
   if (value === undefined) fail(path, "undefined is silently omitted by JSON.stringify");
-  if (typeof value !== "object") fail(path, `${typeof value} is not a JSON value`);
+  if (!isJsonContainer(value)) fail(path, `${rejectedKind(value)} is not a JSON value`);
   if (isResult(value)) {
     fail(path, "Result must be unwrapped before crossing a JSON boundary");
   }
@@ -123,7 +190,7 @@ function visit(value: unknown, path: string, ancestors: Set<object>): JsonValue 
 }
 
 /** Assert, without coercion, that a value survives Eve's JSON boundary faithfully. */
-export function assertJsonValue(value: unknown, boundary = "JSON boundary"): JsonValue {
+function assertJsonValue(value: unknown, boundary: string): JsonValue {
   return visit(value, boundary, new Set());
 }
 

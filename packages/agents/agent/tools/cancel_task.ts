@@ -2,8 +2,8 @@ import { defineTool } from "eve/tools";
 import { z } from "zod";
 
 import { guardToolExecution } from "../lib/core/serialization.ts";
-import { approveScheduleMutation, requireScheduleMutationOwner } from "../lib/schedule-owner.ts";
-import { getScheduleStore } from "../lib/schedule-store.ts";
+import { approveScheduleMutation, requireScheduleMutationOwner } from "../lib/schedule/owner.ts";
+import { getScheduleStore } from "../lib/schedule/store.ts";
 
 export default defineTool({
   description: "Cancel one active scheduled task owned by the current Discord user.",

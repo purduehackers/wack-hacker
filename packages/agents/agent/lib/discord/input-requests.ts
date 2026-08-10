@@ -2,22 +2,47 @@ import { Result } from "@repo/shared/result";
 import { sliceText } from "@repo/shared/text";
 import type { RenderInputRequest } from "@repo/shared/wire";
 import type { InputRequest } from "eve/client";
+import { z } from "zod";
 
+import type { JsonValue } from "../core/serialization.ts";
 import type { ApprovalPolicyStore } from "../policy/approval-record.ts";
 import type { DiscordChannelState } from "./state.ts";
 
 const SENSITIVE_INPUT_KEY = /secret|token|password|credential|api_key|auth|^value$/iu;
+
+/** The `JsonValue` arm this walk recurses into once strings and arrays are handled. */
+type JsonObject = { readonly [key: string]: JsonValue };
+
+// Hoisted so the recursive walk reuses one schema per kind instead of rebuilding
+// them at every node.
+const stringSchema = z.string();
+const objectSchema = z.object({});
+
+function isString(value: JsonValue): value is string {
+  return stringSchema.safeParse(value).success;
+}
+
+/**
+ * `z.object({})` accepts exactly `typeof value === "object" && value !== null &&
+ * !Array.isArray(value)`. Arrays already returned above, so this covers the same
+ * values the old `typeof value === "object" && value !== null` test did, and
+ * leaves `null`, booleans and every number — `NaN` and the infinities included —
+ * to be handed back untouched.
+ */
+function isJsonObject(value: JsonValue): value is JsonObject {
+  return objectSchema.safeParse(value).success;
+}
 
 function visiblePrompt(value: string): string {
   const prompt = sliceText(value.trim(), 2_000);
   return prompt === "" ? "Input required." : prompt;
 }
 
-function redactInput(value: unknown, depth = 0): unknown {
+function redactInput(value: JsonValue, depth = 0): JsonValue {
   if (depth >= 6) return "[truncated]";
-  if (typeof value === "string") return sliceText(value, 500);
+  if (isString(value)) return sliceText(value, 500);
   if (Array.isArray(value)) return value.slice(0, 20).map((item) => redactInput(item, depth + 1));
-  if (typeof value !== "object" || value === null) return value;
+  if (!isJsonObject(value)) return value;
 
   return Object.fromEntries(
     Object.entries(value)
@@ -29,7 +54,7 @@ function redactInput(value: unknown, depth = 0): unknown {
   );
 }
 
-function inputPreview(value: unknown): string | undefined {
+function inputPreview(value: JsonValue): string | undefined {
   const serialized = JSON.stringify(redactInput(value), undefined, 2);
   if (serialized === undefined || serialized === "{}") return undefined;
   return sliceText(serialized.replaceAll("```", "` ` `"), 2_000);
@@ -46,7 +71,7 @@ function approvalDisplay(
   };
 }
 
-export interface ApplyInputRequestsDeps {
+interface ApplyInputRequestsDeps {
   readonly state: Pick<
     DiscordChannelState,
     "answeredInputRequestIds" | "pendingInputRequestIds" | "renderInputRequests"

@@ -23,16 +23,16 @@ function parseCover(cover: string | undefined): CreatePageParameters["cover"] {
 export const create_page = defineTool({
   description: `Create a new Notion page. Can be a subpage of another page, or a new entry in a database. Pass markdown for the page body — the first # heading becomes the title if properties.title is omitted. For database entries, set properties matching the database schema (use retrieve_database first).`,
   access: { risk: "write" },
-  input: z.object({
+  input: z.strictObject({
     parent_type: z.enum(["page_id", "database_id"]).describe("Parent type"),
     parent_id: z.string().describe("Parent page or database UUID"),
     properties: z
-      .record(z.string(), z.unknown())
+      .record(z.string(), z.json())
       .optional()
       .describe("Page properties (Notion property format)"),
     markdown: z.string().optional().describe("Page body content as markdown"),
     icon: z.string().optional().describe("Emoji or external URL for page icon"),
-    cover: z.string().optional().describe("External URL for page cover image"),
+    cover: z.url().optional().describe("External URL for page cover image"),
   }),
   execute: async ({ parent_type, parent_id, properties, markdown, icon, cover }) => {
     const pageProperties = properties ?? {};
@@ -65,14 +65,14 @@ export const create_page = defineTool({
 export const update_page = defineTool({
   description: `Update a page's properties, icon, cover, or archived status. Only include fields to change. For database entries, properties must match the database schema. Set archived: true to soft-delete.`,
   access: { risk: "destructive" },
-  input: z.object({
+  input: z.strictObject({
     page_id: z.string().describe("Page UUID"),
     properties: z
-      .record(z.string(), z.unknown())
+      .record(z.string(), z.json())
       .optional()
       .describe("Properties to update (Notion property format)"),
     icon: z.string().optional().describe("Emoji or external URL for page icon"),
-    cover: z.string().optional().describe("External URL for page cover image"),
+    cover: z.url().optional().describe("External URL for page cover image"),
     archived: z.boolean().optional().describe("Set true to archive (soft-delete)"),
   }),
   execute: async ({ page_id, properties, icon, cover, archived }) => {
@@ -101,7 +101,7 @@ export const update_page = defineTool({
 export const retrieve_page_property = defineTool({
   description: `Get a single property value from a page, with pagination for large values (relations, rollups, rich_text). Use retrieve_page first to see all property IDs.`,
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     page_id: z.string().describe("Page UUID"),
     property_id: z.string().describe("Property ID (from retrieve_page results)"),
     ...cursorPaginationInputShape,
@@ -119,7 +119,7 @@ export const retrieve_page_property = defineTool({
 export const read_page_content = defineTool({
   description: `Read a page's full body content as markdown. Returns the complete page content including headings, lists, code blocks, etc. Use this to see what's on a page before editing.`,
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     page_id: z.string().describe("Page UUID"),
   }),
   execute: async ({ page_id }) => {
@@ -132,7 +132,7 @@ export const archive_page = defineTool({
   description:
     "Archive (soft-delete) a Notion page. Equivalent to update_page with archived=true, but as an explicit intent.",
   access: { risk: "destructive" },
-  input: z.object({
+  input: z.strictObject({
     page_id: z.string().describe("Page UUID"),
   }),
   execute: async ({ page_id }) => {
@@ -150,7 +150,7 @@ export const archive_page = defineTool({
 export const update_page_content = defineTool({
   description: `Update a page's body content using markdown. Two modes: "replace_content" replaces the entire page body, or "update_content" does search-and-replace on specific text. Use read_page_content first to see current content.`,
   access: { risk: "write" },
-  input: z.object({
+  input: z.strictObject({
     page_id: z.string().describe("Page UUID"),
     mode: z
       .enum(["replace_content", "update_content"])

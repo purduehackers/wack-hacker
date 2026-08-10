@@ -9,11 +9,9 @@ export default defineDynamic({
   events: {
     "turn.started": (_event, ctx) => {
       const principal = requirePrincipal(ctx.session.auth.current);
-      // oxlint-disable-next-line unicorn/no-null -- null hides a dynamic subagent
-      if (Result.isError(principal)) return null;
+      if (Result.isError(principal)) return undefined;
       const decision = decideCapability(principal.value, VERCEL_RUNTIME.subagentDescriptor);
-      // oxlint-disable-next-line unicorn/no-null -- null hides a dynamic subagent
-      if (Result.isError(decision) || !decision.value.discover) return null;
+      if (Result.isError(decision) || !decision.value.discover) return undefined;
       return defineAgent({
         description:
           "Operate Vercel projects, deployments, domains, observability, integrations, edge-platform features, security, rolling releases, and sandboxes.",

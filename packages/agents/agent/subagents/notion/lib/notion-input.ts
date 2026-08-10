@@ -30,9 +30,12 @@ type BlockKind = Exclude<
 >;
 
 const jsonValueSchema = z.json();
-type JsonValue = z.infer<typeof jsonValueSchema>;
-const jsonRecordSchema = z.record(z.string(), jsonValueSchema);
-const pagePropertyKinds: ReadonlySet<PagePropertyKind> = new Set([
+type JsonValue = z.output<typeof jsonValueSchema>;
+/** A JSON object — the shape every fragment of a Notion request body must have. */
+const jsonObjectSchema = z.record(z.string(), jsonValueSchema);
+type JsonObject = z.output<typeof jsonObjectSchema>;
+
+const pagePropertyKind = z.enum([
   "title",
   "rich_text",
   "number",
@@ -49,8 +52,8 @@ const pagePropertyKinds: ReadonlySet<PagePropertyKind> = new Set([
   "relation",
   "place",
   "verification",
-]);
-const dataSourcePropertyKinds: ReadonlySet<DataSourcePropertyKind> = new Set([
+]) satisfies z.ZodType<PagePropertyKind>;
+const dataSourcePropertyKind = z.enum([
   "title",
   "rich_text",
   "number",
@@ -72,8 +75,8 @@ const dataSourcePropertyKinds: ReadonlySet<DataSourcePropertyKind> = new Set([
   "last_edited_time",
   "last_edited_by",
   "unique_id",
-]);
-const blockKinds: ReadonlySet<BlockKind> = new Set([
+]) satisfies z.ZodType<DataSourcePropertyKind>;
+const blockKind = z.enum([
   "paragraph",
   "heading_1",
   "heading_2",
@@ -103,56 +106,65 @@ const blockKinds: ReadonlySet<BlockKind> = new Set([
   "column",
   "synced_block",
   "template",
-]);
+]) satisfies z.ZodType<BlockKind>;
 
-function contains<T extends string>(collection: ReadonlySet<T>, candidate: string): candidate is T {
-  return collection.values().some((member) => member === candidate);
-}
+const queryTimestamp = z.enum(["created_time", "last_edited_time"]);
+const propertyFilterSchema = z.looseObject({ property: z.string() });
+const timestampFilterSchema = z.looseObject({ timestamp: queryTimestamp });
+const sortDirection = z.enum(["ascending", "descending"]);
+/** Exactly one sort target: a property name or a timestamp, never both nor neither. */
+const querySortsSchema = z.array(
+  z.xor([
+    z.looseObject({ property: z.string(), direction: sortDirection }),
+    z.looseObject({ timestamp: queryTimestamp, direction: sortDirection }),
+  ]),
+);
+const titlePropertySchema = z.looseObject({ title: jsonValueSchema });
+const renamedPropertySchema = z.looseObject({ name: z.string() });
+const updateBlockEnvelopeSchema = z.looseObject({
+  block_id: z.string(),
+  in_trash: z.boolean().optional(),
+});
+const appendBlockEnvelopeSchema = z.looseObject({
+  block_id: z.string(),
+  children: z.array(jsonObjectSchema).min(1),
+  after: z.string().optional(),
+});
+const updateBlockMetadataKey = z.enum(["block_id", "in_trash", "type"]);
+const appendBlockMetadataKey = z.enum(["object", "type"]);
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function isJsonRecord(value: unknown): value is Record<string, JsonValue> {
-  return isRecord(value) && jsonRecordSchema.safeParse(value).success;
+function hasPropertyKind(value: JsonValue, kind: z.ZodType<string>): boolean {
+  const object = jsonObjectSchema.safeParse(value);
+  return object.success && Object.keys(object.data).some((key) => kind.safeParse(key).success);
 }
 
 export function isQueryFilter(value: unknown): value is QueryFilter {
-  if (!isJsonRecord(value)) return false;
-  const group = value.and ?? value.or;
+  const object = jsonObjectSchema.safeParse(value);
+  if (!object.success) return false;
+  const filter = object.data;
+  const group = filter.and ?? filter.or;
   if (group !== undefined) return Array.isArray(group) && group.every(isQueryFilter);
-  if (typeof value.property === "string") {
-    return Object.entries(value).some(
-      ([key, condition]) => key !== "property" && isRecord(condition),
+  if (propertyFilterSchema.safeParse(filter).success) {
+    return Object.entries(filter).some(
+      ([key, condition]) => key !== "property" && jsonObjectSchema.safeParse(condition).success,
     );
   }
-  if (value.timestamp === "created_time" || value.timestamp === "last_edited_time") {
-    return isRecord(value[value.timestamp]);
+  const timestamp = timestampFilterSchema.safeParse(filter);
+  if (timestamp.success) {
+    return jsonObjectSchema.safeParse(filter[timestamp.data.timestamp]).success;
   }
   return false;
 }
 
 export function isQuerySorts(value: unknown): value is QuerySorts {
-  return (
-    Array.isArray(value) &&
-    value.every(
-      (sort) =>
-        isRecord(sort) &&
-        (sort.direction === "ascending" || sort.direction === "descending") &&
-        (typeof sort.property === "string") !==
-          (sort.timestamp === "created_time" || sort.timestamp === "last_edited_time"),
-    )
-  );
-}
-
-function hasPropertyKind(value: unknown, kinds: ReadonlySet<string>): boolean {
-  return isJsonRecord(value) && Object.keys(value).some((key) => contains(kinds, key));
+  return querySortsSchema.safeParse(value).success;
 }
 
 export function isCreatePageProperties(value: unknown): value is CreatePageProperties {
+  const object = jsonObjectSchema.safeParse(value);
   return (
-    isRecord(value) &&
-    Object.values(value).every((item) => hasPropertyKind(item, pagePropertyKinds))
+    object.success &&
+    Object.values(object.data).every((item) => hasPropertyKind(item, pagePropertyKind))
   );
 }
 
@@ -161,65 +173,70 @@ export function isUpdatePageProperties(value: unknown): value is UpdatePagePrope
 }
 
 export function isCreateDataSourceProperties(value: unknown): value is CreateDataSourceProperties {
+  const object = jsonObjectSchema.safeParse(value);
+  if (!object.success) return false;
+  const properties = Object.values(object.data);
   return (
-    isRecord(value) &&
-    Object.values(value).every((item) => hasPropertyKind(item, dataSourcePropertyKinds)) &&
-    Object.values(value).some((item) => isRecord(item) && "title" in item)
+    properties.every((item) => hasPropertyKind(item, dataSourcePropertyKind)) &&
+    properties.some((item) => titlePropertySchema.safeParse(item).success)
   );
 }
 
 export function isUpdateDataSourceProperties(value: unknown): value is UpdateDataSourceProperties {
+  const object = jsonObjectSchema.safeParse(value);
   return (
-    isRecord(value) &&
-    Object.values(value).every(
+    object.success &&
+    Object.values(object.data).every(
       (item) =>
         item === null ||
-        (isJsonRecord(item) &&
-          (typeof item.name === "string" ||
-            Object.keys(item).some((key) => contains(dataSourcePropertyKinds, key)))),
+        renamedPropertySchema.safeParse(item).success ||
+        hasPropertyKind(item, dataSourcePropertyKind),
     )
   );
 }
 
-function hasSingleBlockKind(
-  value: Record<string, unknown>,
-  metadata: ReadonlySet<string>,
-): boolean {
+function hasSingleBlockKind(value: JsonObject, metadataKey: z.ZodType<string>): boolean {
   const propertyNames = Object.keys(value);
   if (
-    !propertyNames.every((candidate) => metadata.has(candidate) || contains(blockKinds, candidate))
+    !propertyNames.every(
+      (candidate) =>
+        metadataKey.safeParse(candidate).success || blockKind.safeParse(candidate).success,
+    )
   ) {
     return false;
   }
-  const present = propertyNames.filter((candidate) => contains(blockKinds, candidate));
-  if (present.length > 1 || !present.every((candidate) => isRecord(value[candidate]))) return false;
+  const present = propertyNames.filter((candidate) => blockKind.safeParse(candidate).success);
+  if (present.length > 1) return false;
+  if (!present.every((candidate) => jsonObjectSchema.safeParse(value[candidate]).success)) {
+    return false;
+  }
   if (value.type === undefined) return true;
-  return typeof value.type === "string" && present[0] === value.type;
+  // `present[0]` is a block-kind name, so this also rejects a non-string `type`
+  // and a `type` declared with no matching block payload.
+  return present[0] === value.type;
 }
 
 export function isUpdateBlockParameters(value: unknown): value is UpdateBlockParameters {
+  const object = jsonObjectSchema.safeParse(value);
   return (
-    isJsonRecord(value) &&
-    typeof value.block_id === "string" &&
-    (value.in_trash === undefined || typeof value.in_trash === "boolean") &&
-    hasSingleBlockKind(value, new Set(["block_id", "in_trash", "type"]))
+    object.success &&
+    updateBlockEnvelopeSchema.safeParse(object.data).success &&
+    hasSingleBlockKind(object.data, updateBlockMetadataKey)
   );
 }
 
 export function isAppendBlockChildrenParameters(
   value: unknown,
 ): value is AppendBlockChildrenParameters {
+  const object = jsonObjectSchema.safeParse(value);
+  if (!object.success) return false;
+  const envelope = appendBlockEnvelopeSchema.safeParse(object.data);
   return (
-    isJsonRecord(value) &&
-    typeof value.block_id === "string" &&
-    Array.isArray(value.children) &&
-    value.children.length > 0 &&
-    value.children.every(
+    envelope.success &&
+    envelope.data.children.every(
       (child) =>
-        isJsonRecord(child) &&
-        hasSingleBlockKind(child, new Set(["object", "type"])) &&
-        Object.keys(child).some((key) => contains(blockKinds, key)),
-    ) &&
-    (value.after === undefined || typeof value.after === "string")
+        hasSingleBlockKind(child, appendBlockMetadataKey) &&
+        Object.keys(child).some((key) => blockKind.safeParse(key).success),
+    )
   );
 }

@@ -17,7 +17,7 @@ const hcbTransferSchema = z.object({
     .object({ id: z.string().optional(), name: z.string().optional(), slug: z.string().optional() })
     .optional(),
 });
-type HcbTransfer = z.infer<typeof hcbTransferSchema>;
+type HcbTransfer = z.output<typeof hcbTransferSchema>;
 
 function projectTransfer(t: HcbTransfer) {
   return {
@@ -36,7 +36,7 @@ export const get_transfer = defineTool({
   description:
     "Get a single HCB inter-org transfer by ID — sender, receiver, amount_cents, status, and memo.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     id: z.string().describe("Transfer ID"),
   }),
   execute: async ({ id }) => {
@@ -50,7 +50,7 @@ export const list_transfers = defineTool({
   description:
     "List HCB inter-org transfers (disbursements) involving Purdue Hackers — sender, receiver, amount_cents, status, and memo.",
   access: { risk: "read" },
-  input: z.object(paginationInputShape),
+  input: z.strictObject(paginationInputShape),
   execute: async (input) => {
     const data = await hcbGet(
       `/organizations/${hcbOrgSlug()}/transfers`,

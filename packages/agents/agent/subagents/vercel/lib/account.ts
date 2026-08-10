@@ -3,12 +3,13 @@ import { z } from "zod";
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { vercel } from "./client.ts";
 import { VERCEL_TEAM_ID, VERCEL_TEAM_SLUG } from "./constants.ts";
+import { epochMillis, isoTimestamp, pageLimit } from "./fields.ts";
 
 export const whoami = defineTool({
   description:
     "Return the authenticated Vercel user and the active Purdue Hackers team context. Useful as a debug smoke test.",
   access: { risk: "read" },
-  input: z.object({}),
+  input: z.strictObject({}),
   execute: async () => {
     const user = await vercel().user.getAuthUser();
     return JSON.stringify({
@@ -22,10 +23,10 @@ export const list_teams = defineTool({
   description:
     "List every Vercel team the authenticated account belongs to. Returns id, slug, name, createdAt. Paginated via `limit` / `since` / `until`.",
   access: { risk: "read" },
-  input: z.object({
-    limit: z.number().max(100).optional(),
-    since: z.number().optional().describe("Unix ms timestamp lower bound"),
-    until: z.number().optional().describe("Unix ms timestamp upper bound"),
+  input: z.strictObject({
+    limit: pageLimit.max(100).optional(),
+    since: epochMillis.optional().describe("Unix ms timestamp lower bound"),
+    until: epochMillis.optional().describe("Unix ms timestamp upper bound"),
   }),
   execute: async ({ limit, since, until }) => {
     const result = await vercel().teams.getTeams({ limit, since, until });
@@ -37,8 +38,8 @@ export const list_user_events = defineTool({
   description:
     "List recent audit events for the authenticated user scoped to the active Vercel team — useful for investigating who ran what (e.g. promotions, env var edits, member changes).",
   access: { risk: "read" },
-  input: z.object({
-    limit: z.number().max(100).optional(),
+  input: z.strictObject({
+    limit: pageLimit.max(100).optional(),
     types: z
       .string()
       .optional()
@@ -47,8 +48,8 @@ export const list_user_events = defineTool({
       ),
     userId: z.string().optional().describe("Filter to events emitted by this user id"),
     projectId: z.string().optional(),
-    since: z.string().optional().describe("ISO timestamp lower bound"),
-    until: z.string().optional().describe("ISO timestamp upper bound"),
+    since: isoTimestamp.optional().describe("ISO timestamp lower bound"),
+    until: isoTimestamp.optional().describe("ISO timestamp upper bound"),
   }),
   execute: async ({ limit, types, userId, projectId, since, until }) => {
     const result = await vercel().user.listUserEvents({
@@ -69,7 +70,7 @@ export const list_event_types = defineTool({
   description:
     "List every user-facing event type the audit log recognises. Use this before calling list_user_events with a specific `types` filter.",
   access: { risk: "read" },
-  input: z.object({}),
+  input: z.strictObject({}),
   execute: async () => {
     const result = await vercel().user.listEventTypes({
       teamId: VERCEL_TEAM_ID,

@@ -10,10 +10,8 @@ export const SUBAGENT_OUTPUT_SCHEMA = z.strictObject({
         name: z.string(),
         type: z.string(),
         id: z.string(),
-        url: z.string().url(),
+        url: z.url(),
       }),
     )
     .max(10),
 });
-
-export type SubagentOutput = z.infer<typeof SUBAGENT_OUTPUT_SCHEMA>;

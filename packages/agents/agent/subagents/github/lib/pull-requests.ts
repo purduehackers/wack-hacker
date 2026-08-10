@@ -3,29 +3,34 @@ import { z } from "zod";
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { octokit } from "./client.ts";
 import { env } from "./config.ts";
-import { paginationInputShape } from "./constants.ts";
+import { paginationInputShape, repoField, resourceId } from "./constants.ts";
+
+const pullNumber = resourceId.describe("PR number");
+
+/** `repo` plus the PR number and offset pagination — the shape every PR listing shares. */
+const pullPaginatedInputShape = {
+  repo: repoField,
+  pull_number: pullNumber,
+  ...paginationInputShape,
+};
 
 /** Create a new pull request. */
 export const create_pull_request = defineTool({
   description: `Create a new pull request in a repository. Specify the head branch (with changes) and base branch (to merge into). Supports draft PRs and Markdown body. Returns the PR number, title, URL, and state.`,
   access: { risk: "write" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
+  input: z.strictObject({
+    repo: repoField,
     title: z.string().describe("PR title"),
-    body: z.string().optional().describe("PR body (Markdown)"),
+    body: z.string().exactOptional().describe("PR body (Markdown)"),
     head: z.string().describe("Branch with changes"),
     base: z.string().describe("Branch to merge into"),
-    draft: z.boolean().optional(),
+    draft: z.boolean().exactOptional(),
   }),
-  execute: async ({ repo, title, body, head, base, draft }) => {
+  execute: async ({ repo, ...fields }) => {
     const { data } = await octokit().rest.pulls.create({
       owner: env.GITHUB_ORG,
       repo,
-      title,
-      head,
-      base,
-      ...(body === undefined ? {} : { body }),
-      ...(draft === undefined ? {} : { draft }),
+      ...fields,
     });
     return JSON.stringify({
       number: data.number,
@@ -41,23 +46,19 @@ export const create_pull_request = defineTool({
 export const update_pull_request = defineTool({
   description: `Update an existing pull request. Can change its title, body, state (open/closed), or base branch. Returns the updated PR summary.`,
   access: { risk: "write" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    pull_number: z.number().describe("PR number"),
-    title: z.string().optional(),
-    body: z.string().optional(),
-    state: z.enum(["open", "closed"]).optional(),
-    base: z.string().optional().describe("Change the base branch"),
+  input: z.strictObject({
+    repo: repoField,
+    pull_number: pullNumber,
+    title: z.string().exactOptional(),
+    body: z.string().exactOptional(),
+    state: z.enum(["open", "closed"]).exactOptional(),
+    base: z.string().exactOptional().describe("Change the base branch"),
   }),
-  execute: async ({ repo, pull_number, title, body, state, base }) => {
+  execute: async ({ repo, ...fields }) => {
     const { data } = await octokit().rest.pulls.update({
       owner: env.GITHUB_ORG,
       repo,
-      pull_number,
-      ...(title === undefined ? {} : { title }),
-      ...(body === undefined ? {} : { body }),
-      ...(state === undefined ? {} : { state }),
-      ...(base === undefined ? {} : { base }),
+      ...fields,
     });
     return JSON.stringify({
       number: data.number,
@@ -72,21 +73,18 @@ export const update_pull_request = defineTool({
 export const merge_pull_request = defineTool({
   description: `Merge a pull request. Supports merge commit, squash, and rebase strategies. Optionally set a custom commit title and message. Returns whether the merge succeeded and the resulting SHA.`,
   access: { risk: "destructive" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    pull_number: z.number().describe("PR number"),
-    commit_title: z.string().optional().describe("Merge commit title"),
-    commit_message: z.string().optional().describe("Merge commit body"),
-    merge_method: z.enum(["merge", "squash", "rebase"]).optional(),
+  input: z.strictObject({
+    repo: repoField,
+    pull_number: pullNumber,
+    commit_title: z.string().exactOptional().describe("Merge commit title"),
+    commit_message: z.string().exactOptional().describe("Merge commit body"),
+    merge_method: z.enum(["merge", "squash", "rebase"]).exactOptional(),
   }),
-  execute: async ({ repo, pull_number, commit_title, commit_message, merge_method }) => {
+  execute: async ({ repo, ...fields }) => {
     const { data } = await octokit().rest.pulls.merge({
       owner: env.GITHUB_ORG,
       repo,
-      pull_number,
-      ...(commit_title === undefined ? {} : { commit_title }),
-      ...(commit_message === undefined ? {} : { commit_message }),
-      ...(merge_method === undefined ? {} : { merge_method }),
+      ...fields,
     });
     return JSON.stringify({
       merged: data.merged,
@@ -101,9 +99,9 @@ export const close_pull_request = defineTool({
   description:
     "Close a pull request without merging. Does not delete the branch. Use update_pull_request with state='open' to reopen.",
   access: { risk: "write", confirm: "self" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    pull_number: z.number().describe("PR number"),
+  input: z.strictObject({
+    repo: repoField,
+    pull_number: pullNumber,
   }),
   execute: async ({ repo, pull_number }) => {
     const { data } = await octokit().rest.pulls.update({
@@ -120,19 +118,23 @@ export const close_pull_request = defineTool({
 export const request_reviewers = defineTool({
   description: "Request reviewers on a pull request. Can request individual users and/or teams.",
   access: { risk: "write" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    pull_number: z.number().describe("PR number"),
-    reviewers: z.array(z.string()).optional().describe("GitHub usernames to request as reviewers"),
-    team_reviewers: z.array(z.string()).optional().describe("Team slugs to request as reviewers"),
+  input: z.strictObject({
+    repo: repoField,
+    pull_number: pullNumber,
+    reviewers: z
+      .array(z.string())
+      .exactOptional()
+      .describe("GitHub usernames to request as reviewers"),
+    team_reviewers: z
+      .array(z.string())
+      .exactOptional()
+      .describe("Team slugs to request as reviewers"),
   }),
-  execute: async ({ repo, pull_number, reviewers, team_reviewers }) => {
+  execute: async ({ repo, ...fields }) => {
     const { data } = await octokit().rest.pulls.requestReviewers({
       owner: env.GITHUB_ORG,
       repo,
-      pull_number,
-      ...(reviewers === undefined ? {} : { reviewers }),
-      ...(team_reviewers === undefined ? {} : { team_reviewers }),
+      ...fields,
     });
     return JSON.stringify({
       number: data.number,
@@ -146,9 +148,9 @@ export const request_reviewers = defineTool({
 export const remove_requested_reviewers = defineTool({
   description: "Remove previously-requested reviewers from a pull request.",
   access: { risk: "destructive" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    pull_number: z.number().describe("PR number"),
+  input: z.strictObject({
+    repo: repoField,
+    pull_number: pullNumber,
     reviewers: z.array(z.string()).describe("GitHub usernames to remove"),
     team_reviewers: z.array(z.string()).optional().describe("Team slugs to remove"),
   }),
@@ -171,11 +173,7 @@ export const remove_requested_reviewers = defineTool({
 export const list_pr_reviews = defineTool({
   description: `List reviews on a pull request. Returns each review's ID, author, state (APPROVED, CHANGES_REQUESTED, COMMENTED, etc.), body, and timestamp. Useful for checking approval status.`,
   access: { risk: "read" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    pull_number: z.number().describe("PR number"),
-    ...paginationInputShape,
-  }),
+  input: z.strictObject(pullPaginatedInputShape),
   execute: async ({ repo, pull_number, per_page, page }) => {
     const { data } = await octokit().rest.pulls.listReviews({
       owner: env.GITHUB_ORG,
@@ -201,19 +199,17 @@ export const list_pr_reviews = defineTool({
 export const create_pr_review = defineTool({
   description: `Submit a review on a pull request. Can APPROVE, REQUEST_CHANGES, or leave a COMMENT. Include a body with your review feedback.`,
   access: { risk: "write" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    pull_number: z.number().describe("PR number"),
-    body: z.string().optional().describe("Review body"),
+  input: z.strictObject({
+    repo: repoField,
+    pull_number: pullNumber,
+    body: z.string().exactOptional().describe("Review body"),
     event: z.enum(["APPROVE", "REQUEST_CHANGES", "COMMENT"]).describe("Review action"),
   }),
-  execute: async ({ repo, pull_number, body, event }) => {
+  execute: async ({ repo, ...fields }) => {
     const { data } = await octokit().rest.pulls.createReview({
       owner: env.GITHUB_ORG,
       repo,
-      pull_number,
-      ...(body === undefined ? {} : { body }),
-      event,
+      ...fields,
     });
     return JSON.stringify({
       id: data.id,
@@ -227,11 +223,7 @@ export const create_pr_review = defineTool({
 export const list_pr_files = defineTool({
   description: `List files changed in a pull request. Returns each file's name, status (added/modified/removed), lines added/deleted, and a truncated patch preview. Useful for understanding the scope of changes.`,
   access: { risk: "read" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    pull_number: z.number().describe("PR number"),
-    ...paginationInputShape,
-  }),
+  input: z.strictObject(pullPaginatedInputShape),
   execute: async ({ repo, pull_number, per_page, page }) => {
     const { data } = await octokit().rest.pulls.listFiles({
       owner: env.GITHUB_ORG,
@@ -257,11 +249,7 @@ export const list_pr_files = defineTool({
 export const list_pr_comments = defineTool({
   description: `List review comments (inline code comments) on a pull request. Returns each comment's ID, body, file path, line number, author, and timestamp. Different from issue comments -- these are tied to specific lines of code.`,
   access: { risk: "read" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    pull_number: z.number().describe("PR number"),
-    ...paginationInputShape,
-  }),
+  input: z.strictObject(pullPaginatedInputShape),
   execute: async ({ repo, pull_number, per_page, page }) => {
     const { data } = await octokit().rest.pulls.listReviewComments({
       owner: env.GITHUB_ORG,

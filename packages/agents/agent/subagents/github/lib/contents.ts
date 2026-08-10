@@ -3,23 +3,22 @@ import { z } from "zod";
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { octokit } from "./client.ts";
 import { env } from "./config.ts";
-import { paginationInputShape } from "./constants.ts";
+import { isoDateOrDateTime, paginationInputShape, repoField } from "./constants.ts";
 
 /** Get the content of a file or list a directory in a repository. */
 export const get_file_content = defineTool({
   description: `Get the content of a file or list entries in a directory. For files, returns the decoded content (truncated at 50k chars), SHA, and URL. For directories, returns a list of entries with name, path, type, and size. Use the 'ref' param to read from a specific branch or tag.`,
   access: { risk: "read" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
+  input: z.strictObject({
+    repo: repoField,
     path: z.string().describe("File or directory path"),
-    ref: z.string().optional().describe("Branch/tag/SHA (defaults to default branch)"),
+    ref: z.string().exactOptional().describe("Branch/tag/SHA (defaults to default branch)"),
   }),
-  execute: async ({ repo, path, ref }) => {
+  execute: async ({ repo, ...fields }) => {
     const { data } = await octokit().rest.repos.getContent({
       owner: env.GITHUB_ORG,
       repo,
-      path,
-      ...(ref === undefined ? {} : { ref }),
+      ...fields,
     });
     if (Array.isArray(data)) {
       return JSON.stringify(
@@ -55,23 +54,23 @@ export const get_file_content = defineTool({
 export const create_or_update_file = defineTool({
   description: `Create or update a file in a repository. The content is provided as plain text and will be base64-encoded automatically. For updates, you must provide the current file's SHA (get it from get_file_content). Returns the file path, new SHA, URL, and commit SHA.`,
   access: { risk: "write" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
+  input: z.strictObject({
+    repo: repoField,
     path: z.string().describe("File path"),
     content: z.string().describe("File content (plain text, will be base64-encoded)"),
     message: z.string().describe("Commit message"),
-    branch: z.string().optional().describe("Branch (defaults to default branch)"),
-    sha: z.string().optional().describe("SHA of the file being replaced (required for update)"),
+    branch: z.string().exactOptional().describe("Branch (defaults to default branch)"),
+    sha: z
+      .string()
+      .exactOptional()
+      .describe("SHA of the file being replaced (required for update)"),
   }),
-  execute: async ({ repo, path, content, message, branch, sha }) => {
+  execute: async ({ repo, content, ...fields }) => {
     const { data } = await octokit().rest.repos.createOrUpdateFileContents({
       owner: env.GITHUB_ORG,
       repo,
-      path,
-      message,
       content: Buffer.from(content).toString("base64"),
-      ...(branch === undefined ? {} : { branch }),
-      ...(sha === undefined ? {} : { sha }),
+      ...fields,
     });
     return JSON.stringify({
       path: data.content?.path,
@@ -86,23 +85,20 @@ export const create_or_update_file = defineTool({
 export const delete_file = defineTool({
   description: `Delete a file from a repository by creating a commit that removes it. Requires the file's current SHA (get it from get_file_content).`,
   access: { risk: "destructive" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
+  input: z.strictObject({
+    repo: repoField,
     path: z.string().describe("File path to delete"),
     message: z.string().describe("Commit message"),
     sha: z.string().describe("SHA of the file to delete"),
-    branch: z.string().optional(),
+    branch: z.string().exactOptional(),
   }),
-  execute: async ({ repo, path, message, sha, branch }) => {
+  execute: async ({ repo, ...fields }) => {
     await octokit().rest.repos.deleteFile({
       owner: env.GITHUB_ORG,
       repo,
-      path,
-      message,
-      sha,
-      ...(branch === undefined ? {} : { branch }),
+      ...fields,
     });
-    return JSON.stringify({ deleted: true, path });
+    return JSON.stringify({ deleted: true, path: fields.path });
   },
 });
 
@@ -110,8 +106,8 @@ export const delete_file = defineTool({
 export const get_directory_tree = defineTool({
   description: `Get the full recursive directory tree of a repository. Returns all file and directory paths with their types and sizes. Useful for understanding project structure. May be truncated for very large repos.`,
   access: { risk: "read" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
+  input: z.strictObject({
+    repo: repoField,
     tree_sha: z.string().optional().describe("Tree SHA or branch name (defaults to HEAD)"),
   }),
   execute: async ({ repo, tree_sha }) => {
@@ -138,24 +134,25 @@ export const get_directory_tree = defineTool({
 export const list_commits = defineTool({
   description: `List commits for a repository, optionally filtered by branch, file path, or date range. Returns abbreviated SHA, message, author, date, and URL for each commit.`,
   access: { risk: "read" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    sha: z.string().optional().describe("Branch or SHA to list from"),
-    path: z.string().optional().describe("Filter to commits affecting this path"),
-    since: z.string().optional().describe("ISO 8601 date to filter from"),
-    until: z.string().optional().describe("ISO 8601 date to filter to"),
+  input: z.strictObject({
+    repo: repoField,
+    sha: z.string().exactOptional().describe("Branch or SHA to list from"),
+    path: z.string().exactOptional().describe("Filter to commits affecting this path"),
+    since: isoDateOrDateTime
+      .exactOptional()
+      .describe("ISO 8601 date or timestamp — inclusive lower bound"),
+    until: isoDateOrDateTime
+      .exactOptional()
+      .describe("ISO 8601 date or timestamp — inclusive upper bound"),
     ...paginationInputShape,
   }),
-  execute: async ({ repo, ...opts }) => {
+  execute: async ({ repo, per_page, page, ...filters }) => {
     const { data } = await octokit().rest.repos.listCommits({
       owner: env.GITHUB_ORG,
       repo,
-      ...(opts.sha === undefined ? {} : { sha: opts.sha }),
-      ...(opts.path === undefined ? {} : { path: opts.path }),
-      ...(opts.since === undefined ? {} : { since: opts.since }),
-      ...(opts.until === undefined ? {} : { until: opts.until }),
-      per_page: opts.per_page ?? 20,
-      page: opts.page ?? 1,
+      ...filters,
+      per_page: per_page ?? 20,
+      page: page ?? 1,
     });
     return JSON.stringify(
       data.map((c) => ({
@@ -173,8 +170,8 @@ export const list_commits = defineTool({
 export const get_commit = defineTool({
   description: `Get full details for a single commit, including message, author, date, stats (additions/deletions), and a list of changed files with their status and line counts.`,
   access: { risk: "read" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
+  input: z.strictObject({
+    repo: repoField,
     ref: z.string().describe("Commit SHA, branch, or tag"),
   }),
   execute: async ({ repo, ref }) => {
@@ -204,8 +201,8 @@ export const get_commit = defineTool({
 export const compare_commits = defineTool({
   description: `Compare two commits, branches, or tags. Returns the comparison status (ahead/behind/diverged), commit count, a list of commits between them, and changed files with their diffs. Useful for understanding what changed between releases or branches.`,
   access: { risk: "read" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
+  input: z.strictObject({
+    repo: repoField,
     base: z.string().describe("Base ref (branch, tag, or SHA)"),
     head: z.string().describe("Head ref (branch, tag, or SHA)"),
   }),

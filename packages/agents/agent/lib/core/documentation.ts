@@ -1,7 +1,7 @@
 import { UpstreamError } from "@repo/shared/errors";
 import { z } from "zod";
 
-import { env } from "../env.ts";
+import { env } from "../../env.ts";
 import { plainJson } from "./json.ts";
 
 const PHACK_ASK_URL = "https://ask.purduehackers.com/api/query";
@@ -38,7 +38,7 @@ export async function queryDocumentation(input: z.output<typeof documentationInp
     throw new UpstreamError({
       service: "Purdue Hackers knowledge base",
       status: 502,
-      detail: "response was not valid JSON",
+      detail: `response was not valid JSON: ${z.prettifyError(parsed.error)}`,
     });
   }
   return plainJson(parsed.data);

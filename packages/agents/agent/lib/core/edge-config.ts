@@ -1,7 +1,8 @@
 import { UpstreamError } from "@repo/shared/errors";
 import { z } from "zod";
 
-const edgeConfigItemsSchema = z.record(z.string(), z.unknown());
+/** Edge Config items arrive as `response.json()`, so every value is a JSON value. */
+const edgeConfigItemsSchema = z.record(z.string(), z.json());
 
 /** Parse the URL form emitted by Vercel Edge Config without retaining its token in the URL. */
 function parseEdgeConfigConnection(connectionString: string) {
@@ -56,7 +57,7 @@ export async function readEdgeConfigItems(connectionString: string) {
     throw new UpstreamError({
       service: "Edge Config",
       status: 502,
-      detail: "organizer roster response was invalid",
+      detail: `organizer roster response was invalid: ${z.prettifyError(parsed.error)}`,
     });
   }
   return parsed.data;

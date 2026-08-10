@@ -13,21 +13,24 @@ export default defineDynamic({
         ctx.session.auth.current,
         GITHUB_TOOL_NAMES,
       );
-      const tools: Record<string, unknown> = {};
-      for (const toolName of visibleNames) {
-        const spec = GITHUB_TOOLS[toolName];
-        tools[toolName] = defineTool({
-          description: spec.description,
-          inputSchema: spec.input,
-          approval: async (approvalCtx) =>
-            await GITHUB_RUNTIME.approvalForTool(toolName, approvalCtx),
-          execute: async (input, toolCtx) =>
-            guardToolExecution(
-              async () => await GITHUB_RUNTIME.executeTool(toolName, input, toolCtx),
-            ),
-        });
-      }
-      return tools;
+      return Object.fromEntries(
+        visibleNames.map((toolName) => {
+          const spec = GITHUB_TOOLS[toolName];
+          return [
+            toolName,
+            defineTool({
+              description: spec.description,
+              inputSchema: spec.input,
+              approval: async (approvalCtx) =>
+                await GITHUB_RUNTIME.approvalForTool(toolName, approvalCtx),
+              execute: async (input, toolCtx) =>
+                guardToolExecution(
+                  async () => await GITHUB_RUNTIME.executeTool(toolName, input, toolCtx),
+                ),
+            }),
+          ];
+        }),
+      );
     },
   },
 });

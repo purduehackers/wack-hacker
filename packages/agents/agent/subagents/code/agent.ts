@@ -14,7 +14,34 @@ export default defineDynamic({
       return decision.allowed
         ? defineAgent({
             description: DESCRIPTION,
-            model: "anthropic/claude-sonnet-5",
+            model: "openai/gpt-5.6-luna",
+            /**
+             * Code work is the one place worth paying for depth. `xhigh` is the
+             * highest effort this family exposes short of `max`, which the
+             * gateway catalog lists but which costs far more for marginal gain
+             * on bounded repository edits.
+             */
+            reasoning: "xhigh",
+            modelOptions: {
+              providerOptions: {
+                gateway: {
+                  // Restricts routing and fallbacks to these providers. The
+                  // request fails outright if neither can serve the model, which
+                  // is the intended behaviour: no silent reroute to a third
+                  // party for repository-mutating work.
+                  only: ["openai", "bedrock"],
+                  // OpenAI caches implicitly, so this is a no-op there; it earns
+                  // its place if the request lands on Bedrock, where the gateway
+                  // inserts the cache breakpoints itself.
+                  caching: "auto",
+                },
+                openai: {
+                  // Condensed thought summaries, so approval prompts can show
+                  // why a mutation was proposed.
+                  reasoningSummary: "auto",
+                },
+              },
+            },
             outputSchema: SUBAGENT_OUTPUT_SCHEMA,
             limits: {
               maxInputTokensPerSession: 500_000,

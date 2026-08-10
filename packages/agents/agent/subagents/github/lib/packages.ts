@@ -3,15 +3,16 @@ import { z } from "zod";
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { octokit } from "./client.ts";
 import { env } from "./config.ts";
-import { paginationInputShape } from "./constants.ts";
+import { paginationInputShape, resourceId } from "./constants.ts";
 
 const packageTypeSchema = z.enum(["npm", "maven", "rubygems", "docker", "nuget", "container"]);
+const packageName = z.string().min(1).describe("Package name");
 
 /** List packages in the organization. */
 export const list_packages = defineTool({
   description: `List packages in the purduehackers organization filtered by package type (npm, docker, container, etc.). Returns each package's ID, name, type, visibility, URL, and timestamps.`,
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     package_type: packageTypeSchema.describe("Package type"),
     ...paginationInputShape,
   }),
@@ -40,9 +41,9 @@ export const list_packages = defineTool({
 export const get_package = defineTool({
   description: `Get detailed information about a specific package in the purduehackers organization, including its ID, name, type, visibility, URL, and timestamps.`,
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     package_type: packageTypeSchema,
-    package_name: z.string().describe("Package name"),
+    package_name: packageName,
   }),
   execute: async ({ package_type, package_name }) => {
     const { data } = await octokit().rest.packages.getPackageForOrganization({
@@ -66,9 +67,9 @@ export const get_package = defineTool({
 export const list_package_versions = defineTool({
   description: `List all versions of a package in the purduehackers organization. Returns each version's ID, name (tag), timestamps, URL, and metadata.`,
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     package_type: packageTypeSchema,
-    package_name: z.string().describe("Package name"),
+    package_name: packageName,
     ...paginationInputShape,
   }),
   execute: async ({ package_type, package_name, per_page, page }) => {
@@ -96,10 +97,10 @@ export const list_package_versions = defineTool({
 export const delete_package_version = defineTool({
   description: `Delete a specific version of a package from the purduehackers organization. This action is irreversible. You need the package version ID (get it from list_package_versions).`,
   access: { risk: "destructive" },
-  input: z.object({
+  input: z.strictObject({
     package_type: packageTypeSchema,
-    package_name: z.string().describe("Package name"),
-    package_version_id: z.number().describe("Package version ID"),
+    package_name: packageName,
+    package_version_id: resourceId.describe("Package version ID"),
   }),
   execute: async ({ package_type, package_name, package_version_id }) => {
     await octokit().rest.packages.deletePackageVersionForOrg({

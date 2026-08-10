@@ -1,7 +1,7 @@
 import { UpstreamError } from "@repo/shared/errors";
 import { z } from "zod";
 
-import { env } from "../env.ts";
+import { env } from "../../env.ts";
 
 const EXA_SEARCH_URL = "https://api.exa.ai/search";
 const EXA_CATEGORIES = [
@@ -15,19 +15,19 @@ const EXA_CATEGORIES = [
   "linkedin profile",
 ] as const;
 
+/** Exa accepts either an ISO calendar date or a full ISO 8601 instant. */
+const isoPublishedDate = z.union([z.iso.date(), z.iso.datetime({ offset: true })]);
+
 export const webSearchInputSchema = z.strictObject({
   query: z.string().describe("The search query"),
   numResults: z
-    .number()
     .int()
     .min(1)
     .max(10)
-    .optional()
     .default(5)
     .describe("Number of results to return (default 5, max 10)"),
   type: z
     .enum(["auto", "neural", "keyword"])
-    .optional()
     .default("auto")
     .describe("Search type: 'auto' (default), 'neural' for semantic, 'keyword' for exact"),
   category: z
@@ -36,14 +36,14 @@ export const webSearchInputSchema = z.strictObject({
     .describe("Optional Exa data category to focus the search."),
   livecrawl: z
     .enum(["never", "fallback", "always", "auto"])
-    .optional()
     .default("auto")
     .describe("Livecrawl strategy (default 'auto')."),
-  startPublishedDate: z
-    .string()
+  startPublishedDate: isoPublishedDate
     .optional()
-    .describe("Filter results published after this ISO date"),
-  endPublishedDate: z.string().optional().describe("Filter results published before this ISO date"),
+    .describe("Filter results published after this ISO date or date-time"),
+  endPublishedDate: isoPublishedDate
+    .optional()
+    .describe("Filter results published before this ISO date or date-time"),
   includeDomains: z.array(z.string()).optional().describe("Only return results from these domains"),
   excludeDomains: z.array(z.string()).optional().describe("Exclude results from these domains"),
   includeText: z.string().optional().describe("Require this text (max 5 words, single phrase)"),
@@ -52,7 +52,7 @@ export const webSearchInputSchema = z.strictObject({
 
 const exaResultSchema = z.strictObject({
   title: z.string().nullable(),
-  url: z.string().url(),
+  url: z.url(),
   publishedDate: z.string().optional(),
   author: z.string().optional(),
   score: z.number().optional(),
@@ -126,7 +126,11 @@ export async function searchWeb(input: z.output<typeof webSearchInputSchema>) {
 
   const parsed = exaResponseSchema.safeParse(await response.json());
   if (!parsed.success) {
-    throw new UpstreamError({ service: "Exa", status: 502, detail: "search response was invalid" });
+    throw new UpstreamError({
+      service: "Exa",
+      status: 502,
+      detail: `search response was invalid: ${z.prettifyError(parsed.error)}`,
+    });
   }
   if (parsed.data.results.length === 0) return "No results found.";
 

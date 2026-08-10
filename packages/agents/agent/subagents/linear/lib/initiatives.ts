@@ -1,35 +1,25 @@
 import { InitiativeStatus } from "@linear/sdk";
 import { z } from "zod";
 
-const INITIATIVE_STATUS: Record<"Planned" | "Active" | "Completed", InitiativeStatus> = {
-  Planned: InitiativeStatus.Planned,
-  Active: InitiativeStatus.Active,
-  Completed: InitiativeStatus.Completed,
-};
-
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { linear } from "./client.ts";
-import { sdkInput } from "./sdk-input.ts";
+
+const initiativeStatusSchema = z.enum(InitiativeStatus);
 
 export const create_initiative = defineTool({
   description:
     "Create an initiative (strategic goal grouping multiple projects). Supports owner, status (Planned/Active/Completed), target date, and Markdown content.",
   access: { risk: "write" },
-  input: z.object({
+  input: z.strictObject({
     name: z.string(),
-    description: z.string().optional(),
-    content: z.string().optional().describe("Markdown"),
-    ownerId: z.string().optional(),
-    status: z.enum(["Planned", "Active", "Completed"]).optional(),
-    targetDate: z.string().optional().describe("ISO date"),
+    description: z.string().exactOptional(),
+    content: z.string().exactOptional().describe("Markdown"),
+    ownerId: z.string().exactOptional(),
+    status: initiativeStatusSchema.exactOptional(),
+    targetDate: z.iso.date().exactOptional().describe("ISO date"),
   }),
-  execute: async ({ status, ...rest }) => {
-    const payload = await linear.createInitiative(
-      sdkInput<Parameters<typeof linear.createInitiative>[0]>({
-        ...rest,
-        status: status === undefined ? undefined : INITIATIVE_STATUS[status],
-      }),
-    );
+  execute: async (input) => {
+    const payload = await linear.createInitiative(input);
     const initiative = await payload.initiative;
     if (!initiative) return "Failed to create initiative";
     return JSON.stringify({ id: initiative.id, name: initiative.name, url: initiative.url });
@@ -39,23 +29,17 @@ export const create_initiative = defineTool({
 export const update_initiative = defineTool({
   description: "Update an initiative by ID. Only include fields to change.",
   access: { risk: "write" },
-  input: z.object({
+  input: z.strictObject({
     id: z.string(),
-    name: z.string().optional(),
-    description: z.string().optional(),
-    content: z.string().optional().describe("Markdown"),
-    ownerId: z.string().optional(),
-    status: z.enum(["Planned", "Active", "Completed"]).optional(),
-    targetDate: z.string().optional().describe("ISO date"),
+    name: z.string().exactOptional(),
+    description: z.string().exactOptional(),
+    content: z.string().exactOptional().describe("Markdown"),
+    ownerId: z.string().exactOptional(),
+    status: initiativeStatusSchema.exactOptional(),
+    targetDate: z.iso.date().exactOptional().describe("ISO date"),
   }),
-  execute: async ({ id, status, ...rest }) => {
-    const payload = await linear.updateInitiative(
-      id,
-      sdkInput<Parameters<typeof linear.updateInitiative>[1]>({
-        ...rest,
-        status: status === undefined ? undefined : INITIATIVE_STATUS[status],
-      }),
-    );
+  execute: async ({ id, ...input }) => {
+    const payload = await linear.updateInitiative(id, input);
     const initiative = await payload.initiative;
     if (!initiative) return "Failed to update initiative";
     return JSON.stringify({ id: initiative.id, name: initiative.name, url: initiative.url });
@@ -65,7 +49,7 @@ export const update_initiative = defineTool({
 export const list_initiatives = defineTool({
   description: "List all initiatives with name, status, target date, and URL.",
   access: { risk: "read" },
-  input: z.object({}),
+  input: z.strictObject({}),
   execute: async () => {
     const r = await linear.initiatives();
     return JSON.stringify(
@@ -83,7 +67,7 @@ export const list_initiatives = defineTool({
 export const query_initiative_activity = defineTool({
   description: "Fetch an initiative's change history (status changes, owner changes, etc.).",
   access: { risk: "read" },
-  input: z.object({ id: z.string() }),
+  input: z.strictObject({ id: z.string() }),
   execute: async ({ id }) => {
     const initiative = await linear.initiative(id);
     const history = await initiative.history();

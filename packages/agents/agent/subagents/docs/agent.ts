@@ -10,7 +10,14 @@ export default defineDynamic({
         ? defineAgent({
             description:
               "Answer factual questions from the Purdue Hackers knowledge base about events, projects, documentation, history, culture, and organizational information.",
-            model: "anthropic/claude-sonnet-5",
+            model: "deepseek/deepseek-v4-flash-0731",
+            modelOptions: {
+              providerOptions: {
+                // DeepSeek caches implicitly, so this only matters if the gateway
+                // ever falls back to a provider needing explicit cache markers.
+                gateway: { caching: "auto" },
+              },
+            },
             outputSchema: SUBAGENT_OUTPUT_SCHEMA,
           })
         : undefined,

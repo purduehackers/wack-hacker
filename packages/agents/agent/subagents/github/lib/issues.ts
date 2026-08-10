@@ -3,29 +3,28 @@ import { z } from "zod";
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { octokit } from "./client.ts";
 import { env } from "./config.ts";
-import { paginationInputShape } from "./constants.ts";
+import { isoDateOrDateTime, paginationInputShape, repoField, resourceId } from "./constants.ts";
+
+const issueNumber = resourceId.describe("Issue number");
+const commentId = resourceId.describe("Comment ID");
 
 /** Create a new issue in a repository. */
 export const create_issue = defineTool({
   description: `Create a new issue in a repository. Supports Markdown body, assignees, labels, and milestone. Returns the issue number, title, URL, and state.`,
   access: { risk: "write" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
+  input: z.strictObject({
+    repo: repoField,
     title: z.string().describe("Issue title"),
-    body: z.string().optional().describe("Issue body (Markdown)"),
-    assignees: z.array(z.string()).optional().describe("GitHub usernames to assign"),
-    labels: z.array(z.string()).optional().describe("Label names to apply"),
-    milestone: z.number().optional().describe("Milestone number"),
+    body: z.string().exactOptional().describe("Issue body (Markdown)"),
+    assignees: z.array(z.string()).exactOptional().describe("GitHub usernames to assign"),
+    labels: z.array(z.string()).exactOptional().describe("Label names to apply"),
+    milestone: resourceId.exactOptional().describe("Milestone number"),
   }),
-  execute: async ({ repo, title, body, assignees, labels, milestone }) => {
+  execute: async ({ repo, ...fields }) => {
     const { data } = await octokit().rest.issues.create({
       owner: env.GITHUB_ORG,
       repo,
-      title,
-      ...(body === undefined ? {} : { body }),
-      ...(assignees === undefined ? {} : { assignees }),
-      ...(labels === undefined ? {} : { labels }),
-      ...(milestone === undefined ? {} : { milestone }),
+      ...fields,
     });
     return JSON.stringify({
       number: data.number,
@@ -40,27 +39,21 @@ export const create_issue = defineTool({
 export const update_issue = defineTool({
   description: `Update an existing issue. Can change its title, body, state (open/closed), assignees, labels, or milestone. Returns the updated issue summary.`,
   access: { risk: "write" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    issue_number: z.number().describe("Issue number"),
-    title: z.string().optional(),
-    body: z.string().optional(),
-    state: z.enum(["open", "closed"]).optional(),
-    assignees: z.array(z.string()).optional(),
-    labels: z.array(z.string()).optional(),
-    milestone: z.number().nullable().optional(),
+  input: z.strictObject({
+    repo: repoField,
+    issue_number: issueNumber,
+    title: z.string().exactOptional(),
+    body: z.string().exactOptional(),
+    state: z.enum(["open", "closed"]).exactOptional(),
+    assignees: z.array(z.string()).exactOptional(),
+    labels: z.array(z.string()).exactOptional(),
+    milestone: resourceId.nullable().exactOptional().describe("Milestone number; null clears it"),
   }),
-  execute: async ({ repo, issue_number, title, body, state, assignees, labels, milestone }) => {
+  execute: async ({ repo, ...fields }) => {
     const { data } = await octokit().rest.issues.update({
       owner: env.GITHUB_ORG,
       repo,
-      issue_number,
-      ...(title === undefined ? {} : { title }),
-      ...(body === undefined ? {} : { body }),
-      ...(state === undefined ? {} : { state }),
-      ...(assignees === undefined ? {} : { assignees }),
-      ...(labels === undefined ? {} : { labels }),
-      ...(milestone === undefined ? {} : { milestone }),
+      ...fields,
     });
     return JSON.stringify({
       number: data.number,
@@ -76,22 +69,21 @@ export const lock_issue = defineTool({
   description:
     "Lock the conversation on an issue or PR so only collaborators can comment. Useful for derailed threads.",
   access: { risk: "write", confirm: "self" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    issue_number: z.number().describe("Issue or PR number"),
+  input: z.strictObject({
+    repo: repoField,
+    issue_number: resourceId.describe("Issue or PR number"),
     lock_reason: z
       .enum(["off-topic", "too heated", "resolved", "spam"])
-      .optional()
+      .exactOptional()
       .describe("Reason for locking"),
   }),
-  execute: async ({ repo, issue_number, lock_reason }) => {
+  execute: async ({ repo, ...fields }) => {
     await octokit().rest.issues.lock({
       owner: env.GITHUB_ORG,
       repo,
-      issue_number,
-      ...(lock_reason === undefined ? {} : { lock_reason }),
+      ...fields,
     });
-    return JSON.stringify({ locked: true, issue_number });
+    return JSON.stringify({ locked: true, issue_number: fields.issue_number });
   },
 });
 
@@ -99,9 +91,9 @@ export const lock_issue = defineTool({
 export const unlock_issue = defineTool({
   description: "Unlock a previously locked issue or PR conversation.",
   access: { risk: "write" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    issue_number: z.number().describe("Issue or PR number"),
+  input: z.strictObject({
+    repo: repoField,
+    issue_number: resourceId.describe("Issue or PR number"),
   }),
   execute: async ({ repo, issue_number }) => {
     await octokit().rest.issues.unlock({
@@ -117,9 +109,9 @@ export const unlock_issue = defineTool({
 export const add_assignees = defineTool({
   description: "Add assignees to an issue or PR. Up to 10 assignees.",
   access: { risk: "write" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    issue_number: z.number().describe("Issue or PR number"),
+  input: z.strictObject({
+    repo: repoField,
+    issue_number: resourceId.describe("Issue or PR number"),
     assignees: z.array(z.string()).min(1).max(10).describe("GitHub usernames to assign"),
   }),
   execute: async ({ repo, issue_number, assignees }) => {
@@ -140,9 +132,9 @@ export const add_assignees = defineTool({
 export const remove_assignees = defineTool({
   description: "Remove assignees from an issue or PR.",
   access: { risk: "write", confirm: "self" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    issue_number: z.number().describe("Issue or PR number"),
+  input: z.strictObject({
+    repo: repoField,
+    issue_number: resourceId.describe("Issue or PR number"),
     assignees: z.array(z.string()).min(1).describe("GitHub usernames to unassign"),
   }),
   execute: async ({ repo, issue_number, assignees }) => {
@@ -163,9 +155,9 @@ export const remove_assignees = defineTool({
 export const list_issue_comments = defineTool({
   description: `List comments on an issue. Returns each comment's ID, body, author, timestamps, and URL. Useful for understanding discussion history.`,
   access: { risk: "read" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    issue_number: z.number().describe("Issue number"),
+  input: z.strictObject({
+    repo: repoField,
+    issue_number: issueNumber,
     ...paginationInputShape,
   }),
   execute: async ({ repo, issue_number, per_page, page }) => {
@@ -193,9 +185,9 @@ export const list_issue_comments = defineTool({
 export const create_issue_comment = defineTool({
   description: `Add a new comment to an issue. Supports Markdown. Returns the comment ID and URL.`,
   access: { risk: "write" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    issue_number: z.number().describe("Issue number"),
+  input: z.strictObject({
+    repo: repoField,
+    issue_number: issueNumber,
     body: z.string().describe("Comment body (Markdown)"),
   }),
   execute: async ({ repo, issue_number, body }) => {
@@ -213,9 +205,9 @@ export const create_issue_comment = defineTool({
 export const update_issue_comment = defineTool({
   description: `Edit an existing issue comment by its ID. Replaces the entire body with the new Markdown content. Returns the comment ID and URL.`,
   access: { risk: "write" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    comment_id: z.number().describe("Comment ID"),
+  input: z.strictObject({
+    repo: repoField,
+    comment_id: commentId,
     body: z.string().describe("New comment body (Markdown)"),
   }),
   execute: async ({ repo, comment_id, body }) => {
@@ -233,9 +225,9 @@ export const update_issue_comment = defineTool({
 export const delete_issue_comment = defineTool({
   description: `Permanently delete an issue comment by its ID. This action cannot be undone.`,
   access: { risk: "destructive" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    comment_id: z.number().describe("Comment ID"),
+  input: z.strictObject({
+    repo: repoField,
+    comment_id: commentId,
   }),
   execute: async ({ repo, comment_id }) => {
     await octokit().rest.issues.deleteComment({
@@ -251,23 +243,25 @@ export const delete_issue_comment = defineTool({
 export const manage_labels = defineTool({
   description: `Create, update, or delete a label in a repository. For 'create' and 'update', you can set name, color (hex without #), and description. For 'update', use new_name to rename. Returns the label name and color on success.`,
   access: { risk: "destructive" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
+  input: z.strictObject({
+    repo: repoField,
     action: z.enum(["create", "update", "delete"]),
     name: z.string().describe("Label name"),
-    new_name: z.string().optional().describe("New name (for update)"),
-    color: z.string().optional().describe("Hex color without # (e.g. 'ff0000')"),
-    description: z.string().optional(),
+    new_name: z.string().exactOptional().describe("New name (for update)"),
+    color: z
+      .stringFormat("github-label-color", /^[0-9A-Fa-f]{6}$/u)
+      .exactOptional()
+      .describe("Hex color without # (e.g. 'ff0000')"),
+    description: z.string().exactOptional(),
   }),
-  execute: async ({ repo, action, name, new_name, color, description }) => {
+  execute: async ({ repo, action, name, new_name, ...fields }) => {
     switch (action) {
       case "create": {
         const { data } = await octokit().rest.issues.createLabel({
           owner: env.GITHUB_ORG,
           repo,
           name,
-          ...(color === undefined ? {} : { color }),
-          ...(description === undefined ? {} : { description }),
+          ...fields,
         });
         return JSON.stringify({ name: data.name, color: data.color });
       }
@@ -277,8 +271,7 @@ export const manage_labels = defineTool({
           repo,
           name,
           ...(new_name === undefined ? {} : { new_name }),
-          ...(color === undefined ? {} : { color }),
-          ...(description === undefined ? {} : { description }),
+          ...fields,
         });
         return JSON.stringify({ name: data.name, color: data.color });
       }
@@ -297,26 +290,27 @@ export const manage_labels = defineTool({
 export const manage_milestones = defineTool({
   description: `Create, update, or delete a milestone in a repository. For 'create', title is required. For 'update' and 'delete', milestone_number is required. Supports setting description, state, and due date.`,
   access: { risk: "destructive" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
+  input: z.strictObject({
+    repo: repoField,
     action: z.enum(["create", "update", "delete"]),
-    milestone_number: z.number().optional().describe("Milestone number (for update/delete)"),
-    title: z.string().optional().describe("Title (for create/update)"),
-    description: z.string().optional(),
-    state: z.enum(["open", "closed"]).optional(),
-    due_on: z.string().optional().describe("Due date ISO 8601 (e.g. '2025-12-31T00:00:00Z')"),
+    milestone_number: resourceId.exactOptional().describe("Milestone number (for update/delete)"),
+    title: z.string().exactOptional().describe("Title (for create/update)"),
+    description: z.string().exactOptional(),
+    state: z.enum(["open", "closed"]).exactOptional(),
+    due_on: isoDateOrDateTime
+      .exactOptional()
+      .describe("Due date, ISO 8601 (e.g. '2025-12-31T00:00:00Z')"),
   }),
-  execute: async ({ repo, action, milestone_number, ...input }) => {
+  execute: async ({ repo, action, milestone_number, ...fields }) => {
     switch (action) {
       case "create": {
-        if (input.title === undefined) return "title is required when creating a milestone";
+        const { title, ...rest } = fields;
+        if (title === undefined) return "title is required when creating a milestone";
         const { data } = await octokit().rest.issues.createMilestone({
           owner: env.GITHUB_ORG,
           repo,
-          title: input.title,
-          ...(input.description === undefined ? {} : { description: input.description }),
-          ...(input.state === undefined ? {} : { state: input.state }),
-          ...(input.due_on === undefined ? {} : { due_on: input.due_on }),
+          title,
+          ...rest,
         });
         return JSON.stringify({
           number: data.number,
@@ -332,10 +326,7 @@ export const manage_milestones = defineTool({
           owner: env.GITHUB_ORG,
           repo,
           milestone_number,
-          ...(input.title === undefined ? {} : { title: input.title }),
-          ...(input.description === undefined ? {} : { description: input.description }),
-          ...(input.state === undefined ? {} : { state: input.state }),
-          ...(input.due_on === undefined ? {} : { due_on: input.due_on }),
+          ...fields,
         });
         return JSON.stringify({
           number: data.number,

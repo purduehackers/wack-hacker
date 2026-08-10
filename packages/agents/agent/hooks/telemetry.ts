@@ -3,7 +3,7 @@
 import { getRedis } from "@repo/shared/redis";
 import { defineHook } from "eve/hooks";
 
-import { env } from "../lib/env.ts";
+import { env } from "../env.ts";
 import {
   countAgentEvent,
   distributeAgentEvent,

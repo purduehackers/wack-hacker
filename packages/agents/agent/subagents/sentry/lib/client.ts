@@ -1,11 +1,18 @@
+import { UpstreamError } from "@repo/shared/errors";
 import { retrieveAProject, unwrapResult } from "@sentry/api";
 import { z } from "zod";
 
 import { env } from "./config.ts";
 
-function stringifyQueryValue(value: unknown): string {
+/** A single value a Sentry query parameter can carry before serialization. */
+type SentryQueryScalar = string | number | boolean | Date;
+/** Query bag accepted by the raw Sentry helpers: scalars, repeated scalars, or absent. */
+type SentryQuery = Readonly<
+  Record<string, SentryQueryScalar | SentryQueryScalar[] | null | undefined>
+>;
+
+function stringifyQueryValue(value: SentryQueryScalar): string {
   if (value instanceof Date) return value.toISOString();
-  if (typeof value === "string") return value;
   return String(value);
 }
 
@@ -34,8 +41,8 @@ const sentryJsonSchema = z.json();
 /** GET helper for endpoints not covered by generated SDK methods. */
 export async function sentryGet(
   path: string,
-  query?: Record<string, unknown>,
-): Promise<z.infer<typeof sentryJsonSchema>> {
+  query?: SentryQuery,
+): Promise<z.output<typeof sentryJsonSchema>> {
   const url = new URL(path.startsWith("http") ? path : `${BASE_URL}${path}`);
   if (query) {
     for (const [key, value] of Object.entries(query)) {
@@ -65,9 +72,9 @@ export async function sentryGet(
 /** PUT helper for generated SDK endpoints whose wire schema is narrower than the server API. */
 export async function sentryPut(
   path: string,
-  query: Record<string, unknown>,
+  query: SentryQuery,
   body: unknown,
-): Promise<z.infer<typeof sentryJsonSchema>> {
+): Promise<z.output<typeof sentryJsonSchema>> {
   const url = new URL(`${BASE_URL}${path}`);
   for (const [key, value] of Object.entries(query)) {
     if (value === undefined || value === null) continue;
@@ -92,6 +99,23 @@ export async function sentryPut(
     throw new Error(`Sentry API ${response.status}: ${responseBody.slice(0, 200)}`);
   }
   return sentryJsonSchema.parse(await response.json());
+}
+
+/**
+ * Decode a raw Sentry payload against a projection, reporting a shape the
+ * projection does not cover as a typed upstream failure carrying the offending
+ * path rather than as a bare `ZodError` thrown out of the tool.
+ */
+export function sentryResponse<S extends z.ZodType>(schema: S, payload: unknown): z.output<S> {
+  const parsed = schema.safeParse(payload);
+  if (!parsed.success) {
+    throw new UpstreamError({
+      service: "Sentry",
+      status: 502,
+      detail: `invalid response: ${z.prettifyError(parsed.error)}`,
+    });
+  }
+  return parsed.data;
 }
 
 /** Resolve a project slug to the numeric identifier required by generated query endpoints. */

@@ -4,7 +4,7 @@ import { createAppAuth } from "@octokit/auth-app";
 import type { InstallationAccessTokenAuthentication } from "@octokit/auth-app";
 import { Octokit } from "octokit";
 
-import { env } from "../env.ts";
+import { env } from "../../env.ts";
 
 export const CODE_GITHUB_OWNER = "purduehackers";
 const CODE_REPOSITORY_NAME = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,98}[A-Za-z0-9])?$/u;

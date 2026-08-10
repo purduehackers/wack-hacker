@@ -1,4 +1,4 @@
-import type { Comment, GetCommentsResponse } from "@figma/rest-api-spec";
+import type { Comment, GetCommentsResponse, PostCommentRequestBody } from "@figma/rest-api-spec";
 import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
@@ -29,7 +29,7 @@ export const list_comments = defineTool({
   description:
     "List comments on a Figma file. Returns comment text, author, timestamp, resolved status, and thread info.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     file_key: z.string().describe("The file key"),
     as_md: z
       .boolean()
@@ -48,7 +48,7 @@ export const create_comment = defineTool({
   description:
     "Post a comment on a Figma file. Can optionally be pinned to a specific location or node.",
   access: { risk: "write" },
-  input: z.object({
+  input: z.strictObject({
     file_key: z.string().describe("The file key"),
     message: z.string().describe("Comment text"),
     comment_id: z.string().optional().describe("Parent comment ID for replies"),
@@ -57,7 +57,7 @@ export const create_comment = defineTool({
     node_id: z.string().optional().describe("Node ID to attach the comment to"),
   }),
   execute: async ({ file_key, message, comment_id, x, y, node_id }) => {
-    const body: Record<string, unknown> = { message };
+    const body: PostCommentRequestBody = { message };
     if (comment_id) body.comment_id = comment_id;
     if (x !== undefined && y !== undefined) {
       body.client_meta = { x, y, ...(node_id ? { node_id } : {}) };
@@ -71,7 +71,7 @@ export const create_comment = defineTool({
 export const delete_comment = defineTool({
   description: "Delete a comment from a Figma file.",
   access: { risk: "destructive" },
-  input: z.object({
+  input: z.strictObject({
     file_key: z.string().describe("The file key"),
     comment_id: z.string().describe("The comment ID to delete"),
   }),
@@ -84,7 +84,7 @@ export const delete_comment = defineTool({
 export const add_reaction = defineTool({
   description: "Add an emoji reaction to a comment on a Figma file.",
   access: { risk: "write" },
-  input: z.object({
+  input: z.strictObject({
     file_key: z.string().describe("The file key"),
     comment_id: z.string().describe("The comment ID"),
     emoji: z.string().describe('Emoji shortcode (e.g., ":thumbsup:", ":heart:")'),
@@ -98,7 +98,7 @@ export const add_reaction = defineTool({
 export const delete_reaction = defineTool({
   description: "Remove an emoji reaction from a comment on a Figma file.",
   access: { risk: "destructive" },
-  input: z.object({
+  input: z.strictObject({
     file_key: z.string().describe("The file key"),
     comment_id: z.string().describe("The comment ID"),
     emoji: z.string().describe("Emoji shortcode to remove"),

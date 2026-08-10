@@ -6,7 +6,8 @@ import {
 } from "@sentry/api";
 import { z } from "zod";
 
-import { sentryGet, sentryOpts, sentryOrg, sentryPut } from "./client.ts";
+import { sentryGet, sentryOpts, sentryOrg, sentryPut, sentryResponse } from "./client.ts";
+import { sentryNumericId } from "./constants.ts";
 
 const issueTagsResponseSchema = z.array(
   z.looseObject({
@@ -23,8 +24,8 @@ export const update_issue = defineTool({
   description:
     "Update a Sentry issue — resolve, ignore, assign, set priority, or bookmark. Use status 'resolved', 'ignored', or 'unresolved'.",
   access: { risk: "write" },
-  input: z.object({
-    issue_id: z.string().describe("Sentry issue ID (numeric)"),
+  input: z.strictObject({
+    issue_id: sentryNumericId.describe("Sentry issue ID (numeric)"),
     status: z.enum(["resolved", "unresolved", "ignored"]).optional().describe("New issue status"),
     assigned_to: z
       .string()
@@ -34,7 +35,7 @@ export const update_issue = defineTool({
     is_bookmarked: z.boolean().optional().describe("Bookmark/unbookmark"),
     priority: z.enum(["critical", "high", "medium", "low"]).optional(),
     status_details: z
-      .record(z.string(), z.unknown())
+      .record(z.string(), z.json())
       .optional()
       .describe(
         "Status details (e.g. { inNextRelease: true } for resolve, { ignoreDuration: 30 } for ignore)",
@@ -45,14 +46,15 @@ export const update_issue = defineTool({
       .describe("Substatus for ignored issues"),
   }),
   execute: async ({ issue_id, ...input }) => {
-    const body: Record<string, unknown> = {};
-    if (input.status !== undefined) body.status = input.status;
-    if (input.assigned_to !== undefined) body.assignedTo = input.assigned_to;
-    if (input.has_seen !== undefined) body.hasSeen = input.has_seen;
-    if (input.is_bookmarked !== undefined) body.isBookmarked = input.is_bookmarked;
-    if (input.priority !== undefined) body.priority = input.priority;
-    if (input.status_details !== undefined) body.statusDetails = input.status_details;
-    if (input.substatus !== undefined) body.substatus = input.substatus;
+    const body = {
+      ...(input.status === undefined ? {} : { status: input.status }),
+      ...(input.assigned_to === undefined ? {} : { assignedTo: input.assigned_to }),
+      ...(input.has_seen === undefined ? {} : { hasSeen: input.has_seen }),
+      ...(input.is_bookmarked === undefined ? {} : { isBookmarked: input.is_bookmarked }),
+      ...(input.priority === undefined ? {} : { priority: input.priority }),
+      ...(input.status_details === undefined ? {} : { statusDetails: input.status_details }),
+      ...(input.substatus === undefined ? {} : { substatus: input.substatus }),
+    };
     const result = await updateAnIssue({
       ...sentryOpts(),
       path: {
@@ -70,8 +72,8 @@ export const update_issue = defineTool({
 export const delete_issue = defineTool({
   description: "Permanently delete a Sentry issue. This action cannot be undone.",
   access: { risk: "destructive", minRole: "admin" },
-  input: z.object({
-    issue_id: z.string().describe("Sentry issue ID (numeric)"),
+  input: z.strictObject({
+    issue_id: sentryNumericId.describe("Sentry issue ID (numeric)"),
   }),
   execute: async ({ issue_id }) => {
     const result = await removeAnIssue({
@@ -91,9 +93,9 @@ export const bulk_update_issues = defineTool({
   description:
     "Bulk update multiple Sentry issues. Can resolve, ignore, or assign multiple issues at once.",
   access: { risk: "write", confirm: "self" },
-  input: z.object({
+  input: z.strictObject({
     project_slug: z.string().describe("Project slug"),
-    issue_ids: z.array(z.string()).describe("Array of issue IDs to update"),
+    issue_ids: z.array(sentryNumericId).describe("Array of issue IDs to update"),
     status: z.enum(["resolved", "unresolved", "ignored"]).optional(),
     assigned_to: z.string().optional(),
     has_seen: z.boolean().optional(),
@@ -101,12 +103,13 @@ export const bulk_update_issues = defineTool({
     priority: z.enum(["critical", "high", "medium", "low"]).optional(),
   }),
   execute: async ({ project_slug, issue_ids, ...input }) => {
-    const body: Record<string, unknown> = {};
-    if (input.status !== undefined) body.status = input.status;
-    if (input.assigned_to !== undefined) body.assignedTo = input.assigned_to;
-    if (input.has_seen !== undefined) body.hasSeen = input.has_seen;
-    if (input.is_bookmarked !== undefined) body.isBookmarked = input.is_bookmarked;
-    if (input.priority !== undefined) body.priority = input.priority;
+    const body = {
+      ...(input.status === undefined ? {} : { status: input.status }),
+      ...(input.assigned_to === undefined ? {} : { assignedTo: input.assigned_to }),
+      ...(input.has_seen === undefined ? {} : { hasSeen: input.has_seen }),
+      ...(input.is_bookmarked === undefined ? {} : { isBookmarked: input.is_bookmarked }),
+      ...(input.priority === undefined ? {} : { priority: input.priority }),
+    };
     const data = await sentryPut(
       `/projects/${sentryOrg()}/${project_slug}/issues/`,
       { id: issue_ids.map(Number) },
@@ -121,12 +124,15 @@ export const list_issue_tags = defineTool({
   description:
     "List tag distributions for a Sentry issue. Shows tag keys (browser, os, environment, etc.) with value counts.",
   access: { risk: "read" },
-  input: z.object({
-    issue_id: z.string().describe("Sentry issue ID (numeric)"),
+  input: z.strictObject({
+    issue_id: sentryNumericId.describe("Sentry issue ID (numeric)"),
   }),
   execute: async ({ issue_id }) => {
     // No direct SDK method for listing all tags; use raw fetch
-    const data = issueTagsResponseSchema.parse(await sentryGet(`/issues/${issue_id}/tags/`));
+    const data = sentryResponse(
+      issueTagsResponseSchema,
+      await sentryGet(`/issues/${issue_id}/tags/`),
+    );
     return JSON.stringify(
       data.map((t) => ({
         key: t.key,
@@ -142,8 +148,8 @@ export const list_issue_tags = defineTool({
 export const get_issue_tag_values = defineTool({
   description: "Get values for a specific tag on a Sentry issue, with occurrence counts.",
   access: { risk: "read" },
-  input: z.object({
-    issue_id: z.string().describe("Sentry issue ID (numeric)"),
+  input: z.strictObject({
+    issue_id: sentryNumericId.describe("Sentry issue ID (numeric)"),
     tag_key: z.string().describe("Tag key (e.g. 'browser', 'os', 'environment')"),
   }),
   execute: async ({ issue_id, tag_key }) => {

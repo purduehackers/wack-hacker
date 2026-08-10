@@ -1,27 +1,11 @@
 import { z } from "zod";
 
-export const perPageField = z
-  .number()
-  .int()
-  .min(1)
-  .max(100)
-  .optional()
-  .describe("Page size (default 50)");
+export const perPageField = z.int().min(1).max(100).optional().describe("Page size (default 50)");
 
-export const pageField = z.number().int().min(1).optional().describe("Page number (default 1)");
-
-/** Offset-style pagination. Spread into a tool's `z.object({...})`. */
-export const paginationInputShape = {
-  per_page: perPageField,
-  page: pageField,
-};
-
-export const pageSizeField = z.number().int().min(1).max(100).optional();
-
-export const startCursorField = z.string().optional();
-
-/** Cursor-style pagination (Notion, Sales SDK). Spread into a tool's `z.object({...})`. */
-export const cursorPaginationInputShape = {
-  page_size: pageSizeField,
-  start_cursor: startCursorField,
-};
+/**
+ * Sentry surfaces issue, rule, and alert identifiers as decimal digit strings,
+ * and several call sites hand them straight to `Number(...)`. Naming the format
+ * keeps that assumption enforced at the tool boundary instead of letting `NaN`
+ * reach the API.
+ */
+export const sentryNumericId = z.stringFormat("sentry-numeric-id", /^\d+$/u);

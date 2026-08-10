@@ -22,7 +22,7 @@ const hcbInvoiceSchema = z.object({
   created_at: z.string().optional(),
   paid_at: z.string().optional(),
 });
-type HcbInvoice = z.infer<typeof hcbInvoiceSchema>;
+type HcbInvoice = z.output<typeof hcbInvoiceSchema>;
 
 function projectInvoice(i: HcbInvoice) {
   return {
@@ -43,7 +43,7 @@ export const list_invoices = defineTool({
   description:
     "List invoices sent by the org — sponsor name, amount_cents, status (open/paid/void), due/paid dates, and memo.",
   access: { risk: "read" },
-  input: z.object(paginationInputShape),
+  input: z.strictObject(paginationInputShape),
   execute: async (input) => {
     const data = await hcbGet(
       `/organizations/${hcbOrgSlug()}/invoices`,
@@ -59,7 +59,7 @@ export const get_invoice = defineTool({
   description:
     "Get a single invoice by ID — sponsor name, amount_cents, status, due/paid dates, and memo.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     id: z.string().describe("Invoice ID"),
   }),
   execute: async ({ id }) => {
@@ -73,7 +73,7 @@ export const list_open_invoices = defineTool({
   description:
     "List outstanding (unpaid) invoices only — drives fundraising follow-ups with sponsors. Paginates through all invoices and filters to statuses that aren't paid/void.",
   access: { risk: "read" },
-  input: z.object({}),
+  input: z.strictObject({}),
   execute: async () => {
     const all = await hcbPaginate(
       `/organizations/${hcbOrgSlug()}/invoices`,

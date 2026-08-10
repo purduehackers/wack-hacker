@@ -7,7 +7,7 @@ export const list_team_members = defineTool({
   description:
     "List all members of a Linear team. Returns name, display name, email, admin flag, and active status.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     team_id: z.string().describe("Team UUID"),
   }),
   execute: async ({ team_id }) => {
@@ -30,7 +30,7 @@ export const add_user_to_team = defineTool({
   description:
     "Add a user to a Linear team. Resolve user and team IDs first via list_users and suggest_property_values.",
   access: { risk: "destructive", minRole: "admin" },
-  input: z.object({
+  input: z.strictObject({
     team_id: z.string().describe("Team UUID"),
     user_id: z.string().describe("User UUID to add"),
   }),
@@ -54,7 +54,7 @@ export const remove_user_from_team = defineTool({
   description:
     "Remove a user from a Linear team. Resolve user and team IDs first via list_users and suggest_property_values.",
   access: { risk: "destructive", minRole: "admin" },
-  input: z.object({
+  input: z.strictObject({
     team_id: z.string().describe("Team UUID"),
     user_id: z.string().describe("User UUID to remove"),
   }),

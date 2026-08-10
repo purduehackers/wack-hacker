@@ -17,7 +17,7 @@ const hcbDonationSchema = z.object({
   created_at: z.string().optional(),
   message: z.string().optional(),
 });
-type HcbDonation = z.infer<typeof hcbDonationSchema>;
+type HcbDonation = z.output<typeof hcbDonationSchema>;
 
 function projectDonation(d: HcbDonation) {
   return {
@@ -37,7 +37,7 @@ export const list_donations = defineTool({
   description:
     "List donations to the Hack Club Bank org — donor name (or '(anonymous)'), amount_cents, status, recurring flag, and message.",
   access: { risk: "read" },
-  input: z.object(paginationInputShape),
+  input: z.strictObject(paginationInputShape),
   execute: async (input) => {
     const data = await hcbGet(
       `/organizations/${hcbOrgSlug()}/donations`,
@@ -53,7 +53,7 @@ export const get_donation = defineTool({
   description:
     "Fetch a single donation by ID. Returns donor name (or '(anonymous)'), amount_cents, status, recurring flag, and message.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     id: z.string().describe("Donation ID"),
   }),
   execute: async ({ id }) => {
@@ -67,7 +67,7 @@ export const donation_totals = defineTool({
   description:
     "Sum successful donations within an ISO date range. Returns total_cents, count, and a breakdown of recurring vs one-time. Useful for fundraising team asks ('what did we raise this month?').",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     since: z.iso.date().optional().describe("ISO date (YYYY-MM-DD) — on/after this date"),
     until: z.iso.date().optional().describe("ISO date (YYYY-MM-DD) — on/before this date"),
   }),

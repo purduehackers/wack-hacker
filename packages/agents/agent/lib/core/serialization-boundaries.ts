@@ -1,11 +1,26 @@
-export interface SerializationBoundaryDiagnostic {
+/**
+ * Static counterpart to `serialization.ts`.
+ *
+ * `serialization.ts` rejects a non-JSON value at runtime, but only if it is
+ * actually reached. This proves it is reached, by reading the source: every
+ * `defineTool` executor must return through `guardToolExecution`, and every
+ * `defineState` initializer through `assertStateValue`. Namespace imports of
+ * `eve/tools` / `eve/context` are refused outright, because a call behind one
+ * would be invisible to the patterns below — the analysis is textual, so it
+ * bans the indirection it cannot follow rather than pretending to see through it.
+ *
+ * Pure and I/O-free; `scripts/check-serialization-boundaries.ts` walks `agent/**`
+ * and feeds each file in.
+ */
+
+interface SerializationBoundaryDiagnostic {
   readonly column: number;
   readonly line: number;
   readonly message: string;
   readonly path: string;
 }
 
-export interface SerializationBoundaryAnalysis {
+interface SerializationBoundaryAnalysis {
   readonly diagnostics: readonly SerializationBoundaryDiagnostic[];
   readonly stateInitializers: number;
   readonly toolExecutors: number;

@@ -9,19 +9,19 @@ import {
 } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import type { ApprovalContext, ApprovalStatus, ToolContext } from "eve/tools";
+import { z } from "zod";
 
-import { assertToolOutput } from "../core/serialization.ts";
-import type { ApprovalPolicyStore } from "./approval-record.ts";
-import type { BudgetStore } from "./budget.ts";
+import { assertToolOutput, type JsonValue } from "../core/serialization.ts";
 import type { DomainToolName, DomainToolRegistry, DomainToolSpec } from "./domain-tools.ts";
 import { decideCapability } from "./engine.ts";
-import { resolveExecutionAuthority } from "./execution-authority.ts";
+import { resolveExecutionAuthority, type ExecutionAuthority } from "./execution-authority.ts";
 import { requirePrincipal } from "./principal.ts";
 import { getApprovalPolicyStore, getAuditStore, getBudgetStore } from "./stores.ts";
 import {
   CapabilityKind,
   Confirmation,
   RiskLevel,
+  type CapabilityDecision,
   type CapabilityDescriptor,
   type PolicyEvaluationContext,
   type PolicyPrincipal,
@@ -42,12 +42,6 @@ type AuditDecision = (typeof AUDIT_DECISIONS)[keyof typeof AUDIT_DECISIONS];
 type AuditStore = import("./audit.ts").AuditStore;
 type ProviderFailure = RateLimited | Transient | UpstreamError;
 
-export interface DomainRuntimeDependencies {
-  readonly approval: Pick<ApprovalPolicyStore, "putSecondParty" | "read">;
-  readonly audit: Pick<AuditStore, "record">;
-  readonly budget: Pick<BudgetStore, "read">;
-}
-
 export interface DomainRuntimeAdapter<R extends DomainToolRegistry> {
   readonly domain: string;
   readonly label: string;
@@ -59,7 +53,7 @@ export interface DomainRuntimeAdapter<R extends DomainToolRegistry> {
   ) => UpstreamError | undefined;
   readonly mapFailure?: (cause: unknown, operation: string) => ProviderFailure;
   readonly projectAuditInput?: (input: unknown, name: DomainToolName<R>) => unknown;
-  readonly projectOutput?: (output: unknown, name: DomainToolName<R>) => unknown;
+  readonly projectOutput?: (output: unknown, name: DomainToolName<R>) => JsonValue;
   readonly sanitizeErrorText?: (text: string) => string;
 }
 
@@ -85,34 +79,281 @@ function denied(required: string, actual: string, subject: string) {
   return { ok: false, error: serializeError(new Forbidden({ required, actual, subject })) };
 }
 
-// oxlint-disable-next-line oxclippy/too-many-lines -- authorization, approval, execution, and audit order stay in one reviewable policy closure.
-export function createDomainRuntime<const R extends DomainToolRegistry>(
+function hasToolName<R extends DomainToolRegistry>(
   adapter: DomainRuntimeAdapter<R>,
-  dependencies?: DomainRuntimeDependencies,
+  value: string,
+): value is DomainToolName<R> {
+  return Object.hasOwn(adapter.tools, value);
+}
+
+function toolSpecOf<R extends DomainToolRegistry>(
+  adapter: DomainRuntimeAdapter<R>,
+  name: DomainToolName<R>,
+): DomainToolSpec {
+  const spec: DomainToolSpec | undefined = adapter.tools[name];
+  if (spec === undefined) throw new Error(`Unknown ${adapter.domain} tool: ${name}`);
+  return spec;
+}
+
+function descriptorOf<R extends DomainToolRegistry>(
+  adapter: DomainRuntimeAdapter<R>,
+  name: DomainToolName<R>,
+): CapabilityDescriptor {
+  const access = toolSpecOf(adapter, name).access;
+  return {
+    kind: CapabilityKind.Tool,
+    name,
+    minRole:
+      access.minRole ?? (access.risk === RiskLevel.Read ? UserRole.Public : UserRole.Organizer),
+    risk: access.risk,
+    ...(access.confirm === undefined ? {} : { confirmation: access.confirm }),
+  };
+}
+
+async function evaluationContextOf<R extends DomainToolRegistry>(
+  adapter: DomainRuntimeAdapter<R>,
+  principal: PolicyPrincipal,
+): Promise<PolicyEvaluationContext> {
+  if (principal.role !== UserRole.Public) return {};
+  const budget = await getBudgetStore().read(principal.userId);
+  if (Result.isError(budget)) {
+    // The budget backend is the policy spine's sole fail-open dependency.
+    console.warn(`${adapter.domain} budget lookup unavailable`, serializeError(budget.error));
+    return {};
+  }
+  return { budget: budget.value };
+}
+
+interface AuditEntry<R extends DomainToolRegistry> {
+  readonly adapter: DomainRuntimeAdapter<R>;
+  readonly principal: PolicyPrincipal;
+  readonly name: DomainToolName<R>;
+  readonly input: unknown;
+  readonly decision: AuditDecision;
+  readonly decidedBy: string | undefined;
+}
+
+async function recordAudit<R extends DomainToolRegistry>(entry: AuditEntry<R>): Promise<void> {
+  const { adapter, principal, name, input, decision, decidedBy } = entry;
+  const spec = toolSpecOf(adapter, name);
+  let store: Pick<AuditStore, "record">;
+  try {
+    store = await getAuditStore();
+  } catch (cause) {
+    console.warn(`${adapter.domain} audit store unavailable`, cause);
+    return;
+  }
+  const recorded = await store.record({
+    principal,
+    delegate: adapter.domain,
+    tool: name,
+    risk: spec.access.risk,
+    input: adapter.projectAuditInput?.(input, name) ?? input,
+    decision,
+    ...(spec.access.reason === undefined ? {} : { reason: spec.access.reason }),
+    ...(decidedBy === undefined ? {} : { decidedBy }),
+  });
+  if (Result.isError(recorded)) {
+    // Audit availability must not turn a completed upstream action into a replay.
+    console.warn(`${adapter.domain} audit append unavailable`, serializeError(recorded.error));
+  }
+}
+
+async function visibleToolNamesOf<R extends DomainToolRegistry>(
+  adapter: DomainRuntimeAdapter<R>,
+  current: ApprovalContext["session"]["auth"]["current"],
+  candidates: readonly string[],
+): Promise<DomainToolName<R>[]> {
+  const principal = requirePrincipal(current);
+  if (Result.isError(principal)) return [];
+  const context = await evaluationContextOf(adapter, principal.value);
+  return candidates.filter((toolName): toolName is DomainToolName<R> => {
+    if (!hasToolName(adapter, toolName)) return false;
+    const decision = decideCapability(principal.value, descriptorOf(adapter, toolName), context);
+    return !Result.isError(decision) && decision.value.discover;
+  });
+}
+
+type CapabilityRuling = ReturnType<typeof decideCapability>;
+
+function approvalDenialReason<R extends DomainToolRegistry>(
+  adapter: DomainRuntimeAdapter<R>,
+  decision: CapabilityRuling,
+): string {
+  if (Result.isError(decision)) return decision.error.message;
+  if (decision.value.denial === "budget") return "Daily AI token budget reached.";
+  if (decision.value.denial === "confirmation") {
+    return "Scheduled actions cannot run tools that require confirmation.";
+  }
+  return `Policy denied this ${adapter.label} action.`;
+}
+
+async function requestSecondPartyApproval<R extends DomainToolRegistry>(
+  adapter: DomainRuntimeAdapter<R>,
+  name: DomainToolName<R>,
+  ctx: ApprovalContext,
+  principal: PolicyPrincipal,
+): Promise<ApprovalStatus> {
+  const descriptor = descriptorOf(adapter, name);
+  const stored = await getApprovalPolicyStore().putSecondParty(ctx.session.id, ctx.callId, {
+    requesterUserId: principal.userId,
+    mode: "second-party",
+    minApproverRole:
+      descriptor.minRole === UserRole.Public ? UserRole.Organizer : descriptor.minRole,
+    tool: name,
+    risk: descriptor.risk,
+  });
+  const entry = { adapter, principal, name, input: ctx.toolInput, decidedBy: undefined };
+  if (Result.isError(stored)) {
+    await recordAudit({ ...entry, decision: AUDIT_DECISIONS.Denied });
+    return { type: "denied", reason: "Second-party approval policy could not be persisted." };
+  }
+  await recordAudit({ ...entry, decision: AUDIT_DECISIONS.Requested });
+  return "user-approval";
+}
+
+async function approvalFor<R extends DomainToolRegistry>(
+  adapter: DomainRuntimeAdapter<R>,
+  name: DomainToolName<R>,
+  ctx: ApprovalContext,
+): Promise<ApprovalStatus> {
+  const principal = requirePrincipal(ctx.session.auth.current);
+  if (Result.isError(principal)) {
+    return { type: "denied", reason: principal.error.message };
+  }
+  const context = await evaluationContextOf(adapter, principal.value);
+  const decision = decideCapability(principal.value, descriptorOf(adapter, name), context);
+  const entry = {
+    adapter,
+    principal: principal.value,
+    name,
+    input: ctx.toolInput,
+    decidedBy: undefined,
+  };
+  if (Result.isError(decision) || !decision.value.execute || decision.value.approve === "deny") {
+    await recordAudit({ ...entry, decision: AUDIT_DECISIONS.Denied });
+    return { type: "denied", reason: approvalDenialReason(adapter, decision) };
+  }
+  if (decision.value.approve === Confirmation.None) return "not-applicable";
+  if (decision.value.approve === Confirmation.SecondParty) {
+    return await requestSecondPartyApproval(adapter, name, ctx, principal.value);
+  }
+  await recordAudit({ ...entry, decision: AUDIT_DECISIONS.Requested });
+  return "user-approval";
+}
+
+async function executionAuthorityOf<R extends DomainToolRegistry>(
+  adapter: DomainRuntimeAdapter<R>,
+  name: DomainToolName<R>,
+  ctx: ToolContext,
+): Promise<ExecutionAuthority | undefined> {
+  const current = requirePrincipal(ctx.session.auth.current);
+  if (Result.isError(current)) return undefined;
+  const attributes = ctx.session.auth.current?.attributes;
+  const descriptor = descriptorOf(adapter, name);
+  return resolveExecutionAuthority({
+    current: current.value,
+    approvalRequesterId: attributes?.approvalRequesterId,
+    approvalRequesterMemberRoles: attributes?.approvalRequesterMemberRoles,
+    sessionId: ctx.session.id,
+    callId: ctx.callId,
+    tool: name,
+    risk: descriptor.risk,
+    requesterMinRole: descriptor.minRole,
+    approvalPolicies: getApprovalPolicyStore(),
+  });
+}
+
+/** The denial subject reported to the model when policy refuses execution. */
+function executionDenialSubject<R extends DomainToolRegistry>(
+  adapter: DomainRuntimeAdapter<R>,
+  name: DomainToolName<R>,
+  denial: CapabilityDecision["denial"],
+): string {
+  if (denial === "confirmation") return "a confirmation-free scheduled action";
+  if (denial === "budget") return "available daily token budget";
+  return descriptorOf(adapter, name).minRole;
+}
+
+/** Runs the provider call itself, mapping any thrown cause onto a provider failure. */
+async function runToolExecution<R extends DomainToolRegistry>(
+  adapter: DomainRuntimeAdapter<R>,
+  spec: DomainToolSpec,
+  name: DomainToolName<R>,
+  parsedInput: unknown,
+  ctx: ToolContext,
 ) {
-  type Name = DomainToolName<R>;
+  const operation = `execute ${adapter.label} tool ${name}`;
+  return await Result.tryPromise({
+    try: async () => {
+      const output = await spec.execute(parsedInput, ctx);
+      return adapter.projectOutput === undefined
+        ? assertToolOutput(output)
+        : adapter.projectOutput(output, name);
+    },
+    catch: (cause) =>
+      adapter.mapFailure?.(cause, operation) ??
+      standardFailure(adapter.service, cause, operation, adapter.sanitizeErrorText ?? String),
+  });
+}
 
-  function isToolName(value: string): value is Name {
-    return Object.hasOwn(adapter.tools, value);
+/** Result stays internal; this is the plain JSON Eve boundary. */
+async function executeToolFor<R extends DomainToolRegistry>(
+  adapter: DomainRuntimeAdapter<R>,
+  name: DomainToolName<R>,
+  input: unknown,
+  ctx: ToolContext,
+): Promise<unknown> {
+  const authority = await executionAuthorityOf(adapter, name, ctx);
+  if (authority === undefined) {
+    return denied(descriptorOf(adapter, name).minRole, "unauthorized", name);
   }
-
-  function toolSpec(name: Name): DomainToolSpec {
-    const spec: DomainToolSpec | undefined = adapter.tools[name];
-    if (spec === undefined) throw new Error(`Unknown ${adapter.domain} tool: ${name}`);
-    return spec;
+  const principal = authority.principal;
+  const entry = { adapter, principal, name, input, decidedBy: authority.decidedBy };
+  const policyContext = await evaluationContextOf(adapter, principal);
+  const decision = decideCapability(principal, descriptorOf(adapter, name), policyContext);
+  if (Result.isError(decision)) {
+    return { ok: false, error: serializeError(decision.error) };
   }
-
-  function descriptorForTool(name: Name): CapabilityDescriptor {
-    const access = toolSpec(name).access;
-    return {
-      kind: CapabilityKind.Tool,
+  if (!decision.value.execute || decision.value.approve === "deny") {
+    await recordAudit({ ...entry, decision: AUDIT_DECISIONS.Denied });
+    return denied(
+      executionDenialSubject(adapter, name, decision.value.denial),
+      principal.role,
       name,
-      minRole:
-        access.minRole ?? (access.risk === RiskLevel.Read ? UserRole.Public : UserRole.Organizer),
-      risk: access.risk,
-      ...(access.confirm === undefined ? {} : { confirmation: access.confirm }),
+    );
+  }
+  if (authority.decidedBy !== undefined) {
+    await recordAudit({ ...entry, decision: AUDIT_DECISIONS.Approved });
+  }
+
+  const configurationError = adapter.configurationError?.(name, input);
+  if (configurationError !== undefined) {
+    await recordAudit({ ...entry, decision: AUDIT_DECISIONS.Failed });
+    return { ok: false, error: serializeError(configurationError) };
+  }
+
+  const spec = toolSpecOf(adapter, name);
+  const parsed = spec.input.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: { tag: "InvalidInput", message: z.prettifyError(parsed.error) },
     };
   }
+  const result = await runToolExecution(adapter, spec, name, parsed.data, ctx);
+  if (Result.isError(result)) {
+    await recordAudit({ ...entry, decision: AUDIT_DECISIONS.Failed });
+    return { ok: false, error: serializeError(result.error) };
+  }
+  await recordAudit({ ...entry, decision: AUDIT_DECISIONS.Executed });
+  return result.value;
+}
+
+export function createDomainRuntime<const R extends DomainToolRegistry>(
+  adapter: DomainRuntimeAdapter<R>,
+) {
+  type Name = DomainToolName<R>;
 
   const subagentDescriptor = {
     kind: CapabilityKind.Subagent,
@@ -122,197 +363,17 @@ export function createDomainRuntime<const R extends DomainToolRegistry>(
     confirmation: Confirmation.None,
   } as const satisfies CapabilityDescriptor;
 
-  async function evaluationContext(principal: PolicyPrincipal): Promise<PolicyEvaluationContext> {
-    if (principal.role !== UserRole.Public) return {};
-    const budget = await (dependencies?.budget ?? getBudgetStore()).read(principal.userId);
-    if (Result.isError(budget)) {
-      // The budget backend is the policy spine's sole fail-open dependency.
-      console.warn(`${adapter.domain} budget lookup unavailable`, serializeError(budget.error));
-      return {};
-    }
-    return { budget: budget.value };
-  }
-
-  async function audit(
-    principal: PolicyPrincipal,
-    name: Name,
-    input: unknown,
-    decision: AuditDecision,
-    decidedBy?: string,
-  ): Promise<void> {
-    const spec = toolSpec(name);
-    let store: Pick<AuditStore, "record">;
-    try {
-      store = dependencies?.audit ?? (await getAuditStore());
-    } catch (cause) {
-      console.warn(`${adapter.domain} audit store unavailable`, cause);
-      return;
-    }
-    const recorded = await store.record({
-      principal,
-      delegate: adapter.domain,
-      tool: name,
-      risk: spec.access.risk,
-      input: adapter.projectAuditInput?.(input, name) ?? input,
-      decision,
-      ...(spec.access.reason === undefined ? {} : { reason: spec.access.reason }),
-      ...(decidedBy === undefined ? {} : { decidedBy }),
-    });
-    if (Result.isError(recorded)) {
-      // Audit availability must not turn a completed upstream action into a replay.
-      console.warn(`${adapter.domain} audit append unavailable`, serializeError(recorded.error));
-    }
-  }
-
-  async function visibleToolNames(
-    current: ApprovalContext["session"]["auth"]["current"],
-    candidates: readonly string[],
-  ): Promise<Name[]> {
-    const principal = requirePrincipal(current);
-    if (Result.isError(principal)) return [];
-    const context = await evaluationContext(principal.value);
-    return candidates.filter((toolName): toolName is Name => {
-      if (!isToolName(toolName)) return false;
-      const decision = decideCapability(principal.value, descriptorForTool(toolName), context);
-      return !Result.isError(decision) && decision.value.discover;
-    });
-  }
-
-  async function approvalForTool(name: Name, ctx: ApprovalContext): Promise<ApprovalStatus> {
-    const principal = requirePrincipal(ctx.session.auth.current);
-    if (Result.isError(principal)) {
-      return { type: "denied", reason: principal.error.message };
-    }
-    const context = await evaluationContext(principal.value);
-    const decision = decideCapability(principal.value, descriptorForTool(name), context);
-    if (Result.isError(decision) || !decision.value.execute || decision.value.approve === "deny") {
-      await audit(principal.value, name, ctx.toolInput, AUDIT_DECISIONS.Denied);
-      return {
-        type: "denied",
-        reason: Result.isError(decision)
-          ? decision.error.message
-          : decision.value.denial === "budget"
-            ? "Daily AI token budget reached."
-            : decision.value.denial === "confirmation"
-              ? "Scheduled actions cannot run tools that require confirmation."
-              : `Policy denied this ${adapter.label} action.`,
-      };
-    }
-    if (decision.value.approve === Confirmation.None) return "not-applicable";
-    if (decision.value.approve === Confirmation.SecondParty) {
-      const descriptor = descriptorForTool(name);
-      const stored = await (dependencies?.approval ?? getApprovalPolicyStore()).putSecondParty(
-        ctx.session.id,
-        ctx.callId,
-        {
-          requesterUserId: principal.value.userId,
-          mode: "second-party",
-          minApproverRole:
-            descriptor.minRole === UserRole.Public ? UserRole.Organizer : descriptor.minRole,
-          tool: name,
-          risk: descriptor.risk,
-        },
-      );
-      if (Result.isError(stored)) {
-        await audit(principal.value, name, ctx.toolInput, AUDIT_DECISIONS.Denied);
-        return { type: "denied", reason: "Second-party approval policy could not be persisted." };
-      }
-      await audit(principal.value, name, ctx.toolInput, AUDIT_DECISIONS.Requested);
-      return "user-approval";
-    }
-    await audit(principal.value, name, ctx.toolInput, AUDIT_DECISIONS.Requested);
-    return "user-approval";
-  }
-
-  async function principalForExecution(name: Name, ctx: ToolContext) {
-    const current = requirePrincipal(ctx.session.auth.current);
-    if (Result.isError(current)) return undefined;
-    const attributes = ctx.session.auth.current?.attributes;
-    const descriptor = descriptorForTool(name);
-    return resolveExecutionAuthority({
-      current: current.value,
-      approvalRequesterId: attributes?.approvalRequesterId,
-      approvalRequesterMemberRoles: attributes?.approvalRequesterMemberRoles,
-      sessionId: ctx.session.id,
-      callId: ctx.callId,
-      tool: name,
-      risk: descriptor.risk,
-      requesterMinRole: descriptor.minRole,
-      approvalPolicies: dependencies?.approval ?? getApprovalPolicyStore(),
-    });
-  }
-
-  /** Result stays internal; this is the plain JSON Eve boundary. */
-  async function executeTool(name: Name, input: unknown, ctx: ToolContext): Promise<unknown> {
-    const authority = await principalForExecution(name, ctx);
-    if (authority === undefined) {
-      return denied(descriptorForTool(name).minRole, "unauthorized", name);
-    }
-    const principal = authority.principal;
-    const policyContext = await evaluationContext(principal);
-    const decision = decideCapability(principal, descriptorForTool(name), policyContext);
-    if (Result.isError(decision)) {
-      return { ok: false, error: serializeError(decision.error) };
-    }
-    if (!decision.value.execute || decision.value.approve === "deny") {
-      await audit(principal, name, input, AUDIT_DECISIONS.Denied, authority.decidedBy);
-      return denied(
-        decision.value.denial === "confirmation"
-          ? "a confirmation-free scheduled action"
-          : decision.value.denial === "budget"
-            ? "available daily token budget"
-            : descriptorForTool(name).minRole,
-        principal.role,
-        name,
-      );
-    }
-    if (authority.decidedBy !== undefined) {
-      await audit(principal, name, input, AUDIT_DECISIONS.Approved, authority.decidedBy);
-    }
-
-    const configurationError = adapter.configurationError?.(name, input);
-    if (configurationError !== undefined) {
-      await audit(principal, name, input, AUDIT_DECISIONS.Failed, authority.decidedBy);
-      return { ok: false, error: serializeError(configurationError) };
-    }
-
-    const spec = toolSpec(name);
-    const parsed = spec.input.safeParse(input);
-    if (!parsed.success) {
-      return {
-        ok: false,
-        error: {
-          tag: "InvalidInput",
-          message: parsed.error.issues.map((issue) => issue.message).join("; "),
-        },
-      };
-    }
-    const operation = `execute ${adapter.label} tool ${name}`;
-    const result = await Result.tryPromise({
-      try: async () => {
-        const output = await spec.execute(parsed.data, ctx);
-        return adapter.projectOutput === undefined
-          ? assertToolOutput(output)
-          : adapter.projectOutput(output, name);
-      },
-      catch: (cause) =>
-        adapter.mapFailure?.(cause, operation) ??
-        standardFailure(adapter.service, cause, operation, adapter.sanitizeErrorText ?? String),
-    });
-    if (Result.isError(result)) {
-      await audit(principal, name, input, AUDIT_DECISIONS.Failed, authority.decidedBy);
-      return { ok: false, error: serializeError(result.error) };
-    }
-    await audit(principal, name, input, AUDIT_DECISIONS.Executed, authority.decidedBy);
-    return result.value;
-  }
-
   return {
-    approvalForTool,
-    descriptorForTool,
-    executeTool,
-    isToolName,
+    approvalForTool: (name: Name, ctx: ApprovalContext): Promise<ApprovalStatus> =>
+      approvalFor(adapter, name, ctx),
+    descriptorForTool: (name: Name): CapabilityDescriptor => descriptorOf(adapter, name),
+    executeTool: (name: Name, input: unknown, ctx: ToolContext): Promise<unknown> =>
+      executeToolFor(adapter, name, input, ctx),
+    isToolName: (value: string): value is Name => hasToolName(adapter, value),
     subagentDescriptor,
-    visibleToolNames,
+    visibleToolNames: (
+      current: ApprovalContext["session"]["auth"]["current"],
+      candidates: readonly string[],
+    ): Promise<Name[]> => visibleToolNamesOf(adapter, current, candidates),
   } as const;
 }

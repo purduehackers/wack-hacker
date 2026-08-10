@@ -31,10 +31,10 @@ export const get_file = defineTool({
   description:
     "Get a Figma file's metadata and document structure. Use depth to control how deep the node tree goes (default 1 = pages only). Large files can be enormous — start shallow.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     file_key: z.string().describe("The file key (from the Figma URL)"),
     depth: z
-      .number()
+      .int()
       .min(1)
       .max(4)
       .default(1)
@@ -56,7 +56,7 @@ export const get_file = defineTool({
 export const list_projects = defineTool({
   description: "List all projects in the team. Returns project IDs and names.",
   access: { risk: "read" },
-  input: z.object({}),
+  input: z.strictObject({}),
   execute: async () => {
     const data = await figma.get<GetTeamProjectsResponse>(`/v1/teams/${figma.teamId}/projects`);
     return data.projects.map((p) => ({
@@ -70,7 +70,7 @@ export const list_project_files = defineTool({
   description:
     "List files in a specific project. Returns file keys, names, last modified times, and thumbnail URLs.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_id: z.string().describe("The project ID"),
   }),
   execute: async ({ project_id }) => {
@@ -83,9 +83,9 @@ export const search_files = defineTool({
   description:
     "Search for files by name across all team projects. Fetches all projects and their files, then filters by query. May be slow for large teams.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     query: z.string().describe("Search query to match against file names (case-insensitive)"),
-    limit: z.number().max(50).default(10).describe("Max results to return"),
+    limit: z.int().min(1).max(50).default(10).describe("Max results to return"),
   }),
   execute: async ({ query, limit }) => {
     const data = await figma.get<GetTeamProjectsResponse>(`/v1/teams/${figma.teamId}/projects`);

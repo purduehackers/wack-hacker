@@ -1,32 +1,36 @@
 import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
-import { octokit } from "./client.ts";
+import { octokit, octokitStatus } from "./client.ts";
 import { env } from "./config.ts";
-import { paginationInputShape } from "./constants.ts";
+import { paginationInputShape, repoField, repoName, resourceId } from "./constants.ts";
+
+/**
+ * Value the branch-protection request body carries to clear a rule. GitHub
+ * treats an explicit `null` as "remove this rule" and a missing key as "leave
+ * it alone", so the literal is part of the wire contract. One named sentinel
+ * keeps the rest of this module under the no-null rule.
+ */
+// oxlint-disable-next-line unicorn/no-null -- GitHub clears a protection rule only when the request body sends an explicit null
+const CLEAR_RULE = null;
+
+const branchName = z.string().min(1).describe("Branch name");
 
 export const create_repository = defineTool({
   description: `Create a new repository in the purduehackers organization. Returns the repo name, URL, visibility, and default branch.`,
   access: { risk: "write" },
-  input: z.object({
-    name: z.string().describe("Repository name"),
-    description: z.string().optional(),
-    private: z.boolean().optional().describe("Whether the repo is private (default true)"),
-    auto_init: z.boolean().optional().describe("Initialize with a README"),
-    gitignore_template: z.string().optional().describe("Gitignore template (e.g. 'Node')"),
-    license_template: z.string().optional().describe("License template (e.g. 'mit')"),
+  input: z.strictObject({
+    name: repoName.describe("Repository name"),
+    description: z.string().exactOptional(),
+    private: z.boolean().default(true).describe("Whether the repo is private (default true)"),
+    auto_init: z.boolean().exactOptional().describe("Initialize with a README"),
+    gitignore_template: z.string().exactOptional().describe("Gitignore template (e.g. 'Node')"),
+    license_template: z.string().exactOptional().describe("License template (e.g. 'mit')"),
   }),
   execute: async (input) => {
     const { data } = await octokit().rest.repos.createInOrg({
       org: env.GITHUB_ORG,
-      name: input.name,
-      ...(input.description === undefined ? {} : { description: input.description }),
-      private: input.private ?? true,
-      ...(input.auto_init === undefined ? {} : { auto_init: input.auto_init }),
-      ...(input.gitignore_template === undefined
-        ? {}
-        : { gitignore_template: input.gitignore_template }),
-      ...(input.license_template === undefined ? {} : { license_template: input.license_template }),
+      ...input,
     });
     return JSON.stringify({
       name: data.name,
@@ -41,48 +45,25 @@ export const create_repository = defineTool({
 export const update_repository = defineTool({
   description: `Update repository settings — description, visibility, archive status, default branch, and merge strategies.`,
   access: { risk: "destructive" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    description: z.string().optional(),
-    private: z.boolean().optional(),
-    archived: z.boolean().optional(),
-    default_branch: z.string().optional(),
-    has_issues: z.boolean().optional(),
-    has_wiki: z.boolean().optional(),
-    has_projects: z.boolean().optional(),
-    allow_squash_merge: z.boolean().optional(),
-    allow_merge_commit: z.boolean().optional(),
-    allow_rebase_merge: z.boolean().optional(),
-    delete_branch_on_merge: z.boolean().optional(),
+  input: z.strictObject({
+    repo: repoField,
+    description: z.string().exactOptional(),
+    private: z.boolean().exactOptional(),
+    archived: z.boolean().exactOptional(),
+    default_branch: z.string().min(1).exactOptional(),
+    has_issues: z.boolean().exactOptional(),
+    has_wiki: z.boolean().exactOptional(),
+    has_projects: z.boolean().exactOptional(),
+    allow_squash_merge: z.boolean().exactOptional(),
+    allow_merge_commit: z.boolean().exactOptional(),
+    allow_rebase_merge: z.boolean().exactOptional(),
+    delete_branch_on_merge: z.boolean().exactOptional(),
   }),
-  execute: async ({
-    repo,
-    description,
-    private: isPrivate,
-    archived,
-    default_branch,
-    has_issues,
-    has_wiki,
-    has_projects,
-    allow_squash_merge,
-    allow_merge_commit,
-    allow_rebase_merge,
-    delete_branch_on_merge,
-  }) => {
+  execute: async ({ repo, ...settings }) => {
     const { data } = await octokit().rest.repos.update({
       owner: env.GITHUB_ORG,
       repo,
-      ...(description === undefined ? {} : { description }),
-      ...(isPrivate === undefined ? {} : { private: isPrivate }),
-      ...(archived === undefined ? {} : { archived }),
-      ...(default_branch === undefined ? {} : { default_branch }),
-      ...(has_issues === undefined ? {} : { has_issues }),
-      ...(has_wiki === undefined ? {} : { has_wiki }),
-      ...(has_projects === undefined ? {} : { has_projects }),
-      ...(allow_squash_merge === undefined ? {} : { allow_squash_merge }),
-      ...(allow_merge_commit === undefined ? {} : { allow_merge_commit }),
-      ...(allow_rebase_merge === undefined ? {} : { allow_rebase_merge }),
-      ...(delete_branch_on_merge === undefined ? {} : { delete_branch_on_merge }),
+      ...settings,
     });
     return JSON.stringify({
       name: data.name,
@@ -97,8 +78,8 @@ export const update_repository = defineTool({
 export const delete_repository = defineTool({
   description: `Permanently delete a repository. Irreversible — destroys all code, issues, and history.`,
   access: { risk: "destructive", confirm: "second-party" },
-  input: z.object({
-    repo: z.string().describe("Repository name to delete"),
+  input: z.strictObject({
+    repo: repoName.describe("Repository name to delete"),
   }),
   execute: async ({ repo }) => {
     await octokit().rest.repos.delete({ owner: env.GITHUB_ORG, repo });
@@ -110,8 +91,8 @@ export const archive_repository = defineTool({
   description:
     "Archive a repository — makes it read-only. Reversible via update_repository archived=false, but users can no longer push, open issues/PRs, or fork while archived.",
   access: { risk: "destructive" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
+  input: z.strictObject({
+    repo: repoField,
   }),
   execute: async ({ repo }) => {
     const { data } = await octokit().rest.repos.update({
@@ -130,21 +111,20 @@ export const transfer_repository = defineTool({
   description:
     "Transfer a repository to a different owner (user or org). The new owner receives a transfer invitation which they must accept.",
   access: { risk: "destructive" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    new_owner: z.string().describe("New owner's username or org slug"),
-    team_ids: z.array(z.number()).optional().describe("Team IDs to add on transfer"),
+  input: z.strictObject({
+    repo: repoField,
+    new_owner: z.string().min(1).describe("New owner's username or org slug"),
+    team_ids: z.array(resourceId).exactOptional().describe("Team IDs to add on transfer"),
   }),
-  execute: async ({ repo, new_owner, team_ids }) => {
+  execute: async ({ repo, ...fields }) => {
     const { data } = await octokit().rest.repos.transfer({
       owner: env.GITHUB_ORG,
       repo,
-      new_owner,
-      ...(team_ids === undefined ? {} : { team_ids }),
+      ...fields,
     });
     return JSON.stringify({
       transferring: true,
-      new_full_name: `${new_owner}/${repo}`,
+      new_full_name: `${fields.new_owner}/${repo}`,
       html_url: data.html_url,
     });
   },
@@ -153,18 +133,18 @@ export const transfer_repository = defineTool({
 export const list_branches = defineTool({
   description: `List branches for a repository. Optionally filter to only protected branches. Returns branch name and protection status.`,
   access: { risk: "read" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    protected: z.boolean().optional().describe("Filter to protected branches only"),
+  input: z.strictObject({
+    repo: repoField,
+    protected: z.boolean().exactOptional().describe("Filter to protected branches only"),
     ...paginationInputShape,
   }),
-  execute: async ({ repo, ...opts }) => {
+  execute: async ({ repo, per_page, page, ...filters }) => {
     const { data } = await octokit().rest.repos.listBranches({
       owner: env.GITHUB_ORG,
       repo,
-      ...(opts.protected === undefined ? {} : { protected: opts.protected }),
-      per_page: opts.per_page ?? 30,
-      page: opts.page ?? 1,
+      ...filters,
+      per_page: per_page ?? 30,
+      page: page ?? 1,
     });
     return JSON.stringify(data.map((b) => ({ name: b.name, protected: b.protected })));
   },
@@ -173,9 +153,9 @@ export const list_branches = defineTool({
 export const get_branch_protection = defineTool({
   description: `Get branch protection rules — required status checks, review requirements, admin enforcement, and push restrictions. Returns 'not protected' if no rules are set.`,
   access: { risk: "read" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    branch: z.string().describe("Branch name"),
+  input: z.strictObject({
+    repo: repoField,
+    branch: branchName,
   }),
   execute: async ({ repo, branch }) => {
     try {
@@ -200,7 +180,7 @@ export const get_branch_protection = defineTool({
         restrictions: data.restrictions,
       });
     } catch (e: unknown) {
-      if (typeof e === "object" && e !== null && "status" in e && e.status === 404)
+      if (octokitStatus(e) === 404)
         return JSON.stringify({
           protected: false,
           message: "No protection rules set",
@@ -213,11 +193,11 @@ export const get_branch_protection = defineTool({
 export const set_branch_protection = defineTool({
   description: `Set or update branch protection rules — status checks, admin enforcement, review requirements, and push restrictions. Pass null to clear a rule.`,
   access: { risk: "destructive" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    branch: z.string().describe("Branch name"),
+  input: z.strictObject({
+    repo: repoField,
+    branch: branchName,
     required_status_checks: z
-      .object({
+      .strictObject({
         strict: z.boolean(),
         contexts: z.array(z.string()),
       })
@@ -225,15 +205,15 @@ export const set_branch_protection = defineTool({
       .optional(),
     enforce_admins: z.boolean().nullable().optional(),
     required_pull_request_reviews: z
-      .object({
-        required_approving_review_count: z.number().optional(),
-        dismiss_stale_reviews: z.boolean().optional(),
-        require_code_owner_reviews: z.boolean().optional(),
+      .strictObject({
+        required_approving_review_count: z.int().min(0).max(6).exactOptional(),
+        dismiss_stale_reviews: z.boolean().exactOptional(),
+        require_code_owner_reviews: z.boolean().exactOptional(),
       })
       .nullable()
       .optional(),
     restrictions: z
-      .object({
+      .strictObject({
         users: z.array(z.string()),
         teams: z.array(z.string()),
       })
@@ -245,37 +225,10 @@ export const set_branch_protection = defineTool({
       owner: env.GITHUB_ORG,
       repo,
       branch,
-      // oxlint-disable-next-line unicorn/no-null -- GitHub uses null to clear this rule
-      required_status_checks: rules.required_status_checks ?? null,
-      // oxlint-disable-next-line unicorn/no-null -- GitHub uses null to clear this rule
-      enforce_admins: rules.enforce_admins ?? null,
-      required_pull_request_reviews:
-        // oxlint-disable-next-line unicorn/no-null -- nullable input clears this rule
-        rules.required_pull_request_reviews == null
-          ? // oxlint-disable-next-line unicorn/no-null -- GitHub uses null to clear this rule
-            null
-          : {
-              ...(rules.required_pull_request_reviews.required_approving_review_count === undefined
-                ? {}
-                : {
-                    required_approving_review_count:
-                      rules.required_pull_request_reviews.required_approving_review_count,
-                  }),
-              ...(rules.required_pull_request_reviews.dismiss_stale_reviews === undefined
-                ? {}
-                : {
-                    dismiss_stale_reviews:
-                      rules.required_pull_request_reviews.dismiss_stale_reviews,
-                  }),
-              ...(rules.required_pull_request_reviews.require_code_owner_reviews === undefined
-                ? {}
-                : {
-                    require_code_owner_reviews:
-                      rules.required_pull_request_reviews.require_code_owner_reviews,
-                  }),
-            },
-      // oxlint-disable-next-line unicorn/no-null -- GitHub uses null to clear this rule
-      restrictions: rules.restrictions ?? null,
+      required_status_checks: rules.required_status_checks ?? CLEAR_RULE,
+      enforce_admins: rules.enforce_admins ?? CLEAR_RULE,
+      required_pull_request_reviews: rules.required_pull_request_reviews ?? CLEAR_RULE,
+      restrictions: rules.restrictions ?? CLEAR_RULE,
     });
     return JSON.stringify({ updated: true, repo, branch });
   },
@@ -284,9 +237,9 @@ export const set_branch_protection = defineTool({
 export const delete_branch_protection = defineTool({
   description: `Remove all branch protection rules from a branch, making it unprotected.`,
   access: { risk: "destructive" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    branch: z.string().describe("Branch name"),
+  input: z.strictObject({
+    repo: repoField,
+    branch: branchName,
   }),
   execute: async ({ repo, branch }) => {
     await octokit().rest.repos.deleteBranchProtection({

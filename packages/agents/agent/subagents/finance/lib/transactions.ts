@@ -3,41 +3,18 @@ import { z } from "zod";
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { hcbGet, hcbOrgSlug, hcbPaginate, hcbTxnUrl, paginationQuery } from "./client.ts";
 import { paginationInputShape } from "./constants.ts";
-
-const hcbReceiptsSummarySchema = z.object({
-  count: z.number().optional(),
-  missing: z.boolean().optional(),
-});
-const hcbTransactionSchema = z.object({
-  id: z.string().optional(),
-  date: z.string().optional(),
-  amount_cents: z.number().optional(),
-  memo: z.string().optional(),
-  type: z.string().optional(),
-  pending: z.boolean().optional(),
-  receipts: hcbReceiptsSummarySchema.optional(),
-});
-type HcbTransaction = z.infer<typeof hcbTransactionSchema>;
-
-function projectTransaction(t: HcbTransaction) {
-  return {
-    id: t.id,
-    date: t.date,
-    amount_cents: t.amount_cents,
-    memo: t.memo,
-    type: t.type,
-    pending: t.pending,
-    receipts: t.receipts,
-    href: t.id ? hcbTxnUrl(t.id) : undefined,
-  };
-}
+import {
+  type HcbTransaction,
+  hcbTransactionSchema,
+  projectTransaction,
+} from "./transaction-shape.ts";
 
 /** List the most recent transactions. */
 export const list_transactions = defineTool({
   description:
     "List recent HCB transactions for Purdue Hackers — newest first. Each transaction includes id, date, amount_cents (negative = outflow), memo, type, pending flag, and a receipts summary {count, missing}. Receipt files themselves are NOT available via HCB's API; only whether a receipt is attached.",
   access: { risk: "read" },
-  input: z.object(paginationInputShape),
+  input: z.strictObject(paginationInputShape),
   execute: async (input) => {
     const data = await hcbGet(
       `/organizations/${hcbOrgSlug()}/transactions`,
@@ -53,7 +30,7 @@ export const get_transaction = defineTool({
   description:
     "Get a single HCB transaction by id. Returns a compact summary with id, date, amount_cents (negative = outflow), memo, type, pending flag, receipts summary {count, missing}, and href. Receipt files themselves are NOT available via HCB's API; only whether a receipt is attached — visit hcb.hackclub.com/hcb/{id} for the actual file.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     id: z.string().describe("HCB transaction id (e.g. 'txn_abc123')"),
   }),
   execute: async ({ id }) => {
@@ -63,24 +40,23 @@ export const get_transaction = defineTool({
 });
 
 /** Search transactions by memo substring, amount range, and/or date range. */
-const findTransactionsInput = z.object({
+const findTransactionsInput = z.strictObject({
   memo_contains: z
     .string()
     .optional()
     .describe("Case-insensitive substring match on the memo field"),
   min_amount_cents: z
-    .number()
     .int()
     .optional()
     .describe("Inclusive lower bound on amount_cents (signed — negatives are outflows)"),
-  max_amount_cents: z.number().int().optional().describe("Inclusive upper bound on amount_cents"),
+  max_amount_cents: z.int().optional().describe("Inclusive upper bound on amount_cents"),
   since: z.iso.date().optional().describe("ISO date (YYYY-MM-DD) — on/after this date"),
   until: z.iso.date().optional().describe("ISO date (YYYY-MM-DD) — on/before this date"),
   pending: z
     .enum(["any", "only", "exclude"])
     .optional()
     .describe("Filter by pending status (default 'any')"),
-  limit: z.number().int().min(1).max(200).optional().describe("Max results to return (default 50)"),
+  limit: z.int().min(1).max(200).optional().describe("Max results to return (default 50)"),
 });
 
 export const find_transactions = defineTool({
@@ -101,7 +77,7 @@ export const find_transactions = defineTool({
   },
 });
 
-type FindFilter = z.infer<typeof findTransactionsInput>;
+type FindFilter = z.output<typeof findTransactionsInput>;
 
 function buildTransactionFilter(f: FindFilter): (t: HcbTransaction) => boolean {
   const needle = f.memo_contains?.toLowerCase();

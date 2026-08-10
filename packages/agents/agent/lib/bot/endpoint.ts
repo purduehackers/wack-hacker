@@ -1,7 +1,7 @@
 import {
   readActiveBotGeneration,
   type ActiveBotGenerationReader,
-} from "@repo/shared/bot-generation";
+} from "@repo/shared/bot/generation";
 
 /**
  * Resolve the fenced live Sandbox domain. A static host remains the fallback
@@ -11,11 +11,11 @@ import {
 export async function resolveBotBaseUrl(
   redis: ActiveBotGenerationReader,
   fallback: string,
-  now = new Date(),
 ): Promise<string> {
+  const now = Date.now();
   const active = await readActiveBotGeneration(redis);
   if (active === undefined) return fallback;
-  if (Date.parse(active.expiresAt) <= now.getTime()) {
+  if (Date.parse(active.expiresAt) <= now) {
     throw new Error("active bot Sandbox generation has expired");
   }
   const base = new URL(active.healthUrl);

@@ -1,17 +1,16 @@
 import type {
   CreatePageParameters,
   QueryDataSourceParameters,
-  UpdatePageParameters,
 } from "@notionhq/client/build/src/api-endpoints";
 import { z } from "zod";
 
 type QueryFilter = NonNullable<QueryDataSourceParameters["filter"]>;
 type QuerySorts = NonNullable<QueryDataSourceParameters["sorts"]>;
 type CreateProperties = CreatePageParameters["properties"];
-type UpdateProperties = UpdatePageParameters["properties"];
 
-const jsonRecordSchema = z.record(z.string(), z.json());
-const propertyKinds = new Set([
+/** A JSON object — the shape every fragment of a Notion request body must have. */
+const jsonObjectSchema = z.record(z.string(), z.json());
+const propertyKind = z.enum([
   "title",
   "rich_text",
   "number",
@@ -28,54 +27,52 @@ const propertyKinds = new Set([
   "relation",
 ]);
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+const queryTimestamp = z.enum(["created_time", "last_edited_time"]);
+const propertyFilterSchema = z.looseObject({ property: z.string() });
+const timestampFilterSchema = z.looseObject({ timestamp: queryTimestamp });
+const sortDirection = z.enum(["ascending", "descending"]);
+/** Exactly one sort target: a property name or a timestamp, never both nor neither. */
+const querySortsSchema = z.array(
+  z.xor([
+    z.looseObject({ property: z.string(), direction: sortDirection }),
+    z.looseObject({ timestamp: queryTimestamp, direction: sortDirection }),
+  ]),
+);
 
 /** Narrow the legacy generic filter schema to the Notion SDK's recursive filter union. */
 export function isQueryFilter(value: unknown): value is QueryFilter {
-  if (!isRecord(value) || !jsonRecordSchema.safeParse(value).success) return false;
-  const group = value.and ?? value.or;
+  const object = jsonObjectSchema.safeParse(value);
+  if (!object.success) return false;
+  const filter = object.data;
+  const group = filter.and ?? filter.or;
   if (group !== undefined) return Array.isArray(group) && group.every(isQueryFilter);
-  if (typeof value.property === "string") {
-    return Object.entries(value).some(
-      ([key, condition]) => key !== "property" && isRecord(condition),
+  if (propertyFilterSchema.safeParse(filter).success) {
+    return Object.entries(filter).some(
+      ([key, condition]) => key !== "property" && jsonObjectSchema.safeParse(condition).success,
     );
   }
-  if (value.timestamp === "created_time" || value.timestamp === "last_edited_time") {
-    return isRecord(value[value.timestamp]);
+  const timestamp = timestampFilterSchema.safeParse(filter);
+  if (timestamp.success) {
+    return jsonObjectSchema.safeParse(filter[timestamp.data.timestamp]).success;
   }
   return false;
 }
 
 /** Require exactly one SDK sort target rather than forwarding an ambiguous record. */
 export function isQuerySorts(value: unknown): value is QuerySorts {
-  return (
-    Array.isArray(value) &&
-    value.every(
-      (sort) =>
-        isRecord(sort) &&
-        (sort.direction === "ascending" || sort.direction === "descending") &&
-        (typeof sort.property === "string") !==
-          (sort.timestamp === "created_time" || sort.timestamp === "last_edited_time"),
-    )
-  );
-}
-
-function isPropertyMap(value: unknown): boolean {
-  return (
-    isRecord(value) &&
-    Object.values(value).every(
-      (property) =>
-        isRecord(property) && Object.keys(property).some((key) => propertyKinds.has(key)),
-    )
-  );
+  return querySortsSchema.safeParse(value).success;
 }
 
 export function isCreateProperties(value: unknown): value is CreateProperties {
-  return isPropertyMap(value);
-}
-
-export function isUpdateProperties(value: unknown): value is UpdateProperties {
-  return isPropertyMap(value);
+  const object = jsonObjectSchema.safeParse(value);
+  return (
+    object.success &&
+    Object.values(object.data).every((property) => {
+      const candidate = jsonObjectSchema.safeParse(property);
+      return (
+        candidate.success &&
+        Object.keys(candidate.data).some((key) => propertyKind.safeParse(key).success)
+      );
+    })
+  );
 }

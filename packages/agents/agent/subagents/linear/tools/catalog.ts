@@ -13,21 +13,24 @@ export default defineDynamic({
         ctx.session.auth.current,
         LINEAR_TOOL_NAMES,
       );
-      const tools: Record<string, unknown> = {};
-      for (const toolName of visibleNames) {
-        const spec = LINEAR_TOOLS[toolName];
-        tools[toolName] = defineTool({
-          description: spec.description,
-          inputSchema: spec.input,
-          approval: async (approvalCtx) =>
-            await LINEAR_RUNTIME.approvalForTool(toolName, approvalCtx),
-          execute: async (input, toolCtx) =>
-            guardToolExecution(
-              async () => await LINEAR_RUNTIME.executeTool(toolName, input, toolCtx),
-            ),
-        });
-      }
-      return tools;
+      return Object.fromEntries(
+        visibleNames.map((toolName) => {
+          const spec = LINEAR_TOOLS[toolName];
+          return [
+            toolName,
+            defineTool({
+              description: spec.description,
+              inputSchema: spec.input,
+              approval: async (approvalCtx) =>
+                await LINEAR_RUNTIME.approvalForTool(toolName, approvalCtx),
+              execute: async (input, toolCtx) =>
+                guardToolExecution(
+                  async () => await LINEAR_RUNTIME.executeTool(toolName, input, toolCtx),
+                ),
+            }),
+          ];
+        }),
+      );
     },
   },
 });

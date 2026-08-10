@@ -5,22 +5,31 @@ import type { InvariantViolated, Unauthenticated } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import type { SessionAuthContext, SessionContext } from "eve/context";
 import type { ApprovalContext, ApprovalStatus } from "eve/tools/approval";
+import { z } from "zod";
 
-import { decideCapability } from "./policy/engine.ts";
-import { requirePrincipal } from "./policy/principal.ts";
+import { discordSnowflake } from "../core/schema.ts";
+import { decideCapability } from "../policy/engine.ts";
+import { requirePrincipal } from "../policy/principal.ts";
 import {
   CapabilityKind,
   Confirmation,
   RiskLevel,
   type CapabilityDecision,
-} from "./policy/types.ts";
-import type { ScheduleOwner } from "./schedule-store.ts";
+} from "../policy/types.ts";
+import type { ScheduleOwner } from "./store.ts";
 
-const DISCORD_ID = /^\d{17,20}$/u;
 type ScheduleMutationName = "schedule_task" | "cancel_task";
+/**
+ * One entry of Eve's authenticated attribute bag: a single string or a list of
+ * strings. The narrowing below is therefore load-bearing, not a formality.
+ */
+type AuthAttribute = SessionAuthContext["attributes"][string];
 
-function discordId(value: unknown): string | undefined {
-  return typeof value === "string" && DISCORD_ID.test(value) ? value : undefined;
+/** At most one Discord role per position in the guild's role list. */
+const memberRolesSchema = z.array(discordSnowflake).max(64);
+
+function discordId(value: AuthAttribute | undefined): string | undefined {
+  return discordSnowflake.safeParse(value).data;
 }
 
 function scheduleMutationDecision(
@@ -44,7 +53,7 @@ export function requireScheduleOwner(ctx: SessionContext): ScheduleOwner {
     auth === null ||
     auth.authenticator !== "discord" ||
     auth.principalType !== "user" ||
-    !DISCORD_ID.test(auth.principalId)
+    !discordSnowflake.safeParse(auth.principalId).success
   ) {
     throw new Error("an authenticated Discord user is required to manage scheduled tasks");
   }
@@ -58,16 +67,12 @@ export function requireScheduleOwner(ctx: SessionContext): ScheduleOwner {
     throw new Error("scheduled tasks require a Discord channel destination");
   }
 
-  const memberRoles = attributes.memberRoles;
-  if (
-    !Array.isArray(memberRoles) ||
-    memberRoles.length > 64 ||
-    !memberRoles.every((role): role is string => discordId(role) !== undefined)
-  ) {
+  const memberRoles = memberRolesSchema.safeParse(attributes.memberRoles);
+  if (!memberRoles.success) {
     throw new Error("scheduled tasks require current Discord role identifiers");
   }
 
-  return { ownerId: auth.principalId, channelId, memberRoles };
+  return { ownerId: auth.principalId, channelId, memberRoles: memberRoles.data };
 }
 
 export function requireScheduleMutationOwner(

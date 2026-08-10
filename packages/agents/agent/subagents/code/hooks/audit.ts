@@ -6,22 +6,43 @@ import { Result } from "@repo/shared/result";
 import { defineHook } from "eve/hooks";
 import { z } from "zod";
 
-import { env } from "../../../lib/env.ts";
+import { env } from "../../../env.ts";
+import type { JsonValue } from "../../../lib/core/serialization.ts";
 import { createAuditStore, requirePrincipal, RiskLevel } from "../../../lib/policy/index.ts";
 
+/**
+ * The delegated code surface, in full. Repository mutation now happens through
+ * one tool — the Codex task — so the audit row for `code_task` is the record of
+ * every edit that later reaches `code_post_finish`.
+ */
 const tools = {
-  checkout_repository: RiskLevel.Write,
-  read_file: RiskLevel.Read,
-  glob: RiskLevel.Read,
-  grep: RiskLevel.Read,
-  bash: RiskLevel.Write,
-  write_file: RiskLevel.Write,
-  edit_file: RiskLevel.Write,
-  remove_path: RiskLevel.Destructive,
+  code_task: RiskLevel.Write,
   code_post_finish: RiskLevel.Destructive,
 } as const;
 type CodeToolName = keyof typeof tools;
 const failedOutput = z.object({ ok: z.literal(false) });
+/** A JSON object, excluding arrays and null — the only shape with audit-worthy field names. */
+const jsonObject = z.looseObject({});
+/**
+ * The `typeof`-style tag the audit row records, derived by matching the value
+ * against the JSON shapes instead of interrogating its runtime type.
+ *
+ * Every option is deliberately shallow. A recursive `z.json()` here would walk
+ * the entire payload and raise `RangeError: Maximum call stack size exceeded`
+ * on a cyclic or deeply nested value — which `.catch()` does not intercept,
+ * because it supplies a fallback for validation issues, not thrown errors. The
+ * `JSON.stringify` guard below exists for exactly that class of input, so the
+ * tag must not be the thing that reintroduces the throw.
+ */
+const jsonKind = z.union([
+  z.array(z.unknown()).transform(() => "array" as const),
+  z.string().transform(() => "string" as const),
+  z.number().transform(() => "number" as const),
+  z.boolean().transform(() => "boolean" as const),
+  // Total terminal option, so auditing can never be the thing that fails a turn:
+  // objects and `null` alike land here, exactly as `typeof` reported them.
+  z.unknown().transform(() => "object" as const),
+]);
 const audit = createAuditStore({
   url: env.TURSO_DATABASE_URL,
   ...(env.TURSO_AUTH_TOKEN === undefined ? {} : { authToken: env.TURSO_AUTH_TOKEN }),
@@ -31,19 +52,17 @@ function isCodeTool(value: string): value is CodeToolName {
   return Object.hasOwn(tools, value);
 }
 
-function opaqueAuditInput(value: unknown) {
+function opaqueAuditInput(value: JsonValue) {
   let serialized: string;
   try {
     serialized = JSON.stringify(value) ?? "null";
   } catch {
     serialized = "[unserializable]";
   }
+  const fields = jsonObject.safeParse(value);
   return {
-    fields:
-      typeof value === "object" && value !== null && !Array.isArray(value)
-        ? Object.keys(value).sort().slice(0, 100)
-        : [],
-    kind: Array.isArray(value) ? "array" : typeof value,
+    fields: fields.success ? Object.keys(fields.data).sort().slice(0, 100) : [],
+    kind: jsonKind.parse(value),
     sha256: createHash("sha256").update(serialized).digest("hex"),
   };
 }
@@ -52,7 +71,7 @@ async function record(
   id: string,
   current: Parameters<typeof requirePrincipal>[0],
   tool: CodeToolName,
-  input: unknown,
+  input: JsonValue,
   decision: (typeof AuditDecision)[keyof typeof AuditDecision],
 ): Promise<void> {
   const principal = requirePrincipal(current);

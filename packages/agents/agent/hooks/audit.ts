@@ -3,8 +3,9 @@ import { serializeError } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { defineHook } from "eve/hooks";
 
+import { env } from "../env.ts";
 import { CORE_TOOL_DESCRIPTORS } from "../lib/core/descriptors.ts";
-import { env } from "../lib/env.ts";
+import type { JsonValue } from "../lib/core/serialization.ts";
 import { createAuditStore, requirePrincipal, RiskLevel } from "../lib/policy/index.ts";
 
 const risks = {
@@ -26,11 +27,17 @@ function isAuditedTool(value: string): value is AuditedTool {
   return Object.hasOwn(risks, value);
 }
 
+/** A completed action is audited by its outcome shape, never by the model's arguments again. */
+interface ToolResultAudit {
+  readonly kind: "tool-result";
+  readonly failed: boolean | undefined;
+}
+
 async function record(
   id: string,
   current: Parameters<typeof requirePrincipal>[0],
   tool: AuditedTool,
-  input: unknown,
+  input: JsonValue | ToolResultAudit,
   decision: (typeof AuditDecision)[keyof typeof AuditDecision],
 ): Promise<void> {
   const principal = requirePrincipal(current);

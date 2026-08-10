@@ -13,21 +13,24 @@ export default defineDynamic({
         ctx.session.auth.current,
         VERCEL_TOOL_NAMES,
       );
-      const tools: Record<string, unknown> = {};
-      for (const toolName of visibleNames) {
-        const spec = VERCEL_TOOLS[toolName];
-        tools[toolName] = defineTool({
-          description: spec.description,
-          inputSchema: spec.input,
-          approval: async (approvalCtx) =>
-            await VERCEL_RUNTIME.approvalForTool(toolName, approvalCtx),
-          execute: async (input, toolCtx) =>
-            guardToolExecution(
-              async () => await VERCEL_RUNTIME.executeTool(toolName, input, toolCtx),
-            ),
-        });
-      }
-      return tools;
+      return Object.fromEntries(
+        visibleNames.map((toolName) => {
+          const spec = VERCEL_TOOLS[toolName];
+          return [
+            toolName,
+            defineTool({
+              description: spec.description,
+              inputSchema: spec.input,
+              approval: async (approvalCtx) =>
+                await VERCEL_RUNTIME.approvalForTool(toolName, approvalCtx),
+              execute: async (input, toolCtx) =>
+                guardToolExecution(
+                  async () => await VERCEL_RUNTIME.executeTool(toolName, input, toolCtx),
+                ),
+            }),
+          ] as const;
+        }),
+      );
     },
   },
 });

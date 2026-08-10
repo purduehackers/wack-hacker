@@ -3,16 +3,22 @@ import { z } from "zod";
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { octokit } from "./client.ts";
 import { env } from "./config.ts";
-import { paginationInputShape } from "./constants.ts";
+import {
+  paginationInputShape,
+  repoField,
+  repoPaginatedInputShape,
+  resourceId,
+} from "./constants.ts";
+
+/** Workflows are addressable by their numeric id or by their file name. */
+const workflowRef = z.union([resourceId, z.string().min(1)]);
+const runId = resourceId.describe("Workflow run ID");
 
 /** List workflow definitions in a repository. */
 export const list_workflows = defineTool({
   description: `List CI/CD workflows defined in a repository's .github/workflows directory. Returns each workflow's ID, name, file path, state, and URL.`,
   access: { risk: "read" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    ...paginationInputShape,
-  }),
+  input: z.strictObject(repoPaginatedInputShape),
   execute: async ({ repo, per_page, page }) => {
     const { data } = await octokit().rest.actions.listRepoWorkflows({
       owner: env.GITHUB_ORG,
@@ -37,9 +43,9 @@ export const list_workflows = defineTool({
 export const list_workflow_runs = defineTool({
   description: `List workflow runs for a repository. Optionally filter by workflow ID/filename, branch, or status. Returns run ID, name, status, conclusion, branch, and timestamps. If no workflow_id is given, lists runs across all workflows.`,
   access: { risk: "read" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    workflow_id: z.union([z.number(), z.string()]).optional().describe("Workflow ID or filename"),
+  input: z.strictObject({
+    repo: repoField,
+    workflow_id: workflowRef.optional().describe("Workflow ID or filename"),
     branch: z.string().optional(),
     status: z
       .enum([
@@ -62,7 +68,7 @@ export const list_workflow_runs = defineTool({
     ...paginationInputShape,
   }),
   execute: async ({ repo, workflow_id, branch, status, per_page, page }) => {
-    if (workflow_id) {
+    if (workflow_id !== undefined) {
       const { data } = await octokit().rest.actions.listWorkflowRuns({
         owner: env.GITHUB_ORG,
         repo,
@@ -115,9 +121,9 @@ export const list_workflow_runs = defineTool({
 export const get_workflow_run = defineTool({
   description: `Get detailed information about a specific workflow run, including its status, conclusion, triggering event, branch, commit SHA, and timing information.`,
   access: { risk: "read" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    run_id: z.number().describe("Workflow run ID"),
+  input: z.strictObject({
+    repo: repoField,
+    run_id: runId,
   }),
   execute: async ({ repo, run_id }) => {
     const { data } = await octokit().rest.actions.getWorkflowRun({
@@ -146,23 +152,19 @@ export const get_workflow_run = defineTool({
 export const trigger_workflow = defineTool({
   description: `Trigger a workflow_dispatch event to manually run a workflow. The workflow must have a workflow_dispatch trigger defined. Specify the branch/tag to run on and optional input parameters.`,
   access: { risk: "destructive" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    workflow_id: z
-      .union([z.number(), z.string()])
-      .describe("Workflow ID or filename (e.g. 'deploy.yml')"),
+  input: z.strictObject({
+    repo: repoField,
+    workflow_id: workflowRef.describe("Workflow ID or filename (e.g. 'deploy.yml')"),
     ref: z.string().describe("Branch or tag to run the workflow on"),
-    inputs: z.record(z.string(), z.string()).optional().describe("Workflow input parameters"),
+    inputs: z.record(z.string(), z.string()).exactOptional().describe("Workflow input parameters"),
   }),
-  execute: async ({ repo, workflow_id, ref, inputs }) => {
+  execute: async ({ repo, ...fields }) => {
     await octokit().rest.actions.createWorkflowDispatch({
       owner: env.GITHUB_ORG,
       repo,
-      workflow_id,
-      ref,
-      ...(inputs === undefined ? {} : { inputs }),
+      ...fields,
     });
-    return JSON.stringify({ triggered: true, workflow_id, ref });
+    return JSON.stringify({ triggered: true, workflow_id: fields.workflow_id, ref: fields.ref });
   },
 });
 
@@ -170,9 +172,9 @@ export const trigger_workflow = defineTool({
 export const cancel_workflow_run = defineTool({
   description: `Cancel a workflow run that is currently in progress or queued. Returns confirmation of cancellation.`,
   access: { risk: "destructive" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    run_id: z.number().describe("Workflow run ID"),
+  input: z.strictObject({
+    repo: repoField,
+    run_id: runId,
   }),
   execute: async ({ repo, run_id }) => {
     await octokit().rest.actions.cancelWorkflowRun({
@@ -188,9 +190,9 @@ export const cancel_workflow_run = defineTool({
 export const rerun_workflow = defineTool({
   description: `Re-run a completed workflow run. This creates a new attempt of the same run. Useful for retrying failed builds or deployments.`,
   access: { risk: "destructive" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    run_id: z.number().describe("Workflow run ID"),
+  input: z.strictObject({
+    repo: repoField,
+    run_id: runId,
   }),
   execute: async ({ repo, run_id }) => {
     await octokit().rest.actions.reRunWorkflow({
@@ -206,9 +208,9 @@ export const rerun_workflow = defineTool({
 export const list_workflow_jobs = defineTool({
   description: `List jobs for a workflow run. Returns each job's ID, name, status, conclusion, timing, and individual step details. Use 'latest' filter for the most recent attempt or 'all' for every attempt.`,
   access: { risk: "read" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    run_id: z.number().describe("Workflow run ID"),
+  input: z.strictObject({
+    repo: repoField,
+    run_id: runId,
     filter: z.enum(["latest", "all"]).optional(),
     ...paginationInputShape,
   }),
@@ -246,9 +248,9 @@ export const list_workflow_jobs = defineTool({
 export const download_artifact = defineTool({
   description: `Get the download URL for a workflow artifact by its ID. Returns a URL that can be used to download the artifact as a zip file.`,
   access: { risk: "read" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    artifact_id: z.number().describe("Artifact ID"),
+  input: z.strictObject({
+    repo: repoField,
+    artifact_id: resourceId.describe("Artifact ID"),
   }),
   execute: async ({ repo, artifact_id }) => {
     const { url } = await octokit().rest.actions.downloadArtifact({

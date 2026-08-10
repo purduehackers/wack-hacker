@@ -5,27 +5,21 @@ import type { Db, TursoConfig } from "@repo/shared/db";
 import { Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 
+import { createRedactor } from "../core/json.ts";
 import { countAgentEvent, currentTraceId } from "../telemetry.ts";
 import type { PolicyPrincipal, RiskLevel } from "./types.ts";
 
-const SECRET_KEY =
-  /authorization|cookie|credential|password|secret|token|api[-_]?key|private[-_]?key/iu;
 const MAX_PREVIEW = 1_000;
 
-function redact(value: unknown, key = "", depth = 0): unknown {
-  if (SECRET_KEY.test(key)) return "[redacted]";
-  if (depth >= 8) return "[truncated]";
-  if (Array.isArray(value)) return value.slice(0, 50).map((item) => redact(item, "", depth + 1));
-  if (typeof value !== "object" || value === null) return value;
-  return Object.fromEntries(
-    Object.entries(value)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .slice(0, 100)
-      .map(([entryKey, entryValue]) => [entryKey, redact(entryValue, entryKey, depth + 1)]),
-  );
-}
+/** Tighter caps than the Eve JSON boundary: the preview lands in a 1000-char column. */
+const redact = createRedactor({
+  sensitiveKey:
+    /authorization|cookie|credential|password|secret|token|api[-_]?key|private[-_]?key/iu,
+  maxArrayItems: 50,
+  maxEntries: 100,
+});
 
-export function auditInput(input: unknown): { readonly hash: string; readonly preview: string } {
+function auditInput(input: unknown): { readonly hash: string; readonly preview: string } {
   const serialized = JSON.stringify(redact(input)) ?? "null";
   return {
     hash: createHash("sha256").update(serialized).digest("hex"),

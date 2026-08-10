@@ -9,7 +9,7 @@ export const retrieve_block = defineTool({
   description:
     "Get a single Notion block by ID. Returns block type and its typed content. Use for inspecting individual blocks before updating.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     block_id: z.string().describe("Block UUID"),
   }),
   execute: async ({ block_id }) => {
@@ -21,10 +21,10 @@ export const update_block = defineTool({
   description:
     "Update a block's content. The shape of block_content must match the existing block's type (e.g. { paragraph: { rich_text: [...] } }). Use retrieve_block first to see the current structure.",
   access: { risk: "destructive" },
-  input: z.object({
+  input: z.strictObject({
     block_id: z.string().describe("Block UUID"),
     block_content: z
-      .record(z.string(), z.unknown())
+      .record(z.string(), z.json())
       .describe("Block content in Notion API format, keyed by block type"),
     archived: z.boolean().optional().describe("Set true to archive"),
   }),
@@ -45,7 +45,7 @@ export const delete_block = defineTool({
   description:
     "Archive (soft-delete) a block. Notion does not permanently delete blocks — this sets archived=true.",
   access: { risk: "destructive" },
-  input: z.object({
+  input: z.strictObject({
     block_id: z.string().describe("Block UUID"),
   }),
   execute: async ({ block_id }) => {
@@ -61,7 +61,7 @@ export const list_block_children = defineTool({
   description:
     "List a block's child blocks (for a page or container block). Paginated. Returns each child's ID, type, and summary content.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     block_id: z.string().describe("Parent block or page UUID"),
     ...cursorPaginationInputShape,
   }),
@@ -88,10 +88,10 @@ export const append_block_children = defineTool({
   description:
     "Append blocks to a page or container block. children is an array of block objects in Notion API format (e.g. [{ paragraph: { rich_text: [{ text: { content: 'Hello' } }] } }]).",
   access: { risk: "write" },
-  input: z.object({
+  input: z.strictObject({
     block_id: z.string().describe("Parent block or page UUID"),
     children: z
-      .array(z.record(z.string(), z.unknown()))
+      .array(z.record(z.string(), z.json()))
       .min(1)
       .describe("Array of block objects to append"),
     after: z

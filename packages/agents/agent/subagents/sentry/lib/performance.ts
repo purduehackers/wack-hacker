@@ -10,7 +10,7 @@ export const list_transactions = defineTool({
   description:
     "List transaction events with performance metrics. Common fields: 'transaction', 'count()', 'p50(transaction.duration)', 'p95(transaction.duration)', 'avg(transaction.duration)'.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_slug: z.string().describe("Project slug"),
     fields: z
       .array(z.string())
@@ -42,7 +42,7 @@ export const get_transaction_summary = defineTool({
   description:
     "Get time-series performance data for a specific transaction. Useful for spotting regressions or trends.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_slug: z.string().describe("Project slug"),
     transaction: z.string().describe("Transaction name (e.g. 'GET /api/users')"),
     y_axis: z
@@ -72,7 +72,7 @@ export const list_spans = defineTool({
   description:
     "Query span-level data for deeper performance analysis. Useful for finding slow database queries, HTTP calls, or specific operations.",
   access: { risk: "read" },
-  input: z.object({
+  input: z.strictObject({
     project_slug: z.string().describe("Project slug"),
     fields: z
       .array(z.string())

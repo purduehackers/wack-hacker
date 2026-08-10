@@ -4,10 +4,10 @@ import { Result } from "@repo/shared/result";
 
 import type { BudgetState } from "./types.ts";
 
-export const PUBLIC_DAILY_TOKEN_LIMIT = 250_000;
+const PUBLIC_DAILY_TOKEN_LIMIT = 250_000;
 const TTL_SECONDS = 48 * 60 * 60;
 
-export function budgetKey(userId: string, now = new Date()): string {
+function budgetKey(userId: string, now: Date): string {
   return `budget:tokens:${now.toISOString().slice(0, 10)}:${userId}`;
 }
 
@@ -19,7 +19,8 @@ export class BudgetStore {
     this.redis = redis;
   }
 
-  async read(userId: string, now = new Date()): Promise<Result<BudgetState, Transient>> {
+  async read(userId: string): Promise<Result<BudgetState, Transient>> {
+    const now = new Date();
     return Result.tryPromise({
       try: async () => {
         const raw: unknown = await this.redis.get(budgetKey(userId, now));
@@ -31,11 +32,8 @@ export class BudgetStore {
     });
   }
 
-  async add(
-    userId: string,
-    tokens: number,
-    now = new Date(),
-  ): Promise<Result<BudgetState, Transient>> {
+  async add(userId: string, tokens: number): Promise<Result<BudgetState, Transient>> {
+    const now = new Date();
     return Result.tryPromise({
       try: async () => {
         const increment = Math.max(0, Math.trunc(tokens));

@@ -15,7 +15,7 @@ import { figma } from "./client.ts";
 // Helpers
 // ---------------------------------------------------------------------------
 
-const webhookEventSchema: z.ZodType<WebhookV2Event> = z.enum([
+const webhookEventSchema = z.enum([
   "PING",
   "FILE_UPDATE",
   "FILE_VERSION_UPDATE",
@@ -23,8 +23,8 @@ const webhookEventSchema: z.ZodType<WebhookV2Event> = z.enum([
   "LIBRARY_PUBLISH",
   "FILE_COMMENT",
   "DEV_MODE_STATUS_UPDATE",
-]);
-const webhookStatusSchema: z.ZodType<WebhookV2Status> = z.enum(["ACTIVE", "PAUSED"]);
+]) satisfies z.ZodType<WebhookV2Event>;
+const webhookStatusSchema = z.enum(["ACTIVE", "PAUSED"]) satisfies z.ZodType<WebhookV2Status>;
 
 function summarizeWebhook(w: WebhookV2) {
   return {
@@ -45,7 +45,7 @@ function summarizeWebhook(w: WebhookV2) {
 export const list_team_webhooks = defineTool({
   description: "List all webhooks configured for the team.",
   access: { risk: "read", minRole: "admin" },
-  input: z.object({}),
+  input: z.strictObject({}),
   execute: async () => {
     const data = await figma.get<GetTeamWebhooksResponse>(`/v2/teams/${figma.teamId}/webhooks`);
     return data.webhooks.map(summarizeWebhook);
@@ -56,7 +56,7 @@ export const create_webhook = defineTool({
   description:
     "Create a new webhook for team events. Events include FILE_UPDATE, FILE_DELETE, FILE_VERSION_UPDATE, LIBRARY_PUBLISH, and more.",
   access: { risk: "destructive", minRole: "admin" },
-  input: z.object({
+  input: z.strictObject({
     event_type: webhookEventSchema.describe("The event type to subscribe to"),
     endpoint: z.url().describe("The callback URL"),
     passcode: z.string().describe("Passcode for verifying webhook payloads"),
@@ -79,7 +79,7 @@ export const create_webhook = defineTool({
 export const get_webhook = defineTool({
   description: "Get a webhook's details by ID.",
   access: { risk: "read", minRole: "admin" },
-  input: z.object({
+  input: z.strictObject({
     webhook_id: z.string().describe("The webhook ID"),
   }),
   execute: async ({ webhook_id }) => {
@@ -91,7 +91,7 @@ export const get_webhook = defineTool({
 export const update_webhook = defineTool({
   description: "Update webhook configuration — endpoint, passcode, description, or status.",
   access: { risk: "destructive", minRole: "admin" },
-  input: z.object({
+  input: z.strictObject({
     webhook_id: z.string().describe("The webhook ID"),
     event_type: webhookEventSchema.describe("The event type"),
     endpoint: z.url().describe("Callback URL"),
@@ -115,7 +115,7 @@ export const update_webhook = defineTool({
 export const delete_webhook = defineTool({
   description: "Delete a webhook permanently.",
   access: { risk: "destructive", minRole: "admin" },
-  input: z.object({
+  input: z.strictObject({
     webhook_id: z.string().describe("The webhook ID to delete"),
   }),
   execute: async ({ webhook_id }) => {

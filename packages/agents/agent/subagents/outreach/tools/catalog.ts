@@ -13,21 +13,24 @@ export default defineDynamic({
         ctx.session.auth.current,
         OUTREACH_TOOL_NAMES,
       );
-      const tools: Record<string, unknown> = {};
-      for (const toolName of visibleNames) {
-        const spec = OUTREACH_TOOLS[toolName];
-        tools[toolName] = defineTool({
-          description: spec.description,
-          inputSchema: spec.input,
-          approval: async (approvalCtx) =>
-            await OUTREACH_RUNTIME.approvalForTool(toolName, approvalCtx),
-          execute: async (input, toolCtx) =>
-            guardToolExecution(
-              async () => await OUTREACH_RUNTIME.executeTool(toolName, input, toolCtx),
-            ),
-        });
-      }
-      return tools;
+      return Object.fromEntries(
+        visibleNames.map((toolName) => {
+          const spec = OUTREACH_TOOLS[toolName];
+          return [
+            toolName,
+            defineTool({
+              description: spec.description,
+              inputSchema: spec.input,
+              approval: async (approvalCtx) =>
+                await OUTREACH_RUNTIME.approvalForTool(toolName, approvalCtx),
+              execute: async (input, toolCtx) =>
+                guardToolExecution(
+                  async () => await OUTREACH_RUNTIME.executeTool(toolName, input, toolCtx),
+                ),
+            }),
+          ];
+        }),
+      );
     },
   },
 });

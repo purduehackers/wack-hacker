@@ -14,7 +14,7 @@ export const add_member_to_platform = defineTool({
   description:
     "Send a Linear workspace invite by email. Role defaults to 'member'; can also invite as 'admin' or 'guest' (guest users only see teams they're explicitly added to). Never guess or fabricate an email — always confirm the exact address with the user.",
   access: { risk: "destructive", minRole: "admin" },
-  input: z.object({
+  input: z.strictObject({
     email: z.email().describe("Email address to invite"),
     role: z
       .enum(["admin", "member", "guest"])
@@ -41,7 +41,7 @@ export const remove_member_from_platform = defineTool({
   description:
     "Remove a member from the Linear workspace. If the user has not yet accepted their invite, revokes the pending invite. If they have joined, suspends them (data is preserved; they lose access). Provide either email (for pending invites) or user_id (for active users). Always confirm identity before calling.",
   access: { risk: "destructive", minRole: "admin" },
-  input: z.object({
+  input: z.strictObject({
     email: z
       .email()
       .optional()

@@ -3,16 +3,15 @@ import { z } from "zod";
 import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
 import { octokit } from "./client.ts";
 import { env } from "./config.ts";
-import { paginationInputShape } from "./constants.ts";
+import { repoField, repoPaginatedInputShape, resourceId } from "./constants.ts";
+
+const environmentName = z.string().min(1).describe("Environment name");
 
 export const list_environments = defineTool({
   description:
     "List deployment environments for a repository. Returns name, URL, protection rules, and timestamps.",
   access: { risk: "read" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    ...paginationInputShape,
-  }),
+  input: z.strictObject(repoPaginatedInputShape),
   execute: async ({ repo, per_page, page }) => {
     const { data } = await octokit().rest.repos.getAllEnvironments({
       owner: env.GITHUB_ORG,
@@ -38,9 +37,9 @@ export const list_environments = defineTool({
 export const get_environment = defineTool({
   description: "Get details for a single deployment environment, including protection rules.",
   access: { risk: "read" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    environment_name: z.string().describe("Environment name"),
+  input: z.strictObject({
+    repo: repoField,
+    environment_name: environmentName,
   }),
   execute: async ({ repo, environment_name }) => {
     const { data } = await octokit().rest.repos.getEnvironment({
@@ -63,35 +62,37 @@ export const create_or_update_environment = defineTool({
   description:
     "Create or update a deployment environment. Optionally configure wait timers and required reviewers (by user IDs or team IDs).",
   access: { risk: "destructive" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    environment_name: z.string().describe("Environment name"),
-    wait_timer: z.number().min(0).optional().describe("Wait minutes before allowing deploys"),
+  input: z.strictObject({
+    repo: repoField,
+    environment_name: environmentName,
+    wait_timer: z
+      .int()
+      .min(0)
+      .max(43_200)
+      .exactOptional()
+      .describe("Wait minutes before allowing deploys"),
     reviewers: z
       .array(
-        z.object({
+        z.strictObject({
           type: z.enum(["User", "Team"]),
-          id: z.number(),
+          id: resourceId,
         }),
       )
-      .optional()
+      .exactOptional()
       .describe("Required reviewers before deploy"),
     deployment_branch_policy: z
-      .object({
+      .strictObject({
         protected_branches: z.boolean(),
         custom_branch_policies: z.boolean(),
       })
       .nullable()
-      .optional(),
+      .exactOptional(),
   }),
-  execute: async ({ repo, environment_name, wait_timer, reviewers, deployment_branch_policy }) => {
+  execute: async ({ repo, ...fields }) => {
     const { data } = await octokit().rest.repos.createOrUpdateEnvironment({
       owner: env.GITHUB_ORG,
       repo,
-      environment_name,
-      ...(wait_timer === undefined ? {} : { wait_timer }),
-      ...(reviewers === undefined ? {} : { reviewers }),
-      ...(deployment_branch_policy === undefined ? {} : { deployment_branch_policy }),
+      ...fields,
     });
     return JSON.stringify({
       id: data.id,
@@ -104,9 +105,9 @@ export const create_or_update_environment = defineTool({
 export const delete_environment = defineTool({
   description: "Delete a deployment environment. Associated deployments become unenvironmented.",
   access: { risk: "destructive" },
-  input: z.object({
-    repo: z.string().describe("Repository name"),
-    environment_name: z.string().describe("Environment name"),
+  input: z.strictObject({
+    repo: repoField,
+    environment_name: environmentName,
   }),
   execute: async ({ repo, environment_name }) => {
     await octokit().rest.repos.deleteAnEnvironment({
