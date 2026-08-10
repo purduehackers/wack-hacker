@@ -1,8 +1,8 @@
 import { z } from "zod";
 
-import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
-import { hcbGet, hcbOrgSlug, hcbPaginate, hcbTxnUrl, paginationQuery } from "./client.ts";
-import { paginationInputShape } from "./constants.ts";
+import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
+import { hcbGet, hcbOrgSlug, hcbPaginate, hcbTxnUrl } from "../../client.ts";
+import { paginationInputShape, paginationQuery } from "../../constants.ts";
 
 const hcbCardChargeSchema = z.object({
   id: z.string().optional(),
@@ -30,23 +30,22 @@ const hcbCardChargeSchema = z.object({
 });
 type HcbCardCharge = z.output<typeof hcbCardChargeSchema>;
 
-function projectCharge(c: HcbCardCharge) {
+function projectCharge(charge: HcbCardCharge) {
   return {
-    id: c.id,
-    amount_cents: c.amount_cents,
-    memo: c.memo,
-    spent_at: c.spent_at,
-    pending: c.pending,
-    user: c.user?.name,
-    user_email: c.user?.email,
-    card_last4: c.card?.last4,
-    merchant: c.merchant?.name,
-    receipts: c.receipts,
-    href: c.transaction_id ? hcbTxnUrl(c.transaction_id) : undefined,
+    id: charge.id,
+    amount_cents: charge.amount_cents,
+    memo: charge.memo,
+    spent_at: charge.spent_at,
+    pending: charge.pending,
+    user: charge.user?.name,
+    user_email: charge.user?.email,
+    card_last4: charge.card?.last4,
+    merchant: charge.merchant?.name,
+    receipts: charge.receipts,
+    href: charge.transaction_id ? hcbTxnUrl(charge.transaction_id) : undefined,
   };
 }
 
-/** List HCB card charges, optionally filtered by user. */
 export const list_card_charges = defineTool({
   description:
     "List HCB card charges — merchant, user, amount_cents, and receipts summary {count, missing}. Supports an optional user filter (substring match on cardholder name or email) for microgrant recipient spend tracking.",
@@ -60,6 +59,8 @@ export const list_card_charges = defineTool({
   }),
   execute: async ({ user, ...pagination }) => {
     const path = `/organizations/${hcbOrgSlug()}/card_charges`;
+    // HCB has no server-side cardholder filter, so a user query has to page the
+    // charge list and match locally.
     if (user) {
       const all = await hcbPaginate(
         path,
@@ -73,9 +74,9 @@ export const list_card_charges = defineTool({
       );
       const needle = user.toLowerCase();
       const matches = all.filter(
-        (c) =>
-          (c.user?.name ?? "").toLowerCase().includes(needle) ||
-          (c.user?.email ?? "").toLowerCase().includes(needle),
+        (charge) =>
+          (charge.user?.name ?? "").toLowerCase().includes(needle) ||
+          (charge.user?.email ?? "").toLowerCase().includes(needle),
       );
       return matches.map(projectCharge);
     }

@@ -1,8 +1,8 @@
 import { defineDynamic, defineTool } from "eve/tools";
 
 import { guardToolExecution } from "../../../lib/core/serialization.ts";
+import { FINANCE_TOOLS } from "../lib/registry.ts";
 import { FINANCE_RUNTIME } from "../lib/runtime.ts";
-import { FINANCE_TOOLS } from "../lib/tool-registry.ts";
 
 const FINANCE_TOOL_NAMES = Object.keys(FINANCE_TOOLS);
 
