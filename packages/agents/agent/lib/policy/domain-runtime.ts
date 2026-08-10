@@ -47,6 +47,14 @@ export interface DomainRuntimeAdapter<R extends DomainToolRegistry> {
   readonly label: string;
   readonly service: string;
   readonly tools: R;
+  /**
+   * Values for the env keys this domain's tools declare in `requires`.
+   *
+   * Passed explicitly rather than read from `env` by key, so the lookup stays
+   * a concrete object the type checker can see rather than an index into the
+   * whole environment.
+   */
+  readonly credentials?: Readonly<Record<string, string | undefined>>;
   readonly configurationError?: (
     name: DomainToolName<R>,
     input: unknown,
@@ -327,7 +335,8 @@ async function executeToolFor<R extends DomainToolRegistry>(
     await recordAudit({ ...entry, decision: AUDIT_DECISIONS.Approved });
   }
 
-  const configurationError = adapter.configurationError?.(name, input);
+  const configurationError =
+    missingCredential(adapter, name) ?? adapter.configurationError?.(name, input);
   if (configurationError !== undefined) {
     await recordAudit({ ...entry, decision: AUDIT_DECISIONS.Failed });
     return { ok: false, error: serializeError(configurationError) };
@@ -348,6 +357,32 @@ async function executeToolFor<R extends DomainToolRegistry>(
   }
   await recordAudit({ ...entry, decision: AUDIT_DECISIONS.Executed });
   return result.value;
+}
+
+/**
+ * The error for a tool whose declared `requires` key is absent from the
+ * environment the domain supplied.
+ *
+ * Checked before the domain's own `configurationError`, so a domain keeps the
+ * hook only for conditions a single env key cannot express.
+ */
+function missingCredential<R extends DomainToolRegistry>(
+  adapter: DomainRuntimeAdapter<R>,
+  name: DomainToolName<R>,
+): UpstreamError | undefined {
+  const declared = toolSpecOf(adapter, name).requires;
+  if (declared === undefined) return undefined;
+  const required = Array.isArray(declared) ? declared : [declared];
+  const missing = required.filter((key) => {
+    const value = adapter.credentials?.[key];
+    return value === undefined || value === "";
+  });
+  if (missing.length === 0) return undefined;
+  return new UpstreamError({
+    service: adapter.service,
+    status: 401,
+    detail: `${missing.join(" and ")} is not configured`,
+  });
 }
 
 export function createDomainRuntime<const R extends DomainToolRegistry>(

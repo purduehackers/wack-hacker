@@ -16,6 +16,15 @@ export type DomainToolSpec<I extends z.ZodType = z.ZodType, O = unknown> = Pick<
 > & {
   readonly access: DomainAccessDescriptor;
   readonly input: I;
+  /**
+   * Environment key(s) this tool cannot run without.
+   *
+   * Declared on the tool rather than branched on by name in the domain's
+   * `configurationError`, which is how `shopping` and `outreach` ended up
+   * maintaining hardcoded `Set`s of tool names beside the registry — a list
+   * that silently goes stale the first time a tool is added.
+   */
+  readonly requires?: string | readonly string[];
 };
 
 /** Retains the Zod input/output relationship while authoring heterogeneous registries. */
