@@ -1,62 +1,14 @@
-import type { PageObjectResponse } from "@notionhq/client/build/src/api-endpoints";
 import { z } from "zod";
 
-import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
-import { accountId, cloudflare } from "../../cloudflare/lib/client.ts";
-import { notion } from "./client.ts";
+import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
+import { accountId, cloudflare } from "../../../../cloudflare/lib/client.ts";
+import { notion } from "../../client.ts";
 import {
   COMPANIES_DATA_SOURCE_ID,
   CONTACTS_DATA_SOURCE_ID,
   OUTREACH_FROM_EMAIL,
   OUTREACH_REPLY_TO_EMAIL,
-} from "./constants.ts";
-
-/**
- * Value this tool reports for a Notion property that is unset or holds a
- * different property type. The model has to see "read it, there was nothing
- * there" rather than a missing key, so the JSON output carries an explicit
- * null. One named sentinel keeps the rest of this module under the no-null
- * rule.
- */
-// oxlint-disable-next-line unicorn/no-null -- serialized tool output distinguishes an empty property from an absent key
-const ABSENT = null;
-
-export const get_email_status = defineTool({
-  description: `Read the outreach tracking properties off a Company or Contact page. Returns Last Outreach ID, Outreach Status, Outreach Last Event At, Do Not Contact. \`send_outreach_email\` writes these when it sends.`,
-  access: { risk: "read" },
-  input: z.strictObject({
-    page_id: z.string(),
-  }),
-  execute: async ({ page_id }) => {
-    const page = await notion.pages.retrieve({ page_id });
-    if (!("properties" in page)) return { id: page.id };
-    const props = page.properties;
-    type PageProperty = PageObjectResponse["properties"][string];
-    const readRich = (property: PageProperty | undefined) => {
-      if (property?.type !== "rich_text") return ABSENT;
-      return property.rich_text.map((item) => item.plain_text).join("");
-    };
-    const readSelect = (property: PageProperty | undefined) => {
-      if (property?.type !== "select") return ABSENT;
-      return property.select?.name ?? ABSENT;
-    };
-    const readDate = (property: PageProperty | undefined) => {
-      if (property?.type !== "date") return ABSENT;
-      return property.date?.start ?? ABSENT;
-    };
-    const readCheckbox = (property: PageProperty | undefined) => {
-      if (property?.type !== "checkbox") return ABSENT;
-      return property.checkbox;
-    };
-    return {
-      id: page.id,
-      last_outreach_id: readRich(props["Last Outreach ID"]),
-      outreach_status: readSelect(props["Outreach Status"]),
-      outreach_last_event_at: readDate(props["Outreach Last Event At"]),
-      do_not_contact: readCheckbox(props["Do Not Contact"]),
-    };
-  },
-});
+} from "../../constants.ts";
 
 /**
  * Records a completed send on the CRM row.
@@ -116,6 +68,9 @@ async function refusalReason(
 export const send_outreach_email = defineTool({
   description: `Send one outreach email to one recipient and record the message id on the target Notion row ("Last Outreach ID", "Outreach Status" = Sent, "Outreach Last Event At"). Refuses to send when the row has "Do Not Contact" checked or does not belong to the named CRM data source. Sends from ${OUTREACH_FROM_EMAIL} with ${OUTREACH_REPLY_TO_EMAIL} as Reply-To. For mass campaigns use the broadcasts skill instead.`,
   access: { risk: "destructive", confirm: "second-party" },
+  // Cloudflare sends the mail; Notion holds the Do Not Contact flag this
+  // refuses on, and the row the message id is written back to.
+  requires: ["CLOUDFLARE_API_TOKEN", "NOTION_TOKEN"],
   input: z.strictObject({
     target: z.literal(["company", "contact"]).describe("Which CRM data source owns the page"),
     page_id: z.string().describe("Notion page id of the Company or Contact row"),

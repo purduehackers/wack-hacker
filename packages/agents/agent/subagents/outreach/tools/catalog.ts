@@ -1,8 +1,8 @@
 import { defineDynamic, defineTool } from "eve/tools";
 
 import { guardToolExecution } from "../../../lib/core/serialization.ts";
+import { OUTREACH_TOOLS } from "../lib/registry.ts";
 import { OUTREACH_RUNTIME } from "../lib/runtime.ts";
-import { OUTREACH_TOOLS } from "../lib/tool-registry.ts";
 
 const OUTREACH_TOOL_NAMES = Object.keys(OUTREACH_TOOLS);
 

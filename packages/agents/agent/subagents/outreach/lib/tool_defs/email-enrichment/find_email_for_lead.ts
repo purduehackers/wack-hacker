@@ -1,16 +1,8 @@
 import { z } from "zod";
 
-import { defineDomainTool as defineTool } from "../../../lib/policy/domain-tools.ts";
-import { hunter, notion } from "./client.ts";
-
-/**
- * Value these tools report for a Hunter field the API left out of its response.
- * The model has to see "Hunter was asked and returned nothing" rather than a
- * missing key, so the JSON output carries an explicit null. One named sentinel
- * keeps the rest of this module under the no-null rule.
- */
-// oxlint-disable-next-line unicorn/no-null -- serialized tool output distinguishes an unresolved field from an absent key
-const ABSENT = null;
+import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
+import { hunter, notion } from "../../client.ts";
+import { ABSENT } from "../../constants.ts";
 
 const emailFinderResponseSchema = z.object({
   data: z
@@ -39,21 +31,8 @@ const domainSearchResponseSchema = z.object({
     })
     .optional(),
 });
-const emailVerifierResponseSchema = z.object({
-  data: z
-    .object({
-      status: z.string().optional(),
-      result: z.string().optional(),
-      score: z.number().optional(),
-      regexp: z.boolean().optional(),
-      smtp_check: z.boolean().optional(),
-      disposable: z.boolean().optional(),
-    })
-    .optional(),
-});
 type EmailFinderResponse = z.output<typeof emailFinderResponseSchema>;
 type DomainSearchResponse = z.output<typeof domainSearchResponseSchema>;
-type EmailVerifierResponse = z.output<typeof emailVerifierResponseSchema>;
 
 function extractDomain(urlOrDomain: string | undefined): string | undefined {
   if (!urlOrDomain) return undefined;
@@ -83,6 +62,7 @@ async function domainFromNotionPage(pageId: string): Promise<string | undefined>
 export const find_email_for_lead = defineTool({
   description: `Look up an email address via Hunter. If full_name is provided, uses /v2/email-finder with the domain. Otherwise uses /v2/domain-search. You may pass a Notion page_id to derive the domain from the Company's Website property.`,
   access: { risk: "read" },
+  requires: "HUNTER_API_KEY",
   input: z.strictObject({
     domain: z.string().optional().describe("Company domain (e.g. example.com)"),
     page_id: z.string().optional().describe("Notion page id to read Website from"),
@@ -130,28 +110,6 @@ export const find_email_for_lead = defineTool({
         type: e.type ?? ABSENT,
         confidence: e.confidence ?? ABSENT,
       })),
-    };
-  },
-});
-
-export const verify_email = defineTool({
-  description: `Verify an email address via Hunter /v2/email-verifier. Returns status ("deliverable", "undeliverable", "risky", "unknown") plus score. Treat "risky" and "undeliverable" as blockers unless the user overrides.`,
-  access: { risk: "read" },
-  input: z.strictObject({
-    email: z.email(),
-  }),
-  execute: async ({ email }) => {
-    const result: EmailVerifierResponse = await hunter(
-      "email-verifier",
-      { email },
-      emailVerifierResponseSchema,
-    );
-    return {
-      email,
-      status: result.data?.status ?? ABSENT,
-      result: result.data?.result ?? ABSENT,
-      score: result.data?.score ?? ABSENT,
-      disposable: result.data?.disposable ?? ABSENT,
     };
   },
 });
