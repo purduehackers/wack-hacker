@@ -26,7 +26,9 @@ page must belong to the CRM data source the caller named, and a checked
 `Do Not Contact` refuses outright. Neither is advisory. Cloudflare returns
 `message_id` on success, which is what lands in the row's `Last Outreach ID`.
 
-`lib/notion-input.ts` and `lib/shared-constants.ts` are forks of `notion`'s.
+`lib/notion-input.ts` and `lib/shared-constants.ts` re-export Notion's query
+filter, sort and pagination pieces rather than copying them. Only the
+CRM-specific parts — `isCreateProperties` and `crmQueryInputShape` — are local.
 
 ## Adding a tool
 

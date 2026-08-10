@@ -1,15 +1,27 @@
-import type {
-  CreatePageParameters,
-  QueryDataSourceParameters,
-} from "@notionhq/client/build/src/api-endpoints";
+import type { CreatePageParameters } from "@notionhq/client/build/src/api-endpoints";
 import { z } from "zod";
 
-type QueryFilter = NonNullable<QueryDataSourceParameters["filter"]>;
-type QuerySorts = NonNullable<QueryDataSourceParameters["sorts"]>;
+/**
+ * The CRM's own Notion input guard.
+ *
+ * Query filter and sort validation is Notion's and is re-exported rather than
+ * copied — this module used to carry its own forks of both, which had begun to
+ * drift from the originals.
+ */
+export { isQueryFilter, isQuerySorts } from "../../notion/lib/notion-input.ts";
+
 type CreateProperties = CreatePageParameters["properties"];
 
 /** A JSON object — the shape every fragment of a Notion request body must have. */
 const jsonObjectSchema = z.record(z.string(), z.json());
+
+/**
+ * The property kinds a CRM row is built from.
+ *
+ * Narrower than `notion`'s equivalent on purpose: a Company, Contact or Deal is
+ * created from this fixed set, so a body carrying anything else is a mistake
+ * worth rejecting rather than forwarding.
+ */
 const propertyKind = z.enum([
   "title",
   "rich_text",
@@ -26,42 +38,6 @@ const propertyKind = z.enum([
   "phone_number",
   "relation",
 ]);
-
-const queryTimestamp = z.enum(["created_time", "last_edited_time"]);
-const propertyFilterSchema = z.looseObject({ property: z.string() });
-const timestampFilterSchema = z.looseObject({ timestamp: queryTimestamp });
-const sortDirection = z.enum(["ascending", "descending"]);
-/** Exactly one sort target: a property name or a timestamp, never both nor neither. */
-const querySortsSchema = z.array(
-  z.xor([
-    z.looseObject({ property: z.string(), direction: sortDirection }),
-    z.looseObject({ timestamp: queryTimestamp, direction: sortDirection }),
-  ]),
-);
-
-/** Narrow the legacy generic filter schema to the Notion SDK's recursive filter union. */
-export function isQueryFilter(value: unknown): value is QueryFilter {
-  const object = jsonObjectSchema.safeParse(value);
-  if (!object.success) return false;
-  const filter = object.data;
-  const group = filter.and ?? filter.or;
-  if (group !== undefined) return Array.isArray(group) && group.every(isQueryFilter);
-  if (propertyFilterSchema.safeParse(filter).success) {
-    return Object.entries(filter).some(
-      ([key, condition]) => key !== "property" && jsonObjectSchema.safeParse(condition).success,
-    );
-  }
-  const timestamp = timestampFilterSchema.safeParse(filter);
-  if (timestamp.success) {
-    return jsonObjectSchema.safeParse(filter[timestamp.data.timestamp]).success;
-  }
-  return false;
-}
-
-/** Require exactly one SDK sort target rather than forwarding an ambiguous record. */
-export function isQuerySorts(value: unknown): value is QuerySorts {
-  return querySortsSchema.safeParse(value).success;
-}
 
 export function isCreateProperties(value: unknown): value is CreateProperties {
   const object = jsonObjectSchema.safeParse(value);

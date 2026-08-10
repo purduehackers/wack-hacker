@@ -10,8 +10,10 @@ upstream API does and where it will surprise you.
 database and its rows: `resolveDataSourceId(databaseId)` in `lib/client.ts` is
 how you get from one to the other, and query tools take the data source id.
 
-`lib/notion-input.ts` builds the property-value shapes. It is currently forked
-with `outreach`'s copy and should be deduplicated rather than extended twice.
+`lib/notion-input.ts` builds the property-value shapes and is the canonical
+copy: `outreach` re-exports `isQueryFilter` and `isQuerySorts` from here, and
+`lib/shared-constants.ts` likewise for pagination and sorts. Changing either
+changes both domains.
 
 ## Shape of the API
 
