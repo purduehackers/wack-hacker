@@ -219,10 +219,10 @@ uploads and does not delete what is already public.
 Current organizer/admin only, always ephemeral:
 
 - `start` validates one Extended_Pictographic code point and a version, renames
-  the fixed channel's leading emoji, then updates Dashboard Edge Config;
+  the fixed channel's leading emoji, then updates Dashboard Global Config;
 - `reset` restores the moon prefix and does not change dashboard version.
 
-Discord rename precedes Edge Config update. A partial failure may leave the
+Discord rename precedes Global Config update. A partial failure may leave the
 channel renamed; rerunning is the convergence path.
 
 ## Community message and reaction handlers
@@ -342,14 +342,14 @@ thread. A CMS/send failure before the final step prevents archive on that run.
 
 ## Community integrations
 
-| Service               | Data/behavior                                                | Failure/timeout notes                                                |
-| --------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------- |
-| Privacy DB            | Self preference CRUD                                         | Typed retries for rate/5xx/transport; no explicit fetch timeout      |
-| Dashboard Edge Config | Hack-night version                                           | Parsed at startup; typed retry; no explicit fetch timeout            |
-| Dashboard message API | Public message identity/content/HTML/attachments             | All non-2xx currently treated transient; no explicit timeout         |
-| Ships                 | User/message/title/content/media metadata                    | Upstream message ID idempotence; rate/5xx retry; no explicit timeout |
-| Payload CMS           | Hack-night media binary + source/batch/message/user metadata | 15s requests; 2,000-document listing cap; uploads not shared-retried |
-| Groq                  | Raw Discord voice audio/transcript                           | Whole-file size fallback; chunk retry once                           |
+| Service                 | Data/behavior                                                | Failure/timeout notes                                                |
+| ----------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------- |
+| Privacy DB              | Self preference CRUD                                         | Typed retries for rate/5xx/transport; no explicit fetch timeout      |
+| Dashboard Global Config | Hack-night version                                           | Parsed at startup; typed retry; no explicit fetch timeout            |
+| Dashboard message API   | Public message identity/content/HTML/attachments             | All non-2xx currently treated transient; no explicit timeout         |
+| Ships                   | User/message/title/content/media metadata                    | Upstream message ID idempotence; rate/5xx retry; no explicit timeout |
+| Payload CMS             | Hack-night media binary + source/batch/message/user metadata | 15s requests; 2,000-document listing cap; uploads not shared-retried |
+| Groq                    | Raw Discord voice audio/transcript                           | Whole-file size fallback; chunk retry once                           |
 
 ## Current behavior and limitations
 

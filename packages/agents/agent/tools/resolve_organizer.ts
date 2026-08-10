@@ -19,7 +19,7 @@ export default defineDynamic({
             try {
               return await resolveOrganizer(input);
             } catch (cause) {
-              return coreToolFailure("Edge Config", cause);
+              return coreToolFailure("Global Config", cause);
             }
           });
         },

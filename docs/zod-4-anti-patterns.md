@@ -305,7 +305,7 @@ repo: z.templateLiteral(["purduehackers/", z.stringFormat("github-repository-nam
 
 ### `unconstrained-url-for-http-endpoint` — 8 sites · validation
 
-**Wrong:** `AGENT_URL: z.url()` (and `BOT_URL`, `UPSTASH_REDIS_REST_URL`, `EDGE_CONFIG`, `SENTRY_DSN`).
+**Wrong:** `AGENT_URL: z.url()` (and `BOT_URL`, `UPSTASH_REDIS_REST_URL`, `GLOBAL_CONFIG`, `SENTRY_DSN`).
 **Right:** `z.url({ protocol: /^https?$/u })`.
 **Buys:** bare `z.url()` delegates to the WHATWG parser, which accepts `javascript:alert(1)`, `data:text/html,<h1>x`, `mailto:`, `ftp://` and `wss://` — all five verified as parsing successfully. Every one of these variables is an HTTP endpoint the process will `fetch()`, so a mistyped or injected scheme should fail at boot.
 **Sites:** `packages/bot/src/env.ts:31,37,65` · `packages/agents/agent/env.ts:27,36,39,44,83`.
@@ -905,10 +905,10 @@ data.map((project) => ({ …, status: projectProjectionSchema.parse(project).sta
 
 **Wrong:** `filter: z.record(z.string(), z.unknown()).optional()` · **Right:** `z.record(z.string(), z.json())`.
 **Buys:** `z.record(z.string(), z.unknown())` infers exactly `Record<string, unknown>`, the type the project's own rules ban — the ban is being routed around through zod. The repo already has the right answer twice (`notion/lib/notion-input.ts:32-34` and `outreach/lib/notion-input.ts:11-13`), so this is 10 sites that missed an established local pattern. Measured: `z.unknown()` emits `additionalProperties:{}` and accepts a **function** as a value; `z.json()` rejects it.
-**Sites:** model-facing — `outreach/lib/deals.ts:19`, `outreach/lib/contacts.ts:15`, `sentry/lib/alerts.ts:82,85,131,132`, `notion/lib/blocks.ts:94`. Internal parse — `lib/core/edge-config.ts:4`, `vercel/lib/edge.ts:220`, `check-capabilities.ts:120`.
+**Sites:** model-facing — `outreach/lib/deals.ts:19`, `outreach/lib/contacts.ts:15`, `sentry/lib/alerts.ts:82,85,131,132`, `notion/lib/blocks.ts:94`. Internal parse — `lib/core/global-config.ts:4`, `vercel/lib/edge.ts:220`, `check-capabilities.ts:120`.
 **⚠ The cost, verified after the fact:** `z.json()` is self-referential, so `z.toJSONSchema` emits a recursive `$defs`/`$ref` document — and this survives **every** conversion option the AI SDK uses (draft-7 and 2020-12, `reused:'inline'` and `'ref'`); inlining cannot remove a genuine cycle. Converting all 659 tool inputs: **exactly 15 now contain `$ref` and none did at HEAD** (sentry `create_alert_rule`, `update_alert_rule`, `update_issue`; 12 in notion/outreach). Runtime acceptance is unchanged for anything arriving via `JSON.parse` (the only divergence, `{k: undefined}`, is unreachable from a JSON tool call). Whether recursive `$ref` in tool parameters survives the configured gateway model is a **single cross-cutting decision** — the justification originally written ("Anthropic accepts $ref/$defs") is stale in this tree, where `sentry/agent.ts` sets `deepseek/deepseek-v4-flash-0731` and `code/agent.ts` sets `openai/gpt-5.6-luna`.
 **Detection:** `z.record` with exactly two arguments, arg0 `z.string()` and arg1 `z.unknown()`. Autofix to `z.json()` only inside a tool `input:` subtree; report-only at `.parse()` call sites.
-**Must not flag:** `vercel/lib/edge.ts patch_edge_config_items.value` was deliberately left as `z.unknown().optional()` for the `$ref` reason above, and because `z.json()` would pull `null` into the inferred type.
+**Must not flag:** `vercel/lib/edge.ts patch_global_config_items.value` was deliberately left as `z.unknown().optional()` for the `$ref` reason above, and because `z.json()` would pull `null` into the inferred type.
 
 ### `parse-as-type-cast` — 6 sites · inert
 
@@ -978,7 +978,7 @@ if (status === "start" && "admissionAttemptId" in value && typeof value.admissio
 **Wrong (b) — path-dropping**, `domain-runtime.ts:342`: `parsed.error.issues.map((issue) => issue.message).join("; ")`.
 **Right:** `z.prettifyError(parsed.error)` — already used at `cms/lib/client.ts:202` and `bot/integrations/cms.ts:113`; it renders `✖ Invalid input: expected string, received number\n  → at status`.
 **Buys:** the `.issues.map(i => i.message)` variant **drops `issue.path`**, so a 15-field payload reports "Invalid input: expected string, received number" with no indication of which field drifted — and `wire.ts:398` and `render.ts:128` hand-roll the path back in, proving the omission is unintentional rather than policy. The five fully-discarding sites replace the error with a fixed string, so an upstream drift produces a log line with **zero** diagnostic content. `domain-runtime.ts:342` is the highest-value fix: that string is what the **model** reads when a tool input is rejected.
-**Sites:** `domain-runtime.ts:342` · `lib/core/audit-log.ts:128-131` · `lib/core/web-search.ts:128-131` · `lib/core/edge-config.ts:54-60` · `lib/core/documentation.ts:36-43` · `bot/src/agent/render/discord-rest.ts:35-43` · `bot/src/integrations/ships.ts:70`.
+**Sites:** `domain-runtime.ts:342` · `lib/core/audit-log.ts:128-131` · `lib/core/web-search.ts:128-131` · `lib/core/global-config.ts:54-60` · `lib/core/documentation.ts:36-43` · `bot/src/agent/render/discord-rest.ts:35-43` · `bot/src/integrations/ships.ts:70`.
 **Detection:** a `!parsed.success` branch whose thrown/returned message is a `StringLiteral` or template containing no reference to `parsed.error`, OR contains `.issues.map(… => … .message)` without `.path`.
 **Format caveat:** where the consumer joins issues into a one-line message (`InvalidInput` joins with `"; "`), `z.prettifyError` is multi-line — use path-prefixed lines instead, matching `shared/src/conversations/render.ts:128`.
 

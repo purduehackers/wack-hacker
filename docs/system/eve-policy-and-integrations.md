@@ -364,7 +364,7 @@ The root agent has project tools outside provider domains:
 | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `documentation`                | Public read; Purdue Hackers documentation API; no confirmation                                                                                     |
 | `web_search`                   | Public read; configured search provider; no confirmation                                                                                           |
-| `resolve_organizer`            | Public read; Edge Config-backed organizer lookup; no confirmation                                                                                  |
+| `resolve_organizer`            | Public read; Global Config-backed organizer lookup; no confirmation                                                                                |
 | `list_audit_log`               | Admin read of durable audit; no confirmation                                                                                                       |
 | `schedule_task`                | Intended organizer write with self approval and execution-time role recheck; currently affected by the Discord self-approval projection limitation |
 | `cancel_task`                  | Intended organizer write with self approval, owner scoping, execution-time role recheck; currently affected by the same limitation                 |

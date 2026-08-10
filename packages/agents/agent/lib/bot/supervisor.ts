@@ -266,7 +266,7 @@ export type BotProcessEnvironment = Readonly<Record<string, string>> & {
   readonly UPSTASH_REDIS_REST_URL: string;
   readonly UPSTASH_REDIS_REST_TOKEN: string;
   readonly VERCEL_API_TOKEN: string;
-  readonly DASHBOARD_EDGE_CONFIG: string;
+  readonly DASHBOARD_GLOBAL_CONFIG: string;
   readonly PAYLOAD_CMS_API_KEY: string;
   readonly SHIP_API_KEY: string;
   readonly PHACK_API_TOKEN: string;
@@ -282,7 +282,7 @@ const REQUIRED_BOT_ENV_KEYS = [
   "UPSTASH_REDIS_REST_URL",
   "UPSTASH_REDIS_REST_TOKEN",
   "VERCEL_API_TOKEN",
-  "DASHBOARD_EDGE_CONFIG",
+  "DASHBOARD_GLOBAL_CONFIG",
   "PAYLOAD_CMS_API_KEY",
   "SHIP_API_KEY",
   "PHACK_API_TOKEN",

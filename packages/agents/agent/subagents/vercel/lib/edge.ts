@@ -7,7 +7,14 @@ import { pageLimit } from "./fields.ts";
 import { dropKeyDeep } from "./redact.ts";
 
 /**
- * Strip the secret `token` field from Edge Config token payloads. The Vercel
+ * Vercel renamed Edge Config to Global Config, but `@vercel/sdk` 1.19.40 still
+ * exposes the accessor as `edgeConfig` with `*EdgeConfig*` method and parameter
+ * names. Those are upstream identifiers, so they stay as they are; every name
+ * this file owns — tools, inputs, descriptions — uses the current product name.
+ */
+
+/**
+ * Strip the secret `token` field from Global Config token payloads. The Vercel
  * SDK returns raw tokens on list/get/create; surfacing those into Discord or
  * logs would leak credentials. The SDK's `id` field is explicitly documented
  * as a non-secret reference, so we keep it along with label/createdAt.
@@ -16,10 +23,10 @@ function redactTokens(input: unknown): unknown {
   return dropKeyDeep(input, "token");
 }
 
-// ──────────────── EDGE CONFIG — STORES ────────────────
+// ──────────────── GLOBAL CONFIG — STORES ────────────────
 
-export const list_edge_configs = defineTool({
-  description: "List every Edge Config store in the team.",
+export const list_global_configs = defineTool({
+  description: "List every Global Config store in the team.",
   access: { risk: "read" },
   input: z.strictObject({}),
   execute: async () => {
@@ -28,21 +35,21 @@ export const list_edge_configs = defineTool({
   },
 });
 
-export const get_edge_config = defineTool({
-  description: "Retrieve a single Edge Config by id.",
+export const get_global_config = defineTool({
+  description: "Retrieve a single Global Config by id.",
   access: { risk: "read" },
-  input: z.strictObject({ edge_config_id: z.string() }),
-  execute: async ({ edge_config_id }) => {
+  input: z.strictObject({ global_config_id: z.string() }),
+  execute: async ({ global_config_id }) => {
     const result = await vercel().edgeConfig.getEdgeConfig({
       ...TEAM,
-      edgeConfigId: edge_config_id,
+      edgeConfigId: global_config_id,
     });
     return JSON.stringify(result);
   },
 });
 
-export const create_edge_config = defineTool({
-  description: "Create a new Edge Config store.",
+export const create_global_config = defineTool({
+  description: "Create a new Global Config store.",
   access: { risk: "write" },
   input: z.strictObject({
     slug: z.string(),
@@ -56,74 +63,74 @@ export const create_edge_config = defineTool({
   },
 });
 
-export const update_edge_config = defineTool({
-  description: "Rename an Edge Config.",
+export const update_global_config = defineTool({
+  description: "Rename a Global Config.",
   access: { risk: "destructive" },
   input: z.strictObject({
-    edge_config_id: z.string(),
+    global_config_id: z.string(),
     slug: z.string(),
   }),
-  execute: async ({ edge_config_id, slug }) => {
+  execute: async ({ global_config_id, slug }) => {
     const result = await vercel().edgeConfig.updateEdgeConfig({
       ...TEAM,
-      edgeConfigId: edge_config_id,
+      edgeConfigId: global_config_id,
       requestBody: { slug },
     });
     return JSON.stringify(result);
   },
 });
 
-export const delete_edge_config = defineTool({
-  description: "Permanently delete an Edge Config store.",
+export const delete_global_config = defineTool({
+  description: "Permanently delete a Global Config store.",
   access: { risk: "destructive" },
-  input: z.strictObject({ edge_config_id: z.string() }),
-  execute: async ({ edge_config_id }) => {
+  input: z.strictObject({ global_config_id: z.string() }),
+  execute: async ({ global_config_id }) => {
     await vercel().edgeConfig.deleteEdgeConfig({
       ...TEAM,
-      edgeConfigId: edge_config_id,
+      edgeConfigId: global_config_id,
     });
-    return JSON.stringify({ ok: true, id: edge_config_id });
+    return JSON.stringify({ ok: true, id: global_config_id });
   },
 });
 
-// ──────────────── EDGE CONFIG — ITEMS ────────────────
+// ──────────────── GLOBAL CONFIG — ITEMS ────────────────
 
-export const list_edge_config_items = defineTool({
-  description: "List all items in an Edge Config.",
+export const list_global_config_items = defineTool({
+  description: "List all items in a Global Config.",
   access: { risk: "read" },
-  input: z.strictObject({ edge_config_id: z.string() }),
-  execute: async ({ edge_config_id }) => {
+  input: z.strictObject({ global_config_id: z.string() }),
+  execute: async ({ global_config_id }) => {
     const result = await vercel().edgeConfig.getEdgeConfigItems({
       ...TEAM,
-      edgeConfigId: edge_config_id,
+      edgeConfigId: global_config_id,
     });
     return JSON.stringify(result);
   },
 });
 
-export const get_edge_config_item = defineTool({
-  description: "Get a single item by key from an Edge Config.",
+export const get_global_config_item = defineTool({
+  description: "Get a single item by key from a Global Config.",
   access: { risk: "read" },
   input: z.strictObject({
-    edge_config_id: z.string(),
+    global_config_id: z.string(),
     key: z.string(),
   }),
-  execute: async ({ edge_config_id, key }) => {
+  execute: async ({ global_config_id, key }) => {
     const result = await vercel().edgeConfig.getEdgeConfigItem({
       ...TEAM,
-      edgeConfigId: edge_config_id,
+      edgeConfigId: global_config_id,
       edgeConfigItemKey: key,
     });
     return JSON.stringify(result);
   },
 });
 
-export const patch_edge_config_items = defineTool({
+export const patch_global_config_items = defineTool({
   description:
-    "Upsert or delete items in an Edge Config. Pass an array of operations: { operation: 'create'|'update'|'upsert'|'delete', key, value? }.",
+    "Upsert or delete items in a Global Config. Pass an array of operations: { operation: 'create'|'update'|'upsert'|'delete', key, value? }.",
   access: { risk: "destructive" },
   input: z.strictObject({
-    edge_config_id: z.string(),
+    global_config_id: z.string(),
     items: z
       .array(
         z.strictObject({
@@ -134,88 +141,88 @@ export const patch_edge_config_items = defineTool({
       )
       .min(1),
   }),
-  execute: async ({ edge_config_id, items }) => {
+  execute: async ({ global_config_id, items }) => {
     const result = await vercel().edgeConfig.patchEdgeConfigItems({
       ...TEAM,
-      edgeConfigId: edge_config_id,
+      edgeConfigId: global_config_id,
       requestBody: { items },
     });
     return JSON.stringify(result);
   },
 });
 
-// ──────────────── EDGE CONFIG — SCHEMA & TOKENS & BACKUPS ────────────────
+// ──────────────── GLOBAL CONFIG — SCHEMA & TOKENS & BACKUPS ────────────────
 
-export const get_edge_config_schema = defineTool({
-  description: "Get the JSON Schema for an Edge Config (validates future writes).",
+export const get_global_config_schema = defineTool({
+  description: "Get the JSON Schema for a Global Config (validates future writes).",
   access: { risk: "read" },
-  input: z.strictObject({ edge_config_id: z.string() }),
-  execute: async ({ edge_config_id }) => {
+  input: z.strictObject({ global_config_id: z.string() }),
+  execute: async ({ global_config_id }) => {
     const result = await vercel().edgeConfig.getEdgeConfigSchema({
       ...TEAM,
-      edgeConfigId: edge_config_id,
+      edgeConfigId: global_config_id,
     });
     return JSON.stringify(result);
   },
 });
 
-export const delete_edge_config_schema = defineTool({
-  description: "Delete the schema definition on an Edge Config.",
+export const delete_global_config_schema = defineTool({
+  description: "Delete the schema definition on a Global Config.",
   access: { risk: "destructive" },
-  input: z.strictObject({ edge_config_id: z.string() }),
-  execute: async ({ edge_config_id }) => {
+  input: z.strictObject({ global_config_id: z.string() }),
+  execute: async ({ global_config_id }) => {
     await vercel().edgeConfig.deleteEdgeConfigSchema({
       ...TEAM,
-      edgeConfigId: edge_config_id,
+      edgeConfigId: global_config_id,
     });
     return JSON.stringify({ ok: true });
   },
 });
 
-export const list_edge_config_tokens = defineTool({
+export const list_global_config_tokens = defineTool({
   description:
-    "List read tokens for an Edge Config. **Always strips the raw `token` field** — returns id/label/createdAt metadata only. The Vercel dashboard is the only path for retrieving an existing token's secret.",
+    "List read tokens for a Global Config. **Always strips the raw `token` field** — returns id/label/createdAt metadata only. The Vercel dashboard is the only path for retrieving an existing token's secret.",
   access: { risk: "read" },
-  input: z.strictObject({ edge_config_id: z.string() }),
-  execute: async ({ edge_config_id }) => {
+  input: z.strictObject({ global_config_id: z.string() }),
+  execute: async ({ global_config_id }) => {
     const result = await vercel().edgeConfig.getEdgeConfigTokens({
       ...TEAM,
-      edgeConfigId: edge_config_id,
+      edgeConfigId: global_config_id,
     });
     return JSON.stringify(redactTokens(result));
   },
 });
 
-export const get_edge_config_token = defineTool({
+export const get_global_config_token = defineTool({
   description:
-    "Retrieve a specific Edge Config read token's metadata. **Strips the raw `token` field** from the response.",
+    "Retrieve a specific Global Config read token's metadata. **Strips the raw `token` field** from the response.",
   access: { risk: "read" },
   input: z.strictObject({
-    edge_config_id: z.string(),
+    global_config_id: z.string(),
     token: z.string(),
   }),
-  execute: async ({ edge_config_id, token }) => {
+  execute: async ({ global_config_id, token }) => {
     const result = await vercel().edgeConfig.getEdgeConfigToken({
       ...TEAM,
-      edgeConfigId: edge_config_id,
+      edgeConfigId: global_config_id,
       token,
     });
     return JSON.stringify(redactTokens(result));
   },
 });
 
-export const create_edge_config_token = defineTool({
+export const create_global_config_token = defineTool({
   description:
-    "Create a new read token for an Edge Config. **Does NOT return the token value** — only its id and label. Retrieve the secret from the Vercel dashboard to avoid leaking it into Discord/logs.",
+    "Create a new read token for a Global Config. **Does NOT return the token value** — only its id and label. Retrieve the secret from the Vercel dashboard to avoid leaking it into Discord/logs.",
   access: { risk: "write" },
   input: z.strictObject({
-    edge_config_id: z.string(),
+    global_config_id: z.string(),
     label: z.string(),
   }),
-  execute: async ({ edge_config_id, label }) => {
+  execute: async ({ global_config_id, label }) => {
     const result = await vercel().edgeConfig.createEdgeConfigToken({
       ...TEAM,
-      edgeConfigId: edge_config_id,
+      edgeConfigId: global_config_id,
       requestBody: { label },
     });
     // The SDK models the response as `{ token, id }`, so naming the one
@@ -223,56 +230,56 @@ export const create_edge_config_token = defineTool({
     // future secret-bearing field cannot leak through an explicit projection.
     return JSON.stringify({
       id: result.id,
-      note: "Token value redacted. Retrieve it from the Vercel dashboard under Edge Config → Tokens.",
+      note: "Token value redacted. Retrieve it from the Vercel dashboard under Global Config → Tokens.",
     });
   },
 });
 
-export const delete_edge_config_tokens = defineTool({
-  description: "Delete one or more Edge Config read tokens.",
+export const delete_global_config_tokens = defineTool({
+  description: "Delete one or more Global Config read tokens.",
   access: { risk: "destructive" },
   input: z.strictObject({
-    edge_config_id: z.string(),
+    global_config_id: z.string(),
     tokens: z.array(z.string()).min(1),
   }),
-  execute: async ({ edge_config_id, tokens }) => {
+  execute: async ({ global_config_id, tokens }) => {
     await vercel().edgeConfig.deleteEdgeConfigTokens({
       ...TEAM,
-      edgeConfigId: edge_config_id,
+      edgeConfigId: global_config_id,
       requestBody: { tokens },
     });
     return JSON.stringify({ ok: true, tokens });
   },
 });
 
-export const list_edge_config_backups = defineTool({
-  description: "List automatic backups for an Edge Config.",
+export const list_global_config_backups = defineTool({
+  description: "List automatic backups for a Global Config.",
   access: { risk: "read" },
   input: z.strictObject({
-    edge_config_id: z.string(),
+    global_config_id: z.string(),
     limit: pageLimit.optional(),
   }),
-  execute: async ({ edge_config_id, limit }) => {
+  execute: async ({ global_config_id, limit }) => {
     const result = await vercel().edgeConfig.getEdgeConfigBackups({
       ...TEAM,
-      edgeConfigId: edge_config_id,
+      edgeConfigId: global_config_id,
       limit,
     });
     return JSON.stringify(result);
   },
 });
 
-export const get_edge_config_backup = defineTool({
-  description: "Retrieve a specific Edge Config backup.",
+export const get_global_config_backup = defineTool({
+  description: "Retrieve a specific Global Config backup.",
   access: { risk: "read" },
   input: z.strictObject({
-    edge_config_id: z.string(),
+    global_config_id: z.string(),
     backup_version_id: z.string(),
   }),
-  execute: async ({ edge_config_id, backup_version_id }) => {
+  execute: async ({ global_config_id, backup_version_id }) => {
     const result = await vercel().edgeConfig.getEdgeConfigBackup({
       ...TEAM,
-      edgeConfigId: edge_config_id,
+      edgeConfigId: global_config_id,
       edgeConfigBackupVersionId: backup_version_id,
     });
     return JSON.stringify(result);

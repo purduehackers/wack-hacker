@@ -66,9 +66,9 @@ export const env = createEnv({
      */
     PORT: port.default(8080),
 
-    /** `/hack-night` bumps the dashboard's Edge Config `version` key. */
+    /** `/hack-night` bumps the dashboard's Global Config `version` key. */
     VERCEL_API_TOKEN: secret,
-    DASHBOARD_EDGE_CONFIG: secret,
+    DASHBOARD_GLOBAL_CONFIG: secret,
 
     /** The hack night photo archive in Payload CMS. */
     PAYLOAD_CMS_API_KEY: secret,

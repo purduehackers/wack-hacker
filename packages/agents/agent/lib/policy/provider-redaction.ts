@@ -11,7 +11,7 @@ const VALUE_SECRET_TOOLS = new Set([
   "get_project_env_var",
   "create_project_env_vars",
   "edit_project_env_var",
-  "create_edge_config_token",
+  "create_global_config_token",
   "create_sdk_key",
 ]);
 

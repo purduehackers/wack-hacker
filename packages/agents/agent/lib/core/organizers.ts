@@ -2,7 +2,7 @@ import { UpstreamError } from "@repo/shared/errors";
 import { z } from "zod";
 
 import { env } from "../../env.ts";
-import { readEdgeConfigItems } from "./edge-config.ts";
+import { readGlobalConfigItems } from "./global-config.ts";
 
 const ORGANIZER_KEY_PREFIX = "organizer_";
 
@@ -36,15 +36,15 @@ export const resolveOrganizerInputSchema = z.strictObject({
 async function findOrganizer(query: string) {
   const trimmed = query.trim();
   if (!trimmed) return undefined;
-  if (env.EDGE_CONFIG === undefined) {
+  if (env.GLOBAL_CONFIG === undefined) {
     throw new UpstreamError({
-      service: "Edge Config",
+      service: "Global Config",
       status: 503,
       detail: "organizer roster is not configured",
     });
   }
 
-  const items = await readEdgeConfigItems(env.EDGE_CONFIG);
+  const items = await readGlobalConfigItems(env.GLOBAL_CONFIG);
   const organizerEntries = Object.entries(items).flatMap(([key, value]) => {
     if (!key.startsWith(ORGANIZER_KEY_PREFIX)) return [];
     const parsed = organizerSchema.safeParse(value);

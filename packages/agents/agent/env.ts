@@ -52,7 +52,7 @@ export const env = createEnv({
     SENTRY_RELEASE: identifier.optional(),
 
     /** Optional Phase-3/4 integration credentials; tools deny when absent. */
-    EDGE_CONFIG: httpUrl.optional(),
+    GLOBAL_CONFIG: httpUrl.optional(),
     LINEAR_API_KEY: secret.optional(),
     NOTION_TOKEN: secret.optional(),
     GITHUB_APP_ID: secret.optional(),
@@ -88,7 +88,7 @@ export const env = createEnv({
     DISCORD_BOT_TOKEN: secret.optional(),
     DISCORD_BOT_CLIENT_ID: secret.optional(),
     AGENT_URL: httpUrl.optional(),
-    DASHBOARD_EDGE_CONFIG: secret.optional(),
+    DASHBOARD_GLOBAL_CONFIG: secret.optional(),
     SHIP_API_KEY: secret.optional(),
     PHACK_API_TOKEN: secret.optional(),
     GROQ_API_KEY: secret.optional(),

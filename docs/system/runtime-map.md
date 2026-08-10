@@ -146,7 +146,7 @@ Required groups:
 - Discord: `DISCORD_BOT_TOKEN`, `DISCORD_BOT_CLIENT_ID`;
 - agent seam: `AGENT_URL`, `AGENT_INGRESS_SECRET`, `BOT_INGRESS_SECRET`;
 - Redis: `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`;
-- community integrations: privacy DB, Vercel/Edge Config dashboard, Payload CMS,
+- community integrations: Vercel/Global Config dashboard, Payload CMS,
   ship mirror, dashboard API, and Groq credentials;
 - `PORT` (default `8080`), with optional `SENTRY_DSN`.
 

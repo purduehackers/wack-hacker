@@ -24,20 +24,20 @@ import { privacyCommand } from "./privacy.ts";
 export interface CommandDeps {
   readonly redis: RedisClient;
   readonly vercelToken: string;
-  readonly dashboardEdgeConfig: string;
+  readonly dashboardGlobalConfig: string;
 }
 
 /**
  * Builds every command, or fails if a dependency cannot be constructed.
  *
- * The dashboard writer parses an Edge Config connection string, which can be
+ * The dashboard writer parses a Global Config connection string, which can be
  * malformed. Surfacing that here means the process refuses to start rather than
  * failing the first time an organizer runs `/hack-night` mid-event.
  */
 export function buildCommands(deps: CommandDeps): Result<readonly SlashCommand[], UpstreamError> {
   const dashboard = createDashboardWriter({
     vercelToken: deps.vercelToken,
-    connectionString: deps.dashboardEdgeConfig,
+    connectionString: deps.dashboardGlobalConfig,
   });
   if (Result.isError(dashboard)) return dashboard;
 

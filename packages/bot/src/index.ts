@@ -127,7 +127,7 @@ async function main(): Promise<void> {
   const built = buildCommands({
     redis,
     vercelToken: env.VERCEL_API_TOKEN,
-    dashboardEdgeConfig: env.DASHBOARD_EDGE_CONFIG,
+    dashboardGlobalConfig: env.DASHBOARD_GLOBAL_CONFIG,
   });
   if (Result.isError(built)) {
     console.error(`startup aborted: ${serializeError(built.error).message}`);

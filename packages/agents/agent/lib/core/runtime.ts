@@ -18,7 +18,7 @@ import { decideCapability } from "../policy/engine.ts";
 import { requirePrincipal } from "../policy/principal.ts";
 import type { PolicyEvaluationContext, PolicyPrincipal } from "../policy/types.ts";
 import { CORE_TOOL_DESCRIPTORS, type CoreToolName } from "./descriptors.ts";
-import { isEdgeConfigConnectionConfigured } from "./edge-config.ts";
+import { isGlobalConfigConnectionConfigured } from "./global-config.ts";
 
 let budgetStore: BudgetStore | undefined;
 
@@ -34,7 +34,9 @@ function integrationConfigured(name: CoreToolName): boolean {
     case "web_search":
       return env.EXA_API_KEY !== undefined;
     case "resolve_organizer":
-      return env.EDGE_CONFIG !== undefined && isEdgeConfigConnectionConfigured(env.EDGE_CONFIG);
+      return (
+        env.GLOBAL_CONFIG !== undefined && isGlobalConfigConnectionConfigured(env.GLOBAL_CONFIG)
+      );
     case "list_audit_log":
       return configuredUrl.safeParse(env.TURSO_DATABASE_URL).success;
   }
