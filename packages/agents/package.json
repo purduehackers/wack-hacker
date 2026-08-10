@@ -34,6 +34,7 @@
     "@vercel/sandbox": "2.9.2",
     "@vercel/sdk": "1.19.40",
     "ai": "^7.0.55",
+    "cloudflare": "7.0.0",
     "croner": "9.1.0",
     "discord-api-types": "^0.38.49",
     "drizzle-orm": "0.45.2",

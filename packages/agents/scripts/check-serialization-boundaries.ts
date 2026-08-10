@@ -19,6 +19,7 @@ async function authoredTypeScriptFiles(directory: string): Promise<string[]> {
 }
 
 const INTEGRATION_DOMAINS = new Set([
+  "cloudflare",
   "cms",
   "discord",
   "figma",
@@ -63,11 +64,15 @@ for (const path of await authoredTypeScriptFiles(agentRoot)) {
 if (failures.length > 0) {
   throw new Error(`serialization boundary invariant failed:\n${failures.join("\n")}`);
 }
-if (toolExecutors === 0 || stateInitializers === 0 || integrationCatalogs !== 11) {
+// Derived from INTEGRATION_DOMAINS rather than written out, so adding a domain
+// is one edit in one place. A hardcoded count here drifts silently: the scan
+// would keep passing on the old number while the new domain went unchecked.
+const expectedCatalogs = INTEGRATION_DOMAINS.size;
+if (toolExecutors === 0 || stateInitializers === 0 || integrationCatalogs !== expectedCatalogs) {
   throw new Error(
     `serialization boundary scan found ${toolExecutors} tool executors, ` +
       `${stateInitializers} state initializers, and ${integrationCatalogs} integration catalogs; ` +
-      "expected non-empty boundaries and exactly 11 direct integration catalogs",
+      `expected non-empty boundaries and exactly ${expectedCatalogs} direct integration catalogs`,
   );
 }
 console.info(

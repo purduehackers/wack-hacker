@@ -53,6 +53,8 @@ export const env = createEnv({
 
     /** Optional Phase-3/4 integration credentials; tools deny when absent. */
     GLOBAL_CONFIG: httpUrl.optional(),
+    CLOUDFLARE_API_TOKEN: secret.optional(),
+    CLOUDFLARE_ACCOUNT_ID: identifier.optional(),
     LINEAR_API_KEY: secret.optional(),
     NOTION_TOKEN: secret.optional(),
     GITHUB_APP_ID: secret.optional(),
