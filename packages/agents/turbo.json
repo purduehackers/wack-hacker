@@ -5,6 +5,9 @@
   ],
   "tasks": {
     "build": {
+      "outputs": [
+        ".output/**"
+      ],
       "env": [
         "AGENT_INGRESS_SECRET",
         "AGENT_URL",
@@ -28,16 +31,25 @@
         "GROQ_API_KEY",
         "HCB_ORG_SLUG",
         "HUNTER_API_KEY",
+        "KV_REST_API_READ_ONLY_TOKEN",
+        "KV_URL",
+        "KV_REST_API_URL",
+        "KV_REST_API_TOKEN",
         "LINEAR_API_KEY",
         "NOTION_TOKEN",
         "PAYLOAD_CMS_API_KEY",
         "PHACK_API_TOKEN",
         "PHACK_ASK_API_KEY",
+        "REDIS_URL",
         "SENTRY_AUTH_TOKEN",
         "SENTRY_DSN",
         "SENTRY_ORG",
+        "SENTRY_OTLP_TRACES_URL",
+        "SENTRY_PROJECT",
+        "SENTRY_PUBLIC_KEY",
         "SENTRY_RELEASE",
         "SENTRY_TRACES_SAMPLE_RATE",
+        "SENTRY_VERCEL_LOG_DRAIN_URL",
         "SERPAPI_API_KEY",
         "SHIP_API_KEY",
         "SKIP_ENV_VALIDATION",
