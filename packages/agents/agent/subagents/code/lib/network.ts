@@ -1,44 +1,16 @@
 import type { InstallationAccessTokenAuthentication } from "@octokit/auth-app";
 import type { SandboxNetworkPolicy, SandboxSession } from "eve/sandbox";
 
-/*
- * There is deliberately no subnet deny list.
+/**
+ * Egress the code sandbox runs under: unrestricted.
  *
- * Both policies below are domain allowlists, so anything unnamed is already
- * refused — a private-range deny list only restated that. It also broke the
- * thing it was meant to protect: Vercel's sandbox create API rejects IPv6
- * CIDRs outright (`400 Invalid CIDR "::1/128"`), and eve forwards CIDRs
- * unvalidated, so every sandbox creation carrying this policy failed.
+ * See `harness.ts` for why the allow list was removed. What remains below is
+ * not a restriction — it is the opposite. `withGitHubPushCredentials` narrows
+ * egress *only* for the duration of a push, so the firewall can attach the
+ * installation token to github.com requests without the token ever existing
+ * inside a sandbox that runs model-written code.
  */
-
-/** Normal code-work egress. It never contains credentials. */
-export const CODE_SANDBOX_NETWORK_POLICY: SandboxNetworkPolicy = {
-  allow: [
-    "github.com",
-    "*.github.com",
-    "githubusercontent.com",
-    "*.githubusercontent.com",
-    "registry.npmjs.org",
-    "*.npmjs.org",
-    "registry.yarnpkg.com",
-    "bun.sh",
-    "*.bun.sh",
-    "deno.land",
-    "*.deno.land",
-    "pypi.org",
-    "*.pypi.org",
-    "pythonhosted.org",
-    "*.pythonhosted.org",
-    "crates.io",
-    "*.crates.io",
-    "rubygems.org",
-    "*.rubygems.org",
-    "packagist.org",
-    "*.packagist.org",
-    "repo.maven.apache.org",
-    "services.gradle.org",
-  ],
-};
+export const CODE_SANDBOX_NETWORK_POLICY: SandboxNetworkPolicy = "allow-all";
 
 /**
  * The installation token exists only in the agent runtime and Vercel firewall
@@ -51,6 +23,9 @@ function githubPushNetworkPolicy(
   return {
     allow: {
       "github.com": [{ transform: [{ headers: { authorization } }] }],
+      // Everything else stays reachable: this policy exists to attach a header,
+      // not to fence the sandbox in while a push runs.
+      "*": [],
     },
   };
 }

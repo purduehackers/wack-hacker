@@ -1,7 +1,7 @@
 import { defineAgent, defineDynamic } from "eve";
 
-import { decideCodeCapability } from "../../lib/code-sandbox/policy.ts";
 import { SUBAGENT_OUTPUT_SCHEMA } from "../../lib/core/subagent-output.ts";
+import { decideCodeCapability } from "./lib/policy.ts";
 
 const DESCRIPTION =
   "Inspect or change one public Purdue Hackers repository in a bounded Eve-provisioned sandbox. Use for bug fixes, features, refactors, tests, configuration, and repository-specific code investigation. Repository checkout and every mutation require current-admin approval.";

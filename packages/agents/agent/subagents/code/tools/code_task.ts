@@ -1,11 +1,11 @@
 import { defineDynamic, defineTool } from "eve/tools";
 import { z } from "zod";
 
-import { codeHarnessBoundRepo, runCodeHarnessTask } from "../../../lib/code-sandbox/harness.ts";
-import { codeMutationApproval, decideCodeCapability } from "../../../lib/code-sandbox/policy.ts";
-import { containsLikelySecret, sanitizeText } from "../../../lib/code-sandbox/safety.ts";
-import { codeWorkspaceState } from "../../../lib/code-sandbox/state.ts";
 import { guardToolExecution } from "../../../lib/core/serialization.ts";
+import { codeHarnessBoundRepo, runCodeHarnessTask } from "../lib/harness.ts";
+import { codeMutationApproval, decideCodeCapability } from "../lib/policy.ts";
+import { containsLikelySecret, sanitizeText } from "../lib/safety.ts";
+import { codeWorkspaceState } from "../lib/state.ts";
 
 /** The `<name>` half of a bound repository, as GitHub itself constrains it. */
 const repositoryName = z.stringFormat(

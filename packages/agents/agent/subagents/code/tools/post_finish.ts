@@ -2,22 +2,23 @@ import type { SessionAuthContext } from "eve/context";
 import { defineDynamic, defineTool } from "eve/tools";
 import { z } from "zod";
 
+import { guardToolExecution } from "../../../lib/core/serialization.ts";
 import {
   CodeHarnessSandboxLost,
   CodeHarnessSandboxUnreachable,
   attachParkedCodeHarnessSandbox,
   codeHarnessPublicationTarget,
   type AttachedCodeHarnessSandbox,
-} from "../../../lib/code-sandbox/harness.ts";
-import { withGitHubPushCredentials } from "../../../lib/code-sandbox/network.ts";
-import { codeMutationApproval, decideCodeCapability } from "../../../lib/code-sandbox/policy.ts";
+} from "../lib/harness.ts";
+import { withGitHubPushCredentials } from "../lib/network.ts";
+import { codeMutationApproval, decideCodeCapability } from "../lib/policy.ts";
 import {
   CODE_GITHUB_OWNER,
   createCodePublicationRuntime,
   ensureCodePullRequest,
   featureBranchFor,
   isCodeRepositoryName,
-} from "../../../lib/code-sandbox/publication.ts";
+} from "../lib/publication.ts";
 import {
   MAX_COMMAND_OUTPUT_BYTES,
   MAX_COMMAND_TIMEOUT_MS,
@@ -27,9 +28,8 @@ import {
   sanitizeText,
   shellQuote,
   type SandboxCommandRunner,
-} from "../../../lib/code-sandbox/safety.ts";
-import { codeWorkspaceState, type CodePublicationState } from "../../../lib/code-sandbox/state.ts";
-import { guardToolExecution } from "../../../lib/core/serialization.ts";
+} from "../lib/safety.ts";
+import { codeWorkspaceState, type CodePublicationState } from "../lib/state.ts";
 
 /** A commit subject or PR title: one line, checked after the surrounding trim. */
 const singleLine = z.stringFormat("single-line", /^[^\n]*$/u);

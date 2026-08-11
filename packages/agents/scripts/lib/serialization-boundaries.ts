@@ -91,7 +91,7 @@ export function analyzeSerializationBoundaries(
   const defineStates = importedBindings(source, "eve/context", "defineState");
   const toolGuards = importedBindings(
     source,
-    source.includes('from "./serialization.ts"') ? "./serialization.ts" : "",
+    source.includes('from "../../agent/lib/core/serialization.ts"') ? "./serialization.ts" : "",
     "guardToolExecution",
   );
   for (const match of source.matchAll(

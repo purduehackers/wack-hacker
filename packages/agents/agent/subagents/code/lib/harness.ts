@@ -15,8 +15,8 @@ import { defineState } from "eve/context";
 import type { SandboxNetworkPolicy, SandboxSession } from "eve/sandbox";
 import { z } from "zod";
 
-import { jsonCodec } from "../core/schema.ts";
-import { assertStateValue } from "../core/serialization.ts";
+import { jsonCodec } from "../../../lib/core/schema.ts";
+import { assertStateValue } from "../../../lib/core/serialization.ts";
 import {
   MAX_TOOL_TEXT_BYTES,
   sanitizeText,
@@ -43,47 +43,18 @@ const MAX_SUMMARY_BYTES = Math.min(MAX_TOOL_TEXT_BYTES, 16_000);
 const commitSha = z.stringFormat("git-commit-sha", /^[a-f0-9]{40,64}$/u);
 
 /**
- * Typed against `@vercel/sandbox` rather than Eve's sandbox contract: this
- * sandbox is provisioned by `@ai-sdk/sandbox-vercel`, not by Eve, and the two
- * policy shapes are only incidentally similar.
+ * The harness sandbox runs unrestricted.
  *
- * Codex talks to the model from *inside* the sandbox, so unlike the Eve code
- * sandbox this one needs the gateway host as egress; the rest mirrors the
- * normal code-work allow list. Like `CODE_SANDBOX_NETWORK_POLICY` it carries no
- * subnet deny list: an allow list already refuses everything unnamed, so a deny
- * list only restated it while risking the CIDR validation that broke sandbox
- * creation once already.
+ * It previously carried a package-registry allow list, which only ever
+ * described the registries someone had thought of: a task needing a private
+ * mirror, a git dependency, an unlisted docs host, or a language toolchain
+ * nobody had used yet failed for reasons that looked like a broken repository
+ * rather than a firewall. The sandbox is ephemeral, holds no credential — the
+ * GitHub token is injected at the firewall and never enters the process — and
+ * every mutation still needs admin approval before it leaves. The allow list
+ * bought little and cost real work.
  */
-const CODE_HARNESS_NETWORK_POLICY: NetworkPolicy = {
-  allow: [
-    // Codex itself: the bridge installs `@openai/codex-sdk` and then talks to
-    // the gateway from inside the sandbox.
-    "ai-gateway.vercel.sh",
-    "registry.npmjs.org",
-    "*.npmjs.org",
-    "github.com",
-    "*.github.com",
-    "githubusercontent.com",
-    "*.githubusercontent.com",
-    "registry.yarnpkg.com",
-    "bun.sh",
-    "*.bun.sh",
-    "deno.land",
-    "*.deno.land",
-    "pypi.org",
-    "*.pypi.org",
-    "pythonhosted.org",
-    "*.pythonhosted.org",
-    "crates.io",
-    "*.crates.io",
-    "rubygems.org",
-    "*.rubygems.org",
-    "packagist.org",
-    "*.packagist.org",
-    "repo.maven.apache.org",
-    "services.gradle.org",
-  ],
-};
+const CODE_HARNESS_NETWORK_POLICY: NetworkPolicy = "allow-all";
 
 const INSTRUCTIONS = [
   "You are the code executor for a Purdue Hackers admin. You work only inside this sandbox.",

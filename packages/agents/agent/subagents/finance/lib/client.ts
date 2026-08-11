@@ -2,7 +2,7 @@ import { UpstreamError } from "@repo/shared/errors";
 import { z } from "zod";
 
 import { env } from "../../../env.ts";
-import { stringifyQueryValue } from "../../../lib/http/query.ts";
+import { stringifyQueryValue } from "./query.ts";
 
 const BASE_URL = "https://hcb.hackclub.com/api/v3";
 const REQUEST_TIMEOUT_MS = 15_000;

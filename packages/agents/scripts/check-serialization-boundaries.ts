@@ -4,7 +4,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { analyzeSerializationBoundaries } from "../agent/lib/core/serialization-boundaries.ts";
+import { analyzeSerializationBoundaries } from "./lib/serialization-boundaries.ts";
 const packageRoot = fileURLToPath(new URL("..", import.meta.url));
 const agentRoot = join(packageRoot, "agent");
 

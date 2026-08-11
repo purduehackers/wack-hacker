@@ -12,7 +12,7 @@ import {
   decideCapability,
   requirePrincipal,
   type CapabilityDecision,
-} from "../policy/index.ts";
+} from "../../../lib/policy/index.ts";
 import { codeWorkspaceState } from "./state.ts";
 
 type MutationRisk = typeof RiskLevel.Write | typeof RiskLevel.Destructive;
