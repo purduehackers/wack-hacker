@@ -3,7 +3,7 @@
 import { Redis } from "@upstash/redis";
 import { z } from "zod";
 
-import { BOT_ACTIVE_GENERATION_KEY, decodeActiveBotGeneration } from "../src/bot/generation.ts";
+import { readActiveBotGeneration } from "../src/bot/generation.ts";
 import { readyHealthReportSchema } from "../src/bot/health.ts";
 import { redisEnv } from "../src/env/scripts.ts";
 import { vcrDigestImage } from "../src/formats.ts";
@@ -11,7 +11,8 @@ import { vcrDigestImage } from "../src/formats.ts";
 function usage(): never {
   console.error(`usage:
   bun packages/shared/scripts/release-check.ts image <vcr-image@sha256:digest>
-  bun packages/shared/scripts/release-check.ts smoke <vcr-image@sha256:digest>`);
+  bun packages/shared/scripts/release-check.ts smoke <vcr-image@sha256:digest>
+  bun packages/shared/scripts/release-check.ts active`);
   process.exit(2);
 }
 
@@ -49,7 +50,7 @@ async function checkImage(image: string): Promise<void> {
 
 async function smoke(expectedImage: string): Promise<void> {
   const redis = new Redis(redisEnv());
-  const active = decodeActiveBotGeneration(await redis.get(BOT_ACTIVE_GENERATION_KEY));
+  const active = await readActiveBotGeneration(redis);
   if (active === undefined) throw new Error("active bot generation is missing");
   if (active.image !== expectedImage) {
     throw new Error(`active image mismatch: expected ${expectedImage}, received ${active.image}`);
@@ -84,8 +85,26 @@ async function smoke(expectedImage: string): Promise<void> {
   );
 }
 
+/**
+ * The digest currently serving, for a release record to name as the rollback
+ * target. Prints `unknown` rather than failing when nothing is active yet — the
+ * first promotion into an empty environment has no predecessor, and that is not
+ * an error.
+ */
+async function printActiveImage(): Promise<void> {
+  const active = await readActiveBotGeneration(new Redis(redisEnv()));
+  console.log(active?.image ?? "unknown");
+}
+
 const [command, imageArgument, ...extra] = process.argv.slice(2);
-if (extra.length > 0 || (command !== "image" && command !== "smoke")) usage();
-const image = requireImage(imageArgument);
-if (command === "image") await checkImage(image);
-else await smoke(image);
+if (extra.length > 0 || (command !== "image" && command !== "smoke" && command !== "active")) {
+  usage();
+}
+if (command === "active") {
+  if (imageArgument !== undefined) usage();
+  await printActiveImage();
+} else {
+  const image = requireImage(imageArgument);
+  if (command === "image") await checkImage(image);
+  else await smoke(image);
+}

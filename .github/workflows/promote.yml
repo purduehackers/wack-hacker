@@ -91,16 +91,16 @@ jobs:
           severity: HIGH,CRITICAL
           vuln-type: os,library
 
+      # Uses the shared script rather than an inline `bun -e`: the repo root
+      # declares none of these dependencies, and bun's isolated workspace layout
+      # leaves the root `node_modules` holding only the store, so an eval there
+      # cannot resolve `@upstash/redis`. The script also owns the Redis key,
+      # which this step previously hardcoded beside the constant that defines it.
       - name: Record currently active digest
         id: previous
         run: |
-          previous="$(bun -e '
-            import { Redis } from "@upstash/redis";
-            const redis = Redis.fromEnv();
-            let active = await redis.get("wack:bot-sandbox:active:v1");
-            if (typeof active === "string") active = JSON.parse(active);
-            console.log(active && typeof active === "object" && typeof active.image === "string" ? active.image : "unknown");
-          ')"
+          set -euo pipefail
+          previous="$(bun packages/shared/scripts/release-check.ts active)"
           echo "image=$previous" >> "$GITHUB_OUTPUT"
 
       - name: Link agent project
