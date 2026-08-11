@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash } from "node:crypto";
 
 import type { HarnessV1SandboxProvider } from "@ai-sdk/harness";
 import { createCodex } from "@ai-sdk/harness-codex";
@@ -9,14 +9,19 @@ import {
 } from "@ai-sdk/harness/agent";
 import { createVercelSandbox } from "@ai-sdk/sandbox-vercel";
 import { TaggedError } from "@repo/shared/result";
-import { APIError, Sandbox, type NetworkPolicy } from "@vercel/sandbox";
+import { Sandbox } from "@vercel/sandbox";
 import type { DynamicToolCall } from "ai";
 import { defineState } from "eve/context";
-import type { SandboxNetworkPolicy, SandboxSession } from "eve/sandbox";
+import type { SandboxSession } from "eve/sandbox";
 import { z } from "zod";
 
 import { jsonCodec } from "../../../lib/schema.ts";
 import { assertStateValue } from "../../../lib/serialization.ts";
+import {
+  CODE_BRIDGE_STARTUP_TIMEOUT_MS,
+  CODE_SANDBOX_BRIDGE_PORT,
+  CODE_TASK_TIMEOUT_MS,
+} from "./constants.ts";
 import {
   MAX_TOOL_TEXT_BYTES,
   sanitizeText,
@@ -31,30 +36,11 @@ import {
  */
 const CODE_HARNESS_MODEL = "openai/gpt-5.6-luna";
 
-/** The adapter binds its bridge to the sandbox's first declared port. */
-const CODE_HARNESS_BRIDGE_PORT = 4_000;
-const SANDBOX_TIMEOUT_MS = 45 * 60_000;
-const BRIDGE_STARTUP_TIMEOUT_MS = 5 * 60_000;
-const TASK_TIMEOUT_MS = 20 * 60_000;
 const MAX_REPORTED_CHANGES = 200;
 /** Tighter than the shared tool cap, because this text is one agent report. */
 const MAX_SUMMARY_BYTES = Math.min(MAX_TOOL_TEXT_BYTES, 16_000);
 /** Wide enough for SHA-256 object ids, which GitHub repositories may use. */
 const commitSha = z.stringFormat("git-commit-sha", /^[a-f0-9]{40,64}$/u);
-
-/**
- * The harness sandbox runs unrestricted.
- *
- * It previously carried a package-registry allow list, which only ever
- * described the registries someone had thought of: a task needing a private
- * mirror, a git dependency, an unlisted docs host, or a language toolchain
- * nobody had used yet failed for reasons that looked like a broken repository
- * rather than a firewall. The sandbox is ephemeral, holds no credential — the
- * GitHub token is injected at the firewall and never enters the process — and
- * every mutation still needs admin approval before it leaves. The allow list
- * bought little and cost real work.
- */
-const CODE_HARNESS_NETWORK_POLICY: NetworkPolicy = "allow-all";
 
 const INSTRUCTIONS = [
   "You are the code executor for a Purdue Hackers admin. You work only inside this sandbox.",
@@ -92,21 +78,17 @@ export type CodeHarnessState =
        */
       readonly checkoutSha: string;
       readonly repo: string;
-      /** Absolute checkout path *inside the Codex sandbox*, not the Eve one. */
+      /** Absolute checkout path in this session's sandbox. */
       readonly repoRoot: string;
       /** JSON text of the harness resume payload; see `resumeStateSchema`. */
       readonly resumeState: string;
-      /**
-       * Vercel sandbox name, which is what `HarnessV1NetworkSandboxSession.id`
-       * carries. Publication reattaches the firewall through it.
-       */
-      readonly sandboxName: string;
       readonly sessionId: string;
     };
 
 /**
- * One parked Codex sandbox per Eve session. Without this, every request-scoped
- * tool call would start a fresh sandbox and throw away the previous edits.
+ * One parked Codex conversation per Eve session. The sandbox it ran in is the
+ * session's own and outlives this record; what is parked here is the harness
+ * transcript, so a later call continues rather than restarts.
  */
 const codeHarnessState = defineState<CodeHarnessState>("wack.code.harness", () =>
   assertStateValue({ phase: "idle" }),
@@ -121,7 +103,7 @@ export interface CodeHarnessTaskResult {
   readonly changed: readonly CodeHarnessFileChange[];
   readonly changesTruncated: boolean;
   readonly finishReason: string;
-  /** Whether the sandbox is still alive and reusable by the next call. */
+  /** Whether the conversation is resumable by the next call. */
   readonly parked: boolean;
   readonly redacted: boolean;
   readonly repoDirectory: string;
@@ -135,7 +117,7 @@ const fileChangeSchema = z.object({
   path: z.string().min(1),
 });
 
-/** Repository this Eve session's Codex sandbox is already bound to, if any. */
+/** Repository this Eve session's sandbox is already checked out to, if any. */
 export function codeHarnessBoundRepo(): string | undefined {
   const state = codeHarnessState.get();
   return state.phase === "parked" ? state.repo : undefined;
@@ -145,10 +127,9 @@ function repositoryDirectoryName(repo: string): string {
   return repo.slice(repo.indexOf("/") + 1);
 }
 
-/** Sandbox names are shared with Vercel, so keep them short, opaque, and unique. */
+/** Harness session ids are opaque to Vercel now, but still stable per session. */
 function mintSessionId(sessionKey: string): string {
-  const stable = createHash("sha256").update(sessionKey).digest("hex").slice(0, 16);
-  return `${stable}-${randomBytes(4).toString("hex")}`;
+  return createHash("sha256").update(sessionKey).digest("hex").slice(0, 16);
 }
 
 function cloneCommand(repo: string, directory: string, ref: string | undefined): string {
@@ -165,47 +146,39 @@ function cloneCommand(repo: string, directory: string, ref: string | undefined):
   ].join("\n");
 }
 
-/** Ambient Vercel credentials, exactly like the sandbox the agent already runs. */
-function createCodeHarnessSandboxProvider(): HarnessV1SandboxProvider {
-  return createVercelSandbox({
-    runtime: "node24",
-    ports: [CODE_HARNESS_BRIDGE_PORT],
-    resources: { vcpus: 2 },
-    timeout: SANDBOX_TIMEOUT_MS,
-    networkPolicy: CODE_HARNESS_NETWORK_POLICY,
-  });
-}
-
 /**
- * Observes the Vercel sandbox name the harness picked.
+ * Hands Codex the sandbox Eve already provisioned for this session.
  *
- * `HarnessAgentSession` keeps its network sandbox session private, and the
- * name is the only handle publication can later reattach the firewall through,
- * so the provider seam is where we read it. Nothing else is intercepted: both
- * methods delegate and return the provider's own session untouched.
+ * `createVercelSandbox` has two modes: create one of its own, or wrap a
+ * caller-provided `Sandbox`. The wrapping mode is the whole point — it marks
+ * the session `ownsLifecycle: false`, so the adapter's `stop()` and `destroy()`
+ * become no-ops and the harness cannot tear down a sandbox it does not own.
+ *
+ * Eve names its Vercel sandboxes after the session key and exposes that name as
+ * `SandboxSession.id`, which is how a raw `Sandbox` handle is recovered here.
+ * That correspondence is an implementation detail rather than a documented
+ * contract, but it fails closed: a changed convention yields a 404 and a clear
+ * error, never a handle to somebody else's sandbox.
  */
-function observingSandboxProvider(
-  delegate: HarnessV1SandboxProvider,
-  observe: (sandboxName: string) => void,
-): HarnessV1SandboxProvider {
-  const resumeSession = delegate.resumeSession;
-  return {
-    ...delegate,
-    createSession: async (options) => {
-      const session = await delegate.createSession(options);
-      observe(session.id);
-      return session;
-    },
-    ...(resumeSession === undefined
-      ? {}
-      : {
-          resumeSession: async (options: Parameters<typeof resumeSession>[0]) => {
-            const session = await resumeSession(options);
-            observe(session.id);
-            return session;
-          },
-        }),
-  };
+async function codeHarnessSandboxProvider(input: {
+  readonly abortSignal: AbortSignal;
+  readonly sandbox: SandboxSession;
+}): Promise<HarnessV1SandboxProvider> {
+  let sandbox: Sandbox;
+  try {
+    sandbox = await Sandbox.get({
+      name: input.sandbox.id,
+      // Eve has already resumed the sandbox by the time `getSandbox()` returns,
+      // so this is a lookup, not a second resume.
+      resume: false,
+      signal: input.abortSignal,
+    });
+  } catch (cause) {
+    throw new CodeHarnessSandboxLost(
+      `this session's sandbox could not be reached (${describe(cause)})`,
+    );
+  }
+  return createVercelSandbox({ sandbox, bridgePorts: [CODE_SANDBOX_BRIDGE_PORT] });
 }
 
 /** What publication needs to know about the checkout Codex was handed. */
@@ -233,7 +206,7 @@ function createCodeHarnessAgent(input: {
       // `xhigh` exists on the model but not in this adapter's typed union.
       reasoningEffort: "high",
       webSearch: false,
-      startupTimeoutMs: BRIDGE_STARTUP_TIMEOUT_MS,
+      startupTimeoutMs: CODE_BRIDGE_STARTUP_TIMEOUT_MS,
     }),
     sandbox: input.sandbox,
     // Codex cannot emit approval requests for its own built-ins, so any other
@@ -241,6 +214,8 @@ function createCodeHarnessAgent(input: {
     permissionMode: "allow-all",
     instructions: `${INSTRUCTIONS} The repository is checked out at ./${directoryName}.`,
     sandboxConfig: {
+      // The clone stays here rather than in Eve's `onSession`: the repository is
+      // an input to each `code_task` call, not a property of the session.
       onSession: async ({ session, sessionWorkDir, abortSignal }) => {
         const repoRoot = `${sessionWorkDir}/${directoryName}`;
         const signal = abortSignal === undefined ? {} : { abortSignal };
@@ -295,7 +270,8 @@ async function openSession(
           }),
         };
       } catch {
-        // A parked sandbox dies on its own timeout; a fresh one is the recovery.
+        // A transcript the adapter refuses is recoverable: the checkout is still
+        // in the sandbox, so a fresh conversation resumes work on the same files.
         codeHarnessState.update(() => ({ phase: "idle" }));
       }
     }
@@ -328,22 +304,23 @@ function collectFileChanges(toolCalls: readonly DynamicToolCall[]): {
 }
 
 /**
- * Runs one Codex turn against a sandbox owned by this Eve session.
+ * Runs one Codex turn against this Eve session's sandbox.
  *
- * On success the session is parked with `detach()` so the sandbox survives for
- * the next request-scoped tool call; on any failure it is destroyed, because a
- * sandbox nobody can resume is a running bill and a live checkout.
+ * On success the conversation is parked with `detach()` so the next call
+ * continues it. On failure the harness session is dropped, which now costs
+ * nothing to recover from: the sandbox is Eve's, so the edits survive and only
+ * the transcript is lost.
  */
 export async function runCodeHarnessTask(input: {
   readonly abortSignal: AbortSignal;
   readonly ref: string | undefined;
   readonly repo: string;
+  readonly sandbox: SandboxSession;
   readonly sessionKey: string;
   readonly task: string;
 }): Promise<CodeHarnessTaskResult> {
   const stored = codeHarnessState.get();
   const bound = stored.phase === "parked" && stored.repo === input.repo ? stored : undefined;
-  let sandboxName: string | undefined;
   let checkout: CodeHarnessCheckout | undefined;
   const agent = createCodeHarnessAgent({
     onCheckout: (observed) => {
@@ -351,8 +328,9 @@ export async function runCodeHarnessTask(input: {
     },
     ref: input.ref,
     repo: input.repo,
-    sandbox: observingSandboxProvider(createCodeHarnessSandboxProvider(), (name) => {
-      sandboxName = name;
+    sandbox: await codeHarnessSandboxProvider({
+      abortSignal: input.abortSignal,
+      sandbox: input.sandbox,
     }),
   });
   const opened = await openSession(agent, {
@@ -364,16 +342,15 @@ export async function runCodeHarnessTask(input: {
     sessionKey: input.sessionKey,
   });
 
-  const deadline = AbortSignal.any([input.abortSignal, AbortSignal.timeout(TASK_TIMEOUT_MS)]);
+  const deadline = AbortSignal.any([input.abortSignal, AbortSignal.timeout(CODE_TASK_TIMEOUT_MS)]);
   let parked = false;
   try {
     const observed = checkout;
-    const name = sandboxName;
-    // Both are set while the session opens. Checking before the turn runs means
-    // a sandbox publication could never reattach to is torn down here rather
-    // than left billing with a checkout nobody can reach.
-    if (observed === undefined || name === undefined) {
-      throw new Error("The Codex sandbox did not report its checkout.");
+    // Set while the session opens. Checking before the turn runs means a
+    // checkout publication could never locate is reported here rather than
+    // after a Codex turn has already edited files nobody can commit.
+    if (observed === undefined) {
+      throw new Error("The Codex session did not report its checkout.");
     }
 
     const result = await agent.generate({
@@ -391,12 +368,11 @@ export async function runCodeHarnessTask(input: {
       checkoutSha: opened.resumed && bound !== undefined ? bound.checkoutSha : observed.checkoutSha,
       repo: input.repo,
       repoRoot: observed.repoRoot,
-      // Deliberately not `z.encode(resumeStateSchema, resume)`: the sandbox is
+      // Deliberately not `z.encode(resumeStateSchema, resume)`: the session is
       // already detached and `parked` is already set, so a validation throw here
-      // would skip teardown and strand a live, billing sandbox. An unreadable
-      // payload instead degrades to a fresh session at the next `openSession`.
+      // would skip teardown. An unreadable payload instead degrades to a fresh
+      // conversation at the next `openSession`.
       resumeState: JSON.stringify(resume),
-      sandboxName: name,
       sessionId: opened.session.sessionId,
     }));
 
@@ -416,18 +392,24 @@ export async function runCodeHarnessTask(input: {
   } finally {
     if (!parked) {
       codeHarnessState.update(() => ({ phase: "idle" }));
-      // Teardown must not mask the original failure that got us here.
+      // `destroy()` is a no-op on a caller-provided sandbox, so this releases
+      // the harness session without touching the sandbox Eve owns.
       await opened.session.destroy().catch(() => undefined);
     }
   }
 }
 
 /**
- * The parked sandbox is gone, so the edits it held are unrecoverable.
+ * The checkout is not where it was left, so the edits it held are unrecoverable.
  *
  * Separate from every other publication failure on purpose: an operator has to
  * be told the work is lost and must be redone, and publication must never
- * answer this by provisioning a fresh sandbox and pushing whatever is in it.
+ * answer this by cloning a fresh checkout and pushing whatever is in it.
+ *
+ * Rarer than it used to be. This once covered a sandbox timing out on its own;
+ * Eve resumes those. What is left is a sandbox Eve replaced — which it does
+ * when the sandbox definition itself changes — landing the session on a fresh
+ * filesystem with no checkout in it.
  */
 export class CodeHarnessSandboxLost extends TaggedError("CodeHarnessSandboxLost")<{
   detail: string;
@@ -436,20 +418,7 @@ export class CodeHarnessSandboxLost extends TaggedError("CodeHarnessSandboxLost"
   constructor(detail: string) {
     super({
       detail,
-      message: `the Codex sandbox holding these edits is gone (${detail}); the uncommitted work cannot be recovered and the task must be run again`,
-    });
-  }
-}
-
-/** The Sandbox API could not be reached, so the sandbox's fate is unknown. */
-export class CodeHarnessSandboxUnreachable extends TaggedError("CodeHarnessSandboxUnreachable")<{
-  detail: string;
-  message: string;
-}> {
-  constructor(detail: string) {
-    super({
-      detail,
-      message: `the Vercel Sandbox API could not be reached to republish from the Codex sandbox (${detail}); the edits may still be alive, so fix the configuration and retry rather than redoing the work`,
+      message: `the checkout holding these edits is gone (${detail}); the uncommitted work cannot be recovered and the task must be run again`,
     });
   }
 }
@@ -468,15 +437,13 @@ export function codeHarnessPublicationTarget(): CodeHarnessPublicationTarget | u
 }
 
 export interface AttachedCodeHarnessSandbox extends CodeHarnessPublicationTarget {
-  /** Command surface only. Deliberately not the infra-capable session. */
+  /** Command surface only. Deliberately not the policy-capable session. */
   readonly exec: SandboxCommandRunner;
   /**
    * Firewall control, in the shape `withGitHubPushCredentials` brokers through.
    * It is a separate handle from `exec` so a command runner can never reach it.
    */
   readonly network: Pick<SandboxSession, "setNetworkPolicy">;
-  /** The policy this sandbox normally runs under, restored after brokering. */
-  readonly restorePolicy: SandboxNetworkPolicy;
 }
 
 function describe(cause: unknown): string {
@@ -484,75 +451,40 @@ function describe(cause: unknown): string {
 }
 
 /**
- * Reattaches to the sandbox `code_task` parked, for publication only.
+ * Resolves the checkout `code_task` left, for publication only.
  *
- * Liveness is proven *before* reattaching, and with `resume: false`, so a
- * timed-out sandbox is reported as lost rather than silently restarted into an
- * empty checkout that would then be pushed as if it were the agent's work.
- *
- * The `network` handle drives the raw Vercel sandbox rather than the harness
- * session: `HarnessV1NetworkPolicy` can express host allow lists and CIDRs but
- * has no representation for a per-domain header transform, which is the entire
- * mechanism that keeps the installation token out of the sandbox.
+ * The sandbox arrives from `ctx.getSandbox()` already alive, so nothing is
+ * reattached here. What is still worth proving is that the checkout is *in* it:
+ * Eve replaces a session's sandbox when the sandbox definition changes, and a
+ * fresh filesystem would otherwise be committed as if it were the agent's work.
  */
 export async function attachParkedCodeHarnessSandbox(input: {
   readonly abortSignal: AbortSignal;
+  readonly sandbox: SandboxSession;
 }): Promise<AttachedCodeHarnessSandbox> {
   const state = codeHarnessState.get();
   if (state.phase !== "parked") {
-    throw new CodeHarnessSandboxLost("no Codex sandbox is parked for this session");
+    throw new CodeHarnessSandboxLost("no checkout is parked for this session");
   }
 
-  let sandbox: Sandbox;
+  let probe: Awaited<ReturnType<SandboxSession["run"]>>;
   try {
-    sandbox = await Sandbox.get({
-      name: state.sandboxName,
-      resume: false,
-      signal: input.abortSignal,
-    });
-  } catch (cause) {
-    // A 404 is the sandbox itself being gone; anything else (most importantly
-    // missing Vercel credentials) says nothing about whether it still exists.
-    if (cause instanceof APIError && cause.response.status === 404) {
-      throw new CodeHarnessSandboxLost("the sandbox no longer exists");
-    }
-    throw new CodeHarnessSandboxUnreachable(describe(cause));
-  }
-  if (sandbox.status !== "running") {
-    throw new CodeHarnessSandboxLost(`the sandbox is ${sandbox.status}`);
-  }
-
-  const resumeSession = createCodeHarnessSandboxProvider().resumeSession;
-  if (resumeSession === undefined) {
-    throw new CodeHarnessSandboxUnreachable("the sandbox provider cannot reattach by session id");
-  }
-  let session: Awaited<ReturnType<typeof resumeSession>>;
-  try {
-    session = await resumeSession({
-      sessionId: state.sessionId,
+    probe = await input.sandbox.run({
+      command: `test -d ${shellQuote(`${state.repoRoot}/.git`)}`,
       abortSignal: input.abortSignal,
     });
   } catch (cause) {
-    throw new CodeHarnessSandboxUnreachable(describe(cause));
+    throw new CodeHarnessSandboxLost(`the sandbox could not be read (${describe(cause)})`);
   }
-  // Identity check: the command surface and the firewall must govern the same
-  // resource, or brokered credentials would be handed to the wrong sandbox.
-  if (session.id !== state.sandboxName) {
-    throw new CodeHarnessSandboxLost("the parked sandbox was replaced by a different one");
+  if (probe.exitCode !== 0) {
+    throw new CodeHarnessSandboxLost("the sandbox no longer holds the checkout");
   }
 
   return {
     checkoutSha: state.checkoutSha,
-    exec: session,
-    network: {
-      setNetworkPolicy: async (policy) => {
-        // No abort signal: the restore leg has to run even once the caller's
-        // signal is aborted, or an abort mid-push would strand the credential.
-        await sandbox.update({ networkPolicy: policy });
-      },
-    },
+    exec: input.sandbox,
+    network: { setNetworkPolicy: (policy) => input.sandbox.setNetworkPolicy(policy) },
     repo: state.repo,
     repoRoot: state.repoRoot,
-    restorePolicy: CODE_HARNESS_NETWORK_POLICY,
   };
 }

@@ -1,11 +1,11 @@
 import type { SessionAuthContext } from "eve/context";
+import type { SandboxSession } from "eve/sandbox";
 import { defineDynamic, defineTool } from "eve/tools";
 import { z } from "zod";
 
 import { guardToolExecution } from "../../../lib/serialization.ts";
 import {
   CodeHarnessSandboxLost,
-  CodeHarnessSandboxUnreachable,
   attachParkedCodeHarnessSandbox,
   codeHarnessPublicationTarget,
   type AttachedCodeHarnessSandbox,
@@ -47,16 +47,13 @@ function failed(code: string, message: string) {
 }
 
 /**
- * Reattachment failures are reported verbatim rather than folded into the
- * generic publication failure: "your sandbox timed out and the edits are gone"
- * and "publication failed, retrying is safe" call for opposite operator moves.
+ * A missing checkout is reported verbatim rather than folded into the generic
+ * publication failure: "the edits are gone, redo the work" and "publication
+ * failed, retrying is safe" call for opposite operator moves.
  */
 function attachmentFailure(cause: unknown) {
   if (CodeHarnessSandboxLost.is(cause)) return failed("harness_sandbox_lost", cause.message);
-  if (CodeHarnessSandboxUnreachable.is(cause)) {
-    return failed("harness_sandbox_unreachable", cause.message);
-  }
-  return failed("harness_attach_failed", "The Codex sandbox could not be reattached to publish.");
+  return failed("harness_attach_failed", "The parked checkout could not be resolved to publish.");
 }
 
 /** The one sandbox and checkout every publication command runs against. */
@@ -99,10 +96,7 @@ async function remoteSafetyFailure(exec: PublicationExec, canonicalOrigin: strin
     maxOutputBytes: 2_000,
   });
   if (topLevel.exitCode !== 0 || topLevel.stdout.trim() !== exec.repoRoot) {
-    return failed(
-      "repo_mismatch",
-      "The Codex sandbox no longer holds the checkout that was parked.",
-    );
+    return failed("repo_mismatch", "The sandbox no longer holds the checkout that was parked.");
   }
 
   const remoteNames = await runPublicationCommand(exec, "git remote", {
@@ -320,19 +314,15 @@ async function pushFailure(input: {
   readonly exec: PublicationExec;
   readonly token: string;
 }) {
-  const push = await withGitHubPushCredentials(
-    input.attached.network,
-    input.token,
-    () =>
-      runPublicationCommand(
-        input.exec,
-        // GIT_TERMINAL_PROMPT=0 turns a rejected credential into an immediate
-        // failure. Without it git falls back to prompting, and only the absence
-        // of a tty in the sandbox stops it from hanging until the timeout.
-        `GIT_TERMINAL_PROMPT=0 git -c core.hooksPath=/dev/null -c credential.helper= push --porcelain --no-verify ${shellQuote(input.canonicalOrigin)} ${shellQuote(`${input.commitSha}:${input.branchRef}`)}`,
-        { timeoutMs: MAX_COMMAND_TIMEOUT_MS, maxOutputBytes: MAX_COMMAND_OUTPUT_BYTES },
-      ),
-    input.attached.restorePolicy,
+  const push = await withGitHubPushCredentials(input.attached.network, input.token, () =>
+    runPublicationCommand(
+      input.exec,
+      // GIT_TERMINAL_PROMPT=0 turns a rejected credential into an immediate
+      // failure. Without it git falls back to prompting, and only the absence
+      // of a tty in the sandbox stops it from hanging until the timeout.
+      `GIT_TERMINAL_PROMPT=0 git -c core.hooksPath=/dev/null -c credential.helper= push --porcelain --no-verify ${shellQuote(input.canonicalOrigin)} ${shellQuote(`${input.commitSha}:${input.branchRef}`)}`,
+      { timeoutMs: MAX_COMMAND_TIMEOUT_MS, maxOutputBytes: MAX_COMMAND_OUTPUT_BYTES },
+    ),
   );
   if (push.exitCode !== 0 || push.timedOut || push.outputLimited) {
     const stderr = sanitizeText(push.stderr, 2_000);
@@ -453,6 +443,8 @@ async function runCodePublication(input: {
   readonly commitMessage: string;
   readonly current: SessionAuthContext | null;
   readonly published: CodePublicationState | undefined;
+  /** This session's sandbox — the one `code_task` left its checkout in. */
+  readonly sandbox: SandboxSession;
   readonly sessionId: string;
   readonly title: string;
 }) {
@@ -493,19 +485,22 @@ async function runCodePublication(input: {
     !isCodeRepositoryName(repoName) ||
     extra !== undefined
   ) {
-    return failed("repo_not_allowed", "The parked sandbox is not bound to purduehackers/<repo>.");
+    return failed("repo_not_allowed", "The parked checkout is not bound to purduehackers/<repo>.");
   }
 
-  // Outside the catch below: reattachment failures are already typed and must
-  // not be flattened into "retrying is safe".
+  // Outside the catch below: a missing checkout is already typed and must not
+  // be flattened into "retrying is safe".
   let attached: AttachedCodeHarnessSandbox;
   try {
-    attached = await attachParkedCodeHarnessSandbox({ abortSignal: input.abortSignal });
+    attached = await attachParkedCodeHarnessSandbox({
+      abortSignal: input.abortSignal,
+      sandbox: input.sandbox,
+    });
   } catch (cause) {
     return attachmentFailure(cause);
   }
   if (attached.repo !== input.boundRepo) {
-    return failed("repo_mismatch", "The parked Codex sandbox is bound to a different repository.");
+    return failed("repo_mismatch", "The parked checkout is for a different repository.");
   }
 
   try {
@@ -565,6 +560,7 @@ export default defineDynamic({
                 commitMessage,
                 current: ctx.session.auth.current,
                 published,
+                sandbox: await ctx.getSandbox(),
                 sessionId: ctx.session.id,
                 title,
               }),

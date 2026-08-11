@@ -53,7 +53,7 @@ export default defineDynamic({
 
       return defineTool({
         description:
-          "Delegate one bounded coding task on a public purduehackers/<repo> to a Codex agent running in this session's own sandbox. It checks the repository out, edits it, and runs the repository's own checks; it never commits, pushes, or opens a pull request. Later calls reuse the same sandbox, so they build on earlier edits. Returns the changed paths and the agent's own report. Requires current-admin approval on every call. Publish the result with code_post_finish, which commits from that same sandbox.",
+          "Delegate one bounded coding task on a public purduehackers/<repo> to a Codex agent running in this session's sandbox. It checks the repository out, edits it, and runs the repository's own checks; it never commits, pushes, or opens a pull request. Later calls reuse the same sandbox, so they build on earlier edits. Returns the changed paths and the agent's own report. Requires current-admin approval on every call. Publish the result with code_post_finish, which commits from that same sandbox.",
         inputSchema: codeTaskInput,
         approval: ({ session }) => codeMutationApproval(session.auth.current, "code_task", "write"),
         async execute({ repo, ref, task }, ctx) {
@@ -84,6 +84,9 @@ export default defineDynamic({
                 abortSignal: ctx.abortSignal,
                 ref,
                 repo,
+                // Codex runs inside this sandbox rather than one of its own, so
+                // its edits are visible to publication without a reattach.
+                sandbox: await ctx.getSandbox(),
                 sessionKey: ctx.session.id,
                 task,
               });

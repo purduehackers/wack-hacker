@@ -476,13 +476,14 @@ them, each resolved per step from `session.auth.current` and the workspace
 phase, so a non-admin sees neither:
 
 - `tools/code_task.ts` delegates one bounded instruction to a Codex agent
-  running in this session's own sandbox. It checks the repository out, edits it,
-  and runs the repository's own checks; it never commits, pushes, or opens a
-  pull request. Later calls resume the same parked sandbox, so they build on the
-  earlier edits.
+  running in this session's sandbox — the one Eve provisions from
+  `subagents/code/sandbox.ts`, handed to the Codex adapter rather than letting it
+  create a second. It checks the repository out, edits it, and runs the
+  repository's own checks; it never commits, pushes, or opens a pull request.
+  Later calls resume the parked conversation against that same checkout.
 - `tools/post_finish.ts` exposes `code_post_finish`, which publishes from that
-  same parked sandbox. It is offered only once `code_task` has parked one, since
-  otherwise there is no checkout to publish.
+  same checkout. It is offered only once `code_task` has parked one, since
+  otherwise there is nothing to publish.
 
 Both require current-admin approval on every call. Publication is terminal: once
 the workspace records one, `code_task` stops being offered and
