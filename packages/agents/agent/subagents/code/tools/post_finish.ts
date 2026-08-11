@@ -2,7 +2,7 @@ import type { SessionAuthContext } from "eve/context";
 import { defineDynamic, defineTool } from "eve/tools";
 import { z } from "zod";
 
-import { guardToolExecution } from "../../../lib/core/serialization.ts";
+import { guardToolExecution } from "../../../lib/serialization.ts";
 import {
   CodeHarnessSandboxLost,
   CodeHarnessSandboxUnreachable,

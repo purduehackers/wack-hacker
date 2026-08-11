@@ -91,11 +91,11 @@ export function analyzeSerializationBoundaries(
   const defineStates = importedBindings(source, "eve/context", "defineState");
   const toolGuards = importedBindings(
     source,
-    source.includes('from "../../agent/lib/core/serialization.ts"') ? "./serialization.ts" : "",
+    source.includes('from "../../agent/lib/serialization.ts"') ? "./serialization.ts" : "",
     "guardToolExecution",
   );
   for (const match of source.matchAll(
-    /import\s*\{([^}]*)\}\s*from\s*["']([^"']*\/lib\/core\/serialization\.ts)["']/gu,
+    /import\s*\{([^}]*)\}\s*from\s*["']([^"']*\/lib\/serialization\.ts)["']/gu,
   )) {
     const moduleName = match[2];
     if (moduleName !== undefined) {
@@ -106,7 +106,7 @@ export function analyzeSerializationBoundaries(
   }
   const stateGuards = new Set<string>();
   for (const match of source.matchAll(
-    /import\s*\{([^}]*)\}\s*from\s*["']([^"']*(?:\/core\/serialization|\.\/serialization)\.ts)["']/gu,
+    /import\s*\{([^}]*)\}\s*from\s*["']([^"']*(?:\/lib\/serialization|\.\/serialization)\.ts)["']/gu,
   )) {
     const moduleName = match[2];
     if (moduleName !== undefined) {

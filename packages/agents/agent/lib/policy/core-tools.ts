@@ -13,12 +13,12 @@ import type { ToolContext } from "eve/tools";
 import { z } from "zod";
 
 import { env } from "../../env.ts";
-import { BudgetStore } from "../policy/budget.ts";
-import { decideCapability } from "../policy/engine.ts";
-import { requirePrincipal } from "../policy/principal.ts";
-import type { PolicyEvaluationContext, PolicyPrincipal } from "../policy/types.ts";
-import { CORE_TOOL_DESCRIPTORS, type CoreToolName } from "./descriptors.ts";
-import { isGlobalConfigConnectionConfigured } from "./global-config.ts";
+import { CORE_TOOL_DESCRIPTORS, type CoreToolName } from "../descriptors.ts";
+import { isGlobalConfigConnectionConfigured } from "../global-config.ts";
+import { BudgetStore } from "./budget.ts";
+import { decideCapability } from "./engine.ts";
+import { requirePrincipal } from "./principal.ts";
+import type { PolicyEvaluationContext, PolicyPrincipal } from "./types.ts";
 
 let budgetStore: BudgetStore | undefined;
 

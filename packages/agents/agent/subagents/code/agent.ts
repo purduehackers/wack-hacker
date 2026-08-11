@@ -1,6 +1,6 @@
 import { defineAgent, defineDynamic } from "eve";
 
-import { SUBAGENT_OUTPUT_SCHEMA } from "../../lib/core/subagent-output.ts";
+import { SUBAGENT_OUTPUT_SCHEMA } from "../../lib/subagent-output.ts";
 import { decideCodeCapability } from "./lib/policy.ts";
 
 const DESCRIPTION =

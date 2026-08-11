@@ -1,6 +1,6 @@
 import { defineDynamic, defineTool } from "eve/tools";
 
-import { guardToolExecution } from "../../../lib/core/serialization.ts";
+import { guardToolExecution } from "../../../lib/serialization.ts";
 import { SHOPPING_TOOLS } from "../lib/registry.ts";
 import { SHOPPING_RUNTIME } from "../lib/runtime.ts";
 

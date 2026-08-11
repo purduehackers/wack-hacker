@@ -1,6 +1,6 @@
 import { defineDynamic, defineTool } from "eve/tools";
 
-import { guardToolExecution } from "../../../lib/core/serialization.ts";
+import { guardToolExecution } from "../../../lib/serialization.ts";
 import { CLOUDFLARE_TOOLS } from "../lib/registry.ts";
 import { CLOUDFLARE_RUNTIME } from "../lib/runtime.ts";
 

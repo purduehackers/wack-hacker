@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { env } from "../../env.ts";
-import { assertToolOutput, type JsonValue } from "../core/serialization.ts";
+import { assertToolOutput, type JsonValue } from "../serialization.ts";
 
 const SENSITIVE_KEY =
   /(?:authorization|cookie|password|passwd|secret|token|api[_-]?key|private[_-]?key|credential|dsn)/i;

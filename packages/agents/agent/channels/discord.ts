@@ -53,7 +53,6 @@ import { z } from "zod";
 
 import { env } from "../env.ts";
 import { resolveBotBaseUrl } from "../lib/bot/endpoint.ts";
-import { discordSnowflake, storedInt, storedJson } from "../lib/core/schema.ts";
 import { applyInputRequests } from "../lib/discord/input-requests.ts";
 import { createRenderPublisher, renderFooter } from "../lib/discord/render-intent.ts";
 import {
@@ -66,6 +65,7 @@ import {
 } from "../lib/discord/state.ts";
 import type { DiscordChannelState } from "../lib/discord/state.ts";
 import { ApprovalPolicyStore } from "../lib/policy/approval-record.ts";
+import { discordSnowflake, storedInt, storedJson } from "../lib/schema.ts";
 import { currentTraceparent, traceHeaders, turnTokenKey } from "../lib/telemetry.ts";
 
 const redis = getRedis({

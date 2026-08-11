@@ -1,7 +1,7 @@
 import { defineDynamic, defineTool } from "eve/tools";
 import { z } from "zod";
 
-import { guardToolExecution } from "../../../lib/core/serialization.ts";
+import { guardToolExecution } from "../../../lib/serialization.ts";
 import { codeHarnessBoundRepo, runCodeHarnessTask } from "../lib/harness.ts";
 import { codeMutationApproval, decideCodeCapability } from "../lib/policy.ts";
 import { containsLikelySecret, sanitizeText } from "../lib/safety.ts";

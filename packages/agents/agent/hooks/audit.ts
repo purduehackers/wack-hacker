@@ -4,9 +4,9 @@ import { Result } from "@repo/shared/result";
 import { defineHook } from "eve/hooks";
 
 import { env } from "../env.ts";
-import { CORE_TOOL_DESCRIPTORS } from "../lib/core/descriptors.ts";
-import type { JsonValue } from "../lib/core/serialization.ts";
+import { CORE_TOOL_DESCRIPTORS } from "../lib/descriptors.ts";
 import { createAuditStore, requirePrincipal, RiskLevel } from "../lib/policy/index.ts";
+import type { JsonValue } from "../lib/serialization.ts";
 
 const risks = {
   documentation: CORE_TOOL_DESCRIPTORS.documentation.risk,

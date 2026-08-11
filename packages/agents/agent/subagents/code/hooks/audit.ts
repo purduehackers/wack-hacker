@@ -7,8 +7,8 @@ import { defineHook } from "eve/hooks";
 import { z } from "zod";
 
 import { env } from "../../../env.ts";
-import type { JsonValue } from "../../../lib/core/serialization.ts";
 import { createAuditStore, requirePrincipal, RiskLevel } from "../../../lib/policy/index.ts";
+import type { JsonValue } from "../../../lib/serialization.ts";
 
 /**
  * The delegated code surface, in full. Repository mutation now happens through

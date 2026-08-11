@@ -1,6 +1,6 @@
 import { defineState } from "eve/context";
 
-import { assertStateValue } from "../../../lib/core/serialization.ts";
+import { assertStateValue } from "../../../lib/serialization.ts";
 
 export interface CodePublicationState {
   readonly branch: string;

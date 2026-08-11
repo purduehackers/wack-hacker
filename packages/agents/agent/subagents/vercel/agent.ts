@@ -1,7 +1,7 @@
 import { defineAgent, defineDynamic } from "eve";
 
-import { SUBAGENT_OUTPUT_SCHEMA } from "../../lib/core/subagent-output.ts";
 import { subagentDiscoverable } from "../../lib/policy/index.ts";
+import { SUBAGENT_OUTPUT_SCHEMA } from "../../lib/subagent-output.ts";
 import { VERCEL_RUNTIME } from "./lib/runtime.ts";
 
 export default defineDynamic({

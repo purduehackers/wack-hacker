@@ -4,7 +4,7 @@ import type { RedisClient } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
 import { z } from "zod";
 
-import { storedJson } from "../core/schema.ts";
+import { storedJson } from "../schema.ts";
 import { RiskLevel, type RiskLevel as RiskLevelValue } from "./types.ts";
 
 const APPROVAL_TTL_SECONDS = 15 * 60;

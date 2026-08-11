@@ -21,7 +21,7 @@ import { Result, TaggedError } from "@repo/shared/result";
 import { APIError, Sandbox } from "@vercel/sandbox";
 import { z } from "zod";
 
-import { storedInt, storedJson } from "../core/schema.ts";
+import { storedInt, storedJson } from "../schema.ts";
 
 /** The port the bot process listens on inside its sandbox. */
 export const BOT_PORT_DEFAULT = 8080;

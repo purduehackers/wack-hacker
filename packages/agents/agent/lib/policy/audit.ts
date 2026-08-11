@@ -5,7 +5,7 @@ import type { Db, TursoConfig } from "@repo/shared/db";
 import { Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 
-import { createRedactor } from "../core/json.ts";
+import { createRedactor } from "../json.ts";
 import { countAgentEvent, currentTraceId } from "../telemetry.ts";
 import type { PolicyPrincipal, RiskLevel } from "./types.ts";
 

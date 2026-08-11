@@ -11,7 +11,7 @@ import { Result } from "@repo/shared/result";
 import type { ApprovalContext, ApprovalStatus, ToolContext } from "eve/tools";
 import { z } from "zod";
 
-import { assertToolOutput, type JsonValue } from "../core/serialization.ts";
+import { assertToolOutput, type JsonValue } from "../serialization.ts";
 import type { DomainToolName, DomainToolRegistry, DomainToolSpec } from "./domain-tools.ts";
 import { decideCapability } from "./engine.ts";
 import { resolveExecutionAuthority, type ExecutionAuthority } from "./execution-authority.ts";

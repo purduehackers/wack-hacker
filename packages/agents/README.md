@@ -27,7 +27,7 @@ scripts/              check-capabilities, check-serialization-boundaries, sandbo
 
 ## Subagents
 
-Twelve native provider domains plus two auxiliary (`code`, `docs`) — **670 tools across 106 skills**.
+Twelve native provider domains plus one auxiliary (`code`) — **670 tools across 106 skills**.
 
 | Domain  | Tools | Skills |     | Domain     | Tools | Skills |
 | ------- | ----: | -----: | --- | ---------- | ----: | -----: |

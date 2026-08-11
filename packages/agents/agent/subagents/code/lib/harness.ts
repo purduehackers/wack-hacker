@@ -15,8 +15,8 @@ import { defineState } from "eve/context";
 import type { SandboxNetworkPolicy, SandboxSession } from "eve/sandbox";
 import { z } from "zod";
 
-import { jsonCodec } from "../../../lib/core/schema.ts";
-import { assertStateValue } from "../../../lib/core/serialization.ts";
+import { jsonCodec } from "../../../lib/schema.ts";
+import { assertStateValue } from "../../../lib/serialization.ts";
 import {
   MAX_TOOL_TEXT_BYTES,
   sanitizeText,

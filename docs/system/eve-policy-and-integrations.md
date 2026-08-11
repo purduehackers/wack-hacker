@@ -50,7 +50,7 @@ Every Eve agent gets a default sandbox unless it authors an override. The backen
 selection is hosted Vercel Sandbox, then local Docker, microsandbox, or just-bash
 according to availability. Sandbox application environment/credentials are not
 forwarded, but the default egress policy is `allow-all`. Root and ordinary
-provider/docs subagents do not currently disable or restrict all default
+provider subagents do not currently disable or restrict all default
 shell/file/web tools. Therefore their effective surface is broader than the 670
 project provider tools. The code subagent is the exception: it explicitly
 disables the generic defaults and replaces them with bounded capabilities and an
@@ -112,19 +112,20 @@ flowchart LR
 
 There are 13 subagents:
 
-- 11 provider domains: CMS, Discord, Figma, Finance, GitHub, Linear, Notion,
-  Outreach, Sentry, Shopping, and Vercel;
-- an admin-only code subagent;
-- a documentation subagent.
+- 12 provider domains: Cloudflare, CMS, Discord, Figma, Finance, GitHub,
+  Linear, Notion, Outreach, Sentry, Shopping, and Vercel;
+- an admin-only code subagent.
 
 The root rebuilds the full subagent map from current auth on every
-`turn.started`. Provider domains are organizer-visible as delegated agents, code
-is admin-only, and documentation is public only when its API is configured. A
+`turn.started`. Provider domains are organizer-visible as delegated agents and code
+is admin-only. `documentation` is a root tool, public only when its API is
+configured — it had a subagent wrapping it, which delegated a model call to
+reach one tool the root already had. A
 provider domain can contain raw tool descriptors with lower minimum roles, but
 those do not bypass the outer subagent discovery gate in ordinary root use.
 
 `bun run check:capabilities` reports the surface it validates: 12 native
-domains, 670 tools, 106 skills, and 14 subagents.
+domains, 670 tools, 106 skills, and 13 subagents.
 
 | Domain     | Tools | Skills |
 | ---------- | ----: | -----: |

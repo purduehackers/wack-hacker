@@ -8,7 +8,7 @@ import { Result } from "@repo/shared/result";
 import { Cron } from "croner";
 import { z } from "zod";
 
-import { discordSnowflake, jsonCodec } from "../core/schema.ts";
+import { discordSnowflake, jsonCodec } from "../schema.ts";
 
 export const SCHEDULE_MAX_ATTEMPTS = 5;
 const MAX_LISTED_TASKS = 50;

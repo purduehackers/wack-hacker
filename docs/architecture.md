@@ -270,7 +270,7 @@ for Eve replay reconstruction; a factory must not hide `defineTool`. The inline
 closure delegates to the shared runtime. GitHub, Sentry, and Vercel retain
 provider-secret redaction for requested actions, execution audit input, errors,
 and output. Feature parity remains exact across 12 native domains, 670 tools,
-106 skills, and 14 subagents.
+106 skills, and 13 subagents.
 
 ## Shared deployment and schedule decoders
 

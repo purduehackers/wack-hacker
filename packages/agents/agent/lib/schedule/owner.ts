@@ -7,7 +7,6 @@ import type { SessionAuthContext, SessionContext } from "eve/context";
 import type { ApprovalContext, ApprovalStatus } from "eve/tools/approval";
 import { z } from "zod";
 
-import { discordSnowflake } from "../core/schema.ts";
 import { decideCapability } from "../policy/engine.ts";
 import { requirePrincipal } from "../policy/principal.ts";
 import {
@@ -16,6 +15,7 @@ import {
   RiskLevel,
   type CapabilityDecision,
 } from "../policy/types.ts";
+import { discordSnowflake } from "../schema.ts";
 import type { ScheduleOwner } from "./store.ts";
 
 type ScheduleMutationName = "schedule_task" | "cancel_task";

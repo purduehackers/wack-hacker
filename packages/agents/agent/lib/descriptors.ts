@@ -5,7 +5,7 @@ import {
   Confirmation,
   RiskLevel,
   type CapabilityDescriptor,
-} from "../policy/types.ts";
+} from "./policy/types.ts";
 
 export const CORE_TOOL_DESCRIPTORS = {
   documentation: {

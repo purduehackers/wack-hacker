@@ -4,8 +4,8 @@ import type { RenderInputRequest } from "@repo/shared/wire";
 import type { InputRequest } from "eve/client";
 import { z } from "zod";
 
-import type { JsonValue } from "../core/serialization.ts";
 import type { ApprovalPolicyStore } from "../policy/approval-record.ts";
+import type { JsonValue } from "../serialization.ts";
 import type { DiscordChannelState } from "./state.ts";
 
 const SENSITIVE_INPUT_KEY = /secret|token|password|credential|api_key|auth|^value$/iu;
