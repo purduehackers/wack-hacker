@@ -1,0 +1,55 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "extends": [
+    "//"
+  ],
+  "tasks": {
+    "build": {
+      "env": [
+        "AGENT_INGRESS_SECRET",
+        "AGENT_URL",
+        "BOT_IMAGE",
+        "BOT_INGRESS_SECRET",
+        "BOT_SANDBOX_ENABLED",
+        "BOT_URL",
+        "CLOUDFLARE_ACCOUNT_ID",
+        "CLOUDFLARE_API_TOKEN",
+        "DASHBOARD_GLOBAL_CONFIG",
+        "DISCORD_BOT_CLIENT_ID",
+        "DISCORD_BOT_TOKEN",
+        "EXA_API_KEY",
+        "FIGMA_ACCESS_TOKEN",
+        "FIGMA_TEAM_ID",
+        "GITHUB_APP_ID",
+        "GITHUB_APP_INSTALLATION_ID",
+        "GITHUB_APP_PRIVATE_KEY",
+        "GITHUB_ORG",
+        "GLOBAL_CONFIG",
+        "GROQ_API_KEY",
+        "HCB_ORG_SLUG",
+        "HUNTER_API_KEY",
+        "LINEAR_API_KEY",
+        "NOTION_TOKEN",
+        "PAYLOAD_CMS_API_KEY",
+        "PHACK_API_TOKEN",
+        "PHACK_ASK_API_KEY",
+        "SENTRY_AUTH_TOKEN",
+        "SENTRY_DSN",
+        "SENTRY_ORG",
+        "SENTRY_RELEASE",
+        "SENTRY_TRACES_SAMPLE_RATE",
+        "SERPAPI_API_KEY",
+        "SHIP_API_KEY",
+        "SKIP_ENV_VALIDATION",
+        "TURSO_AUTH_TOKEN",
+        "TURSO_DATABASE_URL",
+        "UPSTASH_REDIS_REST_TOKEN",
+        "UPSTASH_REDIS_REST_URL",
+        "VERCEL_API_TOKEN",
+        "VERCEL_PROJECT_ID",
+        "VERCEL_TEAM_ID",
+        "VERCEL_TOKEN"
+      ]
+    }
+  }
+}
