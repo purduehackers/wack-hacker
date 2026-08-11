@@ -27,8 +27,18 @@ export interface DiscordChannelState {
   activity: string;
   turnStartedAt?: number;
   toolCalls: number;
-  /** Makes `message.completed` idempotent under durable event replay. */
-  lastCompletedStepIndex: number;
+  /**
+   * The last assistant block appended, so a replayed `message.completed` is
+   * recognised by what it says rather than by where it claimed to be.
+   *
+   * `stepIndex` cannot do this job. Eve reports `stepIndex: 0` — and
+   * `sequence: 0` — for *every* step of a turn that suspends and resumes, so a
+   * second model call after a subagent is indistinguishable from a replay of
+   * the first by either field. Event ids do not work either: a retry is emitted
+   * under a fresh id, so keying on those double-counts a replay instead of
+   * dropping it. What actually differs is the text.
+   */
+  lastCompletedMessage: string;
   /** Outstanding HITL requests keep normal Discord messages queued. */
   pendingInputRequestIds: string[];
   /** Responses already queued into Eve while another required request remains. */
@@ -55,7 +65,7 @@ export function initialDiscordState(): DiscordChannelState {
     text: "",
     activity: "",
     toolCalls: 0,
-    lastCompletedStepIndex: -1,
+    lastCompletedMessage: "",
     pendingInputRequestIds: [],
     answeredInputRequestIds: [],
     pendingAuthorizationNames: [],
@@ -130,7 +140,7 @@ export function beginDiscordTurn(
     state.turnStartedAt = now;
     state.streamingText = "";
     state.text = state.completedText;
-    state.lastCompletedStepIndex = -1;
+    state.lastCompletedMessage = "";
     state.activity = "thinking…";
     state.lastRenderPublishedAt = 0;
     state.lastRenderPreview = "";
@@ -152,7 +162,7 @@ export function beginDiscordTurn(
   state.completedText = "";
   state.streamingText = "";
   state.text = "";
-  state.lastCompletedStepIndex = -1;
+  state.lastCompletedMessage = "";
   state.toolCalls = 0;
   state.activity = "thinking…";
   state.pendingInputRequestIds = [];
@@ -179,9 +189,10 @@ function appendBlock(existing: string, block: string): string {
 
 export function appendStreamingMessage(
   state: DiscordChannelState,
-  input: { readonly stepIndex: number; readonly messageSoFar: string },
+  input: { readonly messageSoFar: string },
 ): void {
-  if (input.stepIndex <= state.lastCompletedStepIndex) return;
+  // Naturally idempotent: `messageSoFar` is cumulative, so a replayed delta
+  // replaces the in-progress text with the same value rather than doubling it.
   state.streamingText = input.messageSoFar;
   state.text = appendBlock(state.completedText, state.streamingText);
 }
@@ -189,12 +200,13 @@ export function appendStreamingMessage(
 /** Preserves preliminary assistant text across tool-call model steps, replay-safely. */
 export function completeStreamingMessage(
   state: DiscordChannelState,
-  input: { readonly stepIndex: number; readonly message: string | null },
+  input: { readonly message: string | null },
 ): void {
-  if (input.stepIndex <= state.lastCompletedStepIndex) return;
   // Framework boundary: Eve uses null when a step emitted no assistant message.
-  if (input.message !== null) state.completedText = appendBlock(state.completedText, input.message);
+  if (input.message !== null && input.message !== state.lastCompletedMessage) {
+    state.completedText = appendBlock(state.completedText, input.message);
+    state.lastCompletedMessage = input.message;
+  }
   state.streamingText = "";
   state.text = state.completedText;
-  state.lastCompletedStepIndex = input.stepIndex;
 }
