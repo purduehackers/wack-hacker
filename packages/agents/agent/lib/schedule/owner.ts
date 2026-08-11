@@ -9,6 +9,7 @@ import { z } from "zod";
 
 import { decideCapability } from "../policy/engine.ts";
 import { requirePrincipal } from "../policy/principal.ts";
+import type { AuthAttribute } from "../policy/types.ts";
 import {
   CapabilityKind,
   Confirmation,
@@ -19,12 +20,6 @@ import { discordSnowflake } from "../schema.ts";
 import type { ScheduleOwner } from "./store.ts";
 
 type ScheduleMutationName = "schedule_task" | "cancel_task";
-/**
- * One entry of Eve's authenticated attribute bag: a single string or a list of
- * strings. The narrowing below is therefore load-bearing, not a formality.
- */
-type AuthAttribute = SessionAuthContext["attributes"][string];
-
 /** At most one Discord role per position in the guild's role list. */
 const memberRolesSchema = z.array(discordSnowflake).max(64);
 

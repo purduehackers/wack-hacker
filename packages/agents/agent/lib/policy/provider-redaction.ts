@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { env } from "../../env.ts";
-import { assertToolOutput, type JsonValue } from "../serialization.ts";
+import { assertToolOutput, isString, type JsonValue } from "../serialization.ts";
 
 const SENSITIVE_KEY =
   /(?:authorization|cookie|password|passwd|secret|token|api[_-]?key|private[_-]?key|credential|dsn)/i;
@@ -35,14 +35,9 @@ type ProviderValue =
 /** The two arms the walk descends into, and the only values `seen` ever holds. */
 type ProviderContainer = ProviderValue[] | { [key: string]: ProviderValue };
 
-// Hoisted so the recursive walk reuses one schema per kind instead of rebuilding
-// them at every node.
-const stringSchema = z.string();
+// Hoisted so the recursive walk reuses one schema instead of rebuilding it at
+// every node.
 const objectSchema = z.object({});
-
-function isString(value: unknown): value is string {
-  return stringSchema.safeParse(value).success;
-}
 
 /**
  * Arrays and non-null objects, the two kinds this walk descends into.

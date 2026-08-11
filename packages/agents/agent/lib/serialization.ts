@@ -9,8 +9,11 @@ export type JsonValue =
   | readonly JsonValue[]
   | { readonly [key: string]: JsonValue };
 
+/** The `JsonValue` arm that carries field names. */
+export type JsonObject = { readonly [key: string]: JsonValue };
+
 /** The two arms of `JsonValue` the walk recurses into, and the only values `ancestors` ever holds. */
-type JsonContainer = JsonValue[] | { readonly [key: string]: JsonValue };
+type JsonContainer = JsonValue[] | JsonObject;
 
 // Hoisted so the recursive walk reuses one schema per kind instead of rebuilding
 // them at every node.
@@ -22,7 +25,8 @@ const bigintSchema = z.bigint();
 const symbolSchema = z.symbol();
 const functionSchema = z.function();
 
-function isString(value: unknown): value is string {
+/** Shared with every other walk over `JsonValue` in this package. */
+export function isString(value: unknown): value is string {
   return stringSchema.safeParse(value).success;
 }
 

@@ -5,22 +5,14 @@ import type { InputRequest } from "eve/client";
 import { z } from "zod";
 
 import type { ApprovalPolicyStore } from "../policy/approval-record.ts";
-import type { JsonValue } from "../serialization.ts";
+import { isString, type JsonObject, type JsonValue } from "../serialization.ts";
 import type { DiscordChannelState } from "./state.ts";
 
 const SENSITIVE_INPUT_KEY = /secret|token|password|credential|api_key|auth|^value$/iu;
 
-/** The `JsonValue` arm this walk recurses into once strings and arrays are handled. */
-type JsonObject = { readonly [key: string]: JsonValue };
-
-// Hoisted so the recursive walk reuses one schema per kind instead of rebuilding
-// them at every node.
-const stringSchema = z.string();
+// Hoisted so the recursive walk reuses one schema instead of rebuilding it at
+// every node.
 const objectSchema = z.object({});
-
-function isString(value: JsonValue): value is string {
-  return stringSchema.safeParse(value).success;
-}
 
 /**
  * `z.object({})` accepts exactly `typeof value === "object" && value !== null &&
