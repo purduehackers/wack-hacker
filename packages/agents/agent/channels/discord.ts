@@ -254,6 +254,16 @@ async function publishDesiredRender(
   const dispatchId = state.activeDispatchId;
   const messageId = state.activeMessageId;
   if (dispatchId === undefined || messageId === undefined || state.channelId === "") return false;
+  // `eveTurnId` fences every render write in Redis — `if active.eveTurnId ~=
+  // ARGV[5] then return -1`. An empty one is not a harmless blank: every empty
+  // id compares equal to every other, so publishing one would let an unrelated
+  // turn's render satisfy this turn's fence. The bot rejects the intent at its
+  // wire boundary, which is correct but leaves the render silently undelivered;
+  // refuse here instead, where the reason is visible.
+  if (input.eveTurnId === "") {
+    console.warn("render intent skipped: no active eve turn to fence it to");
+    return false;
+  }
 
   const liveText =
     input.phase === "streaming" ? sliceText(state.text, LIVE_TEXT_CHARS) : state.text;
@@ -643,18 +653,18 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
         state.activity = `${phrases.join(", ")}…`;
         await publishDesiredRender(state, {
           sessionId: ctx.session.id,
-          eveTurnId: ctx.session.turn.id,
+          eveTurnId: data.turnId,
           phase: "streaming",
         });
       }
     },
 
-    async "action.result"(_data, channel, ctx) {
+    async "action.result"(data, channel, ctx) {
       // Work finished; drop the status line rather than leaving a stale one.
       channel.state.activity = "";
       await publishDesiredRender(channel.state, {
         sessionId: ctx.session.id,
-        eveTurnId: ctx.session.turn.id,
+        eveTurnId: data.turnId,
         phase: "streaming",
       });
     },
