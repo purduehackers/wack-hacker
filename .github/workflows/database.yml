@@ -1,21 +1,23 @@
-name: Migrate production database and deploy agent
+name: Migrate database
+
+# Applies migrations that are already in the repository. It never generates one:
+# `drizzle-kit generate` runs on a developer's machine and its output is
+# reviewed in the pull request, where `ci.yml` reports what each statement would
+# do and blocks anything that drops or rebuilds data. By the time a migration
+# reaches `main` the decision has been made, so this only carries it out.
+#
+# It also does not deploy. The agent project is connected to `main`, so the code
+# that needs the new schema has already shipped by the time this runs; deploying
+# again from here rebuilt the whole app to change nothing.
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/shared/migrations/**"
+      - "packages/shared/src/db/**"
+      - ".github/workflows/database.yml"
   workflow_dispatch:
-    inputs:
-      database:
-        description: Production Turso database name
-        required: true
-        type: string
-      change_ticket:
-        description: Incident/change ticket URL or ID
-        required: true
-        type: string
-      quiesced:
-        description: I stopped bot ingress and confirmed in-flight agent writes drained
-        required: true
-        default: false
-        type: boolean
 
 permissions:
   contents: read
@@ -24,88 +26,62 @@ concurrency:
   group: production-database
   cancel-in-progress: false
 
-env:
-  VERCEL_CLI_VERSION: 58.7.1
-
 jobs:
-  migrate-and-deploy:
+  migrate:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
     env:
-      DATABASE: ${{ inputs.database }}
-      CHANGE_TICKET: ${{ inputs.change_ticket }}
-      QUIESCED: ${{ inputs.quiesced }}
       TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
       TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      VERCEL_SCOPE: ${{ vars.VERCEL_SCOPE }}
-      AGENT_PROJECT: ${{ vars.AGENT_VERCEL_PROJECT }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
 
-      - name: Enforce maintenance gate
+      - name: Require database credentials
         run: |
           set -euo pipefail
-          test "$QUIESCED" = "true" || { echo "production writes are not confirmed quiesced" >&2; exit 1; }
-          test -n "$CHANGE_TICKET"
-          test -n "$TURSO_DATABASE_URL"
-          test -n "$TURSO_AUTH_TOKEN"
-          test -n "$VERCEL_TOKEN"
-          test -n "$VERCEL_SCOPE"
-          test -n "$AGENT_PROJECT"
-          [[ "$DATABASE" =~ ^[a-z0-9][a-z0-9-]*$ ]]
+          test -n "$TURSO_DATABASE_URL" || {
+            echo "::error::TURSO_DATABASE_URL is not configured for the production environment" >&2
+            exit 1
+          }
 
-      # Same guarantee the Turso CLI was installed for, without the CLI: a Turso
-      # URL is `libsql://<database>-<org>.turso.io`, so the approved name must be
-      # the first path-free label of the host.
-      - name: Verify configured database identity
+      # A Turso URL is `libsql://<database>-<org>.turso.io`, so the host's first
+      # label names the database this run would alter. Printed rather than
+      # matched against an input: there is no second database to confuse it with,
+      # and an operator reading the log should see which one moved.
+      - name: Name the database being migrated
         run: |
           set -euo pipefail
           host="${TURSO_DATABASE_URL#*://}"
-          case "${host%%.*}" in
-            "$DATABASE"|"$DATABASE"-*) ;;
-            *) echo "TURSO_DATABASE_URL does not name the approved database" >&2; exit 1 ;;
-          esac
+          echo "migrating \`${host%%.*}\`" >> "$GITHUB_STEP_SUMMARY"
 
-      # Turso restores to any point in its retention window on demand, so a clone
-      # taken *before* the change is recoverable information, not a recoverable
-      # artifact — `turso db create --from-db <db> --timestamp <t>` works just as
-      # well after something goes wrong. The clone this replaced cost a whole
-      # extra database per migration, none of which anything ever deleted.
-      # What was actually needed is the timestamp to restore from.
+      # Turso restores to any point inside its retention window on demand, so
+      # what a rollback needs is the timestamp, not a clone taken in advance.
+      # The clone this replaced left an extra database behind on every migration
+      # and nothing ever deleted them.
       - name: Record the restore point
         id: restore_point
         run: echo "at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
-      - name: Forward migration
+      - name: Apply migrations
         working-directory: packages/shared
         run: bun run db:migrate
 
-      - name: Verify ledger, schema, and database integrity
+      - name: Verify ledger, schema, and integrity
         run: bun packages/shared/scripts/verify-database.ts
-
-      - name: Link agent project
-        run: >-
-          bunx vercel@${VERCEL_CLI_VERSION} pull --yes --environment production
-          --project "$AGENT_PROJECT" --scope "$VERCEL_SCOPE" --token "$VERCEL_TOKEN"
-
-      - name: Deploy verified agent
-        id: deploy
-        run: |
-          set -euo pipefail
-          deployment_url="$(bunx vercel@${VERCEL_CLI_VERSION} deploy --prod --yes --scope "$VERCEL_SCOPE" --token "$VERCEL_TOKEN")"
-          echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
 
       - name: Change record
         run: |
           {
-            echo "## Production database change"
+            echo "## Database migration"
             echo
-            echo "- Change: $CHANGE_TICKET"
-            echo "- Database: \`$DATABASE\`"
-            echo "- Restore point: \`${{ steps.restore_point.outputs.at }}\` (turso db create <name> --from-db $DATABASE --timestamp <that>)"
-            echo "- Agent deployment: ${{ steps.deploy.outputs.url }}"
-            echo "- Bot remains quiesced until operator smoke/re-enable."
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- Restore point: \`${{ steps.restore_point.outputs.at }}\`"
+            echo
+            echo "To roll back, clone from just before that timestamp:"
+            echo
+            echo '```bash'
+            echo "turso db create <recovery-name> --from-db <database> --timestamp ${{ steps.restore_point.outputs.at }}"
+            echo '```'
           } >> "$GITHUB_STEP_SUMMARY"

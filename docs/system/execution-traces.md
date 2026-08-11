@@ -382,7 +382,7 @@ operator procedure.
 ```text
 reviewed manual workflow on main                         .github/workflows/database.yml
 └─ production environment (reviewer gate only if configured) + concurrency lock
-   ├─ enforce quiesced=true, change ticket, names and credentials
+   ├─ require TURSO_DATABASE_URL and name the database being migrated
    ├─ install checksum-pinned Turso CLI
    ├─ verify provider database URL == approved TURSO_DATABASE_URL
    ├─ record the restore point timestamp for Turso PITR
@@ -392,7 +392,7 @@ reviewed manual workflow on main                         .github/workflows/datab
    │  └─ quick integrity + ledger/latest hash + required schema subset
    ├─ Vercel pull/link configured agent project
    ├─ production agent deploy
-   └─ change summary: bot remains quiesced pending human smoke/re-enable
+   └─ change summary: commit, restore point, and the clone command to undo it
 ```
 
 The maintenance checkbox does not fence Eve: its minute dispatcher can still

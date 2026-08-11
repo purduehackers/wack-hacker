@@ -4,82 +4,78 @@ Only the Eve/agent deployment writes Turso; the bot has no database credentials.
 Production migrations are forward-only. Every schema change must be compatible
 with the currently deployed agent until the new deployment is healthy.
 
-> **Current maintenance blocker:** stopping the bot does not stop the Eve
-> once-per-minute schedule dispatcher, which can still claim and fail due rows in
-> Turso. The workflow's `quiesced` checkbox is an operator assertion, not a
-> technical fence. Do not run the production migration unless the whole agent
-> writer set is externally proven idle for the window; routine use needs an
-> explicit agent/scheduler maintenance fence. Also, the create/cancel schedule
-> smoke below is blocked by the documented Discord self-approval projection
-> limitation.
+## The path a schema change takes
 
-## Automated path
+**On the pull request**, `ci.yml` reviews it. `review-migrations.ts` runs
+`drizzle-kit generate` and fails if it produces a file — a schema that moved
+without a migration to carry it would otherwise apply nothing on `main` while
+the code expects the new shape. It then classifies every statement the branch
+adds and posts a table to the PR: what drops data, what makes drizzle rebuild a
+table, what adds a constraint existing rows could violate, and what it could not
+classify. Anything destructive fails the check.
 
-Dispatch **Migrate production database and deploy agent** (`database.yml`) from
-the reviewed commit. Enter the production Turso database name, a new backup
-database name, the change ticket, and confirm that all writers are quiesced. Naming the `production` environment
-supplies a second human gate only when required reviewers are configured in the
-repository settings.
+Destructive changes are not forbidden. They stop being something that can reach
+production without a decision, which is the part that matters when the next step
+is automatic.
 
-The job refuses a URL/name mismatch, creates a provider-side point-in-time clone
-before mutation, applies Drizzle migrations,
-runs `PRAGMA quick_check`, verifies that the latest repository migration hash is
-in the ledger and that required tables/columns exist, and only then deploys the
-agent. The Turso and Vercel CLIs are exact versions; the Turso archive checksum
-is verified. On any failure, the bot stays quiesced for operator action.
+**On merge to `main`**, `database.yml` applies it. That workflow never
+generates: the migration was written and reviewed before it merged. It records
+the restore point, runs the migrations, verifies the ledger, `PRAGMA
+quick_check`, and that required tables and columns exist.
 
-## Operator sequence
+It does not deploy. The agent project is connected to `main`, so the code that
+needs the new schema has already shipped by the time the migration runs — which
+also means **a migration must be compatible with the agent that is already
+serving**, since that agent sees the new schema first.
 
-1. Announce a maintenance window. Deploy the isolated supervisor with
-   `BOT_SANDBOX_ENABLED=false`, wait for an in-flight ensure to finish, then stop
-   the active bot with the guarded command in [deployment.md](deployment.md).
-   This closes Discord ingress and the bot's scheduled endpoint, but it does
-   **not** stop the Eve dispatcher from updating due schedule rows. Wait at least
-   the longest observed agent request and externally prove no live turn,
-   provider tool, schedule dispatcher, or other Eve invocation can write for the
-   entire window. There is no database read-only or agent-maintenance fence in
-   this repository; checking the quiesce box based only on the bot stop is
-   unsafe.
-2. Record the current agent deployment URL, exact bot digest, database name,
-   UTC time, and change ticket. Choose a **new** backup database name; Turso PITR
-   cannot restore over an existing database.
-3. Run `database.yml`. Do not insert Drizzle ledger rows by hand. `db:migrate`
-   applies every migration the ledger has not recorded; on an empty database
-   that is the `0000` baseline and nothing else.
-4. Review the workflow's database verification and Vercel deployment URL.
-   Re-enable supervision, then dispatch **Release bot** with the last known-good bot
-   digest to create a fresh sandbox against the new agent deployment.
-5. Run a non-destructive agent turn and inspect errors/latency. The intended
-   create/list/cancel schedule smoke cannot currently complete because
-   create/cancel self-approval controls fail before rendering. Do not substitute
-   a direct database write or bypass approval. Keep production cutover blocked
-   until that limitation is fixed and the full live smoke succeeds.
+## Rollback
 
-The equivalent provider backup command, useful for a witnessed manual change,
-is documented by Turso and does not copy customer data into CI artifacts:
+Turso restores to any point inside its retention window on demand, so the
+workflow records a timestamp rather than cloning in advance:
 
 ```bash
-BACKUP_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-turso db create <new-backup-db> --from-db <production-db> --timestamp "$BACKUP_AT"
+turso db create <recovery-name> --from-db <database> --timestamp <recorded-timestamp>
 ```
 
-A logical dump is an optional second backup (`turso db shell <db> .dump >
-dump.sql`), but it contains production data: encrypt it to the approved backup
-store, never a GitHub artifact or incident ticket.
+The clone this replaced was taken before every migration and left an extra
+database behind that nothing ever deleted, for a recovery that is equally
+available afterwards.
+
+> **Known limitation:** stopping the bot does not stop the Eve once-per-minute
+> schedule dispatcher, which can still claim and fail due rows in Turso. There is
+> no maintenance fence over the agent's writer set. For a migration that cannot
+> tolerate concurrent writes, take the agent deployment down rather than relying
+> on bot ingress being idle.
+
+## When a change needs more care
+
+Most migrations need nothing beyond the pull request review. These do:
+
+- **A destructive statement.** The PR check fails on purpose. Decide explicitly:
+  split the change so the additive half ships first and the drop follows once
+  nothing reads the column, or accept it and note the restore point.
+- **A change the currently serving agent cannot tolerate.** The agent deploys on
+  merge and the migration runs on merge, in that order but not atomically, so
+  the running agent briefly sees the new schema. Additive changes are safe;
+  anything that removes or retypes a column the old code reads is not.
+- **A migration that cannot tolerate concurrent writes.** Take the agent
+  deployment down for the window. Stopping the bot is not enough — the Eve
+  dispatcher still claims schedule rows every minute.
+
+Never run `drizzle-kit push` against production, and never hand-insert ledger
+rows. `db:migrate` applies every migration the ledger has not recorded; on an
+empty database that is the `0000` baseline and nothing else. There are no down
+migrations.
 
 ## Failure and rollback
 
-- **Before migration:** delete nothing; fix the backup/preflight and re-run.
-- **Migration or verification failure:** keep ingress quiesced. Preserve the PITR
-  database and logs. Do not deploy the new agent.
-- **Application regression with a compatible schema:** use `vercel rollback
-<previous-agent-deployment-url>`, re-run smoke tests, and keep the forward
-  schema. This is the normal rollback.
-- **Data/schema corruption:** never attempt an in-place PITR restore. Create or
-  retain the pre-change clone, verify it, mint a token for it, update the agent
-  project's `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`, deploy the known-good
-  agent, and only then re-enable the bot. This is a new production cutover and
-  needs the same approval. Preserve the failed database for forensics.
-
-There are no down migrations, and `drizzle-kit push` is forbidden in production.
-Never point the old agent at a non-backward-compatible forward schema.
+- **Migration or verification failure.** The workflow stops before the change
+  record, so the run's log holds the restore point. Fix forward with a new
+  migration where possible.
+- **Application regression, schema still compatible.** `vercel rollback
+<previous-agent-deployment-url>` and keep the forward schema. This is the
+  normal rollback and needs no database action.
+- **Data or schema corruption.** Do not restore in place. Clone from the
+  recorded restore point, verify it, mint a token, update the agent project's
+  `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`, and redeploy. Preserve the failed
+  database for forensics.

@@ -101,7 +101,8 @@ migrations, verifies integrity, and only then deploys Eve. The
 assertion is not a technical fence: stopping the bot leaves the once-per-minute
 Eve schedule dispatcher able to claim/fail due Turso rows. Routine migration is
 therefore blocked until the whole agent writer set is externally proven idle or
-a real maintenance fence exists. The bot remains quiesced until operator smoke/
+a real maintenance fence exists. Stopping the bot does not stop the Eve
+dispatcher, so a migration needing exclusive writes takes the agent down/
 re-enable; current schedule create/cancel smoke is separately blocked by the
 approval projection limitation. The exact warnings are in the
 [database runbook](../operations/database.md).
@@ -388,7 +389,7 @@ database/deployment process.
 ### Promotion
 
 `image.yml` names the `production` environment, accepts a full known-good digest
-and change ticket, and receives a human gate only when required reviewers are
+and receives a human gate only when required reviewers are
 configured in GitHub settings. It verifies VCR platform/digest, Cosign workflow identity and
 attestations, rescans the exact digest, records previous active image, updates
 and deploys the agent, waits for the `bot-supervisor` schedule to adopt the
@@ -418,4 +419,4 @@ The source of truth for commands and failure handling remains:
   deploy but writes no durable rollback record. Its GitHub summary is produced
   only after ensure/smoke succeeds and has no `always()` guard; a post-deploy
   failure can therefore leave changed production with no release summary. Use
-  the workflow logs and external change ticket as evidence.
+  the workflow logs and the recorded restore point as evidence.

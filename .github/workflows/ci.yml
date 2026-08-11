@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -51,6 +52,52 @@ jobs:
           TURSO_DATABASE_URL="file:$database" bun run db:migrate
       - run: bun run build
       - run: docker build --platform linux/amd64 -f packages/bot/Dockerfile -t wack-hacker-bot:ci .
+
+  # A schema change is the one thing CI cannot undo after the fact, so it is
+  # reviewed before it merges rather than discovered when `main` applies it.
+  migrations:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # The reviewer diffs against the base branch, so a shallow clone has
+          # nothing to compare with.
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+
+      - name: Review schema changes
+        id: review
+        run: |
+          set -euo pipefail
+          bun packages/shared/scripts/review-migrations.ts \
+            "origin/${{ github.base_ref }}" | tee review.md
+
+      - name: Post the review to the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          marker="<!-- migration-review -->"
+          body="$marker"$'\n'"$(cat review.md)"
+          existing="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" \
+            --jq "[.[] | select(.body | startswith(\"$marker\"))][0].id // empty")"
+          if [ -n "$existing" ]; then
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${existing}" \
+              -f body="$body" >/dev/null
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" \
+              -f body="$body" >/dev/null
+          fi
+
+      # Destructive statements are not forbidden, but they stop being something
+      # that can happen without anyone noticing: production migrates on merge.
+      - name: Block on data loss
+        if: steps.review.outputs.blocking == 'true'
+        run: |
+          echo "::error::this branch drops or rebuilds existing data — see the migration review comment" >&2
+          exit 1
 
   # Slash commands are guild-scoped and registered by an explicit PUT that replaces the whole
   # set, so this is idempotent and safe to repeat. It runs only after a merge to main, and only
