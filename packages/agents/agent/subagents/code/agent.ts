@@ -43,12 +43,10 @@ export default defineDynamic({
               },
             },
             outputSchema: SUBAGENT_OUTPUT_SCHEMA,
+            // A subagent has no default budget of its own: it takes a share
+            // of the root's remaining quota, which is now Eve's 40M rather than
+            // a hand-picked cap. Naming a number here could only lower it.
             limits: {
-              // Set explicitly rather than inherited: a code session reads far
-              // more than it writes, and it is the one subagent that can run
-              // for an hour against a real checkout.
-              maxInputTokensPerSession: 2_000_000,
-              maxOutputTokensPerSession: 200_000,
               sessionTimeoutMs: 60 * 60_000,
             },
           })

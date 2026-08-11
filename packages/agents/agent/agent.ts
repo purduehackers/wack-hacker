@@ -22,21 +22,13 @@ export default defineAgent({
     },
   },
   compaction: { thresholdPercent: 0.8 },
+  // No token limits: Eve's own defaults are more generous than anything worth
+  // hand-picking here — 40M provider-reported input tokens for a root session,
+  // and output uncapped unless configured. The previous 500k input cap was 80x
+  // below the framework default, and because a delegated child receives a share
+  // of its parent's *remaining* quota rather than a default of its own, that cap
+  // was also every subagent's ceiling. Only the wall-clock bound stays.
   limits: {
     sessionTimeoutMs: TWO_HOURS_MS,
-    /**
-     * The root budget is also every subagent's budget.
-     *
-     * A delegated child has no default of its own — Eve gives it a share of the
-     * parent's *remaining* quota, split across the batch. At 500k a root that
-     * had already done some work handed each child roughly 200k, which is a
-     * small context for a domain agent holding 68 tools and a skill document.
-     * Eve's own default for a root session is 40M; this stays well under that
-     * while leaving a child over a million tokens even after a busy parent turn
-     * and a parallel dispatch.
-     */
-    maxInputTokensPerSession: 10_000_000,
-    /** Raised with the input budget: 50k of output cannot fill a 10M session. */
-    maxOutputTokensPerSession: 1_000_000,
   },
 });
