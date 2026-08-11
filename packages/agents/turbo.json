@@ -1,13 +1,9 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
-  "extends": [
-    "//"
-  ],
+  "extends": ["//"],
   "tasks": {
     "build": {
-      "outputs": [
-        ".output/**"
-      ],
+      "outputs": [".output/**"],
       "env": [
         "AGENT_INGRESS_SECRET",
         "AGENT_URL",
