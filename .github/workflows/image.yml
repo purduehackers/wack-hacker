@@ -211,6 +211,14 @@ jobs:
       # rebuilt with the new value rather than a fresh one deployed from this
       # checkout. Deploying here would ship the agent as a side effect of
       # releasing the bot — two changes in an action that verifies one.
+      # `env add` writes through the linked project, not the flags, so this has to
+      # come first. It replaced a `vercel pull`, which also downloaded the whole
+      # production environment just to establish the same link.
+      - name: Link the agent project
+        run: >-
+          bunx vercel@${VERCEL_CLI_VERSION} link --yes
+          --project "$AGENT_PROJECT" --team "$VERCEL_SCOPE" --token "$VERCEL_TOKEN"
+
       - name: Pin the released digest and rebuild production
         id: deploy
         env:
