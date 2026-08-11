@@ -325,6 +325,7 @@ async function publishDesiredRender(
     activity: state.activity,
     ...(input.footer === undefined ? {} : { footer: input.footer }),
     ...(traceparent === undefined ? {} : { traceparent }),
+    authoredAt: new Date().toISOString(),
     ...(inputRequests.length === 0 ? {} : { inputRequests }),
     ...(authorizations.length === 0 ? {} : { authorizations }),
   };
@@ -830,6 +831,7 @@ async function settleAndNotifyParked(
     activity: state.activity,
     ...(state.finalRenderFooter === undefined ? {} : { footer: state.finalRenderFooter }),
     ...(traceparent === undefined ? {} : { traceparent }),
+    authoredAt: new Date().toISOString(),
   };
 
   const settledRevision = await renderPublisher.settleAndPark(intent, payload);

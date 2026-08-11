@@ -325,6 +325,15 @@ const renderIntentSchema = z.strictObject({
   footer: z.string().max(2_000).optional(),
   /** Eve span that authored this desired state, retained through Redis recovery. */
   traceparent: traceparent.optional(),
+  /**
+   * When the agent authored this desired state, ISO-8601.
+   *
+   * Redis holds no time anywhere in the render path, so a stuck or truncated
+   * render could not be lined up against anything — not the workflow streams,
+   * not the trace, not the Discord message. `traceparent` gives the trace and
+   * this gives the moment, which together are what a post-mortem starts from.
+   */
+  authoredAt: z.iso.datetime().optional(),
   inputRequests: z.array(renderInputRequestSchema).max(1).optional(),
   authorizations: z.array(renderAuthorizationSchema).max(5).optional(),
 });
