@@ -8,6 +8,8 @@
  * reads an agent or bot environment singleton.
  */
 
+import { createHash } from "node:crypto";
+
 import {
   BOT_ACTIVE_GENERATION_KEY,
   BOT_SUPERVISOR_FENCE_KEY,
@@ -751,11 +753,32 @@ async function inspectActive(
   }
 }
 
+/**
+ * Fingerprint of the environment a container was started with.
+ *
+ * A sandbox receives its environment once, at creation. Rotating a secret on the
+ * project changes what *this* deployment reads and nothing about the process
+ * already running, so without this the bot kept a revoked credential until the
+ * image digest happened to change or the sandbox aged out — a day, for a
+ * key rotation that looked like it had taken effect immediately.
+ *
+ * Hashed rather than compared: the value is a record of secrets, and the
+ * generation record is read by tooling that has no business seeing them.
+ */
+function environmentFingerprint(botEnv: Readonly<Record<string, string>>): string {
+  const canonical = Object.keys(botEnv)
+    .sort()
+    .map((key) => `${key}=${botEnv[key] ?? ""}`)
+    .join("\n");
+  return createHash("sha256").update(canonical).digest("hex");
+}
+
 function sandboxMatches(
   sandbox: SdkSandbox,
   active: ActiveBotGeneration,
   desiredImage: string,
   desiredDigest: string,
+  desiredEnvFingerprint: string,
 ): boolean {
   return (
     sandbox.name === active.sandboxName &&
@@ -763,7 +786,8 @@ function sandboxMatches(
     !sandbox.persistent &&
     sandbox.vcpus === 1 &&
     active.image === desiredImage &&
-    immutableImageDigest(sandbox.image ?? "") === desiredDigest
+    immutableImageDigest(sandbox.image ?? "") === desiredDigest &&
+    active.envFingerprint === desiredEnvFingerprint
   );
 }
 
@@ -960,7 +984,13 @@ async function useHealthyActive(
   if (
     record === undefined ||
     sandbox === undefined ||
-    !sandboxMatches(sandbox, record, input.config.image, input.config.imageDigest)
+    !sandboxMatches(
+      sandbox,
+      record,
+      input.config.image,
+      input.config.imageDigest,
+      environmentFingerprint(input.config.env),
+    )
   ) {
     return Result.ok(undefined);
   }
@@ -1144,6 +1174,7 @@ async function activateCandidate(
     healthUrl: candidate.healthUrl,
     activatedAt: new Date().toISOString(),
     expiresAt: candidate.expiresAt.toISOString(),
+    envFingerprint: environmentFingerprint(input.config.env),
   };
   const committed = await commitGeneration(input.redis, input.lease, previous.record, next);
   if (Result.isError(committed)) {

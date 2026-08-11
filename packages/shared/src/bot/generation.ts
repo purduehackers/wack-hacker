@@ -41,6 +41,14 @@ export const activeBotGenerationSchema = z.object({
   healthUrl: healthUrlSchema,
   activatedAt: z.iso.datetime(),
   expiresAt: z.iso.datetime(),
+  /**
+   * SHA-256 over the environment the container was started with.
+   *
+   * Optional because a record written before this field existed must stay
+   * decodable — and because an absent fingerprint is exactly the signal to
+   * replace: that sandbox was started with an environment nobody recorded.
+   */
+  envFingerprint: z.string().length(64).optional(),
 });
 
 export type ActiveBotGeneration = z.output<typeof activeBotGenerationSchema>;
