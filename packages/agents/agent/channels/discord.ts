@@ -46,7 +46,7 @@ import type {
 } from "@repo/shared/wire";
 import * as Sentry from "@sentry/node";
 import type { UserContent } from "ai";
-import { defineChannel, POST } from "eve/channels";
+import { defineChannel, POST, type Session } from "eve/channels";
 import { createUnauthorizedResponse } from "eve/channels/auth";
 import type { SessionAuthContext, SessionContext } from "eve/context";
 import { z } from "zod";
@@ -73,6 +73,34 @@ const redis = getRedis({
   token: env.UPSTASH_REDIS_REST_TOKEN,
 });
 const conversations = createConversationStore({ redis });
+
+/**
+ * Cancels a turn that a newly arrived message supersedes.
+ *
+ * Someone who types while the agent is working is correcting it, not waiting in
+ * line behind it. Cancelling the live turn lets the replacement act on the
+ * correction; without this the agent finishes researching the wrong thing and
+ * answers the question that was already withdrawn.
+ *
+ * A session parked on an input request is left alone: its turn is suspended
+ * rather than working, and cancelling it would kill the request the person is
+ * being asked to answer. `cancel` reports `no_active_turn` on its own when
+ * nothing is running, so the only case worth checking here is the parked one.
+ */
+async function steerActiveTurn(
+  active: Session | undefined,
+  continuationKey: string,
+): Promise<void> {
+  if (active === undefined) return;
+  const parked = await conversations.queue.parked(continuationKey);
+  if (Result.isError(parked) || parked.value !== undefined) return;
+  const cancelled = await active.cancel();
+  if (cancelled.status !== "accepted") return;
+  console.info(
+    JSON.stringify({ event: "discord.turn.steered", continuationKey, sessionId: active.id }),
+  );
+}
+
 const renderPublisher = createRenderPublisher({
   store: conversations.renderPublication,
   botUrl: () => resolveBotBaseUrl(redis, env.BOT_URL),
@@ -355,6 +383,8 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
         active === undefined
           ? [...(payload.recentMessages ?? []), ...(payload.referencedContext ?? [])]
           : [];
+
+      await steerActiveTurn(active, payload.continuationKey);
       const renderChannelId = payload.thread?.id ?? payload.channel.id;
 
       // Last side effect before Eve: after this fence becomes live, a crash must
@@ -693,6 +723,13 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
         ...(tokens === undefined ? {} : { tokens }),
         toolCalls: state.toolCalls,
       });
+    },
+
+    async "turn.cancelled"(_data, channel) {
+      // Steered out of the way. The replacement turn paints over this, so the
+      // only job here is to drop the status line rather than leave the previous
+      // turn's "delegating to…" spinning under the new answer.
+      channel.state.activity = "";
     },
 
     async "turn.failed"(data, channel) {
