@@ -45,10 +45,28 @@ COPY patches/ patches/
 # rather than silently resolving something the repo never tested.
 RUN bun install --frozen-lockfile --production --filter='@repo/bot' --filter='@repo/shared'
 
+# Drop the TypeScript compiler from the runtime tree.
+#
+# It is not a dependency of anything here — it arrives as a *types-only* peer of
+# `@purduehackers/discord-markdown-utils` and `@t3-oss/env-core`, and bun
+# installs peers. Nothing loads it at runtime, but its platform package ships a
+# ~30MB Go binary whose vendored `golang.org/x/text` and Go stdlib carry their
+# own CVEs, which failed the image vulnerability gate on a compiler the bot
+# never runs. `--production` does not help: these are peers, not devDependencies.
+RUN rm -rf node_modules/.bun/typescript@* node_modules/.bun/@typescript+* \
+    && find . -path '*/node_modules/typescript' -prune -exec rm -rf {} + \
+    && find . -path '*/node_modules/@typescript' -prune -exec rm -rf {} +
+
 
 FROM oven/bun:1.3.14-alpine@sha256:5acc90a93e91ff07bf72aa90a7c9f0fa189765aec90b47bdbf2152d2196383c0 AS runtime
 
 WORKDIR /app
+
+# The pinned base still ships openssl 3.5.6-r0, which carries a HIGH CVE with a
+# published fix (3.5.7-r0). Upgrading just these two keeps the digest pin
+# meaningful while clearing the gate; a base bump replaces this when upstream
+# rebuilds.
+RUN apk --no-cache upgrade libcrypto3 libssl3
 
 ENV NODE_ENV=production \
     OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT=65536
