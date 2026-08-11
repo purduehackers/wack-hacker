@@ -156,7 +156,7 @@ point `BOT_URL` at your machine. `BOT_SANDBOX_ENABLED=true` with an empty
 
 ### Releasing after the first deploy
 
-Do not repeat the manual steps above for production changes. Merging to `main` builds, scans, signs and attests a bot image (`image.yml`) without touching production. Promotion is a separate reviewed dispatch (`promote.yml`) gated on a protected `production` GitHub environment, which sets `BOT_IMAGE`, deploys the agent, and then waits for the supervisor to adopt the digest and report healthy.
+Do not repeat the manual steps above for production changes. Merging to `main` runs **Release bot** (`image.yml`): it builds `linux/amd64`, scans, attests provenance and an SBOM, pins `BOT_IMAGE` to the digest, rebuilds the serving deployment, and waits for the supervisor to adopt the digest and report healthy. To roll back, dispatch the same workflow with a known-good digest in `image` — it skips the build and re-pins that one.
 
 That flow, its required GitHub variables and secrets, the smoke check, and rollback are documented in the [operations runbooks](docs/operations/README.md). A successful Vercel deployment is not a successful bot release until the smoke check passes.
 

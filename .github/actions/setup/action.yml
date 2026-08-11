@@ -1,0 +1,22 @@
+name: Set up the repository toolchain
+description: >-
+  Bun, Node, and a frozen-lockfile install. Every workflow needs the same three
+  steps, and they had drifted: only CI pinned Node, so a workflow that grew an
+  `eve` call would have failed on the runner default.
+
+runs:
+  using: composite
+  steps:
+    - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      with:
+        bun-version: 1.3.14
+
+    # Bun runs everything except `eve build`, which is a Node CLI declaring
+    # `engines.node: ">=24"`. Runners default to Node 22, so this is pinned from
+    # `.node-version` rather than left to the image.
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      with:
+        node-version-file: .node-version
+
+    - run: bun install --frozen-lockfile
+      shell: bash

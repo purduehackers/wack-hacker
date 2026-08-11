@@ -47,7 +47,7 @@ is verified. On any failure, the bot stays quiesced for operator action.
    applies every migration the ledger has not recorded; on an empty database
    that is the `0000` baseline and nothing else.
 4. Review the workflow's database verification and Vercel deployment URL.
-   Re-enable supervision, then run `promote.yml` with the last reviewed bot
+   Re-enable supervision, then dispatch **Release bot** with the last known-good bot
    digest to create a fresh sandbox against the new agent deployment.
 5. Run a non-destructive agent turn and inspect errors/latency. The intended
    create/list/cancel schedule smoke cannot currently complete because

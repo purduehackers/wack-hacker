@@ -387,7 +387,7 @@ database/deployment process.
 
 ### Promotion
 
-`promote.yml` names the `production` environment, accepts a full reviewed digest
+`image.yml` names the `production` environment, accepts a full known-good digest
 and change ticket, and receives a human gate only when required reviewers are
 configured in GitHub settings. It verifies VCR platform/digest, Cosign workflow identity and
 attestations, rescans the exact digest, records previous active image, updates

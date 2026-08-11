@@ -385,7 +385,7 @@ reviewed manual workflow on main                         .github/workflows/datab
    ├─ enforce quiesced=true, change ticket, names and credentials
    ├─ install checksum-pinned Turso CLI
    ├─ verify provider database URL == approved TURSO_DATABASE_URL
-   ├─ create timestamped pre-change PITR clone and verify it exists
+   ├─ record the restore point timestamp for Turso PITR
    ├─ Drizzle migrate                                  packages/shared/migrations/*.sql
    │  └─ apply whatever the ledger has not recorded
    ├─ verify database                                  packages/shared/scripts/verify-database.ts

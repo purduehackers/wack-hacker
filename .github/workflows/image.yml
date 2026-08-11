@@ -1,4 +1,11 @@
-name: Publish bot image
+name: Release bot
+
+# Build, verify, and ship the bot in one pass, or re-ship a digest that already
+# passed. Splitting these across two workflows implied a review gate between
+# them; every environment on this repository has zero protection rules, so the
+# gate was a dispatch step and a change-ticket string, not a reviewer. Rollback
+# is the mode that survived: dispatch with a known-good digest to skip the build
+# and re-pin it.
 
 on:
   push:
@@ -10,6 +17,11 @@ on:
       - "packages/shared/**"
       - ".github/workflows/image.yml"
   workflow_dispatch:
+    inputs:
+      image:
+        description: Existing vcr.vercel.com image@sha256 digest to re-ship. Leave empty to build HEAD.
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -18,8 +30,10 @@ permissions:
   # `application/vnd.dev.cosign.simplesigning.v1+json` layer mediaType.
   attestations: write
 
+# One release at a time. This was keyed per-SHA, so two merges could pin
+# `BOT_IMAGE` concurrently and the loser would still be reported as active.
 concurrency:
-  group: publish-bot-image-${{ github.sha }}
+  group: release-bot
   cancel-in-progress: false
 
 env:
@@ -28,17 +42,22 @@ env:
   SYFT_LINUX_X64_SHA256: bb8f1ba8201d1ce0d99ab4f5243142629c1afba4da97a7c4ca2df97327f97190
 
 jobs:
-  publish:
+  release:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    environment: production
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_SCOPE: ${{ vars.VERCEL_SCOPE }}
+      VCR_PROJECT: ${{ vars.VCR_PROJECT }}
+      AGENT_PROJECT: ${{ vars.AGENT_VERCEL_PROJECT }}
+      UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+      UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+      REQUESTED_IMAGE: ${{ inputs.image }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: 1.3.14
+      - uses: ./.github/actions/setup
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-
-      - run: bun install --frozen-lockfile
 
       - name: Validate registry configuration
         env:
@@ -68,6 +87,7 @@ jobs:
 
       - name: Build and push immutable candidate
         id: build
+        if: inputs.image == ''
         env:
           BUILDX_METADATA_PROVENANCE: max
           VCR_IMAGE: ${{ vars.VCR_IMAGE }}
@@ -84,12 +104,24 @@ jobs:
           echo "image=$image" >> "$GITHUB_OUTPUT"
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
 
+      - name: Resolve released digest
+        id: release
+        run: |
+          set -euo pipefail
+          image="${REQUESTED_IMAGE:-${{ steps.build.outputs.image }}}"
+          case "$image" in
+            vcr.vercel.com/*@sha256:*) ;;
+            *) echo "release target must be a vcr.vercel.com digest reference" >&2; exit 1 ;;
+          esac
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+
       - name: Wait for VCR and verify platform
         env:
-          IMAGE: ${{ steps.build.outputs.image }}
+          IMAGE: ${{ steps.release.outputs.image }}
         run: bun packages/shared/scripts/release-check.ts image "$IMAGE"
 
       - name: Export SPDX SBOM with checksum-pinned Syft
+        if: inputs.image == ''
         env:
           IMAGE: ${{ steps.build.outputs.image }}
         run: |
@@ -103,6 +135,7 @@ jobs:
           test -s sbom.spdx.json
 
       - name: Extract reviewable SLSA provenance
+        if: inputs.image == ''
         run: |
           bun -e '
             const metadata = await Bun.file("build-metadata.json").json();
@@ -116,7 +149,7 @@ jobs:
       - name: Scan immutable image
         uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
         with:
-          image-ref: ${{ steps.build.outputs.image }}
+          image-ref: ${{ steps.release.outputs.image }}
           format: table
           exit-code: "1"
           ignore-unfixed: true
@@ -130,6 +163,7 @@ jobs:
       # the SBOM or provenance either. The identity is unchanged — still keyless
       # sigstore, still this workflow's GitHub OIDC token — only the store moves.
       - name: Attest build provenance
+        if: inputs.image == ''
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-name: ${{ vars.VCR_IMAGE }}
@@ -137,6 +171,7 @@ jobs:
           push-to-registry: false
 
       - name: Attest SBOM
+        if: inputs.image == ''
         uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
         with:
           subject-name: ${{ vars.VCR_IMAGE }}
@@ -146,7 +181,7 @@ jobs:
 
       - name: Verify published attestations
         env:
-          IMAGE: ${{ steps.build.outputs.image }}
+          IMAGE: ${{ steps.release.outputs.image }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
@@ -155,6 +190,7 @@ jobs:
             --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/image.yml"
 
       - name: Upload review record
+        if: inputs.image == ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: bot-image-${{ github.sha }}
@@ -165,16 +201,70 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-      - name: Publish digest for review
+      - name: Record currently active digest
+        id: previous
+        run: |
+          set -euo pipefail
+          echo "image=$(bun packages/shared/scripts/release-check.ts active)" >> "$GITHUB_OUTPUT"
+
+      # Only the `BOT_IMAGE` pin changes, so the deployment already serving is
+      # rebuilt with the new value rather than a fresh one deployed from this
+      # checkout. Deploying here would ship the agent as a side effect of
+      # releasing the bot — two changes in an action that verifies one.
+      - name: Pin the released digest and rebuild production
+        id: deploy
         env:
-          IMAGE: ${{ steps.build.outputs.image }}
+          IMAGE: ${{ steps.release.outputs.image }}
+        run: |
+          set -euo pipefail
+          bunx vercel@${VERCEL_CLI_VERSION} env add BOT_IMAGE production \
+            --value "$IMAGE" --yes --force --no-sensitive \
+            --scope "$VERCEL_SCOPE" --token "$VERCEL_TOKEN"
+
+          current="$(curl -sS --fail-with-body \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v6/deployments?app=${AGENT_PROJECT}&target=production&state=READY&limit=1&slug=${VERCEL_SCOPE}" \
+            | bun -e '
+              const uid = JSON.parse(await Bun.stdin.text()).deployments?.[0]?.uid;
+              if (typeof uid !== "string") {
+                console.error("no READY production deployment to rebuild");
+                process.exit(1);
+              }
+              console.log(uid);
+            ')"
+          echo "rebuilding $current with the released digest"
+          bunx vercel@${VERCEL_CLI_VERSION} redeploy "$current" \
+            --target production --scope "$VERCEL_SCOPE" --token "$VERCEL_TOKEN"
+          echo "deployment=$current" >> "$GITHUB_OUTPUT"
+
+      # The bot-supervisor schedule is the only writer of the generation record
+      # and fires every five minutes, so this waits for a tick rather than
+      # triggering one. A release is not a release until the digest is actually
+      # serving and the bot reports ready.
+      - name: Wait for the supervisor to adopt the digest
+        env:
+          IMAGE: ${{ steps.release.outputs.image }}
+        run: |
+          set -euo pipefail
+          deadline=$(( SECONDS + 900 ))
+          until bun packages/shared/scripts/release-check.ts smoke "$IMAGE"; do
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "released digest did not become active within 15 minutes" >&2
+              exit 1
+            fi
+            echo "waiting for the bot-supervisor schedule to adopt $IMAGE…"
+            sleep 30
+          done
+
+      - name: Release record
+        env:
+          IMAGE: ${{ steps.release.outputs.image }}
         run: |
           {
-            echo "## Bot image candidate"
+            echo "## Bot release"
             echo
-            echo '\`\`\`'
-            echo "$IMAGE"
-            echo '\`\`\`'
-            echo
-            echo "Review the attached SBOM/provenance and this job's scan before promotion."
+            echo "- Mode: ${{ inputs.image == '' && 'built from HEAD' || 're-shipped an existing digest' }}"
+            echo "- Previous: \`${{ steps.previous.outputs.image }}\`"
+            echo "- Current: \`$IMAGE\`"
+            echo "- Rebuilt deployment: \`${{ steps.deploy.outputs.deployment }}\`"
           } >> "$GITHUB_STEP_SUMMARY"

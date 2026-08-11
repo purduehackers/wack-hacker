@@ -60,46 +60,47 @@ a real deployment. Treat that as an unmet production prerequisite: define and
 review a hosted reattachment check before claiming the Eve cutover complete.
 Do not replace it with a second loader or infer it from bot `/health`.
 
-## Build, review, and promote
+## Release
 
-1. Merge to `main`. **Publish bot image** (`image.yml`) builds `linux/amd64`,
-   waits until VCR serves the exact digest, scans it, creates an SPDX JSON SBOM
-   and BuildKit SLSA provenance, signs the digest with GitHub OIDC, and uploads
-   the review metadata. It does not alter production.
-2. Review the workflow's digest, SBOM, provenance metadata, vulnerability scan,
-   and signature verification. Copy the full digest reference from its summary.
-3. Dispatch **Promote reviewed bot digest** (`promote.yml`) with that exact
-   reference and the change ticket. The `production` environment is the human
-   approval gate. The job re-verifies VCR availability, platform, signature,
-   and vulnerabilities before changing `BOT_IMAGE`.
-4. Promotion sets `BOT_IMAGE` on the agent project and deploys it, then waits
-   for the `bot-supervisor` schedule to adopt the digest — up to five minutes
-   for the next tick plus candidate startup. It then reads the fenced
-   active-generation record and verifies both the exact image and the bot's
-   ready `/health` payload. Do not call a successful Vercel deployment a
-   successful bot release until this smoke check passes.
-5. Verify one non-destructive Discord command and inspect Sentry/logs for
-   `bot.sandbox.ensure`, gateway reconnects, schedule failures, and render
-   backlog. Record the previous and current digests in the change ticket.
+Merging to `main` runs **Release bot** (`image.yml`) end to end:
+
+1. Builds `linux/amd64` from `packages/bot/Dockerfile` and pushes an immutable
+   digest to VCR, then waits until VCR serves that exact digest.
+2. Exports an SPDX SBOM with a checksum-pinned Syft and extracts the BuildKit
+   SLSA provenance.
+3. Scans the immutable digest and fails on any fixable HIGH or CRITICAL.
+4. Attests provenance and the SBOM to GitHub's attestation store, keyless via
+   this workflow's OIDC identity, then verifies what it published.
+5. Pins `BOT_IMAGE` to the digest and **rebuilds the deployment already
+   serving** — not a fresh deploy from the checkout, which would ship the agent
+   as a side effect of releasing the bot.
+6. Waits up to fifteen minutes for `bot-supervisor` to adopt the digest and for
+   the bot to report a ready `/health`. A green Vercel deployment is not a
+   release until this passes.
+
+Then verify one non-destructive Discord command and check Sentry for
+`bot.sandbox.ensure`, gateway reconnects, schedule failures, and render backlog.
 
 Local preflight, after `vercel vcr login docker`, uses the same registry check:
 
 ```bash
-bun packages/shared/scripts/release-check.ts image   vcr.vercel.com/<team>/<project>/wack-hacker-bot@sha256:<digest>
+bun packages/shared/scripts/release-check.ts image \
+  vcr.vercel.com/<team>/<project>/wack-hacker-bot@sha256:<digest>
 ```
 
 ## Failure and rollback
 
 Promotion is replace-before-drain: an unhealthy candidate never becomes active.
-If smoke fails after commit, **do not rebuild a tag**. Re-dispatch `promote.yml`
-with the last known-good, already reviewed digest. This creates a new fenced
+If smoke fails after commit, **do not rebuild a tag**. Dispatch **Release bot**
+with the last known-good digest in its `image` input: it skips the build,
+re-verifies that digest's attestations and scan, and re-pins it. This creates a new fenced
 generation from the old immutable image and is the bot rollback. Then repeat the
 Discord check.
 
 Because supervision now ships with the agent, `vercel rollback <deployment-url>`
 on the agent also reverts the `BOT_IMAGE` that deployment carried — but it does
 **not** by itself replace the running sandbox, which only the next scheduled
-reconcile does. Prefer re-dispatching `promote.yml` for a bot rollback, and
+reconcile does. Prefer dispatching **Release bot** with a digest for a bot rollback, and
 reserve `vercel rollback` for agent code faults.
 
 If a reconcile fails, preserve its logs and the read-only snapshot before
