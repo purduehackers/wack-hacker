@@ -23,6 +23,16 @@ import {
 const renderProjectionSchema = z.object({
   anchorMessageId: discordSnowflake.optional(),
   anchorContentHash: contentHash.optional(),
+  /**
+   * The message carrying an input request's prose and buttons.
+   *
+   * Separate from the anchor because the anchor is edited on every streaming
+   * tick, and Discord does not notify anyone for an edit — a mention added that
+   * way never pings the person being asked for input. Optional so a projection
+   * written before this existed still decodes.
+   */
+  hitlMessageId: discordSnowflake.optional(),
+  hitlContentHash: contentHash.optional(),
   overflow: z
     .array(z.object({ messageId: discordSnowflake, contentHash: contentHash.optional() }))
     .max(10),

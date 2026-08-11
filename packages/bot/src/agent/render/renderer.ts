@@ -11,6 +11,13 @@ import type { DiscordError, DiscordRest } from "./discord-rest.ts";
 
 const MAX_MESSAGE_CHARS = 1_900;
 const MAX_MESSAGES = 5;
+/**
+ * Nonce slot for the input-request message.
+ *
+ * The anchor takes 0 and overflow takes 1..MAX_MESSAGES, so this sits past the
+ * end of that range and cannot collide with a chunk.
+ */
+const HITL_NONCE_INDEX = MAX_MESSAGES + 1;
 const LIVE_CONTINUES = "-# response continues…";
 const TRUNCATED = "-# response truncated";
 
@@ -22,6 +29,9 @@ interface OverflowProjection {
 export interface RendererProjection {
   anchorMessageId?: string;
   anchorContentHash?: string;
+  /** See `renderProjectionSchema`: the input request lives on its own message. */
+  hitlMessageId?: string;
+  hitlContentHash?: string;
   overflow: OverflowProjection[];
 }
 
@@ -31,6 +41,7 @@ interface RenderInput {
   readonly footer?: string;
   readonly notice?: string;
   readonly components?: NonNullable<RESTPostAPIChannelMessageJSONBody["components"]>;
+  readonly mentionUserIds?: readonly string[];
   readonly terminal: boolean;
 }
 
@@ -43,21 +54,15 @@ function renderBody(input: Omit<RenderInput, "terminal">): string {
   return sections.join("\n");
 }
 
+/**
+ * The streaming body alone. The notice that used to be appended here now has its
+ * own message, so a mention inside it arrives as a new message and pings.
+ */
 function liveChunk(input: RenderInput): string {
-  const notice = input.notice === undefined ? "" : sliceText(input.notice, 900);
   const { notice: _notice, terminal: _terminal, ...bodyInput } = input;
   const body = renderBody(bodyInput);
-  if (notice === "") {
-    if (body.length <= MAX_MESSAGE_CHARS) return body;
-    return `${sliceText(body, MAX_MESSAGE_CHARS - LIVE_CONTINUES.length - 2)}\n\n${LIVE_CONTINUES}`;
-  }
-
-  const available = MAX_MESSAGE_CHARS - notice.length - 2;
-  const visibleBody =
-    body.length <= available
-      ? body
-      : `${sliceText(body, available - LIVE_CONTINUES.length - 2)}\n\n${LIVE_CONTINUES}`;
-  return visibleBody === "" ? notice : `${visibleBody}\n\n${notice}`;
+  if (body.length <= MAX_MESSAGE_CHARS) return body;
+  return `${sliceText(body, MAX_MESSAGE_CHARS - LIVE_CONTINUES.length - 2)}\n\n${LIVE_CONTINUES}`;
 }
 
 function finalChunks(input: RenderInput): readonly string[] {
@@ -79,6 +84,11 @@ function anchorHash(
   components: NonNullable<RESTPostAPIChannelMessageJSONBody["components"]>,
 ): string {
   return hash(JSON.stringify([content, components]));
+}
+
+/** A message someone deleted underneath us is not an error worth failing on. */
+function isMissingMessage(error: RenderWriteError): boolean {
+  return error instanceof UpstreamError && error.status === 404;
 }
 
 function nonce(messageId: string, index: number): string {
@@ -182,7 +192,7 @@ async function writeAnchor(
     state.anchorContentHash = contentHash;
     return checkpoint(rendering);
   }
-  if (!(allowRecreate && edited.error instanceof UpstreamError && edited.error.status === 404)) {
+  if (!(allowRecreate && isMissingMessage(edited.error))) {
     return edited;
   }
 
@@ -246,7 +256,7 @@ async function writeOverflow(
       if (Result.isError(saved)) return saved;
       continue;
     }
-    if (!(edited.error instanceof UpstreamError && edited.error.status === 404)) return edited;
+    if (!isMissingMessage(edited.error)) return edited;
 
     state.overflow.splice(index, 1);
     const saved = await checkpoint(rendering);
@@ -255,6 +265,76 @@ async function writeOverflow(
     if (Result.isError(recreated)) return recreated;
   }
   return Result.ok(undefined);
+}
+
+/**
+ * The input request, on a message of its own.
+ *
+ * Created rather than edited into place, and posted allowing exactly the
+ * mentions the notice names. Both halves are required: the anchor is edited on
+ * every streaming tick and Discord never notifies for an edit, and every render
+ * message otherwise suppresses mentions so streamed prose cannot ping people.
+ * Together they are why "Input required for @someone" arrived silently.
+ *
+ * The message is deleted once there is no request left to answer, so a resolved
+ * request does not leave a live button behind.
+ */
+async function writeHitl(
+  rendering: RenderContext,
+  notice: string | undefined,
+  components: NonNullable<RESTPostAPIChannelMessageJSONBody["components"]>,
+  mentionUserIds: readonly string[],
+): Promise<Result<undefined, RenderWriteError>> {
+  const { deps, state } = rendering;
+  const content = notice ?? "";
+  const wanted = content !== "" || components.length > 0;
+
+  if (!wanted) {
+    if (state.hitlMessageId === undefined) return Result.ok(undefined);
+    const owned = await verifyLease(rendering);
+    if (Result.isError(owned)) return owned;
+    const removed = await deps.rest.deleteMessage(deps.channelId, state.hitlMessageId);
+    if (Result.isError(removed) && !isMissingMessage(removed.error)) return removed;
+    delete state.hitlMessageId;
+    delete state.hitlContentHash;
+    return checkpoint(rendering);
+  }
+
+  const contentHash = anchorHash(content, components);
+  if (state.hitlMessageId !== undefined && state.hitlContentHash === contentHash) {
+    return Result.ok(undefined);
+  }
+
+  const owned = await verifyLease(rendering);
+  if (Result.isError(owned)) return owned;
+
+  if (state.hitlMessageId !== undefined) {
+    const edited = await deps.rest.editMessage(
+      deps.channelId,
+      state.hitlMessageId,
+      content,
+      components,
+    );
+    if (Result.isOk(edited)) {
+      state.hitlContentHash = contentHash;
+      return checkpoint(rendering);
+    }
+    if (!isMissingMessage(edited.error)) return edited;
+    delete state.hitlMessageId;
+    delete state.hitlContentHash;
+  }
+
+  const created = await deps.rest.postMessage(deps.channelId, {
+    content,
+    components,
+    allowed_mentions: { users: [...mentionUserIds] },
+    nonce: nonce(deps.sourceMessageId, HITL_NONCE_INDEX),
+    enforce_nonce: true,
+  });
+  if (Result.isError(created)) return created;
+  state.hitlMessageId = created.value.id;
+  state.hitlContentHash = contentHash;
+  return checkpoint(rendering);
 }
 
 async function removeStaleOverflow(
@@ -281,11 +361,23 @@ export function createRenderer(deps: RendererDeps, state: RendererProjection) {
   return {
     write: async (input: RenderInput): Promise<Result<undefined, RenderWriteError>> => {
       if (!input.terminal) {
-        return writeAnchor(rendering, liveChunk(input), input.components ?? [], false);
+        // The anchor keeps only the streamed body; the request gets its own
+        // message so its mention is delivered as a notification.
+        const anchor = await writeAnchor(rendering, liveChunk(input), [], false);
+        if (Result.isError(anchor)) return anchor;
+        return writeHitl(
+          rendering,
+          input.notice,
+          input.components ?? [],
+          input.mentionUserIds ?? [],
+        );
       }
       const [head = "", ...tail] = finalChunks(input);
       const anchor = await writeAnchor(rendering, head, [], true);
       if (Result.isError(anchor)) return anchor;
+      // A finished turn has nothing left to answer.
+      const hitl = await writeHitl(rendering, undefined, [], []);
+      if (Result.isError(hitl)) return hitl;
       const overflow = await writeOverflow(rendering, tail);
       return Result.isError(overflow) ? overflow : removeStaleOverflow(rendering, tail.length);
     },

@@ -178,6 +178,7 @@ async function paint(
     ...(work.intent.footer === undefined ? {} : { footer: work.intent.footer }),
     ...(hitl?.notice === undefined ? {} : { notice: hitl.notice }),
     ...(hitl === undefined ? {} : { components: hitl.components }),
+    ...(hitl === undefined ? {} : { mentionUserIds: hitl.mentionUserIds }),
     terminal: work.intent.phase !== "streaming",
   });
   if (Result.isError(painted)) {

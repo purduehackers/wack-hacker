@@ -35,6 +35,15 @@ export type HitlLocator =
 interface HitlView {
   readonly notice?: string;
   readonly components: APIActionRowComponent<APIComponentInMessageActionRow>[];
+  /**
+   * Users the notice mentions and who should actually be notified.
+   *
+   * Every render message is posted with mentions suppressed, which is right for
+   * streamed assistant prose — it must never ping someone because the model
+   * wrote an `@`. An input request is the exception: it names one person and is
+   * useless if they are not told.
+   */
+  readonly mentionUserIds: readonly string[];
 }
 
 function inputCustomId(
@@ -154,8 +163,12 @@ export function renderHitl(intent: RenderIntent): HitlView {
   const authorizations = intent.authorizations ?? [];
   const notices: string[] = [];
   const rows: APIActionRowComponent<APIComponentInMessageActionRow>[] = [];
+  const mentionUserIds: string[] = [];
 
   if (request !== undefined) {
+    // Second-party approval names a role, not a person, so there is nobody to
+    // ping — `publicInputNotice` renders no mention in that case either.
+    if (request.approvalMode !== "second-party") mentionUserIds.push(request.recipientUserId);
     notices.push(publicInputNotice(request));
     rows.push(...inputRows(intent, request, 0));
   }
@@ -189,6 +202,7 @@ export function renderHitl(intent: RenderIntent): HitlView {
   return {
     ...(notices.length === 0 ? {} : { notice: notices.join("\n\n") }),
     components: rows,
+    mentionUserIds,
   };
 }
 

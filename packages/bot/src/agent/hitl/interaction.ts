@@ -243,7 +243,12 @@ async function checkSourceMessage(
     report(deps, "agent.hitl.decode-projection", projection.error);
     return "This input request is temporarily unavailable.";
   }
-  if (projection.value.anchorMessageId !== sourceMessageId) {
+  // The request now lives on its own message so its mention actually notifies.
+  // Older projections have no `hitlMessageId` and still carry their buttons on
+  // the anchor, so both are accepted rather than invalidating a live request
+  // that was rendered before this shipped.
+  const carrier = projection.value.hitlMessageId ?? projection.value.anchorMessageId;
+  if (carrier !== sourceMessageId) {
     return "This input request is no longer active.";
   }
   return undefined;
