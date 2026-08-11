@@ -60,9 +60,21 @@ async function assertStable(redis: RedisClient, expected: ActiveBotGeneration): 
 }
 
 async function managedSandboxes() {
-  const paginator = await Sandbox.list({ tags: { ...MANAGED_TAGS }, ...auth() });
+  // One tag filter only; the API rejects more ("Only one tag filter is supported
+  // at a time"). The rest of the managed set is matched below.
+  const paginator = await Sandbox.list({
+    tags: { managedBy: MANAGED_TAGS.managedBy },
+    ...auth(),
+  });
   const entries = [];
-  for await (const entry of paginator) entries.push(entry);
+  for await (const entry of paginator) {
+    // Narrow to the full managed set the API could not filter on, so this never
+    // reports — or offers to delete — a sandbox this project does not own.
+    const managed = Object.entries(MANAGED_TAGS).every(
+      ([key, value]) => entry.tags?.[key] === value,
+    );
+    if (managed) entries.push(entry);
+  }
   return entries;
 }
 

@@ -40,6 +40,22 @@ const MANAGED_TAGS = Object.freeze({
   workload: "discord-bot",
 });
 
+/**
+ * The one tag the Sandbox API will filter on.
+ *
+ * `list` rejects more than one — "Only one tag filter is supported at a time" —
+ * so passing the whole managed set failed every call. The orphan sweep swallowed
+ * that as a non-fatal issue and reconciled anyway, which is why terminated
+ * candidates accumulated instead of being reaped. The remaining tags are matched
+ * client-side against what the API returns.
+ */
+const LIST_FILTER_TAG = Object.freeze({ managedBy: MANAGED_TAGS.managedBy });
+
+/** Whether a listed sandbox carries every tag this supervisor manages by. */
+function isManaged(tags: Readonly<Record<string, string>> | undefined): boolean {
+  return Object.entries(MANAGED_TAGS).every(([key, value]) => tags?.[key] === value);
+}
+
 const ACQUIRE_MUTEX_SCRIPT = `
 -- wack:bot-sandbox:acquire
 if redis.call("EXISTS", KEYS[1]) == 1 then return false end
@@ -770,7 +786,10 @@ async function terminateSandbox(
         }
       }
     } catch (cause) {
-      issues.push(`SIGTERM ${sandbox.name}: ${detailOf(cause)}`);
+      // A command that has already exited is gone, not a failure to stop: the
+      // candidate we are tearing down is usually one whose process died on its
+      // own, which is why we are here at all.
+      if (!isNotFound(cause)) issues.push(`SIGTERM ${sandbox.name}: ${detailOf(cause)}`);
     }
   }
 
@@ -794,7 +813,7 @@ async function sweepOrphans(
 ): Promise<Result<void, BotSandboxOperationFailed | BotSandboxCleanupFailed>> {
   let listed: SdkSandboxPaginator;
   try {
-    listed = await client.list({ tags: { ...MANAGED_TAGS } });
+    listed = await client.list({ tags: { ...LIST_FILTER_TAG } });
   } catch (cause) {
     return Result.err(
       new BotSandboxOperationFailed({
@@ -807,7 +826,7 @@ async function sweepOrphans(
   const issues: string[] = [];
   try {
     for await (const entry of listed) {
-      if (entry.name === activeName) continue;
+      if (entry.name === activeName || !isManaged(entry.tags)) continue;
       const generationTag = entry.tags?.["generation"];
       const taggedGeneration = Number(generationTag);
       // A lease may expire during a long sweep. Never let its stale owner
