@@ -53,7 +53,12 @@ function isContainer(value: unknown): value is ProviderContainer {
 
 export function redactProviderText(value: string): string {
   let redacted = value.replace(/Bearer\s+[A-Za-z0-9._~+/-]+/gi, "Bearer [REDACTED]");
-  for (const secret of [env.GITHUB_APP_PRIVATE_KEY, env.SENTRY_AUTH_TOKEN, env.VERCEL_API_TOKEN]) {
+  for (const secret of [
+    env.GITHUB_APP_PRIVATE_KEY,
+    env.SENTRY_AUTH_TOKEN,
+    env.SENTRY_API_TOKEN,
+    env.VERCEL_API_TOKEN,
+  ]) {
     if (secret && secret.length >= 4) redacted = redacted.split(secret).join("[REDACTED]");
   }
   return redacted;

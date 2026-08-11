@@ -15,7 +15,7 @@ export const SENTRY_RUNTIME = createDomainRuntime({
   service: "Sentry",
   tools: SENTRY_TOOLS,
   configurationError: () =>
-    env.SENTRY_AUTH_TOKEN === undefined || env.SENTRY_ORG === undefined
+    env.SENTRY_API_TOKEN === "" || env.SENTRY_ORG === ""
       ? new UpstreamError({
           service: "Sentry",
           status: 401,

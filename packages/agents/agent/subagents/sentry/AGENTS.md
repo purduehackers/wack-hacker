@@ -6,7 +6,11 @@ upstream API does and where it will surprise you.
 
 ## Upstream
 
-`@sentry/api` with `SENTRY_AUTH_TOKEN`, scoped to `SENTRY_ORG`. Calls return a
+`@sentry/api` with `SENTRY_API_TOKEN`, scoped to `SENTRY_ORG`. Not
+`SENTRY_AUTH_TOKEN` — that is the Vercel integration's release-upload token and
+carries only `project:read`/`project:releases`/`project:write`, so every tool
+here that reads an event or an issue gets a 403 from it. This one needs
+`event:read` and `org:read`. Calls return a
 wrapped result — `unwrapResult` before use.
 
 One of three domains wiring `provider-redaction`, with `redactInput: true` on

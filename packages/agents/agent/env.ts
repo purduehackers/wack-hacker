@@ -69,7 +69,14 @@ export const env = createEnv({
     PHACK_ASK_API_KEY: secret.optional(),
     PAYLOAD_CMS_API_KEY: secret.optional(),
     HUNTER_API_KEY: secret.optional(),
+    /**
+     * Release upload and source maps, managed by the Vercel Sentry integration.
+     * Its scopes are `project:read`, `project:releases`, `project:write` — the
+     * subagent's tools read events and issues and cannot use it.
+     */
     SENTRY_AUTH_TOKEN: secret.optional(),
+    /** The subagent's own credential: a user token with `event:read`/`org:read`. */
+    SENTRY_API_TOKEN: secret.optional(),
     SENTRY_ORG: identifier.optional(),
     VERCEL_API_TOKEN: secret.optional(),
 

@@ -9,7 +9,12 @@ import { env as runtimeEnv } from "../../../env.ts";
 
 /** Typed SDK configuration; execution is denied before these fallbacks can be used. */
 export const env = {
-  SENTRY_AUTH_TOKEN: runtimeEnv.SENTRY_AUTH_TOKEN ?? "",
+  /**
+   * `SENTRY_API_TOKEN`, not `SENTRY_AUTH_TOKEN`. The latter is the Vercel
+   * integration's release-upload token and carries only `project:*` scopes, so
+   * every tool here that reads an event or an issue got a 403 from it.
+   */
+  SENTRY_API_TOKEN: runtimeEnv.SENTRY_API_TOKEN ?? "",
   SENTRY_ORG: runtimeEnv.SENTRY_ORG ?? "",
 };
 

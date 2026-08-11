@@ -25,7 +25,7 @@ export function sentryOpts() {
   return {
     baseUrl: "https://sentry.io" as const,
     headers: {
-      Authorization: `Bearer ${env.SENTRY_AUTH_TOKEN}`,
+      Authorization: `Bearer ${env.SENTRY_API_TOKEN}`,
     },
   };
 }
@@ -56,7 +56,7 @@ export async function sentryGet(
   }
   const response = await fetch(url, {
     headers: {
-      Authorization: `Bearer ${env.SENTRY_AUTH_TOKEN}`,
+      Authorization: `Bearer ${env.SENTRY_API_TOKEN}`,
       "Content-Type": "application/json",
     },
     signal: AbortSignal.timeout(15_000),
@@ -87,7 +87,7 @@ export async function sentryPut(
   const response = await fetch(url, {
     method: "PUT",
     headers: {
-      Authorization: `Bearer ${env.SENTRY_AUTH_TOKEN}`,
+      Authorization: `Bearer ${env.SENTRY_API_TOKEN}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(sentryJsonSchema.parse(body)),
