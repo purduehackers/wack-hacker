@@ -94,19 +94,28 @@ export async function applyInputRequests(deps: ApplyInputRequestsDeps): Promise<
         if (request.kind === "tool-approval") {
           const policy = await deps.approvalPolicies.read(deps.sessionId, request.action.callId);
           if (Result.isError(policy)) throw policy.error;
-          if (policy.value === undefined) {
-            throw new Error("tool approval policy is unavailable");
+          // Absent means self-approval, not tampering. Only `requestSecondPartyApproval`
+          // writes a record, because a record exists to bind *another* person to a
+          // request they did not make. A `Confirmation.Self` approval has no second
+          // party, so there is nothing to store and nothing to verify — the approver
+          // is the requester, and `userId` below already says who that is.
+          //
+          // Requiring one unconditionally threw for every self-approval, which
+          // failed the whole batch and rendered no control at all. `schedule_task`
+          // asked for approval, Discord showed a truncated sentence and no button,
+          // and the scheduled task could never be approved.
+          if (policy.value !== undefined) {
+            if (
+              policy.value.requesterUserId !== userId ||
+              policy.value.tool !== request.action.toolName
+            ) {
+              throw new Error("tool approval policy does not match the pending request");
+            }
+            approvalPolicy = {
+              approvalMode: policy.value.mode,
+              approverMinRole: policy.value.minApproverRole,
+            };
           }
-          if (
-            policy.value.requesterUserId !== userId ||
-            policy.value.tool !== request.action.toolName
-          ) {
-            throw new Error("tool approval policy does not match the pending request");
-          }
-          approvalPolicy = {
-            approvalMode: policy.value.mode,
-            approverMinRole: policy.value.minApproverRole,
-          };
         }
         return {
           requestId: request.requestId,
