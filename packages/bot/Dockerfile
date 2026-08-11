@@ -96,4 +96,8 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
 
 WORKDIR /app/packages/bot
 
-CMD ["bun", "--preload", "src/instrument.ts", "run", "src/index.ts"]
+# `bun run start`, not the flags spelled out: `bun --preload X run Y` is not a
+# valid invocation — bun prints its help and exits 1 — and this spelled them out
+# in the wrong order. Deferring to the package script keeps one definition of how
+# the bot starts, which is also what the agent's supervisor now invokes.
+CMD ["bun", "run", "start"]

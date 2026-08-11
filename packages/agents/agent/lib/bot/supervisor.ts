@@ -1074,9 +1074,13 @@ async function startCandidate(
 
   let command: SdkBotCommand;
   try {
+    // `bun run start`, which is the package script the image also defaults to.
+    // Spelling the flags out here produced `bun --preload X run Y` — not a valid
+    // invocation — so every candidate exited immediately, served nothing, and
+    // was torn down as unhealthy with a 502 that looked like a platform fault.
     command = await candidate.runCommand({
       cmd: "bun",
-      args: ["--preload", "src/instrument.ts", "run", "src/index.ts"],
+      args: ["run", "start"],
       cwd: "/app/packages/bot",
       detached: true,
     });

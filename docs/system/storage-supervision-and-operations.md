@@ -390,8 +390,9 @@ database/deployment process.
 
 `image.yml` names the `production` environment, accepts a full known-good digest
 and receives a human gate only when required reviewers are
-configured in GitHub settings. It verifies VCR platform/digest, Cosign workflow identity and
-attestations, rescans the exact digest, records previous active image, updates
+configured in GitHub settings. It verifies VCR platform/digest, the GitHub-stored provenance and SBOM
+attestations signed by this repository's `image.yml`, rescans the exact digest,
+records the previous active image, updates
 and deploys the agent, waits for the `bot-supervisor` schedule to adopt the
 digest, then checks active image plus validated bot readiness. Rollback is promotion of a previously retained verified digest,
 not tag mutation.
