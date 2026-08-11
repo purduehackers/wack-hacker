@@ -210,7 +210,9 @@ gateway REST token is still usable; Sentry flushes last.
 - model: `deepseek/deepseek-v4-flash-0731`;
 - compaction at 80% context;
 - two-hour session timeout;
-- 500,000 input and 50,000 output tokens per session.
+- 10,000,000 input and 1,000,000 output tokens per session. The root budget
+  is also every subagent's: a delegated child has no default of its own and
+  receives a share of the parent's remaining quota.
 
 Eve discovers the custom Discord channel, root tools, 13 subagents, native
 skills/tools, hooks, and the schedule from filesystem conventions. The channel

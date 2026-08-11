@@ -44,8 +44,11 @@ export default defineDynamic({
             },
             outputSchema: SUBAGENT_OUTPUT_SCHEMA,
             limits: {
-              maxInputTokensPerSession: 500_000,
-              maxOutputTokensPerSession: 50_000,
+              // Set explicitly rather than inherited: a code session reads far
+              // more than it writes, and it is the one subagent that can run
+              // for an hour against a real checkout.
+              maxInputTokensPerSession: 2_000_000,
+              maxOutputTokensPerSession: 200_000,
               sessionTimeoutMs: 60 * 60_000,
             },
           })
