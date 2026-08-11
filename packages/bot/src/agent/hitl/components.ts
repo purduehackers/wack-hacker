@@ -137,21 +137,39 @@ function inputRows(
   return rows;
 }
 
+/**
+ * Ask the person, then say what for.
+ *
+ * The request used to open with a bold banner and put the actual question
+ * underneath, so the first line was the label rather than the ask. The mention
+ * leads now — it is a direct address, and it is the line that pings — and the
+ * question follows as a quote so it reads as the thing being asked rather than
+ * more assistant prose. What is being approved is detail, and sits last.
+ */
 function publicInputNotice(request: RenderInputRequest): string {
-  const heading = request.kind === "tool-approval" ? "Approval required" : "Input required";
-  const promptLength = request.kind === "tool-approval" ? 300 : 800;
-  const audience =
+  const approving = request.kind === "tool-approval";
+  const promptLength = approving ? 300 : 800;
+  const verb = approving ? "needs your approval" : "needs your input";
+  const lead =
     request.approvalMode === "second-party"
-      ? ` from a different ${request.approverMinRole ?? "organizer"}`
-      : ` for <@${request.recipientUserId}>`;
-  const sections = [`**${heading}${audience}**`, sliceText(request.prompt, promptLength)];
+      ? `A different ${request.approverMinRole ?? "organizer"} ${verb.replace("your ", "")}`
+      : `<@${request.recipientUserId}> — ${verb}`;
+
+  const sections = [
+    lead,
+    sliceText(request.prompt, promptLength)
+      .split("\n")
+      .map((line) => `> ${line}`)
+      .join("\n"),
+  ];
   if (request.toolName !== undefined) {
-    sections.push(`Tool: \`${sliceText(request.toolName.replaceAll("`", ""), 100)}\``);
+    const tool = sliceText(request.toolName.replaceAll("`", ""), 100);
+    sections.push(`-# about to run \`${tool}\``);
   }
   if (request.inputPreview !== undefined) {
     sections.push(`\`\`\`json\n${sliceText(request.inputPreview, 350)}\n\`\`\``);
   }
-  return sections.join("\n\n");
+  return sections.join("\n");
 }
 
 function authorizationName(authorization: RenderAuthorization): string {
