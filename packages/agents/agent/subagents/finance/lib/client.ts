@@ -2,20 +2,25 @@ import { UpstreamError } from "@repo/shared/errors";
 import { z } from "zod";
 
 import { env } from "../../../env.ts";
-import { stringifyQueryValue } from "./query.ts";
 
 const BASE_URL = "https://hcb.hackclub.com/api/v3";
 const REQUEST_TIMEOUT_MS = 15_000;
 
-/**
- * A single value an HCB query parameter can carry before serialization.
- * Deliberately excludes `Date`: the shared `stringifyQueryValue` sends objects
- * through `JSON.stringify`, so a Date would serialize as a *quoted* ISO string
- * (`?since=%222024-01-02T03%3A04%3A05.000Z%22`) rather than a bare date.
- */
+/** A single value an HCB query parameter can carry before serialization. */
 type HcbQueryScalar = string | number | boolean;
 /** Query bag accepted by the HCB helpers: scalars, repeated scalars, or absent. */
 type HcbQuery = Readonly<Record<string, HcbQueryScalar | HcbQueryScalar[] | null | undefined>>;
+
+/**
+ * HCB takes no date parameters, so every scalar it accepts is one `String`
+ * already renders correctly. This replaced a general `unknown` stringifier that
+ * handled symbols, functions and objects for a caller that passes none of them —
+ * and whose `JSON.stringify` fallback made a `Date` serialize as a *quoted* ISO
+ * string, a footgun the narrowed type now makes unrepresentable.
+ */
+function stringifyQueryValue(value: HcbQueryScalar): string {
+  return String(value);
+}
 
 export function hcbOrgSlug(): string {
   return env.HCB_ORG_SLUG ?? "";

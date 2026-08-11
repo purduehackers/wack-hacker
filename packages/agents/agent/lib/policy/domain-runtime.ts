@@ -1,5 +1,10 @@
 import { AuditDecision } from "@repo/shared/db/enums";
-import { UserRole } from "@repo/shared/discord";
+import {
+  UserRole,
+  roleAtLeast,
+  roleFromMemberRoles,
+  type UserRole as UserRoleValue,
+} from "@repo/shared/discord";
 import {
   Forbidden,
   RateLimited,
@@ -15,12 +20,12 @@ import { z } from "zod";
 import { assertToolOutput, type JsonValue } from "../serialization.ts";
 import type { DomainToolName, DomainToolRegistry, DomainToolSpec } from "./domain-tools.ts";
 import { decideCapability } from "./engine.ts";
-import { resolveExecutionAuthority, type ExecutionAuthority } from "./execution-authority.ts";
 import { requirePrincipal } from "./principal.ts";
 import { getApprovalPolicyStore, getAuditStore, readBudgetContext } from "./stores.ts";
 import {
   CapabilityKind,
   Confirmation,
+  PolicySource,
   RiskLevel,
   type CapabilityDecision,
   type CapabilityDescriptor,
@@ -180,8 +185,7 @@ async function requestSecondPartyApproval<R extends DomainToolRegistry>(
   const stored = await getApprovalPolicyStore().putSecondParty(ctx.session.id, ctx.callId, {
     requesterUserId: principal.userId,
     mode: "second-party",
-    minApproverRole:
-      descriptor.minRole === UserRole.Public ? UserRole.Organizer : descriptor.minRole,
+    minApproverRole: expectedApproverRole(descriptor.minRole),
     tool: name,
     risk: descriptor.risk,
   });
@@ -224,6 +228,24 @@ async function approvalFor<R extends DomainToolRegistry>(
   return "user-approval";
 }
 
+interface ExecutionAuthority {
+  readonly principal: PolicyPrincipal;
+  readonly decidedBy?: string;
+}
+
+/** The role that may approve for a requester, since nobody self-approves as public. */
+function expectedApproverRole(requesterMinRole: UserRoleValue): Exclude<UserRoleValue, "public"> {
+  return requesterMinRole === UserRole.Public ? UserRole.Organizer : requesterMinRole;
+}
+
+/**
+ * Who this call executes as.
+ *
+ * Without an approval in flight that is simply the caller. With one, the
+ * approval is rebound to the requester who owns execution, and every
+ * authority-bearing field is re-checked against the durable policy record and
+ * the bot's freshly fetched Discord roles before the approver can resume it.
+ */
 async function executionAuthorityOf<R extends DomainToolRegistry>(
   adapter: DomainRuntimeAdapter<R>,
   name: DomainToolName<R>,
@@ -232,18 +254,35 @@ async function executionAuthorityOf<R extends DomainToolRegistry>(
   const current = requirePrincipal(ctx.session.auth.current);
   if (Result.isError(current)) return undefined;
   const attributes = ctx.session.auth.current?.attributes;
+
+  const requesterId = z.string().safeParse(attributes?.approvalRequesterId).data;
+  if (requesterId === undefined) return { principal: current.value };
+  const freshMemberRoles = z
+    .array(z.string())
+    .safeParse(attributes?.approvalRequesterMemberRoles).data;
+  if (freshMemberRoles === undefined) return undefined;
+
   const descriptor = descriptorOf(adapter, name);
-  return resolveExecutionAuthority({
-    current: current.value,
-    approvalRequesterId: attributes?.approvalRequesterId,
-    approvalRequesterMemberRoles: attributes?.approvalRequesterMemberRoles,
-    sessionId: ctx.session.id,
-    callId: ctx.callId,
-    tool: name,
-    risk: descriptor.risk,
-    requesterMinRole: descriptor.minRole,
-    approvalPolicies: getApprovalPolicyStore(),
-  });
+  const policy = await getApprovalPolicyStore().read(ctx.session.id, ctx.callId);
+  if (
+    Result.isError(policy) ||
+    policy.value === undefined ||
+    policy.value.requesterUserId !== requesterId ||
+    policy.value.tool !== name ||
+    policy.value.risk !== descriptor.risk ||
+    policy.value.minApproverRole !== expectedApproverRole(descriptor.minRole) ||
+    current.value.userId === requesterId ||
+    !roleAtLeast(current.value.role, policy.value.minApproverRole)
+  ) {
+    return undefined;
+  }
+
+  const requesterAccess = roleFromMemberRoles(freshMemberRoles);
+  if (!roleAtLeast(requesterAccess, descriptor.minRole)) return undefined;
+  return {
+    principal: { userId: requesterId, role: requesterAccess, source: PolicySource.Chat },
+    decidedBy: current.value.userId,
+  };
 }
 
 /** The denial subject reported to the model when policy refuses execution. */
