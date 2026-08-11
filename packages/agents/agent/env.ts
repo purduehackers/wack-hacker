@@ -91,7 +91,11 @@ export const env = createEnv({
     SHIP_API_KEY: secret.optional(),
     PHACK_API_TOKEN: secret.optional(),
     GROQ_API_KEY: secret.optional(),
-    /** Omit all three on Vercel to use project OIDC for the Sandbox API. */
+    /**
+     * Omit `VERCEL_TOKEN` to use the deployment's OIDC identity for the Sandbox
+     * API. `VERCEL_PROJECT_ID` is injected by Vercel itself, so its presence
+     * means nothing about intent — only the token does.
+     */
     VERCEL_TOKEN: secret.optional(),
     VERCEL_TEAM_ID: secret.optional(),
     VERCEL_PROJECT_ID: secret.optional(),

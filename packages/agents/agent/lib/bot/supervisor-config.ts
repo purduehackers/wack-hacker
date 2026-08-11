@@ -40,24 +40,30 @@ function required(value: string | undefined, field: keyof BotProcessEnvironment)
 /**
  * Explicit Vercel credentials, or nothing at all.
  *
- * A partial set is rejected rather than merged with OIDC: two of three
- * variables means someone intended token auth and mistyped a name, and
+ * The *token* decides which mode this is, not the presence of any of the three.
+ * `VERCEL_PROJECT_ID` is a system variable Vercel injects into every runtime, so
+ * a rule of "all three absent means OIDC" can never be satisfied on Vercel —
+ * which was the only platform it existed for. It failed every reconcile with
+ * `InvalidBotSandboxConfig` instead, and the bot was never provisioned.
+ *
+ * A partial set is still rejected once a token is present: a token without its
+ * team or project means someone intended token auth and mistyped a name, and
  * silently falling back would authenticate as the wrong identity.
  */
 function credentials(source: AgentEnv): BotSandboxCredentials | undefined {
-  const configured = [source.VERCEL_TOKEN, source.VERCEL_TEAM_ID, source.VERCEL_PROJECT_ID];
-  if (configured.every((entry) => entry === undefined)) return undefined;
-  if (configured.some((entry) => entry === undefined)) {
+  const token = source.VERCEL_TOKEN;
+  // No token: authenticate with the deployment's own OIDC identity, whatever
+  // ambient ids the platform happens to have set.
+  if (token === undefined) return undefined;
+  const teamId = source.VERCEL_TEAM_ID;
+  const projectId = source.VERCEL_PROJECT_ID;
+  if (teamId === undefined || projectId === undefined) {
     throw new InvalidBotSandboxConfig({
       field: "credentials",
-      detail: "VERCEL_TOKEN, VERCEL_TEAM_ID, and VERCEL_PROJECT_ID must be set together",
+      detail: "VERCEL_TOKEN requires VERCEL_TEAM_ID and VERCEL_PROJECT_ID to be set with it",
     });
   }
-  return {
-    token: source.VERCEL_TOKEN ?? "",
-    teamId: source.VERCEL_TEAM_ID ?? "",
-    projectId: source.VERCEL_PROJECT_ID ?? "",
-  };
+  return { token, teamId, projectId };
 }
 
 function botEnvironment(source: AgentEnv): BotProcessEnvironment {
