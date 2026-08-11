@@ -1,3 +1,4 @@
+import { AuditDecision } from "@repo/shared/db/enums";
 import { serializeError } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { defineHook } from "eve/hooks";
@@ -6,9 +7,6 @@ import type { AuditStore } from "./audit.ts";
 import { requirePrincipal } from "./principal.ts";
 import { getAuditStore } from "./stores.ts";
 import type { CapabilityDescriptor } from "./types.ts";
-
-type AuditDecisionValues = typeof import("@repo/shared/db").AuditDecision;
-const REQUESTED = "requested" satisfies AuditDecisionValues["Requested"];
 
 export interface DomainAuditHookAdapter<N extends string> {
   readonly descriptorForTool: (name: N) => CapabilityDescriptor;
@@ -41,7 +39,7 @@ export function defineDomainAuditHook<N extends string>(adapter: DomainAuditHook
             tool: action.toolName,
             risk: descriptor.risk,
             input: adapter.redactInput ? { redacted: true } : action.input,
-            decision: REQUESTED,
+            decision: AuditDecision.Requested,
           });
           if (Result.isError(recorded)) {
             console.warn(

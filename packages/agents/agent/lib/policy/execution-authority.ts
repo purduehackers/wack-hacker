@@ -5,17 +5,10 @@ import {
   type UserRole as UserRoleValue,
 } from "@repo/shared/discord";
 import { Result } from "@repo/shared/result";
-import type { SessionAuthContext } from "eve/context";
 import { z } from "zod";
 
 import type { ApprovalPolicyStore } from "./approval-record.ts";
-import { PolicySource, type PolicyPrincipal, type RiskLevel } from "./types.ts";
-
-/**
- * One entry of Eve's authenticated attribute bag: a single string or a list of
- * strings. The narrowing below is therefore load-bearing, not a formality.
- */
-type AuthAttribute = SessionAuthContext["attributes"][string];
+import { PolicySource, type AuthAttribute, type PolicyPrincipal, type RiskLevel } from "./types.ts";
 
 export interface ExecutionAuthority {
   readonly principal: PolicyPrincipal;

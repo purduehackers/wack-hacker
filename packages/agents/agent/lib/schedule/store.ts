@@ -655,13 +655,7 @@ let defaultStore: Promise<ScheduleStore> | undefined;
 /** Defers Drizzle/libSQL loading until execution; Eve evaluates authored modules at discovery. */
 export function getScheduleStore(): Promise<ScheduleStore> {
   defaultStore ??= Promise.all([import("@repo/shared/db"), import("../../env.ts")]).then(
-    ([{ getDb }, { env }]) =>
-      createScheduleStore({
-        db: getDb({
-          url: env.TURSO_DATABASE_URL,
-          ...(env.TURSO_AUTH_TOKEN === undefined ? {} : { authToken: env.TURSO_AUTH_TOKEN }),
-        }),
-      }),
+    ([{ getDb }, { tursoConfig }]) => createScheduleStore({ db: getDb(tursoConfig()) }),
   );
   return defaultStore;
 }

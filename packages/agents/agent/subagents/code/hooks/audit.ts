@@ -1,13 +1,14 @@
 import { createHash } from "node:crypto";
 
-import { AuditDecision } from "@repo/shared/db";
+import { AuditDecision } from "@repo/shared/db/enums";
 import { serializeError } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { defineHook } from "eve/hooks";
 import { z } from "zod";
 
-import { env } from "../../../env.ts";
-import { createAuditStore, requirePrincipal, RiskLevel } from "../../../lib/policy/index.ts";
+import { requirePrincipal } from "../../../lib/policy/principal.ts";
+import { getAuditStore } from "../../../lib/policy/stores.ts";
+import { RiskLevel } from "../../../lib/policy/types.ts";
 import type { JsonValue } from "../../../lib/serialization.ts";
 
 /**
@@ -43,11 +44,6 @@ const jsonKind = z.union([
   // objects and `null` alike land here, exactly as `typeof` reported them.
   z.unknown().transform(() => "object" as const),
 ]);
-const audit = createAuditStore({
-  url: env.TURSO_DATABASE_URL,
-  ...(env.TURSO_AUTH_TOKEN === undefined ? {} : { authToken: env.TURSO_AUTH_TOKEN }),
-});
-
 function isCodeTool(value: string): value is CodeToolName {
   return Object.hasOwn(tools, value);
 }
@@ -72,10 +68,19 @@ async function record(
   current: Parameters<typeof requirePrincipal>[0],
   tool: CodeToolName,
   input: JsonValue,
-  decision: (typeof AuditDecision)[keyof typeof AuditDecision],
+  decision: AuditDecision,
 ): Promise<void> {
   const principal = requirePrincipal(current);
   if (Result.isError(principal)) return;
+  // Resolved here rather than at module scope, so the delegated code surface
+  // does not pull libSQL into the boot path for turns that never audit.
+  let audit: Awaited<ReturnType<typeof getAuditStore>>;
+  try {
+    audit = await getAuditStore();
+  } catch (cause) {
+    console.warn("Code action audit unavailable", cause);
+    return;
+  }
   const outcome = await audit.record({
     id,
     principal: principal.value,

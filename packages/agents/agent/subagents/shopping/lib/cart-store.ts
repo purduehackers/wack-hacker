@@ -1,15 +1,12 @@
 import { getDb, shoppingCartItems, shoppingCarts } from "@repo/shared/db";
 
-import { env } from "../../../env.ts";
+import { tursoConfig } from "../../../env.ts";
 import type { CartMutation, CartSnapshot, NewCartItemInput } from "./shopping-types.ts";
 
 const GLOBAL_CART_ID = "global";
 
 function db() {
-  return getDb({
-    url: env.TURSO_DATABASE_URL,
-    ...(env.TURSO_AUTH_TOKEN === undefined ? {} : { authToken: env.TURSO_AUTH_TOKEN }),
-  });
+  return getDb(tursoConfig());
 }
 
 function now(): string {

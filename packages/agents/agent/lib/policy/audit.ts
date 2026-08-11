@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
 
-import { AuditDecision, actionAudit, getDb } from "@repo/shared/db";
+import { actionAudit, getDb } from "@repo/shared/db";
 import type { Db, TursoConfig } from "@repo/shared/db";
+import type { AuditDecision } from "@repo/shared/db/enums";
 import { Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 
@@ -39,7 +40,7 @@ export interface ActionAuditRecord {
   readonly risk: RiskLevel;
   readonly input: unknown;
   readonly reason?: string;
-  readonly decision: (typeof AuditDecision)[keyof typeof AuditDecision];
+  readonly decision: AuditDecision;
   readonly decidedBy?: string;
   readonly traceId?: string;
 }
@@ -97,8 +98,4 @@ export class AuditStore {
       },
     });
   }
-}
-
-export function createAuditStore(config: TursoConfig): AuditStore {
-  return new AuditStore(config);
 }

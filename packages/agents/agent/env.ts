@@ -102,3 +102,17 @@ export const env = createEnv({
 });
 
 export type AgentEnv = typeof env;
+
+/**
+ * Turso connection settings, in the shape `getDb`/`createClient` take.
+ *
+ * `TURSO_AUTH_TOKEN` is optional and `exactOptionalPropertyTypes` refuses a
+ * present-but-undefined key, so the conditional spread is mandatory rather than
+ * stylistic — which is why four call sites had each written their own copy.
+ */
+export function tursoConfig(): { readonly url: string; readonly authToken?: string } {
+  return {
+    url: env.TURSO_DATABASE_URL,
+    ...(env.TURSO_AUTH_TOKEN === undefined ? {} : { authToken: env.TURSO_AUTH_TOKEN }),
+  };
+}

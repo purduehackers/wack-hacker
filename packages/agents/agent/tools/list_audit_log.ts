@@ -5,7 +5,7 @@ import { UpstreamError } from "@repo/shared/errors";
 import { defineDynamic, defineTool } from "eve/tools";
 import { z } from "zod";
 
-import { env } from "../env.ts";
+import { env, tursoConfig } from "../env.ts";
 import { redactAuditPreview } from "../lib/json.ts";
 import { authorizeCoreTool, coreToolFailure, isCoreToolVisible } from "../lib/policy/core-tools.ts";
 import { PolicySource, RiskLevel } from "../lib/policy/types.ts";
@@ -57,8 +57,7 @@ let auditClient: ReturnType<typeof createClient> | undefined;
 
 function getAuditClient() {
   auditClient ??= createClient({
-    url: env.TURSO_DATABASE_URL,
-    ...(env.TURSO_AUTH_TOKEN === undefined ? {} : { authToken: env.TURSO_AUTH_TOKEN }),
+    ...tursoConfig(),
   });
   return auditClient;
 }

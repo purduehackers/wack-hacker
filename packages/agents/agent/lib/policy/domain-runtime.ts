@@ -1,3 +1,4 @@
+import { AuditDecision } from "@repo/shared/db/enums";
 import { UserRole } from "@repo/shared/discord";
 import {
   Forbidden,
@@ -16,29 +17,16 @@ import type { DomainToolName, DomainToolRegistry, DomainToolSpec } from "./domai
 import { decideCapability } from "./engine.ts";
 import { resolveExecutionAuthority, type ExecutionAuthority } from "./execution-authority.ts";
 import { requirePrincipal } from "./principal.ts";
-import { getApprovalPolicyStore, getAuditStore, getBudgetStore } from "./stores.ts";
+import { getApprovalPolicyStore, getAuditStore, readBudgetContext } from "./stores.ts";
 import {
   CapabilityKind,
   Confirmation,
   RiskLevel,
   type CapabilityDecision,
   type CapabilityDescriptor,
-  type PolicyEvaluationContext,
   type PolicyPrincipal,
 } from "./types.ts";
 
-type AuditDecisionValues = typeof import("@repo/shared/db").AuditDecision;
-const AUDIT_DECISIONS = {
-  Requested: "requested",
-  Approved: "approved",
-  Denied: "denied",
-  Executed: "executed",
-  Failed: "failed",
-} as const satisfies Pick<
-  AuditDecisionValues,
-  "Requested" | "Approved" | "Denied" | "Executed" | "Failed"
->;
-type AuditDecision = (typeof AUDIT_DECISIONS)[keyof typeof AUDIT_DECISIONS];
 type AuditStore = import("./audit.ts").AuditStore;
 type ProviderFailure = RateLimited | Transient | UpstreamError;
 
@@ -118,20 +106,6 @@ function descriptorOf<R extends DomainToolRegistry>(
   };
 }
 
-async function evaluationContextOf<R extends DomainToolRegistry>(
-  adapter: DomainRuntimeAdapter<R>,
-  principal: PolicyPrincipal,
-): Promise<PolicyEvaluationContext> {
-  if (principal.role !== UserRole.Public) return {};
-  const budget = await getBudgetStore().read(principal.userId);
-  if (Result.isError(budget)) {
-    // The budget backend is the policy spine's sole fail-open dependency.
-    console.warn(`${adapter.domain} budget lookup unavailable`, serializeError(budget.error));
-    return {};
-  }
-  return { budget: budget.value };
-}
-
 interface AuditEntry<R extends DomainToolRegistry> {
   readonly adapter: DomainRuntimeAdapter<R>;
   readonly principal: PolicyPrincipal;
@@ -174,7 +148,7 @@ async function visibleToolNamesOf<R extends DomainToolRegistry>(
 ): Promise<DomainToolName<R>[]> {
   const principal = requirePrincipal(current);
   if (Result.isError(principal)) return [];
-  const context = await evaluationContextOf(adapter, principal.value);
+  const context = await readBudgetContext(principal.value, adapter.domain);
   return candidates.filter((toolName): toolName is DomainToolName<R> => {
     if (!hasToolName(adapter, toolName)) return false;
     const decision = decideCapability(principal.value, descriptorOf(adapter, toolName), context);
@@ -213,10 +187,10 @@ async function requestSecondPartyApproval<R extends DomainToolRegistry>(
   });
   const entry = { adapter, principal, name, input: ctx.toolInput, decidedBy: undefined };
   if (Result.isError(stored)) {
-    await recordAudit({ ...entry, decision: AUDIT_DECISIONS.Denied });
+    await recordAudit({ ...entry, decision: AuditDecision.Denied });
     return { type: "denied", reason: "Second-party approval policy could not be persisted." };
   }
-  await recordAudit({ ...entry, decision: AUDIT_DECISIONS.Requested });
+  await recordAudit({ ...entry, decision: AuditDecision.Requested });
   return "user-approval";
 }
 
@@ -229,7 +203,7 @@ async function approvalFor<R extends DomainToolRegistry>(
   if (Result.isError(principal)) {
     return { type: "denied", reason: principal.error.message };
   }
-  const context = await evaluationContextOf(adapter, principal.value);
+  const context = await readBudgetContext(principal.value, adapter.domain);
   const decision = decideCapability(principal.value, descriptorOf(adapter, name), context);
   const entry = {
     adapter,
@@ -239,14 +213,14 @@ async function approvalFor<R extends DomainToolRegistry>(
     decidedBy: undefined,
   };
   if (Result.isError(decision) || !decision.value.execute || decision.value.approve === "deny") {
-    await recordAudit({ ...entry, decision: AUDIT_DECISIONS.Denied });
+    await recordAudit({ ...entry, decision: AuditDecision.Denied });
     return { type: "denied", reason: approvalDenialReason(adapter, decision) };
   }
   if (decision.value.approve === Confirmation.None) return "not-applicable";
   if (decision.value.approve === Confirmation.SecondParty) {
     return await requestSecondPartyApproval(adapter, name, ctx, principal.value);
   }
-  await recordAudit({ ...entry, decision: AUDIT_DECISIONS.Requested });
+  await recordAudit({ ...entry, decision: AuditDecision.Requested });
   return "user-approval";
 }
 
@@ -318,13 +292,13 @@ async function executeToolFor<R extends DomainToolRegistry>(
   }
   const principal = authority.principal;
   const entry = { adapter, principal, name, input, decidedBy: authority.decidedBy };
-  const policyContext = await evaluationContextOf(adapter, principal);
+  const policyContext = await readBudgetContext(principal, adapter.domain);
   const decision = decideCapability(principal, descriptorOf(adapter, name), policyContext);
   if (Result.isError(decision)) {
     return { ok: false, error: serializeError(decision.error) };
   }
   if (!decision.value.execute || decision.value.approve === "deny") {
-    await recordAudit({ ...entry, decision: AUDIT_DECISIONS.Denied });
+    await recordAudit({ ...entry, decision: AuditDecision.Denied });
     return denied(
       executionDenialSubject(adapter, name, decision.value.denial),
       principal.role,
@@ -332,13 +306,13 @@ async function executeToolFor<R extends DomainToolRegistry>(
     );
   }
   if (authority.decidedBy !== undefined) {
-    await recordAudit({ ...entry, decision: AUDIT_DECISIONS.Approved });
+    await recordAudit({ ...entry, decision: AuditDecision.Approved });
   }
 
   const configurationError =
     missingCredential(adapter, name) ?? adapter.configurationError?.(name, input);
   if (configurationError !== undefined) {
-    await recordAudit({ ...entry, decision: AUDIT_DECISIONS.Failed });
+    await recordAudit({ ...entry, decision: AuditDecision.Failed });
     return { ok: false, error: serializeError(configurationError) };
   }
 
@@ -352,10 +326,10 @@ async function executeToolFor<R extends DomainToolRegistry>(
   }
   const result = await runToolExecution(adapter, spec, name, parsed.data, ctx);
   if (Result.isError(result)) {
-    await recordAudit({ ...entry, decision: AUDIT_DECISIONS.Failed });
+    await recordAudit({ ...entry, decision: AuditDecision.Failed });
     return { ok: false, error: serializeError(result.error) };
   }
-  await recordAudit({ ...entry, decision: AUDIT_DECISIONS.Executed });
+  await recordAudit({ ...entry, decision: AuditDecision.Executed });
   return result.value;
 }
 

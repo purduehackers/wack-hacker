@@ -5,14 +5,14 @@ import { Result } from "@repo/shared/result";
 import type { SessionAuthContext } from "eve/context";
 import type { ApprovalStatus } from "eve/tools/approval";
 
+import { decideCapability } from "../../../lib/policy/engine.ts";
+import { requirePrincipal } from "../../../lib/policy/principal.ts";
 import {
   CapabilityKind,
   Confirmation,
   RiskLevel,
-  decideCapability,
-  requirePrincipal,
   type CapabilityDecision,
-} from "../../../lib/policy/index.ts";
+} from "../../../lib/policy/types.ts";
 import { codeWorkspaceState } from "./state.ts";
 
 type MutationRisk = typeof RiskLevel.Write | typeof RiskLevel.Destructive;

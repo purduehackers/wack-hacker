@@ -1,6 +1,13 @@
-import { ConfirmMode, PolicySource, RiskLevel } from "@repo/shared/db";
-import type { ConfirmMode as ConfirmationValue } from "@repo/shared/db";
+import { ConfirmMode, PolicySource, RiskLevel } from "@repo/shared/db/enums";
+import type { ConfirmMode as ConfirmationValue } from "@repo/shared/db/enums";
 import type { UserRole } from "@repo/shared/discord";
+import type { SessionAuthContext } from "eve/context";
+
+/**
+ * One entry of Eve's authenticated attribute bag: a single string or a list of
+ * strings. Every narrowing of one is therefore load-bearing, not a formality.
+ */
+export type AuthAttribute = SessionAuthContext["attributes"][string];
 
 export const CapabilityKind = {
   Subagent: "subagent",

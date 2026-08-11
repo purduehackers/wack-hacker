@@ -1,6 +1,6 @@
 import { defineAgent, defineDynamic } from "eve";
 
-import { subagentDiscoverable } from "../../lib/policy/index.ts";
+import { subagentDiscoverable } from "../../lib/policy/discovery.ts";
 import { SUBAGENT_OUTPUT_SCHEMA } from "../../lib/subagent-output.ts";
 import { OUTREACH_RUNTIME } from "./lib/runtime.ts";
 

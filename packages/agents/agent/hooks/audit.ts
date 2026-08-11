@@ -1,11 +1,12 @@
-import { AuditDecision } from "@repo/shared/db";
+import { AuditDecision } from "@repo/shared/db/enums";
 import { serializeError } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { defineHook } from "eve/hooks";
 
-import { env } from "../env.ts";
 import { CORE_TOOL_DESCRIPTORS } from "../lib/descriptors.ts";
-import { createAuditStore, requirePrincipal, RiskLevel } from "../lib/policy/index.ts";
+import { requirePrincipal } from "../lib/policy/principal.ts";
+import { getAuditStore } from "../lib/policy/stores.ts";
+import { RiskLevel } from "../lib/policy/types.ts";
 import type { JsonValue } from "../lib/serialization.ts";
 
 const risks = {
@@ -18,11 +19,6 @@ const risks = {
   list_scheduled_tasks: RiskLevel.Read,
 } as const;
 type AuditedTool = keyof typeof risks;
-const audit = createAuditStore({
-  url: env.TURSO_DATABASE_URL,
-  ...(env.TURSO_AUTH_TOKEN === undefined ? {} : { authToken: env.TURSO_AUTH_TOKEN }),
-});
-
 function isAuditedTool(value: string): value is AuditedTool {
   return Object.hasOwn(risks, value);
 }
@@ -38,10 +34,20 @@ async function record(
   current: Parameters<typeof requirePrincipal>[0],
   tool: AuditedTool,
   input: JsonValue | ToolResultAudit,
-  decision: (typeof AuditDecision)[keyof typeof AuditDecision],
+  decision: AuditDecision,
 ): Promise<void> {
   const principal = requirePrincipal(current);
   if (Result.isError(principal)) return;
+  // Resolved here rather than at module scope: this hook loads on every cold
+  // start, and building the store eagerly pulls libSQL into the boot path for
+  // turns that never write an audit row.
+  let audit: Awaited<ReturnType<typeof getAuditStore>>;
+  try {
+    audit = await getAuditStore();
+  } catch (cause) {
+    console.warn("Root action audit unavailable", cause);
+    return;
+  }
   const outcome = await audit.record({
     id,
     principal: principal.value,

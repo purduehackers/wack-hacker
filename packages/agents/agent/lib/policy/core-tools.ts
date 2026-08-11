@@ -6,26 +6,16 @@ import {
   httpStatusOf,
   serializeError,
 } from "@repo/shared/errors";
-import { getRedis } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
 import type { SessionAuthContext } from "eve/context";
 import type { ToolContext } from "eve/tools";
-import { z } from "zod";
 
 import { env } from "../../env.ts";
 import { CORE_TOOL_DESCRIPTORS, type CoreToolName } from "../descriptors.ts";
 import { isGlobalConfigConnectionConfigured } from "../global-config.ts";
-import { BudgetStore } from "./budget.ts";
 import { decideCapability } from "./engine.ts";
 import { requirePrincipal } from "./principal.ts";
-import type { PolicyEvaluationContext, PolicyPrincipal } from "./types.ts";
-
-let budgetStore: BudgetStore | undefined;
-
-/** The audit log needs a real database URL, not merely a declared one. */
-const configuredUrl = z.string().min(1);
-/** Redis credentials are passed through verbatim; only their presence is in question. */
-const configuredCredential = z.string();
+import { readBudgetContext } from "./stores.ts";
 
 function integrationConfigured(name: CoreToolName): boolean {
   switch (name) {
@@ -38,23 +28,10 @@ function integrationConfigured(name: CoreToolName): boolean {
         env.GLOBAL_CONFIG !== undefined && isGlobalConfigConnectionConfigured(env.GLOBAL_CONFIG)
       );
     case "list_audit_log":
-      return configuredUrl.safeParse(env.TURSO_DATABASE_URL).success;
+      // `TURSO_DATABASE_URL` is required by `env.ts`, so the audit log is
+      // configured whenever the process started at all.
+      return true;
   }
-}
-
-async function evaluationContext(principal: PolicyPrincipal): Promise<PolicyEvaluationContext> {
-  const url = configuredCredential.safeParse(env.UPSTASH_REDIS_REST_URL);
-  if (!url.success) return {};
-  const token = configuredCredential.safeParse(env.UPSTASH_REDIS_REST_TOKEN);
-  if (!token.success) return {};
-  budgetStore ??= new BudgetStore(getRedis({ url: url.data, token: token.data }));
-  const budget = await budgetStore.read(principal.userId);
-  if (Result.isError(budget)) {
-    // Budget is the policy spine's sole fail-open dependency.
-    console.warn("core tool budget lookup unavailable");
-    return {};
-  }
-  return { budget: budget.value };
 }
 
 /** Role-gated discovery is resolved from the current Eve delivery on every turn. */
@@ -93,7 +70,7 @@ export async function authorizeCoreTool(name: CoreToolName, ctx: ToolContext) {
   const decision = decideCapability(
     principal.value,
     CORE_TOOL_DESCRIPTORS[name],
-    await evaluationContext(principal.value),
+    await readBudgetContext(principal.value, "core tool"),
   );
   if (Result.isError(decision)) {
     return {
