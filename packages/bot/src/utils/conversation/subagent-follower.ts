@@ -1,5 +1,5 @@
 /**
- * Follows a child session's stream so a delegated turn stops looking dead.
+ * Follows the session's own stream so a delegated turn stops looking dead.
  *
  * A declared subagent runs in its own session. The parent's stream carries only
  * `subagent.called` and `subagent.completed`, and the parent is suspended for
@@ -21,8 +21,19 @@ import { z } from "zod";
 
 import type { ConversationFlowDeps } from "./types.ts";
 
-/** Child events worth showing. Anything else is noise at this distance. */
-const SHOWN = new Set(["action.started", "message.completed", "step.started"]);
+/**
+ * Parent-stream events worth showing while a delegation runs.
+ *
+ * `subagent.called` and `subagent.completed` are the delegation's own
+ * boundaries; the action events cover what the turn does around them. Anything
+ * else is noise at this distance.
+ */
+const SHOWN = new Set([
+  "subagent.called",
+  "subagent.completed",
+  "actions.requested",
+  "action.result",
+]);
 
 const MAX_LINE = 200;
 
@@ -39,26 +50,31 @@ const running = new Map<string, Follower>();
  * so an unrecognised shape must render nothing rather than throw. Only the two
  * fields worth showing are named.
  */
-const childEventSchema = z.looseObject({
+const streamEventSchema = z.looseObject({
   type: z.string(),
   data: z
     .looseObject({
-      actions: z.array(z.looseObject({ toolName: z.string() })).optional(),
-      message: z.string().optional(),
+      name: z.string().optional(),
+      output: z.string().optional(),
+      actions: z
+        .array(
+          z.looseObject({ toolName: z.string().optional(), subagentName: z.string().optional() }),
+        )
+        .optional(),
     })
     .optional(),
 });
 
-type ChildEvent = z.output<typeof childEventSchema>;
+type StreamEvent = z.output<typeof streamEventSchema>;
 
-function summarize(subagent: string, event: ChildEvent): string | undefined {
+function summarize(subagent: string, event: StreamEvent): string | undefined {
   if (!SHOWN.has(event.type)) return undefined;
-  const tools = event.data?.actions?.map((action) => action.toolName) ?? [];
-  if (tools.length > 0) return `${subagent}: ${tools.join(", ")}`;
-  const said = event.data?.message?.trim();
-  return said === undefined || said === ""
-    ? undefined
-    : `${subagent}: ${said.replaceAll(/\s+/gu, " ")}`;
+  if (event.type === "subagent.called") return `${event.data?.name ?? subagent} started`;
+  if (event.type === "subagent.completed") return `${event.data?.name ?? subagent} finished`;
+  const named = (event.data?.actions ?? [])
+    .map((action) => action.subagentName ?? action.toolName)
+    .filter((entry): entry is string => entry !== undefined);
+  return named.length === 0 ? undefined : `${subagent}: ${named.join(", ")}`;
 }
 
 /**
@@ -86,7 +102,7 @@ async function follow({
   signal,
   onLine,
 }: FollowInput): Promise<void> {
-  const url = new URL(`/eve/v1/session/${delegation.childSessionId}/stream`, deps.eve.baseUrl);
+  const url = new URL(`/eve/v1/session/${delegation.sessionId}/stream`, deps.eve.baseUrl);
   const response = await fetch(url, {
     headers: { Authorization: `Bearer ${delegation.streamToken}` },
     signal,
@@ -107,7 +123,7 @@ async function follow({
       buffered = complete.pop() ?? "";
       for (const line of complete) {
         if (!line.startsWith("data:")) continue;
-        const parsed = childEventSchema.safeParse(jsonText.safeParse(line.slice(5)).data);
+        const parsed = streamEventSchema.safeParse(jsonText.safeParse(line.slice(5)).data);
         if (!parsed.success) continue;
         const summary = summarize(delegation.name, parsed.data);
         if (summary === undefined) continue;
@@ -147,7 +163,7 @@ export function followSubagent(
         status: "error",
         errorTag: "FollowFailed",
         errorMessage: cause instanceof Error ? cause.message : String(cause),
-        attributes: { dispatchId, childSessionId: delegation.childSessionId },
+        attributes: { dispatchId, sessionId: delegation.sessionId },
       });
     })
     .finally(() => {

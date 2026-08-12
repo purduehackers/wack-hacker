@@ -8,20 +8,24 @@ import { z } from "zod";
 import { env } from "../env.ts";
 
 /**
- * Publishes the address of the child session a delegated turn is waiting on.
+ * Announces that this turn has handed work to a subagent, and hands over a
+ * token for reading its stream.
  *
- * A declared subagent runs in its own session. The parent's stream carries only
- * `subagent.called` and `subagent.completed`, and everything between happens on
- * the child's stream — which the parent cannot read, because it is suspended for
- * exactly that span. Something that holds sockets has to read it instead, and
- * this is how that something learns the address.
+ * A delegated turn goes silent from outside: the parent suspends while the child
+ * runs, publishes no renders, and is reclaimed by the sweep as though it had
+ * died. Something has to watch, and the only side that can hold a stream is the
+ * bot — which has no Vercel identity of its own, so the token is minted here,
+ * inside a function, and left where the bot will look.
  *
- * A hook rather than a channel handler because `ChannelEvents` does not carry
- * the subagent events at all; only `HookEventMap` does.
+ * **On `actions.requested`, not `subagent.called`.** The latter never reaches a
+ * hook: eve dispatches it through `callAdapterEventHandler` to the channel
+ * adapter and onto the parent's event stream, and authored `ChannelEvents` does
+ * not carry it either. A probe on both settled it — `actions.requested` fires
+ * with `kind: "subagent-call"`, and `subagent.called` does not fire at all.
  *
- * Keyed by delivery, not by conversation: the same conversation's next turn
- * delegates separately, and a stale address would have the reader following a
- * child that finished two turns ago.
+ * That costs the child's session id, which is only on the stream. It is not
+ * needed: the parent's own stream carries the delegation's boundaries, and the
+ * parent session id is already on the active record. The bot follows the parent.
  */
 
 const conversations = createConversationStore({
@@ -42,19 +46,20 @@ function dispatchOf(attributes: AuthAttributes | undefined): string | undefined 
 
 export default defineHook({
   events: {
-    async "subagent.called"(event, ctx) {
+    async "actions.requested"(event, ctx) {
+      const delegated = event.data.actions.filter(
+        (action) => action.kind === "subagent-call" || action.kind === "remote-agent-call",
+      );
+      if (delegated.length === 0) return;
+
       const dispatchId = dispatchOf(ctx.session.auth.current?.attributes);
       if (dispatchId === undefined) return;
-      // Minted here because here is a Vercel function. The reader is not: the
-      // bot is a long-lived sandbox process with no Vercel identity of its own,
-      // so it cannot ask for one and has to be handed one. Twelve hours covers
-      // any delegation, which is why this is a single mint and not a refresh
-      // path. A mint that fails costs the progress relay, not the turn.
+
+      // A mint that fails costs the watch, not the turn.
       const streamToken = await getVercelOidcToken().catch((cause: unknown) => {
         console.warn(
           JSON.stringify({
             event: "subagent.token_unavailable",
-            childSessionId: event.data.childSessionId,
             reason: cause instanceof Error ? cause.message : String(cause),
           }),
         );
@@ -62,16 +67,22 @@ export default defineHook({
       });
       if (streamToken === undefined) return;
 
+      const first = delegated[0];
       await conversations.subagents.begin(dispatchId, {
-        childSessionId: event.data.childSessionId,
-        name: event.data.name,
-        callId: event.data.callId,
+        sessionId: ctx.session.id,
+        name:
+          first?.kind === "subagent-call"
+            ? first.subagentName
+            : first?.kind === "remote-agent-call"
+              ? first.remoteAgentName
+              : "subagent",
+        callId: first?.callId ?? "unknown",
         streamToken,
         startedAt: new Date().toISOString(),
       });
     },
 
-    async "subagent.completed"(_event, ctx) {
+    async "turn.completed"(_event, ctx) {
       const dispatchId = dispatchOf(ctx.session.auth.current?.attributes);
       if (dispatchId === undefined) return;
       await conversations.subagents.end(dispatchId);

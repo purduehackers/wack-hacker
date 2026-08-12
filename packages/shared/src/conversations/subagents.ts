@@ -29,8 +29,15 @@ import { subagentKey } from "./keys.ts";
 const DELEGATION_TTL_SECONDS = 6 * 60 * 60;
 
 const delegationSchema = z.strictObject({
-  /** Address of the child's own event stream. */
-  childSessionId: z.string().min(1).max(128),
+  /**
+   * The session whose stream carries this delegation's progress.
+   *
+   * The parent's, not the child's. A child's session id exists only on the
+   * parent's event stream, and the event carrying it never reaches a hook — but
+   * the parent's stream is where its boundaries appear anyway, so following the
+   * parent is both sufficient and the only thing reachable from here.
+   */
+  sessionId: z.string().min(1).max(128),
   /** What to call it in the channel: "code", "github", … */
   name: z.string().min(1).max(64),
   /** Which call this is, so a second delegation replaces rather than duplicates. */
