@@ -745,11 +745,28 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
       });
     },
 
-    async "turn.cancelled"(_data, channel) {
-      // Steered out of the way. The replacement turn paints over this, so the
-      // only job here is to drop the status line rather than leave the previous
-      // turn's "delegating to…" spinning under the new answer.
-      channel.state.activity = "";
+    async "turn.cancelled"(data, channel, ctx) {
+      // Steered out of the way — and this has to release the delivery, because
+      // nothing else will. `session.completed` does not follow a cancellation,
+      // so the queue release that normally rides on it never happens: the
+      // active record stays live, the message that did the steering is never
+      // claimed, and the conversation is held until its lease expires. That is
+      // what "steering breaks the agent" looked like — two "Thinking…" anchors,
+      // neither of which could ever finish.
+      //
+      // The earlier note here said the replacement turn would paint over this.
+      // It cannot. The replacement turn is the thing being blocked.
+      const state = channel.state;
+      state.activity = "";
+      state.finalRenderPhase ??= "completed";
+      state.finalRenderFooter ??= renderFooter({
+        referenceId: ctx.session.id.slice(-8),
+        ...(state.turnStartedAt === undefined
+          ? {}
+          : { durationMs: Date.now() - state.turnStartedAt }),
+        toolCalls: state.toolCalls,
+      });
+      await settleAndNotifyParked(state, ctx.session.id, data.turnId);
     },
 
     async "turn.failed"(data, channel) {
