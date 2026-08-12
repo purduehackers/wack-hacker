@@ -197,6 +197,51 @@ the endpoint. The first real `code_task` after this is the actual test — watch
 for a `↳ code: …` line under the status line, and for the turn surviving past
 thirty minutes.
 
+## Testing the agent without Discord
+
+`eve invoke` drives a deployed agent over HTTP with no terminal:
+
+```bash
+bunx eve invoke -u https://eve.purduehackers.com --scope purdue-hackers "…"
+```
+
+Safe against production by construction: an HTTP-created session holds the
+stable ID alias and **no channel continuation token**, so it cannot write to
+Discord. It is a real session and costs real tokens; it just has no channel.
+
+### The missing half: a principal
+
+An HTTP session has no principal, so `roleFromMemberRoles` sees nothing,
+`decideCodeCapability` denies, and every interesting path — `code_task`,
+anything admin-gated, the whole subagent relay — is refused before it starts.
+Which makes the loop useless for exactly the things worth testing.
+
+What is needed is a way to say _invoke as this Discord user_:
+
+```bash
+DISCORD_IMPERSONATE_USER_ID=636701123620634653 bunx eve invoke -u … "run a code task"
+```
+
+The seam is `authFor` in `agent/channels/discord.ts`. It builds a
+`SessionAuthContext` from a `Principal` — `userId`, `username`, `nickname`,
+`memberRoles` — and `memberRoles` is the only field that matters, because
+`roleFromMemberRoles` derives the tier from it and every policy decision reads
+that. So the work is: resolve the member from `DISCORD_GUILD_ID` over Discord
+REST, build the principal from the real roles, and assert it for sessions that
+arrive without one.
+
+Fetching the roles rather than accepting them from env is deliberate. Roles
+passed in would be a way to mint an admin that does not exist; roles read from
+the guild can only ever impersonate someone who already has the access.
+
+### The gate this needs
+
+**It must be impossible in production.** Anything that lets an environment
+variable choose a principal is privilege escalation if it survives the deploy
+that matters. Gate it on the eve environment being development, and fail loudly
+rather than silently falling back to an unprivileged session — a test that
+quietly runs as nobody is worse than one that refuses to run.
+
 ## Gates
 
 ```bash
