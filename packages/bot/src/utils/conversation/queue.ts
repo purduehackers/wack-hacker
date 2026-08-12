@@ -63,6 +63,28 @@ export async function kick(
   return sent.error;
 }
 
+/**
+ * Interrupt the turn holding this conversation, if one is.
+ *
+ * Someone who types while the agent is working is correcting it, not waiting in
+ * line. Cancelling happens agent-side; this only tells it to. Failures are
+ * reported and swallowed — the message stays queued either way, and the hard
+ * cap eventually releases the conversation even if the agent is unreachable.
+ */
+async function steerHolder(deps: ConversationFlowDeps, continuationKey: string): Promise<void> {
+  const sessionId = await deps.store.queue.holder(continuationKey);
+  if (sessionId === undefined) return;
+  const steered = await deps.eve.sendSteer({ continuationKey });
+  if (Result.isOk(steered)) return;
+  deps.reporter.emit({
+    op: "agent.router.steer",
+    status: "error",
+    errorTag: tagOf(steered.error),
+    errorMessage: steered.error.message,
+    attributes: { continuationKey, sessionId },
+  });
+}
+
 export async function submitMessage(
   runtime: FlowRuntime,
   payload: MessagePayload,
@@ -71,7 +93,13 @@ export async function submitMessage(
   const submitted = await Result.tryPromise({
     try: async () => {
       await deps.store.queue.enqueue(payload);
-      return runtime.isStopped() ? undefined : kick(deps, payload.continuationKey);
+      if (runtime.isStopped()) return undefined;
+      const kicked = await kick(deps, payload.continuationKey);
+      // `kick` returns without claiming when a turn already holds this
+      // conversation. That is the case this exists for: the message is durable
+      // in the queue, and interrupting the turn is what lets the queue move.
+      await steerHolder(deps, payload.continuationKey);
+      return kicked;
     },
     catch: (cause) =>
       new Transient({

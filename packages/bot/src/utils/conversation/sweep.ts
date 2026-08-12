@@ -23,6 +23,34 @@ async function recoverActiveQueues(runtime: FlowRuntime): Promise<void> {
   for (const continuationKey of await deps.store.queue.keys()) {
     if (runtime.isStopped()) break;
     try {
+      // Before anything else: a delivery that has held this conversation past
+      // the hard cap is given up on, which is what lets a turn that died
+      // without parking stop blocking every message behind it.
+      const expired = await deps.store.queue.expireAdmission(continuationKey);
+      if (Result.isError(expired)) {
+        deps.reporter.captureDefect(expired.error, {
+          op: "agent.router.expire-admission",
+          attributes: { continuationKey },
+        });
+      } else if (expired.value !== undefined) {
+        const error = new RecoveryRequired({
+          operation: "agent delivery",
+          detail: "the turn ran past the hard cap without finishing",
+          remediation: "send the message again to retry",
+        });
+        deps.reporter.emit({
+          op: "agent.router.expire-admission",
+          status: "error",
+          errorTag: error._tag,
+          errorMessage: error.message,
+          attributes: {
+            continuationKey,
+            messageId: expired.value.messageId,
+            dispatchId: expired.value.dispatchId,
+          },
+        });
+      }
+
       const recovery = await deps.store.queue.recoverAdmission(continuationKey);
       if (Result.isError(recovery)) {
         deps.reporter.captureDefect(recovery.error, {

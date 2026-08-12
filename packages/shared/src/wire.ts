@@ -272,6 +272,20 @@ const resetPayloadSchema = z.strictObject({
 });
 
 /** Bot-internal reset request after a durable queue cutover has been installed. */
+/**
+ * Bot → agent: someone typed while a turn was running.
+ *
+ * Carries no content. The message itself is already durable in the pending
+ * queue; this only asks the agent to stop what it is doing so that queue can
+ * move. Steering used to ride on the delivery itself, which meant it could only
+ * happen after `claim` handed the delivery over — and `claim` refuses while a
+ * turn holds the conversation, so it never fired in the one situation it exists
+ * for.
+ */
+const steerRequestPayloadSchema = z.strictObject({
+  continuationKey: snowflake,
+});
+
 const resetRequestPayloadSchema = z.strictObject({
   ...resetPayloadSchema.shape,
   resetId: z.uuid(),
@@ -375,6 +389,7 @@ export type RenderAuthorization = z.output<typeof renderAuthorizationSchema>;
 export type AuthorizationChallenge = z.output<typeof authorizationChallengeSchema>;
 export type ResetPayload = z.output<typeof resetPayloadSchema>;
 export type ResetRequestPayload = z.output<typeof resetRequestPayloadSchema>;
+export type SteerRequestPayload = z.output<typeof steerRequestPayloadSchema>;
 export type ParkedPayload = z.output<typeof parkedPayloadSchema>;
 export type RenderTarget = z.output<typeof renderTargetSchema>;
 export type RenderIntent = z.output<typeof renderIntentSchema>;
@@ -419,6 +434,7 @@ export const WIRE_ROUTES = {
   message: "/discord/message",
   interaction: "/discord/interaction",
   reset: "/discord/reset",
+  steer: "/discord/steer",
 } as const;
 
 /** The bot's own internal route, called only by the agent. */
@@ -458,6 +474,12 @@ export function decodeResetRequestPayload(
   input: unknown,
 ): Result<ResetRequestPayload, InvalidInput> {
   return decode(resetRequestPayloadSchema, "reset request payload", input);
+}
+
+export function decodeSteerRequestPayload(
+  input: unknown,
+): Result<SteerRequestPayload, InvalidInput> {
+  return decode(steerRequestPayloadSchema, "steer request payload", input);
 }
 
 export function decodeParkedPayload(input: unknown): Result<ParkedPayload, InvalidInput> {

@@ -34,6 +34,7 @@ import {
   decodeDeliveryPayload,
   decodeInteractionPayload,
   decodeResetRequestPayload,
+  decodeSteerRequestPayload,
   WIRE_ROUTES,
 } from "@repo/shared/wire";
 import type {
@@ -543,6 +544,24 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
         reason: decoded.value.reason,
       });
       return Response.json({ ok: true, status: outcome.status });
+    }),
+
+    /**
+     * Someone typed while a turn was running: stop it so the queue can move.
+     *
+     * The message itself is already durable on the bot's pending queue. This
+     * only cancels, and the cancellation is what releases `agent:active` — the
+     * fence that otherwise refuses every later delivery on this conversation.
+     */
+    POST(WIRE_ROUTES.steer, async (request, { resolveSession }) => {
+      if (!botAuthenticated(request)) {
+        return createUnauthorizedResponse({ status: 401, message: "bad bearer" });
+      }
+      const decoded = decodeSteerRequestPayload(await request.json());
+      if (Result.isError(decoded)) return failed(decoded.error);
+      const { continuationKey } = decoded.value;
+      await steerActiveTurn(await resolveSession(continuationKey), continuationKey);
+      return Response.json({ ok: true, status: "accepted" });
     }),
   ],
 

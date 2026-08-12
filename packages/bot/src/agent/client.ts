@@ -25,6 +25,7 @@ import type {
   InteractionPayload,
   DeliveryPayload,
   ResetRequestPayload,
+  SteerRequestPayload,
   WireResponse,
 } from "@repo/shared/wire";
 import { z } from "zod";
@@ -34,7 +35,11 @@ import { activeTraceparent } from "../framework/observability.ts";
 export type AgentError = Transient | UpstreamError;
 
 /** Every body this client posts. Only the reset route carries no trace context. */
-type AgentRequestPayload = DeliveryPayload | InteractionPayload | ResetRequestPayload;
+type AgentRequestPayload =
+  | DeliveryPayload
+  | InteractionPayload
+  | ResetRequestPayload
+  | SteerRequestPayload;
 
 type AgentAck = Omit<Extract<WireResponse, { readonly ok: true }>, "ok">;
 
@@ -136,6 +141,9 @@ export function createAgentClient(deps: AgentClientDeps) {
 
     sendReset: async (payload: ResetRequestPayload): Promise<Result<undefined, AgentError>> =>
       post(WIRE_ROUTES.reset, payload, "agent.reset", quickRetry, decodeCommandAck),
+
+    sendSteer: async (payload: SteerRequestPayload): Promise<Result<undefined, AgentError>> =>
+      post(WIRE_ROUTES.steer, payload, "agent.steer", quickRetry, decodeCommandAck),
   };
 }
 
