@@ -43,18 +43,6 @@ export function ingressKey(continuationKey: string): string {
   return `agent:ingress:${continuationKey}`;
 }
 
-/**
- * The request a steer displaced, held until the replacement turn carries it.
- *
- * Cancelling a turn is how steering makes room, and eve's durable history
- * "keeps only what had already settled" — so the message being corrected is
- * gone by the time the correction runs. Without this the agent answers the
- * correction alone and asks what you wanted, having genuinely forgotten.
- */
-export function supersededKey(continuationKey: string): string {
-  return `agent:superseded:${continuationKey}`;
-}
-
 export function parkedKey(continuationKey: string): string {
   return `agent:parked:${continuationKey}`;
 }

@@ -6,9 +6,11 @@
  * here loops — the sweep owns repetition.
  */
 
+import type { HolderState } from "@repo/shared/conversations";
 import { tagOf, Transient } from "@repo/shared/errors";
 import type { KnownError } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
+import { sliceText } from "@repo/shared/text";
 import type {
   MessagePayload,
   ParkedPayload,
@@ -71,15 +73,32 @@ export async function kick(
  * reported and swallowed — the message stays queued either way, and the hard
  * cap eventually releases the conversation even if the agent is unreachable.
  */
-async function steerHolder(deps: ConversationFlowDeps, continuationKey: string): Promise<void> {
-  const holder = await deps.store.queue.holder(continuationKey);
-  if (holder === undefined) return;
-  // Cancelling is how room is made, and a cancelled turn's request does not
-  // survive in eve's durable history. Recorded before the cancel so the
-  // replacement turn can be told what it is correcting.
-  if (holder.content !== undefined) {
-    await deps.store.queue.markSuperseded(continuationKey, holder.content);
-  }
+/** Matches `content` on the wire schema, so a fold can never overflow it. */
+const MAX_CONTENT = 9_000;
+
+/**
+ * Fold the request being corrected into the correction itself.
+ *
+ * Steering cancels the running turn, and eve's durable history "keeps only what
+ * had already settled" — so a turn cancelled a second in takes its request with
+ * it. Asked to check some channels and then told "the channels are in discord
+ * btw", the agent replied asking what you wanted, having genuinely forgotten.
+ *
+ * Both utterances are in hand right here, so they go in as one message rather
+ * than being stashed somewhere for the agent to reassemble. eve then has the
+ * whole request in the only place it needs to look, which is the message. This
+ * is what eve's own TUI means by coalescing a queued message into the next turn.
+ */
+function coalesce(payload: MessagePayload, superseded: string | undefined): MessagePayload {
+  if (superseded === undefined || superseded === "") return payload;
+  return { ...payload, content: sliceText(`${superseded}\n\n${payload.content}`, MAX_CONTENT) };
+}
+
+async function steerHolder(
+  deps: ConversationFlowDeps,
+  holder: HolderState,
+  continuationKey: string,
+): Promise<void> {
   const steered = await deps.eve.sendSteer({ continuationKey });
   if (Result.isOk(steered)) return;
   deps.reporter.emit({
@@ -98,14 +117,16 @@ export async function submitMessage(
   const { deps } = runtime;
   const submitted = await Result.tryPromise({
     try: async () => {
-      await deps.store.queue.enqueue(payload);
+      // Asked before anything is enqueued or claimed. A turn holding the
+      // conversation now was started by an earlier delivery and is working on a
+      // request this message corrects, so its text joins this one and then it is
+      // interrupted to let the queue move. Asking after the claim instead finds
+      // the turn *this* message just started and cancels it, which is a turn
+      // that never gets to answer anything.
+      const holder = await deps.store.queue.holder(payload.continuationKey);
+      await deps.store.queue.enqueue(coalesce(payload, holder?.content));
       if (runtime.isStopped()) return undefined;
-      // Before claiming, never after. Any turn holding the conversation at this
-      // point was started by an earlier delivery and is working on a question
-      // this message supersedes, so it is interrupted to let the queue move.
-      // Asking afterwards instead finds the turn *this* message just started
-      // and cancels it, which is a turn that never gets to answer anything.
-      await steerHolder(deps, payload.continuationKey);
+      if (holder !== undefined) await steerHolder(deps, holder, payload.continuationKey);
       return kick(deps, payload.continuationKey);
     },
     catch: (cause) =>

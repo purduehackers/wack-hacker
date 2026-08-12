@@ -22,7 +22,6 @@ import {
   continuationKeyFromQueueMember,
   ingressKey,
   parkedKey,
-  supersededKey,
   pendingKey,
   QUEUE_INDEX_KEY,
   queueMember,
@@ -37,11 +36,8 @@ import {
 const DELIVERY_LEASE_MS = 30_000;
 /** Completed Discord-message tombstones are only needed across plausible retries. */
 const SEEN_TTL_SECONDS = 7 * 24 * 60 * 60;
-/** Long enough for the replacement turn to start, short enough not to linger. */
-const SUPERSEDED_TTL_SECONDS = 5 * 60;
-
 /** What a live turn is holding a conversation for. */
-interface HolderState {
+export interface HolderState {
   readonly sessionId: string;
   /** The request being worked on, so a steer can carry it forward. */
   readonly content?: string;
@@ -694,19 +690,6 @@ export function createQueueTransitions(redis: RedisClient) {
       };
     },
 
-    /** Remember the request a steer displaced, briefly. */
-    markSuperseded: async (continuationKey: string, content: string): Promise<void> => {
-      await redis.set(supersededKey(continuationKey), content, { ex: SUPERSEDED_TTL_SECONDS });
-    },
-
-    /** Read it once, on the way into the replacement turn. */
-    takeSuperseded: async (continuationKey: string): Promise<string | undefined> => {
-      const key = supersededKey(continuationKey);
-      const raw: unknown = await redis.get(key);
-      await redis.del(key);
-      const parsed = z.string().min(1).safeParse(raw);
-      return parsed.success ? parsed.data : undefined;
-    },
     beginReset: (continuationKey: string): Promise<string> => beginReset(redis, continuationKey),
     commitReset: (continuationKey: string, resetId: string): Promise<boolean> =>
       commitReset(redis, continuationKey, resetId),
