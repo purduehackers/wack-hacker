@@ -27,12 +27,14 @@ import { createQueueTransitions } from "./queue.ts";
 import { createRenderPublicationTransitions } from "./render-publication.ts";
 import { createRenderTransitions } from "./render.ts";
 import { createScheduledFireTransitions } from "./scheduled-fire.ts";
+import { createSubagentTransitions } from "./subagents.ts";
 
 export function createConversationStore(deps: { readonly redis: RedisClient }) {
   const { redis } = deps;
   return {
     queue: createQueueTransitions(redis),
     admission: createAdmissionTransitions(redis),
+    subagents: createSubagentTransitions(redis),
     render: createRenderTransitions(redis),
     renderPublication: createRenderPublicationTransitions(redis),
     hitl: createHitlTransitions(redis),

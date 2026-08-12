@@ -43,6 +43,11 @@ export function ingressKey(continuationKey: string): string {
   return `agent:ingress:${continuationKey}`;
 }
 
+/** Keyed by delivery, because a conversation's next turn delegates separately. */
+export function subagentKey(dispatchId: string): string {
+  return `agent:subagent:${dispatchId}`;
+}
+
 export function parkedKey(continuationKey: string): string {
   return `agent:parked:${continuationKey}`;
 }
