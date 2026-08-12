@@ -12,7 +12,7 @@ import { z } from "zod";
 import { stored } from "../json.ts";
 import type { RedisClient } from "../redis/client.ts";
 import type { DeliveryPayload } from "../wire.ts";
-import { activeKey, ingressKey, resetKey } from "./keys.ts";
+import { ACTIVE_RECORD_LUA, activeKey, ingressKey, resetKey } from "./keys.ts";
 
 /** Atomic Redis scripting surface used by delivery coordination. */
 type AdmissionRedis = Pick<RedisClient, "eval">;
@@ -20,6 +20,7 @@ type AdmissionRedis = Pick<RedisClient, "eval">;
 const DELIVERY_ADMISSION_TTL_MS = 15 * 60_000;
 
 const START_DELIVERY_SCRIPT = `
+${ACTIVE_RECORD_LUA}
 -- wack:start-delivery
 if redis.call("GET", KEYS[2]) then return cjson.encode({status = "resetting"}) end
 local raw = redis.call("GET", KEYS[1])
@@ -31,7 +32,7 @@ end
 if active.phase == "claimed" then
   active.phase = "live"
   active.admissionAttemptId = ARGV[3]
-  redis.call("SET", KEYS[1], cjson.encode(active), "KEEPTTL")
+  writeActive(KEYS[1], active)
   redis.call("SET", KEYS[3], ARGV[3], "PX", tonumber(ARGV[4]))
   return cjson.encode({status = "start", admissionAttemptId = ARGV[3]})
 end
@@ -46,7 +47,7 @@ if active.phase == "live" then
   end
   if not admissionOwner then
     active.phase = "recovery-required"
-    redis.call("SET", KEYS[1], cjson.encode(active), "KEEPTTL")
+    writeActive(KEYS[1], active)
     return cjson.encode({status = "recovery-required"})
   end
 end
@@ -57,6 +58,7 @@ return cjson.encode({status = "in-progress"})
 `;
 
 const CONFIRM_DELIVERY_SCRIPT = `
+${ACTIVE_RECORD_LUA}
 -- wack:confirm-delivery
 local raw = redis.call("GET", KEYS[1])
 if not raw then return 0 end
@@ -64,7 +66,7 @@ local active = cjson.decode(raw)
 if active.dispatchId ~= ARGV[1] or active.messageId ~= ARGV[2] then return 0 end
 if active.phase ~= "live" and active.phase ~= "parked" then return 0 end
 active.sessionId = ARGV[3]
-redis.call("SET", KEYS[1], cjson.encode(active), "KEEPTTL")
+writeActive(KEYS[1], active)
 return 1
 `;
 

@@ -3,6 +3,7 @@
 import type { RedisClient } from "../redis/client.ts";
 import type { ParkedPayload, RenderIntent } from "../wire.ts";
 import {
+  ACTIVE_RECORD_LUA,
   activeKey,
   AGENT_READY_SET_KEY,
   AGENT_RENDER_READY_SET_KEY,
@@ -27,6 +28,7 @@ const LIVE_LEASE_MS = 30 * 60_000;
 const PARKED_LEASE_MS = 24 * 60 * 60_000;
 
 const PUBLISH_SCRIPT = `
+${ACTIVE_RECORD_LUA}
 -- wack:publish-render
 local activeRaw = redis.call("GET", KEYS[3])
 if not activeRaw then return 0 end
@@ -47,7 +49,7 @@ redis.call("SET", KEYS[1], ARGV[2], "EX", tonumber(ARGV[4]))
 -- Proof of life. The turn holds its conversation for as long as it keeps
 -- painting, and no longer.
 active.expiresAtMs = tonumber(ARGV[8]) + tonumber(ARGV[9])
-redis.call("SET", KEYS[3], cjson.encode(active), "KEEPTTL")
+writeActive(KEYS[3], active)
 redis.call("DEL", KEYS[4])
 local added = redis.call("SADD", KEYS[2], ARGV[3])
 if added == 1 then return 1 end
@@ -55,6 +57,7 @@ return 3
 `;
 
 const SETTLE_SCRIPT = `
+${ACTIVE_RECORD_LUA}
 -- wack:settle-render-and-park
 local raw = redis.call("GET", KEYS[1])
 if not raw then return 0 end
@@ -98,7 +101,7 @@ active.phase = "parked"
 active.sessionId = ARGV[3]
 active.eveTurnId = ARGV[5]
 active.expiresAtMs = tonumber(ARGV[11]) + tonumber(ARGV[12])
-redis.call("SET", KEYS[1], cjson.encode(active), "KEEPTTL")
+writeActive(KEYS[1], active)
 redis.call("SET", KEYS[2], ARGV[4])
 redis.call("SADD", KEYS[3], ARGV[6])
 return settledRevision

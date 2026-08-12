@@ -15,6 +15,7 @@ import { Result } from "../result/index.ts";
 import { decodeDeliveryPayload, decodeParkedPayload } from "../wire.ts";
 import type { DeliveryPayload, MessagePayload, ParkedPayload, RenderTarget } from "../wire.ts";
 import {
+  ACTIVE_RECORD_LUA,
   activeKey,
   AGENT_READY_SET_KEY,
   AGENT_RENDER_READY_SET_KEY,
@@ -98,6 +99,7 @@ return 1
 `;
 
 const CLAIM_SCRIPT = `
+${ACTIVE_RECORD_LUA}
 -- wack:claim
 if redis.call("GET", KEYS[4]) then return nil end
 local raw = redis.call("GET", KEYS[2])
@@ -108,7 +110,7 @@ if raw then
   if tonumber(active.deliveryLeaseUntilMs) > tonumber(ARGV[3]) then return nil end
   active.ownerToken = ARGV[1]
   active.deliveryLeaseUntilMs = tonumber(ARGV[4])
-  redis.call("SET", KEYS[2], cjson.encode(active), "KEEPTTL")
+  writeActive(KEYS[2], active)
   return active.deliveryRaw
 end
 local deliveryRaw = redis.call("LPOP", KEYS[1])
@@ -131,6 +133,7 @@ return deliveryRaw
 `;
 
 const RECOVER_ADMISSION_SCRIPT = `
+${ACTIVE_RECORD_LUA}
 -- wack:recover-admission
 if redis.call("GET", KEYS[2]) then return nil end
 local raw = redis.call("GET", KEYS[1])
@@ -171,7 +174,7 @@ end
 
 local shouldReport = active.recoveryReported ~= true
 active.recoveryReported = true
-redis.call("SET", KEYS[1], cjson.encode(active), "KEEPTTL")
+writeActive(KEYS[1], active)
 if shouldReport then return active.deliveryRaw end
 return nil
 `;
@@ -233,6 +236,7 @@ return active.deliveryRaw
 `;
 
 const CONFIRM_SCRIPT = `
+${ACTIVE_RECORD_LUA}
 -- wack:confirm
 local raw = redis.call("GET", KEYS[1])
 if not raw then return 0 end
@@ -240,7 +244,7 @@ local active = cjson.decode(raw)
 if active.ownerToken ~= ARGV[1] then return 0 end
 if active.phase ~= "live" and active.phase ~= "parked" then return 0 end
 active.sessionId = ARGV[2]
-redis.call("SET", KEYS[1], cjson.encode(active), "KEEPTTL")
+writeActive(KEYS[1], active)
 return 1
 `;
 
