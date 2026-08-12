@@ -1,4 +1,11 @@
-/** Redis half of the bot↔agent delivery and parked-turn handshake. */
+/**
+ * Redis half of the bot↔agent delivery and parked-turn handshake.
+ *
+ * Every write to the active record here carries `KEEPTTL`. A bare `SET` clears
+ * a Redis expiry, and `wack:start-delivery` runs on every delivery — without it
+ * the key that `claim` had just given a bounded life became immortal again
+ * moments later, which is the whole failure this directory was fixed for.
+ */
 
 import { z } from "zod";
 
@@ -24,7 +31,7 @@ end
 if active.phase == "claimed" then
   active.phase = "live"
   active.admissionAttemptId = ARGV[3]
-  redis.call("SET", KEYS[1], cjson.encode(active))
+  redis.call("SET", KEYS[1], cjson.encode(active), "KEEPTTL")
   redis.call("SET", KEYS[3], ARGV[3], "PX", tonumber(ARGV[4]))
   return cjson.encode({status = "start", admissionAttemptId = ARGV[3]})
 end
@@ -39,7 +46,7 @@ if active.phase == "live" then
   end
   if not admissionOwner then
     active.phase = "recovery-required"
-    redis.call("SET", KEYS[1], cjson.encode(active))
+    redis.call("SET", KEYS[1], cjson.encode(active), "KEEPTTL")
     return cjson.encode({status = "recovery-required"})
   end
 end
@@ -57,7 +64,7 @@ local active = cjson.decode(raw)
 if active.dispatchId ~= ARGV[1] or active.messageId ~= ARGV[2] then return 0 end
 if active.phase ~= "live" and active.phase ~= "parked" then return 0 end
 active.sessionId = ARGV[3]
-redis.call("SET", KEYS[1], cjson.encode(active))
+redis.call("SET", KEYS[1], cjson.encode(active), "KEEPTTL")
 return 1
 `;
 
