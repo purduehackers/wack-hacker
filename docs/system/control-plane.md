@@ -234,6 +234,51 @@ Fetching the roles rather than accepting them from env is deliberate. Roles
 passed in would be a way to mint an admin that does not exist; roles read from
 the guild can only ever impersonate someone who already has the access.
 
+### Running it
+
+`eve invoke` with no `-u` builds and runs the agent locally, where `VERCEL_ENV`
+is unset and impersonation is therefore allowed:
+
+```bash
+cd packages/agents
+set -a; . ../../.env.local; set +a
+DISCORD_IMPERSONATE_USER_ID=636701123620634653 \
+  bunx eve invoke "use the code subagent to inspect purduehackers/wack-hacker"
+```
+
+Proven to work end to end. The assertion lands —
+
+```json
+{
+  "event": "discord.impersonated",
+  "userId": "636701123620634653",
+  "username": "chryzm1111",
+  "roles": 19
+}
+```
+
+— and an admin-gated `code_task` reaches its approval instead of a policy
+denial, having spawned a real child session:
+
+```
+agent "agents" -> wrun_01KZVGMNXYP199N63N4BWBJGP2
+agent "code"   -> wrun_01KZVGMVDZ59YR2015WE49PFQZ
+status: input-required, kind: tool-approval
+```
+
+**What this loop cannot reach.** An impersonated session has no Discord dispatch,
+so `subagent.called` finds no `discordDispatchId`, writes no delegation, and the
+follower never starts. That is correct — there is nowhere to paint — but it
+means the relay's rendering half is still only exercised by a real Discord turn.
+This loop proves the delegation path and the policy tier; the `↳ code: …` line
+needs the channel.
+
+Deploying a preview for the fuller path is currently blocked on project
+configuration: the project's root directory is `packages/agents`, and
+`vercel deploy` fails from both the repo root and that directory. The git
+integration only builds the production branch, so a branch push produces no
+preview either.
+
 ### The gate this needs
 
 **It must be impossible in production.** Anything that lets an environment
