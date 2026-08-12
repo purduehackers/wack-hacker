@@ -15,6 +15,7 @@ import { renderHitl } from "../../agent/hitl/components.ts";
 import { createRenderer } from "../../agent/render/renderer.ts";
 import type { RendererProjection } from "../../agent/render/renderer.ts";
 import { continueTrace, traceOperation } from "../../framework/observability.ts";
+import { followSubagent, stopFollowing } from "./subagent-follower.ts";
 import type { ConversationFlowDeps, RenderWork } from "./types.ts";
 
 export function reportFailure(
@@ -149,6 +150,37 @@ async function indexTurn(
   return true;
 }
 
+/**
+ * Attach a follower to whatever child this delivery is waiting on.
+ *
+ * Its only job is to write the progress line into the projection and ask for a
+ * repaint; the follower itself handles the lease. Errors reading the delegation
+ * are not worth failing a paint over — the turn is fine, only the narration is
+ * missing.
+ */
+async function watchDelegation(
+  deps: ConversationFlowDeps,
+  dispatchId: string,
+  work: RenderWork,
+): Promise<void> {
+  const delegation = await deps.store.subagents.current(dispatchId);
+  if (Result.isError(delegation)) {
+    deps.reporter.captureDefect(delegation.error, {
+      op: "agent.render.follow-subagent",
+      attributes: { dispatchId },
+    });
+    return;
+  }
+  if (delegation.value === undefined) {
+    stopFollowing(dispatchId);
+    return;
+  }
+  followSubagent(deps, dispatchId, work.target.continuationKey, delegation.value, async (line) => {
+    work.projection.subagentActivity = line;
+    await applyLatest(deps, dispatchId);
+  });
+}
+
 async function paint(
   deps: ConversationFlowDeps,
   dispatchId: string,
@@ -180,8 +212,17 @@ async function paint(
     ...(hitl === undefined ? {} : { components: hitl.components }),
     ...(hitl === undefined ? {} : { mentionUserIds: hitl.mentionUserIds }),
     ...(hitl?.key === undefined ? {} : { hitlKey: hitl.key }),
+    ...(work.projection.subagentActivity === undefined
+      ? {}
+      : { subagentActivity: work.projection.subagentActivity }),
     terminal: work.intent.phase !== "streaming",
   });
+  // A delegated turn is silent from out here; the follower is what makes it
+  // visible and what keeps its lease alive. Started only while streaming, and
+  // torn down the moment the turn is not.
+  if (work.intent.phase === "streaming") await watchDelegation(deps, dispatchId, work);
+  else stopFollowing(dispatchId);
+
   if (Result.isError(painted)) {
     reportFailure(deps, dispatchId, "agent.render.paint", painted.error);
     if (

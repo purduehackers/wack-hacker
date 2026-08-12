@@ -245,6 +245,30 @@ if redis.call("LLEN", KEYS[5]) == 0 then redis.call("SREM", KEYS[6], ARGV[5]) en
 return active.deliveryRaw
 `;
 
+/**
+ * Push the lease out because a child session is still working.
+ *
+ * The lease is refreshed by renders, and a delegated turn publishes none while
+ * its child runs — the parent is suspended for exactly that span. Progress read
+ * off the child's own stream is the evidence that would otherwise be missing,
+ * so whoever is reading it says so here.
+ *
+ * Fenced on the delivery, not the conversation: a stale follower must not be
+ * able to hold a turn that has already moved on.
+ */
+const REFRESH_LEASE_SCRIPT = `
+${ACTIVE_RECORD_LUA}
+-- wack:refresh-lease
+local raw = redis.call("GET", KEYS[1])
+if not raw then return 0 end
+local active = cjson.decode(raw)
+if active.dispatchId ~= ARGV[1] then return 0 end
+if active.phase ~= "live" then return 0 end
+active.expiresAtMs = tonumber(ARGV[2]) + tonumber(ARGV[3])
+writeActive(KEYS[1], active)
+return 1
+`;
+
 const CONFIRM_SCRIPT = `
 ${ACTIVE_RECORD_LUA}
 -- wack:confirm
@@ -530,6 +554,23 @@ async function expireAdmission(
   return parseStored(raw, "expired delivery", decodeDeliveryPayload);
 }
 
+/** True when the lease moved; false when this delivery no longer owns the turn. */
+async function refreshLease(
+  redis: Pick<RedisClient, "eval">,
+  continuationKey: string,
+  dispatchId: string,
+): Promise<boolean> {
+  return (
+    Number(
+      await redis.eval(
+        REFRESH_LEASE_SCRIPT,
+        [activeKey(continuationKey)],
+        [dispatchId, Date.now(), LIVE_LEASE_MS],
+      ),
+    ) === 1
+  );
+}
+
 async function confirmTurn(
   redis: RedisClient,
   continuationKey: string,
@@ -648,6 +689,8 @@ export function createQueueTransitions(redis: RedisClient) {
       continuationKey: string,
     ): Promise<Result<DeliveryPayload | undefined, InvalidInput>> =>
       expireAdmission(redis, continuationKey),
+    refreshLease: (continuationKey: string, dispatchId: string): Promise<boolean> =>
+      refreshLease(redis, continuationKey, dispatchId),
     confirm: (continuationKey: string, claimToken: string, sessionId: string): Promise<boolean> =>
       confirmTurn(redis, continuationKey, claimToken, sessionId),
     complete: (payload: ParkedPayload): Promise<CompletionStatus> => completeTurn(redis, payload),

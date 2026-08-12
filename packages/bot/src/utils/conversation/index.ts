@@ -13,6 +13,7 @@ import type { MessagePayload } from "@repo/shared/wire";
 
 import type { AgentError } from "../../agent/client.ts";
 import { admitScheduledFire, answerHitl, resetAndKick, submitMessage } from "./queue.ts";
+import { stopAllFollowers } from "./subagent-follower.ts";
 import { awaitSweepDrain, sweepOnce } from "./sweep.ts";
 import type { ConversationFlow, ConversationFlowDeps, FlowRuntime } from "./types.ts";
 
@@ -100,6 +101,9 @@ export function createConversationFlow(deps: ConversationFlowDeps): Conversation
     stop: async () => {
       if (stopped) return;
       stopped = true;
+      // Child streams are held open by this process; nothing else will drop
+      // them, and a half-read stream would keep a lease alive past shutdown.
+      stopAllFollowers();
       if (recoveryTimer) clearInterval(recoveryTimer);
       if (!sweepRunning) return;
       await awaitSweepDrain(sweepRunning);

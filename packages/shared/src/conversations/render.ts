@@ -42,6 +42,15 @@ const renderProjectionSchema = z.object({
    * be lost. A change in this value means "post a new message", not "edit".
    */
   hitlRequestKey: z.string().min(1).max(128).optional(),
+  /**
+   * What a subagent is doing, as read off its own stream.
+   *
+   * Bot-owned, unlike everything the intent carries. The agent cannot author it
+   * — it is suspended while the child runs, which is the whole reason this
+   * exists — so the reader that follows the child writes it here and the
+   * renderer merges it in. The intent stays the agent's alone.
+   */
+  subagentActivity: z.string().min(1).max(200).optional(),
   overflow: z
     .array(z.object({ messageId: discordSnowflake, contentHash: contentHash.optional() }))
     .max(10),

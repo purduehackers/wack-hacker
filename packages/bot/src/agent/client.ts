@@ -132,6 +132,9 @@ export function createAgentClient(deps: AgentClientDeps) {
     });
 
   return {
+    /** The agent's origin, for routes reached outside this client's envelope. */
+    baseUrl: deps.baseUrl,
+
     /** Not retried — see the note at the top of this file. */
     sendMessage: async (payload: DeliveryPayload): Promise<Result<AgentAck, AgentError>> =>
       post(WIRE_ROUTES.message, payload, "agent.message", noRetry, decodeSessionAck),

@@ -33,6 +33,7 @@ export interface RendererProjection {
   hitlMessageId?: string;
   hitlContentHash?: string;
   hitlRequestKey?: string;
+  subagentActivity?: string;
   overflow: OverflowProjection[];
 }
 
@@ -44,12 +45,18 @@ interface RenderInput {
   readonly components?: NonNullable<RESTPostAPIChannelMessageJSONBody["components"]>;
   readonly mentionUserIds?: readonly string[];
   readonly hitlKey?: string;
+  readonly subagentActivity?: string;
   readonly terminal: boolean;
 }
 
 function renderBody(input: Omit<RenderInput, "terminal">): string {
   const sections: string[] = [];
   if (input.activity !== "") sections.push(`-# ${input.activity}`);
+  // Sits under the agent's own status line: it is a child's report of what it
+  // is doing, which is narrower than what this turn is doing.
+  if (input.subagentActivity !== undefined && input.subagentActivity !== "") {
+    sections.push(`-# ↳ ${input.subagentActivity}`);
+  }
   if (input.text !== "") sections.push(input.text);
   if (input.footer !== undefined && input.footer !== "") sections.push(`-# ${input.footer}`);
   if (input.notice !== undefined && input.notice !== "") sections.push(input.notice);
