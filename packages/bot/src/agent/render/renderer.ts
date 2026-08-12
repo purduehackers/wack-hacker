@@ -393,6 +393,21 @@ async function writeHitl(
   return checkpoint(rendering);
 }
 
+/** Take the turn's own message back down; a deleted one is already gone. */
+async function removeAnchor(
+  rendering: RenderContext,
+): Promise<Result<undefined, RenderWriteError>> {
+  const { deps, state } = rendering;
+  if (state.anchorMessageId === undefined) return Result.ok(undefined);
+  const owned = await verifyLease(rendering);
+  if (Result.isError(owned)) return owned;
+  const removed = await deps.rest.deleteMessage(deps.channelId, state.anchorMessageId);
+  if (Result.isError(removed) && !isMissingMessage(removed.error)) return removed;
+  delete state.anchorMessageId;
+  delete state.anchorContentHash;
+  return checkpoint(rendering);
+}
+
 async function removeStaleOverflow(
   rendering: RenderContext,
   keep: number,
@@ -430,6 +445,16 @@ export function createRenderer(deps: RendererDeps, state: RendererProjection) {
         );
       }
       const [head = "", ...tail] = finalChunks(input);
+      // A turn that was steered away before it said anything settles with no
+      // body, and the footer alone is a message showing a bare reference id and
+      // nothing else. There is nothing to report, so the anchor goes.
+      if (head === "" && tail.length === 0) {
+        const cleared = await removeAnchor(rendering);
+        if (Result.isError(cleared)) return cleared;
+        const hitl = await writeHitl(rendering, undefined, [], [], undefined);
+        if (Result.isError(hitl)) return hitl;
+        return removeStaleOverflow(rendering, 0);
+      }
       const anchor = await writeAnchor(rendering, head, [], true);
       if (Result.isError(anchor)) return anchor;
       // A finished turn has nothing left to answer.

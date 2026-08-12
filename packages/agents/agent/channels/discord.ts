@@ -381,10 +381,18 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
       // Context is durable history. Add the lead-in only when this delivery
       // creates the session; resending it on every follow-up duplicates history.
       const active = await resolveSession(payload.continuationKey);
-      const context =
-        active === undefined
+      // A request a steer displaced is gone from eve's durable history, so it
+      // rides in as context on the turn that replaced it. Without this the
+      // agent answers the correction on its own and asks what was wanted.
+      const superseded = await conversations.queue.takeSuperseded(payload.continuationKey);
+      const context = [
+        ...(active === undefined
           ? [...(payload.recentMessages ?? []), ...(payload.referencedContext ?? [])]
-          : [];
+          : []),
+        ...(superseded === undefined
+          ? []
+          : [`Earlier, unfinished request from this person: ${superseded}`]),
+      ];
 
       await steerActiveTurn(active, payload.continuationKey);
       const renderChannelId = payload.thread?.id ?? payload.channel.id;

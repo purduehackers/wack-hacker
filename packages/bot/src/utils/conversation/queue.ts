@@ -72,8 +72,14 @@ export async function kick(
  * cap eventually releases the conversation even if the agent is unreachable.
  */
 async function steerHolder(deps: ConversationFlowDeps, continuationKey: string): Promise<void> {
-  const sessionId = await deps.store.queue.holder(continuationKey);
-  if (sessionId === undefined) return;
+  const holder = await deps.store.queue.holder(continuationKey);
+  if (holder === undefined) return;
+  // Cancelling is how room is made, and a cancelled turn's request does not
+  // survive in eve's durable history. Recorded before the cancel so the
+  // replacement turn can be told what it is correcting.
+  if (holder.content !== undefined) {
+    await deps.store.queue.markSuperseded(continuationKey, holder.content);
+  }
   const steered = await deps.eve.sendSteer({ continuationKey });
   if (Result.isOk(steered)) return;
   deps.reporter.emit({
@@ -81,7 +87,7 @@ async function steerHolder(deps: ConversationFlowDeps, continuationKey: string):
     status: "error",
     errorTag: tagOf(steered.error),
     errorMessage: steered.error.message,
-    attributes: { continuationKey, sessionId },
+    attributes: { continuationKey, sessionId: holder.sessionId },
   });
 }
 

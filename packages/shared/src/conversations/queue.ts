@@ -22,6 +22,7 @@ import {
   continuationKeyFromQueueMember,
   ingressKey,
   parkedKey,
+  supersededKey,
   pendingKey,
   QUEUE_INDEX_KEY,
   queueMember,
@@ -36,6 +37,15 @@ import {
 const DELIVERY_LEASE_MS = 30_000;
 /** Completed Discord-message tombstones are only needed across plausible retries. */
 const SEEN_TTL_SECONDS = 7 * 24 * 60 * 60;
+/** Long enough for the replacement turn to start, short enough not to linger. */
+const SUPERSEDED_TTL_SECONDS = 5 * 60;
+
+/** What a live turn is holding a conversation for. */
+interface HolderState {
+  readonly sessionId: string;
+  /** The request being worked on, so a steer can carry it forward. */
+  readonly content?: string;
+}
 const ADMISSION_RECOVERY_EVE_TURN_ID = "delivery-admission-recovery";
 export const ADMISSION_RECOVERY_TEXT =
   "I couldn't safely finish starting this turn, so I stopped rather than risk running it twice.";
@@ -84,7 +94,11 @@ export const ADMISSION_EXPIRY_FOOTER = "Send the message again to retry.";
 const activeHolderSchema = z.looseObject({
   phase: z.string(),
   sessionId: z.string(),
+  deliveryRaw: z.string(),
 });
+
+/** Only the field a superseded request is recovered from. */
+const holderContentSchema = z.looseObject({ content: z.string() });
 
 const ENQUEUE_SCRIPT = `
 -- wack:enqueue
@@ -660,15 +674,38 @@ export function createQueueTransitions(redis: RedisClient) {
      * reach the agent. This is how the bot finds out there is something to
      * interrupt.
      */
-    holder: async (continuationKey: string): Promise<string | undefined> => {
+    holder: async (continuationKey: string): Promise<HolderState | undefined> => {
       const raw: unknown = await redis.get(activeKey(continuationKey));
       if (raw === null || raw === undefined) return undefined;
       const decoded = parseStored(raw, "active holder", (input) =>
         decode(activeHolderSchema, "active holder", input),
       );
       if (Result.isError(decoded)) return undefined;
-      const { phase, sessionId } = decoded.value;
-      return phase === "live" && sessionId !== "" ? sessionId : undefined;
+      const { phase, sessionId, deliveryRaw } = decoded.value;
+      if (phase !== "live" || sessionId === "") return undefined;
+      const content = parseStored(deliveryRaw, "holder delivery", (input) =>
+        decode(holderContentSchema, "holder delivery", input),
+      );
+      return {
+        sessionId,
+        ...(Result.isError(content) || content.value.content === ""
+          ? {}
+          : { content: content.value.content }),
+      };
+    },
+
+    /** Remember the request a steer displaced, briefly. */
+    markSuperseded: async (continuationKey: string, content: string): Promise<void> => {
+      await redis.set(supersededKey(continuationKey), content, { ex: SUPERSEDED_TTL_SECONDS });
+    },
+
+    /** Read it once, on the way into the replacement turn. */
+    takeSuperseded: async (continuationKey: string): Promise<string | undefined> => {
+      const key = supersededKey(continuationKey);
+      const raw: unknown = await redis.get(key);
+      await redis.del(key);
+      const parsed = z.string().min(1).safeParse(raw);
+      return parsed.success ? parsed.data : undefined;
     },
     beginReset: (continuationKey: string): Promise<string> => beginReset(redis, continuationKey),
     commitReset: (continuationKey: string, resetId: string): Promise<boolean> =>
