@@ -179,11 +179,12 @@ Build it in the bot, which already holds a socket and already renders:
    writes `agent:subagent:<dispatchId>` on `subagent.called` and clears it on
    `subagent.completed`.
 2. Bot subscribes to the child's stream. **Next.** Read the delegation with
-   `store.subagents.current(dispatchId)`; the address is
-   `GET /eve/v1/session/:childSessionId/stream`. Note the auth: that endpoint
-   wants a Vercel OIDC token, which the bot does not carry today — settle that
-   before anything else, since it decides whether the bot reads the stream
-   directly or the agent proxies it.
+   `store.subagents.current(dispatchId)` — it carries `childSessionId` and a
+   `streamToken`, and the address is `GET /eve/v1/session/:childSessionId/stream`.
+   Auth is settled (`00f0bcc`): the bot has no Vercel identity of its own, so the
+   hook mints an OIDC token where it runs — inside a function — and hands it over
+   with the delegation. Verified end to end: that token opens the stream with a 200. Twelve-hour lifetime against a minutes-to-hours delegation, so there is
+   no refresh path.
 3. Child progress becomes the activity line, which refreshes the lease.
 
 The third step is why this is the right fix rather than a bigger timeout: each
