@@ -32,6 +32,7 @@ export interface RendererProjection {
   /** See `renderProjectionSchema`: the input request lives on its own message. */
   hitlMessageId?: string;
   hitlContentHash?: string;
+  hitlRequestKey?: string;
   overflow: OverflowProjection[];
 }
 
@@ -42,6 +43,7 @@ interface RenderInput {
   readonly notice?: string;
   readonly components?: NonNullable<RESTPostAPIChannelMessageJSONBody["components"]>;
   readonly mentionUserIds?: readonly string[];
+  readonly hitlKey?: string;
   readonly terminal: boolean;
 }
 
@@ -59,7 +61,7 @@ function renderBody(input: Omit<RenderInput, "terminal">): string {
  * own message, so a mention inside it arrives as a new message and pings.
  */
 function liveChunk(input: RenderInput): string {
-  const { notice: _notice, terminal: _terminal, ...bodyInput } = input;
+  const { notice: _notice, terminal: _terminal, hitlKey: _hitlKey, ...bodyInput } = input;
   const body = renderBody(bodyInput);
   if (body.length <= MAX_MESSAGE_CHARS) return body;
   return `${sliceText(body, MAX_MESSAGE_CHARS - LIVE_CONTINUES.length - 2)}\n\n${LIVE_CONTINUES}`;
@@ -94,6 +96,22 @@ function isMissingMessage(error: RenderWriteError): boolean {
 function nonce(messageId: string, index: number): string {
   // A Discord snowflake plus ':4' is at most 22 characters (limit: 25).
   return `${messageId}:${index}`;
+}
+
+/**
+ * A nonce that is stable for one request and different for the next.
+ *
+ * `enforce_nonce` is what makes a retried post idempotent, so the value has to
+ * stay the same across attempts at the same question. It also has to *change*
+ * between questions: a turn that asks twice used to reuse one nonce for both,
+ * and Discord answered the second post by returning the first message
+ * unmodified — leaving the projection holding the new content's hash against a
+ * message that still showed the old question, which no later render would
+ * correct because the hash then matched. Four base64url characters of SHA-256
+ * keep the whole value inside Discord's 25-character limit.
+ */
+function requestNonce(messageId: string, key: string): string {
+  return `${messageId}:${hash(key).slice(0, 4)}`;
 }
 
 type RenderWriteError = DiscordError | Transient;
@@ -268,6 +286,32 @@ async function writeOverflow(
 }
 
 /**
+ * Take the controls off the message carrying the current request and forget it.
+ *
+ * Used both when a request is over and when a later one supersedes it. The
+ * message itself is left in the channel: it is the thread's record that the
+ * question was asked, and for one that was answered the interaction handler has
+ * already written the outcome into it. This used to delete the message, which
+ * erased that record — and, because the next request then reused the same
+ * per-turn nonce, Discord returned the deleted message's slot instead of
+ * posting the new question at all.
+ */
+async function retireRequestMessage(
+  rendering: RenderContext,
+): Promise<Result<undefined, RenderWriteError>> {
+  const { deps, state } = rendering;
+  if (state.hitlMessageId === undefined) return Result.ok(undefined);
+  const owned = await verifyLease(rendering);
+  if (Result.isError(owned)) return owned;
+  const cleared = await deps.rest.clearComponents(deps.channelId, state.hitlMessageId);
+  if (Result.isError(cleared) && !isMissingMessage(cleared.error)) return cleared;
+  delete state.hitlMessageId;
+  delete state.hitlContentHash;
+  delete state.hitlRequestKey;
+  return checkpoint(rendering);
+}
+
+/**
  * The input request, on a message of its own.
  *
  * Created rather than edited into place, and posted allowing exactly the
@@ -276,29 +320,35 @@ async function writeOverflow(
  * message otherwise suppresses mentions so streamed prose cannot ping people.
  * Together they are why "Input required for @someone" arrived silently.
  *
- * The message is deleted once there is no request left to answer, so a resolved
- * request does not leave a live button behind.
+ * One message per request: a turn that asks twice leaves two records rather
+ * than editing the first into the second.
  */
 async function writeHitl(
   rendering: RenderContext,
   notice: string | undefined,
   components: NonNullable<RESTPostAPIChannelMessageJSONBody["components"]>,
   mentionUserIds: readonly string[],
+  requestKey: string | undefined,
 ): Promise<Result<undefined, RenderWriteError>> {
   const { deps, state } = rendering;
   const content = notice ?? "";
   const wanted = content !== "" || components.length > 0;
 
-  if (!wanted) {
-    if (state.hitlMessageId === undefined) return Result.ok(undefined);
-    const owned = await verifyLease(rendering);
-    if (Result.isError(owned)) return owned;
-    const removed = await deps.rest.deleteMessage(deps.channelId, state.hitlMessageId);
-    if (Result.isError(removed) && !isMissingMessage(removed.error)) return removed;
-    delete state.hitlMessageId;
-    delete state.hitlContentHash;
-    return checkpoint(rendering);
+  const superseded =
+    state.hitlRequestKey !== undefined &&
+    requestKey !== undefined &&
+    state.hitlRequestKey !== requestKey;
+  if (superseded) {
+    const retired = await retireRequestMessage(rendering);
+    if (Result.isError(retired)) return retired;
   }
+
+  // A request that is no longer wanted has been answered, expired, or was
+  // withdrawn. The message stays either way: it is the thread's record that the
+  // question was asked, and for an answered one the interaction handler has
+  // already written the outcome into it. Only the controls come off, and only
+  // if they are still there — an answered request cleared them on the way out.
+  if (!wanted) return retireRequestMessage(rendering);
 
   const contentHash = anchorHash(content, components);
   if (state.hitlMessageId !== undefined && state.hitlContentHash === contentHash) {
@@ -317,23 +367,29 @@ async function writeHitl(
     );
     if (Result.isOk(edited)) {
       state.hitlContentHash = contentHash;
+      if (requestKey !== undefined) state.hitlRequestKey = requestKey;
       return checkpoint(rendering);
     }
     if (!isMissingMessage(edited.error)) return edited;
     delete state.hitlMessageId;
     delete state.hitlContentHash;
+    delete state.hitlRequestKey;
   }
 
   const created = await deps.rest.postMessage(deps.channelId, {
     content,
     components,
     allowed_mentions: { users: [...mentionUserIds] },
-    nonce: nonce(deps.sourceMessageId, HITL_NONCE_INDEX),
+    nonce:
+      requestKey === undefined
+        ? nonce(deps.sourceMessageId, HITL_NONCE_INDEX)
+        : requestNonce(deps.sourceMessageId, requestKey),
     enforce_nonce: true,
   });
   if (Result.isError(created)) return created;
   state.hitlMessageId = created.value.id;
   state.hitlContentHash = contentHash;
+  if (requestKey !== undefined) state.hitlRequestKey = requestKey;
   return checkpoint(rendering);
 }
 
@@ -370,13 +426,14 @@ export function createRenderer(deps: RendererDeps, state: RendererProjection) {
           input.notice,
           input.components ?? [],
           input.mentionUserIds ?? [],
+          input.hitlKey,
         );
       }
       const [head = "", ...tail] = finalChunks(input);
       const anchor = await writeAnchor(rendering, head, [], true);
       if (Result.isError(anchor)) return anchor;
       // A finished turn has nothing left to answer.
-      const hitl = await writeHitl(rendering, undefined, [], []);
+      const hitl = await writeHitl(rendering, undefined, [], [], undefined);
       if (Result.isError(hitl)) return hitl;
       const overflow = await writeOverflow(rendering, tail);
       return Result.isError(overflow) ? overflow : removeStaleOverflow(rendering, tail.length);

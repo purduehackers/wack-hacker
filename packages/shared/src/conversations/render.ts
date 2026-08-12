@@ -33,6 +33,15 @@ const renderProjectionSchema = z.object({
    */
   hitlMessageId: discordSnowflake.optional(),
   hitlContentHash: contentHash.optional(),
+  /**
+   * Which request `hitlMessageId` is asking about.
+   *
+   * A turn can ask more than once — an input request, then a tool approval for
+   * what the answer led to. Without an identity here the second question would
+   * be edited over the first, and the record of what was already answered would
+   * be lost. A change in this value means "post a new message", not "edit".
+   */
+  hitlRequestKey: z.string().min(1).max(128).optional(),
   overflow: z
     .array(z.object({ messageId: discordSnowflake, contentHash: contentHash.optional() }))
     .max(10),

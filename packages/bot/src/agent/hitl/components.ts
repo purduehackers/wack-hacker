@@ -34,6 +34,14 @@ export type HitlLocator =
 
 interface HitlView {
   readonly notice?: string;
+  /**
+   * Identity of the question being asked, stable across re-renders of it.
+   *
+   * The renderer posts a new message when this changes rather than editing the
+   * previous one, so a turn that asks twice leaves two records instead of one
+   * overwritten one.
+   */
+  readonly key?: string;
   readonly components: APIActionRowComponent<APIComponentInMessageActionRow>[];
   /**
    * Users the notice mentions and who should actually be notified.
@@ -217,8 +225,17 @@ export function renderHitl(intent: RenderIntent): HitlView {
     }
   }
 
+  // Authorizations have no request id of their own, so they are keyed by what
+  // they are asking to connect — which is what changes when the ask changes.
+  const key =
+    request?.requestId ??
+    (authorizations.length === 0
+      ? undefined
+      : `auth:${authorizations.map((entry) => entry.name).join(",")}`);
+
   return {
     ...(notices.length === 0 ? {} : { notice: notices.join("\n\n") }),
+    ...(key === undefined ? {} : { key: sliceText(key, 128) }),
     components: rows,
     mentionUserIds,
   };
