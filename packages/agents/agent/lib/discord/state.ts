@@ -53,13 +53,6 @@ export interface DiscordChannelState {
   lastRenderPreview: string;
   /** Final desired state is durable before the normal-message queue advances. */
   renderSettled: boolean;
-  /**
-   * Whether this turn handed work to a subagent.
-   *
-   * A delegated turn goes silent for as long as the child runs, so its hold on
-   * the conversation is leased on a different scale from an ordinary one.
-   */
-  delegated: boolean;
   finalRenderPhase?: "completed" | "failed";
   finalRenderFooter?: string;
 }
@@ -82,7 +75,6 @@ export function initialDiscordState(): DiscordChannelState {
     lastRenderPublishedAt: 0,
     lastRenderPreview: "",
     renderSettled: false,
-    delegated: false,
   };
 }
 
@@ -153,7 +145,6 @@ export function beginDiscordTurn(
     state.lastRenderPublishedAt = 0;
     state.lastRenderPreview = "";
     state.renderSettled = false;
-    state.delegated = false;
     delete state.finalRenderPhase;
     delete state.finalRenderFooter;
     return;
@@ -183,7 +174,6 @@ export function beginDiscordTurn(
   state.lastRenderPublishedAt = 0;
   state.lastRenderPreview = "";
   state.renderSettled = false;
-  state.delegated = false;
   delete state.finalRenderPhase;
   delete state.finalRenderFooter;
 }
