@@ -18,20 +18,23 @@ import { z } from "zod";
 import { InvalidInput } from "../../errors.ts";
 import type { RedisClient } from "../../redis/client.ts";
 import { Result } from "../../result/index.ts";
-import type { DeliveryPayload, MessagePayload } from "../../wire.ts";
+import type { DeliveryPayload, MessagePayload, ParkedPayload } from "../../wire.ts";
 import { decodeDeliveryPayload } from "../../wire.ts";
 import {
   activeKey,
   AGENT_READY_SET_KEY,
+  parkedKey,
   pendingKey,
   QUEUE_INDEX_KEY,
   queueMember,
+  renderOutcomeKey,
   renderTargetKey,
   resetKey,
   resetPendingKey,
   seenKey,
 } from "../keys.ts";
 import { LEASE_LUA, LeaseDuration, RECORD_TTL_MS } from "../lease.ts";
+import { redisValue } from "../redis-value.ts";
 
 /** Completed-message tombstones are only needed across plausible retries. */
 const SEEN_TTL_SECONDS = 7 * 24 * 60 * 60;
@@ -129,9 +132,132 @@ writeRecord(KEYS[1], record)
 return 1
 `;
 
+/**
+ * Three scripts and a second key, collapsed.
+ *
+ * The old handshake spread `start` / `confirm` / `finish` across `admission.ts`
+ * with its own lease in `agent:ingress:<key>`. All of it answered one question —
+ * may this process hand the delivery to eve, and if not, why not — so it is one
+ * compare-and-set returning the reason.
+ *
+ * The five statuses survive because the caller genuinely branches on all of
+ * them: eve has no callable "is a turn already running", so this is the only
+ * place that answer exists.
+ */
+const MARK_LIVE = `
+${RECORD_LUA}
+-- delivery:mark-live
+if redis.call("GET", KEYS[2]) then return "resetting" end
+local raw = redis.call("GET", KEYS[1])
+if not raw then return "stale" end
+local record = cjson.decode(raw)
+if record.dispatchId ~= ARGV[1] or record.messageId ~= ARGV[2] then return "stale" end
+-- Already acknowledged: a retry of the same delivery is answered from the
+-- record rather than run again.
+if record.sessionId ~= "" then return "accepted:" .. record.sessionId end
+if record.phase == "claimed" then
+  record.phase = "live"
+  record.ingress = { holder = ARGV[3], expiresAtMs = tonumber(ARGV[4]) }
+  writeRecord(KEYS[1], record)
+  return "start"
+end
+if record.phase == "live" then
+  -- Live, unacknowledged, and nobody is holding the ingress slot: whoever took
+  -- it never came back, and nobody can tell whether eve began the turn. Held
+  -- rather than retried, because retrying might run it twice.
+  if leaseAvailable(record.ingress, ARGV[5]) then
+    record.phase = "recovery-required"
+    writeRecord(KEYS[1], record)
+    return "recovery-required"
+  end
+  return "in-progress"
+end
+if record.phase == "recovery-required" then return "recovery-required" end
+return "in-progress"
+`;
+
+const RELEASE_INGRESS = `
+${RECORD_LUA}
+-- delivery:release-ingress
+local raw = redis.call("GET", KEYS[1])
+if not raw then return 0 end
+local record = cjson.decode(raw)
+if not record.ingress or record.ingress.holder ~= ARGV[1] then return 0 end
+record.ingress = nil
+writeRecord(KEYS[1], record)
+return 1
+`;
+
+/**
+ * Release the conversation once the turn is finished and its paint is durable.
+ *
+ * The render outcome check is the cross-machine guard. It was an ordering
+ * comment in the bot's sweep — "render first so a durable terminal outcome is
+ * present" — enforced by one `if` buried here. Ordering is not a guarantee.
+ */
+const COMPLETE = `
+-- delivery:complete
+local marker = redis.call("GET", KEYS[2])
+if not marker then return 0 end
+local parked = cjson.decode(marker)
+if parked.messageId ~= ARGV[1] or parked.sessionId ~= ARGV[2]
+  or parked.dispatchId ~= ARGV[3] or parked.eveTurnId ~= ARGV[4] then
+  return -1
+end
+local outcome = redis.call("GET", KEYS[6])
+if outcome ~= "applied" and outcome ~= "discarded" then return -2 end
+local raw = redis.call("GET", KEYS[1])
+if not raw then
+  redis.call("DEL", KEYS[2])
+  redis.call("SREM", KEYS[5], ARGV[5])
+  return 0
+end
+local record = cjson.decode(raw)
+if record.phase ~= "parked" then return -1 end
+if record.messageId ~= ARGV[1] or record.dispatchId ~= ARGV[3] then return -1 end
+if record.sessionId ~= "" and record.sessionId ~= ARGV[2] then return -1 end
+if record.eveTurnId ~= ARGV[4] then return -1 end
+redis.call("DEL", KEYS[1], KEYS[2])
+redis.call("SREM", KEYS[5], ARGV[5])
+if redis.call("LLEN", KEYS[3]) == 0 then redis.call("SREM", KEYS[4], ARGV[5]) end
+return 1
+`;
+
 export interface ClaimedDelivery {
   readonly payload: DeliveryPayload;
   readonly claimToken: string;
+}
+
+/** What `complete` did, in the caller's vocabulary rather than a Lua number. */
+export type CompletionStatus = "completed" | "missing" | "pending" | "stale";
+
+/**
+ * Whether this process may hand the delivery to eve.
+ *
+ * `attempt` is the ingress holder, and the caller must give it back through
+ * `releaseIngress` once eve has answered — otherwise the slot stays taken until
+ * its lease lapses and every later delivery reads `in-progress`.
+ */
+export type Admission =
+  | { readonly status: "start"; readonly attempt: string }
+  | { readonly status: "accepted"; readonly sessionId: string }
+  | { readonly status: "in-progress" | "recovery-required" | "resetting" | "stale" };
+
+/**
+ * The script answers with a word, and `accepted` carries its session after a
+ * colon — the one status with a payload, kept in-band so the whole answer is
+ * one atomic read rather than a word plus a follow-up lookup that could race.
+ */
+function readAdmission(raw: unknown, attempt: string): Admission {
+  const text = z.string().safeParse(raw);
+  if (!text.success) return { status: "stale" };
+  const [status = "", sessionId = ""] = text.data.split(":", 2);
+  if (status === "start") return { status: "start", attempt };
+  if (status === "accepted" && sessionId !== "") return { status: "accepted", sessionId };
+  const known = z
+    .enum(["in-progress", "recovery-required", "resetting", "stale"])
+    .safeParse(status);
+  return { status: known.success ? known.data : "stale" };
 }
 
 export class DeliveryWriter {
@@ -192,17 +318,10 @@ export class DeliveryWriter {
       ],
     );
     if (raw === null || raw === undefined) return Result.ok(undefined);
-    // The script returns the stored delivery as JSON text. Parsed straight into
-    // the wire decoder, which is the schema that owns this shape — rather than
-    // through a codec that yields `unknown` and defers the real check to
-    // whoever remembers to run it.
-    const text = z.string().safeParse(raw);
-    if (!text.success) {
-      return Result.err(
-        new InvalidInput({ subject: "claimed delivery", issues: ["expected JSON text"] }),
-      );
-    }
-    const decoded = decodeDeliveryPayload(JSON.parse(text.data));
+    // Normalised, then handed straight to the decoder that owns this shape.
+    // The script stores the delivery as JSON text, but Upstash may return it
+    // already parsed — assuming either form rejects the other.
+    const decoded = decodeDeliveryPayload(redisValue(raw));
     return Result.isError(decoded) ? decoded : Result.ok({ payload: decoded.value, claimToken });
   }
 
@@ -233,6 +352,64 @@ export class DeliveryWriter {
       [claimToken, sessionId, Date.now()],
     );
     return Number(confirmed) === 1;
+  }
+
+  /**
+   * Ask whether this process may hand the delivery to eve.
+   *
+   * `accepted` carries the session of an earlier attempt, so a retry is answered
+   * from the record instead of running the turn again.
+   */
+  async markLive(
+    continuationKey: string,
+    dispatchId: string,
+    messageId: string,
+  ): Promise<Admission> {
+    const attempt = crypto.randomUUID();
+    const now = Date.now();
+    const raw: unknown = await this.redis.eval(
+      MARK_LIVE,
+      [activeKey(continuationKey), resetKey(continuationKey)],
+      [dispatchId, messageId, attempt, now + LeaseDuration.Ingress, now],
+    );
+    return readAdmission(raw, attempt);
+  }
+
+  /** Give up the ingress slot once eve has answered, however it answered. */
+  async releaseIngress(continuationKey: string, attempt: string): Promise<boolean> {
+    const released = await this.redis.eval(
+      RELEASE_INGRESS,
+      [activeKey(continuationKey)],
+      [attempt],
+    );
+    return Number(released) === 1;
+  }
+
+  /** Release the conversation. Refuses until the terminal paint is durable. */
+  async complete(parked: ParkedPayload): Promise<CompletionStatus> {
+    const outcome = Number(
+      await this.redis.eval(
+        COMPLETE,
+        [
+          activeKey(parked.continuationKey),
+          parkedKey(parked.continuationKey),
+          pendingKey(parked.continuationKey),
+          QUEUE_INDEX_KEY,
+          AGENT_READY_SET_KEY,
+          renderOutcomeKey(parked.dispatchId),
+        ],
+        [
+          parked.messageId,
+          parked.sessionId,
+          parked.dispatchId,
+          parked.eveTurnId,
+          queueMember(parked.continuationKey),
+        ],
+      ),
+    );
+    if (outcome === 1) return "completed";
+    if (outcome === -2) return "pending";
+    return outcome === -1 ? "stale" : "missing";
   }
 
   /** Advertised so a caller can drop a conversation from the ready set. */

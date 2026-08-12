@@ -22,17 +22,9 @@ import { activeKey, parkedKey, pendingKey } from "../keys.ts";
 import { leaseExpired } from "../lease.ts";
 import type { DeliveryRecord } from "../records/delivery.ts";
 import { deliveryRecordSchema } from "../records/delivery.ts";
+import { redisValue } from "../redis-value.ts";
 
 const storedRecord = stored(deliveryRecordSchema);
-
-/**
- * Redis hands a record back as JSON text or as the value, depending on how it
- * was written. Both go to the decoder that owns the shape.
- */
-function readValue(raw: unknown): unknown {
-  const text = z.string().safeParse(raw);
-  return text.success ? JSON.parse(text.data) : raw;
-}
 
 /** What a live turn is holding a conversation for. */
 export interface Holder {
@@ -99,7 +91,7 @@ export class DeliveryReader {
   async parked(continuationKey: string): Promise<ParkedPayload | undefined> {
     const raw: unknown = await this.redis.get(parkedKey(continuationKey));
     if (raw === null || raw === undefined) return undefined;
-    const decoded = decodeParkedPayload(readValue(raw));
+    const decoded = decodeParkedPayload(redisValue(raw));
     return Result.isOk(decoded) ? decoded.value : undefined;
   }
 
