@@ -20,6 +20,10 @@ stacks name the production modules that own each behavior.
 6. [Storage, supervision, and operations](storage-supervision-and-operations.md) —
    Redis/Turso ownership, migrations, bot sandbox rotation, health, telemetry,
    CI, deployment, and incident inspection.
+7. [The conversation control plane](control-plane.md) — what holds a
+   conversation while a turn runs: leases, the record eleven scripts share,
+   steering, and the subagent relay still to build. Start here before changing
+   anything under `packages/shared/src/conversations/`.
 
 The shorter [architecture overview](../architecture.md) records the stable design
 rules. The [operations runbooks](../operations/README.md) are the source of truth
