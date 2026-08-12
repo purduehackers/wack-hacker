@@ -12,10 +12,38 @@ import { Result } from "@repo/shared/result";
 
 import { kick, onParked } from "./queue.ts";
 import { applyLatest, reportFailure } from "./render.ts";
-import type { FlowRuntime } from "./types.ts";
+import { followSubagent, stopFollowing } from "./subagent-follower.ts";
+import type { ConversationFlowDeps, FlowRuntime } from "./types.ts";
 
 const MAX_CONCURRENT_RENDERS = 4;
 const SWEEP_DRAIN_TIMEOUT_MS = 15_000;
+
+/**
+ * Make sure a delegated turn is being watched.
+ *
+ * Started here rather than from a paint, because a paint only happens when a
+ * render is published and a delegated turn publishes none — that silence is the
+ * whole reason the follower exists. Hanging the start off a render meant the
+ * delegation had to be announced before the last paint of the turn to be seen
+ * at all, and it never was.
+ *
+ * Idempotent per delivery, so revisiting a conversation every sweep costs a
+ * lookup rather than a second stream.
+ */
+async function watchDelegation(deps: ConversationFlowDeps, continuationKey: string): Promise<void> {
+  const holder = await deps.store.queue.holder(continuationKey);
+  if (holder?.dispatchId === undefined) return;
+  const delegation = await deps.store.subagents.current(holder.dispatchId);
+  if (Result.isError(delegation)) return;
+  if (delegation.value === undefined) {
+    stopFollowing(holder.dispatchId);
+    return;
+  }
+  const dispatchId = holder.dispatchId;
+  followSubagent(deps, dispatchId, continuationKey, delegation.value, async () => {
+    await applyLatest(deps, dispatchId);
+  });
+}
 
 async function recoverActiveQueues(runtime: FlowRuntime): Promise<void> {
   const { deps } = runtime;
@@ -78,6 +106,7 @@ async function recoverActiveQueues(runtime: FlowRuntime): Promise<void> {
         });
       }
       if (runtime.isStopped()) break;
+      await watchDelegation(deps, continuationKey);
       await kick(deps, continuationKey);
     } catch (cause) {
       deps.reporter.captureDefect(cause, {

@@ -44,6 +44,20 @@ interface Follower {
 const running = new Map<string, Follower>();
 
 /**
+ * The latest line each delivery is showing.
+ *
+ * Held here rather than threaded through the render work, because the follower
+ * outlives any one paint: it is started from the sweep and reports for as long
+ * as the delegation runs, while a paint is a moment. Lost on restart, which is
+ * correct — the follower is lost with it and starts again from the stream.
+ */
+const progress = new Map<string, string>();
+
+export function subagentProgress(dispatchId: string): string | undefined {
+  return progress.get(dispatchId);
+}
+
+/**
  * A child agent's event, parsed at the boundary rather than inspected.
  *
  * Loose on purpose: this is another agent's payload and not our wire contract,
@@ -91,7 +105,7 @@ interface FollowInput {
   readonly continuationKey: string;
   readonly delegation: Delegation;
   readonly signal: AbortSignal;
-  readonly onLine: (line: string) => Promise<void>;
+  readonly onLine: () => Promise<void>;
 }
 
 async function follow({
@@ -130,7 +144,8 @@ async function follow({
 
         const held = await deps.store.queue.refreshLease(continuationKey, dispatchId);
         if (!held) return;
-        await onLine(summary.slice(0, MAX_LINE));
+        progress.set(dispatchId, summary.slice(0, MAX_LINE));
+        await onLine();
       }
     }
   } finally {
@@ -149,7 +164,7 @@ export function followSubagent(
   dispatchId: string,
   continuationKey: string,
   delegation: Delegation,
-  onLine: (line: string) => Promise<void>,
+  onLine: () => Promise<void>,
 ): void {
   if (running.has(dispatchId)) return;
   const controller = new AbortController();
@@ -175,10 +190,12 @@ export function followSubagent(
 export function stopFollowing(dispatchId: string): void {
   running.get(dispatchId)?.stop();
   running.delete(dispatchId);
+  progress.delete(dispatchId);
 }
 
 /** Shutdown: every open child stream is dropped before the process goes. */
 export function stopAllFollowers(): void {
   for (const follower of running.values()) follower.stop();
   running.clear();
+  progress.clear();
 }

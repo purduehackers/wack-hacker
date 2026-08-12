@@ -39,6 +39,8 @@ const SEEN_TTL_SECONDS = 7 * 24 * 60 * 60;
 /** What a live turn is holding a conversation for. */
 export interface HolderState {
   readonly sessionId: string;
+  /** The delivery this turn is running, which every follower is fenced on. */
+  readonly dispatchId: string;
   /** The request being worked on, so a steer can carry it forward. */
   readonly content?: string;
 }
@@ -90,6 +92,7 @@ export const ADMISSION_EXPIRY_FOOTER = "Send the message again to retry.";
 const activeHolderSchema = z.looseObject({
   phase: z.string(),
   sessionId: z.string(),
+  dispatchId: z.string(),
   deliveryRaw: z.string(),
 });
 
@@ -720,13 +723,14 @@ export function createQueueTransitions(redis: RedisClient) {
         decode(activeHolderSchema, "active holder", input),
       );
       if (Result.isError(decoded)) return undefined;
-      const { phase, sessionId, deliveryRaw } = decoded.value;
+      const { phase, sessionId, dispatchId, deliveryRaw } = decoded.value;
       if (phase !== "live" || sessionId === "") return undefined;
       const content = parseStored(deliveryRaw, "holder delivery", (input) =>
         decode(holderContentSchema, "holder delivery", input),
       );
       return {
         sessionId,
+        dispatchId,
         ...(Result.isError(content) || content.value.content === ""
           ? {}
           : { content: content.value.content }),
