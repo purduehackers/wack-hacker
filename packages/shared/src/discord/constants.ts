@@ -25,6 +25,8 @@ export const DISCORD_IDS = {
     /** Ships must carry a URL or attachment; text-only posts are removed. */
     SHIP: "904896819165814794",
     CHECKPOINTS: "1052236377338683514",
+    /** Every audited agent action is mirrored here, one embed per decision. */
+    AGENT_AUDIT: "1537154519182344302",
     HACK_NIGHT: "1020777328172859412",
   },
   categories: {

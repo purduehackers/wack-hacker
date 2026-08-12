@@ -2,8 +2,10 @@ import { AuditDecision } from "@repo/shared/db/enums";
 import { serializeError } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { defineHook } from "eve/hooks";
+import { z } from "zod";
 
 import { CORE_TOOL_DESCRIPTORS } from "../lib/descriptors.ts";
+import { publishAuditEntry } from "../lib/policy/audit-feed.ts";
 import { requirePrincipal } from "../lib/policy/principal.ts";
 import { getAuditStore } from "../lib/policy/stores.ts";
 import { RiskLevel } from "../lib/policy/types.ts";
@@ -28,6 +30,14 @@ interface ToolResultAudit {
   readonly kind: "tool-result";
   readonly failed: boolean | undefined;
 }
+
+/** Distinguishes a result record from a requested input, for the feed only. */
+const toolResultAuditSchema = z.strictObject({
+  kind: z.literal("tool-result"),
+  failed: z.boolean().optional(),
+});
+
+const usernameSchema = z.string().trim().min(1).max(64);
 
 async function record(
   id: string,
@@ -59,7 +69,30 @@ async function record(
   });
   if (Result.isError(outcome)) {
     console.warn("Root action audit unavailable", serializeError(outcome.error));
+    return;
   }
+
+  // After the row, never instead of it. The table is the record and this is the
+  // feed; a Discord outage must cost the notification only.
+  await publishAuditEntry({
+    tool,
+    risk: risks[tool],
+    decision,
+    actorId: principal.value.userId,
+    actorName: usernameOf(current),
+    role: principal.value.role,
+    input: describeInput(input),
+  });
+}
+
+/** The requested input is worth showing; a result's own shape is not. */
+function describeInput(input: JsonValue | ToolResultAudit): string | undefined {
+  const parsed = toolResultAuditSchema.safeParse(input);
+  return parsed.success ? undefined : JSON.stringify(input, undefined, 2);
+}
+
+function usernameOf(current: Parameters<typeof requirePrincipal>[0]): string {
+  return usernameSchema.safeParse(current?.attributes["username"]).data ?? "unknown";
 }
 
 export default defineHook({

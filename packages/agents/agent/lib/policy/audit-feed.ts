@@ -1,0 +1,102 @@
+/**
+ * Mirrors every audited action into Discord, one embed per decision.
+ *
+ * The audit table is the record; this is the feed. A row in Turso answers "what
+ * happened" only if somebody thinks to look, and nobody looks until something
+ * has already gone wrong. An embed in a channel is read by whoever is around.
+ *
+ * Best-effort by construction. The audit row is written first and this runs
+ * after it, so a Discord outage costs the notification and never the record —
+ * and a failure here is logged rather than raised, because an action that
+ * already happened must not be reported as failed on account of its own
+ * announcement.
+ */
+
+import { AuditDecision } from "@repo/shared/db/enums";
+import { DISCORD_IDS } from "@repo/shared/discord";
+import { serializeError } from "@repo/shared/errors";
+import { sliceText } from "@repo/shared/text";
+
+import { discordRest } from "../../subagents/discord/lib/client.ts";
+import type { RiskLevel } from "./types.ts";
+
+/** Read at a glance from the embed's left bar, before any of the text. */
+const COLORS: Record<AuditDecision, number> = {
+  [AuditDecision.Requested]: 0x58_65_f2,
+  [AuditDecision.Approved]: 0x58_65_f2,
+  [AuditDecision.Executed]: 0x57_f2_87,
+  [AuditDecision.Denied]: 0xed_42_45,
+  [AuditDecision.Failed]: 0xfe_e7_5c,
+  [AuditDecision.Timeout]: 0xfe_e7_5c,
+  [AuditDecision.PromptFailed]: 0xfe_e7_5c,
+};
+
+const TITLES: Record<AuditDecision, string> = {
+  [AuditDecision.Requested]: "Action requested",
+  [AuditDecision.Approved]: "Action approved",
+  [AuditDecision.Executed]: "Action executed",
+  [AuditDecision.Denied]: "Action denied",
+  [AuditDecision.Failed]: "Action failed",
+  [AuditDecision.Timeout]: "Approval timed out",
+  /** The prompt never reached anyone, so nothing was attempted. */
+  [AuditDecision.PromptFailed]: "Approval undeliverable",
+};
+
+export interface AuditFeedEntry {
+  readonly tool: string;
+  readonly risk: RiskLevel;
+  readonly decision: AuditDecision;
+  readonly actorId: string;
+  readonly actorName: string;
+  readonly role: string;
+  /** Already redacted by the audit store's own rules before it reaches here. */
+  readonly input: string | undefined;
+}
+
+/**
+ * Discord rejects an embed over 6000 characters across all fields, and a tool
+ * input is the only part with no natural bound. Cut well short of the limit:
+ * the feed exists to say what happened, and the table holds the whole of it.
+ */
+const INPUT_CHARS = 1_000;
+
+function describe(entry: AuditFeedEntry): string {
+  const lines = [
+    `**Tool:** \`${entry.tool}\``,
+    `**Risk:** ${entry.risk}`,
+    `**Actor:** <@${entry.actorId}> (\`${entry.actorName}\`, ${entry.role})`,
+  ];
+  if (entry.input !== undefined && entry.input !== "") {
+    lines.push(`**Input:**\n\`\`\`json\n${sliceText(entry.input, INPUT_CHARS)}\n\`\`\``);
+  }
+  return lines.join("\n");
+}
+
+export async function publishAuditEntry(entry: AuditFeedEntry): Promise<void> {
+  try {
+    await discordRest().post(`/channels/${DISCORD_IDS.channels.AGENT_AUDIT}/messages`, {
+      body: {
+        embeds: [
+          {
+            title: TITLES[entry.decision],
+            description: describe(entry),
+            color: COLORS[entry.decision],
+            timestamp: new Date().toISOString(),
+          },
+        ],
+        // The actor is named so the row can be read, never so they are pinged:
+        // an audit feed that notifies people is one they mute.
+        allowed_mentions: { parse: [] },
+      },
+    });
+  } catch (cause) {
+    console.warn(
+      JSON.stringify({
+        event: "audit.feed_failed",
+        tool: entry.tool,
+        decision: entry.decision,
+        ...serializeError(cause instanceof Error ? cause : new Error(String(cause))),
+      }),
+    );
+  }
+}
