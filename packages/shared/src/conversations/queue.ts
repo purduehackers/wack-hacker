@@ -42,19 +42,41 @@ export const ADMISSION_RECOVERY_FOOTER =
   "React ✅ to this message to reset the conversation before retrying, or start a new thread.";
 
 /**
- * How long a single delivery may hold its conversation before it is given up on.
+ * How long a turn may go silent before the conversation is taken back.
  *
- * `agent:active` is deleted by `complete`, which requires the turn to reach
- * `parked`. A turn that ends any other way — a crash, a stall, a question that
- * was published but never rendered — leaves the record behind, and `claim`
- * refuses every later message on that conversation because the record is not in
- * `claimed` phase. There was no expiry on the key, so that state was permanent:
- * the conversation accepted messages into `pending` and never ran another one.
+ * This is a lease, not a deadline: every render the agent publishes pushes it
+ * out, so a turn is held for as long as it keeps showing its work rather than
+ * for a fixed span from when it started. An absolute cap was tried first and is
+ * wrong — a legitimate `code_task` runs for as long as its sandbox allows and
+ * would have been killed mid-flight.
+ *
+ * The value is therefore the longest plausible gap *between* renders, not the
+ * longest turn. Renders bracket every tool call, so the widest gap is one call,
+ * and the widest call is a subagent bounded by its sandbox timeout.
  */
-const TURN_HARD_CAP_MS = 15 * 60_000;
+const LIVE_LEASE_MS = 30 * 60_000;
+
+/**
+ * How long a turn parked on a person may hold the conversation.
+ *
+ * Deliberately generous rather than unbounded: somebody who has not answered an
+ * approval in a day is not going to, and nothing in this system is allowed to
+ * live forever.
+ */
+const PARKED_LEASE_MS = 24 * 60 * 60_000;
+
+/**
+ * The key's own expiry, well past the lease the sweep acts on.
+ *
+ * The sweep needs the record to still be readable when it decides to give up,
+ * because the delivery it announces is stored inside it — so Redis must not
+ * collect the key first. This is the backstop under the backstop: if the sweep
+ * never runs at all, the key still cannot outlive this.
+ */
+const ACTIVE_KEY_TTL_MS = 2 * PARKED_LEASE_MS;
 const ADMISSION_EXPIRY_EVE_TURN_ID = "delivery-hard-cap";
 export const ADMISSION_EXPIRY_TEXT =
-  "I stopped working on this — it ran past the time limit for a single turn without finishing.";
+  "I stopped working on this — it went quiet for too long without finishing.";
 export const ADMISSION_EXPIRY_FOOTER = "Send the message again to retry.";
 
 /** Only the two fields that decide whether a live turn is holding the queue. */
@@ -86,7 +108,7 @@ if raw then
   if tonumber(active.deliveryLeaseUntilMs) > tonumber(ARGV[3]) then return nil end
   active.ownerToken = ARGV[1]
   active.deliveryLeaseUntilMs = tonumber(ARGV[4])
-  redis.call("SET", KEYS[2], cjson.encode(active))
+  redis.call("SET", KEYS[2], cjson.encode(active), "KEEPTTL")
   return active.deliveryRaw
 end
 local deliveryRaw = redis.call("LPOP", KEYS[1])
@@ -104,7 +126,7 @@ redis.call("SET", KEYS[2], cjson.encode({
   dispatchId = delivery.dispatchId,
   sessionId = "",
   deliveryRaw = deliveryRaw
-}))
+}), "PX", tonumber(ARGV[7]))
 return deliveryRaw
 `;
 
@@ -149,7 +171,7 @@ end
 
 local shouldReport = active.recoveryReported ~= true
 active.recoveryReported = true
-redis.call("SET", KEYS[1], cjson.encode(active))
+redis.call("SET", KEYS[1], cjson.encode(active), "KEEPTTL")
 if shouldReport then return active.deliveryRaw end
 return nil
 `;
@@ -212,7 +234,7 @@ local active = cjson.decode(raw)
 if active.ownerToken ~= ARGV[1] then return 0 end
 if active.phase ~= "live" and active.phase ~= "parked" then return 0 end
 active.sessionId = ARGV[2]
-redis.call("SET", KEYS[1], cjson.encode(active))
+redis.call("SET", KEYS[1], cjson.encode(active), "KEEPTTL")
 return 1
 `;
 
@@ -433,7 +455,8 @@ async function claimTurn(
       claimedAt,
       claimedAt + DELIVERY_LEASE_MS,
       queueMember(continuationKey),
-      claimedAt + TURN_HARD_CAP_MS,
+      claimedAt + LIVE_LEASE_MS,
+      ACTIVE_KEY_TTL_MS,
     ],
   );
   if (raw === null || raw === undefined) return Result.ok(undefined);
@@ -480,11 +503,11 @@ async function expireAdmission(
       ADMISSION_EXPIRY_FOOTER,
       Date.now(),
       queueMember(continuationKey),
-      TURN_HARD_CAP_MS,
+      LIVE_LEASE_MS,
     ],
   );
   if (raw === null || raw === undefined) return Result.ok(undefined);
-  return parseStored(raw, "hard-capped delivery", decodeDeliveryPayload);
+  return parseStored(raw, "expired delivery", decodeDeliveryPayload);
 }
 
 async function confirmTurn(
