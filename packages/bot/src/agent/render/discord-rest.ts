@@ -77,6 +77,28 @@ export function createDiscordRest(rest: RestClient) {
         catch: toDiscordError("edit discord message"),
       }),
 
+    /**
+     * Take the controls off a message without touching what it says.
+     *
+     * `content` is omitted from the body rather than sent as `""` — Discord
+     * leaves an absent field alone, and the text here is a record of a decision
+     * that something else already wrote.
+     */
+    clearComponents: async (
+      channelId: string,
+      messageId: string,
+    ): Promise<Result<undefined, DiscordError>> =>
+      Result.tryPromise({
+        try: async () => {
+          await rest.patch(`/channels/${channelId}/messages/${messageId}`, {
+            body: { components: [] },
+            signal: AbortSignal.timeout(30_000),
+          });
+          return undefined;
+        },
+        catch: toDiscordError("clear discord message components"),
+      }),
+
     deleteMessage: async (
       channelId: string,
       messageId: string,

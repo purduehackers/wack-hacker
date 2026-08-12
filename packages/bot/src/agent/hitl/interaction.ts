@@ -383,7 +383,52 @@ async function handleInput(
     );
     return;
   }
-  await ephemeral(interaction, "Your answer was sent.");
+  await settleRequestMessage(interaction, request, optionId, freeform);
+}
+
+/**
+ * Turn the request into a record of what was decided.
+ *
+ * The prompt stays, the controls go, and a line naming the answer and who gave
+ * it is appended. Previously the message kept its live buttons and the only
+ * feedback was an ephemeral "Your answer was sent." that nobody else could see
+ * and that vanished on dismiss, so the thread was left showing an open question
+ * that had already been answered.
+ *
+ * The source message is edited directly rather than through `editReply`: the
+ * interaction is deferred as an ephemeral reply before the locator is even
+ * parsed, so `editReply` addresses that hidden reply. Deleting it afterwards is
+ * what removes the receipt.
+ */
+async function settleRequestMessage(
+  interaction: Interaction,
+  request: RenderInputRequest,
+  optionId: string | undefined,
+  freeform: string | undefined,
+): Promise<void> {
+  if (!interaction.isRepliable()) return;
+  const source = interaction.isMessageComponent()
+    ? interaction.message
+    : interaction.isModalSubmit()
+      ? (interaction.message ?? undefined)
+      : undefined;
+  if (source === undefined) {
+    await ephemeral(interaction, "Your answer was sent.");
+    return;
+  }
+  const chosen = (request.options ?? []).find((option) => option.id === optionId);
+  const answer =
+    chosen === undefined
+      ? freeform === undefined
+        ? "answered"
+        : `answered: ${sliceText(freeform, 200)}`
+      : chosen.label;
+  await source.edit({
+    content: `${source.content}\n-# ${answer} — <@${interaction.user.id}>`,
+    components: [],
+    allowedMentions: { parse: [] },
+  });
+  await interaction.deleteReply();
 }
 
 async function handleAuthorization(
