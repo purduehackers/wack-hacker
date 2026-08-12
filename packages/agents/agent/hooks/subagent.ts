@@ -1,5 +1,6 @@
 import { createConversationStore } from "@repo/shared/conversations";
 import { getRedis } from "@repo/shared/redis";
+import { getVercelOidcToken } from "@vercel/oidc";
 import type { SessionAuthContext } from "eve/context";
 import { defineHook } from "eve/hooks";
 import { z } from "zod";
@@ -44,10 +45,28 @@ export default defineHook({
     async "subagent.called"(event, ctx) {
       const dispatchId = dispatchOf(ctx.session.auth.current?.attributes);
       if (dispatchId === undefined) return;
+      // Minted here because here is a Vercel function. The reader is not: the
+      // bot is a long-lived sandbox process with no Vercel identity of its own,
+      // so it cannot ask for one and has to be handed one. Twelve hours covers
+      // any delegation, which is why this is a single mint and not a refresh
+      // path. A mint that fails costs the progress relay, not the turn.
+      const streamToken = await getVercelOidcToken().catch((cause: unknown) => {
+        console.warn(
+          JSON.stringify({
+            event: "subagent.token_unavailable",
+            childSessionId: event.data.childSessionId,
+            reason: cause instanceof Error ? cause.message : String(cause),
+          }),
+        );
+        return undefined;
+      });
+      if (streamToken === undefined) return;
+
       await conversations.subagents.begin(dispatchId, {
         childSessionId: event.data.childSessionId,
         name: event.data.name,
         callId: event.data.callId,
+        streamToken,
         startedAt: new Date().toISOString(),
       });
     },
