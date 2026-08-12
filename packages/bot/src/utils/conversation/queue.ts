@@ -94,12 +94,13 @@ export async function submitMessage(
     try: async () => {
       await deps.store.queue.enqueue(payload);
       if (runtime.isStopped()) return undefined;
-      const kicked = await kick(deps, payload.continuationKey);
-      // `kick` returns without claiming when a turn already holds this
-      // conversation. That is the case this exists for: the message is durable
-      // in the queue, and interrupting the turn is what lets the queue move.
+      // Before claiming, never after. Any turn holding the conversation at this
+      // point was started by an earlier delivery and is working on a question
+      // this message supersedes, so it is interrupted to let the queue move.
+      // Asking afterwards instead finds the turn *this* message just started
+      // and cancels it, which is a turn that never gets to answer anything.
       await steerHolder(deps, payload.continuationKey);
-      return kicked;
+      return kick(deps, payload.continuationKey);
     },
     catch: (cause) =>
       new Transient({
