@@ -169,34 +169,33 @@ Reading child progress means subscribing to
 `GET /eve/v1/session/:childSessionId/stream`. **The parent cannot: it is
 suspended for precisely that span.** That single constraint decides the design.
 
-### The relay
+### The relay — built
 
-Build it in the bot, which already holds a socket and already renders:
+1. **Address** (`4d6295a`) — `agent/hooks/subagent.ts` writes
+   `agent:subagent:<dispatchId>` on `subagent.called`, clears it on
+   `subagent.completed`. A hook, not a channel handler: `ChannelEvents` does not
+   carry the subagent events at all; only `HookEventMap` does.
+2. **Auth** (`00f0bcc`) — the same hook mints a Vercel OIDC token, because it
+   runs inside a function and the bot has no Vercel identity of its own. Twelve
+   hours against a minutes-to-hours delegation, so one mint serves the whole
+   thing and there is no refresh path. Verified: that token opens the child
+   stream with a 200.
+3. **Follower** (`95898e9`) — the bot reads the child's stream. Each recognised
+   line does both jobs: it becomes the progress under the turn's status line,
+   and it refreshes the lease. `wack:refresh-lease` is fenced on the delivery so
+   a follower from a turn that moved on cannot hold the next one.
 
-1. Agent publishes `childSessionId` from a **hook** — done, `4d6295a`.
-   `ChannelEvents` does not carry the subagent events at all; only
-   `HookEventMap` does, so this cannot live in the channel. `agent/hooks/subagent.ts`
-   writes `agent:subagent:<dispatchId>` on `subagent.called` and clears it on
-   `subagent.completed`.
-2. Bot subscribes to the child's stream. **Next.** Read the delegation with
-   `store.subagents.current(dispatchId)` — it carries `childSessionId` and a
-   `streamToken`, and the address is `GET /eve/v1/session/:childSessionId/stream`.
-   Auth is settled (`00f0bcc`): the bot has no Vercel identity of its own, so the
-   hook mints an OIDC token where it runs — inside a function — and hands it over
-   with the delegation. Verified end to end: that token opens the stream with a 200. Twelve-hour lifetime against a minutes-to-hours delegation, so there is
-   no refresh path.
-3. Child progress becomes the activity line, which refreshes the lease.
+The delegated-turn gap is closed by construction rather than by a longer timer,
+which is why the two-hour lease was reverted rather than kept.
 
-The third step is why this is the right fix rather than a bigger timeout: each
-render refreshes the lease, so the delegated-turn gap **disappears** instead of
-being special-cased. It also delivers the subagent status updates the channel
-has always been missing.
+Ownership stayed put: the intent is the agent's alone, and the child's progress
+is bot-authored in the projection, merged by the renderer.
 
-Two things to design deliberately: the intent/projection split means the bot
-must not invent render content, so decide whether progress rides as an
-agent-published intent or as a distinct bot-owned line; and the child stream
-must be torn down on `subagent.completed`, on turn cancellation, and on bot
-shutdown.
+**Not yet exercised end to end.** The lease refresh and its fence are verified
+against Redis; the stream reader has only been checked by types and a 200 from
+the endpoint. The first real `code_task` after this is the actual test — watch
+for a `↳ code: …` line under the status line, and for the turn surviving past
+thirty minutes.
 
 ## Gates
 
