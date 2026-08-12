@@ -192,7 +192,13 @@ if redis.call("GET", KEYS[2]) then return nil end
 local raw = redis.call("GET", KEYS[1])
 if not raw then return nil end
 local active = cjson.decode(raw)
-if active.phase ~= "live" and active.phase ~= "parked" and active.phase ~= "claimed" then
+-- Including "recovery-required" on purpose. That phase is a deliberate safe
+-- wedge: the delivery may have reached Eve without acknowledgement, so it holds
+-- the conversation and asks for a reset rather than guessing. Holding it
+-- *forever* was not the intent, and until this line it was the one remaining
+-- state that outlived every lease.
+if active.phase ~= "live" and active.phase ~= "parked" and active.phase ~= "claimed"
+  and active.phase ~= "recovery-required" then
   return nil
 end
 local cap = active.expiresAtMs

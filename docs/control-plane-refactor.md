@@ -10,13 +10,12 @@ documentation instructs channel authors to build it. What should go is the
 **four-phase admission state machine** — a second turn-lifecycle tracker running
 alongside Eve's, kept in sync by hand, with no expiry on its key.
 
-Target: **21 Lua scripts → 18**, `admission.ts` deleted, and the entire class of
-"conversation wedged forever" bugs made unrepresentable rather than swept up
-after the fact.
-
-Phase 1 is shipped (`73643a1`): the lease exists, is refreshed by renders, and
-nothing in this directory can outlive its key any more. Phase 2, deleting the
-handshake, is not.
+Outcome: **the script count did not move, and should not have.** The wedges were
+never caused by the number of Lua scripts — they were caused by a key that could
+not expire. That is fixed, every phase a record can be in is now bounded, and
+the deletion this plan opened with turned out to be the wrong thing to do. The
+reasoning is kept below rather than rewritten, because the disproved version is
+the useful part.
 
 ## What is here today
 
@@ -213,32 +212,50 @@ The last one is the trap: a bare `SET` clears a Redis TTL, so `confirm` alone
 would have restored the immortal key on the first follow-up of every
 conversation — reintroducing the exact bug being fixed, silently.
 
-### Phase 2 — delete the handshake
+### Phase 2 — abandoned, and why
 
-Delete `admission.ts`, replace its phase transition with `wack:mark-live`, drop
-`recover-admission`, `ingressKey`, `admissionAttemptId`, `recoveryReported`, and
-the `recovery-required` phase. The agent's delivery route stops calling
-`startDelivery` / `confirmDelivery` / `finishAdmission`.
+**Do not delete `admission.ts`.** Attempting it showed the plan's premise was
+wrong, and the finding is worth more than the deletion would have been.
 
-_Verification:_ two concurrent POSTs of the same delivery must still produce one
-turn. This is the claim `admission.ts` exists to guarantee and the one thing the
-lease does not cover, so it has to be demonstrated rather than argued — the
-supporting evidence is Eve's own fencing ("fails creation if another run already
-owns the channel alias"; "only one turn run can claim a session's turn inbox")
-plus `agent:seen` deduplicating at the Discord message id.
+The premise was that the admission machinery caused the defects. Re-reading the
+five with the code open, none of them did:
 
-_Risk:_ highest of the phases. This is the cutover, and unlike Phase 1 it cannot
-be checked by driving one Redis key — it needs a concurrency test against a live
-agent.
+| Defect                                | Actual cause                          |
+| ------------------------------------- | ------------------------------------- |
+| `claim` refuses non-`claimed`; no TTL | the missing expiry — fixed in Phase 1 |
+| Steering unreachable behind the claim | where `steerActiveTurn` was called    |
+| Steering cancelled its own turn       | argument ordering in `submitMessage`  |
+| Nonce collision                       | the renderer, not this layer          |
+| `appliedRevision` past a failed write | the renderer, not this layer          |
 
-### Phase 2 — drop the dead machinery
+Zero were caused by the handshake existing. They were caused by a key that could
+not expire, which is now fixed, and by two call-site mistakes.
 
-Remove `phase`, `ownerToken`, `admissionAttemptId`, `deliveryLeaseUntilMs`, the
-hard-cap sweep, `recover-admission`, `expire-admission`, and the
-`ADMISSION_RECOVERY_*` strings. Delete the now-unused key builders.
+Deleting it would also have broken two things the plan did not account for:
 
-_Verification:_ `grep` proves no reader remains. Existing records drain naturally
-because Phase 1 no longer reads the fields.
+- **`ingressKey` is not admission's.** The interaction route takes the same lease
+  (keyed by `interactionId`), and `resetCutoverStatus` reads it to decide whether
+  a reset is safe to start. Removing it from deliveries would silently report
+  "ready" while a delivery was mid-flight into Eve.
+- **`recover-admission` and `expire-admission` are complementary tiers, not
+  duplicates.** Recovery is the fast path for "the agent POST died before
+  acknowledging" and deliberately wedges with a _reset before retrying_ notice,
+  because it cannot tell whether Eve started the turn. Expiry is the slow
+  backstop that frees the conversation. Collapsing them would trade a
+  seconds-scale response for a 30-minute one.
+
+### Phase 2, as actually shipped — close the last immortal state
+
+One line, and the only thing Phase 2 was really owed. `expire-admission` skipped
+`recovery-required` records, so a deliberate safe wedge held its conversation
+forever and needed a human to react ✅ to release it. Holding it _pending_ was
+the intent; holding it _forever_ was not.
+
+With that included, every phase a record can be in is now bounded.
+
+_Verified_ against Redis, two further scenarios on top of Phase 1's four: a
+`recovery-required` record past its lease is reclaimed and cleared, and a parked
+turn with 23 hours left on its lease is left strictly alone.
 
 ### Phase 3 — optional: Vercel Queue for wakeups
 
