@@ -24,7 +24,6 @@ import { createHash } from "node:crypto";
 
 import { bearerMatches } from "@repo/shared/bearer";
 import { createConversationStore } from "@repo/shared/conversations";
-import { DISCORD_GUILD_ID, roleFromMemberRoles } from "@repo/shared/discord";
 import { RecoveryRequired, serializeError, Transient } from "@repo/shared/errors";
 import { getRedis } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
@@ -37,23 +36,17 @@ import {
   decodeSteerRequestPayload,
   WIRE_ROUTES,
 } from "@repo/shared/wire";
-import type {
-  DeliveryPayload,
-  InteractionPayload,
-  ParkedPayload,
-  Principal,
-  RenderIntent,
-  WireResponse,
-} from "@repo/shared/wire";
+import type { DeliveryPayload, ParkedPayload, RenderIntent, WireResponse } from "@repo/shared/wire";
 import * as Sentry from "@sentry/node";
 import type { UserContent } from "ai";
 import { defineChannel, POST, type Session } from "eve/channels";
 import { createUnauthorizedResponse } from "eve/channels/auth";
-import type { SessionAuthContext, SessionContext } from "eve/context";
+import type { SessionContext } from "eve/context";
 import { z } from "zod";
 
 import { env } from "../env.ts";
 import { resolveBotBaseUrl } from "../lib/bot/endpoint.ts";
+import { authFor } from "../lib/discord/auth.ts";
 import { applyInputRequests } from "../lib/discord/input-requests.ts";
 import { createRenderPublisher, renderFooter } from "../lib/discord/render-intent.ts";
 import {
@@ -140,55 +133,6 @@ function botAuthenticated(request: Request): boolean {
  * role snowflakes; a bot that could name its own access tier would make the
  * permission model advisory.
  */
-interface DiscordAuthTarget {
-  /** Parent channel retained for policy decisions. */
-  channelId: string;
-  threadId?: string;
-  /** Present only for a new user turn, not for a HITL continuation. */
-  messageId?: string;
-  dispatchId?: string;
-  /** The actual channel or thread where rendering occurs. */
-  renderChannelId?: string;
-  inputRequestId?: string;
-  source?: "chat" | "scheduled";
-  scheduleId?: string;
-  occurrenceId?: string;
-  approvalRequester?: InteractionPayload["approvalRequester"];
-}
-
-function authFor(principal: Principal, target: DiscordAuthTarget): SessionAuthContext {
-  return {
-    authenticator: "discord",
-    principalType: "user",
-    principalId: principal.userId,
-    attributes: {
-      role: roleFromMemberRoles(principal.memberRoles),
-      memberRoles: principal.memberRoles,
-      username: principal.username,
-      nickname: principal.nickname,
-      channelId: target.channelId,
-      threadId: target.threadId ?? "",
-      guildId: DISCORD_GUILD_ID,
-      source: target.source ?? "chat",
-      ...(target.approvalRequester === undefined
-        ? {}
-        : {
-            approvalRequesterId: target.approvalRequester.userId,
-            approvalRequesterRole: roleFromMemberRoles(target.approvalRequester.memberRoles),
-            approvalRequesterMemberRoles: target.approvalRequester.memberRoles,
-          }),
-      ...(target.scheduleId === undefined ? {} : { scheduleId: target.scheduleId }),
-      ...(target.occurrenceId === undefined ? {} : { occurrenceId: target.occurrenceId }),
-      ...(target.messageId === undefined ? {} : { discordMessageId: target.messageId }),
-      ...(target.dispatchId === undefined ? {} : { discordDispatchId: target.dispatchId }),
-      ...(target.renderChannelId === undefined ? {} : { renderChannelId: target.renderChannelId }),
-      ...(target.inputRequestId === undefined
-        ? {}
-        : { discordInputRequestId: target.inputRequestId }),
-    },
-  };
-}
-
 function ok(sessionId: string, continuationToken: string): Response {
   const body: WireResponse = { ok: true, sessionId, continuationToken };
   return Response.json(body);
