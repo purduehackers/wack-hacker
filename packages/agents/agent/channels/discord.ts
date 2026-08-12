@@ -332,7 +332,7 @@ async function publishDesiredRender(
   };
 
   try {
-    const accepted = await renderPublisher.publish(intent);
+    const accepted = await renderPublisher.publish(intent, state.delegated);
     if (accepted) {
       state.renderRevision = revision;
       state.lastRenderPublishedAt = now;
@@ -689,8 +689,12 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
           case "tool-call":
             return `calling ${action.toolName}`;
           case "subagent-call":
+            // Nothing is heard from the child until it returns, so this turn's
+            // hold on the conversation is leased on a different scale.
+            state.delegated = true;
             return `delegating to ${action.subagentName}`;
           case "remote-agent-call":
+            state.delegated = true;
             return `asking ${action.remoteAgentName}`;
           case "load-skill": {
             const name = z.string().safeParse(action.input["name"]).data;

@@ -27,6 +27,17 @@ const INTENT_TTL_SECONDS = 7 * 24 * 60 * 60;
 const LIVE_LEASE_MS = 30 * 60_000;
 const PARKED_LEASE_MS = 24 * 60 * 60_000;
 
+/**
+ * For a turn that has handed work to a subagent.
+ *
+ * The lease is refreshed by renders, and renders bracket the parent's own tool
+ * calls — but a delegated task runs inside a child session the parent hears
+ * nothing from until it returns. A `code_task` that checks out a repository,
+ * edits it, and runs its checks is silent for exactly that long, and the
+ * ordinary lease reclaimed one mid-flight and told the person it had gone quiet.
+ */
+const DELEGATED_LEASE_MS = 2 * 60 * 60_000;
+
 const PUBLISH_SCRIPT = `
 ${ACTIVE_RECORD_LUA}
 -- wack:publish-render
@@ -114,7 +125,7 @@ interface RenderPublication {
 
 export function createRenderPublicationTransitions(redis: Pick<RedisClient, "eval">) {
   return {
-    publish: async (intent: RenderIntent): Promise<RenderPublication> => {
+    publish: async (intent: RenderIntent, delegated = false): Promise<RenderPublication> => {
       const outcome = Number(
         await redis.eval(
           PUBLISH_SCRIPT,
@@ -133,7 +144,7 @@ export function createRenderPublicationTransitions(redis: Pick<RedisClient, "eva
             intent.dispatchId,
             intent.messageId,
             Date.now(),
-            LIVE_LEASE_MS,
+            delegated ? DELEGATED_LEASE_MS : LIVE_LEASE_MS,
           ],
         ),
       );

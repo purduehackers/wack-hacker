@@ -32,8 +32,8 @@ export interface RenderPublisherDeps {
 
 export function createRenderPublisher(deps: RenderPublisherDeps) {
   return {
-    publish: async (intent: RenderIntent): Promise<boolean> => {
-      const publication = await deps.store.publish(intent);
+    publish: async (intent: RenderIntent, delegated = false): Promise<boolean> => {
+      const publication = await deps.store.publish(intent, delegated);
       if (!publication.accepted) return false;
       if (!publication.shouldWake) return true;
 
