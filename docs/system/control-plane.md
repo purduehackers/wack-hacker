@@ -173,10 +173,18 @@ suspended for precisely that span.** That single constraint decides the design.
 
 Build it in the bot, which already holds a socket and already renders:
 
-1. Agent handles `subagent.called` and publishes `childSessionId`. Today we
-   handle **no** subagent events at all — this is the starting point.
-2. Bot subscribes to the child's stream.
-3. Child progress becomes the activity line.
+1. Agent publishes `childSessionId` from a **hook** — done, `4d6295a`.
+   `ChannelEvents` does not carry the subagent events at all; only
+   `HookEventMap` does, so this cannot live in the channel. `agent/hooks/subagent.ts`
+   writes `agent:subagent:<dispatchId>` on `subagent.called` and clears it on
+   `subagent.completed`.
+2. Bot subscribes to the child's stream. **Next.** Read the delegation with
+   `store.subagents.current(dispatchId)`; the address is
+   `GET /eve/v1/session/:childSessionId/stream`. Note the auth: that endpoint
+   wants a Vercel OIDC token, which the bot does not carry today — settle that
+   before anything else, since it decides whether the bot reads the stream
+   directly or the agent proxies it.
+3. Child progress becomes the activity line, which refreshes the lease.
 
 The third step is why this is the right fix rather than a bigger timeout: each
 render refreshes the lease, so the delegated-turn gap **disappears** instead of
