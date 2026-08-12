@@ -10,20 +10,24 @@ documentation instructs channel authors to build it. What should go is the
 **four-phase admission state machine** — a second turn-lifecycle tracker running
 alongside Eve's, kept in sync by hand, with no expiry on its key.
 
-Target: **21 Lua scripts → 13**, `admission.ts` deleted, and the entire class of
+Target: **21 Lua scripts → 18**, `admission.ts` deleted, and the entire class of
 "conversation wedged forever" bugs made unrepresentable rather than swept up
 after the fact.
 
+Phase 1 is shipped (`73643a1`): the lease exists, is refreshed by renders, and
+nothing in this directory can outlive its key any more. Phase 2, deleting the
+handshake, is not.
+
 ## What is here today
 
-| File | Lines | Lua scripts |
-| --- | ---: | ---: |
-| `queue.ts` | 645 | 9 |
-| `render.ts` | 321 | 6 |
-| `interaction.ts` | 184 | 1 |
-| `admission.ts` | 169 | 3 |
-| `render-publication.ts` | 158 | 2 |
-| **total** | **1,940** | **21** |
+| File                    |     Lines | Lua scripts |
+| ----------------------- | --------: | ----------: |
+| `queue.ts`              |       645 |           9 |
+| `render.ts`             |       321 |           6 |
+| `interaction.ts`        |       184 |           1 |
+| `admission.ts`          |       169 |           3 |
+| `render-publication.ts` |       158 |           2 |
+| **total**               | **1,940** |      **21** |
 
 Plus 22 key builders in `keys.ts`.
 
@@ -32,13 +36,13 @@ bugs found on 2026-08-11, all five were in this layer or the renderer that reads
 its projection; none were in the agent, the tools, the model, or the 670-tool
 subagent tree.
 
-| Defect | Site |
-| --- | --- |
-| Second input request of a turn never rendered (nonce collision) | render projection |
-| `appliedRevision` advanced past a write that never happened | render projection |
-| `claim` refuses any non-`claimed` record; key has no TTL | admission fence |
-| Steering unreachable — it sat behind the claim it needed to bypass | admission fence |
-| Steering cancelled the turn it had just started | admission fence |
+| Defect                                                             | Site              |
+| ------------------------------------------------------------------ | ----------------- |
+| Second input request of a turn never rendered (nonce collision)    | render projection |
+| `appliedRevision` advanced past a write that never happened        | render projection |
+| `claim` refuses any non-`claimed` record; key has no TTL           | admission fence   |
+| Steering unreachable — it sat behind the claim it needed to bypass | admission fence   |
+| Steering cancelled the turn it had just started                    | admission fence   |
 
 ## What is genuinely required
 
@@ -114,8 +118,10 @@ That is not one bug. It is a shape that produces a bug for every code path
 someone forgets, and on 2026-08-11 all four production conversations were in
 that state, the oldest for 21 hours.
 
-The 15-minute hard cap added that night is a sweep that cleans up after the
-shape rather than changing it. It should not survive this refactor.
+The 15-minute hard cap added that night was worse than a band-aid: it measured
+from when the delivery was claimed, so it would have killed a healthy
+`code_task` at fifteen minutes for the crime of taking a while. Phase 1 replaced
+it with a lease measured in silence rather than elapsed time.
 
 ## Target design
 
@@ -143,16 +149,28 @@ written down.
 
 ### What that deletes
 
-- `admission.ts` entirely — `wack:start-delivery`, `wack:confirm-delivery`,
-  `wack:finish-admission`. The three-way handshake collapses into "claim writes
-  the lease; the first render refreshes it".
-- `wack:recover-admission` and `wack:expire-admission` — both exist only to
-  clean up after a lease that could not expire.
-- `wack:confirm` — the session id is written by the claim's owner, not
-  negotiated afterwards.
+- `admission.ts` — `wack:start-delivery`, `wack:confirm-delivery`,
+  `wack:finish-admission`. Most of the handshake collapses into "claim writes the
+  lease; renders refresh it", but **not all of it**: something must still mark
+  the delivery as taken by the agent, because `wack:publish-render` refuses to
+  publish against a record that is not `live`. That becomes one small
+  `wack:mark-live` rather than a three-way handshake with its own lease key.
+- `wack:recover-admission`. Its trigger — a record `live` with no session id and
+  no ingress owner — is a delivery that went silent, which the lease now covers.
 
-21 scripts → 13. `queue.ts` from 9 scripts to 4 (`enqueue`, `claim`, `complete`,
-plus reset/purge). `keys.ts` loses `ingressKey` and `resetPendingKey`.
+**Corrected from the first draft of this plan: 21 scripts → 18, not 13.**
+Implementing Phase 1 showed two of its claims were wrong. `wack:confirm` cannot
+go — the session id is not known at claim time, it comes back from Eve
+afterwards, and steering needs it. And `wack:expire-admission` must stay, because
+Redis key expiry is silent: something has to notice and tell the thread, or a
+turn simply vanishes mid-conversation.
+
+### One correction to "parking deletes it"
+
+Rule 3 above is wrong as written and was implemented differently. Parking cannot
+delete the record — the parked turn still owns the conversation, and `complete`
+fences on the record still being there. Parking instead hands over to a longer
+lease (24h), which keeps the property that matters: bounded, not immortal.
 
 ### What stays untouched
 
@@ -170,31 +188,48 @@ Each phase ships on its own and is reversible. The gates are the ones CI runs:
 `bun run format`, `bunx oxlint --deny-warnings`, `tsc` across the three
 packages, `check:capabilities`, `check:serialization`, `bun run build`.
 
-### Phase 0 — prove the lease in isolation
+### Phase 1 — the lease itself ✅ shipped `73643a1`
 
-Add the TTL'd lease **alongside** the existing phase machine, written but not
-read. Run for a day. Compare, on live traffic, every conversation where the
-lease has expired against every conversation the phase machine still calls live.
-They should agree; where they do not, the lease is wrong and this stops here.
+The absolute cap became a refreshed lease; `agent:active` gained a real `PX`
+expiry; every rewrite of the record carries `KEEPTTL`; parking hands over to a
+24h lease. `admission.ts` is untouched — deleting it is Phase 2, and separating
+the two is what makes each reversible.
 
-*Verification:* a script that diffs the two views across all conversations,
-run against production Redis. No behaviour change ships in this phase.
+Phase 0 was skipped deliberately. Its purpose was to check the lease agrees with
+the phase machine on live traffic over a day, but the lease is refreshed by an
+event we can drive directly, so the same question is answerable in seconds
+against real Redis instead of a day of watching.
 
-### Phase 1 — make the lease authoritative
+_Verified_ against production Redis, four scenarios:
 
-`claim` reads the lease instead of the phase. `admission.ts` is deleted and the
-agent's delivery route stops calling `startDelivery`/`confirmDelivery`. The
-render publish path refreshes the lease.
+| Scenario                   | Expected                         | Result |
+| -------------------------- | -------------------------------- | ------ |
+| Turn publishes a render    | lease → +30min, not reclaimed    | ✅     |
+| Turn silent past its lease | reclaimed, record cleared        | ✅     |
+| `claim`                    | stamps 48h key TTL + 30min lease | ✅     |
+| `confirm`                  | leaves the key TTL intact        | ✅     |
 
-*Verification:* the four expiry scenarios already exercised against real Redis
-for the hard cap (legacy record past its lease with and without queued work,
-fresh record inside its cap, explicit expiry) plus two new ones — a turn parked
-on an approval must not expire, and a turn whose agent died must free the
-conversation within one lease period.
+The last one is the trap: a bare `SET` clears a Redis TTL, so `confirm` alone
+would have restored the immortal key on the first follow-up of every
+conversation — reintroducing the exact bug being fixed, silently.
 
-*Risk:* highest of the four. This is the cutover. Roll back by reverting the
-commit; the phase field is still being written through Phase 1 and is only
-dropped in Phase 2.
+### Phase 2 — delete the handshake
+
+Delete `admission.ts`, replace its phase transition with `wack:mark-live`, drop
+`recover-admission`, `ingressKey`, `admissionAttemptId`, `recoveryReported`, and
+the `recovery-required` phase. The agent's delivery route stops calling
+`startDelivery` / `confirmDelivery` / `finishAdmission`.
+
+_Verification:_ two concurrent POSTs of the same delivery must still produce one
+turn. This is the claim `admission.ts` exists to guarantee and the one thing the
+lease does not cover, so it has to be demonstrated rather than argued — the
+supporting evidence is Eve's own fencing ("fails creation if another run already
+owns the channel alias"; "only one turn run can claim a session's turn inbox")
+plus `agent:seen` deduplicating at the Discord message id.
+
+_Risk:_ highest of the phases. This is the cutover, and unlike Phase 1 it cannot
+be checked by driving one Redis key — it needs a concurrency test against a live
+agent.
 
 ### Phase 2 — drop the dead machinery
 
@@ -202,7 +237,7 @@ Remove `phase`, `ownerToken`, `admissionAttemptId`, `deliveryLeaseUntilMs`, the
 hard-cap sweep, `recover-admission`, `expire-admission`, and the
 `ADMISSION_RECOVERY_*` strings. Delete the now-unused key builders.
 
-*Verification:* `grep` proves no reader remains. Existing records drain naturally
+_Verification:_ `grep` proves no reader remains. Existing records drain naturally
 because Phase 1 no longer reads the fields.
 
 ### Phase 3 — optional: Vercel Queue for wakeups
@@ -212,7 +247,7 @@ Replace the best-effort HTTP callback and the sweep's polling with
 dispatch id. The pending list stays exactly where it is; only the "there is work
 to do" signal moves.
 
-*Verification:* kill the bot mid-turn and confirm the conversation still
+_Verification:_ kill the bot mid-turn and confirm the conversation still
 completes. Do not ship this before Phases 0–2 are settled — it changes the
 recovery path, and the recovery path is what makes the cutover safe.
 
