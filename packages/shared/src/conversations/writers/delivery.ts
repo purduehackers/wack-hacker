@@ -23,10 +23,13 @@ import { decodeDeliveryPayload } from "../../wire.ts";
 import {
   activeKey,
   AGENT_READY_SET_KEY,
+  AGENT_RENDER_READY_SET_KEY,
   parkedKey,
   pendingKey,
   QUEUE_INDEX_KEY,
   queueMember,
+  renderIntentKey,
+  renderMember,
   renderOutcomeKey,
   renderTargetKey,
   resetKey,
@@ -34,10 +37,28 @@ import {
   seenKey,
 } from "../keys.ts";
 import { LEASE_LUA, LeaseDuration, RECORD_TTL_MS } from "../lease.ts";
+import { DeliveryReader } from "../readers/delivery.ts";
 import { redisValue } from "../redis-value.ts";
 
 /** Completed-message tombstones are only needed across plausible retries. */
 const SEEN_TTL_SECONDS = 7 * 24 * 60 * 60;
+/** Matches every other intent write. The scripts this replaces wrote none. */
+const INTENT_TTL_SECONDS = 7 * 24 * 60 * 60;
+
+/**
+ * Synthetic turn ids, so an intent this layer authored is distinguishable from
+ * one the agent published and is idempotent across repeated sweeps.
+ */
+const EXPIRY_TURN_ID = "delivery-lease-lapsed";
+const RECOVERY_TURN_ID = "delivery-unacknowledged";
+
+export const EXPIRY_TEXT =
+  "I stopped working on this — it went quiet for too long without finishing.";
+export const EXPIRY_FOOTER = "Send the message again to retry.";
+export const RECOVERY_TEXT =
+  "I couldn't safely finish starting this turn, so I stopped rather than risk running it twice.";
+export const RECOVERY_FOOTER =
+  "React ✅ to this message to reset the conversation before retrying, or start a new thread.";
 
 /**
  * Prepended to every script here.
@@ -222,6 +243,108 @@ redis.call("SREM", KEYS[5], ARGV[5])
 if redis.call("LLEN", KEYS[3]) == 0 then redis.call("SREM", KEYS[4], ARGV[5]) end
 return 1
 `;
+
+/**
+ * Announce a terminal failure and let the conversation go.
+ *
+ * Shared by the two ways a delivery ends badly, because the announcement is the
+ * same shape either way and the difference is only what it says. Both publish
+ * through `KEYS[3]` with a TTL — the scripts this replaces wrote their failure
+ * intents with no expiry at all, unlike every other intent write, leaving two
+ * keys per stuck delivery that nothing could bound.
+ */
+const ANNOUNCE_FAILURE_LUA = `
+local function announceFailure(intentKey, readySet, member, record, eveTurnId, text, footer, ttl)
+  local delivery = cjson.decode(record.deliveryRaw)
+  local currentRaw = redis.call("GET", intentKey)
+  local revision = 1
+  if currentRaw then
+    local current = cjson.decode(currentRaw)
+    -- Already announced this exact ending: leave it alone so a repeated sweep
+    -- does not churn the revision and re-wake the renderer.
+    if current.phase == "failed" and current.eveTurnId == eveTurnId then return false end
+    revision = tonumber(current.revision) + 1
+  end
+  local intent = {
+    dispatchId = record.dispatchId,
+    continuationKey = delivery.continuationKey,
+    messageId = record.messageId,
+    sessionId = record.sessionId ~= "" and record.sessionId or eveTurnId,
+    eveTurnId = eveTurnId,
+    revision = revision,
+    phase = "failed",
+    text = text,
+    activity = "",
+    footer = footer
+  }
+  if delivery.traceparent then intent.traceparent = delivery.traceparent end
+  redis.call("SET", intentKey, cjson.encode(intent), "EX", tonumber(ttl))
+  redis.call("SADD", readySet, member)
+  return true
+end
+`;
+
+/**
+ * Give up on a turn whose hold has lapsed.
+ *
+ * The lease is refreshed by evidence of progress, so a lapsed one means nothing
+ * has shown its work for a full lease period. Announced rather than silently
+ * dropped: Redis expiry is invisible, and a turn that vanishes mid-conversation
+ * is worse than one that says it stopped.
+ */
+const EXPIRE = `
+${RECORD_LUA}
+${ANNOUNCE_FAILURE_LUA}
+-- delivery:expire
+if redis.call("GET", KEYS[2]) then return nil end
+local raw = redis.call("GET", KEYS[1])
+if not raw then return nil end
+local record = cjson.decode(raw)
+if not leaseAvailable(record.turn, ARGV[4]) then return nil end
+announceFailure(KEYS[3], KEYS[4], ARGV[7], record, ARGV[1], ARGV[2], ARGV[3], ARGV[8])
+redis.call("DEL", KEYS[1], KEYS[5])
+redis.call("SREM", KEYS[8], ARGV[6])
+if redis.call("LLEN", KEYS[6]) == 0 then redis.call("SREM", KEYS[7], ARGV[6]) end
+return record.deliveryRaw
+`;
+
+/**
+ * Report a delivery that reached the agent and was never acknowledged.
+ *
+ * Reported at most once. A sweep visits every conversation on every pass, and
+ * without the flag a stuck delivery would log a line per pass forever.
+ */
+const RECOVER = `
+${RECORD_LUA}
+${ANNOUNCE_FAILURE_LUA}
+-- delivery:recover
+if redis.call("GET", KEYS[2]) then return nil end
+local raw = redis.call("GET", KEYS[1])
+if not raw then return nil end
+local record = cjson.decode(raw)
+if record.phase ~= "recovery-required" then return nil end
+announceFailure(KEYS[3], KEYS[4], ARGV[7], record, ARGV[1], ARGV[2], ARGV[3], ARGV[8])
+if record.recoveryReported then
+  writeRecord(KEYS[1], record)
+  return nil
+end
+record.recoveryReported = true
+writeRecord(KEYS[1], record)
+return record.deliveryRaw
+`;
+
+/** One bad ending's worth of difference from the other. */
+interface BadEnding {
+  readonly script: string;
+  readonly continuationKey: string;
+  readonly eveTurnId: string;
+  readonly text: string;
+  readonly footer: string;
+  /** Keys only one of the two endings needs, spliced in before the ready set. */
+  readonly extraKeys: readonly string[];
+  /** Supplied for recovery, where the record outlives the call. */
+  readonly dispatchId?: string;
+}
 
 export interface ClaimedDelivery {
   readonly payload: DeliveryPayload;
@@ -410,6 +533,81 @@ export class DeliveryWriter {
     if (outcome === 1) return "completed";
     if (outcome === -2) return "pending";
     return outcome === -1 ? "stale" : "missing";
+  }
+
+  /**
+   * Give up on a turn that has gone quiet for a full lease.
+   *
+   * Returns the delivery it abandoned so the caller can report it, or nothing
+   * when the hold is still live.
+   */
+  async expire(
+    continuationKey: string,
+  ): Promise<Result<DeliveryPayload | undefined, InvalidInput>> {
+    return this.endBadly({
+      script: EXPIRE,
+      continuationKey,
+      eveTurnId: EXPIRY_TURN_ID,
+      text: EXPIRY_TEXT,
+      footer: EXPIRY_FOOTER,
+      extraKeys: [pendingKey(continuationKey), QUEUE_INDEX_KEY],
+    });
+  }
+
+  /** Report — once — a delivery that reached the agent and was never acknowledged. */
+  async recover(
+    continuationKey: string,
+    dispatchId: string,
+  ): Promise<Result<DeliveryPayload | undefined, InvalidInput>> {
+    return this.endBadly({
+      script: RECOVER,
+      continuationKey,
+      eveTurnId: RECOVERY_TURN_ID,
+      text: RECOVERY_TEXT,
+      footer: RECOVERY_FOOTER,
+      extraKeys: [],
+      dispatchId,
+    });
+  }
+
+  /**
+   * Both bad endings, which differ only in what they say and what they release.
+   *
+   * `dispatchId` is supplied by the caller for recovery because the record still
+   * exists afterwards; expiry reads it off the record it is about to delete.
+   */
+  private async endBadly(
+    input: BadEnding,
+  ): Promise<Result<DeliveryPayload | undefined, InvalidInput>> {
+    const { script, continuationKey, eveTurnId, text, footer, extraKeys, dispatchId } = input;
+    const record = await new DeliveryReader(this.redis).read(continuationKey);
+    const target = dispatchId ?? record?.dispatchId;
+    if (target === undefined) return Result.ok(undefined);
+    const raw: unknown = await this.redis.eval(
+      script,
+      [
+        activeKey(continuationKey),
+        resetKey(continuationKey),
+        renderIntentKey(target),
+        AGENT_RENDER_READY_SET_KEY,
+        parkedKey(continuationKey),
+        ...extraKeys,
+        AGENT_READY_SET_KEY,
+      ],
+      [
+        eveTurnId,
+        text,
+        footer,
+        Date.now(),
+        "",
+        queueMember(continuationKey),
+        renderMember(target),
+        INTENT_TTL_SECONDS,
+      ],
+    );
+    if (raw === null || raw === undefined) return Result.ok(undefined);
+    const decoded = decodeDeliveryPayload(redisValue(raw));
+    return Result.isError(decoded) ? decoded : Result.ok(decoded.value);
   }
 
   /** Advertised so a caller can drop a conversation from the ready set. */

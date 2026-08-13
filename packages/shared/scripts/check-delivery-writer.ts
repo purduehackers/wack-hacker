@@ -102,6 +102,40 @@ if (admitted.status === "start") {
   check("releasing twice is refused", await writer.releaseIngress(KEY, admitted.attempt), false);
 }
 
+// The two bad endings. Both publish a terminal render and release the
+// conversation, and both take their keys positionally — which is where a
+// mistake hides silently, so they are driven rather than reasoned about.
+await scrub();
+await writer.enqueue(message, delivery, JSON.stringify({ dispatchId: DISPATCH }));
+const forExpiry = await writer.claim(KEY);
+if (Result.isOk(forExpiry) && forExpiry.value !== undefined) {
+  await writer.markLive(KEY, DISPATCH, MESSAGE_ID);
+  check("a live turn is not expired", Result.isOk(await writer.expire(KEY)), true);
+  check("its record survives", (await reader.read(KEY)) !== undefined, true);
+
+  // Backdate the hold so the sweep sees a turn that has gone quiet.
+  const held = await reader.read(KEY);
+  if (held !== undefined) {
+    await redis.set(
+      `agent:active:${KEY}`,
+      JSON.stringify({ ...held, turn: { ...held.turn, expiresAtMs: Date.now() - 1_000 } }),
+      { keepTtl: true },
+    );
+  }
+  const expired = await writer.expire(KEY);
+  check("a lapsed turn is given up on", Result.isOk(expired) && expired.value !== undefined, true);
+  check("its record is released", await reader.read(KEY), undefined);
+  const intent: unknown = await redis.get(`agent:render-intent:${DISPATCH}`);
+  check("it announces a terminal render", intent !== null && intent !== undefined, true);
+  check(
+    "that announcement is bounded",
+    (await redis.pttl(`agent:render-intent:${DISPATCH}`)) > 0,
+    true,
+  );
+  await redis.del(`agent:render-intent:${DISPATCH}`);
+  await redis.srem("agent:render-ready", `r:${DISPATCH}`);
+}
+
 await scrub();
 if (failures === 0) {
   console.info("\nthe delivery writer moves a record through every transition it owns");
