@@ -1,6 +1,6 @@
 import type { ConversationStore } from "@repo/shared/conversations";
 import { roleAtLeast, roleFromMemberRoles, UserRole } from "@repo/shared/discord";
-import { serializeError, tagOf } from "@repo/shared/errors";
+import { messageOf, tagOf } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import type { Reporter } from "@repo/shared/result/observe";
 import { sliceText } from "@repo/shared/text";
@@ -39,12 +39,11 @@ interface HitlInteractionDeps {
 }
 
 function report(deps: HitlInteractionDeps, operation: string, error: unknown): void {
-  const serialized = serializeError(error);
   deps.reporter.emit({
     op: operation,
     status: "error",
     errorTag: tagOf(error),
-    errorMessage: serialized.message,
+    errorMessage: messageOf(error),
   });
 }
 

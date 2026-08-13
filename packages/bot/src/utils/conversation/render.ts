@@ -7,7 +7,7 @@
  * dispatch never sits claimed forever.
  */
 
-import { serializeError, tagOf, Transient, UpstreamError } from "@repo/shared/errors";
+import { messageOf, tagOf, Transient, UpstreamError } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import type { ParkedPayload } from "@repo/shared/wire";
 
@@ -17,22 +17,38 @@ import { continueTrace, traceOperation } from "../../framework/observability.ts"
 import { stopFollowing, subagentProgress } from "./subagent-follower.ts";
 import type { ConversationFlowDeps, RenderWork } from "./types.ts";
 
+function emit(
+  deps: ConversationFlowDeps,
+  dispatchId: string,
+  operation: string,
+  error: unknown,
+  status: "error" | "defect",
+): void {
+  deps.reporter.emit({
+    op: operation,
+    status,
+    errorTag: tagOf(error),
+    errorMessage: messageOf(error),
+    attributes: { dispatchId },
+  });
+}
+
+/** Something went wrong with this paint; the sweep will try it again. */
 export function reportFailure(
   deps: ConversationFlowDeps,
   dispatchId: string,
   operation: string,
   error: unknown,
 ): void {
-  const serialized = serializeError(error);
-  deps.reporter.emit({
-    op: operation,
-    status: "error",
-    errorTag: tagOf(error),
-    errorMessage: serialized.message,
-    attributes: { dispatchId },
-  });
+  emit(deps, dispatchId, operation, error, "error");
 }
 
+/**
+ * Something is wrong with the *record*, so retrying cannot help.
+ *
+ * Captured as a defect rather than counted as an error: the intent, target or
+ * projection was written by us and cannot be read back by us.
+ */
 async function discardDefect(
   deps: ConversationFlowDeps,
   dispatchId: string,
@@ -40,14 +56,7 @@ async function discardDefect(
   error: Error,
 ): Promise<undefined> {
   deps.reporter.captureDefect(error, { op: operation, attributes: { dispatchId } });
-  const serialized = serializeError(error);
-  deps.reporter.emit({
-    op: operation,
-    status: "defect",
-    errorTag: tagOf(error),
-    errorMessage: serialized.message,
-    attributes: { dispatchId },
-  });
+  emit(deps, dispatchId, operation, error, "defect");
   await deps.store.render.discard(dispatchId);
   return undefined;
 }

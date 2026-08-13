@@ -15,7 +15,7 @@ import { z } from "zod";
 import { InvalidInput, Transient } from "../../errors.ts";
 import type { RedisClient } from "../../redis/client.ts";
 import { Result } from "../../result/index.ts";
-import type { DeliveryPayload, MessagePayload, ParkedPayload, RenderTarget } from "../../wire.ts";
+import type { DeliveryPayload, MessagePayload, ParkedPayload } from "../../wire.ts";
 import { decodeDeliveryPayload } from "../../wire.ts";
 import { evalFlag, redisValue } from "../io.ts";
 import {
@@ -37,7 +37,7 @@ import {
 import { LeaseDuration, RECORD_TTL_MS } from "../lease.ts";
 import { DeliveryReader } from "../readers/delivery.ts";
 import { DELIVERY_RECORD_LUA } from "../records/delivery.ts";
-import { RENDER_TTL_SECONDS } from "../records/render.ts";
+import { RENDER_TTL_SECONDS, renderTargetFor } from "../records/render.ts";
 
 /** Completed-message tombstones are only needed across plausible retries. */
 const SEEN_TTL_SECONDS = 7 * 24 * 60 * 60;
@@ -389,18 +389,6 @@ export class DeliveryWriter {
    */
   async enqueue(payload: MessagePayload): Promise<void> {
     const delivery: DeliveryPayload = { ...payload, dispatchId: crypto.randomUUID() };
-    const target: RenderTarget = {
-      dispatchId: delivery.dispatchId,
-      continuationKey: delivery.continuationKey,
-      messageId: delivery.messageId,
-      channelId: delivery.thread?.id ?? delivery.channel.id,
-      authChannelId: delivery.channel.id,
-      ...(delivery.thread === undefined ? {} : { authThreadId: delivery.thread.id }),
-      requesterUserId: delivery.principal.userId,
-      ...(delivery.anchorMessageId === undefined
-        ? { replyToMessageId: delivery.messageId }
-        : { anchorMessageId: delivery.anchorMessageId }),
-    };
     await this.redis.eval(
       ENQUEUE,
       [
@@ -416,7 +404,7 @@ export class DeliveryWriter {
         payload.messageId,
         queueMember(payload.continuationKey),
         SEEN_TTL_SECONDS,
-        JSON.stringify(target),
+        JSON.stringify(renderTargetFor(delivery)),
         RENDER_TTL_SECONDS,
       ],
     );

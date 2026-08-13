@@ -14,7 +14,7 @@
  * wires it to `@sentry/bun`; the agent wires it to eve instrumentation.
  */
 
-import { isDefect, serializeError, tagOf } from "../errors.ts";
+import { isDefect, messageOf, tagOf } from "../errors.ts";
 import type { Result } from "./index.ts";
 import { Result as ResultOps } from "./index.ts";
 
@@ -69,7 +69,7 @@ export function observe<T, E>(op: string, reporter: Reporter, result: Result<T, 
       op,
       status: defect ? "defect" : "error",
       errorTag: tagOf(error),
-      errorMessage: serializeError(error).message,
+      errorMessage: messageOf(error),
     });
   });
 }
@@ -98,7 +98,7 @@ export async function instrument<T, E>(
     op,
     status: defect ? "defect" : "error",
     errorTag: tagOf(result.error),
-    errorMessage: serializeError(result.error).message,
+    errorMessage: messageOf(result.error),
     durationMs,
   });
   return result;

@@ -20,7 +20,7 @@
 
 import { createConversationStore, type ConversationStore } from "@repo/shared/conversations";
 import { DISCORD_GUILD_ID } from "@repo/shared/discord";
-import { serializeError } from "@repo/shared/errors";
+import { messageOf } from "@repo/shared/errors";
 import { getRedis } from "@repo/shared/redis";
 import type { RedisClient } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
@@ -131,7 +131,7 @@ async function main(): Promise<void> {
     dashboardGlobalConfig: env.DASHBOARD_GLOBAL_CONFIG,
   });
   if (Result.isError(built)) {
-    console.error(`startup aborted: ${serializeError(built.error).message}`);
+    console.error(`startup aborted: ${messageOf(built.error)}`);
     process.exit(1);
   }
   const commands = built.value;
@@ -155,7 +155,7 @@ async function main(): Promise<void> {
   });
 
   if (Result.isError(connected)) {
-    console.error(`startup aborted: ${serializeError(connected.error).message}`);
+    console.error(`startup aborted: ${messageOf(connected.error)}`);
     await shutdown("startup-failure");
     process.exit(1);
   }

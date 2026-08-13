@@ -11,6 +11,7 @@ import { z } from "zod";
 
 import { contentHash, discordSnowflake } from "../../formats.ts";
 import { jsonCodec } from "../../json.ts";
+import type { DeliveryPayload, RenderTarget } from "../../wire.ts";
 
 export const renderProjectionSchema = z.object({
   anchorMessageId: discordSnowflake.optional(),
@@ -66,3 +67,27 @@ export type RenderOutcome = (typeof RenderOutcome)[keyof typeof RenderOutcome];
 
 /** How long every key in this aggregate lives: intent, target, projection, outcome. */
 export const RENDER_TTL_SECONDS = 7 * 24 * 60 * 60;
+
+/**
+ * Where a delivery may be painted, fixed at the moment it is queued.
+ *
+ * Immutable for the life of the delivery, which is what lets a paint retry
+ * without re-deriving a channel that may since have changed. Built here rather
+ * than in the delivery writer that stores it, so one place owns the shape.
+ */
+export function renderTargetFor(delivery: DeliveryPayload): RenderTarget {
+  return {
+    dispatchId: delivery.dispatchId,
+    continuationKey: delivery.continuationKey,
+    messageId: delivery.messageId,
+    channelId: delivery.thread?.id ?? delivery.channel.id,
+    authChannelId: delivery.channel.id,
+    ...(delivery.thread === undefined ? {} : { authThreadId: delivery.thread.id }),
+    requesterUserId: delivery.principal.userId,
+    // Without an anchor there is nothing to edit, so the first paint replies to
+    // the message that started the turn.
+    ...(delivery.anchorMessageId === undefined
+      ? { replyToMessageId: delivery.messageId }
+      : { anchorMessageId: delivery.anchorMessageId }),
+  };
+}

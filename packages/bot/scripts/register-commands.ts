@@ -1,7 +1,7 @@
 /** Explicit, guarded guild-command registration. Never runs during bot startup. */
 
 import { DISCORD_GUILD_ID } from "@repo/shared/discord";
-import { httpStatusOf, messageOf, serializeError, UpstreamError } from "@repo/shared/errors";
+import { httpStatusOf, messageOf, UpstreamError } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { REST, Routes } from "discord.js";
 import type { RESTPostAPIChatInputApplicationCommandsJSONBody } from "discord.js";
@@ -75,7 +75,7 @@ async function main(): Promise<void> {
     body: registrationBody,
   });
   if (Result.isError(outcome)) {
-    console.error(`command registration failed: ${serializeError(outcome.error).message}`);
+    console.error(`command registration failed: ${messageOf(outcome.error)}`);
     process.exitCode = 1;
     return;
   }
