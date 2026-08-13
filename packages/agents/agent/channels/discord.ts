@@ -96,7 +96,7 @@ async function steerActiveTurn(
 }
 
 const renderPublisher = createRenderPublisher({
-  store: conversations.renderPublication,
+  store: conversations.render,
   botUrl: () => resolveBotBaseUrl(redis, env.BOT_URL),
   botSecret: env.BOT_INGRESS_SECRET,
 });
@@ -574,7 +574,6 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
           id,
           storedChallenge,
           challengeTtl(expiresAt),
-          60 * 60,
         );
         const authorization = {
           id,
@@ -612,7 +611,7 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
       } else {
         const dispatchId = state.activeDispatchId;
         if (dispatchId !== undefined) {
-          await conversations.authorizations.delete(dispatchId, completed.id);
+          await conversations.authorizations.forget(dispatchId, completed.id);
         }
         state.pendingAuthorizationNames = state.pendingAuthorizationNames.filter(
           (id) => id !== completed.id,

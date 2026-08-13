@@ -15,7 +15,7 @@
 
 import { z } from "zod";
 
-import { leaseSchema } from "../lease.ts";
+import { LEASE_LUA, leaseSchema } from "../lease.ts";
 
 /**
  * Mirrors `DeliveryPhase` in `machines/delivery.ts`.
@@ -67,3 +67,21 @@ export const deliveryRecordSchema = z.strictObject({
 });
 
 export type DeliveryRecord = z.output<typeof deliveryRecordSchema>;
+
+/**
+ * The persisted form's Lua counterpart: fence, then write.
+ *
+ * Prepended to every script that touches this record, in either writer. Kept
+ * beside the schema because both express the same thing — what this record is
+ * allowed to look like after a write — and a `SET` written out by hand at each
+ * call site is a `SET` that will eventually be written differently at one of
+ * them. It already was: `KEEPTTL` was forgotten in three scripts at once, which
+ * cleared the expiry `claim` had just set and left four conversations wedged for
+ * a day with no deadline to rescue them.
+ */
+export const DELIVERY_RECORD_LUA = `
+${LEASE_LUA}
+local function writeRecord(key, record)
+  redis.call("SET", key, cjson.encode(record), "KEEPTTL")
+end
+`;

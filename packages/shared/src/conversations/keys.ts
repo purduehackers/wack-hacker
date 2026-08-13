@@ -105,22 +105,3 @@ export function authorizationIndexKey(dispatchId: string): string {
 export function scheduledFireReceiptKey(occurrenceId: string): string {
   return `agent:scheduled-fire:${occurrenceId}`;
 }
-
-/**
- * The only sanctioned way to write the active record back from Lua.
- *
- * Eight scripts across three files rewrite this record, and every one of them
- * has to preserve invariants that do not live inside the JSON — the key's
- * expiry above all. Written out by hand eight times, that is eight chances to
- * forget, and it was forgotten three times in one night: `wack:start-delivery`
- * stripped the TTL off every delivery moments after `claim` set it.
- *
- * Prepend this to any script that rewrites the record and call `writeActive`.
- * A new invariant then gets added once, here, rather than found missing later
- * in whichever script nobody thought to grep for.
- */
-export const ACTIVE_RECORD_LUA = `
-local function writeActive(key, active)
-  redis.call("SET", key, cjson.encode(active), "KEEPTTL")
-end
-`;

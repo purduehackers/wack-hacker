@@ -32,7 +32,8 @@ const ANSWER_FIELD_ID = "answer";
 
 interface HitlInteractionDeps {
   readonly flow: ConversationFlow;
-  readonly renders: ConversationStore["render"];
+  readonly renders: ConversationStore["renders"];
+  readonly challenges: ConversationStore["authorizationChallenges"];
   readonly reporter: Reporter;
   readonly guildId: string;
 }
@@ -486,7 +487,7 @@ async function handleAuthorization(
     await ephemeral(interaction, "This authorization challenge is no longer active.");
     return;
   }
-  const challenge = await deps.renders.authorization(locator.dispatchId, authorization.id);
+  const challenge = await deps.challenges.challenge(locator.dispatchId, authorization.id);
   if (Result.isError(challenge)) {
     report(deps, "agent.hitl.decode-authorization-challenge", challenge.error);
     await ephemeral(interaction, "This authorization challenge is temporarily unavailable.");

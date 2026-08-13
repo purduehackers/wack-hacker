@@ -85,7 +85,8 @@ function createConversationSeam(
   });
   const hitl = createHitlInteractionHandler({
     flow,
-    renders: conversations.render,
+    renders: conversations.renders,
+    challenges: conversations.authorizationChallenges,
     reporter: consoleReporter,
     guildId: DISCORD_GUILD_ID,
   });

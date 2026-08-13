@@ -140,7 +140,7 @@ async function reconcileParked(runtime: FlowRuntime): Promise<void> {
 
 async function renderDispatches(runtime: FlowRuntime): Promise<void> {
   const { deps } = runtime;
-  const ready = new Set(await deps.store.render.ready());
+  const ready = new Set(await deps.store.renders.pending());
   for (const dispatchId of runtime.pendingDispatches) ready.add(dispatchId);
   runtime.pendingDispatches.clear();
   const dispatches = [...ready];

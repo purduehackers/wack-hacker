@@ -242,7 +242,7 @@ export async function admitScheduledFire(
 export async function onParked(runtime: FlowRuntime, payload: ParkedPayload): Promise<void> {
   const { deps } = runtime;
   if (runtime.isStopped()) return;
-  const outcome = await deps.store.render.outcome(payload.dispatchId);
+  const outcome = await deps.store.renders.outcome(payload.dispatchId);
   if (outcome === undefined) {
     runtime.pendingDispatches.add(payload.dispatchId);
     reportPendingRender(deps, payload);

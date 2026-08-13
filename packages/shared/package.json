@@ -28,8 +28,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "check:invariants": "bun scripts/check-invariants.ts",
-    "check:machines": "bun scripts/check-machines.ts",
-    "check:delivery": "bun scripts/check-delivery-writer.ts"
+    "check:delivery": "bun scripts/check-delivery-writer.ts",
+    "check:render": "bun scripts/check-render-writer.ts"
   },
   "dependencies": {
     "@libsql/client": "^0.17.4",

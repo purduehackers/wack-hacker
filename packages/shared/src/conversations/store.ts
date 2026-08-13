@@ -1,7 +1,6 @@
 /** The only Redis-facing API for durable conversation coordination. */
 
 import type { RedisClient } from "../redis/client.ts";
-import { createAuthorizationTransitions } from "./authorization.ts";
 import { createHitlTransitions } from "./hitl.ts";
 import { createInteractionTransitions } from "./interaction.ts";
 import {
@@ -21,12 +20,14 @@ import {
   resetKey,
   resetPendingKey,
 } from "./keys.ts";
+import { AuthorizationReader } from "./readers/authorization.ts";
 import { DeliveryReader } from "./readers/delivery.ts";
-import { createRenderPublicationTransitions } from "./render-publication.ts";
-import { createRenderTransitions } from "./render.ts";
+import { RenderReader } from "./readers/render.ts";
 import { createScheduledFireTransitions } from "./scheduled-fire.ts";
 import { createSubagentTransitions } from "./subagents.ts";
+import { AuthorizationWriter } from "./writers/authorization.ts";
 import { DeliveryWriter } from "./writers/delivery.ts";
+import { RenderWriter } from "./writers/render.ts";
 
 export function createConversationStore(deps: { readonly redis: RedisClient }) {
   const { redis } = deps;
@@ -40,12 +41,14 @@ export function createConversationStore(deps: { readonly redis: RedisClient }) {
      */
     deliveries: new DeliveryReader(redis),
     delivery: new DeliveryWriter(redis),
+    /** Same split again: `renders` only looks, `render` changes something. */
+    renders: new RenderReader(redis),
+    render: new RenderWriter(redis),
+    authorizationChallenges: new AuthorizationReader(redis),
+    authorizations: new AuthorizationWriter(redis),
     subagents: createSubagentTransitions(redis),
-    render: createRenderTransitions(redis),
-    renderPublication: createRenderPublicationTransitions(redis),
     hitl: createHitlTransitions(redis),
     interactions: createInteractionTransitions(redis),
-    authorizations: createAuthorizationTransitions(redis),
     scheduledFires: createScheduledFireTransitions(redis),
 
     /**

@@ -36,8 +36,9 @@ import {
   resetPendingKey,
   seenKey,
 } from "../keys.ts";
-import { LEASE_LUA, LeaseDuration, RECORD_TTL_MS } from "../lease.ts";
+import { LeaseDuration, RECORD_TTL_MS } from "../lease.ts";
 import { DeliveryReader } from "../readers/delivery.ts";
+import { DELIVERY_RECORD_LUA } from "../records/delivery.ts";
 import { redisValue } from "../redis-value.ts";
 
 /** Completed-message tombstones are only needed across plausible retries. */
@@ -60,20 +61,6 @@ export const RECOVERY_TEXT =
 export const RECOVERY_FOOTER =
   "React ✅ to this message to reset the conversation before retrying, or start a new thread.";
 
-/**
- * Prepended to every script here.
- *
- * `writeRecord` is the single sanctioned rewrite, for the reason in this file's
- * header. It sits beside the lease helpers so a fence and the write it guards
- * are never separated.
- */
-const RECORD_LUA = `
-${LEASE_LUA}
-local function writeRecord(key, record)
-  redis.call("SET", key, cjson.encode(record), "KEEPTTL")
-end
-`;
-
 const ENQUEUE = `
 -- delivery:enqueue
 local firstSighting = redis.call("SADD", KEYS[3], ARGV[2])
@@ -91,7 +78,7 @@ return 1
 `;
 
 const CLAIM = `
-${RECORD_LUA}
+${DELIVERY_RECORD_LUA}
 -- delivery:claim
 if redis.call("GET", KEYS[4]) then return nil end
 local raw = redis.call("GET", KEYS[2])
@@ -126,7 +113,7 @@ return deliveryRaw
 `;
 
 const REFRESH_TURN = `
-${RECORD_LUA}
+${DELIVERY_RECORD_LUA}
 -- delivery:refresh-turn
 local raw = redis.call("GET", KEYS[1])
 if not raw then return 0 end
@@ -141,7 +128,7 @@ return 1
 `;
 
 const CONFIRM_SESSION = `
-${RECORD_LUA}
+${DELIVERY_RECORD_LUA}
 -- delivery:confirm-session
 local raw = redis.call("GET", KEYS[1])
 if not raw then return 0 end
@@ -166,7 +153,7 @@ return 1
  * place that answer exists.
  */
 const MARK_LIVE = `
-${RECORD_LUA}
+${DELIVERY_RECORD_LUA}
 -- delivery:mark-live
 if redis.call("GET", KEYS[2]) then return "resetting" end
 local raw = redis.call("GET", KEYS[1])
@@ -198,7 +185,7 @@ return "in-progress"
 `;
 
 const RELEASE_INGRESS = `
-${RECORD_LUA}
+${DELIVERY_RECORD_LUA}
 -- delivery:release-ingress
 local raw = redis.call("GET", KEYS[1])
 if not raw then return 0 end
@@ -293,7 +280,7 @@ end
  * is worse than one that says it stopped.
  */
 const EXPIRE = `
-${RECORD_LUA}
+${DELIVERY_RECORD_LUA}
 ${ANNOUNCE_FAILURE_LUA}
 -- delivery:expire
 if redis.call("GET", KEYS[2]) then return nil end
@@ -315,7 +302,7 @@ return record.deliveryRaw
  * without the flag a stuck delivery would log a line per pass forever.
  */
 const RECOVER = `
-${RECORD_LUA}
+${DELIVERY_RECORD_LUA}
 ${ANNOUNCE_FAILURE_LUA}
 -- delivery:recover
 if redis.call("GET", KEYS[2]) then return nil end

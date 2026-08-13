@@ -77,7 +77,7 @@ async function loadWork(
   deps: ConversationFlowDeps,
   dispatchId: string,
 ): Promise<RenderWork | undefined> {
-  const desired = await deps.store.render.intent(dispatchId);
+  const desired = await deps.store.renders.intent(dispatchId);
   if (Result.isError(desired)) {
     return discardDefect(deps, dispatchId, "agent.render.decode-intent", desired.error);
   }
@@ -86,7 +86,7 @@ async function loadWork(
     return undefined;
   }
 
-  const targetResult = await deps.store.render.target(dispatchId);
+  const targetResult = await deps.store.renders.target(dispatchId);
   if (Result.isError(targetResult)) {
     return discardDefect(deps, dispatchId, "agent.render.decode-target", targetResult.error);
   }
@@ -114,7 +114,7 @@ async function loadWork(
     );
   }
 
-  const loaded = await deps.store.render.projection(dispatchId, target.anchorMessageId);
+  const loaded = await deps.store.renders.projection(dispatchId, target.anchorMessageId);
   if (Result.isError(loaded)) {
     return discardDefect(deps, dispatchId, "agent.render.decode-projection", loaded.error);
   }
@@ -221,13 +221,13 @@ export async function applyLatest(
         async () => {
           if (!(await paint(deps, dispatchId, claimToken, work))) return "done";
 
-          const completion = await deps.store.render.complete(
+          const completion = await deps.store.render.complete({
             dispatchId,
             claimToken,
-            work.projection,
-            Math.max(work.appliedRevision, work.intent.revision),
-            work.intent.phase !== "streaming",
-          );
+            projection: work.projection,
+            appliedRevision: Math.max(work.appliedRevision, work.intent.revision),
+            terminal: work.intent.phase !== "streaming",
+          });
           releaseClaim = false;
           if (completion === "lost") {
             reportFailure(

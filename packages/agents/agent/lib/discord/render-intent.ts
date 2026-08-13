@@ -25,7 +25,7 @@ export function renderFooter(input: FooterInput): string {
 }
 
 export interface RenderPublisherDeps {
-  readonly store: ConversationStore["renderPublication"];
+  readonly store: ConversationStore["render"];
   readonly botUrl: () => Promise<string>;
   readonly botSecret: string;
 }
