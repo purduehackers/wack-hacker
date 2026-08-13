@@ -407,12 +407,11 @@ for (let cut = 1; cut < steps.length; cut += 1) {
   await restart();
   for (const step of steps.slice(0, cut)) await runStep(step, "expected");
 
+  // Boundedness is I2 and I3 inside `check`, which runs on the line above: a
+  // record with no expiry, or with no lease for the sweep to read, is already a
+  // reported violation. A second test for both at once could only ever fire when
+  // those two had, so it asserted nothing.
   failures += await check(`crash after ${steps[cut - 1]?.name ?? "?"}`);
-  const active = await readActive();
-  const bounded = (await redis.pttl(`agent:active:${KEY}`)) !== -1;
-  if (active !== undefined && active.turn === undefined && !bounded) {
-    fail("unbounded: nothing will ever release this conversation");
-  }
 }
 
 await scrub();

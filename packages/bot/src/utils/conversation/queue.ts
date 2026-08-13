@@ -11,6 +11,7 @@ import { messageOf, tagOf, Transient } from "@repo/shared/errors";
 import type { KnownError } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { sliceText } from "@repo/shared/text";
+import { MAX_CONTENT_CHARS, MAX_SCHEDULE_CONTENT_CHARS } from "@repo/shared/wire";
 import type {
   MessagePayload,
   ParkedPayload,
@@ -70,8 +71,17 @@ export async function kick(
   return sent.error;
 }
 
-/** Matches `content` on the wire schema, so a fold can never overflow it. */
-const MAX_CONTENT = 9_000;
+/**
+ * The cap a folded message must respect, which depends on the kind.
+ *
+ * `content` carries `max(9_000)` on the schema, but a refinement holds anything
+ * that did not come from a schedule to 4_000 — Discord's own ceiling. Folding to
+ * the larger number produced a payload `enqueue` stored happily and `claim` could
+ * never decode, wedging the conversation until the turn lease lapsed.
+ */
+function contentLimit(payload: MessagePayload): number {
+  return payload.kind === "scheduled" ? MAX_SCHEDULE_CONTENT_CHARS : MAX_CONTENT_CHARS;
+}
 
 /** Every durable step here fails the same way: a `Transient` naming what failed. */
 function transient(operation: string) {
@@ -93,7 +103,8 @@ function transient(operation: string) {
  */
 function coalesce(payload: MessagePayload, superseded: string | undefined): MessagePayload {
   if (superseded === undefined || superseded === "") return payload;
-  return { ...payload, content: sliceText(`${superseded}\n\n${payload.content}`, MAX_CONTENT) };
+  const folded = `${superseded}\n\n${payload.content}`;
+  return { ...payload, content: sliceText(folded, contentLimit(payload)) };
 }
 
 /**

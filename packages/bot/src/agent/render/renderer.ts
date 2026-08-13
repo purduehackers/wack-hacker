@@ -447,6 +447,15 @@ export function createRenderer(deps: RendererDeps, state: RendererProjection) {
   const rendering: RenderContext = { deps, state };
   return {
     write: async (input: RenderInput): Promise<Result<undefined, RenderWriteError>> => {
+      // Recorded before the writes, so whatever the anchor ends up carrying is
+      // what the projection claims it carries. A checkpoint inside the writes
+      // then persists it, which is what lets a later paint decide whether the
+      // line on screen is still current.
+      if (input.subagentActivity === undefined || input.subagentActivity === "") {
+        delete state.subagentActivity;
+      } else {
+        state.subagentActivity = input.subagentActivity;
+      }
       if (!input.terminal) {
         // The anchor keeps only the streamed body; the request gets its own
         // message so its mention is delivered as a notification.

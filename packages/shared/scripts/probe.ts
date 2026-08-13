@@ -7,6 +7,24 @@
  * prints rather than throws so one failure does not hide the rest.
  */
 
+import {
+  activeKey,
+  AGENT_READY_SET_KEY,
+  AGENT_RENDER_READY_SET_KEY,
+  parkedKey,
+  pendingKey,
+  QUEUE_INDEX_KEY,
+  queueMember,
+  renderClaimKey,
+  renderIntentKey,
+  renderMember,
+  renderOutcomeKey,
+  renderProjectionKey,
+  renderTargetKey,
+  resetKey,
+  resetPendingKey,
+  seenKey,
+} from "../src/conversations/keys.ts";
 import type { RedisClient } from "../src/redis/client.ts";
 import type { MessagePayload } from "../src/wire.ts";
 
@@ -31,8 +49,10 @@ export function probeMessage(ids: ProbeIds, content: string): MessagePayload {
 /**
  * Erase everything a probe can touch.
  *
- * Render keys are per-dispatch and `enqueue` mints those ids itself, so the
- * caller collects them as it goes and hands them back here.
+ * Through the key catalog, not by re-spelling it: a probe that scrubs a key the
+ * code no longer writes leaves the real one behind, and the next run inherits it.
+ * Render keys are per-dispatch and `enqueue` mints those ids itself, so the caller
+ * collects them as it goes and hands them back here.
  */
 export async function scrubProbe(
   redis: RedisClient,
@@ -40,25 +60,25 @@ export async function scrubProbe(
   minted: ReadonlySet<string>,
 ): Promise<void> {
   await redis.del(
-    `agent:active:${continuationKey}`,
-    `agent:parked:${continuationKey}`,
-    `pending:${continuationKey}`,
-    `agent:seen:${continuationKey}`,
-    `agent:reset:${continuationKey}`,
-    `agent:reset-pending:${continuationKey}`,
+    activeKey(continuationKey),
+    parkedKey(continuationKey),
+    pendingKey(continuationKey),
+    seenKey(continuationKey),
+    resetKey(continuationKey),
+    resetPendingKey(continuationKey),
   );
   for (const dispatchId of minted) {
     await redis.del(
-      `agent:render-target:${dispatchId}`,
-      `agent:render-intent:${dispatchId}`,
-      `agent:render-projection:${dispatchId}`,
-      `agent:render-claim:${dispatchId}`,
-      `agent:render-outcome:${dispatchId}`,
+      renderTargetKey(dispatchId),
+      renderIntentKey(dispatchId),
+      renderProjectionKey(dispatchId),
+      renderClaimKey(dispatchId),
+      renderOutcomeKey(dispatchId),
     );
-    await redis.srem("agent:render-ready", `r:${dispatchId}`);
+    await redis.srem(AGENT_RENDER_READY_SET_KEY, renderMember(dispatchId));
   }
-  await redis.srem("agent:queues", `k:${continuationKey}`);
-  await redis.srem("agent:ready", `k:${continuationKey}`);
+  await redis.srem(QUEUE_INDEX_KEY, queueMember(continuationKey));
+  await redis.srem(AGENT_READY_SET_KEY, queueMember(continuationKey));
 }
 
 /** Prints the verdict and exits non-zero if anything failed. */

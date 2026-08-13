@@ -482,7 +482,11 @@ async function handleAuthorization(
     await ephemeral(interaction, "This authorization challenge is temporarily unavailable.");
     return;
   }
-  if (projection.value.anchorMessageId !== sourceMessageId) {
+  // The same carrier rule as an input request: the anchor is written with no
+  // components at all, so a Connect button is always on the HITL message.
+  // Comparing against the anchor refused every click.
+  const carrier = projection.value.hitlMessageId ?? projection.value.anchorMessageId;
+  if (carrier !== sourceMessageId) {
     await ephemeral(interaction, "This authorization challenge is no longer active.");
     return;
   }

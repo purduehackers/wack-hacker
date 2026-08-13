@@ -114,15 +114,24 @@ check(
   await throws(() => writer.publish(intentFor(dispatchId, 1, "streaming", "different"))),
   true,
 );
-check(
-  "a straggler behind the current frame is dropped",
-  (await writer.publish(intentFor(dispatchId, 1, "streaming"))).accepted,
-  true,
-);
 const advanced = await writer.publish(intentFor(dispatchId, 2, "streaming", "second"));
 check("a newer frame replaces it", advanced.accepted, true);
 const readIntent = await reader.intent(dispatchId);
 check("and reads back", Result.isOk(readIntent) && readIntent.value?.revision, 2);
+// Only meaningful once a *higher* revision is stored. Asserted before the bump,
+// this re-tested the identical-replay path and expected `accepted: true` — the
+// opposite of being dropped.
+check(
+  "a straggler behind the current frame is dropped",
+  (await writer.publish(intentFor(dispatchId, 1, "streaming"))).accepted,
+  false,
+);
+const afterStraggler = await reader.intent(dispatchId);
+check(
+  "and leaves the current frame alone",
+  Result.isOk(afterStraggler) && afterStraggler.value?.revision,
+  2,
+);
 check("publishing pushes the turn lease out", (await redis.pttl(`agent:active:${KEY}`)) > 0, true);
 
 // Painting: the bot's side.

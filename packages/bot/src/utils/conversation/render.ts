@@ -144,7 +144,17 @@ async function paint(
   claimToken: string,
   work: RenderWork,
 ): Promise<boolean> {
-  if (work.appliedRevision >= work.intent.revision) return true;
+  // Never on a terminal frame: the follower is stopped just below, and a finished
+  // turn showing "code: reading files" is a line about work that is over.
+  const progress = work.intent.phase === "streaming" ? subagentProgress(dispatchId) : undefined;
+  // The revision alone cannot decide this. A delegated turn publishes no renders
+  // for the whole span a subagent runs, so its narration changes what is on
+  // screen without changing the intent — and a guard on the revision by itself
+  // made every follower line a no-op, which is precisely the case the follower
+  // exists for.
+  const current = work.appliedRevision >= work.intent.revision;
+  const narrated = (progress ?? "") === (work.projection.subagentActivity ?? "");
+  if (current && narrated) return true;
 
   const renderer = createRenderer(
     {
@@ -161,7 +171,6 @@ async function paint(
     work.projection,
   );
   const hitl = work.intent.phase === "streaming" ? renderHitl(work.intent) : undefined;
-  const progress = subagentProgress(dispatchId);
   const painted = await renderer.write({
     text: work.intent.text,
     activity: work.intent.activity,

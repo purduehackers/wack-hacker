@@ -26,7 +26,21 @@ import type { ConversationFlowDeps } from "./types.ts";
 
 const MAX_LINE = 200;
 
-const running = new Map<string, AbortController>();
+/**
+ * One delegation's open streams: the parent, plus every child it adopts.
+ *
+ * The set matters. A child is started mid-stream and never awaited, so clearing
+ * the entry when the *parent* settles left children running with nobody holding
+ * their controller — unabortable at shutdown, and invisible to the idempotency
+ * check, so the next sweep started a second parent that replayed
+ * `subagent.called` and adopted the same child again.
+ */
+interface Following {
+  readonly controller: AbortController;
+  readonly streams: Set<Promise<void>>;
+}
+
+const running = new Map<string, Following>();
 
 /**
  * The latest line each delivery is showing.
@@ -106,6 +120,7 @@ interface Follow {
   readonly client: Client;
   readonly signal: AbortSignal;
   readonly onLine: () => Promise<void>;
+  readonly following: Following;
 }
 
 interface Stream {
@@ -148,7 +163,7 @@ async function readStream(follow: Follow, stream: Stream): Promise<void> {
       // Not awaited: the parent's stream must keep draining, and both feed the
       // same line. A child does not adopt its own children — following every
       // level would open a stream per node of the tree.
-      void launch(follow, {
+      launch(follow, {
         sessionId: event.data.childSessionId,
         subagent: event.data.name,
         since: 0,
@@ -165,8 +180,9 @@ async function readStream(follow: Follow, stream: Stream): Promise<void> {
   }
 }
 
-function launch(follow: Follow, stream: Stream): Promise<void> {
-  return readStream(follow, stream).catch((cause: unknown) => {
+/** Start a stream and keep it in the tree until it settles. */
+function launch(follow: Follow, stream: Stream): void {
+  const open = readStream(follow, stream).catch((cause: unknown) => {
     if (follow.signal.aborted) return;
     follow.deps.reporter.emit({
       op: "agent.render.follow-subagent",
@@ -176,6 +192,8 @@ function launch(follow: Follow, stream: Stream): Promise<void> {
       attributes: { dispatchId: follow.dispatchId, sessionId: stream.sessionId },
     });
   });
+  follow.following.streams.add(open);
+  void open.finally(() => follow.following.streams.delete(open));
 }
 
 /**
@@ -194,18 +212,17 @@ export function followSubagent(
   if (running.has(dispatchId)) return;
   // One controller for the whole tree, so stopping the delivery stops the parent
   // stream and every child it adopted in one call.
-  const controller = new AbortController();
-  running.set(dispatchId, controller);
+  const following: Following = { controller: new AbortController(), streams: new Set() };
+  running.set(dispatchId, following);
 
-  // Only the parent clears the entry, so a delegation that ends on its own does
-  // not block the next one from being followed.
-  void launch(
+  launch(
     {
       deps,
       dispatchId,
       continuationKey,
-      signal: controller.signal,
+      signal: following.controller.signal,
       onLine,
+      following,
       // The stream token is a Vercel OIDC token, minted where the delegation was
       // announced because the bot has no Vercel identity of its own. Declaring it
       // as OIDC also sends the trusted-OIDC header that deployment protection
@@ -223,21 +240,28 @@ export function followSubagent(
       since: Date.parse(delegation.startedAt),
       adoptChildren: true,
     },
-  ).finally(() => {
-    running.delete(dispatchId);
+  );
+
+  // Cleared only once the whole tree is quiet. The loop re-checks because a child
+  // can be adopted while this is awaiting, and the identity check keeps a settling
+  // follower from evicting the one that replaced it.
+  void (async () => {
+    while (following.streams.size > 0) await Promise.allSettled(following.streams);
+  })().finally(() => {
+    if (running.get(dispatchId) === following) running.delete(dispatchId);
   });
 }
 
 /** Called when the turn ends, so a finished delivery leaves nothing streaming. */
 export function stopFollowing(dispatchId: string): void {
-  running.get(dispatchId)?.abort();
+  running.get(dispatchId)?.controller.abort();
   running.delete(dispatchId);
   progress.delete(dispatchId);
 }
 
 /** Shutdown: every open stream is dropped before the process goes. */
 export function stopAllFollowers(): void {
-  for (const controller of running.values()) controller.abort();
+  for (const following of running.values()) following.controller.abort();
   running.clear();
   progress.clear();
 }

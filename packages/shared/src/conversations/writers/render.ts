@@ -46,8 +46,14 @@ import { projectionCodec, RENDER_TTL_SECONDS } from "../records/render.ts";
  *
  * Fenced on the revision: a lower one is a straggler and is dropped, and the same
  * one with different content is a bug in the publisher rather than a race, so it
- * is refused loudly instead of silently picking a winner. A terminal intent may
- * overwrite a streaming one at the same revision, never the reverse.
+ * is refused loudly instead of silently picking a winner.
+ *
+ * The equal-revision branch is phase-blind — a terminal frame arriving at a
+ * revision a streaming frame already used is refused like any other reuse. That
+ * case is real, because agent state can crash after a publish it never recorded,
+ * and `settleAndPark` is what handles it: it bumps the revision rather than
+ * colliding. The one thing phase decides here is the reverse, above: a streaming
+ * frame may never overwrite a settled one.
  */
 const PUBLISH = `
 ${DELIVERY_RECORD_LUA}

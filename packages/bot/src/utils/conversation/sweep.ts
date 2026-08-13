@@ -87,7 +87,15 @@ async function watchDelegation(deps: ConversationFlowDeps, continuationKey: stri
   if (holder === undefined) return;
   const { dispatchId } = holder;
   const delegation = await deps.store.delegations.current(dispatchId);
-  if (Result.isError(delegation)) return;
+  if (Result.isError(delegation)) {
+    // Silence here is indistinguishable from "no delegation": the follower never
+    // starts, the turn narrates nothing, and its lease is refreshed by nothing.
+    deps.reporter.captureDefect(delegation.error, {
+      op: "agent.router.decode-delegation",
+      attributes: { continuationKey, dispatchId },
+    });
+    return;
+  }
   if (delegation.value === undefined) {
     stopFollowing(dispatchId);
     return;

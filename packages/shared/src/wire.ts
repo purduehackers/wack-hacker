@@ -40,9 +40,9 @@ import { discordSnowflake as snowflake, shortId, traceparent } from "./formats.t
 import { Result } from "./result/index.ts";
 
 /** Discord's own ceiling is 4000 characters for a user message. */
-const MAX_CONTENT_CHARS = 4_000;
+export const MAX_CONTENT_CHARS = 4_000;
 /** A scheduled prompt is application-owned and never came from a Discord message. */
-const MAX_SCHEDULE_CONTENT_CHARS = 9_000;
+export const MAX_SCHEDULE_CONTENT_CHARS = 9_000;
 /** Lead-in context the agent pins on the first turn only. */
 const MAX_LEADIN_MESSAGES = 20;
 const MAX_ATTACHMENTS = 10;
