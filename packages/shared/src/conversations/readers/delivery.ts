@@ -18,7 +18,7 @@ import type { RedisClient } from "../../redis/client.ts";
 import { Result } from "../../result/index.ts";
 import type { ParkedPayload } from "../../wire.ts";
 import { decodeParkedPayload } from "../../wire.ts";
-import { activeKey, parkedKey, pendingKey } from "../keys.ts";
+import { activeKey, AGENT_READY_SET_KEY, parkedKey, pendingKey, QUEUE_INDEX_KEY } from "../keys.ts";
 import { leaseExpired } from "../lease.ts";
 import type { DeliveryRecord } from "../records/delivery.ts";
 import { deliveryRecordSchema } from "../records/delivery.ts";
@@ -44,9 +44,9 @@ export interface Holder {
 const storedContent = stored(z.looseObject({ content: z.string() }));
 
 export class DeliveryReader {
-  private readonly redis: Pick<RedisClient, "get" | "llen">;
+  private readonly redis: Pick<RedisClient, "get" | "llen" | "smembers">;
 
-  constructor(redis: Pick<RedisClient, "get" | "llen">) {
+  constructor(redis: Pick<RedisClient, "get" | "llen" | "smembers">) {
     this.redis = redis;
   }
 
@@ -98,4 +98,28 @@ export class DeliveryReader {
   async queueDepth(continuationKey: string): Promise<number> {
     return this.redis.llen(pendingKey(continuationKey));
   }
+
+  /** Every conversation with work outstanding. */
+  async conversations(): Promise<readonly string[]> {
+    return continuationKeys(await this.redis.smembers(QUEUE_INDEX_KEY));
+  }
+
+  /** Conversations with a parked turn waiting to be reconciled. */
+  async awaitingReconcile(): Promise<readonly string[]> {
+    return continuationKeys(await this.redis.smembers(AGENT_READY_SET_KEY));
+  }
 }
+
+/**
+ * Index members carry their own prefix, so a malformed one is dropped rather
+ * than thrown on. These sets are swept every pass; one bad member must not stop
+ * the sweep from reaching the rest.
+ */
+function continuationKeys(members: readonly unknown[]): readonly string[] {
+  return members.flatMap((entry) => {
+    const parsed = queueMemberSchema.safeParse(entry);
+    return parsed.success ? [parsed.data.slice(2)] : [];
+  });
+}
+
+const queueMemberSchema = z.stringFormat("queue-member", /^k:\d{17,20}$/u);

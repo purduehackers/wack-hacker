@@ -136,6 +136,30 @@ if (Result.isOk(forExpiry) && forExpiry.value !== undefined) {
   await redis.srem("agent:render-ready", `r:${DISPATCH}`);
 }
 
+// Reset. The shadow queue is the part worth proving: a message that arrives
+// during a reset must survive it, or the cutover loses the person's words along
+// with the conversation's history.
+await scrub();
+await redis.del(`agent:reset-pending:${KEY}`);
+const barrier = await writer.beginReset(KEY);
+check("beginReset installs a barrier", barrier.length > 0, true);
+check("a retry reuses the same barrier", await writer.beginReset(KEY), barrier);
+check("the barrier is bounded", (await redis.pttl(`agent:reset:${KEY}`)) > 0, true);
+
+await writer.enqueue(
+  { ...message, messageId: "99999999999999698" },
+  { ...delivery, messageId: "99999999999999698" },
+  JSON.stringify({ dispatchId: DISPATCH }),
+);
+check("a message during reset is diverted", await reader.queueDepth(KEY), 0);
+check("and is not advertised", await redis.sismember("agent:queues", `k:${KEY}`), 0);
+
+check("commitReset refuses a wrong id", await writer.commitReset(KEY, "not-the-barrier"), false);
+check("commitReset completes", await writer.commitReset(KEY, barrier), true);
+check("the diverted message is restored", await reader.queueDepth(KEY), 1);
+check("and re-advertised", await redis.sismember("agent:queues", `k:${KEY}`), 1);
+await redis.del(`agent:reset-pending:${KEY}`);
+
 await scrub();
 if (failures === 0) {
   console.info("\nthe delivery writer moves a record through every transition it owns");

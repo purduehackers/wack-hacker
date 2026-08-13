@@ -15,7 +15,7 @@
 
 import { z } from "zod";
 
-import { InvalidInput } from "../../errors.ts";
+import { InvalidInput, Transient } from "../../errors.ts";
 import type { RedisClient } from "../../redis/client.ts";
 import { Result } from "../../result/index.ts";
 import type { DeliveryPayload, MessagePayload, ParkedPayload } from "../../wire.ts";
@@ -333,6 +333,39 @@ writeRecord(KEYS[1], record)
 return record.deliveryRaw
 `;
 
+const BEGIN_RESET = `
+-- delivery:begin-reset
+local existing = redis.call("GET", KEYS[1])
+if existing then return existing end
+redis.call("SET", KEYS[1], ARGV[1], "EX", tonumber(ARGV[2]))
+return ARGV[1]
+`;
+
+const COMMIT_RESET = `
+-- delivery:commit-reset
+if redis.call("GET", KEYS[5]) ~= ARGV[1] then return 0 end
+redis.call("DEL", KEYS[1], KEYS[3], KEYS[4])
+redis.call("SREM", KEYS[6], ARGV[2])
+redis.call("SREM", KEYS[7], ARGV[2])
+-- What arrived during the reset survives it, and is re-advertised only if there
+-- is actually something to claim.
+local waiting = redis.call("LRANGE", KEYS[2], 0, -1)
+for _, entry in ipairs(waiting) do redis.call("RPUSH", KEYS[1], entry) end
+redis.call("DEL", KEYS[2], KEYS[5])
+if #waiting > 0 then redis.call("SADD", KEYS[6], ARGV[2]) end
+return 1
+`;
+
+/**
+ * How long a reset barrier may block a conversation.
+ *
+ * The barrier this replaces had no expiry at all: six scripts refuse while it
+ * exists, so a `beginReset` whose follow-through never landed blocked the
+ * conversation permanently. Bounded, because nothing here may be immortal — and
+ * a reset that has not completed in an hour is not going to.
+ */
+const RESET_BARRIER_TTL_SECONDS = 60 * 60;
+
 /** One bad ending's worth of difference from the other. */
 interface BadEnding {
   readonly script: string;
@@ -608,6 +641,54 @@ export class DeliveryWriter {
     if (raw === null || raw === undefined) return Result.ok(undefined);
     const decoded = decodeDeliveryPayload(redisValue(raw));
     return Result.isError(decoded) ? decoded : Result.ok(decoded.value);
+  }
+
+  /**
+   * Install the reset barrier, or return the one already installed.
+   *
+   * Idempotent by returning the existing token: a retried reset must reuse the
+   * id it started with, or the cutover it eventually performs would belong to a
+   * different attempt than the one that stopped the traffic.
+   */
+  async beginReset(continuationKey: string): Promise<string> {
+    const token = crypto.randomUUID();
+    const raw: unknown = await this.redis.eval(
+      BEGIN_RESET,
+      [resetKey(continuationKey)],
+      [token, RESET_BARRIER_TTL_SECONDS],
+    );
+    const owner = z.string().min(1).safeParse(raw);
+    if (!owner.success) {
+      throw new Transient({
+        operation: "install the reset barrier",
+        detail: "Redis returned no barrier token",
+      });
+    }
+    return owner.data;
+  }
+
+  /**
+   * Clear everything the reset replaces, then let what arrived meanwhile through.
+   *
+   * The shadow queue is the point: messages that landed during the reset are
+   * moved back onto the real one rather than discarded, so a reset loses the
+   * conversation's history without losing the person's words.
+   */
+  async commitReset(continuationKey: string, resetId: string): Promise<boolean> {
+    const committed = await this.redis.eval(
+      COMMIT_RESET,
+      [
+        pendingKey(continuationKey),
+        resetPendingKey(continuationKey),
+        activeKey(continuationKey),
+        parkedKey(continuationKey),
+        resetKey(continuationKey),
+        QUEUE_INDEX_KEY,
+        AGENT_READY_SET_KEY,
+      ],
+      [resetId, queueMember(continuationKey)],
+    );
+    return Number(committed) === 1;
   }
 
   /** Advertised so a caller can drop a conversation from the ready set. */
