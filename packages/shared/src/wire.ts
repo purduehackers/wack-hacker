@@ -422,6 +422,15 @@ export const wireResponseSchema = z
 
 export type WireResponse = z.output<typeof wireResponseSchema>;
 
+/** What `WIRE_ROUTES.streamToken` answers with. */
+export const streamTokenSchema = z.object({ token: z.string().min(1).max(4_096) }).readonly();
+
+export function decodeStreamToken(
+  input: unknown,
+): Result<z.output<typeof streamTokenSchema>, InvalidInput> {
+  return decode(streamTokenSchema, "stream token", input);
+}
+
 /**
  * Every route on the agent's custom Discord channel.
  *
@@ -435,6 +444,14 @@ export const WIRE_ROUTES = {
   interaction: "/discord/interaction",
   reset: "/discord/reset",
   steer: "/discord/steer",
+  /**
+   * A freshly minted credential for reading a session's event stream.
+   *
+   * The bot has no Vercel identity of its own, so it cannot mint one; the agent
+   * runs inside a function and can. Asked for on demand rather than stored,
+   * because these live under an hour — see `streamTokenSchema`.
+   */
+  streamToken: "/discord/stream-token",
 } as const;
 
 /** The bot's own internal route, called only by the agent. */

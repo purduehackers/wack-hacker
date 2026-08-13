@@ -20,7 +20,7 @@ import { httpStatusOf, messageOf, Transient, UpstreamError } from "@repo/shared/
 import { Result } from "@repo/shared/result";
 import { noRetry, quickRetry } from "@repo/shared/result/retry";
 import type { RetryPolicy } from "@repo/shared/result/retry";
-import { WIRE_ROUTES, wireResponseSchema } from "@repo/shared/wire";
+import { decodeStreamToken, WIRE_ROUTES, wireResponseSchema } from "@repo/shared/wire";
 import type {
   InteractionPayload,
   DeliveryPayload,
@@ -141,6 +141,35 @@ export function createAgentClient(deps: AgentClientDeps) {
 
     sendInteraction: async (payload: InteractionPayload): Promise<Result<AgentAck, AgentError>> =>
       post(WIRE_ROUTES.interaction, payload, "agent.interaction", quickRetry, decodeSessionAck),
+
+    /**
+     * A credential for reading a session's event stream.
+     *
+     * Asked for per connection rather than stored: these carry a fixed expiry
+     * shared across every mint, so a copy taken when a delegation started can be
+     * dead well before that delegation is.
+     */
+    streamToken: async (): Promise<Result<string, AgentError>> => {
+      const answered = await post(
+        WIRE_ROUTES.streamToken,
+        { continuationKey: "" },
+        "agent.stream-token",
+        quickRetry,
+        (body: unknown) => decodeStreamToken(body),
+      );
+      if (Result.isError(answered)) return answered;
+      const decoded = answered.value;
+      if (Result.isError(decoded)) {
+        return Result.err(
+          new UpstreamError({
+            service: "agent",
+            status: 502,
+            detail: "stream token response was malformed",
+          }),
+        );
+      }
+      return Result.ok(decoded.value.token);
+    },
 
     sendReset: async (payload: ResetRequestPayload): Promise<Result<undefined, AgentError>> =>
       post(WIRE_ROUTES.reset, payload, "agent.reset", quickRetry, decodeCommandAck),

@@ -38,6 +38,7 @@ import {
 } from "@repo/shared/wire";
 import type { DeliveryPayload, ParkedPayload, RenderIntent, WireResponse } from "@repo/shared/wire";
 import * as Sentry from "@sentry/node";
+import { getVercelOidcToken } from "@vercel/oidc";
 import type { UserContent } from "ai";
 import { defineChannel, POST, type Session } from "eve/channels";
 import { createUnauthorizedResponse } from "eve/channels/auth";
@@ -478,6 +479,32 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
       } finally {
         await conversations.delivery.releaseIngress(payload.continuationKey, payload.interactionId);
       }
+    }),
+
+    /**
+     * A fresh credential for reading a session's event stream.
+     *
+     * Minted per request, never stored. These are issued with a *fixed* expiry
+     * shared across every mint rather than a lifetime measured from issuance, so
+     * one handed out at 20:52 died at 21:38 — a stored copy is a credential that
+     * silently stops working partway through the delegation it was meant to
+     * cover. The bot asks again on every reconnect instead.
+     */
+    POST(WIRE_ROUTES.streamToken, async (request) => {
+      if (!botAuthenticated(request)) {
+        return createUnauthorizedResponse({ status: 401, message: "bad bearer" });
+      }
+      const token = await getVercelOidcToken().catch((cause: unknown) => {
+        warnFailure("mint a stream token", cause);
+        return undefined;
+      });
+      if (token === undefined) {
+        return failed(
+          new Transient({ operation: "mint a stream token", detail: "unavailable" }),
+          503,
+        );
+      }
+      return Response.json({ token });
     }),
 
     /** Explicit `/new`-style retirement. */
