@@ -6,7 +6,7 @@
  * here loops — the sweep owns repetition.
  */
 
-import type { HolderState } from "@repo/shared/conversations";
+import type { Holder } from "@repo/shared/conversations";
 import { tagOf, Transient } from "@repo/shared/errors";
 import type { KnownError } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
@@ -32,7 +32,7 @@ export async function kick(
   deps: ConversationFlowDeps,
   continuationKey: string,
 ): Promise<AgentError | undefined> {
-  const next = await deps.store.queue.claim(continuationKey);
+  const next = await deps.store.delivery.claim(continuationKey);
   if (Result.isError(next)) {
     deps.reporter.captureDefect(next.error, {
       op: "agent.router.claim",
@@ -47,7 +47,11 @@ export async function kick(
   if (Result.isOk(sent)) {
     // The Eve confirmation and this acknowledgement cover different crash
     // windows. A fast park can consume the claim before this CAS arrives.
-    await deps.store.queue.confirm(continuationKey, claimed.claimToken, sent.value.sessionId);
+    await deps.store.delivery.confirmSession(
+      continuationKey,
+      claimed.claimToken,
+      sent.value.sessionId,
+    );
     return;
   }
 
@@ -96,7 +100,7 @@ function coalesce(payload: MessagePayload, superseded: string | undefined): Mess
 
 async function steerHolder(
   deps: ConversationFlowDeps,
-  holder: HolderState,
+  holder: Holder,
   continuationKey: string,
 ): Promise<void> {
   const steered = await deps.eve.sendSteer({ continuationKey });
@@ -123,8 +127,8 @@ export async function submitMessage(
       // interrupted to let the queue move. Asking after the claim instead finds
       // the turn *this* message just started and cancels it, which is a turn
       // that never gets to answer anything.
-      const holder = await deps.store.queue.holder(payload.continuationKey);
-      await deps.store.queue.enqueue(coalesce(payload, holder?.content));
+      const holder = await deps.store.deliveries.holder(payload.continuationKey);
+      await deps.store.delivery.enqueue(coalesce(payload, holder?.content));
       if (runtime.isStopped()) return undefined;
       if (holder !== undefined) await steerHolder(deps, holder, payload.continuationKey);
       return kick(deps, payload.continuationKey);
@@ -144,7 +148,7 @@ async function resetConversation(
   payload: ResetPayload,
 ): Promise<Result<void, KnownError>> {
   const prepared = await Result.tryPromise({
-    try: () => deps.store.queue.beginReset(payload.continuationKey),
+    try: () => deps.store.delivery.beginReset(payload.continuationKey),
     catch: (cause) =>
       new Transient({
         operation: "agent.router.begin-reset",
@@ -160,7 +164,7 @@ async function resetConversation(
   if (Result.isError(reset)) return reset;
 
   const committed = await Result.tryPromise({
-    try: () => deps.store.queue.commitReset(payload.continuationKey, resetId),
+    try: () => deps.store.delivery.commitReset(payload.continuationKey, resetId),
     catch: (cause) =>
       new Transient({
         operation: "agent.router.commit-reset",
@@ -246,7 +250,7 @@ export async function onParked(runtime: FlowRuntime, payload: ParkedPayload): Pr
   }
   if (runtime.isStopped()) return;
 
-  const status = await deps.store.queue.complete(payload);
+  const status = await deps.store.delivery.complete(payload);
   deps.reporter.emit({
     op: "agent.router.parked",
     status: "ok",

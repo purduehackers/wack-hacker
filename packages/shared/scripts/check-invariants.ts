@@ -20,17 +20,15 @@
 
 import { z } from "zod";
 
-import { createAdmissionTransitions } from "../src/conversations/admission.ts";
-import { createQueueTransitions } from "../src/conversations/queue.ts";
 import { createRenderPublicationTransitions } from "../src/conversations/render-publication.ts";
+import { DeliveryWriter } from "../src/conversations/writers/delivery.ts";
 import { redisEnv } from "../src/env/scripts.ts";
 import { getRedis } from "../src/redis/client.ts";
 import { Result } from "../src/result/index.ts";
 import type { DeliveryPayload, MessagePayload, ParkedPayload, RenderIntent } from "../src/wire.ts";
 
 const redis = getRedis(redisEnv());
-const queue = createQueueTransitions(redis);
-const admission = createAdmissionTransitions(redis);
+const writer = new DeliveryWriter(redis);
 const publication = createRenderPublicationTransitions(redis);
 
 /** Outside the range Discord mints, so it can never collide with real traffic. */
@@ -41,7 +39,7 @@ const SESSION_ID = "wrun_invariant_probe";
 /** Only the fields the invariants below are stated in terms of. */
 const activeRecordSchema = z.looseObject({
   phase: z.string(),
-  expiresAtMs: z.number().optional(),
+  turn: z.looseObject({ expiresAtMs: z.number() }).optional(),
 });
 
 const message: MessagePayload = {
@@ -83,6 +81,8 @@ function parkedFor(dispatchId: string): ParkedPayload {
 
 /** The delivery the claim handed back; every later step is fenced on its id. */
 let claimed: DeliveryPayload | undefined;
+/** The handoff holder, which `confirmSession` fences on. */
+let claimToken = "";
 
 async function readActive(): Promise<z.output<typeof activeRecordSchema> | undefined> {
   const raw: unknown = await redis.get(`agent:active:${KEY}`);
@@ -135,7 +135,7 @@ async function check(label: string): Promise<readonly string[]> {
   if (pending > 0 && !inIndex)
     violations.push("I1 queued work is not in the index, so it never drains");
   if (active !== undefined && ttl === -1) violations.push("I2 the active record has no expiry");
-  if (active !== undefined && active.expiresAtMs === undefined) {
+  if (active !== undefined && active.turn === undefined) {
     violations.push("I3 the active record carries no lease for the sweep to read");
   }
   if (active === undefined && pending === 0 && inIndex) violations.push("I4 index entry leaked");
@@ -152,29 +152,32 @@ async function check(label: string): Promise<readonly string[]> {
 }
 
 const steps: ReadonlyArray<readonly [string, () => Promise<void>]> = [
-  ["enqueue", async () => queue.enqueue(message)],
+  ["enqueue", async () => writer.enqueue(message)],
   [
     "claim",
     async () => {
-      const outcome = await queue.claim(KEY);
+      const outcome = await writer.claim(KEY);
       if (Result.isError(outcome)) throw new Error(`claim failed: ${outcome.error.message}`);
       if (outcome.value === undefined) throw new Error("claim returned nothing");
       claimed = outcome.value.payload;
+      claimToken = outcome.value.claimToken;
     },
   ],
   [
     "admission.start",
     async () => {
       if (claimed === undefined) throw new Error("no claimed delivery");
-      const started = await admission.start(claimed);
-      if (started.status !== "start") throw new Error(`start returned ${started.status}`);
+      const started = await writer.markLive(KEY, claimed.dispatchId, MESSAGE_ID);
+      if (started.status !== "start") throw new Error(`mark-live returned ${started.status}`);
     },
   ],
   [
     "admission.confirm",
     async () => {
       if (claimed === undefined) throw new Error("no claimed delivery");
-      if (!(await admission.confirm(claimed, SESSION_ID))) throw new Error("confirm was rejected");
+      if (!(await writer.confirmSession(KEY, claimToken, SESSION_ID))) {
+        throw new Error("confirm was rejected");
+      }
     },
   ],
   [
@@ -208,7 +211,7 @@ const steps: ReadonlyArray<readonly [string, () => Promise<void>]> = [
     "complete",
     async () => {
       if (claimed === undefined) throw new Error("no claimed delivery");
-      const status = await queue.complete(parkedFor(claimed.dispatchId));
+      const status = await writer.complete(parkedFor(claimed.dispatchId));
       if (status !== "completed") throw new Error(`complete returned ${status}`);
     },
   ],
@@ -243,7 +246,7 @@ for (let cut = 1; cut < steps.length; cut += 1) {
   failures += (await check(`crash after ${steps[cut - 1]?.[0] ?? "?"}`)).length;
   const active = await readActive();
   const remainingMs = await redis.pttl(`agent:active:${KEY}`);
-  if (active !== undefined && active.expiresAtMs === undefined && remainingMs === -1) {
+  if (active !== undefined && active.turn === undefined && remainingMs === -1) {
     console.error("        unbounded: nothing will ever release this conversation");
     failures += 1;
   }

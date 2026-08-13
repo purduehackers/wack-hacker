@@ -31,7 +31,7 @@ const SWEEP_DRAIN_TIMEOUT_MS = 15_000;
  * lookup rather than a second stream.
  */
 async function watchDelegation(deps: ConversationFlowDeps, continuationKey: string): Promise<void> {
-  const holder = await deps.store.queue.holder(continuationKey);
+  const holder = await deps.store.deliveries.holder(continuationKey);
   if (holder?.dispatchId === undefined) return;
   const delegation = await deps.store.subagents.current(holder.dispatchId);
   if (Result.isError(delegation)) return;
@@ -48,13 +48,13 @@ async function watchDelegation(deps: ConversationFlowDeps, continuationKey: stri
 async function recoverActiveQueues(runtime: FlowRuntime): Promise<void> {
   const { deps } = runtime;
   if (runtime.isStopped()) return;
-  for (const continuationKey of await deps.store.queue.keys()) {
+  for (const continuationKey of await deps.store.deliveries.conversations()) {
     if (runtime.isStopped()) break;
     try {
       // Before anything else: a delivery that has held this conversation past
       // the hard cap is given up on, which is what lets a turn that died
       // without parking stop blocking every message behind it.
-      const expired = await deps.store.queue.expireAdmission(continuationKey);
+      const expired = await deps.store.delivery.expire(continuationKey);
       if (Result.isError(expired)) {
         deps.reporter.captureDefect(expired.error, {
           op: "agent.router.expire-admission",
@@ -79,7 +79,14 @@ async function recoverActiveQueues(runtime: FlowRuntime): Promise<void> {
         });
       }
 
-      const recovery = await deps.store.queue.recoverAdmission(continuationKey);
+      // Needs the dispatch, because unlike expiry the record outlives the call
+      // and the announcement has to name the delivery it is about.
+      const held = await deps.store.deliveries.read(continuationKey);
+      if (held === undefined) {
+        await kick(deps, continuationKey);
+        continue;
+      }
+      const recovery = await deps.store.delivery.recover(continuationKey, held.dispatchId);
       if (Result.isError(recovery)) {
         deps.reporter.captureDefect(recovery.error, {
           op: "agent.router.recover-admission",
@@ -119,19 +126,15 @@ async function recoverActiveQueues(runtime: FlowRuntime): Promise<void> {
 
 async function reconcileParked(runtime: FlowRuntime): Promise<void> {
   const { deps } = runtime;
-  const keys = new Set(await deps.store.queue.readyKeys());
+  const keys = new Set(await deps.store.deliveries.awaitingReconcile());
   for (const continuationKey of runtime.pendingContinuations) keys.add(continuationKey);
   runtime.pendingContinuations.clear();
   for (const continuationKey of keys) {
-    const parked = await deps.store.queue.parked(continuationKey);
-    if (Result.isError(parked)) {
-      deps.reporter.captureDefect(parked.error, {
-        op: "agent.router.recover-marker",
-        attributes: { continuationKey },
-      });
-      continue;
-    }
-    if (parked.value !== undefined) await onParked(runtime, parked.value);
+    // A marker that will not decode reads as absent. The sweep visits every
+    // conversation on every pass, so one unreadable marker must not stop it
+    // reaching the rest — and there is nothing to do with a half-understood one.
+    const parked = await deps.store.deliveries.parked(continuationKey);
+    if (parked !== undefined) await onParked(runtime, parked);
   }
 }
 

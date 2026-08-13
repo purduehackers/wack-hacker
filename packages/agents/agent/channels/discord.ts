@@ -86,8 +86,8 @@ async function steerActiveTurn(
   continuationKey: string,
 ): Promise<void> {
   if (active === undefined) return;
-  const parked = await conversations.queue.parked(continuationKey);
-  if (Result.isError(parked) || parked.value !== undefined) return;
+  const parked = await conversations.deliveries.parked(continuationKey);
+  if (parked !== undefined) return;
   const cancelled = await active.cancel();
   if (cancelled.status !== "accepted") return;
   console.info(
@@ -335,7 +335,11 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
 
       // Last side effect before Eve: after this fence becomes live, a crash must
       // wedge safely rather than risk starting this dispatch twice.
-      const admission = await conversations.admission.start(payload);
+      const admission = await conversations.delivery.markLive(
+        payload.continuationKey,
+        payload.dispatchId,
+        payload.messageId,
+      );
       if (admission.status === "accepted") {
         return ok(admission.sessionId, payload.continuationKey);
       }
@@ -383,7 +387,11 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
           state: stateForMessage(payload),
         });
 
-        const confirmed = await conversations.admission.confirm(payload, session.id);
+        const confirmed = await conversations.delivery.confirmSession(
+          payload.continuationKey,
+          admission.attempt,
+          session.id,
+        );
         if (!confirmed) {
           return failed(
             new RecoveryRequired({
@@ -396,7 +404,7 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
         }
         return ok(session.id, payload.continuationKey);
       } finally {
-        await conversations.admission.finish(payload.continuationKey, admission.admissionAttemptId);
+        await conversations.delivery.releaseIngress(payload.continuationKey, admission.attempt);
       }
     }),
 
@@ -411,7 +419,7 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
       const payload = decoded.value;
       const { claim, receiptIdentity } = await conversations.interactions.claim(payload);
       if (claim === 2) {
-        await conversations.admission.finish(payload.continuationKey, payload.interactionId);
+        await conversations.delivery.releaseIngress(payload.continuationKey, payload.interactionId);
         return acceptedInteractionResponse(payload.interactionId);
       }
       if (claim !== 1) {
@@ -454,7 +462,7 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
         );
         return ok(session.id, payload.continuationKey);
       } finally {
-        await conversations.admission.finish(payload.continuationKey, payload.interactionId);
+        await conversations.delivery.releaseIngress(payload.continuationKey, payload.interactionId);
       }
     }),
 

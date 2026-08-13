@@ -142,7 +142,7 @@ async function follow({
         const summary = summarize(delegation.name, parsed.data);
         if (summary === undefined) continue;
 
-        const held = await deps.store.queue.refreshLease(continuationKey, dispatchId);
+        const held = await deps.store.delivery.refreshTurn(continuationKey, dispatchId);
         if (!held) return;
         progress.set(dispatchId, summary.slice(0, MAX_LINE));
         await onLine();

@@ -18,7 +18,7 @@ import { z } from "zod";
 import { InvalidInput, Transient } from "../../errors.ts";
 import type { RedisClient } from "../../redis/client.ts";
 import { Result } from "../../result/index.ts";
-import type { DeliveryPayload, MessagePayload, ParkedPayload } from "../../wire.ts";
+import type { DeliveryPayload, MessagePayload, ParkedPayload, RenderTarget } from "../../wire.ts";
 import { decodeDeliveryPayload } from "../../wire.ts";
 import {
   activeKey,
@@ -430,7 +430,24 @@ export class DeliveryWriter {
    * queueing anything, which is the only reason a redelivered webhook does not
    * run a turn twice.
    */
-  async enqueue(payload: MessagePayload, delivery: DeliveryPayload, target: string): Promise<void> {
+  async enqueue(payload: MessagePayload): Promise<void> {
+    // The dispatch id is minted here, not by the caller: it is the identity
+    // every later fence compares against, so it belongs to whoever owns the
+    // record. The render target is written in the same step because a delivery
+    // that exists without somewhere to paint has nothing useful to say.
+    const delivery: DeliveryPayload = { ...payload, dispatchId: crypto.randomUUID() };
+    const target: RenderTarget = {
+      dispatchId: delivery.dispatchId,
+      continuationKey: delivery.continuationKey,
+      messageId: delivery.messageId,
+      channelId: delivery.thread?.id ?? delivery.channel.id,
+      authChannelId: delivery.channel.id,
+      ...(delivery.thread === undefined ? {} : { authThreadId: delivery.thread.id }),
+      requesterUserId: delivery.principal.userId,
+      ...(delivery.anchorMessageId === undefined
+        ? { replyToMessageId: delivery.messageId }
+        : { anchorMessageId: delivery.anchorMessageId }),
+    };
     await this.redis.eval(
       ENQUEUE,
       [
@@ -446,7 +463,7 @@ export class DeliveryWriter {
         payload.messageId,
         queueMember(payload.continuationKey),
         SEEN_TTL_SECONDS,
-        target,
+        JSON.stringify(target),
       ],
     );
   }

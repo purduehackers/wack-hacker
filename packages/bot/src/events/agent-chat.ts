@@ -9,7 +9,7 @@
  * feedback that something is happening.
  */
 
-import { ADMISSION_RECOVERY_FOOTER, ADMISSION_RECOVERY_TEXT } from "@repo/shared/conversations";
+import { RECOVERY_FOOTER, RECOVERY_TEXT } from "@repo/shared/conversations";
 import { DISCORD_GUILD_ID, roleAtLeast, roleFromMemberRoles, UserRole } from "@repo/shared/discord";
 import { Result } from "@repo/shared/result";
 import { continuationKeyFor } from "@repo/shared/wire";
@@ -28,7 +28,7 @@ import { stripBotMention } from "../utils/mention.ts";
 /** Shown until the agent's first tokens replace it. */
 const PLACEHOLDER = "> Thinking...";
 
-const DELIVERY_FAILURE_NOTICE = `${ADMISSION_RECOVERY_TEXT}\n\n${ADMISSION_RECOVERY_FOOTER}`;
+const DELIVERY_FAILURE_NOTICE = `${RECOVERY_TEXT}\n\n${RECOVERY_FOOTER}`;
 
 /** Discord's cap is 100; the author's name and separator take the rest. */
 const MAX_THREAD_NAME_CHARS = 54;

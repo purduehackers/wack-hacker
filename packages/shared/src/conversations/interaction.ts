@@ -4,12 +4,13 @@ import { roleFromMemberRoles } from "../discord/index.ts";
 import type { RedisClient } from "../redis/client.ts";
 import type { InteractionPayload } from "../wire.ts";
 import {
-  ingressKey,
+  activeKey,
   interactionReceiptKey,
   renderIntentKey,
   renderTargetKey,
   resetKey,
 } from "./keys.ts";
+import { LeaseDuration } from "./lease.ts";
 
 const INTERACTION_RECEIPT_TTL_SECONDS = 7 * 24 * 60 * 60;
 
@@ -72,9 +73,21 @@ else
   return -1
 end
 
-if redis.call("GET", KEYS[5]) then return 0 end
+-- An answer and a delivery both enter eve through the same slot, so a click
+-- arriving while a message is being handed over waits rather than racing it.
+-- The slot is a lease on the delivery record; it used to be a second key, which
+-- is why releasing it meant calling the *delivery* admission with an
+-- interaction id.
+local activeRaw = redis.call("GET", KEYS[5])
+if activeRaw then
+  local record = cjson.decode(activeRaw)
+  if record.ingress and tonumber(record.ingress.expiresAtMs) > tonumber(ARGV[18]) then
+    return 0
+  end
+  record.ingress = { holder = ARGV[13], expiresAtMs = tonumber(ARGV[18]) + tonumber(ARGV[14]) }
+  redis.call("SET", KEYS[5], cjson.encode(record), "KEEPTTL")
+end
 redis.call("SET", KEYS[3], ARGV[9], "EX", tonumber(ARGV[10]))
-redis.call("SET", KEYS[5], ARGV[13], "PX", tonumber(ARGV[14]))
 return 1
 `;
 
@@ -130,7 +143,7 @@ async function claimInteraction(
         renderTargetKey(payload.dispatchId),
         interactionReceiptKey(payload.interactionId),
         resetKey(payload.continuationKey),
-        ingressKey(payload.continuationKey),
+        activeKey(payload.continuationKey),
       ],
       [
         payload.dispatchId,
@@ -146,12 +159,13 @@ async function claimInteraction(
         payload.authChannelId,
         payload.authThreadId ?? "",
         payload.interactionId,
-        15 * 60_000,
+        LeaseDuration.Ingress,
         roleFromMemberRoles(payload.principal.memberRoles),
         payload.approvalRequester?.userId ?? "",
         payload.approvalRequester === undefined
           ? ""
           : roleFromMemberRoles(payload.approvalRequester.memberRoles),
+        Date.now(),
       ],
     ),
   );

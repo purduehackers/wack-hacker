@@ -13,19 +13,20 @@ import {
   renderMember,
   renderOutcomeKey,
 } from "./keys.ts";
+import { LeaseDuration } from "./lease.ts";
 
 const INTENT_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 /**
- * Kept in step with `LIVE_LEASE_MS` and `PARKED_LEASE_MS` in `queue.ts`.
+ * Read from `lease.ts` rather than restated.
  *
  * Publishing a render is the agent saying "still here", and it is the only
  * signal that arrives often enough to mean it: renders bracket every tool call.
  * Parking hands the conversation to a person, whose lease is longer because
  * they are allowed to think.
  */
-const LIVE_LEASE_MS = 30 * 60_000;
-const PARKED_LEASE_MS = 24 * 60 * 60_000;
+const LIVE_LEASE_MS = LeaseDuration.Turn;
+const PARKED_LEASE_MS = LeaseDuration.Person;
 
 const PUBLISH_SCRIPT = `
 ${ACTIVE_RECORD_LUA}
@@ -48,7 +49,7 @@ end
 redis.call("SET", KEYS[1], ARGV[2], "EX", tonumber(ARGV[4]))
 -- Proof of life. The turn holds its conversation for as long as it keeps
 -- painting, and no longer.
-active.expiresAtMs = tonumber(ARGV[8]) + tonumber(ARGV[9])
+active.turn.expiresAtMs = tonumber(ARGV[8]) + tonumber(ARGV[9])
 writeActive(KEYS[3], active)
 redis.call("DEL", KEYS[4])
 local added = redis.call("SADD", KEYS[2], ARGV[3])
@@ -100,7 +101,7 @@ redis.call("SADD", KEYS[5], ARGV[9])
 active.phase = "parked"
 active.sessionId = ARGV[3]
 active.eveTurnId = ARGV[5]
-active.expiresAtMs = tonumber(ARGV[11]) + tonumber(ARGV[12])
+active.turn.expiresAtMs = tonumber(ARGV[11]) + tonumber(ARGV[12])
 writeActive(KEYS[1], active)
 redis.call("SET", KEYS[2], ARGV[4])
 redis.call("SADD", KEYS[3], ARGV[6])

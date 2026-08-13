@@ -75,7 +75,6 @@ interface ConversationReport {
   readonly key: string;
   readonly pendingDepth: number;
   readonly resetPendingDepth: number;
-  readonly ingressPresent: boolean;
   readonly resetPresent: boolean;
   readonly readyMember: boolean;
   readonly active: unknown;
@@ -150,7 +149,6 @@ async function inspectRedis(arguments_: readonly string[]): Promise<void> {
       key: continuation,
       pendingDepth: state.depth,
       resetPendingDepth: state.resetPending,
-      ingressPresent: state.ingress === 1,
       resetPresent: state.reset === 1,
       readyMember: state.ready === 1,
       active: summary(state.active, [
