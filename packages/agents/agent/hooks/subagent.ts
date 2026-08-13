@@ -4,9 +4,10 @@
  *
  * A delegated turn goes silent from outside: the parent suspends while the child
  * runs, publishes no renders, and is reclaimed by the sweep as though it had died.
- * Something has to watch, and the only side that can hold a stream is the bot —
- * which has no Vercel identity of its own, so the token is minted here, inside a
- * function, and left where the bot will look.
+ * Something has to watch, and the only side that can hold a stream is the bot. It
+ * has no Vercel identity of its own, so it asks this deployment for a credential
+ * per connection over `WIRE_ROUTES.streamToken` — this record carries only the
+ * address.
  *
  * **On `actions.requested`, not `subagent.called`.** The latter never reaches a
  * hook: eve dispatches it through `callAdapterEventHandler` to the channel adapter
@@ -20,9 +21,7 @@
  */
 
 import { createConversationStore } from "@repo/shared/conversations";
-import { messageOf } from "@repo/shared/errors";
 import { getRedis } from "@repo/shared/redis";
-import { getVercelOidcToken } from "@vercel/oidc";
 import type { SessionAuthContext } from "eve/context";
 import { defineHook } from "eve/hooks";
 import type { HookEventMap } from "eve/hooks";
@@ -76,19 +75,9 @@ export default defineHook({
       const dispatchId = dispatchOf(ctx.session.auth.current?.attributes);
       if (dispatchId === undefined) return;
 
-      // A mint that fails costs the watch, not the turn.
-      const streamToken = await getVercelOidcToken().catch((cause: unknown) => {
-        console.warn(
-          JSON.stringify({ event: "subagent.token_unavailable", reason: messageOf(cause) }),
-        );
-        return undefined;
-      });
-      if (streamToken === undefined) return;
-
       await conversations.delegation.begin(dispatchId, {
         ...delegation,
         sessionId: ctx.session.id,
-        streamToken,
         startedAt: new Date().toISOString(),
       });
     },

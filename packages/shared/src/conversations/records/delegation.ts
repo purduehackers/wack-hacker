@@ -22,18 +22,19 @@ export const delegationSchema = z.strictObject({
   name: z.string().min(1).max(64),
   /** Which call this is, so a second delegation replaces rather than duplicates. */
   callId: z.string().min(1).max(128),
-  /**
-   * Vercel OIDC token for reading the child's stream, minted where the
-   * delegation is announced because the bot has no Vercel identity of its own.
-   */
-  streamToken: z.string().min(1).max(4_096),
   startedAt: z.iso.datetime(),
 });
 
 export type Delegation = z.output<typeof delegationSchema>;
 
 /**
- * Shorter than the twelve-hour token it carries, so a delegation can never
- * outlive the credential that makes it useful. Cleared on completion regardless.
+ * Long enough for any delegation, because the record no longer carries a
+ * credential that could expire under it.
+ *
+ * It used to hold a Vercel OIDC token and was bounded by that token's supposed
+ * twelve-hour life. Both halves of that were wrong: the token is issued with a
+ * *fixed* expiry shared across every mint, so one taken at 20:52 died at 21:38 —
+ * forty-six minutes, not twelve hours — and a reader handed a stored copy has no
+ * way to renew it. The credential is fetched per connection now.
  */
-export const DELEGATION_TTL_SECONDS = 6 * 60 * 60;
+export const DELEGATION_TTL_SECONDS = 24 * 60 * 60;

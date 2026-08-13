@@ -19,6 +19,7 @@
 
 import type { Delegation } from "@repo/shared/conversations";
 import { messageOf } from "@repo/shared/errors";
+import { Result } from "@repo/shared/result";
 import { Client } from "eve/client";
 import type { MessageStreamEvent } from "eve/client";
 
@@ -122,6 +123,19 @@ function summarize(subagent: string, event: MessageStreamEvent): string | undefi
       return undefined;
     }
   }
+}
+
+/**
+ * A credential for the next connection, or the empty string.
+ *
+ * Empty rather than a throw: the client treats it as "no auth", the route
+ * answers 401, and `launch` reports that once — a stream that cannot authenticate
+ * is the same outcome either way, and this keeps the failure on the reporting
+ * path rather than escaping an auth callback.
+ */
+async function freshToken(deps: ConversationFlowDeps): Promise<string> {
+  const minted = await deps.eve.streamToken();
+  return Result.isOk(minted) ? minted.value : "";
 }
 
 interface Follow {
@@ -234,14 +248,18 @@ export function followSubagent(
       signal: following.controller.signal,
       onLine,
       following,
-      // The stream token is a Vercel OIDC token, minted where the delegation was
-      // announced because the bot has no Vercel identity of its own. Declaring it
-      // as OIDC also sends the trusted-OIDC header that deployment protection
-      // reads. `redirect: "manual"` keeps that credential from following a
+      // Fetched per connection, not stored. The credential is a Vercel OIDC
+      // token, which the bot cannot mint itself and which carries a *fixed*
+      // expiry shared across every mint — so a copy taken when the delegation
+      // started can be dead long before the delegation is. This callback re-runs
+      // on every reconnect, which is exactly where a renewal belongs.
+      //
+      // Declaring it as OIDC also sends the trusted-OIDC header deployment
+      // protection reads; `redirect: "manual"` keeps it from following a
       // redirect to another origin.
       client: new Client({
         host: deps.eve.baseUrl,
-        auth: { vercelOidc: { token: () => Promise.resolve(delegation.streamToken) } },
+        auth: { vercelOidc: { token: () => freshToken(deps) } },
         redirect: "manual",
       }),
     },
