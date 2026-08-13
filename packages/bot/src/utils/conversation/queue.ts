@@ -201,7 +201,7 @@ export async function answerHitl(
   if (claimed !== "acquired") return { status: claimed };
   const sent = await deps.eve.sendInteraction(payload);
   if (Result.isError(sent)) return { status: "failed", error: sent.error };
-  const completed = await deps.store.hitl.complete(
+  const completed = await deps.store.hitl.accept(
     claim.dispatchId,
     claim.revision,
     claim.interactionId,
@@ -221,16 +221,16 @@ export async function admitScheduledFire(
   submit: ConversationFlow["submit"],
 ): Promise<void> {
   const claimToken = crypto.randomUUID();
-  const claim = await deps.store.scheduledFires.claim(payload, claimToken);
+  const claim = await deps.store.schedules.claim(payload, claimToken);
   if (claim === "accepted") return;
-  if (claim === "busy") throw new Error("scheduled occurrence is already being admitted");
+  if (claim === "in-progress") throw new Error("scheduled occurrence is already being admitted");
   try {
     await deps.schedules.admit(payload, submit);
-    if (!(await deps.store.scheduledFires.complete(payload, claimToken))) {
+    if (!(await deps.store.schedules.complete(payload, claimToken))) {
       throw new Error("scheduled occurrence admission receipt ownership was lost");
     }
   } catch (cause) {
-    await deps.store.scheduledFires
+    await deps.store.schedules
       .release(payload.occurrenceId, claimToken)
       .catch((releaseCause: unknown) =>
         console.warn("could not release scheduled occurrence claim", releaseCause),

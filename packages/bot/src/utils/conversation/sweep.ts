@@ -33,7 +33,7 @@ const SWEEP_DRAIN_TIMEOUT_MS = 15_000;
 async function watchDelegation(deps: ConversationFlowDeps, continuationKey: string): Promise<void> {
   const holder = await deps.store.deliveries.holder(continuationKey);
   if (holder?.dispatchId === undefined) return;
-  const delegation = await deps.store.subagents.current(holder.dispatchId);
+  const delegation = await deps.store.delegations.current(holder.dispatchId);
   if (Result.isError(delegation)) return;
   if (delegation.value === undefined) {
     stopFollowing(holder.dispatchId);

@@ -59,7 +59,7 @@ import {
 } from "../lib/discord/state.ts";
 import type { DiscordChannelState } from "../lib/discord/state.ts";
 import { ApprovalPolicyStore } from "../lib/policy/approval-record.ts";
-import { discordSnowflake, storedInt, storedJson } from "../lib/schema.ts";
+import { discordSnowflake, storedInt } from "../lib/schema.ts";
 import { currentTraceparent, traceHeaders, turnTokenKey } from "../lib/telemetry.ts";
 
 const redis = getRedis({
@@ -145,22 +145,19 @@ function failed(error: Error, status = 400): Response {
 }
 
 /**
- * The fields `conversations.interactions.accept` writes that an accepted retry
- * replays. Redis hands the receipt back either already deserialized or as the
- * raw JSON text it stored, so `storedJson` accepts both.
+ * Replay the answer a previous attempt already got.
+ *
+ * The receipt's shape used to be restated here as a local zod schema — two
+ * declarations of one record, kept in step by nobody. The reader owns it now, so
+ * this only has to say which part of it the wire response needs.
  */
-const acceptedReceiptSchema = storedJson(
-  z.object({ sessionId: z.string(), continuationToken: z.string() }),
-);
-
 async function acceptedInteractionResponse(interactionId: string): Promise<Response> {
-  const receipt = acceptedReceiptSchema.safeParse(
-    await conversations.interactions.read(interactionId),
-  );
-  if (!receipt.success) {
-    return failed(new Error("accepted interaction receipt is malformed"), 500);
+  const receipt = await conversations.interactions.receipt(interactionId);
+  if (Result.isError(receipt)) return failed(receipt.error, 500);
+  if (receipt.value?.status !== "accepted") {
+    return failed(new Error("accepted interaction receipt is missing"), 500);
   }
-  return ok(receipt.data.sessionId, receipt.data.continuationToken);
+  return ok(receipt.value.sessionId, receipt.value.continuationToken);
 }
 
 /** What `context` builds, and therefore what the `channel` argument carries. */
@@ -417,15 +414,15 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
       const decoded = decodeInteractionPayload(await request.json());
       if (Result.isError(decoded)) return failed(decoded.error);
       const payload = decoded.value;
-      const { claim, receiptIdentity } = await conversations.interactions.claim(payload);
-      if (claim === 2) {
+      const { claim, identity } = await conversations.interaction.claim(payload);
+      if (claim === "accepted") {
         await conversations.delivery.releaseIngress(payload.continuationKey, payload.interactionId);
         return acceptedInteractionResponse(payload.interactionId);
       }
-      if (claim !== 1) {
+      if (claim !== "claimed") {
         return failed(
           new Error(
-            claim === 0
+            claim === "in-progress"
               ? "interaction delivery is already in progress"
               : "input request is stale or invalid",
           ),
@@ -454,9 +451,9 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
           },
         );
 
-        await conversations.interactions.accept(
+        await conversations.interaction.accept(
           payload.interactionId,
-          receiptIdentity,
+          identity,
           session.id,
           payload.continuationKey,
         );

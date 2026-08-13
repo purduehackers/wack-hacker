@@ -367,10 +367,10 @@ async function handleInput(
       ...(traceparent === undefined ? {} : { traceparent }),
     },
   });
-  if (answered.status === "claimed" || answered.status === "stale") {
+  if (answered.status === "taken" || answered.status === "stale") {
     await ephemeral(
       interaction,
-      answered.status === "claimed"
+      answered.status === "taken"
         ? "An answer is already being processed for this request."
         : "This input request is stale or has already been handled.",
     );

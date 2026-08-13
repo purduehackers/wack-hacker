@@ -68,7 +68,7 @@ export default defineHook({
       if (streamToken === undefined) return;
 
       const first = delegated[0];
-      await conversations.subagents.begin(dispatchId, {
+      await conversations.delegation.begin(dispatchId, {
         sessionId: ctx.session.id,
         name:
           first?.kind === "subagent-call"
@@ -85,7 +85,7 @@ export default defineHook({
     async "turn.completed"(_event, ctx) {
       const dispatchId = dispatchOf(ctx.session.auth.current?.attributes);
       if (dispatchId === undefined) return;
-      await conversations.subagents.end(dispatchId);
+      await conversations.delegation.end(dispatchId);
     },
   },
 });

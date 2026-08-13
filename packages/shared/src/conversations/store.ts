@@ -1,8 +1,17 @@
-/** The only Redis-facing API for durable conversation coordination. */
+/**
+ * The only Redis-facing API for durable conversation coordination.
+ *
+ * Every surface is split the same way: a reader that only looks, and a writer
+ * that owns every transition of one record. The pairing is the whole design —
+ * before it, eleven Lua scripts across three files rewrote the delivery record
+ * under six different fences, and most defects here were one of them forgetting
+ * an invariant the others remembered.
+ *
+ * Names are singular for the writer and plural for the reader, so a call site
+ * says which it is doing without opening this file.
+ */
 
 import type { RedisClient } from "../redis/client.ts";
-import { createHitlTransitions } from "./hitl.ts";
-import { createInteractionTransitions } from "./interaction.ts";
 import {
   activeKey,
   AGENT_READY_SET_KEY,
@@ -21,35 +30,40 @@ import {
   resetPendingKey,
 } from "./keys.ts";
 import { AuthorizationReader } from "./readers/authorization.ts";
+import { DelegationReader } from "./readers/delegation.ts";
 import { DeliveryReader } from "./readers/delivery.ts";
+import { InteractionReader } from "./readers/interaction.ts";
 import { RenderReader } from "./readers/render.ts";
-import { createScheduledFireTransitions } from "./scheduled-fire.ts";
-import { createSubagentTransitions } from "./subagents.ts";
 import { AuthorizationWriter } from "./writers/authorization.ts";
+import { DelegationWriter } from "./writers/delegation.ts";
 import { DeliveryWriter } from "./writers/delivery.ts";
+import { HitlWriter } from "./writers/hitl.ts";
+import { InteractionWriter } from "./writers/interaction.ts";
 import { RenderWriter } from "./writers/render.ts";
+import { ScheduleWriter } from "./writers/schedule.ts";
 
 export function createConversationStore(deps: { readonly redis: RedisClient }) {
   const { redis } = deps;
+  const deliveries = new DeliveryReader(redis);
   return {
-    /**
-     * The delivery lifecycle, split so a lookup cannot become a transition.
-     *
-     * Replaces `queue` and `admission`, which between them held ten Lua scripts
-     * and five ways of expressing a hold. Callers that only look go through
-     * `deliveries`; callers that change something go through `delivery`.
-     */
-    deliveries: new DeliveryReader(redis),
+    /** A turn's hold on one conversation: queue, admission, park, release. */
+    deliveries,
     delivery: new DeliveryWriter(redis),
-    /** Same split again: `renders` only looks, `render` changes something. */
+    /** What should be on screen, and what is. */
     renders: new RenderReader(redis),
     render: new RenderWriter(redis),
+    /** One component click, and the receipt that makes its retry idempotent. */
+    interactions: new InteractionReader(redis),
+    interaction: new InteractionWriter(redis),
+    /** Which child session a delegated turn is waiting on. */
+    delegations: new DelegationReader(redis),
+    delegation: new DelegationWriter(redis),
+    /** Third-party consent challenges hanging off a dispatch. */
     authorizationChallenges: new AuthorizationReader(redis),
     authorizations: new AuthorizationWriter(redis),
-    subagents: createSubagentTransitions(redis),
-    hitl: createHitlTransitions(redis),
-    interactions: createInteractionTransitions(redis),
-    scheduledFires: createScheduledFireTransitions(redis),
+    /** Write-only surfaces: nothing outside their own scripts reads them. */
+    hitl: new HitlWriter(redis),
+    schedules: new ScheduleWriter(redis),
 
     /**
      * Whether a reset may proceed.
@@ -64,7 +78,7 @@ export function createConversationStore(deps: { readonly redis: RedisClient }) {
     ): Promise<"ready" | "stale" | "busy"> => {
       const owner = await redis.get(resetKey(continuationKey));
       if (owner !== resetId) return "stale";
-      const record = await new DeliveryReader(redis).read(continuationKey);
+      const record = await deliveries.read(continuationKey);
       if (record?.ingress === undefined) return "ready";
       return record.ingress.expiresAtMs > Date.now() ? "busy" : "ready";
     },

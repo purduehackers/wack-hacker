@@ -400,7 +400,10 @@ for (let cut = 1; cut < steps.length; cut += 1) {
     if (step === undefined) continue;
     try {
       await step.run();
-      failures += advanceMachine(step.machine ?? {}).length;
+      for (const entry of advanceMachine(step.machine ?? {})) {
+        console.error(`        ${entry}`);
+        failures += 1;
+      }
     } catch {
       // The crash under test; the invariants below are the assertion.
     }
