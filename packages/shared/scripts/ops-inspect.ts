@@ -7,7 +7,18 @@ import { z } from "zod";
 import { BOT_ACTIVE_GENERATION_KEY, BOT_SUPERVISOR_MUTEX_KEY } from "../src/bot/generation.ts";
 import { createConversationStore } from "../src/conversations/index.ts";
 import { redisEnv, tursoEnv } from "../src/env/scripts.ts";
-import { jsonText } from "../src/json.ts";
+import { jsonCodec } from "../src/json.ts";
+
+/**
+ * JSON text to an unvalidated value — deliberately, and only here.
+ *
+ * This used to live in `json.ts` as an export, where it was a standing invitation
+ * to skip validation at an io boundary. This tool is the one place the shape
+ * genuinely is unknown: it prints whatever is under an arbitrary Redis key, for a
+ * person reading the output. Every other reader of a Redis record knows what it
+ * expects and says so with `stored(schema)`.
+ */
+const jsonText = jsonCodec(z.unknown());
 
 function usage(): never {
   console.error(`usage:

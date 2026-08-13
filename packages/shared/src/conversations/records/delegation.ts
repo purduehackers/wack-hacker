@@ -14,12 +14,12 @@ import { z } from "zod";
 
 export const delegationSchema = z.strictObject({
   /**
-   * The session whose stream carries this delegation's progress.
+   * The parent session, which is the only one reachable from where this is written.
    *
-   * The parent's, not the child's. A child's session id exists only on the
-   * parent's event stream, and the event carrying it never reaches a hook — but
-   * the parent's stream is where its boundaries appear anyway, so following the
-   * parent is both sufficient and the only thing reachable from here.
+   * Not where the progress is: a delegated child publishes on its own stream, and
+   * the parent emits only `subagent.called` and `subagent.completed`. The child's
+   * id rides on `subagent.called`, which never reaches a hook, so the reader picks
+   * it up off this stream and attaches to the child itself.
    */
   sessionId: z.string().min(1).max(128),
   /** What to call it in the channel: "code", "github", … */

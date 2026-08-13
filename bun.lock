@@ -71,6 +71,7 @@
         "croner": "^10.0.1",
         "discord-api-types": "^0.38.49",
         "discord.js": "^14.27.0",
+        "eve": "0.31.3",
         "rehype-stringify": "^10.0.1",
         "remark-parse": "^11.0.0",
         "remark-rehype": "^11.1.2",

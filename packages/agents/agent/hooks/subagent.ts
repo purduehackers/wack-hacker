@@ -23,9 +23,16 @@ import { env } from "../env.ts";
  * not carry it either. A probe on both settled it — `actions.requested` fires
  * with `kind: "subagent-call"`, and `subagent.called` does not fire at all.
  *
- * That costs the child's session id, which is only on the stream. It is not
- * needed: the parent's own stream carries the delegation's boundaries, and the
- * parent session id is already on the active record. The bot follows the parent.
+ * That costs the child's session id, which is only on the stream — and the child
+ * is where the work happens. eve is explicit that "a delegated subagent publishes
+ * progress on its own child-session stream. The parent only emits
+ * `subagent.called` with a `childSessionId`, which a client uses to attach."
+ *
+ * So this records the parent, and the bot reads `childSessionId` off the parent's
+ * stream where the hook could not. An earlier version of this comment claimed the
+ * child's id was simply not needed because the parent carried the boundaries; it
+ * does carry them, and nothing else, which is two events for a delegation that can
+ * outlast the turn lease.
  */
 
 const conversations = createConversationStore({

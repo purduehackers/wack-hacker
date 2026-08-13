@@ -32,9 +32,6 @@ export function jsonCodec<S extends z.ZodType>(schema: S): z.ZodCodec<z.ZodStrin
   });
 }
 
-/** JSON text ⇄ an unvalidated value, for readers that validate further downstream. */
-export const jsonText = jsonCodec(z.unknown());
-
 /** A record read back from Redis: JSON text, or the value itself. */
 export function stored<S extends z.ZodType>(
   schema: S,
