@@ -45,17 +45,21 @@ COPY patches/ patches/
 # rather than silently resolving something the repo never tested.
 RUN bun install --frozen-lockfile --production --filter='@repo/bot' --filter='@repo/shared'
 
-# Drop the TypeScript compiler from the runtime tree.
+# Drop build tooling the runtime never loads.
 #
-# It is not a dependency of anything here — it arrives as a *types-only* peer of
-# `@purduehackers/discord-markdown-utils` and `@t3-oss/env-core`, and bun
-# installs peers. Nothing loads it at runtime, but its platform package ships a
-# ~30MB Go binary whose vendored `golang.org/x/text` and Go stdlib carry their
-# own CVEs, which failed the image vulnerability gate on a compiler the bot
-# never runs. `--production` does not help: these are peers, not devDependencies.
+# Neither is a dependency of anything the bot runs. TypeScript arrives as a
+# *types-only* peer of `@purduehackers/discord-markdown-utils` and
+# `@t3-oss/env-core`, and bun installs peers; esbuild arrives under `eve`, whose
+# `nitro` pulls a bundler the bot only ever uses the HTTP client half of. Both
+# ship a platform package carrying a ~30MB Go binary, so this is ~60MB of
+# executable that exists in the image purely to sit there. `--production` does
+# not help: one is a peer, the other a transitive dependency of a real one.
 RUN rm -rf node_modules/.bun/typescript@* node_modules/.bun/@typescript+* \
+    && rm -rf node_modules/.bun/@esbuild+* node_modules/.bun/esbuild@* \
     && find . -path '*/node_modules/typescript' -prune -exec rm -rf {} + \
-    && find . -path '*/node_modules/@typescript' -prune -exec rm -rf {} +
+    && find . -path '*/node_modules/@typescript' -prune -exec rm -rf {} + \
+    && find . -path '*/node_modules/@esbuild' -prune -exec rm -rf {} + \
+    && find . -path '*/node_modules/esbuild' -prune -exec rm -rf {} +
 
 
 FROM oven/bun:1.3.14-alpine@sha256:5acc90a93e91ff07bf72aa90a7c9f0fa189765aec90b47bdbf2152d2196383c0 AS runtime

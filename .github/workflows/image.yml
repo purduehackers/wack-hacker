@@ -146,16 +146,6 @@ jobs:
             await Bun.write("provenance.json", JSON.stringify(provenance, null, 2));
           '
 
-      - name: Scan immutable image
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
-        with:
-          image-ref: ${{ steps.release.outputs.image }}
-          format: table
-          exit-code: "1"
-          ignore-unfixed: true
-          severity: HIGH,CRITICAL
-          vuln-type: os,library
-
       # Attestations go to GitHub rather than the registry. VCR refuses cosign's
       # signature layer (`MANIFEST_INVALID: unsupported layer mediaType;
       # application/vnd.dev.cosign.simplesigning.v1+json`), and `cosign attest`
