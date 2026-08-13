@@ -20,7 +20,7 @@
 
 import { LightningTime } from "@purduehackers/time";
 import { DISCORD_IDS } from "@repo/shared/discord";
-import { Transient } from "@repo/shared/errors";
+import { messageOf, Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import type { Client } from "discord.js";
 
@@ -238,7 +238,7 @@ export function hackNightCountdown() {
         catch: (cause) =>
           new Transient({
             operation: "post countdown",
-            detail: cause instanceof Error ? cause.message : String(cause),
+            detail: messageOf(cause),
           }),
       }),
   } satisfies Schedule;

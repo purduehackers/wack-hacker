@@ -27,13 +27,16 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
-    "check:invariants": "bun scripts/check-invariants.ts"
+    "check:invariants": "bun scripts/check-invariants.ts",
+    "check:delivery": "bun scripts/check-delivery-writer.ts",
+    "check:render": "bun scripts/check-render-writer.ts"
   },
   "dependencies": {
     "@libsql/client": "^0.17.4",
     "@upstash/redis": "^1.38.2",
     "better-result": "^3.0.0",
     "drizzle-orm": "^0.45.2",
+    "xstate": "^5.32.5",
     "zod": "4.4.3"
   },
   "devDependencies": {

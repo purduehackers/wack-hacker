@@ -7,11 +7,12 @@ import {
 } from "@repo/shared/discord";
 import {
   Forbidden,
+  httpStatusOf,
+  messageOf,
   RateLimited,
+  serializeError,
   Transient,
   UpstreamError,
-  httpStatusOf,
-  serializeError,
 } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import type { ApprovalContext, ApprovalStatus, ToolContext } from "eve/tools";
@@ -72,7 +73,7 @@ function standardFailure(
   return new UpstreamError({
     service,
     status: status ?? 500,
-    detail: sanitize(cause instanceof Error ? cause.message : String(cause)),
+    detail: sanitize(messageOf(cause)),
   });
 }
 

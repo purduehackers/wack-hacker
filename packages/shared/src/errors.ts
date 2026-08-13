@@ -249,3 +249,13 @@ export function serializeError(value: unknown): SerializedError {
   if (value instanceof Error) return { tag: "Defect", message: value.message };
   return { tag: "Defect", message: String(value) };
 }
+
+/**
+ * What a thrown value says, whatever it turned out to be.
+ *
+ * `cause instanceof Error ? cause.message : String(cause)` is written out by hand
+ * in two dozen places across this repo; every one of them means this.
+ */
+export function messageOf(value: unknown): string {
+  return serializeError(value).message;
+}

@@ -14,7 +14,7 @@
  */
 
 import { DISCORD_IDS, UserRole, roleAtLeast } from "@repo/shared/discord";
-import { Forbidden, InvalidInput, Transient, UpstreamError } from "@repo/shared/errors";
+import { Forbidden, InvalidInput, messageOf, Transient, UpstreamError } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { MessageFlags, SlashCommandBuilder } from "discord.js";
 import type { ChatInputCommandInteraction } from "discord.js";
@@ -107,7 +107,7 @@ async function renameChannel(
         ? cause
         : new Transient({
             operation: "rename hack night channel",
-            detail: cause instanceof Error ? cause.message : String(cause),
+            detail: messageOf(cause),
           }),
   });
 }

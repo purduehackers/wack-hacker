@@ -5,9 +5,36 @@ import { Redis } from "@upstash/redis";
 import { z } from "zod";
 
 import { BOT_ACTIVE_GENERATION_KEY, BOT_SUPERVISOR_MUTEX_KEY } from "../src/bot/generation.ts";
-import { createConversationStore } from "../src/conversations/index.ts";
+import {
+  activeKey,
+  AGENT_READY_SET_KEY,
+  AGENT_RENDER_READY_SET_KEY,
+  parkedKey,
+  pendingKey,
+  QUEUE_INDEX_KEY,
+  queueMember,
+  renderClaimKey,
+  renderIntentKey,
+  renderMember,
+  renderOutcomeKey,
+  renderProjectionKey,
+  renderTargetKey,
+  resetKey,
+  resetPendingKey,
+} from "../src/conversations/keys.ts";
 import { redisEnv, tursoEnv } from "../src/env/scripts.ts";
-import { jsonText } from "../src/json.ts";
+import { jsonCodec } from "../src/json.ts";
+
+/**
+ * JSON text to an unvalidated value — deliberately, and only here.
+ *
+ * This used to live in `json.ts` as an export, where it was a standing invitation
+ * to skip validation at an io boundary. This tool is the one place the shape
+ * genuinely is unknown: it prints whatever is under an arbitrary Redis key, for a
+ * person reading the output. Every other reader of a Redis record knows what it
+ * expects and says so with `stored(schema)`.
+ */
+const jsonText = jsonCodec(z.unknown());
 
 function usage(): never {
   console.error(`usage:
@@ -75,7 +102,6 @@ interface ConversationReport {
   readonly key: string;
   readonly pendingDepth: number;
   readonly resetPendingDepth: number;
-  readonly ingressPresent: boolean;
   readonly resetPresent: boolean;
   readonly readyMember: boolean;
   readonly active: unknown;
@@ -118,14 +144,16 @@ async function inspectRedis(arguments_: readonly string[]): Promise<void> {
   const dispatch = check(dispatchIdSchema, option(arguments_, "--dispatch"));
 
   const redis = new Redis(redisEnv());
-  const conversations = createConversationStore({ redis });
 
-  const [active, mutexExists, mutexTtlMs, indexes] = await Promise.all([
-    redis.get(BOT_ACTIVE_GENERATION_KEY),
-    redis.exists(BOT_SUPERVISOR_MUTEX_KEY),
-    redis.pttl(BOT_SUPERVISOR_MUTEX_KEY),
-    conversations.inspectIndexes(),
-  ]);
+  const [active, mutexExists, mutexTtlMs, conversationCount, ready, renderReady] =
+    await Promise.all([
+      redis.get(BOT_ACTIVE_GENERATION_KEY),
+      redis.exists(BOT_SUPERVISOR_MUTEX_KEY),
+      redis.pttl(BOT_SUPERVISOR_MUTEX_KEY),
+      redis.scard(QUEUE_INDEX_KEY),
+      redis.scard(AGENT_READY_SET_KEY),
+      redis.scard(AGENT_RENDER_READY_SET_KEY),
+    ]);
   const report: OpsReport = {
     at: new Date().toISOString(),
     supervisor: {
@@ -141,42 +169,61 @@ async function inspectRedis(arguments_: readonly string[]): Promise<void> {
       mutexPresent: mutexExists === 1,
       mutexTtlMs,
     },
-    indexes,
+    indexes: { conversations: conversationCount, ready, renderReady },
   };
 
   if (continuation !== undefined) {
-    const state = await conversations.inspectConversation(continuation);
+    const [depth, activeRecord, parked, reset, resetPending, readyMember] = await Promise.all([
+      redis.llen(pendingKey(continuation)),
+      redis.get(activeKey(continuation)),
+      redis.get(parkedKey(continuation)),
+      redis.exists(resetKey(continuation)),
+      redis.llen(resetPendingKey(continuation)),
+      redis.sismember(AGENT_READY_SET_KEY, queueMember(continuation)),
+    ]);
     report.conversation = {
       key: continuation,
-      pendingDepth: state.depth,
-      resetPendingDepth: state.resetPending,
-      ingressPresent: state.ingress === 1,
-      resetPresent: state.reset === 1,
-      readyMember: state.ready === 1,
-      active: summary(state.active, [
+      pendingDepth: depth,
+      resetPendingDepth: resetPending,
+      resetPresent: reset === 1,
+      readyMember: readyMember === 1,
+      // Which lease is held and until when is the whole answer to "why is this
+      // stuck", so all three are printed.
+      active: summary(activeRecord, [
         "phase",
         "messageId",
         "dispatchId",
         "sessionId",
         "eveTurnId",
-        "deliveryLeaseUntilMs",
+        "handoff",
+        "turn",
+        "ingress",
       ]),
-      parked: summary(state.parked, ["messageId", "dispatchId", "sessionId", "eveTurnId"]),
+      parked: summary(parked, ["messageId", "dispatchId", "sessionId", "eveTurnId"]),
     };
   }
 
   if (dispatch !== undefined) {
-    const state = await conversations.inspectRender(dispatch);
+    const [readyMember, target, intent, projection, claim, claimTtlMs, outcome] = await Promise.all(
+      [
+        redis.sismember(AGENT_RENDER_READY_SET_KEY, renderMember(dispatch)),
+        redis.exists(renderTargetKey(dispatch)),
+        redis.exists(renderIntentKey(dispatch)),
+        redis.exists(renderProjectionKey(dispatch)),
+        redis.exists(renderClaimKey(dispatch)),
+        redis.pttl(renderClaimKey(dispatch)),
+        redis.get(renderOutcomeKey(dispatch)),
+      ],
+    );
     report.render = {
       dispatchId: dispatch,
-      readyMember: state.ready === 1,
-      targetPresent: state.target === 1,
-      intentPresent: state.intent === 1,
-      projectionPresent: state.projection === 1,
-      claimPresent: state.claim === 1,
-      claimTtlMs: state.claimTtlMs,
-      outcome:
-        state.outcome === "applied" || state.outcome === "discarded" ? state.outcome : undefined,
+      readyMember: readyMember === 1,
+      targetPresent: target === 1,
+      intentPresent: intent === 1,
+      projectionPresent: projection === 1,
+      claimPresent: claim === 1,
+      claimTtlMs,
+      outcome: outcome === "applied" || outcome === "discarded" ? outcome : undefined,
     };
   }
 

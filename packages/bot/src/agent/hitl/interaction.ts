@@ -1,6 +1,6 @@
 import type { ConversationStore } from "@repo/shared/conversations";
 import { roleAtLeast, roleFromMemberRoles, UserRole } from "@repo/shared/discord";
-import { serializeError, tagOf } from "@repo/shared/errors";
+import { messageOf, tagOf } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import type { Reporter } from "@repo/shared/result/observe";
 import { sliceText } from "@repo/shared/text";
@@ -32,18 +32,18 @@ const ANSWER_FIELD_ID = "answer";
 
 interface HitlInteractionDeps {
   readonly flow: ConversationFlow;
-  readonly renders: ConversationStore["render"];
+  readonly renders: ConversationStore["renders"];
+  readonly challenges: ConversationStore["authorizationChallenges"];
   readonly reporter: Reporter;
   readonly guildId: string;
 }
 
 function report(deps: HitlInteractionDeps, operation: string, error: unknown): void {
-  const serialized = serializeError(error);
   deps.reporter.emit({
     op: operation,
     status: "error",
     errorTag: tagOf(error),
-    errorMessage: serialized.message,
+    errorMessage: messageOf(error),
   });
 }
 
@@ -366,10 +366,10 @@ async function handleInput(
       ...(traceparent === undefined ? {} : { traceparent }),
     },
   });
-  if (answered.status === "claimed" || answered.status === "stale") {
+  if (answered.status === "taken" || answered.status === "stale") {
     await ephemeral(
       interaction,
-      answered.status === "claimed"
+      answered.status === "taken"
         ? "An answer is already being processed for this request."
         : "This input request is stale or has already been handled.",
     );
@@ -482,11 +482,15 @@ async function handleAuthorization(
     await ephemeral(interaction, "This authorization challenge is temporarily unavailable.");
     return;
   }
-  if (projection.value.anchorMessageId !== sourceMessageId) {
+  // The same carrier rule as an input request: the anchor is written with no
+  // components at all, so a Connect button is always on the HITL message.
+  // Comparing against the anchor refused every click.
+  const carrier = projection.value.hitlMessageId ?? projection.value.anchorMessageId;
+  if (carrier !== sourceMessageId) {
     await ephemeral(interaction, "This authorization challenge is no longer active.");
     return;
   }
-  const challenge = await deps.renders.authorization(locator.dispatchId, authorization.id);
+  const challenge = await deps.challenges.challenge(locator.dispatchId, authorization.id);
   if (Result.isError(challenge)) {
     report(deps, "agent.hitl.decode-authorization-challenge", challenge.error);
     await ephemeral(interaction, "This authorization challenge is temporarily unavailable.");

@@ -7,33 +7,48 @@
  * dispatch never sits claimed forever.
  */
 
-import { serializeError, tagOf, Transient, UpstreamError } from "@repo/shared/errors";
+import { messageOf, tagOf, Transient, UpstreamError } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import type { ParkedPayload } from "@repo/shared/wire";
 
 import { renderHitl } from "../../agent/hitl/components.ts";
-import { createRenderer } from "../../agent/render/renderer.ts";
-import type { RendererProjection } from "../../agent/render/renderer.ts";
+import { createRenderer, toRendererProjection } from "../../agent/render/renderer.ts";
 import { continueTrace, traceOperation } from "../../framework/observability.ts";
 import { stopFollowing, subagentProgress } from "./subagent-follower.ts";
 import type { ConversationFlowDeps, RenderWork } from "./types.ts";
 
+function emit(
+  deps: ConversationFlowDeps,
+  dispatchId: string,
+  operation: string,
+  error: unknown,
+  status: "error" | "defect",
+): void {
+  deps.reporter.emit({
+    op: operation,
+    status,
+    errorTag: tagOf(error),
+    errorMessage: messageOf(error),
+    attributes: { dispatchId },
+  });
+}
+
+/** Something went wrong with this paint; the sweep will try it again. */
 export function reportFailure(
   deps: ConversationFlowDeps,
   dispatchId: string,
   operation: string,
   error: unknown,
 ): void {
-  const serialized = serializeError(error);
-  deps.reporter.emit({
-    op: operation,
-    status: "error",
-    errorTag: tagOf(error),
-    errorMessage: serialized.message,
-    attributes: { dispatchId },
-  });
+  emit(deps, dispatchId, operation, error, "error");
 }
 
+/**
+ * Something is wrong with the *record*, so retrying cannot help.
+ *
+ * Captured as a defect rather than counted as an error: the intent, target or
+ * projection was written by us and cannot be read back by us.
+ */
 async function discardDefect(
   deps: ConversationFlowDeps,
   dispatchId: string,
@@ -41,43 +56,16 @@ async function discardDefect(
   error: Error,
 ): Promise<undefined> {
   deps.reporter.captureDefect(error, { op: operation, attributes: { dispatchId } });
-  const serialized = serializeError(error);
-  deps.reporter.emit({
-    op: operation,
-    status: "defect",
-    errorTag: tagOf(error),
-    errorMessage: serialized.message,
-    attributes: { dispatchId },
-  });
+  emit(deps, dispatchId, operation, error, "defect");
   await deps.store.render.discard(dispatchId);
   return undefined;
-}
-
-function toProjection(value: {
-  readonly anchorMessageId?: string | undefined;
-  readonly anchorContentHash?: string | undefined;
-  readonly overflow: readonly {
-    readonly messageId: string;
-    readonly contentHash?: string | undefined;
-  }[];
-}): RendererProjection {
-  return {
-    ...(value.anchorMessageId === undefined ? {} : { anchorMessageId: value.anchorMessageId }),
-    ...(value.anchorContentHash === undefined
-      ? {}
-      : { anchorContentHash: value.anchorContentHash }),
-    overflow: value.overflow.map((item) => ({
-      messageId: item.messageId,
-      ...(item.contentHash === undefined ? {} : { contentHash: item.contentHash }),
-    })),
-  };
 }
 
 async function loadWork(
   deps: ConversationFlowDeps,
   dispatchId: string,
 ): Promise<RenderWork | undefined> {
-  const desired = await deps.store.render.intent(dispatchId);
+  const desired = await deps.store.renders.intent(dispatchId);
   if (Result.isError(desired)) {
     return discardDefect(deps, dispatchId, "agent.render.decode-intent", desired.error);
   }
@@ -86,7 +74,7 @@ async function loadWork(
     return undefined;
   }
 
-  const targetResult = await deps.store.render.target(dispatchId);
+  const targetResult = await deps.store.renders.target(dispatchId);
   if (Result.isError(targetResult)) {
     return discardDefect(deps, dispatchId, "agent.render.decode-target", targetResult.error);
   }
@@ -114,14 +102,14 @@ async function loadWork(
     );
   }
 
-  const loaded = await deps.store.render.projection(dispatchId, target.anchorMessageId);
+  const loaded = await deps.store.renders.projection(dispatchId, target.anchorMessageId);
   if (Result.isError(loaded)) {
     return discardDefect(deps, dispatchId, "agent.render.decode-projection", loaded.error);
   }
   return {
     intent,
     target,
-    projection: toProjection(loaded.value),
+    projection: toRendererProjection(loaded.value),
     appliedRevision: loaded.value.appliedRevision,
   };
 }
@@ -156,7 +144,17 @@ async function paint(
   claimToken: string,
   work: RenderWork,
 ): Promise<boolean> {
-  if (work.appliedRevision >= work.intent.revision) return true;
+  // Never on a terminal frame: the follower is stopped just below, and a finished
+  // turn showing "code: reading files" is a line about work that is over.
+  const progress = work.intent.phase === "streaming" ? subagentProgress(dispatchId) : undefined;
+  // The revision alone cannot decide this. A delegated turn publishes no renders
+  // for the whole span a subagent runs, so its narration changes what is on
+  // screen without changing the intent — and a guard on the revision by itself
+  // made every follower line a no-op, which is precisely the case the follower
+  // exists for.
+  const current = work.appliedRevision >= work.intent.revision;
+  const narrated = (progress ?? "") === (work.projection.subagentActivity ?? "");
+  if (current && narrated) return true;
 
   const renderer = createRenderer(
     {
@@ -173,7 +171,6 @@ async function paint(
     work.projection,
   );
   const hitl = work.intent.phase === "streaming" ? renderHitl(work.intent) : undefined;
-  const progress = subagentProgress(dispatchId);
   const painted = await renderer.write({
     text: work.intent.text,
     activity: work.intent.activity,
@@ -221,13 +218,13 @@ export async function applyLatest(
         async () => {
           if (!(await paint(deps, dispatchId, claimToken, work))) return "done";
 
-          const completion = await deps.store.render.complete(
+          const completion = await deps.store.render.complete({
             dispatchId,
             claimToken,
-            work.projection,
-            Math.max(work.appliedRevision, work.intent.revision),
-            work.intent.phase !== "streaming",
-          );
+            projection: work.projection,
+            appliedRevision: Math.max(work.appliedRevision, work.intent.revision),
+            terminal: work.intent.phase !== "streaming",
+          });
           releaseClaim = false;
           if (completion === "lost") {
             reportFailure(

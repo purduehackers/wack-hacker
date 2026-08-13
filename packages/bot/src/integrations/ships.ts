@@ -9,7 +9,13 @@
  * the message that triggered it.
  */
 
-import { InvalidInput, RateLimited, Transient, UpstreamError } from "@repo/shared/errors";
+import {
+  InvalidInput,
+  messageOf,
+  RateLimited,
+  Transient,
+  UpstreamError,
+} from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { upstreamRetry } from "@repo/shared/result/retry";
 import { z } from "zod";
@@ -97,7 +103,7 @@ function toShipsError(operation: string) {
       ? cause
       : new Transient({
           operation,
-          detail: cause instanceof Error ? cause.message : String(cause),
+          detail: messageOf(cause),
         });
 }
 

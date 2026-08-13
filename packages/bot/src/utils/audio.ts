@@ -15,7 +15,7 @@
  * discarded by the decoder, silently losing audio.
  */
 
-import { InvalidInput } from "@repo/shared/errors";
+import { InvalidInput, messageOf } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import CodecParser from "codec-parser";
 import type { OggPage } from "codec-parser";
@@ -126,7 +126,7 @@ export function splitOggOpus(
     catch: (cause) =>
       new InvalidInput({
         subject: "ogg opus stream",
-        issues: [cause instanceof Error ? cause.message : String(cause)],
+        issues: [messageOf(cause)],
       }),
   });
   if (Result.isError(parsed)) return parsed;

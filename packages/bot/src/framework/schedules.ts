@@ -6,7 +6,7 @@
  * side effect and retains the claim beyond the weekly interval.
  */
 
-import { Transient } from "@repo/shared/errors";
+import { messageOf, Transient } from "@repo/shared/errors";
 import type { KnownError } from "@repo/shared/errors";
 import type { RedisClient } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
@@ -59,7 +59,7 @@ async function claimScheduleFire(
     catch: (cause) =>
       new Transient({
         operation: `claim schedule ${scheduleName}`,
-        detail: cause instanceof Error ? cause.message : String(cause),
+        detail: messageOf(cause),
       }),
   });
 }

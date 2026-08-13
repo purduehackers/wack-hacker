@@ -6,13 +6,10 @@
  * Drives one delivery through the real Lua — enqueue, claim, admission, render,
  * park, complete — checking every invariant after every transition. Then it cuts
  * the sequence short at each step in turn, which is what a crash actually looks
- * like, and asks the only question that matters afterwards: is the state
- * bounded, or has this conversation been taken hostage.
+ * like, and asks the only question that matters afterwards: is the state bounded,
+ * or has this conversation been taken hostage.
  *
- * Written because five defects in one night all lived in this layer, and every
- * one was invisible to `tsc` and to lint. The properties they broke are not
- * type-level: they are things eleven Lua scripts each have to remember about one
- * shared Redis record, and nothing but this checks them.
+ * The properties are not type-level, so nothing but this checks them.
  *
  * Uses a synthetic conversation key, scrubbed on the way in and out, so it is
  * safe to point at any environment.
@@ -20,18 +17,31 @@
 
 import { z } from "zod";
 
-import { createAdmissionTransitions } from "../src/conversations/admission.ts";
-import { createQueueTransitions } from "../src/conversations/queue.ts";
-import { createRenderPublicationTransitions } from "../src/conversations/render-publication.ts";
+import {
+  allowsDelivery,
+  allowsRender,
+  DeliveryPhase,
+  RenderPhase,
+} from "../src/conversations/machines/index.ts";
+import type {
+  DeliveryContext,
+  DeliveryEvent,
+  RenderContext,
+  RenderEvent,
+} from "../src/conversations/machines/index.ts";
+import { StoredPhase } from "../src/conversations/records/delivery.ts";
+import { DeliveryWriter } from "../src/conversations/writers/delivery.ts";
+import { RenderWriter } from "../src/conversations/writers/render.ts";
 import { redisEnv } from "../src/env/scripts.ts";
+import { messageOf } from "../src/errors.ts";
 import { getRedis } from "../src/redis/client.ts";
 import { Result } from "../src/result/index.ts";
 import type { DeliveryPayload, MessagePayload, ParkedPayload, RenderIntent } from "../src/wire.ts";
+import { finish } from "./probe.ts";
 
 const redis = getRedis(redisEnv());
-const queue = createQueueTransitions(redis);
-const admission = createAdmissionTransitions(redis);
-const publication = createRenderPublicationTransitions(redis);
+const writer = new DeliveryWriter(redis);
+const renders = new RenderWriter(redis);
 
 /** Outside the range Discord mints, so it can never collide with real traffic. */
 const KEY = "99999999999999901";
@@ -41,7 +51,7 @@ const SESSION_ID = "wrun_invariant_probe";
 /** Only the fields the invariants below are stated in terms of. */
 const activeRecordSchema = z.looseObject({
   phase: z.string(),
-  expiresAtMs: z.number().optional(),
+  turn: z.looseObject({ expiresAtMs: z.number() }).optional(),
 });
 
 const message: MessagePayload = {
@@ -83,6 +93,11 @@ function parkedFor(dispatchId: string): ParkedPayload {
 
 /** The delivery the claim handed back; every later step is fenced on its id. */
 let claimed: DeliveryPayload | undefined;
+/** Every step after the claim needs this, and none of them can run without it. */
+function dispatchId(): string {
+  if (claimed === undefined) throw new Error("no claimed delivery");
+  return claimed.dispatchId;
+}
 
 async function readActive(): Promise<z.output<typeof activeRecordSchema> | undefined> {
   const raw: unknown = await redis.get(`agent:active:${KEY}`);
@@ -99,7 +114,6 @@ async function scrub(): Promise<void> {
     `agent:active:${KEY}`,
     `pending:${KEY}`,
     `agent:parked:${KEY}`,
-    `agent:ingress:${KEY}`,
     `agent:seen:${KEY}`,
   );
   if (dispatchId !== undefined) {
@@ -117,12 +131,130 @@ async function scrub(): Promise<void> {
 }
 
 /**
+ * The declared lifecycles, driven beside the real thing.
+ *
+ * `machines/` says which transitions are legal; Lua decides what happened. The two
+ * can drift silently — a guard tightened in one and not the other reads as a
+ * conversation that mysteriously stops — so every step advances both and the
+ * phases are compared. Without this the tables are decoration.
+ */
+interface MachineState {
+  delivery: DeliveryPhase;
+  render: RenderPhase;
+  deliveryContext: DeliveryContext;
+  renderContext: RenderContext;
+}
+
+function freshMachine(): MachineState {
+  return {
+    delivery: DeliveryPhase.Queued,
+    render: RenderPhase.Unclaimed,
+    deliveryContext: { sessionId: "", renderSettled: false },
+    renderContext: { desiredRevision: 0, appliedRevision: 0, terminal: false },
+  };
+}
+
+let machine = freshMachine();
+
+/** Widened deliberately: the question is whether Redis holds a phase it may not. */
+const STORED_PHASES: ReadonlySet<string> = new Set(StoredPhase.options);
+
+/**
+ * Printed beside a violation rather than instead of it. The invariant really was
+ * broken; naming the likeliest third party turns twenty minutes of reading Lua
+ * into one re-run after a deploy.
+ */
+const FOREIGN_WRITER = "     (a process running older code may be competing for the probe)";
+
+/** Phases with no persisted form, so "no record" is the agreeing answer. */
+const UNSTORED_PHASES: readonly DeliveryPhase[] = [
+  DeliveryPhase.Queued,
+  DeliveryPhase.Done,
+  DeliveryPhase.Expired,
+];
+
+/** What one step does to the tables, if anything. */
+interface MachineStep {
+  readonly delivery?: DeliveryEvent["type"];
+  readonly render?: readonly RenderEvent["type"][];
+  readonly deliveryContext?: Partial<DeliveryContext>;
+  readonly renderContext?: Partial<RenderContext>;
+}
+
+function advanceMachine(step: MachineStep): readonly string[] {
+  const violations: string[] = [];
+  // Context first: a guard reads what the transition is about to be judged on.
+  machine.deliveryContext = { ...machine.deliveryContext, ...step.deliveryContext };
+  machine.renderContext = { ...machine.renderContext, ...step.renderContext };
+  if (step.delivery !== undefined) {
+    const allowed = allowsDelivery(machine.delivery, machine.deliveryContext, {
+      type: step.delivery,
+    });
+    if (allowed === undefined) {
+      violations.push(
+        `M1 Redis performed ${step.delivery}, which the machine refuses from ${machine.delivery}`,
+      );
+    } else {
+      machine.delivery = allowed;
+    }
+  }
+  for (const event of step.render ?? []) {
+    const allowed = allowsRender(machine.render, machine.renderContext, { type: event });
+    if (allowed === undefined) {
+      violations.push(
+        `M2 Redis performed render ${event}, which the machine refuses from ${machine.render}`,
+      );
+    } else {
+      machine.render = allowed;
+    }
+  }
+  return violations;
+}
+
+/** Do the tables and Redis agree about where this delivery is? */
+async function compareMachine(
+  active: z.output<typeof activeRecordSchema> | undefined,
+): Promise<readonly string[]> {
+  const violations: string[] = [];
+  const stored = active?.phase;
+  if (stored === undefined) {
+    if (!UNSTORED_PHASES.includes(machine.delivery)) {
+      violations.push(`M3 the machine says ${machine.delivery}, but Redis holds no record`);
+      // This probe is the only legitimate writer of its conversation, so a record
+      // vanishing under it was deleted by somebody else — and it has to advertise
+      // itself in the global indexes for I1 and I4 to mean anything.
+      violations.push(FOREIGN_WRITER);
+    }
+  } else if (stored !== machine.delivery) {
+    violations.push(`M3 the machine says ${machine.delivery}, Redis says ${stored}`);
+  } else if (!STORED_PHASES.has(stored)) {
+    violations.push(`M3 Redis persisted ${stored}, which has no persisted form`);
+  }
+
+  const dispatchId = claimed?.dispatchId;
+  if (dispatchId !== undefined) {
+    const outcome: unknown = await redis.get(`agent:render-outcome:${dispatchId}`);
+    const recorded = outcome === "applied" || outcome === "discarded" ? outcome : undefined;
+    const expected =
+      machine.render === RenderPhase.Applied || machine.render === RenderPhase.Discarded
+        ? machine.render
+        : undefined;
+    if (recorded !== expected) {
+      violations.push(
+        `M4 the render machine says ${expected ?? "no outcome"}, Redis says ${recorded ?? "no outcome"}`,
+      );
+    }
+  }
+  return violations;
+}
+
+/**
  * Five properties no single script owns, which is exactly why they break.
  *
  * Each one is a way a conversation stops making progress rather than a way a
  * request fails, so nothing upstream ever reports them.
  */
-async function check(label: string): Promise<readonly string[]> {
+async function check(label: string): Promise<number> {
   const [active, pending, ttl, parkedMarker, indexed] = await Promise.all([
     readActive(),
     redis.llen(`pending:${KEY}`),
@@ -131,12 +263,14 @@ async function check(label: string): Promise<readonly string[]> {
     redis.sismember("agent:queues", `k:${KEY}`),
   ]);
   const inIndex = indexed === 1;
-  const violations: string[] = [];
+  const violations: string[] = [...(await compareMachine(active))];
   if (pending > 0 && !inIndex)
     violations.push("I1 queued work is not in the index, so it never drains");
   if (active !== undefined && ttl === -1) violations.push("I2 the active record has no expiry");
-  if (active !== undefined && active.expiresAtMs === undefined) {
+  if (active !== undefined && active.turn === undefined) {
     violations.push("I3 the active record carries no lease for the sweep to read");
+    // The current writer cannot produce this shape, so something else wrote it.
+    violations.push(FOREIGN_WRITER);
   }
   if (active === undefined && pending === 0 && inIndex) violations.push("I4 index entry leaked");
   if (parkedMarker !== null && parkedMarker !== undefined && active === undefined) {
@@ -148,111 +282,137 @@ async function check(label: string): Promise<readonly string[]> {
     `   ${mark} ${label.padEnd(32)} ttlMs=${String(ttl).padStart(9)} phase=${phase.padEnd(18)} pending=${pending} indexed=${inIndex}`,
   );
   for (const entry of violations) console.error(`        ${entry}`);
-  return violations;
+  return violations.length;
 }
 
-const steps: ReadonlyArray<readonly [string, () => Promise<void>]> = [
-  ["enqueue", async () => queue.enqueue(message)],
-  [
-    "claim",
-    async () => {
-      const outcome = await queue.claim(KEY);
+interface Step {
+  readonly name: string;
+  readonly run: () => Promise<void>;
+  /** What the declared lifecycles do when this step succeeds. */
+  readonly machine?: MachineStep;
+}
+
+const steps: readonly Step[] = [
+  { name: "enqueue", run: async () => writer.enqueue(message) },
+  {
+    name: "claim",
+    run: async () => {
+      const outcome = await writer.claim(KEY);
       if (Result.isError(outcome)) throw new Error(`claim failed: ${outcome.error.message}`);
       if (outcome.value === undefined) throw new Error("claim returned nothing");
       claimed = outcome.value.payload;
     },
-  ],
-  [
-    "admission.start",
-    async () => {
-      if (claimed === undefined) throw new Error("no claimed delivery");
-      const started = await admission.start(claimed);
-      if (started.status !== "start") throw new Error(`start returned ${started.status}`);
+    machine: { delivery: "CLAIM" },
+  },
+  {
+    name: "admission.start",
+    run: async () => {
+      const started = await writer.markLive(KEY, dispatchId(), MESSAGE_ID);
+      if (started.status !== "start") throw new Error(`mark-live returned ${started.status}`);
     },
-  ],
-  [
-    "admission.confirm",
-    async () => {
-      if (claimed === undefined) throw new Error("no claimed delivery");
-      if (!(await admission.confirm(claimed, SESSION_ID))) throw new Error("confirm was rejected");
+    machine: { delivery: "MARK_LIVE" },
+  },
+  {
+    name: "admission.confirm",
+    run: async () => {
+      if (!(await writer.confirmSession(KEY, dispatchId(), MESSAGE_ID, SESSION_ID))) {
+        throw new Error("confirm was rejected");
+      }
     },
-  ],
-  [
-    "publish(streaming)",
-    async () => {
-      if (claimed === undefined) throw new Error("no claimed delivery");
-      const published = await publication.publish(intentFor(claimed.dispatchId, 1, "streaming"));
+    machine: { delivery: "CONFIRM_SESSION", deliveryContext: { sessionId: SESSION_ID } },
+  },
+  {
+    name: "publish(streaming)",
+    run: async () => {
+      const published = await renders.publish(intentFor(dispatchId(), 1, "streaming"));
       if (!published.accepted) throw new Error("publish was rejected");
     },
-  ],
-  [
-    "settleAndPark",
-    async () => {
-      if (claimed === undefined) throw new Error("no claimed delivery");
-      const settled = await publication.settleAndPark(
-        intentFor(claimed.dispatchId, 2, "completed"),
-        parkedFor(claimed.dispatchId),
+    machine: { render: ["PUBLISH"], renderContext: { desiredRevision: 1, terminal: false } },
+  },
+  {
+    name: "settleAndPark",
+    run: async () => {
+      const settled = await renders.settleAndPark(
+        intentFor(dispatchId(), 2, "completed"),
+        parkedFor(dispatchId()),
       );
       if (settled === undefined) throw new Error("settle was rejected");
     },
-  ],
-  [
-    // Stands in for the bot: `complete` refuses until the paint is recorded.
-    "bot records the paint",
-    async () => {
-      if (claimed === undefined) throw new Error("no claimed delivery");
-      await redis.set(`agent:render-outcome:${claimed.dispatchId}`, "applied");
+    machine: {
+      delivery: "PARK",
+      render: ["PUBLISH"],
+      renderContext: { desiredRevision: 2, terminal: true },
     },
-  ],
-  [
-    "complete",
-    async () => {
-      if (claimed === undefined) throw new Error("no claimed delivery");
-      const status = await queue.complete(parkedFor(claimed.dispatchId));
+  },
+  {
+    // Stands in for the bot: `complete` refuses until the paint is recorded.
+    name: "bot records the paint",
+    run: async () => {
+      await redis.set(`agent:render-outcome:${dispatchId()}`, "applied");
+    },
+    machine: {
+      render: ["CLAIM", "SETTLE"],
+      renderContext: { appliedRevision: 2 },
+      deliveryContext: { renderSettled: true },
+    },
+  },
+  {
+    name: "complete",
+    run: async () => {
+      const status = await writer.complete(parkedFor(dispatchId()));
       if (status !== "completed") throw new Error(`complete returned ${status}`);
     },
-  ],
+    machine: { delivery: "COMPLETE" },
+  },
 ];
 
 let failures = 0;
 
-console.info("happy path — invariants after every transition\n");
-await scrub();
-for (const [name, run] of steps) {
+function fail(...lines: readonly string[]): void {
+  for (const line of lines) console.error(`        ${line}`);
+  failures += lines.length;
+}
+
+/**
+ * A step that throws mid-sequence is the crash under test; one that throws on the
+ * happy path is a failure. Either way the tables only advance on success, because
+ * a step that threw did not happen in Redis either.
+ */
+type OnThrow = "announce" | "expected";
+
+async function runStep(step: Step, onThrow: OnThrow): Promise<void> {
   try {
-    await run();
+    await step.run();
   } catch (cause) {
-    console.error(
-      `   FAIL ${name} threw: ${cause instanceof Error ? cause.message : String(cause)}`,
-    );
-    failures += 1;
+    if (onThrow === "announce") fail(`${step.name} threw: ${messageOf(cause)}`);
+    return;
   }
-  failures += (await check(name)).length;
+  fail(...advanceMachine(step.machine ?? {}));
+}
+
+async function restart(): Promise<void> {
+  await scrub();
+  machine = freshMachine();
+}
+
+console.info("happy path — invariants after every transition\n");
+await restart();
+for (const step of steps) {
+  await runStep(step, "announce");
+  failures += await check(step.name);
 }
 
 console.info("\ncrash injection — stop after step N, then ask whether the state is bounded\n");
 for (let cut = 1; cut < steps.length; cut += 1) {
-  await scrub();
-  for (let index = 0; index < cut; index += 1) {
-    try {
-      await steps[index]?.[1]();
-    } catch {
-      // The crash under test; the invariants below are the assertion.
-    }
-  }
-  failures += (await check(`crash after ${steps[cut - 1]?.[0] ?? "?"}`)).length;
-  const active = await readActive();
-  const remainingMs = await redis.pttl(`agent:active:${KEY}`);
-  if (active !== undefined && active.expiresAtMs === undefined && remainingMs === -1) {
-    console.error("        unbounded: nothing will ever release this conversation");
-    failures += 1;
-  }
+  await restart();
+  for (const step of steps.slice(0, cut)) await runStep(step, "expected");
+
+  // Boundedness is I2 and I3 inside `check`, which runs on the line above: a
+  // record with no expiry, or with no lease for the sweep to read, is already a
+  // reported violation. A second test for both at once could only ever fire when
+  // those two had, so it asserted nothing.
+  failures += await check(`crash after ${steps[cut - 1]?.name ?? "?"}`);
 }
 
 await scrub();
-if (failures === 0) {
-  console.info("\nall invariants hold across every path");
-} else {
-  console.error(`\n${failures} invariant violation(s)`);
-  process.exit(1);
-}
+finish(failures, "all invariants hold across every path");

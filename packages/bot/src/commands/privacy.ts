@@ -14,7 +14,7 @@
  * gate itself was never wired up, so none of it had any effect.
  */
 
-import { Transient } from "@repo/shared/errors";
+import { messageOf, Transient } from "@repo/shared/errors";
 import { isOptedOut, optIn, optOut } from "@repo/shared/privacy";
 import type { RedisClient } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
@@ -77,7 +77,7 @@ async function run(
     catch: (cause) =>
       new Transient({
         operation: "read or write privacy preference",
-        detail: cause instanceof Error ? cause.message : String(cause),
+        detail: messageOf(cause),
       }),
   });
 }

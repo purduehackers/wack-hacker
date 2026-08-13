@@ -6,11 +6,12 @@
  * here loops — the sweep owns repetition.
  */
 
-import type { HolderState } from "@repo/shared/conversations";
-import { tagOf, Transient } from "@repo/shared/errors";
+import type { Holder } from "@repo/shared/conversations";
+import { messageOf, tagOf, Transient } from "@repo/shared/errors";
 import type { KnownError } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { sliceText } from "@repo/shared/text";
+import { MAX_CONTENT_CHARS, MAX_SCHEDULE_CONTENT_CHARS } from "@repo/shared/wire";
 import type {
   MessagePayload,
   ParkedPayload,
@@ -32,7 +33,7 @@ export async function kick(
   deps: ConversationFlowDeps,
   continuationKey: string,
 ): Promise<AgentError | undefined> {
-  const next = await deps.store.queue.claim(continuationKey);
+  const next = await deps.store.delivery.claim(continuationKey);
   if (Result.isError(next)) {
     deps.reporter.captureDefect(next.error, {
       op: "agent.router.claim",
@@ -47,7 +48,12 @@ export async function kick(
   if (Result.isOk(sent)) {
     // The Eve confirmation and this acknowledgement cover different crash
     // windows. A fast park can consume the claim before this CAS arrives.
-    await deps.store.queue.confirm(continuationKey, claimed.claimToken, sent.value.sessionId);
+    await deps.store.delivery.confirmSession(
+      continuationKey,
+      claimed.payload.dispatchId,
+      claimed.payload.messageId,
+      sent.value.sessionId,
+    );
     return;
   }
 
@@ -66,15 +72,21 @@ export async function kick(
 }
 
 /**
- * Interrupt the turn holding this conversation, if one is.
+ * The cap a folded message must respect, which depends on the kind.
  *
- * Someone who types while the agent is working is correcting it, not waiting in
- * line. Cancelling happens agent-side; this only tells it to. Failures are
- * reported and swallowed — the message stays queued either way, and the hard
- * cap eventually releases the conversation even if the agent is unreachable.
+ * `content` carries `max(9_000)` on the schema, but a refinement holds anything
+ * that did not come from a schedule to 4_000 — Discord's own ceiling. Folding to
+ * the larger number produced a payload `enqueue` stored happily and `claim` could
+ * never decode, wedging the conversation until the turn lease lapsed.
  */
-/** Matches `content` on the wire schema, so a fold can never overflow it. */
-const MAX_CONTENT = 9_000;
+function contentLimit(payload: MessagePayload): number {
+  return payload.kind === "scheduled" ? MAX_SCHEDULE_CONTENT_CHARS : MAX_CONTENT_CHARS;
+}
+
+/** Every durable step here fails the same way: a `Transient` naming what failed. */
+function transient(operation: string) {
+  return (cause: unknown): Transient => new Transient({ operation, detail: messageOf(cause) });
+}
 
 /**
  * Fold the request being corrected into the correction itself.
@@ -91,12 +103,21 @@ const MAX_CONTENT = 9_000;
  */
 function coalesce(payload: MessagePayload, superseded: string | undefined): MessagePayload {
   if (superseded === undefined || superseded === "") return payload;
-  return { ...payload, content: sliceText(`${superseded}\n\n${payload.content}`, MAX_CONTENT) };
+  const folded = `${superseded}\n\n${payload.content}`;
+  return { ...payload, content: sliceText(folded, contentLimit(payload)) };
 }
 
+/**
+ * Interrupt the turn holding this conversation, if one is.
+ *
+ * Someone who types while the agent is working is correcting it, not waiting in
+ * line. Cancelling happens agent-side; this only tells it to. Failures are
+ * reported and swallowed — the message stays queued either way, and the hard cap
+ * eventually releases the conversation even if the agent is unreachable.
+ */
 async function steerHolder(
   deps: ConversationFlowDeps,
-  holder: HolderState,
+  holder: Holder,
   continuationKey: string,
 ): Promise<void> {
   const steered = await deps.eve.sendSteer({ continuationKey });
@@ -123,70 +144,50 @@ export async function submitMessage(
       // interrupted to let the queue move. Asking after the claim instead finds
       // the turn *this* message just started and cancels it, which is a turn
       // that never gets to answer anything.
-      const holder = await deps.store.queue.holder(payload.continuationKey);
-      await deps.store.queue.enqueue(coalesce(payload, holder?.content));
+      const holder = await deps.store.deliveries.holder(payload.continuationKey);
+      await deps.store.delivery.enqueue(coalesce(payload, holder?.content));
       if (runtime.isStopped()) return undefined;
       if (holder !== undefined) await steerHolder(deps, holder, payload.continuationKey);
       return kick(deps, payload.continuationKey);
     },
-    catch: (cause) =>
-      new Transient({
-        operation: "agent.router.submit",
-        detail: cause instanceof Error ? cause.message : String(cause),
-      }),
+    catch: transient("agent.router.submit"),
   });
   if (Result.isError(submitted)) return submitted;
   return submitted.value === undefined ? Result.ok(undefined) : Result.err(submitted.value);
-}
-
-async function resetConversation(
-  deps: ConversationFlowDeps,
-  payload: ResetPayload,
-): Promise<Result<void, KnownError>> {
-  const prepared = await Result.tryPromise({
-    try: () => deps.store.queue.beginReset(payload.continuationKey),
-    catch: (cause) =>
-      new Transient({
-        operation: "agent.router.begin-reset",
-        detail: cause instanceof Error ? cause.message : String(cause),
-      }),
-  });
-  if (Result.isError(prepared)) return prepared;
-
-  const resetId = prepared.value;
-  const reset = await deps.eve.sendReset({ ...payload, resetId });
-  // An ambiguous remote result keeps the barrier installed. A later reset
-  // reuses the same id and safely finishes or retries the cutover.
-  if (Result.isError(reset)) return reset;
-
-  const committed = await Result.tryPromise({
-    try: () => deps.store.queue.commitReset(payload.continuationKey, resetId),
-    catch: (cause) =>
-      new Transient({
-        operation: "agent.router.commit-reset",
-        detail: cause instanceof Error ? cause.message : String(cause),
-      }),
-  });
-  if (Result.isError(committed)) return committed;
-  return committed.value
-    ? Result.ok(undefined)
-    : Result.err(
-        new Transient({
-          operation: "agent.router.commit-reset",
-          detail: "reset cutover ownership was lost",
-        }),
-      );
 }
 
 export async function resetAndKick(
   runtime: FlowRuntime,
   payload: ResetPayload,
 ): Promise<Result<void, KnownError>> {
-  const reset = await resetConversation(runtime.deps, payload);
-  if (Result.isOk(reset) && !runtime.isStopped()) {
-    await kick(runtime.deps, payload.continuationKey);
+  const { deps } = runtime;
+  const prepared = await Result.tryPromise({
+    try: () => deps.store.delivery.beginReset(payload.continuationKey),
+    catch: transient("agent.router.begin-reset"),
+  });
+  if (Result.isError(prepared)) return prepared;
+
+  const resetId = prepared.value;
+  // An ambiguous remote result keeps the barrier installed. A later reset reuses
+  // the same id and safely finishes or retries the cutover.
+  const reset = await deps.eve.sendReset({ ...payload, resetId });
+  if (Result.isError(reset)) return reset;
+
+  const committed = await Result.tryPromise({
+    try: () => deps.store.delivery.commitReset(payload.continuationKey, resetId),
+    catch: transient("agent.router.commit-reset"),
+  });
+  if (Result.isError(committed)) return committed;
+  if (!committed.value) {
+    return Result.err(
+      new Transient({
+        operation: "agent.router.commit-reset",
+        detail: "reset cutover ownership was lost",
+      }),
+    );
   }
-  return reset;
+  if (!runtime.isStopped()) await kick(deps, payload.continuationKey);
+  return Result.ok(undefined);
 }
 
 export async function answerHitl(
@@ -197,7 +198,7 @@ export async function answerHitl(
   if (claimed !== "acquired") return { status: claimed };
   const sent = await deps.eve.sendInteraction(payload);
   if (Result.isError(sent)) return { status: "failed", error: sent.error };
-  const completed = await deps.store.hitl.complete(
+  const completed = await deps.store.hitl.accept(
     claim.dispatchId,
     claim.revision,
     claim.interactionId,
@@ -217,16 +218,16 @@ export async function admitScheduledFire(
   submit: ConversationFlow["submit"],
 ): Promise<void> {
   const claimToken = crypto.randomUUID();
-  const claim = await deps.store.scheduledFires.claim(payload, claimToken);
+  const claim = await deps.store.schedules.claim(payload, claimToken);
   if (claim === "accepted") return;
-  if (claim === "busy") throw new Error("scheduled occurrence is already being admitted");
+  if (claim === "in-progress") throw new Error("scheduled occurrence is already being admitted");
   try {
     await deps.schedules.admit(payload, submit);
-    if (!(await deps.store.scheduledFires.complete(payload, claimToken))) {
+    if (!(await deps.store.schedules.complete(payload, claimToken))) {
       throw new Error("scheduled occurrence admission receipt ownership was lost");
     }
   } catch (cause) {
-    await deps.store.scheduledFires
+    await deps.store.schedules
       .release(payload.occurrenceId, claimToken)
       .catch((releaseCause: unknown) =>
         console.warn("could not release scheduled occurrence claim", releaseCause),
@@ -237,16 +238,17 @@ export async function admitScheduledFire(
 
 export async function onParked(runtime: FlowRuntime, payload: ParkedPayload): Promise<void> {
   const { deps } = runtime;
-  if (runtime.isStopped()) return;
-  const outcome = await deps.store.render.outcome(payload.dispatchId);
-  if (outcome === undefined) {
+  /** The paint has not landed yet; the next sweep will try again. */
+  const waitForPaint = (): void => {
     runtime.pendingDispatches.add(payload.dispatchId);
     reportPendingRender(deps, payload);
-    return;
-  }
+  };
+
+  if (runtime.isStopped()) return;
+  if ((await deps.store.renders.outcome(payload.dispatchId)) === undefined) return waitForPaint();
   if (runtime.isStopped()) return;
 
-  const status = await deps.store.queue.complete(payload);
+  const status = await deps.store.delivery.complete(payload);
   deps.reporter.emit({
     op: "agent.router.parked",
     status: "ok",
@@ -258,10 +260,6 @@ export async function onParked(runtime: FlowRuntime, payload: ParkedPayload): Pr
       completion: status,
     },
   });
-  if (status === "pending") {
-    runtime.pendingDispatches.add(payload.dispatchId);
-    reportPendingRender(deps, payload);
-    return;
-  }
+  if (status === "pending") return waitForPaint();
   if (status === "completed") await kick(deps, payload.continuationKey);
 }

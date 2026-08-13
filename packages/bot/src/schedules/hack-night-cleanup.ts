@@ -11,7 +11,7 @@
  */
 
 import { DISCORD_IDS } from "@repo/shared/discord";
-import { Transient } from "@repo/shared/errors";
+import { messageOf, Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 
 import type { Schedule } from "../framework/schedules.ts";
@@ -88,7 +88,7 @@ export function hackNightCleanup(deps: {
             ? cause
             : new Transient({
                 operation: "close hack night",
-                detail: cause instanceof Error ? cause.message : String(cause),
+                detail: messageOf(cause),
               }),
       }),
   } satisfies Schedule;

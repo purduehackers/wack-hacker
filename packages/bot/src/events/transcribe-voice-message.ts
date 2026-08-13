@@ -17,7 +17,7 @@
  */
 
 import { createGroq } from "@ai-sdk/groq";
-import { serializeError } from "@repo/shared/errors";
+import { messageOf } from "@repo/shared/errors";
 import { Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { splitWithFooter } from "@repo/shared/text";
@@ -114,7 +114,7 @@ export function createTranscriber(deps: TranscriberDeps) {
       return Result.err(
         new Transient({
           operation: "transcribe audio",
-          detail: serializeError(whole.error).message,
+          detail: messageOf(whole.error),
         }),
       );
     },
@@ -158,7 +158,7 @@ export function transcribeVoiceMessage(transcriber: Transcriber) {
         catch: (cause) =>
           new Transient({
             operation: "download voice message",
-            detail: cause instanceof Error ? cause.message : String(cause),
+            detail: messageOf(cause),
           }),
       });
       if (Result.isError(downloaded)) {

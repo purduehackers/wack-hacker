@@ -15,7 +15,7 @@
  * file is the only thing that knows Global Config exists.
  */
 
-import { Transient, UpstreamError } from "@repo/shared/errors";
+import { messageOf, Transient, UpstreamError } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { upstreamRetry } from "@repo/shared/result/retry";
 import { parseConnectionString } from "@vercel/global-config";
@@ -97,7 +97,7 @@ export function createDashboardWriter(deps: DashboardDeps): Result<DashboardWrit
               ? cause
               : new Transient({
                   operation: "global config upsert",
-                  detail: cause instanceof Error ? cause.message : String(cause),
+                  detail: messageOf(cause),
                 }),
         },
         upstreamRetry,

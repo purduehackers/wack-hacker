@@ -35,7 +35,7 @@ export interface ConversationAnswer {
 
 export type ConversationAnswerResult =
   | { readonly status: "accepted" }
-  | { readonly status: "claimed" | "stale" }
+  | { readonly status: "taken" | "stale" }
   | { readonly status: "failed"; readonly error: AgentError };
 
 export interface RenderWork {

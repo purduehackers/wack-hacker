@@ -1,92 +1,64 @@
-/** The only Redis-facing API for durable conversation coordination. */
+/**
+ * The only Redis-facing API for durable conversation coordination.
+ *
+ * Every surface is split the same way: a reader that only looks, and a writer
+ * that owns every transition of one record. Names are plural for the reader and
+ * singular for the writer, so a call site says which it is doing.
+ */
 
 import type { RedisClient } from "../redis/client.ts";
-import { createAdmissionTransitions } from "./admission.ts";
-import { createAuthorizationTransitions } from "./authorization.ts";
-import { createHitlTransitions } from "./hitl.ts";
-import { createInteractionTransitions } from "./interaction.ts";
-import {
-  activeKey,
-  AGENT_READY_SET_KEY,
-  AGENT_RENDER_READY_SET_KEY,
-  ingressKey,
-  parkedKey,
-  pendingKey,
-  QUEUE_INDEX_KEY,
-  queueMember,
-  renderClaimKey,
-  renderIntentKey,
-  renderMember,
-  renderOutcomeKey,
-  renderProjectionKey,
-  renderTargetKey,
-  resetKey,
-  resetPendingKey,
-} from "./keys.ts";
-import { createQueueTransitions } from "./queue.ts";
-import { createRenderPublicationTransitions } from "./render-publication.ts";
-import { createRenderTransitions } from "./render.ts";
-import { createScheduledFireTransitions } from "./scheduled-fire.ts";
-import { createSubagentTransitions } from "./subagents.ts";
+import { resetKey } from "./keys.ts";
+import { AuthorizationReader } from "./readers/authorization.ts";
+import { DelegationReader } from "./readers/delegation.ts";
+import { DeliveryReader } from "./readers/delivery.ts";
+import { InteractionReader } from "./readers/interaction.ts";
+import { RenderReader } from "./readers/render.ts";
+import { AuthorizationWriter } from "./writers/authorization.ts";
+import { DelegationWriter } from "./writers/delegation.ts";
+import { DeliveryWriter } from "./writers/delivery.ts";
+import { HitlWriter } from "./writers/hitl.ts";
+import { InteractionWriter } from "./writers/interaction.ts";
+import { RenderWriter } from "./writers/render.ts";
+import { ScheduleWriter } from "./writers/schedule.ts";
 
 export function createConversationStore(deps: { readonly redis: RedisClient }) {
   const { redis } = deps;
+  const deliveries = new DeliveryReader(redis);
   return {
-    queue: createQueueTransitions(redis),
-    admission: createAdmissionTransitions(redis),
-    subagents: createSubagentTransitions(redis),
-    render: createRenderTransitions(redis),
-    renderPublication: createRenderPublicationTransitions(redis),
-    hitl: createHitlTransitions(redis),
-    interactions: createInteractionTransitions(redis),
-    authorizations: createAuthorizationTransitions(redis),
-    scheduledFires: createScheduledFireTransitions(redis),
+    /** A turn's hold on one conversation: queue, admission, park, release. */
+    deliveries,
+    delivery: new DeliveryWriter(redis),
+    /** What should be on screen, and what is. */
+    renders: new RenderReader(redis),
+    render: new RenderWriter(redis),
+    /** One component click, and the receipt that makes its retry idempotent. */
+    interactions: new InteractionReader(redis),
+    interaction: new InteractionWriter(redis),
+    /** Which child session a delegated turn is waiting on. */
+    delegations: new DelegationReader(redis),
+    delegation: new DelegationWriter(redis),
+    /** Third-party consent challenges hanging off a dispatch. */
+    authorizationChallenges: new AuthorizationReader(redis),
+    authorizations: new AuthorizationWriter(redis),
+    /** Write-only surfaces: nothing outside their own scripts reads them. */
+    hitl: new HitlWriter(redis),
+    schedules: new ScheduleWriter(redis),
 
+    /**
+     * Whether a reset may proceed.
+     *
+     * `busy` means a delivery is mid-flight into eve, which is a lease on the
+     * record rather than a second key that had to be kept in step with it.
+     */
     resetCutoverStatus: async (
       continuationKey: string,
       resetId: string,
     ): Promise<"ready" | "stale" | "busy"> => {
-      const [owner, admission] = await Promise.all([
-        redis.get(resetKey(continuationKey)),
-        redis.get(ingressKey(continuationKey)),
-      ]);
+      const owner = await redis.get(resetKey(continuationKey));
       if (owner !== resetId) return "stale";
-      return admission === null || admission === undefined ? "ready" : "busy";
-    },
-
-    inspectIndexes: async () => {
-      const [conversations, ready, renderReady] = await Promise.all([
-        redis.scard(QUEUE_INDEX_KEY),
-        redis.scard(AGENT_READY_SET_KEY),
-        redis.scard(AGENT_RENDER_READY_SET_KEY),
-      ]);
-      return { conversations, ready, renderReady };
-    },
-
-    inspectConversation: async (continuationKey: string) => {
-      const [depth, active, parked, ingress, reset, resetPending, ready] = await Promise.all([
-        redis.llen(pendingKey(continuationKey)),
-        redis.get(activeKey(continuationKey)),
-        redis.get(parkedKey(continuationKey)),
-        redis.exists(ingressKey(continuationKey)),
-        redis.exists(resetKey(continuationKey)),
-        redis.llen(resetPendingKey(continuationKey)),
-        redis.sismember(AGENT_READY_SET_KEY, queueMember(continuationKey)),
-      ]);
-      return { depth, active, parked, ingress, reset, resetPending, ready };
-    },
-
-    inspectRender: async (dispatchId: string) => {
-      const [ready, target, intent, projection, claim, claimTtlMs, outcome] = await Promise.all([
-        redis.sismember(AGENT_RENDER_READY_SET_KEY, renderMember(dispatchId)),
-        redis.exists(renderTargetKey(dispatchId)),
-        redis.exists(renderIntentKey(dispatchId)),
-        redis.exists(renderProjectionKey(dispatchId)),
-        redis.exists(renderClaimKey(dispatchId)),
-        redis.pttl(renderClaimKey(dispatchId)),
-        redis.get(renderOutcomeKey(dispatchId)),
-      ]);
-      return { ready, target, intent, projection, claim, claimTtlMs, outcome };
+      const record = await deliveries.read(continuationKey);
+      if (record?.ingress === undefined) return "ready";
+      return record.ingress.expiresAtMs > Date.now() ? "busy" : "ready";
     },
   };
 }

@@ -12,7 +12,7 @@
  *    exactly once, from one place.
  */
 
-import { InvariantViolated, Transient } from "@repo/shared/errors";
+import { InvariantViolated, messageOf, Transient } from "@repo/shared/errors";
 import type { RedisClient } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
 import { instrument } from "@repo/shared/result/observe";
@@ -61,7 +61,7 @@ async function claimCommandInteraction(
     catch: (cause) =>
       new Transient({
         operation: "claim Discord interaction",
-        detail: cause instanceof Error ? cause.message : String(cause),
+        detail: messageOf(cause),
       }),
   });
 }
