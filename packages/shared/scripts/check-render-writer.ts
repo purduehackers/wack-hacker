@@ -128,11 +128,9 @@ check("republishing the same frame is accepted", again.accepted, true);
 // lost, and the frame is by definition still unpainted. Only a publish that finds
 // the dispatch already advertised suppresses it.
 check("and nudges again, because the last nudge may have been lost", again.shouldWake, true);
-check(
-  "a reused revision with new content is refused",
-  await throws(() => writer.publish(intentFor(dispatchId, 1, "streaming", "different"))),
-  true,
-);
+const reused = await writer.publish(intentFor(dispatchId, 1, "streaming", "different"));
+check("a reused revision with new content is refused", reused.accepted, false);
+check("and answers with the stored revision", reused.behindRevision, 1);
 const advanced = await writer.publish(intentFor(dispatchId, 2, "streaming", "second"));
 check("a newer frame replaces it", advanced.accepted, true);
 const readIntent = await reader.intent(dispatchId);
@@ -287,6 +285,28 @@ check(
 await writer.publish(intentFor(asked, 3, "streaming", "answered"));
 const afterAsking = (await deliveryRecord.read(KEY))?.turn.expiresAtMs ?? 0;
 check("and gives it back once nothing is being asked", afterAsking < whileAsking, true);
+
+// The wedge this replaced: the publisher's revision counter only advances on a
+// publish that lands, so anything that knocked it back — a retried step, a
+// restored checkpoint — left every later attempt re-offering a number Redis had
+// already seen, and the turn never showed anything again.
+await scrub();
+const wedged = await liveDispatch();
+await writer.publish(intentFor(wedged, 1, "streaming"));
+await writer.publish(intentFor(wedged, 2, "streaming", "second"));
+const behind = await writer.publish(intentFor(wedged, 2, "streaming", "counter fell behind"));
+check("a publisher behind the stored revision is refused", behind.accepted, false);
+check("and told what Redis holds, so it can resync", behind.behindRevision, 2);
+const resynced = await writer.publish(
+  intentFor(wedged, (behind.behindRevision ?? 0) + 1, "streaming", "resynced"),
+);
+check("so the very next attempt lands", resynced.accepted, true);
+const afterResync = await reader.intent(wedged);
+check(
+  "carrying what it was trying to say",
+  Result.isOk(afterResync) && afterResync.value?.text,
+  "resynced",
+);
 
 await scrub();
 report("the render writer moves a paint through every transition it owns");

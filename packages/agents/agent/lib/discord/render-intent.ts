@@ -4,6 +4,8 @@ import type { ConversationStore } from "@repo/shared/conversations";
 import { BOT_ROUTES } from "@repo/shared/wire";
 import type { ParkedPayload, RenderIntent } from "@repo/shared/wire";
 
+type RenderPublication = Awaited<ReturnType<ConversationStore["render"]["publish"]>>;
+
 import { traceHeaders } from "../telemetry.ts";
 
 export interface FooterInput {
@@ -32,10 +34,10 @@ export interface RenderPublisherDeps {
 
 export function createRenderPublisher(deps: RenderPublisherDeps) {
   return {
-    publish: async (intent: RenderIntent): Promise<boolean> => {
+    publish: async (intent: RenderIntent): Promise<RenderPublication> => {
       const publication = await deps.store.publish(intent);
-      if (!publication.accepted) return false;
-      if (!publication.shouldWake) return true;
+      if (!publication.accepted) return publication;
+      if (!publication.shouldWake) return publication;
 
       // Redis is the durable path. This small callback only avoids waiting for a
       // replacement bot's startup/periodic recovery sweep.
@@ -55,7 +57,7 @@ export function createRenderPublisher(deps: RenderPublisherDeps) {
       } catch (cause) {
         console.warn("bot render callback failed; Redis recovery remains pending", cause);
       }
-      return true;
+      return publication;
     },
 
     settleAndPark: (intent: RenderIntent, parked: ParkedPayload): Promise<number | undefined> =>

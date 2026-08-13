@@ -66,12 +66,17 @@ if record.phase ~= "live" then return 0 end
 local current = redis.call("GET", KEYS[1])
 if current then
   local decoded = cjson.decode(current)
+  -- The one thing phase decides: a streaming frame may never overwrite a settled
+  -- one, whatever the revisions say.
   if decoded.phase ~= "streaming" and ARGV[5] == "streaming" then return 0 end
-  if tonumber(decoded.revision) > tonumber(ARGV[1]) then return 0 end
-  if tonumber(decoded.revision) == tonumber(ARGV[1]) then
-    if current == ARGV[2] then return 2 end
-    return -2
-  end
+  local stored = tonumber(decoded.revision)
+  local wanted = tonumber(ARGV[1])
+  if stored == wanted and current == ARGV[2] then return 2 end
+  -- Otherwise the publisher's counter is behind what Redis holds. Answered with
+  -- the stored revision, negated, so it can resync — refusing instead wedges the
+  -- turn permanently, because the counter only advances on a publish that lands
+  -- and every retry then re-attempts the same rejected number.
+  if stored >= wanted then return -stored end
 end
 redis.call("SET", KEYS[1], ARGV[2], "EX", tonumber(ARGV[4]))
 -- Proof of life. The turn holds its conversation for as long as it keeps
@@ -234,10 +239,16 @@ export interface PaintCompletion {
  * `accepted` is whether the intent is now the desired state; `shouldWake` is
  * whether anyone needs telling. They differ when the dispatch was already
  * advertised, where waking again would only add a redundant pass.
+ *
+ * `behindRevision` is set when the publish was refused because Redis already
+ * holds that revision or a later one. It carries what Redis holds, so a caller
+ * whose own counter has fallen behind can resync and try again rather than
+ * retrying the same rejected number forever.
  */
 export interface RenderPublication {
   readonly accepted: boolean;
   readonly shouldWake: boolean;
+  readonly behindRevision?: number;
 }
 
 export class RenderWriter {
@@ -280,8 +291,8 @@ export class RenderWriter {
         ],
       ),
     );
-    if (outcome === -2) throw new Error("render revision was reused with different content");
-    return { accepted: outcome !== 0, shouldWake: outcome !== 0 && outcome !== 3 };
+    if (outcome < 0) return { accepted: false, shouldWake: false, behindRevision: -outcome };
+    return { accepted: outcome !== 0, shouldWake: outcome === 1 || outcome === 2 };
   }
 
   /**
