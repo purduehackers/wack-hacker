@@ -11,7 +11,7 @@ import type { RedisClient } from "../src/redis/client.ts";
 import type { MessagePayload } from "../src/wire.ts";
 
 /** Outside the range Discord mints, so a probe can never collide with real traffic. */
-export interface ProbeIds {
+interface ProbeIds {
   readonly continuationKey: string;
   readonly messageId: string;
   readonly userId: string;
@@ -61,10 +61,19 @@ export async function scrubProbe(
   await redis.srem("agent:ready", `k:${continuationKey}`);
 }
 
-export interface Probe {
+/** Prints the verdict and exits non-zero if anything failed. */
+export function finish(failures: number, success: string): never {
+  if (failures === 0) {
+    console.info(`\n${success}`);
+    process.exit(0);
+  }
+  console.error(`\n${failures} failure(s)`);
+  process.exit(1);
+}
+
+interface Probe {
   /** Compared structurally, so an object or array reads as well as a scalar. */
   check: (label: string, actual: unknown, expected: unknown) => void;
-  /** Prints the verdict and exits non-zero if anything failed. */
   report: (success: string) => never;
 }
 
@@ -77,14 +86,7 @@ export function createProbe(): Probe {
       console.info(`   ${ok ? "ok  " : "FAIL"} ${label.padEnd(48)} ${JSON.stringify(actual)}`);
       if (!ok) console.error(`        expected ${JSON.stringify(expected)}`);
     },
-    report(success) {
-      if (failures === 0) {
-        console.info(`\n${success}`);
-        process.exit(0);
-      }
-      console.error(`\n${failures} failure(s)`);
-      process.exit(1);
-    },
+    report: (success) => finish(failures, success),
   };
 }
 

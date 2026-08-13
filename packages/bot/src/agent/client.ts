@@ -16,7 +16,7 @@
  *   acknowledgement or wedge the ambiguous admission window.
  */
 
-import { Transient, UpstreamError, httpStatusOf } from "@repo/shared/errors";
+import { httpStatusOf, messageOf, Transient, UpstreamError } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { noRetry, quickRetry } from "@repo/shared/result/retry";
 import type { RetryPolicy } from "@repo/shared/result/retry";
@@ -75,7 +75,7 @@ function toAgentError(operation: string) {
     if (cause instanceof Transient || cause instanceof UpstreamError) return cause;
 
     const status = httpStatusOf(cause);
-    const detail = cause instanceof Error ? cause.message : String(cause);
+    const detail = messageOf(cause);
     return status !== undefined && status < 500
       ? new UpstreamError({ service: "agent", status, detail })
       : new Transient({ operation, detail });

@@ -55,9 +55,9 @@ const RESET_BARRIER_TTL_SECONDS = 60 * 60;
 const EXPIRY_TURN_ID = "delivery-lease-lapsed";
 const RECOVERY_TURN_ID = "delivery-unacknowledged";
 
-export const EXPIRY_TEXT =
-  "I stopped working on this — it went quiet for too long without finishing.";
-export const EXPIRY_FOOTER = "Send the message again to retry.";
+const EXPIRY_TEXT = "I stopped working on this — it went quiet for too long without finishing.";
+const EXPIRY_FOOTER = "Send the message again to retry.";
+/** Exported because the bot renders the same notice when it refuses a delivery. */
 export const RECOVERY_TEXT =
   "I couldn't safely finish starting this turn, so I stopped rather than risk running it twice.";
 export const RECOVERY_FOOTER =

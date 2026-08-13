@@ -33,9 +33,11 @@ import { StoredPhase } from "../src/conversations/records/delivery.ts";
 import { DeliveryWriter } from "../src/conversations/writers/delivery.ts";
 import { RenderWriter } from "../src/conversations/writers/render.ts";
 import { redisEnv } from "../src/env/scripts.ts";
+import { messageOf } from "../src/errors.ts";
 import { getRedis } from "../src/redis/client.ts";
 import { Result } from "../src/result/index.ts";
 import type { DeliveryPayload, MessagePayload, ParkedPayload, RenderIntent } from "../src/wire.ts";
+import { finish } from "./probe.ts";
 
 const redis = getRedis(redisEnv());
 const writer = new DeliveryWriter(redis);
@@ -93,6 +95,12 @@ function parkedFor(dispatchId: string): ParkedPayload {
 let claimed: DeliveryPayload | undefined;
 /** The handoff holder, which `confirmSession` fences on. */
 let claimToken = "";
+
+/** Every step after the claim needs this, and none of them can run without it. */
+function dispatchId(): string {
+  if (claimed === undefined) throw new Error("no claimed delivery");
+  return claimed.dispatchId;
+}
 
 async function readActive(): Promise<z.output<typeof activeRecordSchema> | undefined> {
   const raw: unknown = await redis.get(`agent:active:${KEY}`);
@@ -249,7 +257,7 @@ async function compareMachine(
  * Each one is a way a conversation stops making progress rather than a way a
  * request fails, so nothing upstream ever reports them.
  */
-async function check(label: string): Promise<readonly string[]> {
+async function check(label: string): Promise<number> {
   const [active, pending, ttl, parkedMarker, indexed] = await Promise.all([
     readActive(),
     redis.llen(`pending:${KEY}`),
@@ -277,7 +285,7 @@ async function check(label: string): Promise<readonly string[]> {
     `   ${mark} ${label.padEnd(32)} ttlMs=${String(ttl).padStart(9)} phase=${phase.padEnd(18)} pending=${pending} indexed=${inIndex}`,
   );
   for (const entry of violations) console.error(`        ${entry}`);
-  return violations;
+  return violations.length;
 }
 
 interface Step {
@@ -303,8 +311,7 @@ const steps: readonly Step[] = [
   {
     name: "admission.start",
     run: async () => {
-      if (claimed === undefined) throw new Error("no claimed delivery");
-      const started = await writer.markLive(KEY, claimed.dispatchId, MESSAGE_ID);
+      const started = await writer.markLive(KEY, dispatchId(), MESSAGE_ID);
       if (started.status !== "start") throw new Error(`mark-live returned ${started.status}`);
     },
     machine: { delivery: "MARK_LIVE" },
@@ -312,7 +319,6 @@ const steps: readonly Step[] = [
   {
     name: "admission.confirm",
     run: async () => {
-      if (claimed === undefined) throw new Error("no claimed delivery");
       if (!(await writer.confirmSession(KEY, claimToken, SESSION_ID))) {
         throw new Error("confirm was rejected");
       }
@@ -322,8 +328,7 @@ const steps: readonly Step[] = [
   {
     name: "publish(streaming)",
     run: async () => {
-      if (claimed === undefined) throw new Error("no claimed delivery");
-      const published = await renders.publish(intentFor(claimed.dispatchId, 1, "streaming"));
+      const published = await renders.publish(intentFor(dispatchId(), 1, "streaming"));
       if (!published.accepted) throw new Error("publish was rejected");
     },
     machine: { render: ["PUBLISH"], renderContext: { desiredRevision: 1, terminal: false } },
@@ -331,10 +336,9 @@ const steps: readonly Step[] = [
   {
     name: "settleAndPark",
     run: async () => {
-      if (claimed === undefined) throw new Error("no claimed delivery");
       const settled = await renders.settleAndPark(
-        intentFor(claimed.dispatchId, 2, "completed"),
-        parkedFor(claimed.dispatchId),
+        intentFor(dispatchId(), 2, "completed"),
+        parkedFor(dispatchId()),
       );
       if (settled === undefined) throw new Error("settle was rejected");
     },
@@ -348,8 +352,7 @@ const steps: readonly Step[] = [
     // Stands in for the bot: `complete` refuses until the paint is recorded.
     name: "bot records the paint",
     run: async () => {
-      if (claimed === undefined) throw new Error("no claimed delivery");
-      await redis.set(`agent:render-outcome:${claimed.dispatchId}`, "applied");
+      await redis.set(`agent:render-outcome:${dispatchId()}`, "applied");
     },
     machine: {
       render: ["CLAIM", "SETTLE"],
@@ -360,8 +363,7 @@ const steps: readonly Step[] = [
   {
     name: "complete",
     run: async () => {
-      if (claimed === undefined) throw new Error("no claimed delivery");
-      const status = await writer.complete(parkedFor(claimed.dispatchId));
+      const status = await writer.complete(parkedFor(dispatchId()));
       if (status !== "completed") throw new Error(`complete returned ${status}`);
     },
     machine: { delivery: "COMPLETE" },
@@ -370,57 +372,52 @@ const steps: readonly Step[] = [
 
 let failures = 0;
 
-console.info("happy path — invariants after every transition\n");
-await scrub();
-machine = freshMachine();
-for (const step of steps) {
+function fail(...lines: readonly string[]): void {
+  for (const line of lines) console.error(`        ${line}`);
+  failures += lines.length;
+}
+
+/**
+ * A step that throws mid-sequence is the crash under test; one that throws on the
+ * happy path is a failure. Either way the tables only advance on success, because
+ * a step that threw did not happen in Redis either.
+ */
+type OnThrow = "announce" | "expected";
+
+async function runStep(step: Step, onThrow: OnThrow): Promise<void> {
   try {
     await step.run();
-    // Advanced only on success: a step that threw did not happen in Redis
-    // either, and moving the table anyway would manufacture a disagreement.
-    for (const entry of advanceMachine(step.machine ?? {})) {
-      console.error(`        ${entry}`);
-      failures += 1;
-    }
   } catch (cause) {
-    console.error(
-      `   FAIL ${step.name} threw: ${cause instanceof Error ? cause.message : String(cause)}`,
-    );
-    failures += 1;
+    if (onThrow === "announce") fail(`${step.name} threw: ${messageOf(cause)}`);
+    return;
   }
-  failures += (await check(step.name)).length;
+  fail(...advanceMachine(step.machine ?? {}));
+}
+
+async function restart(): Promise<void> {
+  await scrub();
+  machine = freshMachine();
+}
+
+console.info("happy path — invariants after every transition\n");
+await restart();
+for (const step of steps) {
+  await runStep(step, "announce");
+  failures += await check(step.name);
 }
 
 console.info("\ncrash injection — stop after step N, then ask whether the state is bounded\n");
 for (let cut = 1; cut < steps.length; cut += 1) {
-  await scrub();
-  machine = freshMachine();
-  for (let index = 0; index < cut; index += 1) {
-    const step = steps[index];
-    if (step === undefined) continue;
-    try {
-      await step.run();
-      for (const entry of advanceMachine(step.machine ?? {})) {
-        console.error(`        ${entry}`);
-        failures += 1;
-      }
-    } catch {
-      // The crash under test; the invariants below are the assertion.
-    }
-  }
-  failures += (await check(`crash after ${steps[cut - 1]?.name ?? "?"}`)).length;
+  await restart();
+  for (const step of steps.slice(0, cut)) await runStep(step, "expected");
+
+  failures += await check(`crash after ${steps[cut - 1]?.name ?? "?"}`);
   const active = await readActive();
-  const remainingMs = await redis.pttl(`agent:active:${KEY}`);
-  if (active !== undefined && active.turn === undefined && remainingMs === -1) {
-    console.error("        unbounded: nothing will ever release this conversation");
-    failures += 1;
+  const bounded = (await redis.pttl(`agent:active:${KEY}`)) !== -1;
+  if (active !== undefined && active.turn === undefined && !bounded) {
+    fail("unbounded: nothing will ever release this conversation");
   }
 }
 
 await scrub();
-if (failures === 0) {
-  console.info("\nall invariants hold across every path");
-} else {
-  console.error(`\n${failures} invariant violation(s)`);
-  process.exit(1);
-}
+finish(failures, "all invariants hold across every path");

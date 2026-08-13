@@ -1,7 +1,7 @@
 /** Explicit, guarded guild-command registration. Never runs during bot startup. */
 
 import { DISCORD_GUILD_ID } from "@repo/shared/discord";
-import { UpstreamError, httpStatusOf, serializeError } from "@repo/shared/errors";
+import { httpStatusOf, messageOf, serializeError, UpstreamError } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { REST, Routes } from "discord.js";
 import type { RESTPostAPIChatInputApplicationCommandsJSONBody } from "discord.js";
@@ -50,7 +50,7 @@ async function registerCommands(deps: {
       new UpstreamError({
         service: "discord",
         status: httpStatusOf(cause) ?? 0,
-        detail: cause instanceof Error ? cause.message : String(cause),
+        detail: messageOf(cause),
       }),
   });
 }

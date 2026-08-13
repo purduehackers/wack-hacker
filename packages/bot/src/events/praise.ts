@@ -6,7 +6,7 @@
  */
 
 import { DISCORD_IDS } from "@repo/shared/discord";
-import { Transient } from "@repo/shared/errors";
+import { messageOf, Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 
 import { defineEvent } from "../framework/events.ts";
@@ -47,7 +47,7 @@ export const praise = defineEvent({
       catch: (cause) =>
         new Transient({
           operation: granting ? "grant wacky role" : "revoke wacky role",
-          detail: cause instanceof Error ? cause.message : String(cause),
+          detail: messageOf(cause),
         }),
     });
   },

@@ -18,6 +18,7 @@
  */
 
 import type { Delegation } from "@repo/shared/conversations";
+import { messageOf } from "@repo/shared/errors";
 import { Client } from "eve/client";
 import type { MessageStreamEvent } from "eve/client";
 
@@ -171,7 +172,7 @@ function launch(follow: Follow, stream: Stream): Promise<void> {
       op: "agent.render.follow-subagent",
       status: "error",
       errorTag: "FollowFailed",
-      errorMessage: cause instanceof Error ? cause.message : String(cause),
+      errorMessage: messageOf(cause),
       attributes: { dispatchId: follow.dispatchId, sessionId: stream.sessionId },
     });
   });

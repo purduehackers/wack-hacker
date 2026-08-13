@@ -18,6 +18,7 @@ import {
   type ActiveBotGeneration,
 } from "@repo/shared/bot/generation";
 import { readyHealthReportSchema } from "@repo/shared/bot/health";
+import { messageOf } from "@repo/shared/errors";
 import type { RedisClient } from "@repo/shared/redis";
 import { Result, TaggedError } from "@repo/shared/result";
 import { APIError, Sandbox } from "@vercel/sandbox";
@@ -365,7 +366,7 @@ const nonObjectSchema = z.union([
 const envValueSchema = z.string();
 
 function detailOf(cause: unknown): string {
-  return cause instanceof Error ? cause.message : String(cause);
+  return messageOf(cause);
 }
 
 function sleep(milliseconds: number): Promise<void> {

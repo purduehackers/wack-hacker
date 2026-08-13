@@ -1,6 +1,6 @@
 /** Once-a-minute durable dispatcher for application-managed schedules. */
 
-import { Transient, UpstreamError } from "@repo/shared/errors";
+import { messageOf, Transient, UpstreamError } from "@repo/shared/errors";
 import { getRedis } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
 import { BOT_ROUTES } from "@repo/shared/wire";
@@ -73,7 +73,7 @@ async function postToBot(job: ClaimedSchedule): Promise<Result<void, Transient |
         ? cause
         : new Transient({
             operation: "deliver scheduled occurrence",
-            detail: cause instanceof Error ? cause.message : String(cause),
+            detail: messageOf(cause),
           }),
   });
 }
@@ -172,7 +172,7 @@ async function dispatchDue(): Promise<Result<void, ScheduleStoreError>> {
         catch: (cause) =>
           new Transient({
             operation: "initialize schedule store",
-            detail: cause instanceof Error ? cause.message : String(cause),
+            detail: messageOf(cause),
           }),
       }),
     );

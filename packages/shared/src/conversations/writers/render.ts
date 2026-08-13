@@ -1,22 +1,21 @@
 /**
  * The only thing that writes the render aggregate.
  *
- * Both directions live here because they are one record seen from two sides: the
- * agent publishes what it wants shown, the bot paints it and records what landed.
- * Splitting them by process would put the revision fence — the single rule that
- * makes the two safe to run concurrently — in two files.
+ * Both directions live here because they are one record seen from two sides — the
+ * agent publishes what it wants shown, the bot paints it and records what landed —
+ * and splitting them by process would put the revision fence, the one rule making
+ * them safe to run concurrently, in two files.
  *
- * Painting Discord is not atomic. It is several HTTP calls, any of which can fail
- * or be overtaken, so a paint holds a lease and checkpoints after every externally
- * visible change. If the process dies mid-paint the lease lapses and the next
- * sweep picks the dispatch up with a projection describing exactly how far it
- * got, which is what stops a retry duplicating messages.
+ * Painting Discord is not atomic: several HTTP calls, any of which can fail or be
+ * overtaken. So a paint holds a lease and checkpoints after every externally
+ * visible change, and a process dying mid-paint leaves a projection describing
+ * exactly how far it got, which is what stops a retry duplicating messages.
  *
- * Two methods here also write the delivery record, through the same `writeRecord`
- * the delivery writer uses. That is deliberate rather than a layering slip:
- * publishing a render is the only signal frequent enough to prove a turn is alive,
- * and parking is one transition that ends the turn and fixes the final frame. Split
- * across two round trips, either could half-happen.
+ * `publish` and `settleAndPark` also write the delivery record, through the same
+ * `writeRecord` the delivery writer uses. Deliberate rather than a layering slip:
+ * publishing is the only signal frequent enough to prove a turn is alive, and
+ * parking both ends the turn and fixes the final frame — split across two round
+ * trips, either could half-happen.
  */
 
 import { z } from "zod";

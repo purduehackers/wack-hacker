@@ -1,6 +1,6 @@
 /** Hack Night photo archive backed by Payload's documented REST API. */
 
-import { Transient, UpstreamError, httpStatusOf } from "@repo/shared/errors";
+import { httpStatusOf, messageOf, Transient, UpstreamError } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { upstreamRetry } from "@repo/shared/result/retry";
 import { z } from "zod";
@@ -67,7 +67,7 @@ function toCmsError(operation: string) {
   return (cause: unknown): CmsError => {
     if (cause instanceof UpstreamError || cause instanceof Transient) return cause;
     const status = httpStatusOf(cause);
-    const detail = cause instanceof Error ? cause.message : String(cause);
+    const detail = messageOf(cause);
     return status !== undefined && status < 500
       ? new UpstreamError({ service: "payload-cms", status, detail })
       : new Transient({ operation, detail });

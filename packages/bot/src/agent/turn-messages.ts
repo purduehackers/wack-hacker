@@ -13,7 +13,7 @@
  * The bot paint coordinator is the sole writer; reaction handlers only read.
  */
 
-import { Transient } from "@repo/shared/errors";
+import { messageOf, Transient } from "@repo/shared/errors";
 import type { RedisClient } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
 import { z } from "zod";
@@ -65,7 +65,7 @@ export function createTurnMessageStore(redis: RedisClient) {
         catch: (cause) =>
           new Transient({
             operation: "turn-message.record",
-            detail: cause instanceof Error ? cause.message : String(cause),
+            detail: messageOf(cause),
           }),
       }),
   };

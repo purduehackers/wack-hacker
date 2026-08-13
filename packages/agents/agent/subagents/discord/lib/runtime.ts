@@ -1,4 +1,4 @@
-import { RateLimited, Transient, UpstreamError } from "@repo/shared/errors";
+import { messageOf, RateLimited, Transient, UpstreamError } from "@repo/shared/errors";
 
 import { env } from "../../../env.ts";
 import { createDomainRuntime } from "../../../lib/policy/domain-runtime.ts";
@@ -28,7 +28,7 @@ export const DISCORD_RUNTIME = createDomainRuntime({
     return new UpstreamError({
       service: "Discord",
       status: 502,
-      detail: `${operation}: ${cause instanceof Error ? cause.message : String(cause)}`,
+      detail: `${operation}: ${messageOf(cause)}`,
     });
   },
 });

@@ -12,7 +12,7 @@
  */
 
 import { DISCORD_IDS } from "@repo/shared/discord";
-import { Transient } from "@repo/shared/errors";
+import { messageOf, Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { MessageType, ThreadAutoArchiveDuration } from "discord.js";
 
@@ -92,7 +92,7 @@ export function hackNightPhotographyThread(deps: { readonly slugStore: ThreadSlu
         catch: (cause) =>
           new Transient({
             operation: "open hack night",
-            detail: cause instanceof Error ? cause.message : String(cause),
+            detail: messageOf(cause),
           }),
       }),
   } satisfies Schedule;

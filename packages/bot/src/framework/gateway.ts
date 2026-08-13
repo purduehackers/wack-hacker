@@ -7,7 +7,7 @@
  * for messages that were not cached by this process.
  */
 
-import { Transient } from "@repo/shared/errors";
+import { messageOf, Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { ActivityType, Client, Events, GatewayIntentBits, Partials } from "discord.js";
 
@@ -78,7 +78,7 @@ export async function connect(
     catch: (cause) =>
       new Transient({
         operation: "gateway login",
-        detail: cause instanceof Error ? cause.message : String(cause),
+        detail: messageOf(cause),
       }),
   });
 }

@@ -14,7 +14,7 @@
  * keeping the keyspace bounded.
  */
 
-import { Transient } from "@repo/shared/errors";
+import { messageOf, Transient } from "@repo/shared/errors";
 import type { RedisClient } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
 
@@ -45,7 +45,7 @@ export function createThreadSlugStore(redis: RedisClient): ThreadSlugStore {
         catch: (cause) =>
           new Transient({
             operation: "store hack night slug",
-            detail: cause instanceof Error ? cause.message : String(cause),
+            detail: messageOf(cause),
           }),
       }),
 
@@ -55,7 +55,7 @@ export function createThreadSlugStore(redis: RedisClient): ThreadSlugStore {
         catch: (cause) =>
           new Transient({
             operation: "read hack night slug",
-            detail: cause instanceof Error ? cause.message : String(cause),
+            detail: messageOf(cause),
           }),
       }),
   };

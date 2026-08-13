@@ -3,7 +3,7 @@
 import { createHash } from "node:crypto";
 
 import type { Db, scheduledTasks } from "@repo/shared/db";
-import { InvalidInput, InvariantViolated, Transient } from "@repo/shared/errors";
+import { InvalidInput, InvariantViolated, messageOf, Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { Cron } from "croner";
 import { z } from "zod";
@@ -147,7 +147,7 @@ function invalidRow(field: string, detail: string): InvariantViolated {
 }
 
 function causeDetail(cause: unknown): string {
-  return cause instanceof Error ? cause.message : String(cause);
+  return messageOf(cause);
 }
 
 function isLibsqlNull<T>(value: T | null): value is null {
@@ -336,7 +336,7 @@ function scheduleOccurrenceId(taskId: string, nextRunAt: string): string {
 }
 
 function errorMessage(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = messageOf(error);
   return message.slice(0, MAX_ERROR_CHARS);
 }
 

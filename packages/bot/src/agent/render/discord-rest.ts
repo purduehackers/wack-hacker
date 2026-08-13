@@ -1,6 +1,12 @@
 /** Discord REST port backed by the gateway client's single rate-limit manager. */
 
-import { RateLimited, Transient, UpstreamError, httpStatusOf } from "@repo/shared/errors";
+import {
+  httpStatusOf,
+  messageOf,
+  RateLimited,
+  Transient,
+  UpstreamError,
+} from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import type {
   APIMessage,
@@ -16,7 +22,7 @@ type RestClient = Pick<Client["rest"], "delete" | "patch" | "post">;
 function toDiscordError(operation: string) {
   return (cause: unknown): DiscordError => {
     const status = httpStatusOf(cause);
-    const detail = cause instanceof Error ? cause.message : String(cause);
+    const detail = messageOf(cause);
     if (status === 429) return new RateLimited({ service: "discord", retryAfterMs: 1_000 });
     if (status !== undefined && status < 500) {
       return new UpstreamError({ service: "discord", status, detail });

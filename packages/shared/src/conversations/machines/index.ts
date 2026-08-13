@@ -14,9 +14,9 @@ import { deliveryMachine, DeliveryPhase as Delivery } from "./delivery.ts";
 import type { RenderContext, RenderEvent, RenderPhase } from "./render.ts";
 import { renderMachine, RenderPhase as Render } from "./render.ts";
 
-export { deliveryMachine, DeliveryPhase } from "./delivery.ts";
+export { DeliveryPhase } from "./delivery.ts";
 export type { DeliveryContext, DeliveryEvent } from "./delivery.ts";
-export { renderMachine, RenderPhase } from "./render.ts";
+export { RenderPhase } from "./render.ts";
 export type { RenderContext, RenderEvent } from "./render.ts";
 
 /** Where a legal transition lands, or nothing when the event is refused. */

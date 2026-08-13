@@ -19,7 +19,7 @@ import {
   remarkDiscord,
 } from "@purduehackers/discord-markdown-utils";
 import { DISCORD_IDS } from "@repo/shared/discord";
-import { Transient } from "@repo/shared/errors";
+import { messageOf, Transient } from "@repo/shared/errors";
 import { isOptedOut } from "@repo/shared/privacy";
 import type { RedisClient } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
@@ -170,7 +170,7 @@ export function emitDashboardMessage(deps: {
               ? cause
               : new Transient({
                   operation: "forward to dashboard",
-                  detail: cause instanceof Error ? cause.message : String(cause),
+                  detail: messageOf(cause),
                 }),
         },
         upstreamRetry,
