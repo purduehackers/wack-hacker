@@ -93,9 +93,6 @@ function parkedFor(dispatchId: string): ParkedPayload {
 
 /** The delivery the claim handed back; every later step is fenced on its id. */
 let claimed: DeliveryPayload | undefined;
-/** The handoff holder, which `confirmSession` fences on. */
-let claimToken = "";
-
 /** Every step after the claim needs this, and none of them can run without it. */
 function dispatchId(): string {
   if (claimed === undefined) throw new Error("no claimed delivery");
@@ -304,7 +301,6 @@ const steps: readonly Step[] = [
       if (Result.isError(outcome)) throw new Error(`claim failed: ${outcome.error.message}`);
       if (outcome.value === undefined) throw new Error("claim returned nothing");
       claimed = outcome.value.payload;
-      claimToken = outcome.value.claimToken;
     },
     machine: { delivery: "CLAIM" },
   },
@@ -319,7 +315,7 @@ const steps: readonly Step[] = [
   {
     name: "admission.confirm",
     run: async () => {
-      if (!(await writer.confirmSession(KEY, claimToken, SESSION_ID))) {
+      if (!(await writer.confirmSession(KEY, dispatchId(), MESSAGE_ID, SESSION_ID))) {
         throw new Error("confirm was rejected");
       }
     },

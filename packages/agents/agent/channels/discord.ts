@@ -386,7 +386,8 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
 
         const confirmed = await conversations.delivery.confirmSession(
           payload.continuationKey,
-          admission.attempt,
+          payload.dispatchId,
+          payload.messageId,
           session.id,
         );
         if (!confirmed) {

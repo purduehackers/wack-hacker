@@ -49,7 +49,8 @@ export async function kick(
     // windows. A fast park can consume the claim before this CAS arrives.
     await deps.store.delivery.confirmSession(
       continuationKey,
-      claimed.claimToken,
+      claimed.payload.dispatchId,
+      claimed.payload.messageId,
       sent.value.sessionId,
     );
     return;

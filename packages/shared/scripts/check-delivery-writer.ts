@@ -92,7 +92,19 @@ check(
   "in-progress",
 );
 
-check("confirm records the session", await writer.confirmSession(KEY, claimToken, SESSION), true);
+// Confirmed from the *agent's* position: it holds the ingress attempt and never
+// sees the bot's handoff token, so a fence on that lease could only ever be
+// satisfied by one of the two processes that call this.
+check(
+  "the agent can confirm the session",
+  await writer.confirmSession(KEY, dispatchId, MESSAGE_ID, SESSION),
+  true,
+);
+check(
+  "a different delivery cannot",
+  await writer.confirmSession(KEY, "00000000-0000-4000-8000-0000000000ff", MESSAGE_ID, SESSION),
+  false,
+);
 check(
   "a retry replays the session",
   (await writer.markLive(KEY, dispatchId, MESSAGE_ID)).status,

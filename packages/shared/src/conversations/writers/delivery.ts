@@ -129,15 +129,25 @@ writeRecord(KEYS[1], record)
 return 1
 `;
 
+/**
+ * Fenced on the delivery's identity, not on a lease.
+ *
+ * Both processes confirm — the bot after a successful send, the agent after eve
+ * accepts — and they hold different tokens: the bot has the handoff it minted in
+ * `claim`, the agent only the ingress attempt `markLive` handed back. A lease
+ * fence here can therefore only ever be satisfied by one of them. `dispatchId`
+ * and `messageId` are the two things both sides genuinely have, and they identify
+ * the delivery exactly.
+ */
 const CONFIRM_SESSION = `
 ${DELIVERY_RECORD_LUA}
 -- delivery:confirm-session
 local raw = redis.call("GET", KEYS[1])
 if not raw then return 0 end
 local record = cjson.decode(raw)
-if not leaseHeld(record.handoff, ARGV[1], ARGV[3]) then return 0 end
+if record.dispatchId ~= ARGV[1] or record.messageId ~= ARGV[2] then return 0 end
 if record.phase ~= "live" and record.phase ~= "parked" then return 0 end
-record.sessionId = ARGV[2]
+record.sessionId = ARGV[3]
 writeRecord(KEYS[1], record)
 return 1
 `;
@@ -451,17 +461,23 @@ export class DeliveryWriter {
     );
   }
 
-  /** Record which eve session took the delivery. */
+  /**
+   * Record which eve session took the delivery.
+   *
+   * Called by both processes, so it names the delivery rather than proving a
+   * hold — see `CONFIRM_SESSION`.
+   */
   async confirmSession(
     continuationKey: string,
-    claimToken: string,
+    dispatchId: string,
+    messageId: string,
     sessionId: string,
   ): Promise<boolean> {
     return evalFlag(
       this.redis,
       CONFIRM_SESSION,
       [activeKey(continuationKey)],
-      [claimToken, sessionId, Date.now()],
+      [dispatchId, messageId, sessionId],
     );
   }
 
