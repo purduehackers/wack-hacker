@@ -162,13 +162,19 @@ async function inspectRedis(arguments_: readonly string[]): Promise<void> {
       resetPendingDepth: state.resetPending,
       resetPresent: state.reset === 1,
       readyMember: state.ready === 1,
+      // The three named leases are what an operator actually needs to see: which
+      // one is held and until when is the whole answer to "why is this stuck".
+      // This asked for `deliveryLeaseUntilMs`, a flat field the record has not
+      // carried since the leases were named, so it always printed nothing.
       active: summary(state.active, [
         "phase",
         "messageId",
         "dispatchId",
         "sessionId",
         "eveTurnId",
-        "deliveryLeaseUntilMs",
+        "handoff",
+        "turn",
+        "ingress",
       ]),
       parked: summary(state.parked, ["messageId", "dispatchId", "sessionId", "eveTurnId"]),
     };

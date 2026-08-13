@@ -245,6 +245,9 @@ const settled = await writer.settleAndPark(
 );
 check("settle returns the revision it landed on", settled, 3);
 check("it parks the delivery", (await redis.exists(`agent:parked:${KEY}`)) === 1, true);
+// A parked marker outliving its record is invariant I5: `complete` can never
+// fence against it again, so it is both unusable and uncollectable.
+check("with a bounded marker", (await redis.pttl(`agent:parked:${KEY}`)) > 0, true);
 check("and re-advertises the paint", await advertised(dispatchId), true);
 check(
   "a streaming intent cannot settle",

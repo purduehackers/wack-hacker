@@ -18,7 +18,14 @@ import type { RedisClient } from "../../redis/client.ts";
 import { Result } from "../../result/index.ts";
 import type { ParkedPayload } from "../../wire.ts";
 import { decodeParkedPayload } from "../../wire.ts";
-import { activeKey, AGENT_READY_SET_KEY, parkedKey, pendingKey, QUEUE_INDEX_KEY } from "../keys.ts";
+import {
+  activeKey,
+  AGENT_READY_SET_KEY,
+  continuationKeyFromQueueMember,
+  parkedKey,
+  pendingKey,
+  QUEUE_INDEX_KEY,
+} from "../keys.ts";
 import { leaseExpired } from "../lease.ts";
 import type { DeliveryRecord } from "../records/delivery.ts";
 import { deliveryRecordSchema } from "../records/delivery.ts";
@@ -114,12 +121,14 @@ export class DeliveryReader {
  * Index members carry their own prefix, so a malformed one is dropped rather
  * than thrown on. These sets are swept every pass; one bad member must not stop
  * the sweep from reaching the rest.
+ *
+ * The decoder comes from the key catalog, which is where the prefix is written.
+ * This file had its own copy of the regex — one wire shape declared twice, which
+ * is how the two spellings of a thing start diverging.
  */
 function continuationKeys(members: readonly unknown[]): readonly string[] {
   return members.flatMap((entry) => {
-    const parsed = queueMemberSchema.safeParse(entry);
-    return parsed.success ? [parsed.data.slice(2)] : [];
+    const continuationKey = continuationKeyFromQueueMember(entry);
+    return continuationKey === undefined ? [] : [continuationKey];
   });
 }
-
-const queueMemberSchema = z.stringFormat("queue-member", /^k:\d{17,20}$/u);

@@ -45,19 +45,19 @@ Discord gateway MESSAGE_CREATE
             ├─ Promise.all(openThread, fetchLeadIn)
             ├─ postPlaceholder(nonce=<source>:0)
             └─ ConversationFlow.submit(payload)        packages/bot/src/utils/conversation/queue.ts
-               ├─ store.queue.enqueue(payload)         packages/shared/src/conversations/queue.ts
-               │  └─ ENQUEUE_SCRIPT: dedup + FIFO + target + indexes
+               ├─ store.delivery.enqueue(payload)      packages/shared/src/conversations/writers/delivery.ts
+               │  └─ delivery:enqueue: dedup + FIFO + target + indexes
                └─ kick(continuationKey)
-                  ├─ store.queue.claim() -> active lease
+                  ├─ store.delivery.claim() -> handoff lease
                   └─ AgentClient.sendMessage()         packages/bot/src/agent/client.ts
                      └─ POST /discord/message (one attempt)
                         └─ channel route               packages/agents/agent/channels/discord.ts
                            ├─ bearer + decodeDeliveryPayload
-                           ├─ admission.start()         packages/shared/src/conversations/admission.ts
+                           ├─ store.delivery.markLive()  packages/shared/src/conversations/writers/delivery.ts
                            ├─ Eve send(message, auth, continuationToken, state)
-                           ├─ admission.confirm(session.id)
+                           ├─ store.delivery.confirmSession(session.id)
                            └─ strict WireResponse
-                  └─ queue.confirm(claimToken, session.id)
+                  └─ store.delivery.releaseIngress(attempt)
 ```
 
 If another message arrives for the same continuation while active, it ends after
@@ -72,14 +72,14 @@ Eve lifecycle event (message.appended/actions.requested/input.requested/...)
    ├─ mutate plain DiscordChannelState                 packages/agents/agent/lib/discord/state.ts
    └─ publishDesiredRender()
       └─ renderPublisher.publish()                     packages/agents/agent/lib/discord/render-intent.ts
-         └─ store.renderPublication.publish()
-            └─ PUBLISH_SCRIPT: revision CAS + intent + render-ready
+         └─ store.render.publish()                  packages/shared/src/conversations/writers/render.ts
+            └─ render:publish: revision CAS + intent + render-ready + turn lease
          └─ best-effort POST /internal/agent/render
             ⇢ bot handleRender()                       packages/bot/src/framework/server.ts
                └─ flow.wake({dispatchId})
                   ⇢ sweep/renderDispatches()
                      └─ applyLatest(dispatchId)         packages/bot/src/utils/conversation/render.ts
-                        ├─ store.render.claim()         packages/shared/src/conversations/render.ts
+                        ├─ store.render.claim()         packages/shared/src/conversations/writers/render.ts
                         ├─ loadWork(intent,target,projection)
                         ├─ createRenderer().write()     packages/bot/src/agent/render/renderer.ts
                         │  ├─ renew render lease
@@ -107,7 +107,7 @@ Eve session.waiting/completed/failed
             └─ reconcileParked()
                └─ onParked()
                   ├─ store.render.outcome()
-                  ├─ store.queue.complete(parked)      Lua verifies exact outcome
+                  ├─ store.delivery.complete(parked)   Lua verifies exact outcome
                   └─ kick(continuationKey)             next FIFO item
 ```
 
@@ -224,13 +224,13 @@ Eve minute schedule
       ├─ derive stable occurrenceId
       ├─ POST /internal/agent/scheduled
       │  └─ bot flow.admitSchedule()
-      │     ├─ scheduledFires.claim()
+      │     ├─ store.schedules.claim()
       │     └─ scheduled adapter admit()
       │        ├─ action=message -> direct Discord nonce; no owner refresh
       │        └─ action=agent
       │           ├─ refresh owner member/roles
       │           └─ placeholder + normal flow.submit()
-      │     └─ scheduledFires.complete()
+      │     └─ store.schedules.complete()
       └─ scheduleStore.complete() or fail()
 ```
 

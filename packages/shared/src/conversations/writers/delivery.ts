@@ -39,12 +39,11 @@ import {
 import { LeaseDuration, RECORD_TTL_MS } from "../lease.ts";
 import { DeliveryReader } from "../readers/delivery.ts";
 import { DELIVERY_RECORD_LUA } from "../records/delivery.ts";
+import { RENDER_TTL_SECONDS } from "../records/render.ts";
 import { redisValue } from "../redis-value.ts";
 
 /** Completed-message tombstones are only needed across plausible retries. */
 const SEEN_TTL_SECONDS = 7 * 24 * 60 * 60;
-/** Matches every other intent write. The scripts this replaces wrote none. */
-const INTENT_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 /**
  * Synthetic turn ids, so an intent this layer authored is distinguishable from
@@ -73,7 +72,11 @@ redis.call("RPUSH", resetting and KEYS[6] or KEYS[1], ARGV[1])
 -- Indexed only when it landed on the real queue. Indexing a diverted delivery
 -- advertises work the claim cannot see, which is how the sweep learned to spin.
 if not resetting then redis.call("SADD", KEYS[2], ARGV[3]) end
-redis.call("SET", KEYS[4], ARGV[5])
+-- Bounded like every other key in the render aggregate. This was a bare SET, and
+-- the target only ever gained an expiry from a *terminal* paint — so any delivery
+-- that never reached one left a key nothing would ever collect. There were 63 of
+-- them in the live store when this was found.
+redis.call("SET", KEYS[4], ARGV[5], "EX", tonumber(ARGV[6]))
 return 1
 `;
 
@@ -451,6 +454,7 @@ export class DeliveryWriter {
         queueMember(payload.continuationKey),
         SEEN_TTL_SECONDS,
         JSON.stringify(target),
+        RENDER_TTL_SECONDS,
       ],
     );
   }
@@ -639,7 +643,7 @@ export class DeliveryWriter {
         "",
         queueMember(continuationKey),
         renderMember(target),
-        INTENT_TTL_SECONDS,
+        RENDER_TTL_SECONDS,
       ],
     );
     if (raw === null || raw === undefined) return Result.ok(undefined);

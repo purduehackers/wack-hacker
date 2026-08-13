@@ -59,28 +59,27 @@ than silently executing a tool twice.
 `packages/shared/src/conversations/keys.ts` defines 20 key families. Callers do
 not interpolate these strings themselves.
 
-| Family                                               | Type  | Scope/value                                       | Purpose                                                                                                          |
-| ---------------------------------------------------- | ----- | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `agent:queues`                                       | set   | members `k:<continuationKey>`                     | Conversations with pending or active queue state                                                                 |
-| `agent:ready`                                        | set   | members `k:<continuationKey>`                     | Parked conversations ready for queue reconciliation                                                              |
-| `agent:render-ready`                                 | set   | members `r:<dispatchId>`                          | Dispatches whose desired render needs convergence                                                                |
-| `pending:<continuationKey>`                          | list  | encoded `DeliveryPayload` JSON                    | FIFO user/scheduled deliveries                                                                                   |
-| `agent:reset-pending:<continuationKey>`              | list  | deliveries arriving behind reset barrier          | Preserves new work while old session retires                                                                     |
-| `agent:seen:<continuationKey>`                       | set   | Discord message IDs                               | Seven-day enqueue deduplication                                                                                  |
-| `agent:active:<continuationKey>`                     | value | delivery + queue claim/lease/session fields       | One claimed/active delivery                                                                                      |
-| `agent:reset:<continuationKey>`                      | value | reset UUID                                        | Fences reset ownership and blocks old admissions                                                                 |
-| `agent:ingress:<continuationKey>`                    | value | admission attempt/dispatch status                 | Fences the exact window in which Eve may accept work                                                             |
-| `agent:parked:<continuationKey>`                     | JSON  | strict `ParkedPayload`                            | Durable waiting/terminal marker for active delivery                                                              |
-| `agent:render-target:<dispatchId>`                   | JSON  | immutable `RenderTarget`                          | Bot-authored channel/requester/anchor authority; initially no TTL, retained seven days after terminal settlement |
-| `agent:render-intent:<dispatchId>`                   | JSON  | latest strict `RenderIntent`                      | Agent-authored desired Discord presentation                                                                      |
-| `agent:render-projection:<dispatchId>`               | JSON  | applied revision, anchor and overflow checkpoints | Resume-safe materialized Discord state                                                                           |
-| `agent:render-claim:<dispatchId>`                    | value | claim token with lease                            | One render worker at a time                                                                                      |
-| `agent:render-outcome:<dispatchId>`                  | value | `applied` or `discarded`                          | Terminal visibility barrier                                                                                      |
-| `agent:hitl-claim:<dispatchId>`                      | JSON  | revision/request/interaction/status               | First-winner bot forwarding claim                                                                                |
-| `agent:interaction-receipt:<interactionId>`          | JSON  | forwarding/accepted identity and response digest  | Agent-ingress idempotency and ambiguity recovery                                                                 |
-| `agent:authorization:<dispatchId>:<authorizationId>` | JSON  | private challenge                                 | TTL-bound URL/code/instructions never placed in public render                                                    |
-| `agent:authorization-index:<dispatchId>`             | set   | full authorization key strings                    | Reset/terminal cleanup of private challenges                                                                     |
-| `agent:scheduled-fire:<occurrenceId>`                | JSON  | claim token or accepted receipt                   | Idempotent bot admission for one stable occurrence                                                               |
+| Family                                               | Type  | Scope/value                                                  | Purpose                                                                      |
+| ---------------------------------------------------- | ----- | ------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| `agent:queues`                                       | set   | members `k:<continuationKey>`                                | Conversations with pending or active queue state                             |
+| `agent:ready`                                        | set   | members `k:<continuationKey>`                                | Parked conversations ready for queue reconciliation                          |
+| `agent:render-ready`                                 | set   | members `r:<dispatchId>`                                     | Dispatches whose desired render needs convergence                            |
+| `pending:<continuationKey>`                          | list  | encoded `DeliveryPayload` JSON                               | FIFO user/scheduled deliveries                                               |
+| `agent:reset-pending:<continuationKey>`              | list  | deliveries arriving behind reset barrier                     | Preserves new work while old session retires                                 |
+| `agent:seen:<continuationKey>`                       | set   | Discord message IDs                                          | Seven-day enqueue deduplication                                              |
+| `agent:active:<continuationKey>`                     | JSON  | strict `DeliveryRecord`: phase, identity, three named leases | One claimed/active delivery                                                  |
+| `agent:reset:<continuationKey>`                      | value | reset UUID                                                   | Fences reset ownership and blocks old admissions                             |
+| `agent:parked:<continuationKey>`                     | JSON  | strict `ParkedPayload`                                       | Durable waiting/terminal marker for active delivery; bounded with its record |
+| `agent:render-target:<dispatchId>`                   | JSON  | immutable `RenderTarget`                                     | Bot-authored channel/requester/anchor authority; seven days from enqueue     |
+| `agent:render-intent:<dispatchId>`                   | JSON  | latest strict `RenderIntent`                                 | Agent-authored desired Discord presentation                                  |
+| `agent:render-projection:<dispatchId>`               | JSON  | applied revision, anchor and overflow checkpoints            | Resume-safe materialized Discord state                                       |
+| `agent:render-claim:<dispatchId>`                    | value | claim token with lease                                       | One render worker at a time                                                  |
+| `agent:render-outcome:<dispatchId>`                  | value | `applied` or `discarded`                                     | Terminal visibility barrier                                                  |
+| `agent:hitl-claim:<dispatchId>`                      | JSON  | revision/request/interaction/status                          | First-winner bot forwarding claim                                            |
+| `agent:interaction-receipt:<interactionId>`          | JSON  | forwarding/accepted identity and response digest             | Agent-ingress idempotency and ambiguity recovery                             |
+| `agent:authorization:<dispatchId>:<authorizationId>` | JSON  | private challenge                                            | TTL-bound URL/code/instructions never placed in public render                |
+| `agent:authorization-index:<dispatchId>`             | set   | full authorization key strings                               | Reset/terminal cleanup of private challenges                                 |
+| `agent:scheduled-fire:<occurrenceId>`                | JSON  | claim token or accepted receipt                              | Idempotent bot admission for one stable occurrence                           |
 
 Only two index-member encodings exist: `k:<17–20 digit Discord ID>` and
 `r:<UUID>`. Decoders reject malformed members, preventing a poison member from
@@ -108,7 +107,7 @@ fallbacks; their index is cleaned as challenges complete.
 
 ### Enqueue
 
-`ConversationFlow.submit()` calls `store.queue.enqueue()`.
+`ConversationFlow.submit()` calls `store.delivery.enqueue()`.
 `enqueueTurn()` creates the dispatch ID and immutable `RenderTarget` before its
 Lua transition:
 
@@ -193,7 +192,7 @@ state:
 - `session.waiting/completed/failed` publish the terminal boundary.
 
 Streaming publication is throttled to roughly 1.5 seconds. Live text is capped
-at 4,000 characters; final text at 12,000. `renderPublication.publish()` accepts
+at 4,000 characters; final text at 12,000. `RenderWriter.publish()` accepts
 a higher revision or an identical replay. Reusing the same revision with
 different content fails with:
 

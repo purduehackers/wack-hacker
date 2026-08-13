@@ -3,7 +3,8 @@
 How a Discord message becomes a turn, what holds a conversation while it runs,
 and what to build next. Written 2026-08-12 after a night in which nine defects
 were found and fixed here; every fact below was verified against production
-rather than read off the source.
+rather than read off the source. Revised 2026-08-13, when the layer was rewritten
+from the ground up — see [the rewrite](#the-rewrite) for what moved and why.
 
 Companion docs: [conversation-engine](./conversation-engine.md) for the durable
 queue's history, [discord-and-bot](./discord-and-bot.md) for the gateway,
@@ -34,14 +35,14 @@ Verified end to end by `bun run check:invariants`, which drives this sequence
 through the real Lua:
 
 ```
-enqueue          pending:<key> ← message          (agent:seen dedupes)
-claim            agent:active ← phase=claimed     PX 48h, lease +30m
-admission.start  phase → live                     ingress lease taken
-admission.confirm sessionId ← wrun_…
-publish(render)  intent ← revision N              lease refreshed +30m
-settleAndPark    phase → parked                   lease → 24h, parked marker
-(bot paints)     render-outcome ← "applied"
-complete         agent:active deleted             index entry released
+delivery:enqueue          pending:<key> ← message      (agent:seen dedupes)
+delivery:claim            agent:active ← phase=claimed PX 48h, turn lease +30m
+delivery:mark-live        phase → live                 ingress lease taken
+delivery:confirm-session  sessionId ← wrun_…
+render:publish            intent ← revision N          turn lease refreshed +30m
+render:settle-and-park    phase → parked               lease → 24h, parked marker
+render:complete           render-outcome ← "applied"
+delivery:complete         agent:active deleted         index entry released
 ```
 
 Every step is fenced. `dispatchId` and `messageId` must match, phases must be
@@ -49,24 +50,60 @@ legal, and a stale replay is refused rather than applied — Eve reports
 `stepIndex: 0` _and_ `sequence: 0` for every step of a turn that suspends and
 resumes, so neither can ever be used as a replay cursor.
 
+## The rewrite
+
+The layer described below was rebuilt on 2026-08-13. What it replaced is recorded
+here because the shape of the old problem is what the new one is built to prevent.
+
+The measurements that justified it: 29 Lua scripts, 22 key builders plus 11 keys
+built inline _inside_ Lua, 12 persisted state strings across 6 machines, **5
+separate claim-token protocols**, 26 TTL constants (two declared twice with a
+comment asking that they stay in step), and 23 commits in 30 days of which 11 were
+fixes or reverts. Nine defects in one night, every one invisible to `tsc` and lint,
+because the invariants are not type-level.
+
+The recurring shape was **one record, many writers, no owner**.
+
+What replaced it:
+
+- **One lease.** `claimToken`, `ownerToken`, `admissionAttemptId`, `resetId` and
+  `receiptIdentity` were five spellings of "somebody holds this until some time".
+  `lease.ts` has one, with one set of durations and one Lua fence.
+- **One reader and one writer per record**, in `readers/` and `writers/`. A writer
+  exposes one method per transition, named for the transition, with no `set` or
+  `update` escape hatch — so the set of things that can happen to a record is the
+  set of methods on its class.
+- **Two declarative machines** in `machines/`, driven in lockstep with the real
+  Lua by `check:invariants`. Redis stays authoritative: transitions execute inside
+  Lua next to the compare-and-set that makes them atomic, and moving a guard out to
+  JavaScript would turn check-then-write into a race across two processes. The
+  machines say which transitions are _legal_; the gate fails if the two disagree.
+
 ## Redis, and the one record that matters
 
 `agent:active:<conversation>` is the record that says a turn holds this
-conversation. **Eleven Lua scripts across three files mutate it, fenced by six
-different predicates.** That is the shape behind most defects found here: to
-change it safely you must know all eleven, so a file-scoped audit is
+conversation. It used to be mutated by eleven Lua scripts across three files under
+six different predicates, which is the shape behind most defects found here: to
+change it safely you had to know all eleven, so a file-scoped audit was
 structurally guaranteed to miss some.
+
+It now has one writer — `DeliveryWriter` — plus exactly two methods on
+`RenderWriter` that touch it, `publish` and `settleAndPark`. Those two are
+deliberate rather than a layering slip: publishing a render is the only signal
+frequent enough to prove a turn is alive, and parking is one transition that both
+ends the turn and fixes the final frame. Split across two round trips, either
+could half-happen.
 
 Two mitigations, both load-bearing:
 
-**One owner for the write.** `ACTIVE_RECORD_LUA` in `keys.ts` defines
-`writeActive`, and every script that rewrites the record calls it. A new
-invariant is added once rather than eight times.
+**One owner for the write.** `DELIVERY_RECORD_LUA` in `records/delivery.ts`
+defines `writeRecord` beside the schema that says what the record may look like,
+and every script that rewrites it calls that. A new invariant is added once.
 
 **`KEEPTTL` on every write.** A bare `SET` clears a Redis expiry. This was
-forgotten three times in one night — including in `wack:start-delivery`, which
-runs on _every_ delivery and silently made the key immortal again moments after
-`claim` had bounded it. If you add a write, use `writeActive`.
+forgotten three times in one night — including in `wack:start-delivery`, which ran
+on _every_ delivery and silently made the key immortal again moments after `claim`
+had bounded it. If you add a write, use `writeRecord`.
 
 Invariants that live _inside_ the JSON survive automatically; every script
 round-trips unknown fields through `cjson`. Invariants that live _outside_ it —
@@ -79,12 +116,14 @@ useful thing to know before editing this directory.**
 Every wedge found here reduced to a record that could not expire. The rule now
 is that no state is unbounded:
 
-| State                     | Bound  | Refreshed by            |
-| ------------------------- | ------ | ----------------------- |
-| A running turn            | 30 min | every published render  |
-| A turn parked on a person | 24 h   | —                       |
-| The key itself            | 48 h   | —                       |
-| A superseded/stuck record | swept  | `wack:expire-admission` |
+| State                     | Bound  | Refreshed by                                     |
+| ------------------------- | ------ | ------------------------------------------------ |
+| A running turn            | 30 min | every published render, every child stream event |
+| A turn parked on a person | 24 h   | —                                                |
+| The delivery record       | 48 h   | —                                                |
+| The parked marker         | 48 h   | —                                                |
+| Every render key          | 7 d    | —                                                |
+| A superseded/stuck record | swept  | `delivery:expire`                                |
 
 The running-turn lease is measured in **silence, not elapsed time**. An earlier
 version capped from the claim, which would have killed a healthy `code_task` for
@@ -93,11 +132,22 @@ widest gap _between_ renders, not the longest turn.
 
 Expiry is announced, never silent: the sweep publishes a terminal render so the
 thread says what happened. Redis expiry alone would make a turn vanish
-mid-conversation, which is why `wack:expire-admission` cannot be deleted.
+mid-conversation, which is why `delivery:expire` cannot be deleted.
 
-**Known gap:** a delegated turn is silent for as long as its subagent runs, so
-`code_task` can exceed 30 minutes and be reclaimed mid-flight. A 2-hour lease
-for delegated turns was tried and reverted — see _What to build next_.
+**Two leaks found by auditing this rule against the live store, 2026-08-13.** Both
+were bare `SET`s that nothing else bounded:
+
+- `delivery:enqueue` wrote `agent:render-target:<dispatch>` with no expiry. The
+  target only ever gained one from a _terminal_ paint, so every delivery that
+  ended any other way left a key nothing would collect. **63 such keys existed.**
+- `render:settle-and-park` wrote the parked marker with no expiry. A marker
+  outliving its delivery record is invariant I5: `complete` can never fence
+  against it again, so it is unusable _and_ uncollectable.
+
+Both are fixed, both are now asserted by `check:delivery` and `check:render`, and
+the 63 existing keys were given an expiry by hand. The lesson generalises: grep
+the writers for `redis.call("SET"` without `EX`, `PX`, `NX` or `KEEPTTL` — that
+is the whole audit, and it takes one command.
 
 ## Rendering
 
@@ -180,10 +230,10 @@ suspended for precisely that span.** That single constraint decides the design.
    hours against a minutes-to-hours delegation, so one mint serves the whole
    thing and there is no refresh path. Verified: that token opens the child
    stream with a 200.
-3. **Follower** (`95898e9`) — the bot reads the child's stream. Each recognised
-   line does both jobs: it becomes the progress under the turn's status line,
-   and it refreshes the lease. `wack:refresh-lease` is fenced on the delivery so
-   a follower from a turn that moved on cannot hold the next one.
+3. **Follower** — the bot reads the child's stream. Each recognised line does both
+   jobs: it becomes the progress under the turn's status line, and it refreshes
+   the lease. `delivery.refreshTurn` is fenced on the delivery so a follower from
+   a turn that moved on cannot hold the next one.
 
 The delegated-turn gap is closed by construction rather than by a longer timer,
 which is why the two-hour lease was reverted rather than kept.
@@ -191,11 +241,39 @@ which is why the two-hour lease was reverted rather than kept.
 Ownership stayed put: the intent is the agent's alone, and the child's progress
 is bot-authored in the projection, merged by the renderer.
 
-**Not yet exercised end to end.** The lease refresh and its fence are verified
-against Redis; the stream reader has only been checked by types and a 200 from
-the endpoint. The first real `code_task` after this is the actual test — watch
-for a `↳ code: …` line under the status line, and for the turn surviving past
-thirty minutes.
+### Two things the follower got wrong, and how they hid
+
+Both produced silence, which is indistinguishable from "nothing is happening".
+
+**It parsed the stream as SSE.** Every line was filtered for a `data:` prefix, but
+eve's stream is **NDJSON** (`application/x-ndjson`). Every line was discarded, so
+the follower emitted no progress and refreshed no lease — the two things it exists
+to do — while looking perfectly healthy. Three conclusions were drawn from that
+silence and all three were wrong: the stream was assumed empty, the session idle,
+and replay unsupported. With correct parsing the same stream returns 42 events and
+replays from `startIndex=0`.
+
+**It followed the parent, not the child.** The section above already said the
+parent carries only the bookends; the code did not do what the section said. Even
+with correct parsing it would have seen two events for an entire delegation —
+enough to narrate a start and a finish, nowhere near enough to keep a 30-minute
+lease alive across work that runs longer than that.
+
+Both are fixed by handing the wire format to `eve/client`, which also brings
+cursor and reconnect handling the hand-rolled reader had no version of. The parent
+is followed for its boundaries; each `subagent.called` names a `childSessionId`,
+and each child is followed for its work.
+
+Typed events paid for themselves immediately. `actions.requested` carries a
+discriminated union of four action kinds — `tool-call`, `subagent-call`,
+`remote-agent-call`, `load-skill` — where the hand-written schema knew two optional
+string fields and silently rendered nothing for the rest.
+
+**Still not exercised end to end.** The client reaching the real agent is verified
+(`health()` returns ready; a stream attach returns a clean 401 for an expired
+token, so host, route, transport and auth wiring are correct). A live delegation
+narrating needs a real `code_task` in Discord — watch for a `↳ code: …` line under
+the status line, and for the turn surviving past thirty minutes.
 
 ## Testing the agent without Discord
 
@@ -296,19 +374,38 @@ bunx tsc --noEmit -p packages/{shared,bot,agents}/tsconfig.json
 bun run --filter @repo/agents check:capabilities
 bun run --filter @repo/agents check:serialization
 bun run --filter @repo/shared check:invariants   # ← this directory
+bun run --filter @repo/shared check:delivery
+bun run --filter @repo/shared check:render
 bun run build
 ```
 
-`check:invariants` is the one that matters here. It drives a delivery through
-the real Lua, asserts five properties after every transition, then cuts the
-sequence short at each step and asks whether the state that remains is bounded.
-None of those are type-level properties, so `tsc` and lint were never going to
-see them — which is why every defect in this layer reached production.
+The three Redis-driven checks are the ones that matter here, and each found a real
+defect the day it was written.
 
-It does **not** yet model `turn.cancelled`, because cancellation is an
-agent-side event rather than a Lua transition. The steering path is exactly what
-it should cover and does not. Extending it is worth doing before the next change
-to steering.
+`check:invariants` drives a delivery through the real Lua, asserts five properties
+after every transition, then cuts the sequence short at each step and asks whether
+the state that remains is bounded. It also drives both declarative machines in
+lockstep and fails if a phase disagrees with what Redis actually holds. That
+lockstep is not decorative: deleting `PARK` from the delivery machine makes it fail
+with `M1 Redis performed PARK, which the machine refuses from live`, which is how
+it was checked.
+
+`check:delivery` and `check:render` cover the transitions themselves — 36 and 40
+assertions against real Redis. None of these are type-level properties, so `tsc`
+and lint were never going to see them, which is why every defect in this layer
+reached production.
+
+`check:invariants` does **not** yet model `turn.cancelled`, because cancellation is
+an agent-side event rather than a Lua transition. The steering path is exactly what
+it should cover and does not. Extending it is worth doing before the next change to
+steering.
+
+**They race with a bot running older code.** The probe advertises itself in the
+global queue index — it has to, since half of what it asserts is about that index —
+so any process still running a previous deploy will sweep the probe conversation up
+and win the claim. It shows as an inscrutable "the active record carries no lease",
+and the gate names the likely cause when it sees a record shape the current writer
+cannot produce. Re-run after deploying.
 
 Two lessons that cost real time, recorded so they cost less next time: a checker
 that cannot fail is worth nothing — the first version of this one hardcoded a

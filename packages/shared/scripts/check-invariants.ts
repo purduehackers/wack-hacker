@@ -112,7 +112,6 @@ async function scrub(): Promise<void> {
     `agent:active:${KEY}`,
     `pending:${KEY}`,
     `agent:parked:${KEY}`,
-    `agent:ingress:${KEY}`,
     `agent:seen:${KEY}`,
   );
   if (dispatchId !== undefined) {
@@ -153,6 +152,15 @@ const machine: MachineState = {
 
 /** Widened deliberately: the question is whether Redis holds a phase it may not. */
 const STORED_PHASES: ReadonlySet<string> = new Set(StoredPhase.options);
+
+/**
+ * The likeliest cause of a failure here, and the one that looks least like itself.
+ *
+ * Printed beside the violation rather than instead of it: the invariant really was
+ * broken, and saying which third party probably broke it is what turns twenty
+ * minutes of reading Lua into one re-run after a deploy.
+ */
+const FOREIGN_WRITER = "     (a process running older code may be competing for the probe)";
 
 /** Phases with no persisted form, so "no record" is the agreeing answer. */
 const UNSTORED_PHASES: readonly DeliveryPhase[] = [
@@ -215,6 +223,12 @@ async function compareMachine(
   if (stored === undefined) {
     if (!UNSTORED_PHASES.includes(machine.delivery)) {
       violations.push(`M3 the machine says ${machine.delivery}, but Redis holds no record`);
+      // This probe is the only legitimate writer of this conversation, so a
+      // record vanishing under it was deleted by somebody else. It advertises
+      // itself in the global indexes — it has to, half of what I1 and I4 assert
+      // is about them — so any sweep still running a previous deploy will pick
+      // the probe up, consume its parked marker, and release the conversation.
+      violations.push(FOREIGN_WRITER);
     }
   } else if (stored !== machine.delivery) {
     violations.push(`M3 the machine says ${machine.delivery}, Redis says ${stored}`);
@@ -260,12 +274,8 @@ async function check(label: string): Promise<readonly string[]> {
   if (active !== undefined && ttl === -1) violations.push("I2 the active record has no expiry");
   if (active !== undefined && active.turn === undefined) {
     violations.push("I3 the active record carries no lease for the sweep to read");
-    // Worth naming, because it is the likeliest cause and looks nothing like it:
-    // the current writer cannot produce this shape, so something else wrote it.
-    // The probe advertises itself in the global queue index — it has to, that is
-    // half of what I1 and I4 are about — so any process still running the
-    // pre-rewrite claim will sweep it up and win the race.
-    violations.push("     (a process running older code may be competing for the probe)");
+    // The current writer cannot produce this shape, so something else wrote it.
+    violations.push(FOREIGN_WRITER);
   }
   if (active === undefined && pending === 0 && inIndex) violations.push("I4 index entry leaked");
   if (parkedMarker !== null && parkedMarker !== undefined && active === undefined) {

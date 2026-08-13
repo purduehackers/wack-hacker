@@ -74,3 +74,14 @@ export type RenderProjection = Omit<StoredRenderProjection, "appliedRevision">;
  */
 export const RenderOutcome = { Applied: "applied", Discarded: "discarded" } as const;
 export type RenderOutcome = (typeof RenderOutcome)[keyof typeof RenderOutcome];
+
+/**
+ * How long every key in this aggregate lives: intent, target, projection, outcome.
+ *
+ * Long enough that a thread reopened next week still shows what was said, and
+ * declared once because the alternative is what happened here — the target was
+ * written by `enqueue` with no expiry at all, and only ever gained one from a
+ * *terminal* paint, so every delivery that ended any other way left a key nothing
+ * would collect.
+ */
+export const RENDER_TTL_SECONDS = 7 * 24 * 60 * 60;

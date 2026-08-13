@@ -100,6 +100,14 @@ check("claim writes phase", afterClaim?.phase, "claimed");
 check("claim grants a handoff lease", afterClaim?.handoff.holder === claimToken, true);
 check("claim grants a turn lease held by the dispatch", afterClaim?.turn.holder, dispatchId);
 check("the record key is bounded", (await redis.pttl(`agent:active:${KEY}`)) > 0, true);
+// Nothing else bounds the target until a *terminal* paint, so a delivery that
+// ends any other way leaked a permanent key. 63 of them existed when this was
+// found, and nothing would ever have collected them.
+check(
+  "and so is the render target",
+  (await redis.pttl(`agent:render-target:${dispatchId}`)) > 0,
+  true,
+);
 
 const admitted = await writer.markLive(KEY, dispatchId, MESSAGE_ID);
 check("mark-live admits the first caller", admitted.status, "start");

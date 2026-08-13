@@ -36,13 +36,10 @@ import {
   renderProjectionKey,
   renderTargetKey,
 } from "../keys.ts";
-import { LeaseDuration } from "../lease.ts";
+import { LeaseDuration, RECORD_TTL_MS } from "../lease.ts";
 import { DELIVERY_RECORD_LUA } from "../records/delivery.ts";
 import type { RenderProjection, StoredRenderProjection } from "../records/render.ts";
-import { projectionCodec } from "../records/render.ts";
-
-/** Long enough that a thread reopened next week still shows what was said. */
-const RENDER_TTL_SECONDS = 7 * 24 * 60 * 60;
+import { projectionCodec, RENDER_TTL_SECONDS } from "../records/render.ts";
 
 /**
  * Say what should be on screen, and prove the turn is still alive doing it.
@@ -135,7 +132,10 @@ record.sessionId = ARGV[3]
 record.eveTurnId = ARGV[5]
 record.turn.expiresAtMs = tonumber(ARGV[11]) + tonumber(ARGV[12])
 writeRecord(KEYS[1], record)
-redis.call("SET", KEYS[2], ARGV[4])
+-- Bounded by the record it fences against, not left immortal. A parked marker
+-- outliving its delivery record is invariant I5 in check:invariants -- complete
+-- can never fence again, so the marker is unusable *and* uncollectable.
+redis.call("SET", KEYS[2], ARGV[4], "PX", tonumber(ARGV[13]))
 redis.call("SADD", KEYS[3], ARGV[6])
 return settledRevision
 `;
@@ -312,6 +312,7 @@ export class RenderWriter {
           RENDER_TTL_SECONDS,
           Date.now(),
           LeaseDuration.Person,
+          RECORD_TTL_MS,
         ],
       ),
     );
