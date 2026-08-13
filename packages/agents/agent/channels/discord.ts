@@ -272,14 +272,30 @@ async function publishDesiredRender(
     ...(authorizations.length === 0 ? {} : { authorizations }),
   };
 
-  try {
-    const accepted = await renderPublisher.publish(intent);
-    if (accepted) {
-      state.renderRevision = revision;
+  /** `undefined` means the counter was behind and has been resynced; try again. */
+  const land = async (attempt: RenderIntent): Promise<boolean | undefined> => {
+    const publication = await renderPublisher.publish(attempt);
+    if (publication.accepted) {
+      state.renderRevision = attempt.revision;
       state.lastRenderPublishedAt = now;
       if (input.phase === "streaming") state.lastRenderPreview = preview;
+      return true;
     }
-    return accepted;
+    // Redis already holds this revision or a later one, so this counter is
+    // behind — it advances only on a publish that lands, and anything that
+    // knocked one out (a retried step, a restored checkpoint) leaves every
+    // later attempt re-offering a number Redis has already seen. Resync to what
+    // it holds and go once more; the intent was built from current state, so
+    // only the tag was wrong.
+    if (publication.behindRevision === undefined) return false;
+    state.renderRevision = publication.behindRevision;
+    return undefined;
+  };
+
+  try {
+    const landed = await land(intent);
+    if (landed !== undefined) return landed;
+    return (await land({ ...intent, revision: state.renderRevision + 1 })) ?? false;
   } catch (cause) {
     warnFailure("publish Discord render intent", cause);
     return false;

@@ -27,6 +27,17 @@ import type { ConversationFlowDeps } from "./types.ts";
 const MAX_LINE = 200;
 
 /**
+ * How deep the tree is followed.
+ *
+ * A delegated subagent can itself delegate — `code` runs codex, so the work worth
+ * narrating is two levels below the turn — and stopping at the first child showed
+ * only that something had started. Bounded rather than unbounded because each
+ * level opens a stream per node, and a line about a great-grandchild's tool call
+ * is further from what the person asked than one line can usefully carry.
+ */
+const MAX_DEPTH = 3;
+
+/**
  * One delegation's open streams: the parent, plus every child it adopts.
  *
  * The set matters. A child is started mid-stream and never awaited, so clearing
@@ -132,12 +143,11 @@ interface Stream {
    * Ignore anything emitted before this instant.
    *
    * Only meaningful for the parent, whose stream holds every earlier turn of the
-   * conversation. A child session is created for this delegation, so its whole
-   * stream is relevant and it passes `0`.
+   * conversation.
    */
   readonly since: number;
-  /** Whether a `subagent.called` here should open another stream. */
-  readonly adoptChildren: boolean;
+  /** How many levels below the turn this stream is; children stop at MAX_DEPTH. */
+  readonly depth: number;
 }
 
 /**
@@ -159,15 +169,16 @@ async function readStream(follow: Follow, stream: Stream): Promise<void> {
     if (signal.aborted) return;
     if (Date.parse(event.meta.at) < stream.since) continue;
 
-    if (stream.adoptChildren && event.type === "subagent.called") {
-      // Not awaited: the parent's stream must keep draining, and both feed the
-      // same line. A child does not adopt its own children — following every
-      // level would open a stream per node of the tree.
+    // Not awaited: this stream must keep draining, and every level feeds the
+    // same line.
+    if (event.type === "subagent.called" && stream.depth < MAX_DEPTH) {
       launch(follow, {
         sessionId: event.data.childSessionId,
         subagent: event.data.name,
+        // A child session is created for this delegation, so its whole stream
+        // belongs to it.
         since: 0,
-        adoptChildren: false,
+        depth: stream.depth + 1,
       });
     }
 
@@ -238,7 +249,7 @@ export function followSubagent(
       sessionId: delegation.sessionId,
       subagent: delegation.name,
       since: Date.parse(delegation.startedAt),
-      adoptChildren: true,
+      depth: 0,
     },
   );
 
