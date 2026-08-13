@@ -5,10 +5,6 @@
  * records what is actually on screen. Keeping them apart is what lets a paint be
  * retried without duplicating messages — the projection says which message ids
  * already exist and what they currently say, so a retry edits rather than posts.
- *
- * Everything here except `subagentActivity` is a fact about Discord. That one
- * field is bot-authored content, and it is here rather than in the intent
- * because the agent is suspended for the whole span it describes.
  */
 
 import { z } from "zod";
@@ -32,17 +28,15 @@ export const renderProjectionSchema = z.object({
    * Which request `hitlMessageId` is asking about.
    *
    * A turn can ask more than once — an input request, then a tool approval for
-   * what the answer led to. Without an identity here the second question would
-   * be edited over the first, and the record of what was already answered would
-   * be lost. A change in this value means "post a new message", not "edit".
+   * what the answer led to. A change in this value means "post a new message",
+   * not "edit", so the record of what was already answered is not lost.
    */
   hitlRequestKey: z.string().min(1).max(128).optional(),
   /**
    * What a subagent is doing, as read off its own stream.
    *
-   * Bot-owned, unlike everything the intent carries. The agent cannot author it
-   * — it is suspended while the child runs, which is the whole reason this
-   * exists — so the reader that follows the child writes it here and the
+   * The one bot-owned field here: the agent is suspended while the child runs,
+   * which is the whole reason this exists, so the follower writes it and the
    * renderer merges it in. The intent stays the agent's alone.
    */
   subagentActivity: z.string().min(1).max(200).optional(),
@@ -52,11 +46,7 @@ export const renderProjectionSchema = z.object({
   appliedRevision: z.int().nonnegative(),
 });
 
-/**
- * One declaration owns both directions of the round trip, so the record cannot
- * be written in a shape its own reader rejects — a bad message id fails at the
- * write instead of poisoning the key until the next read.
- */
+/** One declaration owns both directions, so a bad id fails at the write. */
 export const projectionCodec = jsonCodec(renderProjectionSchema);
 
 export type StoredRenderProjection = z.output<typeof renderProjectionSchema>;
@@ -67,21 +57,12 @@ export type RenderProjection = Omit<StoredRenderProjection, "appliedRevision">;
 /**
  * Where a paint ended up.
  *
- * `applied` and `discarded` are both durable answers, and the delivery machine
- * treats them alike: one means Discord shows the final state, the other means it
- * never can. A turn held open waiting for a paint that cannot happen is the
- * wedge this distinction exists to prevent.
+ * The delivery machine treats both alike: one means Discord shows the final
+ * state, the other means it never can. A turn held open waiting for a paint that
+ * cannot happen is the wedge this distinction prevents.
  */
 export const RenderOutcome = { Applied: "applied", Discarded: "discarded" } as const;
 export type RenderOutcome = (typeof RenderOutcome)[keyof typeof RenderOutcome];
 
-/**
- * How long every key in this aggregate lives: intent, target, projection, outcome.
- *
- * Long enough that a thread reopened next week still shows what was said, and
- * declared once because the alternative is what happened here — the target was
- * written by `enqueue` with no expiry at all, and only ever gained one from a
- * *terminal* paint, so every delivery that ended any other way left a key nothing
- * would collect.
- */
+/** How long every key in this aggregate lives: intent, target, projection, outcome. */
 export const RENDER_TTL_SECONDS = 7 * 24 * 60 * 60;

@@ -1,5 +1,10 @@
 export { createConversationStore, type ConversationStore } from "./store.ts";
 export type { Delegation } from "./records/delegation.ts";
+export {
+  renderProjectionSchema,
+  type RenderProjection,
+  type StoredRenderProjection,
+} from "./records/render.ts";
 export type { Holder } from "./readers/delivery.ts";
 export {
   type Admission,

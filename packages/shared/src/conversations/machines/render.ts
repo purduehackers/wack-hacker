@@ -1,16 +1,13 @@
 /**
  * What may happen to one dispatch's paint, declared once.
  *
- * A specification, like its delivery counterpart: Redis remains authoritative,
- * this table only says which moves are legal. See `./delivery.ts` for why the
+ * A specification like its delivery counterpart; see `./delivery.ts` for why the
  * guards cannot move out of Lua.
  *
  * The lifecycle is short but its terminal states are load-bearing, because they
  * are what release the delivery. `applied` means Discord shows the final state;
- * `discarded` means it never can — a message deleted underneath us, or a 4xx
- * that will not improve on retry. The delivery machine treats them alike on
- * purpose: both are durable answers, and a turn held open waiting for a paint
- * that can never happen is the wedge this pair exists to prevent.
+ * `discarded` means it never can — a message deleted underneath us, or a 4xx that
+ * will not improve on retry.
  */
 
 import { setup } from "xstate";
@@ -28,11 +25,9 @@ export type RenderPhase = (typeof RenderPhase)[keyof typeof RenderPhase];
 
 export interface RenderContext {
   /**
-   * Revision the agent has published, against what the bot has painted.
-   *
    * A paint that finishes behind the desired revision is not finished: the
    * renderer goes back to unclaimed so the sweep drains the rest, which is the
-   * `"newer"` result the bot loops on today.
+   * `"newer"` result the bot loops on.
    */
   readonly desiredRevision: number;
   readonly appliedRevision: number;
@@ -51,9 +46,7 @@ const eventShape: RenderEvent = { type: "CLAIM" };
 export const renderMachine = setup({
   types: { context: contextShape, events: eventShape },
   guards: {
-    /** Everything the agent asked for is on screen. */
-    caughtUp: ({ context }) => context.appliedRevision >= context.desiredRevision,
-    /** Caught up *and* the intent was terminal, so the outcome is durable. */
+    /** Caught up *and* terminal, so the outcome is durable. */
     settled: ({ context }) =>
       context.terminal && context.appliedRevision >= context.desiredRevision,
   },
@@ -66,7 +59,7 @@ export const renderMachine = setup({
       on: {
         CLAIM: RenderPhase.Claimed,
         // A newer revision arrives while nothing holds the paint; still nothing
-        // to release, so this is a self-transition that only moves the target.
+        // to release, so this only moves the target.
         PUBLISH: RenderPhase.Unclaimed,
         DISCARD: RenderPhase.Discarded,
       },
@@ -89,8 +82,6 @@ export const renderMachine = setup({
     [RenderPhase.Applied]: {
       on: { PUBLISH: RenderPhase.Unclaimed, DISCARD: RenderPhase.Discarded },
     },
-    [RenderPhase.Discarded]: {
-      on: { PUBLISH: RenderPhase.Unclaimed },
-    },
+    [RenderPhase.Discarded]: { on: { PUBLISH: RenderPhase.Unclaimed } },
   },
 });

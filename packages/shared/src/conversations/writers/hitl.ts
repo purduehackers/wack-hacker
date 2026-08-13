@@ -14,6 +14,7 @@ import { z } from "zod";
 
 import { jsonCodec } from "../../json.ts";
 import type { RedisClient } from "../../redis/client.ts";
+import { evalFlag } from "../io.ts";
 import { hitlClaimKey, renderIntentKey, resetKey } from "../keys.ts";
 
 /** Outlives any plausible retry of the click that took it, and no longer. */
@@ -113,11 +114,11 @@ export class HitlWriter {
 
   /** Mark the claim answered, once eve has taken the response. */
   async accept(dispatchId: string, revision: number, interactionId: string): Promise<boolean> {
-    const accepted = await this.redis.eval(
+    return evalFlag(
+      this.redis,
       ACCEPT,
       [hitlClaimKey(dispatchId)],
       [interactionId, revision, CLAIM_TTL_SECONDS],
     );
-    return Number(accepted) === 1;
   }
 }

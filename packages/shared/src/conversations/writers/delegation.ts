@@ -1,10 +1,8 @@
 /**
  * The only thing that writes delegations.
  *
- * Two transitions and no Lua: there is nothing to fence. A dispatch delegates to
- * one child at a time, and the writer is the agent — the same process, in the same
- * turn — so a second `begin` replacing the first is the intended behaviour rather
- * than a race to guard against.
+ * No Lua: there is nothing to fence. One agent process writes both transitions
+ * within one turn, so a second `begin` replacing the first is intended.
  */
 
 import { z } from "zod";

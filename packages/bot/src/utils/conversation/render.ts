@@ -12,8 +12,7 @@ import { Result } from "@repo/shared/result";
 import type { ParkedPayload } from "@repo/shared/wire";
 
 import { renderHitl } from "../../agent/hitl/components.ts";
-import { createRenderer } from "../../agent/render/renderer.ts";
-import type { RendererProjection } from "../../agent/render/renderer.ts";
+import { createRenderer, toRendererProjection } from "../../agent/render/renderer.ts";
 import { continueTrace, traceOperation } from "../../framework/observability.ts";
 import { stopFollowing, subagentProgress } from "./subagent-follower.ts";
 import type { ConversationFlowDeps, RenderWork } from "./types.ts";
@@ -51,26 +50,6 @@ async function discardDefect(
   });
   await deps.store.render.discard(dispatchId);
   return undefined;
-}
-
-function toProjection(value: {
-  readonly anchorMessageId?: string | undefined;
-  readonly anchorContentHash?: string | undefined;
-  readonly overflow: readonly {
-    readonly messageId: string;
-    readonly contentHash?: string | undefined;
-  }[];
-}): RendererProjection {
-  return {
-    ...(value.anchorMessageId === undefined ? {} : { anchorMessageId: value.anchorMessageId }),
-    ...(value.anchorContentHash === undefined
-      ? {}
-      : { anchorContentHash: value.anchorContentHash }),
-    overflow: value.overflow.map((item) => ({
-      messageId: item.messageId,
-      ...(item.contentHash === undefined ? {} : { contentHash: item.contentHash }),
-    })),
-  };
 }
 
 async function loadWork(
@@ -121,7 +100,7 @@ async function loadWork(
   return {
     intent,
     target,
-    projection: toProjection(loaded.value),
+    projection: toRendererProjection(loaded.value),
     appliedRevision: loaded.value.appliedRevision,
   };
 }

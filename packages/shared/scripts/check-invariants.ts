@@ -6,13 +6,10 @@
  * Drives one delivery through the real Lua — enqueue, claim, admission, render,
  * park, complete — checking every invariant after every transition. Then it cuts
  * the sequence short at each step in turn, which is what a crash actually looks
- * like, and asks the only question that matters afterwards: is the state
- * bounded, or has this conversation been taken hostage.
+ * like, and asks the only question that matters afterwards: is the state bounded,
+ * or has this conversation been taken hostage.
  *
- * Written because five defects in one night all lived in this layer, and every
- * one was invisible to `tsc` and to lint. The properties they broke are not
- * type-level: they are things eleven Lua scripts each have to remember about one
- * shared Redis record, and nothing but this checks them.
+ * The properties are not type-level, so nothing but this checks them.
  *
  * Uses a synthetic conversation key, scrubbed on the way in and out, so it is
  * safe to point at any environment.
@@ -131,10 +128,10 @@ async function scrub(): Promise<void> {
 /**
  * The declared lifecycles, driven beside the real thing.
  *
- * `machines/` says which transitions are legal; Lua decides what happened. Those
- * two can drift silently — a guard tightened in one and not the other reads as a
- * conversation that mysteriously stops — so every step below advances both and
- * the phases are compared. Without this the tables are decoration.
+ * `machines/` says which transitions are legal; Lua decides what happened. The two
+ * can drift silently — a guard tightened in one and not the other reads as a
+ * conversation that mysteriously stops — so every step advances both and the
+ * phases are compared. Without this the tables are decoration.
  */
 interface MachineState {
   delivery: DeliveryPhase;
@@ -143,22 +140,24 @@ interface MachineState {
   renderContext: RenderContext;
 }
 
-const machine: MachineState = {
-  delivery: DeliveryPhase.Queued,
-  render: RenderPhase.Unclaimed,
-  deliveryContext: { sessionId: "", renderSettled: false },
-  renderContext: { desiredRevision: 0, appliedRevision: 0, terminal: false },
-};
+function freshMachine(): MachineState {
+  return {
+    delivery: DeliveryPhase.Queued,
+    render: RenderPhase.Unclaimed,
+    deliveryContext: { sessionId: "", renderSettled: false },
+    renderContext: { desiredRevision: 0, appliedRevision: 0, terminal: false },
+  };
+}
+
+let machine = freshMachine();
 
 /** Widened deliberately: the question is whether Redis holds a phase it may not. */
 const STORED_PHASES: ReadonlySet<string> = new Set(StoredPhase.options);
 
 /**
- * The likeliest cause of a failure here, and the one that looks least like itself.
- *
- * Printed beside the violation rather than instead of it: the invariant really was
- * broken, and saying which third party probably broke it is what turns twenty
- * minutes of reading Lua into one re-run after a deploy.
+ * Printed beside a violation rather than instead of it. The invariant really was
+ * broken; naming the likeliest third party turns twenty minutes of reading Lua
+ * into one re-run after a deploy.
  */
 const FOREIGN_WRITER = "     (a process running older code may be competing for the probe)";
 
@@ -168,13 +167,6 @@ const UNSTORED_PHASES: readonly DeliveryPhase[] = [
   DeliveryPhase.Done,
   DeliveryPhase.Expired,
 ];
-
-function resetMachine(): void {
-  machine.delivery = DeliveryPhase.Queued;
-  machine.render = RenderPhase.Unclaimed;
-  machine.deliveryContext = { sessionId: "", renderSettled: false };
-  machine.renderContext = { desiredRevision: 0, appliedRevision: 0, terminal: false };
-}
 
 /** What one step does to the tables, if anything. */
 interface MachineStep {
@@ -198,7 +190,7 @@ function advanceMachine(step: MachineStep): readonly string[] {
         `M1 Redis performed ${step.delivery}, which the machine refuses from ${machine.delivery}`,
       );
     } else {
-      machine.delivery = allowed.next;
+      machine.delivery = allowed;
     }
   }
   for (const event of step.render ?? []) {
@@ -208,7 +200,7 @@ function advanceMachine(step: MachineStep): readonly string[] {
         `M2 Redis performed render ${event}, which the machine refuses from ${machine.render}`,
       );
     } else {
-      machine.render = allowed.next;
+      machine.render = allowed;
     }
   }
   return violations;
@@ -223,11 +215,9 @@ async function compareMachine(
   if (stored === undefined) {
     if (!UNSTORED_PHASES.includes(machine.delivery)) {
       violations.push(`M3 the machine says ${machine.delivery}, but Redis holds no record`);
-      // This probe is the only legitimate writer of this conversation, so a
-      // record vanishing under it was deleted by somebody else. It advertises
-      // itself in the global indexes — it has to, half of what I1 and I4 assert
-      // is about them — so any sweep still running a previous deploy will pick
-      // the probe up, consume its parked marker, and release the conversation.
+      // This probe is the only legitimate writer of its conversation, so a record
+      // vanishing under it was deleted by somebody else — and it has to advertise
+      // itself in the global indexes for I1 and I4 to mean anything.
       violations.push(FOREIGN_WRITER);
     }
   } else if (stored !== machine.delivery) {
@@ -382,7 +372,7 @@ let failures = 0;
 
 console.info("happy path — invariants after every transition\n");
 await scrub();
-resetMachine();
+machine = freshMachine();
 for (const step of steps) {
   try {
     await step.run();
@@ -404,7 +394,7 @@ for (const step of steps) {
 console.info("\ncrash injection — stop after step N, then ask whether the state is bounded\n");
 for (let cut = 1; cut < steps.length; cut += 1) {
   await scrub();
-  resetMachine();
+  machine = freshMachine();
   for (let index = 0; index < cut; index += 1) {
     const step = steps[index];
     if (step === undefined) continue;

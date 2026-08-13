@@ -3,19 +3,15 @@
 /**
  * Does the render writer actually move a paint through Redis?
  *
- * The delivery writer has its own checker for the same reason this one exists:
- * the scripts are strings, and a Lua typo, a wrong KEYS index, or a fence reading
- * a field the record does not carry all typecheck perfectly.
+ * The scripts are strings: a Lua typo, a wrong KEYS index, or a fence reading a
+ * field the record does not carry all typecheck perfectly.
  *
- * Two properties here are worth more than the rest, because both have been broken
- * in production and neither is visible to any other gate. A paint that lands
- * behind the current intent must report `newer` rather than settling — settling
- * early records an outcome, and the outcome is what releases the conversation, so
- * getting it wrong strands everything queued behind a half-painted turn. And a
- * lease lost mid-paint must refuse the completion outright, because a second
- * painter is by then already writing the same messages.
- *
- * Synthetic conversation key, scrubbed either side, so it is safe anywhere.
+ * Two properties matter more than the rest, and neither is visible to any other
+ * gate. A paint landing behind the current intent must report `newer` rather than
+ * settling — settling records an outcome, and the outcome releases the
+ * conversation, so getting it wrong strands everything queued behind a
+ * half-painted turn. And a lease lost mid-paint must refuse the completion, since
+ * a second painter is by then writing the same messages.
  */
 
 import { RenderReader } from "../src/conversations/readers/render.ts";
@@ -24,69 +20,35 @@ import { RenderWriter } from "../src/conversations/writers/render.ts";
 import { redisEnv } from "../src/env/scripts.ts";
 import { getRedis } from "../src/redis/client.ts";
 import { Result } from "../src/result/index.ts";
-import type { MessagePayload, ParkedPayload, RenderIntent } from "../src/wire.ts";
+import type { ParkedPayload, RenderIntent } from "../src/wire.ts";
+import { createProbe, probeMessage, scrubProbe, throws } from "./probe.ts";
 
 const redis = getRedis(redisEnv());
 const deliveries = new DeliveryWriter(redis);
 const writer = new RenderWriter(redis);
 const reader = new RenderReader(redis);
+const { check, report } = createProbe();
 
 const KEY = "99999999999999601";
 const MESSAGE_ID = "99999999999999600";
 const SESSION = "wrun_render_probe";
 const TURN = "wturn_render_probe";
 
-const message: MessagePayload = {
-  kind: "mention",
-  continuationKey: KEY,
-  content: "render probe",
-  messageId: MESSAGE_ID,
-  principal: { userId: "99999999999999599", username: "probe", nickname: "probe", memberRoles: [] },
-  channel: { id: KEY, name: "render-probe" },
-};
+const message = probeMessage(
+  { continuationKey: KEY, messageId: MESSAGE_ID, userId: "99999999999999599" },
+  "render probe",
+);
 
 const minted = new Set<string>();
-
-async function scrub(): Promise<void> {
-  await redis.del(
-    `agent:active:${KEY}`,
-    `agent:parked:${KEY}`,
-    `pending:${KEY}`,
-    `agent:seen:${KEY}`,
-    `agent:reset:${KEY}`,
-    `agent:reset-pending:${KEY}`,
-  );
-  for (const dispatchId of minted) {
-    await redis.del(
-      `agent:render-target:${dispatchId}`,
-      `agent:render-intent:${dispatchId}`,
-      `agent:render-projection:${dispatchId}`,
-      `agent:render-claim:${dispatchId}`,
-      `agent:render-outcome:${dispatchId}`,
-    );
-    await redis.srem("agent:render-ready", `r:${dispatchId}`);
-  }
-  await redis.srem("agent:queues", `k:${KEY}`);
-  await redis.srem("agent:ready", `k:${KEY}`);
-}
+const scrub = (): Promise<void> => scrubProbe(redis, KEY, minted);
 
 /**
- * Scoped to this probe's dispatch rather than the whole set.
- *
- * `agent:render-ready` is global, so it carries whatever real traffic is mid-flight
- * — an assertion on its contents would fail on a busy environment and, worse, pass
- * on an empty one for the wrong reason.
+ * Scoped to this probe's dispatch rather than the whole set: `agent:render-ready`
+ * is global, so asserting on its contents would fail on a busy environment and,
+ * worse, pass on an empty one for the wrong reason.
  */
 async function advertised(dispatchId: string): Promise<boolean> {
   return (await reader.pending()).includes(dispatchId);
-}
-
-let failures = 0;
-function check(label: string, actual: unknown, expected: unknown): void {
-  const ok = JSON.stringify(actual) === JSON.stringify(expected);
-  if (!ok) failures += 1;
-  console.info(`   ${ok ? "ok  " : "FAIL"} ${label.padEnd(48)} ${JSON.stringify(actual)}`);
-  if (!ok) console.error(`        expected ${JSON.stringify(expected)}`);
 }
 
 function intentFor(
@@ -129,15 +91,6 @@ async function liveDispatch(): Promise<string> {
   minted.add(dispatchId);
   await deliveries.markLive(KEY, dispatchId, MESSAGE_ID);
   return dispatchId;
-}
-
-async function throws(operation: () => Promise<unknown>): Promise<boolean> {
-  try {
-    await operation();
-    return false;
-  } catch {
-    return true;
-  }
 }
 
 await scrub();
@@ -288,9 +241,4 @@ check("and withdraws the dispatch", await advertised(spare), false);
 check("the intent survives, bounded", (await redis.pttl(`agent:render-intent:${spare}`)) > 0, true);
 
 await scrub();
-if (failures === 0) {
-  console.info("\nthe render writer moves a paint through every transition it owns");
-} else {
-  console.error(`\n${failures} failure(s)`);
-  process.exit(1);
-}
+report("the render writer moves a paint through every transition it owns");

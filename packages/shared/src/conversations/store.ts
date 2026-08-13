@@ -2,33 +2,12 @@
  * The only Redis-facing API for durable conversation coordination.
  *
  * Every surface is split the same way: a reader that only looks, and a writer
- * that owns every transition of one record. The pairing is the whole design —
- * before it, eleven Lua scripts across three files rewrote the delivery record
- * under six different fences, and most defects here were one of them forgetting
- * an invariant the others remembered.
- *
- * Names are singular for the writer and plural for the reader, so a call site
- * says which it is doing without opening this file.
+ * that owns every transition of one record. Names are plural for the reader and
+ * singular for the writer, so a call site says which it is doing.
  */
 
 import type { RedisClient } from "../redis/client.ts";
-import {
-  activeKey,
-  AGENT_READY_SET_KEY,
-  AGENT_RENDER_READY_SET_KEY,
-  parkedKey,
-  pendingKey,
-  QUEUE_INDEX_KEY,
-  queueMember,
-  renderClaimKey,
-  renderIntentKey,
-  renderMember,
-  renderOutcomeKey,
-  renderProjectionKey,
-  renderTargetKey,
-  resetKey,
-  resetPendingKey,
-} from "./keys.ts";
+import { resetKey } from "./keys.ts";
 import { AuthorizationReader } from "./readers/authorization.ts";
 import { DelegationReader } from "./readers/delegation.ts";
 import { DeliveryReader } from "./readers/delivery.ts";
@@ -68,8 +47,7 @@ export function createConversationStore(deps: { readonly redis: RedisClient }) {
     /**
      * Whether a reset may proceed.
      *
-     * `busy` means a delivery is mid-flight into eve. That used to be a separate
-     * `agent:ingress:<key>`; it is now a lease on the record, so this reads the
+     * `busy` means a delivery is mid-flight into eve, which is a lease on the
      * record rather than a second key that had to be kept in step with it.
      */
     resetCutoverStatus: async (
@@ -81,40 +59,6 @@ export function createConversationStore(deps: { readonly redis: RedisClient }) {
       const record = await deliveries.read(continuationKey);
       if (record?.ingress === undefined) return "ready";
       return record.ingress.expiresAtMs > Date.now() ? "busy" : "ready";
-    },
-
-    inspectIndexes: async () => {
-      const [conversations, ready, renderReady] = await Promise.all([
-        redis.scard(QUEUE_INDEX_KEY),
-        redis.scard(AGENT_READY_SET_KEY),
-        redis.scard(AGENT_RENDER_READY_SET_KEY),
-      ]);
-      return { conversations, ready, renderReady };
-    },
-
-    inspectConversation: async (continuationKey: string) => {
-      const [depth, active, parked, reset, resetPending, ready] = await Promise.all([
-        redis.llen(pendingKey(continuationKey)),
-        redis.get(activeKey(continuationKey)),
-        redis.get(parkedKey(continuationKey)),
-        redis.exists(resetKey(continuationKey)),
-        redis.llen(resetPendingKey(continuationKey)),
-        redis.sismember(AGENT_READY_SET_KEY, queueMember(continuationKey)),
-      ]);
-      return { depth, active, parked, reset, resetPending, ready };
-    },
-
-    inspectRender: async (dispatchId: string) => {
-      const [ready, target, intent, projection, claim, claimTtlMs, outcome] = await Promise.all([
-        redis.sismember(AGENT_RENDER_READY_SET_KEY, renderMember(dispatchId)),
-        redis.exists(renderTargetKey(dispatchId)),
-        redis.exists(renderIntentKey(dispatchId)),
-        redis.exists(renderProjectionKey(dispatchId)),
-        redis.exists(renderClaimKey(dispatchId)),
-        redis.pttl(renderClaimKey(dispatchId)),
-        redis.get(renderOutcomeKey(dispatchId)),
-      ]);
-      return { ready, target, intent, projection, claim, claimTtlMs, outcome };
     },
   };
 }

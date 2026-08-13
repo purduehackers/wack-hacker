@@ -21,50 +21,24 @@ import { redisEnv } from "../src/env/scripts.ts";
 import { getRedis } from "../src/redis/client.ts";
 import { Result } from "../src/result/index.ts";
 import type { MessagePayload } from "../src/wire.ts";
+import { createProbe, probeMessage, scrubProbe } from "./probe.ts";
 
 const redis = getRedis(redisEnv());
 const writer = new DeliveryWriter(redis);
 const reader = new DeliveryReader(redis);
+const { check, report } = createProbe();
 
 const KEY = "99999999999999701";
 const MESSAGE_ID = "99999999999999700";
 const SESSION = "wrun_writer_probe";
 
-const message: MessagePayload = {
-  kind: "mention",
-  continuationKey: KEY,
-  content: "writer probe",
-  messageId: MESSAGE_ID,
-  principal: { userId: "99999999999999699", username: "probe", nickname: "probe", memberRoles: [] },
-  channel: { id: KEY, name: "writer-probe" },
-};
+const message = probeMessage(
+  { continuationKey: KEY, messageId: MESSAGE_ID, userId: "99999999999999699" },
+  "writer probe",
+);
 
-/** Render keys are per-dispatch, so scrubbing needs whichever ids were minted. */
 const minted = new Set<string>();
-
-async function scrub(): Promise<void> {
-  await redis.del(
-    `agent:active:${KEY}`,
-    `pending:${KEY}`,
-    `agent:seen:${KEY}`,
-    `agent:reset:${KEY}`,
-    `agent:reset-pending:${KEY}`,
-  );
-  for (const dispatchId of minted) {
-    await redis.del(`agent:render-target:${dispatchId}`, `agent:render-intent:${dispatchId}`);
-    await redis.srem("agent:render-ready", `r:${dispatchId}`);
-  }
-  await redis.srem("agent:queues", `k:${KEY}`);
-  await redis.srem("agent:ready", `k:${KEY}`);
-}
-
-let failures = 0;
-function check(label: string, actual: unknown, expected: unknown): void {
-  const ok = JSON.stringify(actual) === JSON.stringify(expected);
-  if (!ok) failures += 1;
-  console.info(`   ${ok ? "ok  " : "FAIL"} ${label.padEnd(46)} ${JSON.stringify(actual)}`);
-  if (!ok) console.error(`        expected ${JSON.stringify(expected)}`);
-}
+const scrub = (): Promise<void> => scrubProbe(redis, KEY, minted);
 
 /** Queue one message and take it, returning the dispatch the writer minted. */
 async function queueAndClaim(payload: MessagePayload): Promise<{
@@ -100,9 +74,8 @@ check("claim writes phase", afterClaim?.phase, "claimed");
 check("claim grants a handoff lease", afterClaim?.handoff.holder === claimToken, true);
 check("claim grants a turn lease held by the dispatch", afterClaim?.turn.holder, dispatchId);
 check("the record key is bounded", (await redis.pttl(`agent:active:${KEY}`)) > 0, true);
-// Nothing else bounds the target until a *terminal* paint, so a delivery that
-// ends any other way leaked a permanent key. 63 of them existed when this was
-// found, and nothing would ever have collected them.
+// Nothing else bounds the target until a *terminal* paint, so a delivery ending
+// any other way used to leak a key nothing would collect.
 check(
   "and so is the render target",
   (await redis.pttl(`agent:render-target:${dispatchId}`)) > 0,
@@ -139,8 +112,8 @@ if (admitted.status === "start") {
   check("releasing twice is refused", await writer.releaseIngress(KEY, admitted.attempt), false);
 }
 
-// The bad ending. It splices a different key list into the same announcement
-// helper as recovery, so an off-by-one here is invisible to the compiler.
+// The bad ending. It shares an announcement helper with recovery under a
+// different key list, so an off-by-one here is invisible to the compiler.
 await scrub();
 const expiring = await queueAndClaim(message);
 await writer.markLive(KEY, expiring.dispatchId, MESSAGE_ID);
@@ -184,9 +157,4 @@ check("the diverted message is restored", await reader.queueDepth(KEY), 1);
 check("and re-advertised", await redis.sismember("agent:queues", `k:${KEY}`), 1);
 
 await scrub();
-if (failures === 0) {
-  console.info("\nthe delivery writer moves a record through every transition it owns");
-} else {
-  console.error(`\n${failures} failure(s)`);
-  process.exit(1);
-}
+report("the delivery writer moves a record through every transition it owns");

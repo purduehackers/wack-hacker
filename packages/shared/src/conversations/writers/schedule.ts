@@ -18,6 +18,7 @@ import { InvariantViolated } from "../../errors.ts";
 import { jsonCodec } from "../../json.ts";
 import type { RedisClient } from "../../redis/client.ts";
 import type { ScheduledFirePayload } from "../../wire.ts";
+import { evalFlag } from "../io.ts";
 import { scheduledFireReceiptKey } from "../keys.ts";
 
 /** Long enough to cover a fire in flight, short enough that a crash frees it. */
@@ -127,7 +128,8 @@ export class ScheduleWriter {
 
   /** Record that the occurrence ran, so a re-fire is refused for good. */
   async complete(payload: ScheduledFirePayload, claimToken: string): Promise<boolean> {
-    const completed = await this.redis.eval(
+    return evalFlag(
+      this.redis,
       COMPLETE,
       [scheduledFireReceiptKey(payload.occurrenceId)],
       [
@@ -136,17 +138,11 @@ export class ScheduleWriter {
         RECEIPT_TTL_SECONDS,
       ],
     );
-    return Number(completed) === 1;
   }
 
   /** Give the claim back after a fire that failed, so a retry can take it. */
   async release(occurrenceId: string, claimToken: string): Promise<boolean> {
-    const released = await this.redis.eval(
-      RELEASE,
-      [scheduledFireReceiptKey(occurrenceId)],
-      [claimToken],
-    );
-    return Number(released) === 1;
+    return evalFlag(this.redis, RELEASE, [scheduledFireReceiptKey(occurrenceId)], [claimToken]);
   }
 }
 

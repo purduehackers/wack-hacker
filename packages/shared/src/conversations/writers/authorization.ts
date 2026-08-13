@@ -1,26 +1,18 @@
 /**
  * The only thing that writes authorization challenges.
  *
- * A challenge is a third party asking a person to go and approve something — an
- * OAuth consent, a device code — and it is stored rather than kept in agent state
- * because the button that resolves it is clicked in the bot process, which cannot
- * read that state.
- *
- * The index exists so the pair can be cleaned up together: a challenge key alone
- * would be unreachable once the turn that knew its id is gone.
+ * A challenge — an OAuth consent, a device code — is stored rather than kept in
+ * agent state because the button that resolves it is clicked in the bot process,
+ * which cannot read that state. The index exists so the pair can be cleaned up
+ * together: a challenge key alone is unreachable once the turn that knew its id
+ * is gone.
  */
 
 import type { RedisClient } from "../../redis/client.ts";
 import type { AuthorizationChallenge } from "../../wire.ts";
 import { authorizationChallengeKey, authorizationIndexKey } from "../keys.ts";
 
-/**
- * How long the index outlives the challenges it points at.
- *
- * A storage detail, so it lives here rather than being passed in — it was a bare
- * `60 * 60` at the one call site, which made it look like a decision the caller
- * had made rather than a default nobody had thought about.
- */
+/** How long the index outlives the challenges it points at. */
 const INDEX_TTL_SECONDS = 60 * 60;
 
 const STORE = `
@@ -46,12 +38,7 @@ export class AuthorizationWriter {
     this.redis = redis;
   }
 
-  /**
-   * Record a challenge for the button that will resolve it.
-   *
-   * `challengeTtlSeconds` comes from the challenge's own expiry, so a stale one
-   * disappears on its own schedule rather than ours.
-   */
+  /** `challengeTtlSeconds` comes from the challenge's own expiry, not ours. */
   async store(
     dispatchId: string,
     authorizationId: string,

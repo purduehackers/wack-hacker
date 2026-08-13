@@ -1,14 +1,8 @@
 /**
  * Reads of the delivery record. Never writes.
  *
- * Split from the writer so the two halves cannot be confused for each other. A
- * reader that can also mutate is how a "quick lookup" becomes a transition
- * nobody accounted for, which is most of how this layer accumulated writers.
- *
- * Every read decodes through the schema. Upstash returns either stored JSON text
- * or an already-parsed value depending on how it was written, so `stored` accepts
- * both; a record that fails to decode is reported as absent rather than guessed
- * at, because a half-understood record is worse than none.
+ * Split from the writer so a "quick lookup" cannot quietly become a transition.
+ * A record that fails to decode reads as absent rather than being guessed at.
  */
 
 import { z } from "zod";
@@ -18,6 +12,7 @@ import type { RedisClient } from "../../redis/client.ts";
 import { Result } from "../../result/index.ts";
 import type { ParkedPayload } from "../../wire.ts";
 import { decodeParkedPayload } from "../../wire.ts";
+import { redisValue } from "../io.ts";
 import {
   activeKey,
   AGENT_READY_SET_KEY,
@@ -29,9 +24,17 @@ import {
 import { leaseExpired } from "../lease.ts";
 import type { DeliveryRecord } from "../records/delivery.ts";
 import { deliveryRecordSchema } from "../records/delivery.ts";
-import { redisValue } from "../redis-value.ts";
 
 const storedRecord = stored(deliveryRecordSchema);
+
+/**
+ * Only the field a superseded request is recovered from.
+ *
+ * Loose because the rest of the delivery is not this reader's business, and
+ * tightening it here would mirror every wire change into a place that only ever
+ * wanted one string.
+ */
+const storedContent = stored(z.looseObject({ content: z.string() }));
 
 /** What a live turn is holding a conversation for. */
 export interface Holder {
@@ -40,15 +43,6 @@ export interface Holder {
   /** The request being worked on, so a steer can carry it forward. */
   readonly content?: string;
 }
-
-/**
- * Only the field a superseded request is recovered from.
- *
- * Loose because the rest of the delivery is not this reader's business, and
- * tightening it here would mean every wire change had to be mirrored in a place
- * that only ever wanted one string.
- */
-const storedContent = stored(z.looseObject({ content: z.string() }));
 
 export class DeliveryReader {
   private readonly redis: Pick<RedisClient, "get" | "llen" | "smembers">;
@@ -61,30 +55,25 @@ export class DeliveryReader {
   async read(continuationKey: string): Promise<DeliveryRecord | undefined> {
     const raw: unknown = await this.redis.get(activeKey(continuationKey));
     if (raw === null || raw === undefined) return undefined;
-    const parsed = storedRecord.safeParse(raw);
-    return parsed.success ? parsed.data : undefined;
+    return storedRecord.safeParse(raw).data;
   }
 
   /**
    * The turn currently holding this conversation, if one is.
    *
-   * `claim` refuses while such a record exists, which is correct — the turn is
-   * still running — but it also means a newly queued message has no way to
-   * reach the agent. This is how the bot finds out there is something to
-   * interrupt, and what it is interrupting.
+   * `claim` refuses while such a record exists — the turn is still running — so
+   * this is how the bot finds out there is something to interrupt, and what.
    */
   async holder(continuationKey: string): Promise<Holder | undefined> {
     const record = await this.read(continuationKey);
     if (record === undefined || record.phase !== "live" || record.sessionId === "") {
       return undefined;
     }
-    const delivery = storedContent.safeParse(record.deliveryRaw);
+    const content = storedContent.safeParse(record.deliveryRaw).data?.content;
     return {
       sessionId: record.sessionId,
       dispatchId: record.dispatchId,
-      ...(delivery.success && delivery.data.content !== ""
-        ? { content: delivery.data.content }
-        : {}),
+      ...(content === undefined || content === "" ? {} : { content }),
     };
   }
 
@@ -118,13 +107,8 @@ export class DeliveryReader {
 }
 
 /**
- * Index members carry their own prefix, so a malformed one is dropped rather
- * than thrown on. These sets are swept every pass; one bad member must not stop
- * the sweep from reaching the rest.
- *
- * The decoder comes from the key catalog, which is where the prefix is written.
- * This file had its own copy of the regex — one wire shape declared twice, which
- * is how the two spellings of a thing start diverging.
+ * A malformed index member is dropped rather than thrown on: these sets are
+ * swept every pass, and one bad member must not stop the sweep reaching the rest.
  */
 function continuationKeys(members: readonly unknown[]): readonly string[] {
   return members.flatMap((entry) => {

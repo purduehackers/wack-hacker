@@ -3,14 +3,11 @@
  *
  * One method per transition, named for the transition, with no `set` or `update`
  * escape hatch — so the set of things that can happen to this record is the set
- * of methods on this class, readable in one screen. That was the actual problem
- * with what this replaces: not that the Lua was hard, but that finding all of it
- * meant grepping three files and knowing which of six fences applied.
+ * of methods on this class, readable in one screen.
  *
  * Every script fences before it writes and writes through `writeRecord`, which
- * carries `KEEPTTL`. A bare `SET` clears a Redis expiry, and that mistake —
- * stripping the key's bounded life immediately after `claim` set it — is what
- * made conversations immortal once and wedged four of them for a day.
+ * carries `KEEPTTL`. A bare `SET` clears a Redis expiry, and that mistake once
+ * made conversations immortal moments after `claim` had bounded them.
  */
 
 import { z } from "zod";
@@ -20,6 +17,7 @@ import type { RedisClient } from "../../redis/client.ts";
 import { Result } from "../../result/index.ts";
 import type { DeliveryPayload, MessagePayload, ParkedPayload, RenderTarget } from "../../wire.ts";
 import { decodeDeliveryPayload } from "../../wire.ts";
+import { evalFlag, redisValue } from "../io.ts";
 import {
   activeKey,
   AGENT_READY_SET_KEY,
@@ -40,15 +38,20 @@ import { LeaseDuration, RECORD_TTL_MS } from "../lease.ts";
 import { DeliveryReader } from "../readers/delivery.ts";
 import { DELIVERY_RECORD_LUA } from "../records/delivery.ts";
 import { RENDER_TTL_SECONDS } from "../records/render.ts";
-import { redisValue } from "../redis-value.ts";
 
 /** Completed-message tombstones are only needed across plausible retries. */
 const SEEN_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 /**
- * Synthetic turn ids, so an intent this layer authored is distinguishable from
- * one the agent published and is idempotent across repeated sweeps.
+ * How long a reset barrier may block a conversation.
+ *
+ * Six scripts refuse while it exists, so a `beginReset` whose follow-through
+ * never lands would block the conversation permanently. A reset that has not
+ * completed in an hour is not going to.
  */
+const RESET_BARRIER_TTL_SECONDS = 60 * 60;
+
+/** Synthetic turn ids, so an intent this layer authored is distinguishable. */
 const EXPIRY_TURN_ID = "delivery-lease-lapsed";
 const RECOVERY_TURN_ID = "delivery-unacknowledged";
 
@@ -72,10 +75,6 @@ redis.call("RPUSH", resetting and KEYS[6] or KEYS[1], ARGV[1])
 -- Indexed only when it landed on the real queue. Indexing a diverted delivery
 -- advertises work the claim cannot see, which is how the sweep learned to spin.
 if not resetting then redis.call("SADD", KEYS[2], ARGV[3]) end
--- Bounded like every other key in the render aggregate. This was a bare SET, and
--- the target only ever gained an expiry from a *terminal* paint — so any delivery
--- that never reached one left a key nothing would ever collect. There were 63 of
--- them in the live store when this was found.
 redis.call("SET", KEYS[4], ARGV[5], "EX", tonumber(ARGV[6]))
 return 1
 `;
@@ -90,16 +89,16 @@ if raw then
   -- Anything past the handoff belongs to a running turn; only the turn lease
   -- releases those, never a competing claim.
   if record.phase ~= "claimed" then return nil end
-  if leaseHeld(record.handoff, ARGV[1], ARGV[3]) then return record.deliveryRaw end
-  if not leaseAvailable(record.handoff, ARGV[3]) then return nil end
-  record.handoff = { holder = ARGV[1], expiresAtMs = tonumber(ARGV[4]) }
+  if leaseHeld(record.handoff, ARGV[1], ARGV[2]) then return record.deliveryRaw end
+  if not leaseAvailable(record.handoff, ARGV[2]) then return nil end
+  record.handoff = { holder = ARGV[1], expiresAtMs = tonumber(ARGV[3]) }
   writeRecord(KEYS[2], record)
   return record.deliveryRaw
 end
 local deliveryRaw = redis.call("LPOP", KEYS[1])
 if not deliveryRaw then
   -- Nothing queued: drop the advertisement so the sweep stops visiting.
-  redis.call("SREM", KEYS[3], ARGV[5])
+  redis.call("SREM", KEYS[3], ARGV[4])
   return nil
 end
 local delivery = cjson.decode(deliveryRaw)
@@ -108,10 +107,10 @@ redis.call("SET", KEYS[2], cjson.encode({
   dispatchId = delivery.dispatchId,
   messageId = delivery.messageId,
   sessionId = "",
-  handoff = { holder = ARGV[1], expiresAtMs = tonumber(ARGV[4]) },
-  turn = { holder = delivery.dispatchId, expiresAtMs = tonumber(ARGV[6]) },
+  handoff = { holder = ARGV[1], expiresAtMs = tonumber(ARGV[3]) },
+  turn = { holder = delivery.dispatchId, expiresAtMs = tonumber(ARGV[5]) },
   deliveryRaw = deliveryRaw
-}), "PX", tonumber(ARGV[7]))
+}), "PX", tonumber(ARGV[6]))
 return deliveryRaw
 `;
 
@@ -144,12 +143,7 @@ return 1
 `;
 
 /**
- * Three scripts and a second key, collapsed.
- *
- * The old handshake spread `start` / `confirm` / `finish` across `admission.ts`
- * with its own lease in `agent:ingress:<key>`. All of it answered one question —
- * may this process hand the delivery to eve, and if not, why not — so it is one
- * compare-and-set returning the reason.
+ * May this process hand the delivery to eve, and if not, why not.
  *
  * The five statuses survive because the caller genuinely branches on all of
  * them: eve has no callable "is a turn already running", so this is the only
@@ -202,9 +196,9 @@ return 1
 /**
  * Release the conversation once the turn is finished and its paint is durable.
  *
- * The render outcome check is the cross-machine guard. It was an ordering
- * comment in the bot's sweep — "render first so a durable terminal outcome is
- * present" — enforced by one `if` buried here. Ordering is not a guarantee.
+ * The render outcome check is the cross-machine guard. It was an ordering comment
+ * in the bot's sweep, enforced by one `if` buried here; ordering is not a
+ * guarantee.
  */
 const COMPLETE = `
 -- delivery:complete
@@ -235,13 +229,11 @@ return 1
 `;
 
 /**
- * Announce a terminal failure and let the conversation go.
+ * Announce a terminal failure, so a turn that stops says so.
  *
- * Shared by the two ways a delivery ends badly, because the announcement is the
- * same shape either way and the difference is only what it says. Both publish
- * through `KEYS[3]` with a TTL — the scripts this replaces wrote their failure
- * intents with no expiry at all, unlike every other intent write, leaving two
- * keys per stuck delivery that nothing could bound.
+ * Shared by the two bad endings because the announcement is the same shape
+ * either way and only the words differ. Redis expiry is invisible, and a turn
+ * that vanishes mid-conversation is worse than one that says it stopped.
  */
 const ANNOUNCE_FAILURE_LUA = `
 local function announceFailure(intentKey, readySet, member, record, eveTurnId, text, footer, ttl)
@@ -278,9 +270,7 @@ end
  * Give up on a turn whose hold has lapsed.
  *
  * The lease is refreshed by evidence of progress, so a lapsed one means nothing
- * has shown its work for a full lease period. Announced rather than silently
- * dropped: Redis expiry is invisible, and a turn that vanishes mid-conversation
- * is worse than one that says it stopped.
+ * has shown its work for a full lease period.
  */
 const EXPIRE = `
 ${DELIVERY_RECORD_LUA}
@@ -291,18 +281,17 @@ local raw = redis.call("GET", KEYS[1])
 if not raw then return nil end
 local record = cjson.decode(raw)
 if not leaseAvailable(record.turn, ARGV[4]) then return nil end
-announceFailure(KEYS[3], KEYS[4], ARGV[7], record, ARGV[1], ARGV[2], ARGV[3], ARGV[8])
+announceFailure(KEYS[3], KEYS[4], ARGV[6], record, ARGV[1], ARGV[2], ARGV[3], ARGV[7])
 redis.call("DEL", KEYS[1], KEYS[5])
-redis.call("SREM", KEYS[8], ARGV[6])
-if redis.call("LLEN", KEYS[6]) == 0 then redis.call("SREM", KEYS[7], ARGV[6]) end
+redis.call("SREM", KEYS[8], ARGV[5])
+if redis.call("LLEN", KEYS[6]) == 0 then redis.call("SREM", KEYS[7], ARGV[5]) end
 return record.deliveryRaw
 `;
 
 /**
- * Report a delivery that reached the agent and was never acknowledged.
- *
- * Reported at most once. A sweep visits every conversation on every pass, and
- * without the flag a stuck delivery would log a line per pass forever.
+ * Report — at most once — a delivery that reached the agent and was never
+ * acknowledged. A sweep visits every conversation on every pass, so without the
+ * flag a stuck delivery would log a line per pass forever.
  */
 const RECOVER = `
 ${DELIVERY_RECORD_LUA}
@@ -313,11 +302,8 @@ local raw = redis.call("GET", KEYS[1])
 if not raw then return nil end
 local record = cjson.decode(raw)
 if record.phase ~= "recovery-required" then return nil end
-announceFailure(KEYS[3], KEYS[4], ARGV[7], record, ARGV[1], ARGV[2], ARGV[3], ARGV[8])
-if record.recoveryReported then
-  writeRecord(KEYS[1], record)
-  return nil
-end
+announceFailure(KEYS[3], KEYS[4], ARGV[4], record, ARGV[1], ARGV[2], ARGV[3], ARGV[5])
+if record.recoveryReported then return nil end
 record.recoveryReported = true
 writeRecord(KEYS[1], record)
 return record.deliveryRaw
@@ -346,29 +332,6 @@ if #waiting > 0 then redis.call("SADD", KEYS[6], ARGV[2]) end
 return 1
 `;
 
-/**
- * How long a reset barrier may block a conversation.
- *
- * The barrier this replaces had no expiry at all: six scripts refuse while it
- * exists, so a `beginReset` whose follow-through never landed blocked the
- * conversation permanently. Bounded, because nothing here may be immortal — and
- * a reset that has not completed in an hour is not going to.
- */
-const RESET_BARRIER_TTL_SECONDS = 60 * 60;
-
-/** One bad ending's worth of difference from the other. */
-interface BadEnding {
-  readonly script: string;
-  readonly continuationKey: string;
-  readonly eveTurnId: string;
-  readonly text: string;
-  readonly footer: string;
-  /** Keys only one of the two endings needs, spliced in before the ready set. */
-  readonly extraKeys: readonly string[];
-  /** Supplied for recovery, where the record outlives the call. */
-  readonly dispatchId?: string;
-}
-
 export interface ClaimedDelivery {
   readonly payload: DeliveryPayload;
   readonly claimToken: string;
@@ -390,14 +353,12 @@ export type Admission =
   | { readonly status: "in-progress" | "recovery-required" | "resetting" | "stale" };
 
 /**
- * The script answers with a word, and `accepted` carries its session after a
- * colon — the one status with a payload, kept in-band so the whole answer is
- * one atomic read rather than a word plus a follow-up lookup that could race.
+ * `accepted` carries its session after a colon — the one status with a payload,
+ * kept in-band so the whole answer is one atomic read rather than a word plus a
+ * follow-up lookup that could race.
  */
 function readAdmission(raw: unknown, attempt: string): Admission {
-  const text = z.string().safeParse(raw);
-  if (!text.success) return { status: "stale" };
-  const [status = "", sessionId = ""] = text.data.split(":", 2);
+  const [status = "", sessionId = ""] = z.string().safeParse(raw).data?.split(":", 2) ?? [];
   if (status === "start") return { status: "start", attempt };
   if (status === "accepted" && sessionId !== "") return { status: "accepted", sessionId };
   const known = z
@@ -408,9 +369,11 @@ function readAdmission(raw: unknown, attempt: string): Admission {
 
 export class DeliveryWriter {
   private readonly redis: RedisClient;
+  private readonly reader: DeliveryReader;
 
   constructor(redis: RedisClient) {
     this.redis = redis;
+    this.reader = new DeliveryReader(redis);
   }
 
   /**
@@ -419,12 +382,12 @@ export class DeliveryWriter {
    * The dedupe set is the gate: a Discord id seen before returns without
    * queueing anything, which is the only reason a redelivered webhook does not
    * run a turn twice.
+   *
+   * The dispatch id is minted here rather than by the caller — it is the identity
+   * every later fence compares against — and the render target is written in the
+   * same step, because a delivery with nowhere to paint has nothing to say.
    */
   async enqueue(payload: MessagePayload): Promise<void> {
-    // The dispatch id is minted here, not by the caller: it is the identity
-    // every later fence compares against, so it belongs to whoever owns the
-    // record. The render target is written in the same step because a delivery
-    // that exists without somewhere to paint has nothing useful to say.
     const delivery: DeliveryPayload = { ...payload, dispatchId: crypto.randomUUID() };
     const target: RenderTarget = {
       dispatchId: delivery.dispatchId,
@@ -473,7 +436,6 @@ export class DeliveryWriter {
       ],
       [
         claimToken,
-        continuationKey,
         now,
         now + LeaseDuration.Handoff,
         queueMember(continuationKey),
@@ -482,9 +444,6 @@ export class DeliveryWriter {
       ],
     );
     if (raw === null || raw === undefined) return Result.ok(undefined);
-    // Normalised, then handed straight to the decoder that owns this shape.
-    // The script stores the delivery as JSON text, but Upstash may return it
-    // already parsed — assuming either form rejects the other.
     const decoded = decodeDeliveryPayload(redisValue(raw));
     return Result.isError(decoded) ? decoded : Result.ok({ payload: decoded.value, claimToken });
   }
@@ -496,12 +455,12 @@ export class DeliveryWriter {
    * stop rather than keep reporting on a conversation that moved on.
    */
   async refreshTurn(continuationKey: string, dispatchId: string): Promise<boolean> {
-    const moved = await this.redis.eval(
+    return evalFlag(
+      this.redis,
       REFRESH_TURN,
       [activeKey(continuationKey)],
       [dispatchId, Date.now(), LeaseDuration.Turn],
     );
-    return Number(moved) === 1;
   }
 
   /** Record which eve session took the delivery. */
@@ -510,12 +469,12 @@ export class DeliveryWriter {
     claimToken: string,
     sessionId: string,
   ): Promise<boolean> {
-    const confirmed = await this.redis.eval(
+    return evalFlag(
+      this.redis,
       CONFIRM_SESSION,
       [activeKey(continuationKey)],
       [claimToken, sessionId, Date.now()],
     );
-    return Number(confirmed) === 1;
   }
 
   /**
@@ -541,12 +500,7 @@ export class DeliveryWriter {
 
   /** Give up the ingress slot once eve has answered, however it answered. */
   async releaseIngress(continuationKey: string, attempt: string): Promise<boolean> {
-    const released = await this.redis.eval(
-      RELEASE_INGRESS,
-      [activeKey(continuationKey)],
-      [attempt],
-    );
-    return Number(released) === 1;
+    return evalFlag(this.redis, RELEASE_INGRESS, [activeKey(continuationKey)], [attempt]);
   }
 
   /** Release the conversation. Refuses until the terminal paint is durable. */
@@ -571,28 +525,56 @@ export class DeliveryWriter {
         ],
       ),
     );
-    if (outcome === 1) return "completed";
-    if (outcome === -2) return "pending";
-    return outcome === -1 ? "stale" : "missing";
+    switch (outcome) {
+      case 1: {
+        return "completed";
+      }
+      case -1: {
+        return "stale";
+      }
+      case -2: {
+        return "pending";
+      }
+      default: {
+        return "missing";
+      }
+    }
   }
 
   /**
-   * Give up on a turn that has gone quiet for a full lease.
+   * Give up on a turn that has gone quiet for a full lease, announcing it.
    *
    * Returns the delivery it abandoned so the caller can report it, or nothing
-   * when the hold is still live.
+   * when the hold is still live. The record is read first because the intent key
+   * has to be a `KEYS` entry, and only the record knows which dispatch it is.
    */
   async expire(
     continuationKey: string,
   ): Promise<Result<DeliveryPayload | undefined, InvalidInput>> {
-    return this.endBadly({
-      script: EXPIRE,
-      continuationKey,
-      eveTurnId: EXPIRY_TURN_ID,
-      text: EXPIRY_TEXT,
-      footer: EXPIRY_FOOTER,
-      extraKeys: [pendingKey(continuationKey), QUEUE_INDEX_KEY],
-    });
+    const dispatchId = (await this.reader.read(continuationKey))?.dispatchId;
+    if (dispatchId === undefined) return Result.ok(undefined);
+    return this.abandoned(
+      EXPIRE,
+      [
+        activeKey(continuationKey),
+        resetKey(continuationKey),
+        renderIntentKey(dispatchId),
+        AGENT_RENDER_READY_SET_KEY,
+        parkedKey(continuationKey),
+        pendingKey(continuationKey),
+        QUEUE_INDEX_KEY,
+        AGENT_READY_SET_KEY,
+      ],
+      [
+        EXPIRY_TURN_ID,
+        EXPIRY_TEXT,
+        EXPIRY_FOOTER,
+        Date.now(),
+        queueMember(continuationKey),
+        renderMember(dispatchId),
+        RENDER_TTL_SECONDS,
+      ],
+    );
   }
 
   /** Report — once — a delivery that reached the agent and was never acknowledged. */
@@ -600,70 +582,47 @@ export class DeliveryWriter {
     continuationKey: string,
     dispatchId: string,
   ): Promise<Result<DeliveryPayload | undefined, InvalidInput>> {
-    return this.endBadly({
-      script: RECOVER,
-      continuationKey,
-      eveTurnId: RECOVERY_TURN_ID,
-      text: RECOVERY_TEXT,
-      footer: RECOVERY_FOOTER,
-      extraKeys: [],
-      dispatchId,
-    });
-  }
-
-  /**
-   * Both bad endings, which differ only in what they say and what they release.
-   *
-   * `dispatchId` is supplied by the caller for recovery because the record still
-   * exists afterwards; expiry reads it off the record it is about to delete.
-   */
-  private async endBadly(
-    input: BadEnding,
-  ): Promise<Result<DeliveryPayload | undefined, InvalidInput>> {
-    const { script, continuationKey, eveTurnId, text, footer, extraKeys, dispatchId } = input;
-    const record = await new DeliveryReader(this.redis).read(continuationKey);
-    const target = dispatchId ?? record?.dispatchId;
-    if (target === undefined) return Result.ok(undefined);
-    const raw: unknown = await this.redis.eval(
-      script,
+    return this.abandoned(
+      RECOVER,
       [
         activeKey(continuationKey),
         resetKey(continuationKey),
-        renderIntentKey(target),
+        renderIntentKey(dispatchId),
         AGENT_RENDER_READY_SET_KEY,
-        parkedKey(continuationKey),
-        ...extraKeys,
-        AGENT_READY_SET_KEY,
       ],
       [
-        eveTurnId,
-        text,
-        footer,
-        Date.now(),
-        "",
-        queueMember(continuationKey),
-        renderMember(target),
+        RECOVERY_TURN_ID,
+        RECOVERY_TEXT,
+        RECOVERY_FOOTER,
+        renderMember(dispatchId),
         RENDER_TTL_SECONDS,
       ],
     );
+  }
+
+  /** Both bad endings answer with the delivery they gave up on, or nothing. */
+  private async abandoned(
+    script: string,
+    keys: readonly string[],
+    argv: readonly (string | number)[],
+  ): Promise<Result<DeliveryPayload | undefined, InvalidInput>> {
+    const raw: unknown = await this.redis.eval(script, [...keys], [...argv]);
     if (raw === null || raw === undefined) return Result.ok(undefined);
-    const decoded = decodeDeliveryPayload(redisValue(raw));
-    return Result.isError(decoded) ? decoded : Result.ok(decoded.value);
+    return decodeDeliveryPayload(redisValue(raw));
   }
 
   /**
    * Install the reset barrier, or return the one already installed.
    *
-   * Idempotent by returning the existing token: a retried reset must reuse the
-   * id it started with, or the cutover it eventually performs would belong to a
+   * Idempotent by returning the existing token: a retried reset must reuse the id
+   * it started with, or the cutover it eventually performs would belong to a
    * different attempt than the one that stopped the traffic.
    */
   async beginReset(continuationKey: string): Promise<string> {
-    const token = crypto.randomUUID();
     const raw: unknown = await this.redis.eval(
       BEGIN_RESET,
       [resetKey(continuationKey)],
-      [token, RESET_BARRIER_TTL_SECONDS],
+      [crypto.randomUUID(), RESET_BARRIER_TTL_SECONDS],
     );
     const owner = z.string().min(1).safeParse(raw);
     if (!owner.success) {
@@ -683,7 +642,8 @@ export class DeliveryWriter {
    * conversation's history without losing the person's words.
    */
   async commitReset(continuationKey: string, resetId: string): Promise<boolean> {
-    const committed = await this.redis.eval(
+    return evalFlag(
+      this.redis,
       COMMIT_RESET,
       [
         pendingKey(continuationKey),
@@ -696,11 +656,5 @@ export class DeliveryWriter {
       ],
       [resetId, queueMember(continuationKey)],
     );
-    return Number(committed) === 1;
-  }
-
-  /** Advertised so a caller can drop a conversation from the ready set. */
-  async unadvertise(continuationKey: string): Promise<void> {
-    await this.redis.srem(AGENT_READY_SET_KEY, queueMember(continuationKey));
   }
 }

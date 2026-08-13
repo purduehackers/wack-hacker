@@ -23,6 +23,7 @@ import { z } from "zod";
 
 import type { RedisClient } from "../../redis/client.ts";
 import type { ParkedPayload, RenderIntent } from "../../wire.ts";
+import { evalFlag } from "../io.ts";
 import {
   activeKey,
   AGENT_READY_SET_KEY,
@@ -38,7 +39,7 @@ import {
 } from "../keys.ts";
 import { LeaseDuration, RECORD_TTL_MS } from "../lease.ts";
 import { DELIVERY_RECORD_LUA } from "../records/delivery.ts";
-import type { RenderProjection, StoredRenderProjection } from "../records/render.ts";
+import type { RenderProjection } from "../records/render.ts";
 import { projectionCodec, RENDER_TTL_SECONDS } from "../records/render.ts";
 
 /**
@@ -132,23 +133,14 @@ record.sessionId = ARGV[3]
 record.eveTurnId = ARGV[5]
 record.turn.expiresAtMs = tonumber(ARGV[11]) + tonumber(ARGV[12])
 writeRecord(KEYS[1], record)
--- Bounded by the record it fences against, not left immortal. A parked marker
--- outliving its delivery record is invariant I5 in check:invariants -- complete
--- can never fence again, so the marker is unusable *and* uncollectable.
+-- Bounded by the record it fences against: a marker outliving its record is
+-- invariant I5, unusable and uncollectable at once.
 redis.call("SET", KEYS[2], ARGV[4], "PX", tonumber(ARGV[13]))
 redis.call("SADD", KEYS[3], ARGV[6])
 return settledRevision
 `;
 
-/**
- * Take the lease if nobody holds it.
- *
- * `SET NX PX` is the whole transition, so this needs no script at all beyond
- * turning Redis's nil-or-OK into a number. What it replaces opened with a branch
- * for "the caller already holds this, so renew" — unreachable, because the token
- * is minted per call and so never matches what is stored. A holder wanting to
- * hold on calls `renew`, which is what that branch was reaching for.
- */
+/** `SET NX PX` is the whole transition; a holder wanting to hold on calls `renew`. */
 const CLAIM = `
 -- render:claim
 if redis.call("SET", KEYS[1], ARGV[1], "PX", tonumber(ARGV[2]), "NX") then return 1 end
@@ -163,11 +155,9 @@ return 1
 `;
 
 /**
- * Record progress without giving up the lease.
- *
- * Called after every mutation Discord can see, so that a crash leaves a
- * projection matching the channel rather than one predating the last message
- * posted.
+ * Record progress without giving up the lease, after every mutation Discord can
+ * see, so a crash leaves a projection matching the channel rather than one
+ * predating the last message posted.
  */
 const CHECKPOINT = `
 -- render:checkpoint
@@ -207,11 +197,9 @@ return 0
 `;
 
 /**
- * Give up on a paint that can never land.
- *
- * A message someone deleted, or a 4xx that will not improve on retry. Intent,
- * target and projection are bounded rather than deleted so a late reader can still
- * see what was attempted; the outcome is what lets the delivery go.
+ * Give up on a paint that can never land — a deleted message, or a 4xx that will
+ * not improve on retry. Intent, target and projection are bounded rather than
+ * deleted so a late reader can still see what was attempted.
  */
 const DISCARD = `
 -- render:discard
@@ -322,25 +310,26 @@ export class RenderWriter {
     return outcome > 0 ? outcome : undefined;
   }
 
-  /** Bot side: take the paint lease, or renew one this caller already holds. */
+  /** Bot side: take the paint lease if nobody holds it. */
   async claim(dispatchId: string): Promise<string | undefined> {
     const token = crypto.randomUUID();
-    const acquired = await this.redis.eval(
+    const acquired = await evalFlag(
+      this.redis,
       CLAIM,
       [renderClaimKey(dispatchId)],
       [token, LeaseDuration.Paint],
     );
-    return Number(acquired) === 1 ? token : undefined;
+    return acquired ? token : undefined;
   }
 
   /** Still holding it? The renderer asks before every Discord write. */
   async renew(dispatchId: string, claimToken: string): Promise<boolean> {
-    const renewed = await this.redis.eval(
+    return evalFlag(
+      this.redis,
       RENEW,
       [renderClaimKey(dispatchId)],
       [claimToken, LeaseDuration.Paint],
     );
-    return Number(renewed) === 1;
   }
 
   /** Record what is now on screen, keeping the lease. */
@@ -350,17 +339,17 @@ export class RenderWriter {
     projection: RenderProjection,
     appliedRevision: number,
   ): Promise<boolean> {
-    const saved = await this.redis.eval(
+    return evalFlag(
+      this.redis,
       CHECKPOINT,
       [renderClaimKey(dispatchId), renderProjectionKey(dispatchId)],
       [
         claimToken,
-        z.encode(projectionCodec, stamped(projection, appliedRevision)),
+        encodeProjection(projection, appliedRevision),
         RENDER_TTL_SECONDS,
         LeaseDuration.Paint,
       ],
     );
-    return Number(saved) === 1;
   }
 
   /** Give the lease back, recording where the paint got to. */
@@ -379,7 +368,7 @@ export class RenderWriter {
         ],
         [
           claimToken,
-          z.encode(projectionCodec, stamped(projection, appliedRevision)),
+          encodeProjection(projection, appliedRevision),
           appliedRevision,
           renderMember(dispatchId),
           RENDER_TTL_SECONDS,
@@ -393,8 +382,7 @@ export class RenderWriter {
 
   /** Drop the lease without finishing, so the sweep can pick it up again. */
   async release(dispatchId: string, claimToken: string): Promise<boolean> {
-    const released = await this.redis.eval(RELEASE, [renderClaimKey(dispatchId)], [claimToken]);
-    return Number(released) === 1;
+    return evalFlag(this.redis, RELEASE, [renderClaimKey(dispatchId)], [claimToken]);
   }
 
   /** Record that this dispatch can never be painted. */
@@ -414,6 +402,6 @@ export class RenderWriter {
 }
 
 /** `appliedRevision` is stamped at write time, never carried by the caller. */
-function stamped(projection: RenderProjection, appliedRevision: number): StoredRenderProjection {
-  return { ...projection, appliedRevision };
+function encodeProjection(projection: RenderProjection, appliedRevision: number): string {
+  return z.encode(projectionCodec, { ...projection, appliedRevision });
 }

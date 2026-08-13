@@ -2,6 +2,7 @@
 
 import { createHash } from "node:crypto";
 
+import type { RenderProjection, StoredRenderProjection } from "@repo/shared/conversations";
 import { Transient, UpstreamError } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { sliceText, splitText } from "@repo/shared/text";
@@ -21,20 +22,28 @@ const HITL_NONCE_INDEX = MAX_MESSAGES + 1;
 const LIVE_CONTINUES = "-# response continues…";
 const TRUNCATED = "-# response truncated";
 
-interface OverflowProjection {
-  messageId: string;
-  contentHash?: string;
-}
+/**
+ * The stored projection, minus the revision, as mutable working state.
+ *
+ * Derived rather than restated. This was a hand-written copy of
+ * `renderProjectionSchema`, and the copy is how the input request's message id
+ * came to be dropped in transit when the schema grew it: three declarations of
+ * one shape, and only two of them were updated.
+ */
+export type RendererProjection = {
+  -readonly [K in keyof RenderProjection]: RenderProjection[K];
+};
 
-export interface RendererProjection {
-  anchorMessageId?: string;
-  anchorContentHash?: string;
-  /** See `renderProjectionSchema`: the input request lives on its own message. */
-  hitlMessageId?: string;
-  hitlContentHash?: string;
-  hitlRequestKey?: string;
-  subagentActivity?: string;
-  overflow: OverflowProjection[];
+/**
+ * The stored projection as this renderer's working state.
+ *
+ * `overflow` is copied because the renderer mutates what it is handed.
+ */
+export function toRendererProjection({
+  appliedRevision: _appliedRevision,
+  ...projection
+}: StoredRenderProjection): RendererProjection {
+  return { ...projection, overflow: [...projection.overflow] };
 }
 
 interface RenderInput {
@@ -243,7 +252,7 @@ async function createOverflow(
     enforce_nonce: true,
   });
   if (Result.isError(created)) return created;
-  const createdProjection: OverflowProjection = {
+  const createdProjection: RendererProjection["overflow"][number] = {
     messageId: created.value.id,
     ...(created.value.content === content ? { contentHash } : {}),
   };

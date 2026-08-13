@@ -112,12 +112,9 @@ return "claimed"
 `;
 
 /**
- * Whether this click may be forwarded to eve.
- *
  * `claimed` is the only one that runs the turn. `in-progress` is a duplicate that
- * should wait; `accepted` is a duplicate whose answer already exists and must be
- * replayed rather than recomputed; `stale` is everything that no longer matches
- * what is on screen.
+ * should wait; `accepted` is one whose answer already exists and must be replayed
+ * rather than recomputed; `stale` no longer matches what is on screen.
  */
 export type InteractionClaim = "claimed" | "in-progress" | "accepted" | "stale";
 
@@ -179,7 +176,9 @@ export class InteractionWriter {
         Date.now(),
       ],
     );
-    return { claim: readClaim(raw), identity };
+    // Anything the script did not say reads as stale, which is the safe answer.
+    const claim = z.enum(["claimed", "in-progress", "accepted", "stale"]).safeParse(raw);
+    return { claim: claim.success ? claim.data : "stale", identity };
   }
 
   /** Record the answer, so a Discord retry replays it rather than re-running it. */
@@ -197,18 +196,7 @@ export class InteractionWriter {
   }
 }
 
-/**
- * Hash of the answer rather than the answer.
- *
- * The kind is mixed in with a separator so an option id can never collide with
- * freeform text that happens to spell it.
- */
+/** The kind is separated in so an option id cannot collide with freeform text. */
 function digestOf(kind: string, value: string): string {
   return createHash("sha256").update(kind).update("\0").update(value).digest("base64url");
-}
-
-/** Anything the script did not say is treated as stale, which is the safe answer. */
-function readClaim(raw: unknown): InteractionClaim {
-  const known = z.enum(["claimed", "in-progress", "accepted", "stale"]).safeParse(raw);
-  return known.success ? known.data : "stale";
 }

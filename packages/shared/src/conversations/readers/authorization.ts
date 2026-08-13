@@ -5,8 +5,8 @@ import type { RedisClient } from "../../redis/client.ts";
 import { Result } from "../../result/index.ts";
 import type { AuthorizationChallenge } from "../../wire.ts";
 import { decodeAuthorizationChallenge } from "../../wire.ts";
+import { redisValue } from "../io.ts";
 import { authorizationChallengeKey } from "../keys.ts";
-import { redisValue } from "../redis-value.ts";
 
 export class AuthorizationReader {
   private readonly redis: Pick<RedisClient, "get">;
@@ -18,9 +18,8 @@ export class AuthorizationReader {
   /**
    * The challenge behind one authorization button.
    *
-   * Absent is ordinary rather than exceptional — a challenge outlives neither its
-   * own expiry nor the connection completing — so it reads as `undefined` and the
-   * caller tells the person it has gone stale.
+   * Absent is ordinary: a challenge outlives neither its own expiry nor the
+   * connection completing, so the caller tells the person it has gone stale.
    */
   async challenge(
     dispatchId: string,

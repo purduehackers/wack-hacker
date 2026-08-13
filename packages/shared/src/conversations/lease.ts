@@ -1,12 +1,6 @@
 /**
  * Holding something, expressed once.
  *
- * This layer grew five separate ways to say "I hold this" — `claimToken`,
- * `ownerToken`, `admissionAttemptId`, `resetId`, `receiptIdentity` — each with
- * its own fence, its own TTL, and its own idea of what a lost race looks like.
- * Five protocols is five chances to get the fence wrong, and the difference
- * between them was never meaningful: every one is a holder plus a deadline.
- *
  * Two rules make the shape safe, and both were learned the hard way here.
  *
  * **A lease is fenced on its holder, never on the conversation.** A follower or
@@ -38,10 +32,9 @@ export const LeaseDuration = {
 /**
  * The key's own expiry, well past the longest lease it can carry.
  *
- * Belt and braces: the sweep needs the record readable at the moment it decides
- * to give up, because what it announces is stored inside it, so Redis must not
- * collect the key first. If the sweep never runs at all, this is what still
- * bounds the key.
+ * The sweep needs the record readable at the moment it decides to give up,
+ * because what it announces is stored inside it. If the sweep never runs at all,
+ * this is what still bounds the key.
  */
 export const RECORD_TTL_MS = 2 * LeaseDuration.Person;
 
@@ -53,31 +46,15 @@ export const leaseSchema = z.strictObject({
 
 export type Lease = z.output<typeof leaseSchema>;
 
-export function grantLease(holder: string, duration: number, now: number): Lease {
-  return { holder, expiresAtMs: now + duration };
-}
-
 export function leaseExpired(lease: Lease, now: number): boolean {
   return lease.expiresAtMs <= now;
 }
 
 /**
- * Whether `holder` may act on a record carrying `lease`.
- *
- * An expired lease is available to anyone — that is the whole point of a
- * deadline. A live lease belongs to its holder alone.
- */
-export function leaseHeldBy(lease: Lease, holder: string, now: number): boolean {
-  return lease.holder === holder && !leaseExpired(lease, now);
-}
-
-/**
  * Lua counterpart, prepended to any script that fences on a lease.
  *
- * Kept as one string for the same reason `writeActive` is: a rule spelled out at
- * each call site is a rule that will eventually be spelled differently at one of
- * them. `leaseHeld` mirrors the TypeScript above exactly, and the lockstep test
- * is what keeps that true.
+ * `leaseHeld` mirrors `leaseExpired` above, and the lockstep check in
+ * `check:invariants` is what keeps that true.
  */
 export const LEASE_LUA = `
 local function leaseHeld(lease, holder, now)
