@@ -17,8 +17,20 @@ import type { RedisClient } from "../../redis/client.ts";
 import { evalFlag } from "../io.ts";
 import { hitlClaimKey, renderIntentKey, resetKey } from "../keys.ts";
 
-/** Outlives any plausible retry of the click that took it, and no longer. */
-const CLAIM_TTL_SECONDS = 7 * 24 * 60 * 60;
+/**
+ * How long a click may hold the question while it is being forwarded.
+ *
+ * Short on purpose, and this is the only thing that unwedges a forward that never
+ * landed. `answerHitl` has no honest release to call: a failed `sendInteraction`
+ * is ambiguous — a 4xx means eve never saw it, a timeout means it may be running
+ * right now — so releasing on failure risks forwarding the same question twice.
+ * Waiting the window out decides nothing it cannot know. The forward's own budget
+ * is two attempts of ten seconds, so this is roughly four times it.
+ */
+const FORWARDING_TTL_MS = 90 * 1_000;
+
+/** Once answered, the claim is a record and outlives any plausible re-click. */
+const ANSWERED_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 const hitlClaimSchema = z.object({
   revision: z.int().positive(),
@@ -47,7 +59,9 @@ local existing = redis.call("GET", KEYS[2])
 if existing and tonumber(cjson.decode(existing).revision) >= tonumber(ARGV[1]) then
   return "taken"
 end
-redis.call("SET", KEYS[2], ARGV[5], "EX", tonumber(ARGV[6]))
+-- Bounded, so a forward that dies mid-flight gives the question back rather than
+-- holding it for a week.
+redis.call("SET", KEYS[2], ARGV[5], "PX", tonumber(ARGV[6]))
 return "acquired"
 `;
 
@@ -104,7 +118,7 @@ export class HitlWriter {
           interactionId: input.interactionId,
           status: "forwarding",
         }),
-        CLAIM_TTL_SECONDS,
+        FORWARDING_TTL_MS,
         input.continuationKey,
       ],
     );
@@ -118,7 +132,7 @@ export class HitlWriter {
       this.redis,
       ACCEPT,
       [hitlClaimKey(dispatchId)],
-      [interactionId, revision, CLAIM_TTL_SECONDS],
+      [interactionId, revision, ANSWERED_TTL_SECONDS],
     );
   }
 }

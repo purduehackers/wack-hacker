@@ -148,7 +148,14 @@ async function reconcileParked(runtime: FlowRuntime): Promise<void> {
     // not stop the sweep reaching the rest, and there is nothing to do with a
     // half-understood one.
     const parked = await deps.store.deliveries.parked(continuationKey);
-    if (parked !== undefined) await onParked(runtime, parked);
+    if (parked !== undefined) {
+      await onParked(runtime, parked);
+      continue;
+    }
+    // Nothing else drops this member: every path that does needs the marker or
+    // the record it points at, and both are gone. Left alone it is re-read on
+    // every sweep for the life of the deployment.
+    await deps.store.delivery.unadvertise(continuationKey);
   }
 }
 

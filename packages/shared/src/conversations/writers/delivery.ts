@@ -46,10 +46,20 @@ const SEEN_TTL_SECONDS = 7 * 24 * 60 * 60;
  * How long a reset barrier may block a conversation.
  *
  * Six scripts refuse while it exists, so a `beginReset` whose follow-through
- * never lands would block the conversation permanently. A reset that has not
- * completed in an hour is not going to.
+ * never lands mutes the conversation for exactly this long. The whole operation
+ * is one round trip, an 8-second drain and a second round trip, so this is more
+ * than ten times the budget — and an hour, which is what it used to be, is an
+ * hour of a bot that answers nothing and says nothing.
  */
-const RESET_BARRIER_TTL_SECONDS = 60 * 60;
+const RESET_BARRIER_TTL_SECONDS = 5 * 60;
+
+/**
+ * How long diverted messages survive without a cutover.
+ *
+ * A backstop rather than the mechanism: `drainShadow` is what actually recovers
+ * them. Bounded by what bounds any one delivery, since that is what these are.
+ */
+const SHADOW_TTL_SECONDS = RECORD_TTL_MS / 1_000;
 
 /** Synthetic turn ids, so an intent this layer authored is distinguishable. */
 const EXPIRY_TURN_ID = "delivery-lease-lapsed";
@@ -63,26 +73,59 @@ export const RECOVERY_TEXT =
 export const RECOVERY_FOOTER =
   "React ✅ to this message to reset the conversation before retrying, or start a new thread.";
 
+/**
+ * Put back what a reset diverted but never cut over.
+ *
+ * The shadow queue's only reader used to be `commitReset`, which requires the
+ * barrier token — so a reset whose cutover never ran left the messages that
+ * arrived during it in a key nothing would ever read again, and the barrier
+ * lapsing made them permanently unreachable. Anything that observes no barrier
+ * drains them first, which puts them back in front of whatever arrives next:
+ * they got here earlier.
+ */
+const DRAIN_SHADOW_LUA = `
+local function drainShadow(pendingKey, shadowKey)
+  local waiting = redis.call("LRANGE", shadowKey, 0, -1)
+  if #waiting == 0 then return 0 end
+  for _, entry in ipairs(waiting) do redis.call("RPUSH", pendingKey, entry) end
+  redis.call("DEL", shadowKey)
+  return #waiting
+end
+`;
+
 const ENQUEUE = `
+${DRAIN_SHADOW_LUA}
 -- delivery:enqueue
 local firstSighting = redis.call("SADD", KEYS[3], ARGV[2])
 redis.call("EXPIRE", KEYS[3], tonumber(ARGV[4]))
 if firstSighting == 0 then return 0 end
 -- A reset in flight diverts new work to a shadow queue, so the cutover can
 -- clear what it is replacing without discarding what arrived meanwhile.
-local resetting = redis.call("GET", KEYS[5])
-redis.call("RPUSH", resetting and KEYS[6] or KEYS[1], ARGV[1])
--- Indexed only when it landed on the real queue. Indexing a diverted delivery
--- advertises work the claim cannot see, which is how the sweep learned to spin.
-if not resetting then redis.call("SADD", KEYS[2], ARGV[3]) end
+if redis.call("GET", KEYS[5]) then
+  redis.call("RPUSH", KEYS[6], ARGV[1])
+  -- Bounded even so: the drain is what recovers these, and this is what stops
+  -- them outliving every process that could have run it.
+  redis.call("EXPIRE", KEYS[6], tonumber(ARGV[7]))
+else
+  drainShadow(KEYS[1], KEYS[6])
+  redis.call("RPUSH", KEYS[1], ARGV[1])
+end
+-- Advertised either way. A diverted conversation still has to be visited, or
+-- nothing is watching when the barrier lapses; the sweep's visit costs one GET
+-- while the barrier stands, because claim refuses on its first line.
+redis.call("SADD", KEYS[2], ARGV[3])
 redis.call("SET", KEYS[4], ARGV[5], "EX", tonumber(ARGV[6]))
 return 1
 `;
 
 const CLAIM = `
 ${DELIVERY_RECORD_LUA}
+${DRAIN_SHADOW_LUA}
 -- delivery:claim
 if redis.call("GET", KEYS[4]) then return nil end
+-- Nothing may have arrived since the barrier lapsed, so this is the other half
+-- of the recovery: the sweep visits, and what was diverted goes back on the queue.
+drainShadow(KEYS[1], KEYS[5])
 local raw = redis.call("GET", KEYS[2])
 if raw then
   local record = cjson.decode(raw)
@@ -416,6 +459,7 @@ export class DeliveryWriter {
         SEEN_TTL_SECONDS,
         JSON.stringify(renderTargetFor(delivery)),
         RENDER_TTL_SECONDS,
+        SHADOW_TTL_SECONDS,
       ],
     );
   }
@@ -431,6 +475,7 @@ export class DeliveryWriter {
         activeKey(continuationKey),
         QUEUE_INDEX_KEY,
         resetKey(continuationKey),
+        resetPendingKey(continuationKey),
       ],
       [
         claimToken,
@@ -636,6 +681,16 @@ export class DeliveryWriter {
       });
     }
     return owner.data;
+  }
+
+  /**
+   * Drop a conversation's advertisement in the parked-reconcile set.
+   *
+   * For a member whose marker is gone: nothing else removes it, because every
+   * other path that does needs the marker or the record it points at.
+   */
+  async unadvertise(continuationKey: string): Promise<void> {
+    await this.redis.srem(AGENT_READY_SET_KEY, queueMember(continuationKey));
   }
 
   /**

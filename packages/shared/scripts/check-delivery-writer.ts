@@ -162,11 +162,32 @@ check("the barrier is bounded", (await redis.pttl(`agent:reset:${KEY}`)) > 0, tr
 
 await writer.enqueue({ ...message, messageId: "99999999999999698" });
 check("a message during reset is diverted", await reader.queueDepth(KEY), 0);
-check("and is not advertised", await redis.sismember("agent:queues", `k:${KEY}`), 0);
+// Advertised even while diverted. Withholding it meant nothing ever visited the
+// conversation again, so when a barrier lapsed without a cutover there was no
+// process left that could notice and put the diverted messages back.
+check("but still advertised", await redis.sismember("agent:queues", `k:${KEY}`), 1);
 check("commitReset refuses a wrong id", await writer.commitReset(KEY, "not-the-barrier"), false);
 check("commitReset completes", await writer.commitReset(KEY, barrier), true);
 check("the diverted message is restored", await reader.queueDepth(KEY), 1);
 check("and re-advertised", await redis.sismember("agent:queues", `k:${KEY}`), 1);
+
+// A cutover that never runs is the case that used to lose messages for good:
+// only `commitReset` read the shadow queue, and it needs the barrier token, so
+// the barrier lapsing made those messages permanently unreachable.
+await scrub();
+const abandoned = await writer.beginReset(KEY);
+check("a second barrier installs", abandoned.length > 0, true);
+await writer.enqueue({ ...message, messageId: "99999999999999697" });
+check("its message is diverted", await reader.queueDepth(KEY), 0);
+check(
+  "but the conversation is still advertised",
+  await redis.sismember("agent:queues", `k:${KEY}`),
+  1,
+);
+// The barrier lapses with no cutover — nothing else in the system will run one.
+await redis.del(`agent:reset:${KEY}`);
+check("claim drains what the reset diverted", Result.isOk(await writer.claim(KEY)), true);
+check("so it is claimed rather than lost", (await reader.read(KEY))?.phase, "claimed");
 
 await scrub();
 report("the delivery writer moves a record through every transition it owns");

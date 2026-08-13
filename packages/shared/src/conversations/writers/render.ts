@@ -75,7 +75,8 @@ if current then
 end
 redis.call("SET", KEYS[1], ARGV[2], "EX", tonumber(ARGV[4]))
 -- Proof of life. The turn holds its conversation for as long as it keeps
--- painting, and no longer.
+-- painting, and no longer — except while it is waiting on a person, when the
+-- caller sends the longer duration because nothing will paint until they answer.
 record.turn.expiresAtMs = tonumber(ARGV[8]) + tonumber(ARGV[9])
 writeRecord(KEYS[3], record)
 -- A new frame invalidates whatever the last one settled on.
@@ -248,6 +249,15 @@ export class RenderWriter {
 
   /** Agent side: say what should be on screen. */
   async publish(intent: RenderIntent): Promise<RenderPublication> {
+    // A turn showing buttons is suspended on a person, and it deliberately does
+    // not park — an input request is a resumption of this turn, not a boundary
+    // where an unrelated queued message may enter. So nothing refreshes its hold
+    // until the answer arrives, and on the ordinary turn lease the sweep expired
+    // it after thirty minutes and printed "it went quiet for too long" over a
+    // question the person was still reading. Waiting on someone is what the
+    // person lease is for.
+    const waitingOnPerson =
+      (intent.inputRequests?.length ?? 0) > 0 || (intent.authorizations?.length ?? 0) > 0;
     const outcome = Number(
       await this.redis.eval(
         PUBLISH,
@@ -266,7 +276,7 @@ export class RenderWriter {
           intent.dispatchId,
           intent.messageId,
           Date.now(),
-          LeaseDuration.Turn,
+          waitingOnPerson ? LeaseDuration.Person : LeaseDuration.Turn,
         ],
       ),
     );

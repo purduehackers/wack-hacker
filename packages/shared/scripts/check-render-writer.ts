@@ -14,6 +14,8 @@
  * a second painter is by then writing the same messages.
  */
 
+import { LeaseDuration } from "../src/conversations/lease.ts";
+import { DeliveryReader } from "../src/conversations/readers/delivery.ts";
 import { RenderReader } from "../src/conversations/readers/render.ts";
 import { DeliveryWriter } from "../src/conversations/writers/delivery.ts";
 import { RenderWriter } from "../src/conversations/writers/render.ts";
@@ -25,6 +27,7 @@ import { createProbe, probeMessage, scrubProbe, throws } from "./probe.ts";
 
 const redis = getRedis(redisEnv());
 const deliveries = new DeliveryWriter(redis);
+const deliveryRecord = new DeliveryReader(redis);
 const writer = new RenderWriter(redis);
 const reader = new RenderReader(redis);
 const { check, report } = createProbe();
@@ -67,6 +70,22 @@ function intentFor(
     phase,
     text,
     activity: "",
+  };
+}
+
+/** A frame that is waiting on a person, which is what the longer lease is for. */
+function asking(dispatchId: string, revision: number): RenderIntent {
+  return {
+    ...intentFor(dispatchId, revision, "streaming", "waiting for input…"),
+    inputRequests: [
+      {
+        requestId: "req-probe",
+        kind: "question",
+        prompt: "probe?",
+        recipientUserId: "99999999999999599",
+        allowFreeform: true,
+      },
+    ],
   };
 }
 
@@ -248,6 +267,26 @@ await writer.discard(spare);
 check("discard records the outcome", await reader.outcome(spare), "discarded");
 check("and withdraws the dispatch", await advertised(spare), false);
 check("the intent survives, bounded", (await redis.pttl(`agent:render-intent:${spare}`)) > 0, true);
+
+// The person lease, on its own dispatch so it cannot disturb the revisions above.
+// A turn showing buttons is suspended on a person and deliberately does not park,
+// so nothing refreshes its hold until they answer. On the ordinary turn lease the
+// sweep expired it after thirty minutes and printed "it went quiet for too long"
+// over a question that was still on screen.
+await scrub();
+const asked = await liveDispatch();
+await writer.publish(intentFor(asked, 1, "streaming"));
+const beforeAsking = (await deliveryRecord.read(KEY))?.turn.expiresAtMs ?? 0;
+await writer.publish(asking(asked, 2));
+const whileAsking = (await deliveryRecord.read(KEY))?.turn.expiresAtMs ?? 0;
+check(
+  "a question holds the conversation on the person lease",
+  whileAsking - beforeAsking > LeaseDuration.Person - LeaseDuration.Turn,
+  true,
+);
+await writer.publish(intentFor(asked, 3, "streaming", "answered"));
+const afterAsking = (await deliveryRecord.read(KEY))?.turn.expiresAtMs ?? 0;
+check("and gives it back once nothing is being asked", afterAsking < whileAsking, true);
 
 await scrub();
 report("the render writer moves a paint through every transition it owns");
