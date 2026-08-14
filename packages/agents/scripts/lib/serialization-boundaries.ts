@@ -14,6 +14,9 @@
  * and feeds each file in.
  */
 
+import { InvariantViolated, messageOf } from "@repo/shared/errors";
+import { panic, Result } from "@repo/shared/result";
+
 interface SerializationBoundaryDiagnostic {
   readonly column: number;
   readonly line: number;
@@ -31,9 +34,28 @@ function escapePattern(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
+/**
+ * Compiles a pattern whose dynamic parts went through `escapePattern`.
+ * Escaped input cannot produce an invalid pattern, so a failure here is a
+ * defect and panics.
+ */
+function compilePattern(pattern: string, flags: string): RegExp {
+  return Result.try({
+    try: () => new RegExp(pattern, flags),
+    catch: (cause) =>
+      new InvariantViolated({
+        invariant: "escaped source patterns compile",
+        detail: messageOf(cause),
+      }),
+  }).match({
+    ok: (expression) => expression,
+    err: (error) => panic(error.message, error),
+  });
+}
+
 function importedBindings(source: string, moduleName: string, symbol: string): Set<string> {
   const bindings = new Set<string>();
-  const pattern = new RegExp(
+  const pattern = compilePattern(
     `import\\s*\\{([^}]*)\\}\\s*from\\s*["']${escapePattern(moduleName)}["']`,
     "gu",
   );
@@ -59,7 +81,7 @@ function callPositions(source: string, symbols: ReadonlySet<string>, generic = f
   return [...symbols].flatMap((importedName) =>
     occurrences(
       source,
-      new RegExp(
+      compilePattern(
         `\\b${escapePattern(importedName)}${generic ? "(?:<[^;()]+>)?" : ""}\\s*\\(`,
         "gu",
       ),
@@ -155,7 +177,7 @@ export function analyzeSerializationBoundaries(
     const rest = declaration.replace(signature, "");
     const guarded =
       toolGuardPattern !== "" &&
-      new RegExp(
+      compilePattern(
         `^\\s*(?:\\{\\s*)?(?:return\\s+)?(?:await\\s+)?(?:${toolGuardPattern})\\s*\\(`,
         "u",
       ).test(rest);
@@ -170,7 +192,7 @@ export function analyzeSerializationBoundaries(
     const declaration = source.slice(position, position + 800);
     const guarded =
       stateGuardPattern !== "" &&
-      new RegExp(`=>\\s*(?:\\{\\s*return\\s+)?(?:${stateGuardPattern})\\s*\\(`, "u").test(
+      compilePattern(`=>\\s*(?:\\{\\s*return\\s+)?(?:${stateGuardPattern})\\s*\\(`, "u").test(
         declaration,
       );
     if (!guarded) {

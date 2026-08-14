@@ -15,6 +15,7 @@
  * safe to point at any environment.
  */
 
+import { Result } from "@repo/shared/result";
 import { z } from "zod";
 
 import {
@@ -33,9 +34,16 @@ import { StoredPhase } from "../src/conversations/records/delivery.ts";
 import { DeliveryWriter } from "../src/conversations/writers/delivery.ts";
 import { RenderWriter } from "../src/conversations/writers/render.ts";
 import { redisEnv } from "../src/env/scripts.ts";
-import { messageOf } from "../src/errors.ts";
+import {
+  InvariantViolated,
+  messageOf,
+  NotFound,
+  serializeError,
+  Transient,
+} from "../src/errors.ts";
+import type { InvalidInput } from "../src/errors.ts";
+import { stored } from "../src/json.ts";
 import { getRedis } from "../src/redis/client.ts";
-import { Result } from "../src/result/index.ts";
 import type { DeliveryPayload, MessagePayload, ParkedPayload, RenderIntent } from "../src/wire.ts";
 import { finish } from "./probe.ts";
 
@@ -94,18 +102,15 @@ function parkedFor(dispatchId: string): ParkedPayload {
 /** The delivery the claim handed back. Every later step uses its id as the fence. */
 let claimed: DeliveryPayload | undefined;
 /** Every step after the claim needs this, and none of them can run without it. */
-function dispatchId(): string {
-  if (claimed === undefined) throw new Error("no claimed delivery");
-  return claimed.dispatchId;
+function dispatchId(): Result<string, NotFound> {
+  return claimed === undefined
+    ? Result.err(new NotFound({ kind: "claimed delivery", id: KEY }))
+    : Result.ok(claimed.dispatchId);
 }
 
 async function readActive(): Promise<z.output<typeof activeRecordSchema> | undefined> {
   const raw: unknown = await redis.get(`agent:active:${KEY}`);
-  if (raw === null || raw === undefined) return undefined;
-  const text = z.string().safeParse(raw);
-  const decoded: unknown = text.success ? JSON.parse(text.data) : raw;
-  const parsed = activeRecordSchema.safeParse(decoded);
-  return parsed.success ? parsed.data : undefined;
+  return stored(activeRecordSchema).safeParse(raw).data;
 }
 
 async function scrub(): Promise<void> {
@@ -285,59 +290,124 @@ async function check(label: string): Promise<number> {
   return violations.length;
 }
 
+/** One failure a step can produce. The runner treats them all alike. */
+type StepFailure = InvalidInput | InvariantViolated | NotFound | Transient;
+
 interface Step {
   readonly name: string;
-  readonly run: () => Promise<void>;
+  readonly run: () => Promise<Result<unknown, StepFailure>>;
   /** What the declared lifecycles do when this step succeeds. */
   readonly machine?: MachineStep;
 }
 
+/**
+ * Runs one control-plane call. A rejection maps into the step's failure
+ * channel, so a Redis outage reads as a failed step rather than a crash.
+ */
+function attempt<T>(operation: string, run: () => Promise<T>): Promise<Result<T, Transient>> {
+  return Result.tryPromise({
+    try: run,
+    catch: (cause) => new Transient({ operation, detail: messageOf(cause) }),
+  });
+}
+
 const steps: readonly Step[] = [
-  { name: "enqueue", run: async () => writer.enqueue(message) },
+  { name: "enqueue", run: () => attempt("enqueue", () => writer.enqueue(message)) },
   {
     name: "claim",
-    run: async () => {
-      const outcome = await writer.claim(KEY);
-      if (Result.isError(outcome)) throw new Error(`claim failed: ${outcome.error.message}`);
-      if (outcome.value === undefined) throw new Error("claim returned nothing");
-      claimed = outcome.value.payload;
-    },
+    run: () =>
+      Result.gen(async function* () {
+        const outcome = yield* Result.await(attempt("claim", () => writer.claim(KEY)));
+        const delivery = yield* outcome;
+        if (delivery === undefined) {
+          return Result.err(
+            new InvariantViolated({
+              invariant: "claim hands back the enqueued delivery",
+              detail: "claim returned nothing",
+            }),
+          );
+        }
+        claimed = delivery.payload;
+        return Result.ok();
+      }),
     machine: { delivery: "CLAIM" },
   },
   {
     name: "admission.start",
-    run: async () => {
-      const started = await writer.markLive(KEY, dispatchId(), MESSAGE_ID);
-      if (started.status !== "start") throw new Error(`mark-live returned ${started.status}`);
-    },
+    run: () =>
+      Result.gen(async function* () {
+        const id = yield* dispatchId();
+        const started = yield* Result.await(
+          attempt("mark-live", () => writer.markLive(KEY, id, MESSAGE_ID)),
+        );
+        return started.status === "start"
+          ? Result.ok()
+          : Result.err(
+              new InvariantViolated({
+                invariant: "admission starts the claimed delivery",
+                detail: `mark-live returned ${started.status}`,
+              }),
+            );
+      }),
     machine: { delivery: "MARK_LIVE" },
   },
   {
     name: "admission.confirm",
-    run: async () => {
-      if (!(await writer.confirmSession(KEY, dispatchId(), MESSAGE_ID, SESSION_ID))) {
-        throw new Error("confirm was rejected");
-      }
-    },
+    run: () =>
+      Result.gen(async function* () {
+        const id = yield* dispatchId();
+        const confirmed = yield* Result.await(
+          attempt("confirm-session", () => writer.confirmSession(KEY, id, MESSAGE_ID, SESSION_ID)),
+        );
+        return confirmed
+          ? Result.ok()
+          : Result.err(
+              new InvariantViolated({
+                invariant: "admission confirms the live session",
+                detail: "confirm was rejected",
+              }),
+            );
+      }),
     machine: { delivery: "CONFIRM_SESSION", deliveryContext: { sessionId: SESSION_ID } },
   },
   {
     name: "publish(streaming)",
-    run: async () => {
-      const published = await renders.publish(intentFor(dispatchId(), 1, "streaming"));
-      if (!published.accepted) throw new Error("publish was rejected");
-    },
+    run: () =>
+      Result.gen(async function* () {
+        const id = yield* dispatchId();
+        const published = yield* Result.await(
+          attempt("publish", () => renders.publish(intentFor(id, 1, "streaming"))),
+        );
+        return published.accepted
+          ? Result.ok()
+          : Result.err(
+              new InvariantViolated({
+                invariant: "a live turn accepts its first render",
+                detail: "publish was rejected",
+              }),
+            );
+      }),
     machine: { render: ["PUBLISH"], renderContext: { desiredRevision: 1, terminal: false } },
   },
   {
     name: "settleAndPark",
-    run: async () => {
-      const settled = await renders.settleAndPark(
-        intentFor(dispatchId(), 2, "completed"),
-        parkedFor(dispatchId()),
-      );
-      if (settled === undefined) throw new Error("settle was rejected");
-    },
+    run: () =>
+      Result.gen(async function* () {
+        const id = yield* dispatchId();
+        const settled = yield* Result.await(
+          attempt("settle-and-park", () =>
+            renders.settleAndPark(intentFor(id, 2, "completed"), parkedFor(id)),
+          ),
+        );
+        return settled === undefined
+          ? Result.err(
+              new InvariantViolated({
+                invariant: "a live turn settles and parks",
+                detail: "settle was rejected",
+              }),
+            )
+          : Result.ok();
+      }),
     machine: {
       delivery: "PARK",
       render: ["PUBLISH"],
@@ -347,9 +417,14 @@ const steps: readonly Step[] = [
   {
     // Stands in for the bot: `complete` refuses until the bot records the paint.
     name: "bot records the paint",
-    run: async () => {
-      await redis.set(`agent:render-outcome:${dispatchId()}`, "applied");
-    },
+    run: () =>
+      Result.gen(async function* () {
+        const id = yield* dispatchId();
+        yield* Result.await(
+          attempt("record-paint", () => redis.set(`agent:render-outcome:${id}`, "applied")),
+        );
+        return Result.ok();
+      }),
     machine: {
       render: ["CLAIM", "SETTLE"],
       renderContext: { appliedRevision: 2 },
@@ -358,10 +433,21 @@ const steps: readonly Step[] = [
   },
   {
     name: "complete",
-    run: async () => {
-      const status = await writer.complete(parkedFor(dispatchId()));
-      if (status !== "completed") throw new Error(`complete returned ${status}`);
-    },
+    run: () =>
+      Result.gen(async function* () {
+        const id = yield* dispatchId();
+        const status = yield* Result.await(
+          attempt("complete", () => writer.complete(parkedFor(id))),
+        );
+        return status === "completed"
+          ? Result.ok()
+          : Result.err(
+              new InvariantViolated({
+                invariant: "a parked delivery completes once painted",
+                detail: `complete returned ${status}`,
+              }),
+            );
+      }),
     machine: { delivery: "COMPLETE" },
   },
 ];
@@ -374,17 +460,16 @@ function fail(...lines: readonly string[]): void {
 }
 
 /**
- * A step that throws mid-sequence is the crash under test. One that throws on the
+ * A step that fails mid-sequence is the crash under test. One that fails on the
  * happy path is a failure. Either way the tables only advance on success, because
- * a step that threw did not happen in Redis either.
+ * a step that failed did not happen in Redis either.
  */
-type OnThrow = "announce" | "expected";
+type OnFailure = "announce" | "expected";
 
-async function runStep(step: Step, onThrow: OnThrow): Promise<void> {
-  try {
-    await step.run();
-  } catch (cause) {
-    if (onThrow === "announce") fail(`${step.name} threw: ${messageOf(cause)}`);
+async function runStep(step: Step, onFailure: OnFailure): Promise<void> {
+  const outcome = await step.run();
+  if (Result.isError(outcome)) {
+    if (onFailure === "announce") fail(`${step.name} failed: ${messageOf(outcome.error)}`);
     return;
   }
   fail(...advanceMachine(step.machine ?? {}));
@@ -395,24 +480,35 @@ async function restart(): Promise<void> {
   machine = freshMachine();
 }
 
-console.info("happy path — invariants after every transition\n");
-await restart();
-for (const step of steps) {
-  await runStep(step, "announce");
-  failures += await check(step.name);
-}
+const verdict = await Result.gen(async function* () {
+  console.info("happy path — invariants after every transition\n");
+  yield* Result.await(attempt("restart", restart));
+  for (const step of steps) {
+    await runStep(step, "announce");
+    failures += await check(step.name);
+  }
 
-console.info("\ncrash injection — stop after step N, then ask whether the state is bounded\n");
-for (let cut = 1; cut < steps.length; cut += 1) {
-  await restart();
-  for (const step of steps.slice(0, cut)) await runStep(step, "expected");
+  console.info("\ncrash injection — stop after step N, then ask whether the state is bounded\n");
+  for (let cut = 1; cut < steps.length; cut += 1) {
+    yield* Result.await(attempt("restart", restart));
+    for (const step of steps.slice(0, cut)) await runStep(step, "expected");
 
-  // Boundedness is I2 and I3 inside `check`, which runs on the line above: a
-  // record with no expiry, or with no lease for the sweep to read, is already a
-  // reported violation. A second test for both at once could only ever fire when
-  // those two had, so it asserted nothing.
-  failures += await check(`crash after ${steps[cut - 1]?.name ?? "?"}`);
-}
+    // Boundedness is I2 and I3 inside `check`, which runs on the line above: a
+    // record with no expiry, or with no lease for the sweep to read, is already a
+    // reported violation. A second test for both at once could only ever fire when
+    // those two had, so it asserted nothing.
+    failures += await check(`crash after ${steps[cut - 1]?.name ?? "?"}`);
+  }
 
-await scrub();
-finish(failures, "all invariants hold across every path");
+  yield* Result.await(attempt("scrub", scrub));
+  return Result.ok(failures);
+});
+
+verdict.match({
+  ok: (total) => finish(total, "all invariants hold across every path"),
+  err: (error) => {
+    const { tag, message: detail } = serializeError(error);
+    console.error(`\nprobe could not run: ${tag}: ${detail}`);
+    process.exit(1);
+  },
+});

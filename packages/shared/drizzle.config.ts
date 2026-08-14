@@ -1,10 +1,12 @@
 import { defineConfig } from "drizzle-kit";
 
+import { panic } from "./src/result/index.ts";
+
 /**
  * drizzle-kit runs as a CLI outside the application, so it reads `process.env`
- * directly rather than going through a package env schema. Throwing here is
- * correct: a migration against an unset database must fail loudly before it can
- * touch anything.
+ * directly rather than going through a package env schema. `panic` here is
+ * correct: a migration against an unset database is a defect of the invocation
+ * and must fail loudly before it can touch anything.
  *
  * `migrations/` starts from a single generated baseline. There is no prior
  * production database to preserve. A migration that recreates unrelated
@@ -12,7 +14,7 @@ import { defineConfig } from "drizzle-kit";
  */
 const url = process.env["TURSO_DATABASE_URL"];
 if (url === undefined || url === "") {
-  throw new Error("Missing required environment variable: TURSO_DATABASE_URL");
+  panic("Missing required environment variable: TURSO_DATABASE_URL");
 }
 
 const authToken = process.env["TURSO_AUTH_TOKEN"];

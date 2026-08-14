@@ -28,7 +28,9 @@ import {
   resetPendingKey,
   seenKey,
 } from "../src/conversations/keys.ts";
+import { serializeError } from "../src/errors.ts";
 import type { RedisClient } from "../src/redis/client.ts";
+import { Result } from "../src/result/index.ts";
 import type { MessagePayload } from "../src/wire.ts";
 
 /** Outside the range Discord mints, so a probe can never collide with real traffic. */
@@ -122,12 +124,22 @@ export function createProbe(): Probe {
   };
 }
 
+/**
+ * Unwraps a prerequisite the probe cannot continue without. A failed
+ * prerequisite prints the serialized error and exits non-zero, because every
+ * check after it would fail for the same reason.
+ */
+export function prerequisite<T, E>(result: Result<T, E>): T {
+  return result.match({
+    ok: (value) => value,
+    err: (error) => {
+      console.error(JSON.stringify(serializeError(error)));
+      return process.exit(1);
+    },
+  });
+}
+
 /** Whether an operation refused, for the cases where refusing is the contract. */
 export async function throws(operation: () => Promise<unknown>): Promise<boolean> {
-  try {
-    await operation();
-    return false;
-  } catch {
-    return true;
-  }
+  return Result.isError(await Result.tryPromise(operation));
 }

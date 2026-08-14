@@ -20,10 +20,11 @@ import { RenderReader } from "../src/conversations/readers/render.ts";
 import { DeliveryWriter } from "../src/conversations/writers/delivery.ts";
 import { RenderWriter } from "../src/conversations/writers/render.ts";
 import { redisEnv } from "../src/env/scripts.ts";
+import { InvalidInput, InvariantViolated } from "../src/errors.ts";
 import { getRedis } from "../src/redis/client.ts";
-import { Result } from "../src/result/index.ts";
+import { Result, fromNullable } from "../src/result/index.ts";
 import type { ParkedPayload, RenderIntent } from "../src/wire.ts";
-import { createProbe, probeMessage, scrubProbe, throws } from "./probe.ts";
+import { createProbe, prerequisite, probeMessage, scrubProbe, throws } from "./probe.ts";
 
 const redis = getRedis(redisEnv());
 const deliveries = new DeliveryWriter(redis);
@@ -100,22 +101,29 @@ function parkedFor(dispatchId: string): ParkedPayload {
 }
 
 /** A live delivery, which is the only state `publish` will accept. */
-async function liveDispatch(): Promise<string> {
-  await deliveries.enqueue(message);
-  const claimed = await deliveries.claim(KEY);
-  if (Result.isError(claimed) || claimed.value === undefined) {
-    throw new Error("claim returned nothing");
-  }
-  const { dispatchId } = claimed.value.payload;
-  minted.add(dispatchId);
-  await deliveries.markLive(KEY, dispatchId, MESSAGE_ID);
-  return dispatchId;
+function liveDispatch(): Promise<Result<string, InvalidInput | InvariantViolated>> {
+  return Result.gen(async function* () {
+    await deliveries.enqueue(message);
+    const claimed = yield* Result.await(deliveries.claim(KEY));
+    const delivery = yield* fromNullable(
+      claimed,
+      () =>
+        new InvariantViolated({
+          invariant: "a queued delivery can be claimed",
+          detail: "claim returned nothing",
+        }),
+    );
+    const { dispatchId } = delivery.payload;
+    minted.add(dispatchId);
+    await deliveries.markLive(KEY, dispatchId, MESSAGE_ID);
+    return Result.ok(dispatchId);
+  });
 }
 
 await scrub();
 
 // Publishing: the agent's side. The revision fence is the whole contract.
-const dispatchId = await liveDispatch();
+const dispatchId = prerequisite(await liveDispatch());
 const published = await writer.publish(intentFor(dispatchId, 1, "streaming"));
 check("publish is accepted", published.accepted, true);
 check("publish wakes the renderer", published.shouldWake, true);
@@ -253,7 +261,7 @@ check("and records a durable outcome", await reader.outcome(dispatchId), "applie
 
 // Release and discard, the two ways a paint ends without applying.
 await scrub();
-const spare = await liveDispatch();
+const spare = prerequisite(await liveDispatch());
 await writer.publish(intentFor(spare, 1, "streaming"));
 const held = await writer.claim(spare);
 if (held === undefined) process.exit(1);
@@ -272,7 +280,7 @@ check("the intent survives, bounded", (await redis.pttl(`agent:render-intent:${s
 // sweep expired it after thirty minutes and printed "it went quiet for too long"
 // over a question that was still on screen.
 await scrub();
-const asked = await liveDispatch();
+const asked = prerequisite(await liveDispatch());
 await writer.publish(intentFor(asked, 1, "streaming"));
 const beforeAsking = (await deliveryRecord.read(KEY))?.turn.expiresAtMs ?? 0;
 await writer.publish(asking(asked, 2));
@@ -291,7 +299,7 @@ check("and gives it back once nothing is being asked", afterAsking < whileAsking
 // restored checkpoint — left every later attempt re-offering a number Redis had
 // already seen, and the turn never showed anything again.
 await scrub();
-const wedged = await liveDispatch();
+const wedged = prerequisite(await liveDispatch());
 await writer.publish(intentFor(wedged, 1, "streaming"));
 await writer.publish(intentFor(wedged, 2, "streaming", "second"));
 const behind = await writer.publish(intentFor(wedged, 2, "streaming", "counter fell behind"));

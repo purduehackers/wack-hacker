@@ -15,7 +15,7 @@
 
 import { Result } from "better-result";
 
-export { Result, TaggedError } from "better-result";
+export { Panic, panic, Result, TaggedError } from "better-result";
 
 /**
  * Converts framework-mandated absence into a typed failure.

@@ -19,10 +19,11 @@
 import { DeliveryReader } from "../src/conversations/readers/delivery.ts";
 import { DeliveryWriter } from "../src/conversations/writers/delivery.ts";
 import { redisEnv } from "../src/env/scripts.ts";
+import { InvalidInput, InvariantViolated } from "../src/errors.ts";
 import { getRedis } from "../src/redis/client.ts";
-import { Result } from "../src/result/index.ts";
+import { Result, fromNullable } from "../src/result/index.ts";
 import type { MessagePayload } from "../src/wire.ts";
-import { createProbe, probeMessage, scrubProbe } from "./probe.ts";
+import { createProbe, prerequisite, probeMessage, scrubProbe } from "./probe.ts";
 
 const redis = getRedis(redisEnv());
 const writer = new DeliveryWriter(redis);
@@ -42,17 +43,31 @@ const minted = new Set<string>();
 const scrub = (): Promise<void> => scrubProbe(redis, KEY, minted);
 
 /** Queue one message and take it, returning the dispatch the writer minted. */
-async function queueAndClaim(payload: MessagePayload): Promise<{
-  readonly dispatchId: string;
-  readonly claimToken: string;
-}> {
-  await writer.enqueue(payload);
-  const claimed = await writer.claim(KEY);
-  if (Result.isError(claimed) || claimed.value === undefined) {
-    throw new Error("claim returned nothing");
-  }
-  minted.add(claimed.value.payload.dispatchId);
-  return { dispatchId: claimed.value.payload.dispatchId, claimToken: claimed.value.claimToken };
+function queueAndClaim(
+  payload: MessagePayload,
+): Promise<
+  Result<
+    { readonly dispatchId: string; readonly claimToken: string },
+    InvalidInput | InvariantViolated
+  >
+> {
+  return Result.gen(async function* () {
+    await writer.enqueue(payload);
+    const claimed = yield* Result.await(writer.claim(KEY));
+    const delivery = yield* fromNullable(
+      claimed,
+      () =>
+        new InvariantViolated({
+          invariant: "a queued delivery can be claimed",
+          detail: "claim returned nothing",
+        }),
+    );
+    minted.add(delivery.payload.dispatchId);
+    return Result.ok({
+      dispatchId: delivery.payload.dispatchId,
+      claimToken: delivery.claimToken,
+    });
+  });
 }
 
 await scrub();
@@ -128,7 +143,7 @@ if (admitted.status === "start") {
 // The bad ending. It shares an announcement helper with recovery under a
 // different key list, so an off-by-one here is invisible to the compiler.
 await scrub();
-const expiring = await queueAndClaim(message);
+const expiring = prerequisite(await queueAndClaim(message));
 await writer.markLive(KEY, expiring.dispatchId, MESSAGE_ID);
 check("a live turn is not expired", Result.isOk(await writer.expire(KEY)), true);
 check("its record survives", (await reader.read(KEY)) !== undefined, true);

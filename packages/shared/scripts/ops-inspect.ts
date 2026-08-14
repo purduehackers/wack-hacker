@@ -32,7 +32,9 @@ import {
   resetPendingKey,
 } from "../src/conversations/keys.ts";
 import { redisEnv, tursoEnv } from "../src/env/scripts.ts";
+import { InvalidInput, serializeError } from "../src/errors.ts";
 import { jsonCodec } from "../src/json.ts";
+import { Result } from "../src/result/index.ts";
 
 /**
  * JSON text to an unvalidated value — deliberately, and only here.
@@ -54,9 +56,8 @@ function usage(): never {
 
 function option(arguments_: readonly string[], name: string): string | undefined {
   const index = arguments_.indexOf(name);
-  if (index === -1) return undefined;
-  const value = arguments_[index + 1];
-  if (value === undefined || value.startsWith("--")) usage();
+  const value = index === -1 ? undefined : arguments_[index + 1];
+  if (index !== -1 && (value === undefined || value.startsWith("--"))) usage();
   return value;
 }
 
@@ -69,12 +70,15 @@ const dispatchIdSchema = z.stringFormat("dispatch-id", /^[A-Za-z0-9_-]{1,128}$/u
 
 function check<S extends z.ZodType<string, string>>(
   schema: S,
+  name: string,
   value: string | undefined,
-): string | undefined {
-  if (value === undefined) return undefined;
+): Result<string | undefined, InvalidInput> {
+  if (value === undefined) return Result.ok(undefined);
   const parsed = schema.safeParse(value);
-  if (!parsed.success) throw new Error(z.prettifyError(parsed.error));
-  return parsed.data;
+  if (!parsed.success) {
+    return Result.err(new InvalidInput({ subject: name, issues: [z.prettifyError(parsed.error)] }));
+  }
+  return Result.ok(parsed.data);
 }
 
 /** Any keyed blob. The wanted fields differ per key, so this schema declares none. */
@@ -158,102 +162,108 @@ interface OpsReport {
   render?: RenderReport;
 }
 
-async function inspectRedis(arguments_: readonly string[]): Promise<void> {
-  const allowed = new Set(["--continuation", "--dispatch"]);
-  for (let index = 0; index < arguments_.length; index += 2) {
-    if (!allowed.has(arguments_[index] ?? "") || arguments_[index + 1] === undefined) usage();
-  }
-  const continuation = check(continuationKeySchema, option(arguments_, "--continuation"));
-  const dispatch = check(dispatchIdSchema, option(arguments_, "--dispatch"));
-
-  const redis = new Redis(redisEnv());
-
-  const [active, mutexExists, mutexTtlMs, conversationCount, ready, renderReady] =
-    await Promise.all([
-      redis.get(BOT_ACTIVE_GENERATION_KEY),
-      redis.exists(BOT_SUPERVISOR_MUTEX_KEY),
-      redis.pttl(BOT_SUPERVISOR_MUTEX_KEY),
-      redis.scard(QUEUE_INDEX_KEY),
-      redis.scard(AGENT_READY_SET_KEY),
-      redis.scard(AGENT_RENDER_READY_SET_KEY),
-    ]);
-  const report: OpsReport = {
-    at: new Date().toISOString(),
-    supervisor: {
-      active: summary(active, [
-        "version",
-        "generation",
-        "sandboxName",
-        "image",
-        "healthUrl",
-        "activatedAt",
-        "expiresAt",
-      ]),
-      mutexPresent: mutexExists === 1,
-      mutexTtlMs,
-    },
-    indexes: { conversations: conversationCount, ready, renderReady },
-  };
-
-  if (continuation !== undefined) {
-    const [depth, activeRecord, parked, reset, resetPending, readyMember] = await Promise.all([
-      redis.llen(pendingKey(continuation)),
-      redis.get(activeKey(continuation)),
-      redis.get(parkedKey(continuation)),
-      redis.exists(resetKey(continuation)),
-      redis.llen(resetPendingKey(continuation)),
-      redis.sismember(AGENT_READY_SET_KEY, queueMember(continuation)),
-    ]);
-    report.conversation = {
-      key: continuation,
-      pendingDepth: depth,
-      resetPendingDepth: resetPending,
-      resetPresent: reset === 1,
-      readyMember: readyMember === 1,
-      // "Why is this stuck" comes down to who holds which lease and until
-      // when, so the report prints all three.
-      active: summary(activeRecord, [
-        "phase",
-        "messageId",
-        "dispatchId",
-        "sessionId",
-        "eveTurnId",
-        "handoff",
-        "turn",
-        "ingress",
-      ]),
-      parked: summary(parked, ["messageId", "dispatchId", "sessionId", "eveTurnId"]),
-    };
-  }
-
-  if (dispatch !== undefined) {
-    const [readyMember, target, intent, projection, claim, claimTtlMs, outcome] = await Promise.all(
-      [
-        redis.sismember(AGENT_RENDER_READY_SET_KEY, renderMember(dispatch)),
-        redis.exists(renderTargetKey(dispatch)),
-        redis.exists(renderIntentKey(dispatch)),
-        redis.exists(renderProjectionKey(dispatch)),
-        redis.exists(renderClaimKey(dispatch)),
-        redis.pttl(renderClaimKey(dispatch)),
-        redis.get(renderOutcomeKey(dispatch)),
-      ],
+function inspectRedis(arguments_: readonly string[]): Promise<Result<undefined, InvalidInput>> {
+  return Result.gen(async function* () {
+    const allowed = new Set(["--continuation", "--dispatch"]);
+    for (let index = 0; index < arguments_.length; index += 2) {
+      if (!allowed.has(arguments_[index] ?? "") || arguments_[index + 1] === undefined) usage();
+    }
+    const continuation = yield* check(
+      continuationKeySchema,
+      "--continuation",
+      option(arguments_, "--continuation"),
     );
-    report.render = {
-      dispatchId: dispatch,
-      readyMember: readyMember === 1,
-      targetPresent: target === 1,
-      intentPresent: intent === 1,
-      projectionPresent: projection === 1,
-      claimPresent: claim === 1,
-      claimTtlMs,
-      outcome: outcome === "applied" || outcome === "discarded" ? outcome : undefined,
-    };
-  }
+    const dispatch = yield* check(dispatchIdSchema, "--dispatch", option(arguments_, "--dispatch"));
 
-  console.info(JSON.stringify(report, undefined, 2));
+    const redis = new Redis(redisEnv());
+
+    const [active, mutexExists, mutexTtlMs, conversationCount, ready, renderReady] =
+      await Promise.all([
+        redis.get(BOT_ACTIVE_GENERATION_KEY),
+        redis.exists(BOT_SUPERVISOR_MUTEX_KEY),
+        redis.pttl(BOT_SUPERVISOR_MUTEX_KEY),
+        redis.scard(QUEUE_INDEX_KEY),
+        redis.scard(AGENT_READY_SET_KEY),
+        redis.scard(AGENT_RENDER_READY_SET_KEY),
+      ]);
+    const report: OpsReport = {
+      at: new Date().toISOString(),
+      supervisor: {
+        active: summary(active, [
+          "version",
+          "generation",
+          "sandboxName",
+          "image",
+          "healthUrl",
+          "activatedAt",
+          "expiresAt",
+        ]),
+        mutexPresent: mutexExists === 1,
+        mutexTtlMs,
+      },
+      indexes: { conversations: conversationCount, ready, renderReady },
+    };
+
+    if (continuation !== undefined) {
+      const [depth, activeRecord, parked, reset, resetPending, readyMember] = await Promise.all([
+        redis.llen(pendingKey(continuation)),
+        redis.get(activeKey(continuation)),
+        redis.get(parkedKey(continuation)),
+        redis.exists(resetKey(continuation)),
+        redis.llen(resetPendingKey(continuation)),
+        redis.sismember(AGENT_READY_SET_KEY, queueMember(continuation)),
+      ]);
+      report.conversation = {
+        key: continuation,
+        pendingDepth: depth,
+        resetPendingDepth: resetPending,
+        resetPresent: reset === 1,
+        readyMember: readyMember === 1,
+        // "Why is this stuck" comes down to who holds which lease and until
+        // when, so the report prints all three.
+        active: summary(activeRecord, [
+          "phase",
+          "messageId",
+          "dispatchId",
+          "sessionId",
+          "eveTurnId",
+          "handoff",
+          "turn",
+          "ingress",
+        ]),
+        parked: summary(parked, ["messageId", "dispatchId", "sessionId", "eveTurnId"]),
+      };
+    }
+
+    if (dispatch !== undefined) {
+      const [readyMember, target, intent, projection, claim, claimTtlMs, outcome] =
+        await Promise.all([
+          redis.sismember(AGENT_RENDER_READY_SET_KEY, renderMember(dispatch)),
+          redis.exists(renderTargetKey(dispatch)),
+          redis.exists(renderIntentKey(dispatch)),
+          redis.exists(renderProjectionKey(dispatch)),
+          redis.exists(renderClaimKey(dispatch)),
+          redis.pttl(renderClaimKey(dispatch)),
+          redis.get(renderOutcomeKey(dispatch)),
+        ]);
+      report.render = {
+        dispatchId: dispatch,
+        readyMember: readyMember === 1,
+        targetPresent: target === 1,
+        intentPresent: intent === 1,
+        projectionPresent: projection === 1,
+        claimPresent: claim === 1,
+        claimTtlMs,
+        outcome: outcome === "applied" || outcome === "discarded" ? outcome : undefined,
+      };
+    }
+
+    console.info(JSON.stringify(report, undefined, 2));
+    return Result.ok(undefined);
+  });
 }
 
-async function inspectSchedules(): Promise<void> {
+async function inspectSchedules(): Promise<Result<undefined, never>> {
   const { url, authToken } = tursoEnv();
   const client = createClient(authToken === undefined ? { url } : { url, authToken });
   try {
@@ -291,9 +301,21 @@ async function inspectSchedules(): Promise<void> {
   } finally {
     client.close();
   }
+  return Result.ok(undefined);
 }
 
 const [command, ...arguments_] = process.argv.slice(2);
-if (command === "redis") await inspectRedis(arguments_);
-else if (command === "schedules" && arguments_.length === 0) await inspectSchedules();
-else usage();
+const outcome: Result<undefined, InvalidInput> =
+  command === "redis"
+    ? await inspectRedis(arguments_)
+    : command === "schedules" && arguments_.length === 0
+      ? await inspectSchedules()
+      : usage();
+
+outcome.match({
+  ok: () => undefined,
+  err: (error) => {
+    console.error(JSON.stringify(serializeError(error), undefined, 2));
+    process.exit(1);
+  },
+});

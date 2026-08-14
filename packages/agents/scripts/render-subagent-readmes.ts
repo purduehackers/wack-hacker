@@ -16,13 +16,19 @@ import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { UserRole } from "@repo/shared/discord";
+import {
+  InvalidInput,
+  InvariantViolated,
+  messageOf,
+  NotFound,
+  serializeError,
+  Transient,
+} from "@repo/shared/errors";
+import { fromNullable, Result } from "@repo/shared/result";
 import { z } from "zod";
 
 import { parseSkillDoc } from "../agent/lib/policy/skill-catalog.ts";
 import { normalizeReadme, renderSubagentReadme, type SkillDoc } from "./lib/subagent-readme.ts";
-
-const packageRoot = fileURLToPath(new URL("..", import.meta.url));
-const subagentsRoot = join(packageRoot, "agent/subagents");
 
 const skillSchema = z.strictObject({
   name: z.string(),
@@ -35,54 +41,131 @@ const toolSpecSchema = z.looseObject({
   access: z.looseObject({ risk: z.string(), minRole: z.enum(UserRole).optional() }),
 });
 
+/** Reports whether `path` exists. Any stat failure counts as absent. */
 async function exists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
+  return Result.isOk(await Result.tryPromise(() => access(path)));
 }
 
-const domains = (await readdir(subagentsRoot, { withFileTypes: true }))
-  .filter((entry) => entry.isDirectory())
-  .map((entry) => entry.name)
-  .sort((left, right) => left.localeCompare(right));
+/** Validates one registry export, listing every failing path on rejection. */
+function decodeExport<S extends z.ZodType>(
+  schema: S,
+  subject: string,
+  value: unknown,
+): Result<z.output<S>, InvalidInput> {
+  const parsed = schema.safeParse(value);
+  if (parsed.success) return Result.ok(parsed.data);
+  const issues = parsed.error.issues.map((failure) => {
+    const path = failure.path.join(".");
+    return path === "" ? failure.message : `${path}: ${failure.message}`;
+  });
+  return Result.err(new InvalidInput({ subject, issues }));
+}
 
-let rendered = 0;
-for (const domain of domains) {
-  const root = join(subagentsRoot, domain);
-  if (!(await exists(join(root, "lib/registry.ts")))) continue;
+const outcome = await Result.gen(async function* () {
+  const packageRootUrl = yield* fromNullable(
+    URL.parse("..", import.meta.url),
+    () =>
+      new InvariantViolated({
+        invariant: "import.meta.url parses as a URL",
+        detail: import.meta.url,
+      }),
+  );
+  const subagentsRoot = join(fileURLToPath(packageRootUrl), "agent/subagents");
+  const entries = yield* Result.await(
+    Result.tryPromise({
+      try: () => readdir(subagentsRoot, { withFileTypes: true }),
+      catch: () => new NotFound({ kind: "directory", id: subagentsRoot }),
+    }),
+  );
+  const domainNames = entries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort((left, right) => left.localeCompare(right));
 
-  const constant = domain.toUpperCase().replaceAll("-", "_");
-  // The registry module resolves at runtime, so its namespace arrives untyped.
-  // The concrete schemas below validate every field this script consumes.
-  const registry = await import(pathToFileURL(join(root, "lib/registry.ts")).href);
-  const skills = z.array(skillSchema).parse(registry[`${constant}_SKILLS`]);
-  const baseTools = z.array(z.string()).parse(registry[`${constant}_BASE_TOOL_NAMES`]);
-  const tools = z.record(z.string(), toolSpecSchema).parse(registry[`${constant}_TOOLS`]);
+  let rendered = 0;
+  for (const domain of domainNames) {
+    const root = join(subagentsRoot, domain);
+    if (!(await exists(join(root, "lib/registry.ts")))) continue;
 
-  const docs: SkillDoc[] = skills.map((skill) => {
-    const { description } = parseSkillDoc(skill.doc);
-    if (description === "") {
-      throw new Error(`${domain}/${skill.name}.md needs a \`description\` in its frontmatter`);
+    const constant = domain.toUpperCase().replaceAll("-", "_");
+    // The registry module resolves at runtime, so its namespace arrives untyped.
+    // The concrete schemas below validate every field this script consumes.
+    const registry = yield* Result.await(
+      Result.tryPromise({
+        try: () => import(pathToFileURL(join(root, "lib/registry.ts")).href),
+        catch: (cause) =>
+          new InvariantViolated({
+            invariant: `${domain} registry module loads`,
+            detail: messageOf(cause),
+          }),
+      }),
+    );
+    const skillEntries = yield* decodeExport(
+      z.array(skillSchema),
+      `${domain} registry ${constant}_SKILLS`,
+      registry[`${constant}_SKILLS`],
+    );
+    const baseTools = yield* decodeExport(
+      z.array(z.string()),
+      `${domain} registry ${constant}_BASE_TOOL_NAMES`,
+      registry[`${constant}_BASE_TOOL_NAMES`],
+    );
+    const tools = yield* decodeExport(
+      z.record(z.string(), toolSpecSchema),
+      `${domain} registry ${constant}_TOOLS`,
+      registry[`${constant}_TOOLS`],
+    );
+
+    const docs: SkillDoc[] = [];
+    for (const skill of skillEntries) {
+      const { description } = parseSkillDoc(skill.doc);
+      if (description === "") {
+        yield* new InvalidInput({
+          subject: `${domain}/${skill.name}.md`,
+          issues: ["needs a `description` in its frontmatter"],
+        });
+      }
+      docs.push({ name: skill.name, minRole: skill.minRole, tools: skill.tools, description });
     }
-    return { name: skill.name, minRole: skill.minRole, tools: skill.tools, description };
-  });
 
-  const readmePath = join(root, "README.md");
-  const existing = (await exists(readmePath)) ? await readFile(readmePath, "utf8") : undefined;
-  const next = renderSubagentReadme({
-    domain,
-    skills: docs,
-    baseTools,
-    tools,
-    ...(existing !== undefined && { existing }),
-  });
-  if (existing === undefined || normalizeReadme(next) !== normalizeReadme(existing)) {
-    await writeFile(readmePath, next);
-    rendered += 1;
+    const readmePath = join(root, "README.md");
+    const existing = (await exists(readmePath))
+      ? yield* Result.await(
+          Result.tryPromise({
+            try: () => readFile(readmePath, "utf8"),
+            catch: (cause) =>
+              new Transient({ operation: `read ${readmePath}`, detail: messageOf(cause) }),
+          }),
+        )
+      : undefined;
+    const next = renderSubagentReadme({
+      domain,
+      skills: docs,
+      baseTools,
+      tools,
+      ...(existing !== undefined && { existing }),
+    });
+    if (existing === undefined || normalizeReadme(next) !== normalizeReadme(existing)) {
+      yield* Result.await(
+        Result.tryPromise({
+          try: () => writeFile(readmePath, next),
+          catch: (cause) =>
+            new Transient({ operation: `write ${readmePath}`, detail: messageOf(cause) }),
+        }),
+      );
+      rendered += 1;
+    }
   }
-}
+  return Result.ok({ rendered, scanned: domainNames.length });
+});
 
-console.info(`readmes: ${rendered} written, ${domains.length} subagents scanned`);
+outcome.match({
+  ok: ({ rendered, scanned }) => {
+    console.info(`readmes: ${rendered} written, ${scanned} subagents scanned`);
+  },
+  err: (error) => {
+    const failure = serializeError(error);
+    console.error(`render-subagent-readmes failed: ${failure.tag}: ${failure.message}`);
+    process.exitCode = 1;
+  },
+});
