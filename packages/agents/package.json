@@ -14,9 +14,6 @@
     "start": "eve start"
   },
   "dependencies": {
-    "@ai-sdk/harness": "^1.0.64",
-    "@ai-sdk/harness-codex": "^1.0.66",
-    "@ai-sdk/sandbox-vercel": "^1.0.64",
     "@discordjs/rest": "^2.6.2",
     "@figma/rest-api-spec": "0.37.0",
     "@libsql/client": "0.17.4",

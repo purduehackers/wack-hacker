@@ -2,7 +2,7 @@
  * Invoke the agent as a real Discord member, for testing.
  *
  * `eve invoke` reaches a deployed agent over HTTP and creates a session with no
- * principal. Every interesting path refuses on the spot — `code_task`, anything
+ * principal. Every interesting path refuses on the spot — anything
  * admin-gated, the whole subagent relay — because `roleFromMemberRoles` has
  * nothing to derive a tier from. That makes the loop useless for exactly the
  * things worth exercising, which is why this exists.

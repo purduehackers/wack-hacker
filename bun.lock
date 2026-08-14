@@ -19,9 +19,6 @@
       "name": "@repo/agents",
       "version": "0.0.0",
       "dependencies": {
-        "@ai-sdk/harness": "^1.0.64",
-        "@ai-sdk/harness-codex": "^1.0.66",
-        "@ai-sdk/sandbox-vercel": "^1.0.64",
         "@discordjs/rest": "^2.6.2",
         "@figma/rest-api-spec": "0.37.0",
         "@libsql/client": "0.17.4",
@@ -107,15 +104,9 @@
 
     "@ai-sdk/groq": ["@ai-sdk/groq@4.0.24", "", { "dependencies": { "@ai-sdk/provider": "4.0.6", "@ai-sdk/provider-utils": "5.0.23" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-b4Ef0lkEfeKi2PdurFQlgPTwuCH0Ww4vyobl7izGqorFtHhJ7aErNii6vLSs31aTybOHrnAG9rXT7MMWIwmvsg=="],
 
-    "@ai-sdk/harness": ["@ai-sdk/harness@1.0.64", "", { "dependencies": { "@ai-sdk/provider": "4.0.7", "@ai-sdk/provider-utils": "5.0.25", "ai": "7.0.58" }, "peerDependencies": { "ws": "^8.21.0", "zod": "^3.25.76 || ^4.1.8" }, "optionalPeers": ["ws"] }, "sha512-kN9Mt8uNnJK11FhaFg0Kkb/2PWzFl3MEEUHl9s4d/r69A7/iRBEpAjEHnJ4SLWzF/udvdBYriVGA3FgZTuMyww=="],
-
-    "@ai-sdk/harness-codex": ["@ai-sdk/harness-codex@1.0.66", "", { "dependencies": { "@ai-sdk/harness": "1.0.64", "@ai-sdk/provider-utils": "5.0.25", "ws": "^8.21.0" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-JAvQO7JuIg7Co3Ppyq/p0cBr314A1WJa2uzoL17EvLYeYIIIsQQhNrQYwmxK2swxACxwGyZJYpV5KKvvArfXMQ=="],
-
     "@ai-sdk/provider": ["@ai-sdk/provider@4.0.7", "", { "dependencies": { "json-schema": "^0.4.0" } }, "sha512-6or44XprPzKbr8zkmzosowSE0pxkvJcoojBL+mCZvPUt3kvXp3XSNqeVun9golb1acEfSo6yaEBRT18h2VU+1Q=="],
 
     "@ai-sdk/provider-utils": ["@ai-sdk/provider-utils@5.0.25", "", { "dependencies": { "@ai-sdk/provider": "4.0.7", "@standard-schema/spec": "^1.1.0", "@workflow/serde": "4.1.0", "eventsource-parser": "^3.0.8", "undici": "^7.28.0" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-xscPPHCSjCHWrdhai25sbHCJeKNLW/3D1uSpUZa4cEtTKXA8OnPQ3+Rfu1SmM5Ea/Mf8Dfn3cllw9zeMzo/zFA=="],
-
-    "@ai-sdk/sandbox-vercel": ["@ai-sdk/sandbox-vercel@1.0.64", "", { "dependencies": { "@ai-sdk/harness": "1.0.64", "@ai-sdk/provider-utils": "5.0.25", "@vercel/sandbox": "^2.0.1" } }, "sha512-bSDvfA7KMl0j5u51tPQqgtqPe7P45C0vZ9UMX/BD6eVTzdgc1MByYFSuEsk35a63+wTnitP9AVUEOJ1qzUP4JA=="],
 
     "@apm-js-collab/code-transformer": ["@apm-js-collab/code-transformer@0.18.1", "", { "dependencies": { "@types/estree": "^1.0.8", "astring": "^1.9.0", "esquery": "^1.7.0", "meriyah": "^6.1.4", "semifies": "^1.0.0", "source-map": "^0.6.0" }, "bin": { "code-transformer": "cli.js" } }, "sha512-u1Hb6bHjWtkSpiprwVP6YaHC1DTN4RAU3zYkUDUe7WMnJwdyU1pwTL9dFKiSJB9IiLue/EQovmyx6xhU7FFtAQ=="],
 

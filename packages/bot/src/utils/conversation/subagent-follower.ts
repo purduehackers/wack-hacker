@@ -2,9 +2,9 @@
  * Follows a delegated turn's streams so it stops looking dead.
  *
  * A declared subagent runs in its own session and the parent suspends for the
- * whole span, so from out here a `code_task` says nothing for as long as the work
- * takes. Nobody could see what it was doing, and nothing refreshed the turn lease,
- * so the sweep reclaimed turns that were working perfectly well.
+ * whole span, so from out here a delegated turn says nothing for as long as the
+ * work takes. Nobody could see what it was doing, and nothing refreshed the turn
+ * lease, so the sweep reclaimed turns that were working perfectly well.
  *
  * The bot is the only place this can live: it holds sockets, and the agent cannot.
  *
@@ -30,11 +30,11 @@ const MAX_LINE = 200;
 /**
  * How deep the tree is followed.
  *
- * A delegated subagent can itself delegate — `code` runs codex, so the work worth
- * narrating is two levels below the turn — and stopping at the first child showed
- * only that something had started. Bounded rather than unbounded because each
- * level opens a stream per node, and a line about a great-grandchild's tool call
- * is further from what the person asked than one line can usefully carry.
+ * A delegated subagent can itself delegate, so the work worth narrating can sit
+ * below the first child and stopping there showed only that something had
+ * started. Bounded rather than unbounded because each level opens a stream per
+ * node, and a line about a great-grandchild's tool call is further from what the
+ * person asked than one line can usefully carry.
  */
 const MAX_DEPTH = 3;
 

@@ -68,11 +68,17 @@ if (failures.length > 0) {
 // is one edit in one place. A hardcoded count here drifts silently: the scan
 // would keep passing on the old number while the new domain went unchecked.
 const expectedCatalogs = INTEGRATION_DOMAINS.size;
-if (toolExecutors === 0 || stateInitializers === 0 || integrationCatalogs !== expectedCatalogs) {
+// `stateInitializers` is deliberately not asserted non-empty. It was, back when
+// the code subagent's workspace machine was the only `defineState` in the repo,
+// and removing that subagent turned a scan with nothing to find into a failure.
+// The two counts below still prove the scan is looking at real files: executors
+// come from every tool in the tree, and the catalog count is derived from
+// `INTEGRATION_DOMAINS` so a new domain cannot slip past unscanned.
+if (toolExecutors === 0 || integrationCatalogs !== expectedCatalogs) {
   throw new Error(
     `serialization boundary scan found ${toolExecutors} tool executors, ` +
       `${stateInitializers} state initializers, and ${integrationCatalogs} integration catalogs; ` +
-      `expected non-empty boundaries and exactly ${expectedCatalogs} direct integration catalogs`,
+      `expected non-empty executors and exactly ${expectedCatalogs} direct integration catalogs`,
   );
 }
 console.info(
