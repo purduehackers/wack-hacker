@@ -23,8 +23,8 @@ export const create_project = defineTool({
       },
       body: {
         name,
-        ...(slug === undefined ? {} : { slug }),
-        ...(platform === undefined ? {} : { platform }),
+        ...(slug !== undefined && { slug }),
+        ...(platform !== undefined && { platform }),
       },
     });
     const { data } = unwrapResult(result, "createProject");

@@ -21,6 +21,12 @@ export interface IntegrationSkillDefinition {
   readonly doc: string;
 }
 
+/** The two parts of a skill document that `defineSkill` consumes. */
+export interface ParsedSkillDoc {
+  readonly description: string;
+  readonly markdown: string;
+}
+
 /**
  * Splits leading frontmatter off a skill document.
  *
@@ -29,7 +35,7 @@ export interface IntegrationSkillDefinition {
  * so a document can carry editor metadata without this needing to know about
  * it.
  */
-export function parseSkillDoc(doc: string): { description: string; markdown: string } {
+export function parseSkillDoc(doc: string): ParsedSkillDoc {
   const match = /^---\n([\s\S]*?)\n---\n?/u.exec(doc);
   const frontmatter = match?.[1];
   if (match === null || frontmatter === undefined) {

@@ -17,9 +17,9 @@ export const update_dns_record = defineTool({
         type,
         content,
         ttl,
-        ...(comment === undefined ? {} : { comment }),
-        ...(proxied === undefined ? {} : { proxied }),
-        ...(priority === undefined ? {} : { priority }),
+        ...(comment !== undefined && { comment }),
+        ...(proxied !== undefined && { proxied }),
+        ...(priority !== undefined && { priority }),
       }),
     ),
 });

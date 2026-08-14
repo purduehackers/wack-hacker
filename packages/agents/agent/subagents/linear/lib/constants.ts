@@ -71,11 +71,11 @@ export const initiativeStatus = z.enum(InitiativeStatus);
  * Linear's `User`, and the rename is deliberate: nobody asks to invite someone
  * as a "user".
  */
-export const INVITE_ROLE: Record<"admin" | "member" | "guest", UserRoleType> = {
+export const INVITE_ROLE = {
   admin: UserRoleType.Admin,
   member: UserRoleType.User,
   guest: UserRoleType.Guest,
-};
+} satisfies Record<"admin" | "member" | "guest", UserRoleType>;
 
 /**
  * Value the label projections report for a workspace-wide label, which has no

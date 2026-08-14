@@ -17,7 +17,7 @@ export const list_hack_night_sessions = defineTool({
       const res = await payload.find({
         collection: "hack-night-sessions",
         ...paginationQuery(input),
-        ...(published_only ? { where: { published: { equals: true } } } : {}),
+        ...(published_only && { where: { published: { equals: true } } }),
       });
       return JSON.stringify({
         total_docs: res.totalDocs,

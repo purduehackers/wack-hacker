@@ -39,21 +39,19 @@ export function authFor(principal: Principal, target: DiscordAuthTarget): Sessio
       threadId: target.threadId ?? "",
       guildId: DISCORD_GUILD_ID,
       source: target.source ?? "chat",
-      ...(target.approvalRequester === undefined
-        ? {}
-        : {
-            approvalRequesterId: target.approvalRequester.userId,
-            approvalRequesterRole: roleFromMemberRoles(target.approvalRequester.memberRoles),
-            approvalRequesterMemberRoles: target.approvalRequester.memberRoles,
-          }),
-      ...(target.scheduleId === undefined ? {} : { scheduleId: target.scheduleId }),
-      ...(target.occurrenceId === undefined ? {} : { occurrenceId: target.occurrenceId }),
-      ...(target.messageId === undefined ? {} : { discordMessageId: target.messageId }),
-      ...(target.dispatchId === undefined ? {} : { discordDispatchId: target.dispatchId }),
-      ...(target.renderChannelId === undefined ? {} : { renderChannelId: target.renderChannelId }),
-      ...(target.inputRequestId === undefined
-        ? {}
-        : { discordInputRequestId: target.inputRequestId }),
+      ...(target.approvalRequester !== undefined && {
+        approvalRequesterId: target.approvalRequester.userId,
+        approvalRequesterRole: roleFromMemberRoles(target.approvalRequester.memberRoles),
+        approvalRequesterMemberRoles: target.approvalRequester.memberRoles,
+      }),
+      ...(target.scheduleId !== undefined && { scheduleId: target.scheduleId }),
+      ...(target.occurrenceId !== undefined && { occurrenceId: target.occurrenceId }),
+      ...(target.messageId !== undefined && { discordMessageId: target.messageId }),
+      ...(target.dispatchId !== undefined && { discordDispatchId: target.dispatchId }),
+      ...(target.renderChannelId !== undefined && { renderChannelId: target.renderChannelId }),
+      ...(target.inputRequestId !== undefined && {
+        discordInputRequestId: target.inputRequestId,
+      }),
     },
   };
 }

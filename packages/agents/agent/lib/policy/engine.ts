@@ -35,11 +35,11 @@ const inputSchema = z.strictObject({
 });
 
 type PolicyInput = z.output<typeof inputSchema>;
-const ROLE_LEVEL: Record<PolicyPrincipal["role"], number> = {
+const ROLE_LEVEL = {
   [UserRole.Public]: 0,
   [UserRole.Organizer]: 1,
   [UserRole.Admin]: 2,
-};
+} satisfies Record<PolicyPrincipal["role"], number>;
 
 function authorized(input: PolicyInput): boolean {
   return ROLE_LEVEL[input.principal.role] >= ROLE_LEVEL[input.capability.minRole];
@@ -101,7 +101,7 @@ export function decideCapability(
       const input = {
         principal,
         capability,
-        ...(context.budget === undefined ? {} : { budget: context.budget }),
+        ...(context.budget !== undefined && { budget: context.budget }),
       } satisfies PolicyInput;
       const discover = engine.capabilities.discover({ input });
       const execute = engine.capabilities.execute({ input });

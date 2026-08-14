@@ -20,7 +20,13 @@ const redact = createRedactor({
   maxEntries: 100,
 });
 
-function auditInput(input: unknown): { readonly hash: string; readonly preview: string } {
+/** Hash-and-preview projection of a tool input, sized for the audit row. */
+interface AuditInputDigest {
+  readonly hash: string;
+  readonly preview: string;
+}
+
+function auditInput(input: unknown): AuditInputDigest {
   const serialized = JSON.stringify(redact(input)) ?? "null";
   return {
     hash: createHash("sha256").update(serialized).digest("hex"),

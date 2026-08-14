@@ -78,7 +78,7 @@ export class RenderReader {
     if (Result.isError(decoded)) return decoded;
     return Result.ok(
       decoded.value ?? {
-        ...(anchorMessageId === undefined ? {} : { anchorMessageId }),
+        ...(anchorMessageId !== undefined && { anchorMessageId }),
         overflow: [],
         appliedRevision: 0,
       },

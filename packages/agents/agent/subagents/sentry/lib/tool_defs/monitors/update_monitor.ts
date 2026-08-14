@@ -58,9 +58,9 @@ export const update_monitor = defineTool({
     const monitorConfig = {
       schedule_type: schedule_type ?? currentConfig.schedule_type,
       schedule: schedule ?? currentConfig.schedule,
-      ...(resolvedCheckinMargin === undefined ? {} : { checkin_margin: resolvedCheckinMargin }),
-      ...(resolvedMaxRuntime === undefined ? {} : { max_runtime: resolvedMaxRuntime }),
-      ...(resolvedTimezone === undefined ? {} : { timezone: resolvedTimezone }),
+      ...(resolvedCheckinMargin !== undefined && { checkin_margin: resolvedCheckinMargin }),
+      ...(resolvedMaxRuntime !== undefined && { max_runtime: resolvedMaxRuntime }),
+      ...(resolvedTimezone !== undefined && { timezone: resolvedTimezone }),
     };
 
     const data = await sentryPut(

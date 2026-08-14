@@ -29,8 +29,8 @@ export const search_issues = defineTool({
   execute: async ({ query, sort, order, per_page, page }) => {
     const { data } = await octokit().rest.search.issuesAndPullRequests({
       q: `${query} org:${env.GITHUB_ORG}`,
-      ...(sort === undefined ? {} : { sort }),
-      ...(order === undefined ? {} : { order }),
+      ...(sort !== undefined && { sort }),
+      ...(order !== undefined && { order }),
       per_page: per_page ?? 20,
       page: page ?? 1,
     });

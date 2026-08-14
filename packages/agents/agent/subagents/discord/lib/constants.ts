@@ -97,17 +97,18 @@ export const emojiName = z
 
 // ──────────────── Discord enum tables ────────────────
 
-const CHANNEL_TYPE_NAMES: Readonly<Record<number, string>> = {
-  [ChannelType.GuildText]: "text",
-  [ChannelType.GuildVoice]: "voice",
-  [ChannelType.GuildCategory]: "category",
-  [ChannelType.GuildAnnouncement]: "announcement",
-  [ChannelType.AnnouncementThread]: "announcement_thread",
-  [ChannelType.PublicThread]: "public_thread",
-  [ChannelType.PrivateThread]: "private_thread",
-  [ChannelType.GuildStageVoice]: "stage",
-  [ChannelType.GuildForum]: "forum",
-};
+/** Raw channel-type integers to model-facing names. Numbers outside it degrade to `unknown(n)`. */
+const CHANNEL_TYPE_NAMES = new Map<number, string>([
+  [ChannelType.GuildText, "text"],
+  [ChannelType.GuildVoice, "voice"],
+  [ChannelType.GuildCategory, "category"],
+  [ChannelType.GuildAnnouncement, "announcement"],
+  [ChannelType.AnnouncementThread, "announcement_thread"],
+  [ChannelType.PublicThread, "public_thread"],
+  [ChannelType.PrivateThread, "private_thread"],
+  [ChannelType.GuildStageVoice, "stage"],
+  [ChannelType.GuildForum, "forum"],
+]);
 export const AUTO_ARCHIVE_DURATIONS = {
   "60": ThreadAutoArchiveDuration.OneHour,
   "1440": ThreadAutoArchiveDuration.OneDay,
@@ -179,16 +180,16 @@ export function autoModMetadata(
 ): RESTPostAPIAutoModerationRuleJSONBody["trigger_metadata"] {
   if (metadata === undefined) return undefined;
   return compact({
-    ...(metadata.keyword_filter === undefined ? {} : { keyword_filter: metadata.keyword_filter }),
-    ...(metadata.regex_patterns === undefined ? {} : { regex_patterns: metadata.regex_patterns }),
-    ...(metadata.presets === undefined ? {} : { presets: metadata.presets }),
-    ...(metadata.allow_list === undefined ? {} : { allow_list: metadata.allow_list }),
-    ...(metadata.mention_total_limit === undefined
-      ? {}
-      : { mention_total_limit: metadata.mention_total_limit }),
-    ...(metadata.mention_raid_protection_enabled === undefined
-      ? {}
-      : { mention_raid_protection_enabled: metadata.mention_raid_protection_enabled }),
+    ...(metadata.keyword_filter !== undefined && { keyword_filter: metadata.keyword_filter }),
+    ...(metadata.regex_patterns !== undefined && { regex_patterns: metadata.regex_patterns }),
+    ...(metadata.presets !== undefined && { presets: metadata.presets }),
+    ...(metadata.allow_list !== undefined && { allow_list: metadata.allow_list }),
+    ...(metadata.mention_total_limit !== undefined && {
+      mention_total_limit: metadata.mention_total_limit,
+    }),
+    ...(metadata.mention_raid_protection_enabled !== undefined && {
+      mention_raid_protection_enabled: metadata.mention_raid_protection_enabled,
+    }),
   });
 }
 
@@ -211,7 +212,7 @@ export function autoModAction(
   const metadata = autoModActionMetadata(action);
   return compact({
     type: AUTO_MOD_ACTION_TYPES[action.type],
-    ...(metadata === undefined ? {} : { metadata }),
+    ...(metadata !== undefined && { metadata }),
   });
 }
 
@@ -262,7 +263,7 @@ export async function guildWebhook(rest: REST, id: string): Promise<WebhookResul
 export function channelType(value: number): string {
   const parsed = responseInt.safeParse(value);
   if (!parsed.success) throw malformedDiscordResponse("channel type");
-  return CHANNEL_TYPE_NAMES[parsed.data] ?? `unknown(${parsed.data})`;
+  return CHANNEL_TYPE_NAMES.get(parsed.data) ?? `unknown(${parsed.data})`;
 }
 
 /**

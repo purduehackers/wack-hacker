@@ -116,12 +116,17 @@ async function payloadRequest<S extends z.ZodType>(
   return parsed.data;
 }
 
-function imageWhere(
-  slug: string,
-  discordMessageId?: string,
-  filename?: string,
-): Record<string, string> {
-  const where: Record<string, string> = {
+/**
+ * Payload `where[...]` query-string parameters, keyed by the bracketed clause.
+ * A named interface rather than a bare `Record` so the builder below keeps its
+ * literal evidence while staying open to the dynamic filter keys.
+ */
+interface ImageWhereQuery {
+  [clause: string]: string;
+}
+
+function imageWhere(slug: string, discordMessageId?: string, filename?: string): ImageWhereQuery {
+  const where: ImageWhereQuery = {
     "where[source][equals]": SOURCE,
     "where[batchId][equals]": slug,
   };

@@ -82,11 +82,11 @@ function botEnvironment(source: AgentEnv): BotProcessEnvironment {
     PHACK_API_TOKEN: required(source.PHACK_API_TOKEN, "PHACK_API_TOKEN"),
     GROQ_API_KEY: required(source.GROQ_API_KEY, "GROQ_API_KEY"),
     PORT: String(BOT_PORT_DEFAULT),
-    ...(source.SENTRY_DSN === undefined ? {} : { SENTRY_DSN: source.SENTRY_DSN }),
-    ...(source.SENTRY_RELEASE === undefined ? {} : { SENTRY_RELEASE: source.SENTRY_RELEASE }),
-    ...(source.SENTRY_TRACES_SAMPLE_RATE === undefined
-      ? {}
-      : { SENTRY_TRACES_SAMPLE_RATE: String(source.SENTRY_TRACES_SAMPLE_RATE) }),
+    ...(source.SENTRY_DSN !== undefined && { SENTRY_DSN: source.SENTRY_DSN }),
+    ...(source.SENTRY_RELEASE !== undefined && { SENTRY_RELEASE: source.SENTRY_RELEASE }),
+    ...(source.SENTRY_TRACES_SAMPLE_RATE !== undefined && {
+      SENTRY_TRACES_SAMPLE_RATE: String(source.SENTRY_TRACES_SAMPLE_RATE),
+    }),
   };
 }
 
@@ -102,6 +102,6 @@ export function botSupervisionConfig(source: AgentEnv): BotSupervisionConfig {
   return {
     image: source.BOT_IMAGE,
     botEnv: botEnvironment(source),
-    ...(explicit === undefined ? {} : { credentials: explicit }),
+    ...(explicit !== undefined && { credentials: explicit }),
   };
 }

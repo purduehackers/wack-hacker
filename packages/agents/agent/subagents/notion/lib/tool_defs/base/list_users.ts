@@ -12,7 +12,7 @@ export const list_users = defineTool({
   }),
   execute: async ({ start_cursor, page_size }) => {
     const { results, has_more, next_cursor } = await notion.users.list({
-      ...(start_cursor === undefined ? {} : { start_cursor }),
+      ...(start_cursor !== undefined && { start_cursor }),
       page_size: page_size ?? 50,
     });
     return {

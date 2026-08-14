@@ -16,7 +16,7 @@ export const retrieve_page_property = defineTool({
     return await notion.pages.properties.retrieve({
       page_id,
       property_id,
-      ...(start_cursor === undefined ? {} : { start_cursor }),
+      ...(start_cursor !== undefined && { start_cursor }),
       page_size: page_size ?? 25,
     });
   },

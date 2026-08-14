@@ -33,7 +33,7 @@ export const update_database = defineTool({
     }
     const databaseParams: UpdateDatabaseParameters = {
       database_id,
-      ...(title === undefined ? {} : { title: [{ text: { content: title } }] }),
+      ...(title !== undefined && { title: [{ text: { content: title } }] }),
     };
     if (title !== undefined) await notion.databases.update(databaseParams);
     const db = await notion.databases.retrieve({ database_id });

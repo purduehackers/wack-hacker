@@ -28,8 +28,8 @@ export const list_bans = defineTool({
       await rest.get(Routes.guildBans(DISCORD_GUILD_ID), {
         query: makeURLSearchParams<RESTGetAPIGuildBansQuery>({
           limit: input.limit ?? 100,
-          ...(input.before === undefined ? {} : { before: input.before }),
-          ...(input.after === undefined ? {} : { after: input.after }),
+          ...(input.before !== undefined && { before: input.before }),
+          ...(input.after !== undefined && { after: input.after }),
         }),
       }),
       "list guild bans",

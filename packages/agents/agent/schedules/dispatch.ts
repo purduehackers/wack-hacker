@@ -36,10 +36,10 @@ function desiredFire(job: ClaimedSchedule): ScheduledFirePayload {
     description: job.description,
     actionType: job.actionType,
     prompt: job.prompt,
-    ...(job.memberRoles === undefined ? {} : { memberRoles: job.memberRoles }),
+    ...(job.memberRoles !== undefined && { memberRoles: job.memberRoles }),
     attemptNumber: job.attemptCount + 1,
     finalAttempt: job.attemptCount + 1 >= SCHEDULE_MAX_ATTEMPTS,
-    ...(traceparent === undefined ? {} : { traceparent }),
+    ...(traceparent !== undefined && { traceparent }),
     scheduledFor: job.nextRunAt,
   };
 }

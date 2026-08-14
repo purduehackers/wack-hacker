@@ -5,8 +5,6 @@
  * Free text loses bearer tokens and known environment credentials as well.
  */
 
-import { z } from "zod";
-
 import { env } from "../../env.ts";
 import { assertToolOutput, isString, type JsonValue } from "../serialization.ts";
 
@@ -43,20 +41,13 @@ type ProviderValue =
 /** The two arms the walk descends into, and the only values `seen` ever holds. */
 type ProviderContainer = ProviderValue[] | { [key: string]: ProviderValue };
 
-// Hoisted so the recursive walk reuses one schema instead of rebuilding it at
-// every node.
-const objectSchema = z.object({});
-
 /**
- * Arrays and non-null objects, the two kinds this walk descends into.
- *
- * `z.object({})` accepts exactly `typeof value === "object" && value !== null &&
- * !Array.isArray(value)`, so pairing it with `Array.isArray` reproduces the
- * whole `typeof value === "object" && value !== null` set. `null`, functions
- * and every other primitive stay outside it and come back untouched.
+ * Arrays and non-null objects, the two kinds this walk descends into. `null`,
+ * functions and every other primitive stay outside it and come back untouched.
  */
 function isContainer(value: unknown): value is ProviderContainer {
-  return Array.isArray(value) || objectSchema.safeParse(value).success;
+  // oxlint-disable-next-line rayhanadev/no-typeof -- this gate admits any keyed object so the walk can redact inside it. A schema here would validate the leaves and send a payload it rejects back unredacted
+  return typeof value === "object" && value !== null;
 }
 
 /**
@@ -97,7 +88,7 @@ export function redactProviderSecrets(
   value: unknown,
   toolName?: string,
   seen = new WeakSet<ProviderContainer>(),
-): unknown {
+) {
   if (isString(value)) return redactProviderText(value);
   if (!isContainer(value)) return value;
   if (seen.has(value)) return "[Circular]";

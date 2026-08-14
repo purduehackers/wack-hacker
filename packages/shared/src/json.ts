@@ -18,6 +18,7 @@ import { z } from "zod";
 
 /** JSON text ⇄ a value of `schema`. */
 export function jsonCodec<S extends z.ZodType>(schema: S): z.ZodCodec<z.ZodString, S> {
+  // oxlint-disable-next-line rayhanadev/no-json-parse-stringify-codec -- the schema argument validates whatever decode parses at this Redis boundary
   return z.codec(z.string(), schema, {
     decode: (text, payload): z.input<S> => {
       try {

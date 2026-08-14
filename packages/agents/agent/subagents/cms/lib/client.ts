@@ -29,7 +29,7 @@ const eventSchema = z.object({
   end: z.string().optional(),
   location_name: z.string().optional(),
   location_url: z.string().optional(),
-  description: z.unknown().optional(),
+  description: z.json().optional(),
   send: z.boolean().optional(),
   sentAt: z.string().optional(),
   stats: z
@@ -65,8 +65,8 @@ const hackNightSessionSchema = z.object({
   host: z
     .object({ preferred_name: z.string().optional(), discord_id: z.string().optional() })
     .optional(),
-  description: z.unknown().optional(),
-  images: z.array(z.object({ image: z.unknown().optional() })).optional(),
+  description: z.json().optional(),
+  images: z.array(z.object({ image: z.json().optional() })).optional(),
   createdAt: z.string().optional(),
   updatedAt: z.string().optional(),
 });
@@ -151,7 +151,7 @@ const payloadPaginationSchema = z.object({
   totalPages: z.int().nonnegative(),
   page: z.int().positive().nullable(),
 });
-const payloadMutationEnvelopeSchema = z.object({ doc: z.unknown() });
+const payloadMutationEnvelopeSchema = z.object({ doc: z.json() });
 type PayloadPage<C extends PayloadCollection> = z.output<typeof payloadPaginationSchema> & {
   readonly docs: PayloadDocument<C>[];
 };
@@ -337,8 +337,8 @@ function createPayloadRestClient(options: PayloadRestClientOptions) {
       payloadMutationEnvelopeSchema,
       {
         method,
-        ...(body === undefined ? {} : { body }),
-        ...(headers === undefined ? {} : { headers }),
+        ...(body !== undefined && { body }),
+        ...(headers !== undefined && { headers }),
       },
     );
     const parsed = schema.safeParse(result.doc);
@@ -414,20 +414,24 @@ export function cmsAdminUrl(slug: string, id: DocumentId): string {
   return `${CMS_WEB_ORIGIN}/admin/collections/${slug}/${id}`;
 }
 
+/** REST-ready pagination args with defaults applied. */
+export interface PaginationArgs {
+  limit: number;
+  page: number;
+  sort?: string;
+}
+
 /** Resolve pagination input to REST-ready args with defaults. */
 export function paginationQuery(input: {
   limit?: number | undefined;
   page?: number | undefined;
   sort?: string | undefined;
-}): {
-  limit: number;
-  page: number;
-  sort?: string;
-} {
+}): PaginationArgs {
   return {
     limit: input.limit ?? 25,
     page: input.page ?? 1,
-    ...(input.sort ? { sort: input.sort } : {}),
+    // An empty string is not a usable sort key, so it stays out like undefined.
+    ...(input.sort !== undefined && input.sort !== "" && { sort: input.sort }),
   };
 }
 

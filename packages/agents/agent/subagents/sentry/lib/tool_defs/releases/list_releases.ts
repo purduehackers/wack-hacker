@@ -19,8 +19,8 @@ export const list_releases = defineTool({
       ...sentryOpts(),
       path: { organization_id_or_slug: sentryOrg() },
       query: {
-        ...(releaseQuery === undefined ? {} : { query: releaseQuery }),
-        ...(cursor === undefined ? {} : { cursor }),
+        ...(releaseQuery !== undefined && { query: releaseQuery }),
+        ...(cursor !== undefined && { cursor }),
       },
     });
     const { data } = unwrapResult(result, "listReleases");

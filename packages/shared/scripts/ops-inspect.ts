@@ -43,7 +43,7 @@ import { jsonCodec } from "../src/json.ts";
  * person reading the output. Every other reader of a Redis record knows what it
  * expects and says so with `stored(schema)`.
  */
-const jsonText = jsonCodec(z.unknown());
+const jsonText = jsonCodec(z.json());
 
 function usage(): never {
   console.error(`usage:
@@ -78,7 +78,21 @@ function check<S extends z.ZodType<string, string>>(
 }
 
 /** Any keyed blob. The wanted fields differ per key, so this schema declares none. */
-const anyRecordSchema = z.looseObject({});
+const anyRecordSchema = z.record(z.string(), z.json());
+
+/** Marker row for a blob that the tool cannot project field-by-field. */
+interface PresenceMarker {
+  readonly present: boolean;
+  readonly malformed?: boolean;
+}
+
+function malformedMarker(): PresenceMarker {
+  return { present: true, malformed: true };
+}
+
+function presenceMarker(value: unknown): PresenceMarker {
+  return { present: value !== undefined && value !== null };
+}
 
 /**
  * Picks fields out of an arbitrary Redis blob for display. This function
@@ -90,7 +104,7 @@ function summary(raw: unknown, fields: readonly string[]): unknown {
   const text = z.string().safeParse(raw);
   if (text.success) {
     const decoded = jsonText.safeParse(text.data);
-    if (!decoded.success) return { present: true, malformed: true };
+    if (!decoded.success) return malformedMarker();
     return pick(decoded.data, fields);
   }
   return pick(raw, fields);
@@ -98,7 +112,7 @@ function summary(raw: unknown, fields: readonly string[]): unknown {
 
 function pick(value: unknown, fields: readonly string[]): unknown {
   const record = anyRecordSchema.safeParse(value);
-  if (!record.success) return { present: value !== undefined && value !== null };
+  if (!record.success) return presenceMarker(value);
   return Object.fromEntries(
     fields.flatMap((fieldName) => {
       const candidate = record.data[fieldName];

@@ -17,7 +17,7 @@ export const list_users = defineTool({
       const res = await payload.find({
         collection: "users",
         ...paginationQuery(input),
-        ...(email !== undefined ? { where: { email: { equals: email } } } : {}),
+        ...(email !== undefined && { where: { email: { equals: email } } }),
       });
       return JSON.stringify({
         total_docs: res.totalDocs,

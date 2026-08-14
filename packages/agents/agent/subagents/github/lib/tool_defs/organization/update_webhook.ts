@@ -20,15 +20,15 @@ export const update_webhook = defineTool({
   }),
   execute: async ({ repo, hook_id, url, content_type, secret, ...fields }) => {
     const config = {
-      ...(url === undefined ? {} : { url }),
-      ...(content_type === undefined ? {} : { content_type }),
-      ...(secret === undefined ? {} : { secret }),
+      ...(url !== undefined && { url }),
+      ...(content_type !== undefined && { content_type }),
+      ...(secret !== undefined && { secret }),
     };
     const { data } = await octokit().rest.repos.updateWebhook({
       owner: env.GITHUB_ORG,
       repo,
       hook_id,
-      ...(Object.keys(config).length === 0 ? {} : { config }),
+      ...(Object.keys(config).length > 0 && { config }),
       ...fields,
     });
     return JSON.stringify({

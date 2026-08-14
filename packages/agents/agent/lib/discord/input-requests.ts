@@ -59,7 +59,7 @@ function approvalDisplay(
   const preview = inputPreview(request.action.input);
   return {
     toolName: sliceText(request.action.toolName, 256),
-    ...(preview === undefined ? {} : { inputPreview: preview }),
+    ...(preview !== undefined && { inputPreview: preview }),
   };
 }
 
@@ -124,23 +124,21 @@ export async function applyInputRequests(deps: ApplyInputRequestsDeps): Promise<
           kind: request.kind,
           ...approvalDisplay(request),
           ...approvalPolicy,
-          ...(request.display === undefined ? {} : { display: request.display }),
-          ...(request.allowFreeform === undefined ? {} : { allowFreeform: request.allowFreeform }),
-          ...(request.options === undefined
-            ? {}
-            : {
-                options: request.options
-                  .filter(({ id }) => id.length > 0 && id.length <= 512)
-                  .slice(0, 100)
-                  .map((option) => ({
-                    id: option.id,
-                    label: sliceText(visiblePrompt(option.label), 256),
-                    ...(option.description === undefined
-                      ? {}
-                      : { description: sliceText(option.description, 1_000) }),
-                    ...(option.style === undefined ? {} : { style: option.style }),
-                  })),
-              }),
+          ...(request.display !== undefined && { display: request.display }),
+          ...(request.allowFreeform !== undefined && { allowFreeform: request.allowFreeform }),
+          ...(request.options !== undefined && {
+            options: request.options
+              .filter(({ id }) => id.length > 0 && id.length <= 512)
+              .slice(0, 100)
+              .map((option) => ({
+                id: option.id,
+                label: sliceText(visiblePrompt(option.label), 256),
+                ...(option.description !== undefined && {
+                  description: sliceText(option.description, 1_000),
+                }),
+                ...(option.style !== undefined && { style: option.style }),
+              })),
+          }),
         };
       }),
   );

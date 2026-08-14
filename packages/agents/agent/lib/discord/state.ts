@@ -89,7 +89,7 @@ export function stateForMessage(payload: DeliveryPayload): DiscordChannelState {
   return {
     ...initialDiscordState(),
     channelId: payload.thread?.id ?? payload.channel.id,
-    ...(payload.thread === undefined ? {} : { threadId: payload.thread.id }),
+    ...(payload.thread !== undefined && { threadId: payload.thread.id }),
     activeMessageId: payload.messageId,
     activeDispatchId: payload.dispatchId,
   };

@@ -248,10 +248,10 @@ const taskViewRowSchema = z
   ])
   .transform(({ cron, timezone, lastError, lastDispatchedAt, ...view }) => ({
     ...view,
-    ...(isLibsqlNull(cron) ? {} : { cron }),
-    ...(isLibsqlNull(timezone) ? {} : { timezone }),
-    ...(isLibsqlNull(lastError) ? {} : { lastError }),
-    ...(isLibsqlNull(lastDispatchedAt) ? {} : { lastDispatchedAt }),
+    ...(!isLibsqlNull(cron) && { cron }),
+    ...(!isLibsqlNull(timezone) && { timezone }),
+    ...(!isLibsqlNull(lastError) && { lastError }),
+    ...(!isLibsqlNull(lastDispatchedAt) && { lastDispatchedAt }),
   })) satisfies z.ZodType<ScheduledTaskView>;
 
 const claimedBaseShape = {
@@ -274,9 +274,9 @@ const claimedScheduleRowSchema = z
   ])
   .transform(({ cron, timezone, memberRoles, ...claim }) => ({
     ...claim,
-    ...(isLibsqlNull(cron) ? {} : { cron }),
-    ...(isLibsqlNull(timezone) ? {} : { timezone }),
-    ...(isLibsqlNull(memberRoles) ? {} : { memberRoles }),
+    ...(!isLibsqlNull(cron) && { cron }),
+    ...(!isLibsqlNull(timezone) && { timezone }),
+    ...(!isLibsqlNull(memberRoles) && { memberRoles }),
     occurrenceId: scheduleOccurrenceId(claim.id, claim.nextRunAt),
   })) satisfies z.ZodType<ClaimedSchedule>;
 

@@ -547,7 +547,7 @@ function validateConfig(
     imageDigest: image.value.digest,
     env: bot.value.env,
     port: bot.value.port,
-    ...(credentials.value === undefined ? {} : { credentials: credentials.value }),
+    ...(credentials.value !== undefined && { credentials: credentials.value }),
   });
 }
 
@@ -1240,7 +1240,7 @@ async function activateCandidate(
   return Result.ok({
     status: "replaced",
     active: next,
-    ...(previous.record === undefined ? {} : { previousSandboxName: previous.record.sandboxName }),
+    ...(previous.record !== undefined && { previousSandboxName: previous.record.sandboxName }),
   });
 }
 

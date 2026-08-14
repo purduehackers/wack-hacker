@@ -25,8 +25,8 @@ export const list_monitors = defineTool({
       ...sentryOpts(),
       path: { organization_id_or_slug: sentryOrg() },
       query: {
-        ...(projectId === undefined ? {} : { project: [projectId] }),
-        ...(cursor === undefined ? {} : { cursor }),
+        ...(projectId !== undefined && { project: [projectId] }),
+        ...(cursor !== undefined && { cursor }),
       },
     });
     const { data } = unwrapResult(result, "listMonitors");

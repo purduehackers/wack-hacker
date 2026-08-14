@@ -23,7 +23,7 @@ export const append_block_children = defineTool({
     const params = {
       block_id,
       children,
-      ...(after === undefined ? {} : { after }),
+      ...(after !== undefined && { after }),
     };
     if (!isAppendBlockChildrenParameters(params)) {
       return { error: "Invalid Notion block children" };

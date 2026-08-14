@@ -32,8 +32,8 @@ export const search_notion = defineTool({
     const params: SearchParameters = {
       query,
       page_size: page_size ?? 20,
-      ...(start_cursor === undefined ? {} : { start_cursor }),
-      ...(filter === undefined ? {} : { filter: { value: filter, property: "object" } }),
+      ...(start_cursor !== undefined && { start_cursor }),
+      ...(filter !== undefined && { filter: { value: filter, property: "object" } }),
     };
     const { results, has_more, next_cursor } = await notion.search(params);
     return {

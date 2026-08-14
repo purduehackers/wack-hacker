@@ -52,7 +52,7 @@ export const update_alert_rule = defineTool({
         actions: input.actions ?? e.actions,
         actionMatch,
         frequency: input.frequency ?? e.frequency,
-        ...(environment === undefined ? {} : { environment }),
+        ...(environment !== undefined && { environment }),
       },
     });
     const { data } = unwrapResult(result, "updateAlertRule");

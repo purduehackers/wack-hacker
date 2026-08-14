@@ -16,8 +16,8 @@ export const update_cycle = defineTool({
   execute: async ({ id, starts_at, ends_at, ...rest }) => {
     const payload = await linear.updateCycle(id, {
       ...rest,
-      ...(starts_at === undefined ? {} : { startsAt: new Date(starts_at) }),
-      ...(ends_at === undefined ? {} : { endsAt: new Date(ends_at) }),
+      ...(starts_at !== undefined && { startsAt: new Date(starts_at) }),
+      ...(ends_at !== undefined && { endsAt: new Date(ends_at) }),
     });
     const cycle = await payload.cycle;
     if (!cycle) return JSON.stringify({ error: "Failed to update cycle" });

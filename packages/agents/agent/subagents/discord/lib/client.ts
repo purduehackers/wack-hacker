@@ -106,9 +106,10 @@ export function discordObject<T extends Shaped<T>>(value: unknown, endpoint: str
  * entry, and an array of anything but objects still throws.
  */
 export function discordArray<T extends readonly unknown[]>(value: unknown, endpoint: string): T {
+  const raw: unknown = value;
   if (!Array.isArray(value) || value.some((entry) => !isJsonObject(entry))) {
     throw malformedDiscordResponse(endpoint);
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- REST returns unknown. T is the endpoint's exported v10 result.
-  return value as unknown as T;
+  return raw as T;
 }

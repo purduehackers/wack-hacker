@@ -17,7 +17,7 @@ export const list_shelter_projects = defineTool({
       const res = await payload.find({
         collection: "shelter-projects",
         ...paginationQuery(input),
-        ...(visible_only ? { where: { visible: { equals: true } } } : {}),
+        ...(visible_only && { where: { visible: { equals: true } } }),
       });
       return JSON.stringify({
         total_docs: res.totalDocs,

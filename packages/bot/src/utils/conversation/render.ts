@@ -162,9 +162,9 @@ async function paint(
       rest: deps.rest,
       channelId: work.target.channelId,
       sourceMessageId: work.target.messageId,
-      ...(work.target.replyToMessageId === undefined
-        ? {}
-        : { replyToMessageId: work.target.replyToMessageId }),
+      ...(work.target.replyToMessageId !== undefined && {
+        replyToMessageId: work.target.replyToMessageId,
+      }),
       checkpoint: (state) =>
         deps.store.render.checkpoint(dispatchId, claimToken, state, work.appliedRevision),
       verifyLease: () => deps.store.render.renew(dispatchId, claimToken),
@@ -175,12 +175,12 @@ async function paint(
   const painted = await renderer.write({
     text: work.intent.text,
     activity: work.intent.activity,
-    ...(work.intent.footer === undefined ? {} : { footer: work.intent.footer }),
-    ...(hitl?.notice === undefined ? {} : { notice: hitl.notice }),
-    ...(hitl === undefined ? {} : { components: hitl.components }),
-    ...(hitl === undefined ? {} : { mentionUserIds: hitl.mentionUserIds }),
-    ...(hitl?.key === undefined ? {} : { hitlKey: hitl.key }),
-    ...(progress === undefined ? {} : { subagentActivity: progress }),
+    ...(work.intent.footer !== undefined && { footer: work.intent.footer }),
+    ...(hitl?.notice !== undefined && { notice: hitl.notice }),
+    ...(hitl !== undefined && { components: hitl.components }),
+    ...(hitl !== undefined && { mentionUserIds: hitl.mentionUserIds }),
+    ...(hitl?.key !== undefined && { hitlKey: hitl.key }),
+    ...(progress !== undefined && { subagentActivity: progress }),
     terminal: work.intent.phase !== "streaming",
   });
   // A turn that no longer streams has nothing left to narrate.

@@ -14,7 +14,7 @@ export const list_comments = defineTool({
   execute: async ({ block_id, start_cursor, page_size }) => {
     const { results, has_more, next_cursor } = await notion.comments.list({
       block_id,
-      ...(start_cursor === undefined ? {} : { start_cursor }),
+      ...(start_cursor !== undefined && { start_cursor }),
       page_size: page_size ?? 25,
     });
     return {

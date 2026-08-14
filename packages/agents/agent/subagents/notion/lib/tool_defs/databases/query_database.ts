@@ -28,10 +28,10 @@ export const query_database = defineTool({
     const dataSourceId = await resolveDataSourceId(database_id);
     const params: QueryDataSourceParameters = {
       data_source_id: dataSourceId,
-      ...(filter === undefined ? {} : { filter }),
-      ...(sorts === undefined ? {} : { sorts }),
+      ...(filter !== undefined && { filter }),
+      ...(sorts !== undefined && { sorts }),
       page_size: page_size ?? 25,
-      ...(start_cursor === undefined ? {} : { start_cursor }),
+      ...(start_cursor !== undefined && { start_cursor }),
     };
 
     const result = await notion.dataSources.query(params);

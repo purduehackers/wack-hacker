@@ -80,7 +80,7 @@ export async function archivedThreadPages<
       await rest.get(route, {
         query: makeURLSearchParams<RESTGetAPIChannelThreadsArchivedQuery>({
           limit: ARCHIVED_THREAD_PAGE_LIMIT,
-          ...(before === undefined ? {} : { before }),
+          ...(before !== undefined && { before }),
         }),
       }),
       endpoint,

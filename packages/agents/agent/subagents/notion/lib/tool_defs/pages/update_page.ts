@@ -27,10 +27,10 @@ export const update_page = defineTool({
     const parsedCover = parseCover(cover);
     const params: UpdatePageParameters = {
       page_id,
-      ...(properties === undefined ? {} : { properties }),
-      ...(archived === undefined ? {} : { in_trash: archived }),
-      ...(parsedIcon === undefined ? {} : { icon: parsedIcon }),
-      ...(parsedCover === undefined ? {} : { cover: parsedCover }),
+      ...(properties !== undefined && { properties }),
+      ...(archived !== undefined && { in_trash: archived }),
+      ...(parsedIcon !== undefined && { icon: parsedIcon }),
+      ...(parsedCover !== undefined && { cover: parsedCover }),
     };
 
     const page = await notion.pages.update(params);

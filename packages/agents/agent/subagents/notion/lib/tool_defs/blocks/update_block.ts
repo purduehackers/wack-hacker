@@ -19,7 +19,7 @@ export const update_block = defineTool({
     const params = {
       block_id,
       ...block_content,
-      ...(archived === undefined ? {} : { in_trash: archived }),
+      ...(archived !== undefined && { in_trash: archived }),
     };
     if (!isUpdateBlockParameters(params)) {
       return { error: "Invalid Notion block update content" };

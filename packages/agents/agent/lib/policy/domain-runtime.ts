@@ -116,7 +116,7 @@ function descriptorOf<R extends DomainToolRegistry>(
     minRole:
       access.minRole ?? (access.risk === RiskLevel.Read ? UserRole.Public : UserRole.Organizer),
     risk: access.risk,
-    ...(access.confirm === undefined ? {} : { confirmation: access.confirm }),
+    ...(access.confirm !== undefined && { confirmation: access.confirm }),
   };
 }
 
@@ -146,8 +146,8 @@ async function recordAudit<R extends DomainToolRegistry>(entry: AuditEntry<R>): 
     risk: spec.access.risk,
     input: adapter.projectAuditInput?.(input, name) ?? input,
     decision,
-    ...(spec.access.reason === undefined ? {} : { reason: spec.access.reason }),
-    ...(decidedBy === undefined ? {} : { decidedBy }),
+    ...(spec.access.reason !== undefined && { reason: spec.access.reason }),
+    ...(decidedBy !== undefined && { decidedBy }),
   });
   if (Result.isError(recorded)) {
     // Audit availability must not turn a completed upstream action into a replay.

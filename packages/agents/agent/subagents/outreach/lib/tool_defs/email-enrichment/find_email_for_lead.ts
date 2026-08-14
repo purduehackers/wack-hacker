@@ -80,7 +80,8 @@ export const find_email_for_lead = defineTool({
     }
 
     if (full_name || (first_name && last_name)) {
-      const params: Record<string, string | undefined> = { domain: resolvedDomain };
+      const params: Record<string, string | undefined> = {};
+      params.domain = resolvedDomain;
       if (full_name) params.full_name = full_name;
       if (first_name) params.first_name = first_name;
       if (last_name) params.last_name = last_name;

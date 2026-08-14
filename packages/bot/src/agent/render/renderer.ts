@@ -264,7 +264,7 @@ async function createOverflow(
   if (Result.isError(created)) return created;
   const createdProjection: RendererProjection["overflow"][number] = {
     messageId: created.value.id,
-    ...(created.value.content === content ? { contentHash } : {}),
+    ...(created.value.content === content && { contentHash }),
   };
   state.overflow.splice(index, 0, createdProjection);
   const saved = await checkpoint(rendering);

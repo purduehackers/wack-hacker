@@ -20,7 +20,7 @@ export const list_events = defineTool({
       const res = await payload.find({
         collection: "events",
         ...paginationQuery(input),
-        ...(published_only ? { where: { published: { equals: true } } } : {}),
+        ...(published_only && { where: { published: { equals: true } } }),
       });
       return JSON.stringify({
         total_docs: res.totalDocs,

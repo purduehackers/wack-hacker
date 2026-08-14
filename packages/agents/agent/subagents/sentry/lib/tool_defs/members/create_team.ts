@@ -15,7 +15,7 @@ export const create_team = defineTool({
     const result = await createANewTeam({
       ...sentryOpts(),
       path: { organization_id_or_slug: sentryOrg() },
-      body: { name, ...(slug === undefined ? {} : { slug }) },
+      body: { name, ...(slug !== undefined && { slug }) },
     });
     const { data } = unwrapResult(result, "createTeam");
     return JSON.stringify(data);

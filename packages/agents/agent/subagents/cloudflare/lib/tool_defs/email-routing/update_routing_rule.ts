@@ -24,8 +24,8 @@ export const update_routing_rule = defineTool({
         matchers: [{ type: "literal", field: "to", value: match_address }],
         actions: [{ type: "forward", value: forward_to }],
         enabled,
-        ...(name === undefined ? {} : { name }),
-        ...(priority === undefined ? {} : { priority }),
+        ...(name !== undefined && { name }),
+        ...(priority !== undefined && { priority }),
       }),
     ),
 });

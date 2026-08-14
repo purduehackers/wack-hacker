@@ -24,10 +24,10 @@ export const send_email = defineTool({
       to,
       subject,
       text,
-      ...(html === undefined ? {} : { html }),
-      ...(reply_to === undefined ? {} : { reply_to }),
-      ...(cc === undefined ? {} : { cc }),
-      ...(bcc === undefined ? {} : { bcc }),
+      ...(html !== undefined && { html }),
+      ...(reply_to !== undefined && { reply_to }),
+      ...(cc !== undefined && { cc }),
+      ...(bcc !== undefined && { bcc }),
     });
     // Permanent bounces come back in a 2xx body rather than as an error, so a
     // caller that only checks for a thrown error would report a dead address as

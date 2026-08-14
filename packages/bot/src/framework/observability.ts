@@ -17,16 +17,18 @@ function wideEventLine(event: WideEvent, traceId?: string): string {
     event: "operation.completed",
     op: event.op,
     status: event.status,
-    ...(event.durationMs === undefined ? {} : { durationMs: event.durationMs }),
-    ...(event.errorTag === undefined ? {} : { errorTag: event.errorTag }),
-    ...(event.errorMessage === undefined ? {} : { errorMessage: event.errorMessage }),
-    ...(traceId === undefined ? {} : { traceId }),
+    ...(event.durationMs !== undefined && { durationMs: event.durationMs }),
+    ...(event.errorTag !== undefined && { errorTag: event.errorTag }),
+    ...(event.errorMessage !== undefined && { errorMessage: event.errorMessage }),
+    ...(traceId !== undefined && { traceId }),
   });
 }
 
 /** One counter per terminal operation and one latency sample when available. */
 function recordOperationMetrics(event: WideEvent): void {
-  const attributes: Record<string, string> = { op: event.op, status: event.status };
+  const attributes: Record<string, string> = {};
+  attributes["op"] = event.op;
+  attributes["status"] = event.status;
   if (event.errorTag !== undefined) attributes["errorTag"] = event.errorTag;
   Sentry.metrics.count("bot.operation", 1, { attributes });
   if (event.durationMs !== undefined) {
@@ -65,10 +67,7 @@ export function continueTrace<T>(traceparent: string | undefined, work: () => T)
 
 /** Ensures gateway and cron work has an active span before it crosses a durable seam. */
 export function traceOperation<T>(op: string, work: () => T, attributes?: Attributes): T {
-  return Sentry.startSpan(
-    { name: op, op, ...(attributes === undefined ? {} : { attributes }) },
-    work,
-  );
+  return Sentry.startSpan({ name: op, op, ...(attributes !== undefined && { attributes }) }, work);
 }
 
 function activeTraceId(): string | undefined {

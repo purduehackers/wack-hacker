@@ -36,7 +36,7 @@ export const get_org_stats = defineTool({
         field: field ?? "sum(quantity)",
         statsPeriod: stat_period ?? "24h",
         interval: interval ?? "1h",
-        ...(project_slug === undefined ? {} : { project: [project_slug] }),
+        ...(project_slug !== undefined && { project: [project_slug] }),
       },
     });
     const { data } = unwrapResult(result, "getOrgStats");

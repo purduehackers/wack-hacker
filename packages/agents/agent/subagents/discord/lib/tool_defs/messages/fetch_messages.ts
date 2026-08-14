@@ -32,8 +32,8 @@ export const fetch_messages = defineTool({
       await rest.get(Routes.channelMessages(input.channel_id), {
         query: makeURLSearchParams<RESTGetAPIChannelMessagesQuery>({
           limit: input.limit,
-          ...(input.before === undefined ? {} : { before: input.before }),
-          ...(input.after === undefined ? {} : { after: input.after }),
+          ...(input.before !== undefined && { before: input.before }),
+          ...(input.after !== undefined && { after: input.after }),
         }),
       }),
       "fetch channel messages",

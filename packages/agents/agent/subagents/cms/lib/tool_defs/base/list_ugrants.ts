@@ -17,7 +17,7 @@ export const list_ugrants = defineTool({
       const res = await payload.find({
         collection: "ugrants",
         ...paginationQuery(input),
-        ...(visible_only ? { where: { visible: { equals: true } } } : {}),
+        ...(visible_only && { where: { visible: { equals: true } } }),
       });
       return JSON.stringify({
         total_docs: res.totalDocs,

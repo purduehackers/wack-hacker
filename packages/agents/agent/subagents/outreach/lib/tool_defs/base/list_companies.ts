@@ -26,10 +26,10 @@ export const list_companies = defineTool({
     }
     const params: QueryDataSourceParameters = {
       data_source_id: COMPANIES_DATA_SOURCE_ID,
-      ...(filter === undefined ? {} : { filter }),
-      ...(sorts === undefined ? {} : { sorts }),
+      ...(filter !== undefined && { filter }),
+      ...(sorts !== undefined && { sorts }),
       page_size: page_size ?? 25,
-      ...(start_cursor === undefined ? {} : { start_cursor }),
+      ...(start_cursor !== undefined && { start_cursor }),
     };
     const result = await notion.dataSources.query(params);
     return {

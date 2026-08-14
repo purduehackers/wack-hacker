@@ -27,10 +27,10 @@ export const get_log_stats = defineTool({
       path: { organization_id_or_slug: sentryOrg() },
       query: {
         dataset: "logs",
-        ...(project_slug === undefined ? {} : { project: [projectId] }),
+        ...(project_slug !== undefined && { project: [projectId] }),
         statsPeriod: stat_period ?? "24h",
         yAxis: y_axis ?? "count()",
-        ...(query === undefined ? {} : { query }),
+        ...(query !== undefined && { query }),
       },
     });
     const { data } = unwrapResult(result, "getLogStats");

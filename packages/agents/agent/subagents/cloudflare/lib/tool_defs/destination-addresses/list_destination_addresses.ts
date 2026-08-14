@@ -13,7 +13,7 @@ export const list_destination_addresses = defineTool({
   execute: async ({ verified_only }) => {
     const page = await cloudflare().emailRouting.addresses.list({
       account_id: accountId(),
-      ...(verified_only ? { verified: true } : {}),
+      ...(verified_only && { verified: true }),
     });
     return JSON.stringify(page.result);
   },

@@ -21,10 +21,7 @@ export const paginationInputShape = {
 const paginationInputSchema = z.object(paginationInputShape);
 
 /** Resolve pagination input to a query-string object with defaults. */
-export function paginationQuery(input: z.input<typeof paginationInputSchema>): {
-  per_page: number;
-  page: number;
-} {
+export function paginationQuery(input: z.input<typeof paginationInputSchema>) {
   return { per_page: input.per_page ?? 50, page: input.page ?? 1 };
 }
 

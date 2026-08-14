@@ -34,7 +34,7 @@ export const manage_labels = defineTool({
           owner: env.GITHUB_ORG,
           repo,
           name,
-          ...(new_name === undefined ? {} : { new_name }),
+          ...(new_name !== undefined && { new_name }),
           ...fields,
         });
         return JSON.stringify({ name: data.name, color: data.color });

@@ -91,7 +91,7 @@ export const send_outreach_email = defineTool({
       to,
       subject,
       text,
-      ...(html === undefined ? {} : { html }),
+      ...(html !== undefined && { html }),
     });
 
     // Cloudflare reports a permanent bounce in the success body, not as an

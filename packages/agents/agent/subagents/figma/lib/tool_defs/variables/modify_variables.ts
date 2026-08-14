@@ -143,9 +143,9 @@ export const modify_variables = defineTool({
   }),
   execute: async ({ file_key, variable_collections, variable_modes, variables }) => {
     const body: PostVariablesRequestBody = {
-      ...(variable_collections === undefined ? {} : { variableCollections: variable_collections }),
-      ...(variable_modes === undefined ? {} : { variableModes: variable_modes }),
-      ...(variables === undefined ? {} : { variables }),
+      ...(variable_collections !== undefined && { variableCollections: variable_collections }),
+      ...(variable_modes !== undefined && { variableModes: variable_modes }),
+      ...(variables !== undefined && { variables }),
     };
     return await figma.post<PostVariablesResponse>(`/v1/files/${file_key}/variables`, body);
   },

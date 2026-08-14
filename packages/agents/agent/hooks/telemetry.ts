@@ -28,7 +28,7 @@ function countTokens(direction: string, value: number | undefined, delegate?: st
   if (value === undefined || value <= 0) return;
   countAgentEvent(
     "agent.tokens",
-    { direction, ...(delegate === undefined ? {} : { delegate }) },
+    { direction, ...(delegate !== undefined && { delegate }) },
     value,
   );
 }

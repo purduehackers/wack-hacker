@@ -34,9 +34,9 @@ export const create_page = defineTool({
     const params: CreatePageParameters = {
       parent,
       properties: pageProperties,
-      ...(markdown === undefined ? {} : { markdown }),
-      ...(parsedIcon === undefined ? {} : { icon: parsedIcon }),
-      ...(parsedCover === undefined ? {} : { cover: parsedCover }),
+      ...(markdown !== undefined && { markdown }),
+      ...(parsedIcon !== undefined && { icon: parsedIcon }),
+      ...(parsedCover !== undefined && { cover: parsedCover }),
     };
 
     const page = await notion.pages.create(params);

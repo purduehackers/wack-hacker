@@ -37,19 +37,19 @@ export const update_auto_mod_rule = defineTool({
       discordObject<RESTGetAPIAutoModerationRuleResult>(
         await rest.patch(Routes.guildAutoModerationRule(DISCORD_GUILD_ID, input.rule_id), {
           body: compact<RESTPatchAPIAutoModerationRuleJSONBody>({
-            ...(input.name === undefined ? {} : { name: input.name }),
-            ...(input.event_type === undefined
-              ? {}
-              : { event_type: AUTO_MOD_EVENT_TYPES[input.event_type] }),
-            ...(input.trigger_metadata === undefined
-              ? {}
-              : { trigger_metadata: autoModMetadata(input.trigger_metadata) }),
-            ...(input.actions === undefined ? {} : { actions: input.actions.map(autoModAction) }),
-            ...(input.enabled === undefined ? {} : { enabled: input.enabled }),
-            ...(input.exempt_roles === undefined ? {} : { exempt_roles: input.exempt_roles }),
-            ...(input.exempt_channels === undefined
-              ? {}
-              : { exempt_channels: input.exempt_channels }),
+            ...(input.name !== undefined && { name: input.name }),
+            ...(input.event_type !== undefined && {
+              event_type: AUTO_MOD_EVENT_TYPES[input.event_type],
+            }),
+            ...(input.trigger_metadata !== undefined && {
+              trigger_metadata: autoModMetadata(input.trigger_metadata),
+            }),
+            ...(input.actions !== undefined && { actions: input.actions.map(autoModAction) }),
+            ...(input.enabled !== undefined && { enabled: input.enabled }),
+            ...(input.exempt_roles !== undefined && { exempt_roles: input.exempt_roles }),
+            ...(input.exempt_channels !== undefined && {
+              exempt_channels: input.exempt_channels,
+            }),
           }),
         }),
         "update auto moderation rule",

@@ -127,15 +127,14 @@ async function checkDomain(domain: string): Promise<DomainSurface> {
   const constant = constantName(domain);
   const converted = await fileExists(join(root, "lib/registry.ts"));
 
+  // A dynamic import always resolves to a module namespace object. Registry
+  // modules export functions and schemas, so no record schema can name their
+  // shape. The checks below parse each export against its own concrete schema.
   const modulePath = converted ? "lib/registry.ts" : "skills/catalog.ts";
-  const skillModule = z
-    .record(z.string(), z.unknown())
-    .parse(await import(pathToFileURL(join(root, modulePath)).href));
+  const skillModule = await import(pathToFileURL(join(root, modulePath)).href);
   const registryModule = converted
     ? skillModule
-    : z
-        .record(z.string(), z.unknown())
-        .parse(await import(pathToFileURL(join(root, "lib/tool-registry.ts")).href));
+    : await import(pathToFileURL(join(root, "lib/tool-registry.ts")).href);
 
   const baseTools = z.array(z.string()).parse(skillModule[`${constant}_BASE_TOOL_NAMES`]);
   const toolSpecs = z.record(z.string(), toolSpecSchema).parse(registryModule[`${constant}_TOOLS`]);

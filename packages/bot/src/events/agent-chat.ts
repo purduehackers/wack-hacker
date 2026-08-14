@@ -115,7 +115,7 @@ function attachmentsOf(message: Message): NonNullable<MessagePayload["attachment
     url: attachment.url,
     filename: attachment.name,
     size: attachment.size,
-    ...(attachment.contentType === null ? {} : { contentType: attachment.contentType }),
+    ...(attachment.contentType !== null && { contentType: attachment.contentType }),
   }));
 }
 
@@ -174,22 +174,22 @@ export function agentChat(deps: AgentChatDeps) {
         kind: inThread ? "followup" : "mention",
         continuationKey: continuationKeyFor({
           channelId: message.channelId,
-          ...(inThread || thread !== undefined ? { threadId: targetId } : {}),
+          ...((inThread || thread !== undefined) && { threadId: targetId }),
         }),
         content: prompt,
         messageId: message.id,
-        ...(attachments.length === 0 ? {} : { attachments }),
+        ...(attachments.length !== 0 && { attachments }),
         principal: principalOf(message),
         channel: channelRefOf(message),
         ...threadRefOf(message, thread),
-        ...(leadIn.recentMessages.length === 0
-          ? {}
-          : { recentMessages: [...leadIn.recentMessages] }),
-        ...(leadIn.referencedContext.length === 0
-          ? {}
-          : { referencedContext: [...leadIn.referencedContext] }),
-        ...(placeholder === undefined ? {} : { anchorMessageId: placeholder.id }),
-        ...(traceparent === undefined ? {} : { traceparent }),
+        ...(leadIn.recentMessages.length !== 0 && {
+          recentMessages: [...leadIn.recentMessages],
+        }),
+        ...(leadIn.referencedContext.length !== 0 && {
+          referencedContext: [...leadIn.referencedContext],
+        }),
+        ...(placeholder !== undefined && { anchorMessageId: placeholder.id }),
+        ...(traceparent !== undefined && { traceparent }),
       };
 
       const submitted = await deps.agent.submit(payload);
@@ -255,14 +255,20 @@ function channelRefOf(message: Message): MessagePayload["channel"] {
   return {
     id: source.id,
     name: nameOf(source),
-    ...(categoryId === undefined ? {} : { categoryId }),
+    ...(categoryId !== undefined && { categoryId }),
   };
 }
 
-function threadRefOf(
-  message: Message,
-  created: Message["channel"] | undefined,
-): { thread?: MessagePayload["thread"] } {
+/**
+ * The payload's optional thread reference, shaped for spreading. A named
+ * interface rather than an inline annotation so the empty return stays a
+ * precise "no thread" rather than a widened object.
+ */
+interface ThreadRefFields {
+  readonly thread?: MessagePayload["thread"];
+}
+
+function threadRefOf(message: Message, created: Message["channel"] | undefined): ThreadRefFields {
   const channel = message.channel;
 
   if (channel.isThread()) {

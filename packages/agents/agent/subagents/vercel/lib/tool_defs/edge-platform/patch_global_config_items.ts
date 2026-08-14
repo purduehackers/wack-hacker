@@ -15,7 +15,7 @@ export const patch_global_config_items = defineTool({
         z.strictObject({
           operation: z.enum(["create", "update", "upsert", "delete"]),
           key: z.string(),
-          value: z.unknown().optional(),
+          value: z.json().optional(),
         }),
       )
       .min(1),

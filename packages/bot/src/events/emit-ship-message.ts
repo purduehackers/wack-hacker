@@ -59,8 +59,8 @@ function shipAttachments(message: Message): readonly ShipAttachmentInput[] {
       sourceUrl: attachment.url,
       type: type ?? "application/octet-stream",
       filename: attachment.name,
-      ...(attachment.width === null ? {} : { width: attachment.width }),
-      ...(attachment.height === null ? {} : { height: attachment.height }),
+      ...(attachment.width !== null && { width: attachment.width }),
+      ...(attachment.height !== null && { height: attachment.height }),
     });
   };
 

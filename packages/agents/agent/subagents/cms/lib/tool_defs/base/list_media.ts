@@ -22,7 +22,7 @@ export const list_media = defineTool({
       const res = await payload.find({
         collection: "media",
         ...paginationQuery(input),
-        ...(Object.keys(where).length > 0 ? { where } : {}),
+        ...(Object.keys(where).length > 0 && { where }),
       });
       return JSON.stringify({
         total_docs: res.totalDocs,

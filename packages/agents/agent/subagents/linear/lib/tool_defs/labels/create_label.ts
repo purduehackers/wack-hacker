@@ -17,7 +17,7 @@ export const create_label = defineTool({
   execute: async ({ team_id, ...rest }) => {
     const payload = await linear.createIssueLabel({
       ...rest,
-      ...(team_id === undefined ? {} : { teamId: team_id }),
+      ...(team_id !== undefined && { teamId: team_id }),
     });
     const label = await payload.issueLabel;
     if (!label) return JSON.stringify({ error: "Failed to create label" });

@@ -10,7 +10,7 @@ import { decodeDeliveryPayload, MAX_CONTENT_CHARS, MAX_SCHEDULE_CONTENT_CHARS } 
  * over-long fold. By then the delivery is already on the queue, and no decode
  * can ever take it off.
  */
-function deliveryOfLength(kind: "mention" | "scheduled", length: number): unknown {
+function deliveryOfLength(kind: "mention" | "scheduled", length: number) {
   return {
     kind,
     dispatchId: crypto.randomUUID(),
@@ -20,9 +20,10 @@ function deliveryOfLength(kind: "mention" | "scheduled", length: number): unknow
     principal: { userId: "99999999999999899", username: "p", nickname: "p", memberRoles: [] },
     channel: { id: "99999999999999901", name: "probe" },
     // A scheduled turn must carry both, and no other kind may.
-    ...(kind === "scheduled"
-      ? { scheduleId: crypto.randomUUID(), occurrenceId: "a".repeat(22) }
-      : {}),
+    ...(kind === "scheduled" && {
+      scheduleId: crypto.randomUUID(),
+      occurrenceId: "a".repeat(22),
+    }),
   };
 }
 

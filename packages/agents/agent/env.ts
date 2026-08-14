@@ -14,6 +14,7 @@
  * supervision switched off.
  */
 
+import type { TursoConfig } from "@repo/shared/db";
 import { createEnv } from "@t3-oss/env-core";
 import { z } from "zod";
 
@@ -122,9 +123,9 @@ export type AgentEnv = typeof env;
  * than stylistic. Four call sites each wrote their own copy before this
  * helper existed.
  */
-export function tursoConfig(): { readonly url: string; readonly authToken?: string } {
+export function tursoConfig(): TursoConfig {
   return {
     url: env.TURSO_DATABASE_URL,
-    ...(env.TURSO_AUTH_TOKEN === undefined ? {} : { authToken: env.TURSO_AUTH_TOKEN }),
+    ...(env.TURSO_AUTH_TOKEN !== undefined && { authToken: env.TURSO_AUTH_TOKEN }),
   };
 }

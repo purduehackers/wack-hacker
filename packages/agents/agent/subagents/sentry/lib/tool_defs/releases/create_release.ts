@@ -24,8 +24,8 @@ export const create_release = defineTool({
       body: {
         version,
         projects,
-        ...(ref === undefined ? {} : { ref }),
-        ...(date_released === undefined ? {} : { dateReleased: date_released }),
+        ...(ref !== undefined && { ref }),
+        ...(date_released !== undefined && { dateReleased: date_released }),
       },
     });
     const { data } = unwrapResult(result, "createRelease");

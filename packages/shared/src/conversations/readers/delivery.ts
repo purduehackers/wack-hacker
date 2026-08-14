@@ -78,7 +78,7 @@ export class DeliveryReader {
     return {
       sessionId: record.sessionId,
       dispatchId: record.dispatchId,
-      ...(content === undefined || content === "" ? {} : { content }),
+      ...(content !== undefined && content !== "" && { content }),
     };
   }
 

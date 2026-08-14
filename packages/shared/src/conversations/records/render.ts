@@ -83,7 +83,7 @@ export function renderTargetFor(delivery: DeliveryPayload): RenderTarget {
     messageId: delivery.messageId,
     channelId: delivery.thread?.id ?? delivery.channel.id,
     authChannelId: delivery.channel.id,
-    ...(delivery.thread === undefined ? {} : { authThreadId: delivery.thread.id }),
+    ...(delivery.thread !== undefined && { authThreadId: delivery.thread.id }),
     requesterUserId: delivery.principal.userId,
     // Without an anchor there is nothing to edit, so the first paint replies to
     // the message that started the turn.

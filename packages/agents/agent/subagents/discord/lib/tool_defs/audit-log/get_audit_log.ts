@@ -30,10 +30,10 @@ export const get_audit_log = defineTool({
       await rest.get(Routes.guildAuditLog(DISCORD_GUILD_ID), {
         query: makeURLSearchParams<RESTGetAPIAuditLogQuery>({
           limit: input.limit ?? 50,
-          ...(input.user_id === undefined ? {} : { user_id: input.user_id }),
-          ...(input.action_type === undefined ? {} : { action_type: input.action_type }),
-          ...(input.before === undefined ? {} : { before: input.before }),
-          ...(input.after === undefined ? {} : { after: input.after }),
+          ...(input.user_id !== undefined && { user_id: input.user_id }),
+          ...(input.action_type !== undefined && { action_type: input.action_type }),
+          ...(input.before !== undefined && { before: input.before }),
+          ...(input.after !== undefined && { after: input.after }),
         }),
       }),
       "get audit log",

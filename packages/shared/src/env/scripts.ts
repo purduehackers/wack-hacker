@@ -19,7 +19,13 @@ const redisEnvSchema = z.object({
 });
 
 /** Upstash REST credentials, as `@upstash/redis` wants them. */
-export function redisEnv(): { readonly url: string; readonly token: string } {
+export interface RedisEnv {
+  readonly url: string;
+  readonly token: string;
+}
+
+/** Reads and validates the Upstash Redis credentials from `process.env`. */
+export function redisEnv(): RedisEnv {
   const parsed = redisEnvSchema.safeParse(process.env);
   if (!parsed.success) {
     throw new Error(`invalid Upstash Redis environment:\n${z.prettifyError(parsed.error)}`);
@@ -35,7 +41,13 @@ const tursoEnvSchema = z.object({
 });
 
 /** Turso connection settings. `authToken` stays absent for local databases. */
-export function tursoEnv(): { readonly url: string; readonly authToken: string | undefined } {
+export interface TursoEnv {
+  readonly url: string;
+  readonly authToken: string | undefined;
+}
+
+/** Reads and validates the Turso connection settings from `process.env`. */
+export function tursoEnv(): TursoEnv {
   const parsed = tursoEnvSchema.safeParse(process.env);
   if (!parsed.success) {
     throw new Error(`invalid Turso environment:\n${z.prettifyError(parsed.error)}`);

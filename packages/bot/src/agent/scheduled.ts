@@ -141,7 +141,7 @@ async function channelRefs(
       channel: {
         id: destination.id,
         name: channelName(destination),
-        ...(destination.parentId === null ? {} : { categoryId: destination.parentId }),
+        ...(destination.parentId !== null && { categoryId: destination.parentId }),
       },
     };
   }
@@ -155,7 +155,7 @@ async function channelRefs(
     channel: {
       id: parent.id,
       name: channelName(parent),
-      ...(parent.parentId === null ? {} : { categoryId: parent.parentId }),
+      ...(parent.parentId !== null && { categoryId: parent.parentId }),
     },
     thread: {
       id: destination.id,
@@ -240,15 +240,15 @@ async function admitOccurrence(
         occurrenceId: payload.occurrenceId,
         continuationKey: continuationKeyFor({
           channelId: refs.channel.id,
-          ...(refs.thread === undefined ? {} : { threadId: refs.thread.id }),
+          ...(refs.thread !== undefined && { threadId: refs.thread.id }),
         }),
         content: scheduledPrompt(payload),
         messageId: placeholder.id,
         anchorMessageId: placeholder.id,
         principal: owner.principal,
         channel: refs.channel,
-        ...(refs.thread === undefined ? {} : { thread: refs.thread }),
-        ...(payload.traceparent === undefined ? {} : { traceparent: payload.traceparent }),
+        ...(refs.thread !== undefined && { thread: refs.thread }),
+        ...(payload.traceparent !== undefined && { traceparent: payload.traceparent }),
       };
 
       const submitted = await submit(turn);

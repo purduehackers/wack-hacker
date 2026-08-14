@@ -36,11 +36,11 @@ export const UserRole = {
 export type UserRole = (typeof UserRole)[keyof typeof UserRole];
 
 /** Ordered tiers. Higher strictly includes every capability of lower. */
-const ROLE_LEVEL: Record<UserRole, number> = {
+const ROLE_LEVEL = {
   [UserRole.Public]: 0,
   [UserRole.Organizer]: 1,
   [UserRole.Admin]: 2,
-};
+} satisfies Record<UserRole, number>;
 
 /**
  * True when `role` sits at or above `minimum` in the tier order. Gates use

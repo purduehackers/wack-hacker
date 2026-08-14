@@ -22,7 +22,7 @@ export const create_webhook = defineTool({
       config: {
         url,
         content_type: content_type ?? "json",
-        ...(secret === undefined ? {} : { secret }),
+        ...(secret !== undefined && { secret }),
       },
       events,
       active: active ?? true,

@@ -94,13 +94,13 @@ export async function resolveOrganizer(input: z.output<typeof resolveOrganizerIn
     found: true,
     name: organizer.name,
     slug: organizer.slug,
-    ...(organizer.aliases === undefined ? {} : { aliases: organizer.aliases }),
+    ...(organizer.aliases !== undefined && { aliases: organizer.aliases }),
     discord: organizer.discord,
-    ...(organizer.linear === undefined ? {} : { linear: organizer.linear }),
-    ...(organizer.notion === undefined ? {} : { notion: organizer.notion }),
-    ...(organizer.sentry === undefined ? {} : { sentry: organizer.sentry }),
-    ...(organizer.github === undefined ? {} : { github: organizer.github }),
-    ...(organizer.figma === undefined ? {} : { figma: organizer.figma }),
+    ...(organizer.linear !== undefined && { linear: organizer.linear }),
+    ...(organizer.notion !== undefined && { notion: organizer.notion }),
+    ...(organizer.sentry !== undefined && { sentry: organizer.sentry }),
+    ...(organizer.github !== undefined && { github: organizer.github }),
+    ...(organizer.figma !== undefined && { figma: organizer.figma }),
   } as const;
 }
 

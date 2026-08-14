@@ -20,7 +20,7 @@ export const list_service_accounts = defineTool({
       const res = await payload.find({
         collection: "service-accounts",
         ...paginationQuery(input),
-        ...(revoked_only ? { where: { revoked: { equals: true } } } : {}),
+        ...(revoked_only && { where: { revoked: { equals: true } } }),
       });
       return JSON.stringify({
         total_docs: res.totalDocs,

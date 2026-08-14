@@ -315,9 +315,9 @@ async function loadInput(
       request,
       continuationKey: intent.continuationKey,
       authChannelId: target.authChannelId,
-      ...(target.authThreadId === undefined ? {} : { authThreadId: target.authThreadId }),
+      ...(target.authThreadId !== undefined && { authThreadId: target.authThreadId }),
       principal,
-      ...(approvalRequester === undefined ? {} : { approvalRequester }),
+      ...(approvalRequester !== undefined && { approvalRequester }),
     },
   };
 }
@@ -368,13 +368,13 @@ async function handleInput(
       renderRevision: locator.revision,
       requestId: request.requestId,
       authChannelId: loaded.authChannelId,
-      ...(loaded.authThreadId === undefined ? {} : { authThreadId: loaded.authThreadId }),
+      ...(loaded.authThreadId !== undefined && { authThreadId: loaded.authThreadId }),
       ...(optionId === undefined ? { freeform } : { optionId }),
       principal: loaded.principal,
-      ...(loaded.approvalRequester === undefined
-        ? {}
-        : { approvalRequester: loaded.approvalRequester }),
-      ...(traceparent === undefined ? {} : { traceparent }),
+      ...(loaded.approvalRequester !== undefined && {
+        approvalRequester: loaded.approvalRequester,
+      }),
+      ...(traceparent !== undefined && { traceparent }),
     },
   });
   if (answered.status === "taken" || answered.status === "stale") {

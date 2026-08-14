@@ -30,9 +30,9 @@ export const create_deploy = defineTool({
       },
       body: {
         environment,
-        ...(date_started === undefined ? {} : { dateStarted: date_started }),
-        ...(date_finished === undefined ? {} : { dateFinished: date_finished }),
-        ...(name === undefined ? {} : { name }),
+        ...(date_started !== undefined && { dateStarted: date_started }),
+        ...(date_finished !== undefined && { dateFinished: date_finished }),
+        ...(name !== undefined && { name }),
       },
     });
     const { data } = unwrapResult(result, "createDeploy");

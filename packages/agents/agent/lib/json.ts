@@ -35,11 +35,16 @@ export interface RedactionLimits {
   readonly maxEntries: number;
 }
 
+/** Placeholder text the redactor substitutes for a value it must not emit. */
+function redactionMarker(kind: "redacted" | "truncated"): string {
+  return `[${kind}]`;
+}
+
 /** Build the depth-, breadth- and key-capped redactor used at a single boundary. */
 export function createRedactor(limits: RedactionLimits): (value: unknown) => unknown {
   const redact = (value: unknown, key: string, depth: number): unknown => {
-    if (limits.sensitiveKey.test(key)) return "[redacted]";
-    if (depth >= MAX_DEPTH) return "[truncated]";
+    if (limits.sensitiveKey.test(key)) return redactionMarker("redacted");
+    if (depth >= MAX_DEPTH) return redactionMarker("truncated");
     if (Array.isArray(value)) {
       return value.slice(0, limits.maxArrayItems).map((item) => redact(item, "", depth + 1));
     }

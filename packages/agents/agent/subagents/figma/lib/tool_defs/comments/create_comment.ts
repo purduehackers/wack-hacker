@@ -21,7 +21,7 @@ export const create_comment = defineTool({
     const body: PostCommentRequestBody = { message };
     if (comment_id) body.comment_id = comment_id;
     if (x !== undefined && y !== undefined) {
-      body.client_meta = { x, y, ...(node_id ? { node_id } : {}) };
+      body.client_meta = { x, y, ...(node_id && { node_id }) };
     } else if (node_id) {
       body.client_meta = { node_id, node_offset: { x: 0, y: 0 } };
     }

@@ -128,9 +128,8 @@ function inputRows(
             options: chunk.map((choice, chunkIndex) => ({
               label: sliceText(choice.label, 100),
               value: `o${offset + chunkIndex}`,
-              ...(choice.description === undefined || choice.description === ""
-                ? {}
-                : { description: sliceText(choice.description, 100) }),
+              ...(choice.description !== undefined &&
+                choice.description !== "" && { description: sliceText(choice.description, 100) }),
             })),
           },
         ],
@@ -249,8 +248,8 @@ export function renderHitl(intent: RenderIntent): HitlView {
       : `auth:${authorizations.map((entry) => entry.name).join(",")}`);
 
   return {
-    ...(notices.length === 0 ? {} : { notice: notices.join("\n\n") }),
-    ...(key === undefined ? {} : { key: sliceText(key, 128) }),
+    ...(notices.length !== 0 && { notice: notices.join("\n\n") }),
+    ...(key !== undefined && { key: sliceText(key, 128) }),
     components: rows,
     mentionUserIds,
   };

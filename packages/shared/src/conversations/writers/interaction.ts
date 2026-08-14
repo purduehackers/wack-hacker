@@ -147,7 +147,7 @@ export class InteractionWriter {
       principalId: payload.principal.userId,
       responseDigest: digestOf(responseKind, responseValue),
       authChannelId: payload.authChannelId,
-      ...(payload.authThreadId === undefined ? {} : { authThreadId: payload.authThreadId }),
+      ...(payload.authThreadId !== undefined && { authThreadId: payload.authThreadId }),
     };
     const raw: unknown = await this.redis.eval(
       CLAIM,

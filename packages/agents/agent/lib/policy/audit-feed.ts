@@ -22,7 +22,7 @@ import { discordRest } from "../../subagents/discord/lib/client.ts";
 import type { RiskLevel } from "./types.ts";
 
 /** Read at a glance from the embed's left bar, before any of the text. */
-const COLORS: Record<AuditDecision, number> = {
+const COLORS = {
   [AuditDecision.Requested]: 0x58_65_f2,
   [AuditDecision.Approved]: 0x58_65_f2,
   [AuditDecision.Executed]: 0x57_f2_87,
@@ -30,9 +30,9 @@ const COLORS: Record<AuditDecision, number> = {
   [AuditDecision.Failed]: 0xfe_e7_5c,
   [AuditDecision.Timeout]: 0xfe_e7_5c,
   [AuditDecision.PromptFailed]: 0xfe_e7_5c,
-};
+} satisfies Record<AuditDecision, number>;
 
-const TITLES: Record<AuditDecision, string> = {
+const TITLES = {
   [AuditDecision.Requested]: "Action requested",
   [AuditDecision.Approved]: "Action approved",
   [AuditDecision.Executed]: "Action executed",
@@ -41,7 +41,7 @@ const TITLES: Record<AuditDecision, string> = {
   [AuditDecision.Timeout]: "Approval timed out",
   /** The prompt never reached anyone, so the agent attempted nothing. */
   [AuditDecision.PromptFailed]: "Approval undeliverable",
-};
+} satisfies Record<AuditDecision, string>;
 
 export interface AuditFeedEntry {
   readonly tool: string;

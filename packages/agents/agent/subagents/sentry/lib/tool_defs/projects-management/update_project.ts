@@ -22,13 +22,13 @@ export const update_project = defineTool({
   }),
   execute: async ({ project_slug, ...input }) => {
     const body = {
-      ...(input.name === undefined ? {} : { name: input.name }),
-      ...(input.slug === undefined ? {} : { slug: input.slug }),
-      ...(input.platform === undefined ? {} : { platform: input.platform }),
-      ...(input.default_environment === undefined
-        ? {}
-        : { default_environment: input.default_environment }),
-      ...(input.resolve_age === undefined ? {} : { resolve_age: input.resolve_age }),
+      ...(input.name !== undefined && { name: input.name }),
+      ...(input.slug !== undefined && { slug: input.slug }),
+      ...(input.platform !== undefined && { platform: input.platform }),
+      ...(input.default_environment !== undefined && {
+        default_environment: input.default_environment,
+      }),
+      ...(input.resolve_age !== undefined && { resolve_age: input.resolve_age }),
     };
     const result = await updateAProject({
       ...sentryOpts(),

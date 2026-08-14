@@ -31,11 +31,9 @@ export const list_profiled_functions = defineTool({
         dataset: "profile_functions",
         field: defaultFields,
         statsPeriod: stat_period ?? "24h",
-        ...(transaction === undefined
-          ? {}
-          : { query: `transaction:"${escapeQuery(transaction)}"` }),
+        ...(transaction !== undefined && { query: `transaction:"${escapeQuery(transaction)}"` }),
         sort: sort ? `-${sort}` : "-p75()",
-        ...(per_page === undefined ? {} : { per_page }),
+        ...(per_page !== undefined && { per_page }),
       },
     });
     const { data } = unwrapResult(result, "listProfiledFunctions");

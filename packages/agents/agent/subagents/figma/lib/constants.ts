@@ -42,7 +42,7 @@ export function summarizeFile(
     lastModified: file.last_modified,
     thumbnailUrl: file.thumbnail_url,
     url: figmaFileUrl(file.key),
-    ...(projectName ? { projectName } : {}),
+    ...(projectName !== undefined && projectName !== "" && { projectName }),
   };
 }
 

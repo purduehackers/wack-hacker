@@ -26,9 +26,8 @@ class FigmaClient {
   }
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
-    const headers: Record<string, string> = {
-      "X-Figma-Token": env.FIGMA_ACCESS_TOKEN ?? "",
-    };
+    const headers: Record<string, string> = {};
+    headers["X-Figma-Token"] = env.FIGMA_ACCESS_TOKEN ?? "";
     if (body !== undefined) {
       headers["Content-Type"] = "application/json";
     }
@@ -36,7 +35,7 @@ class FigmaClient {
     const res = await fetch(`${BASE_URL}${path}`, {
       method,
       headers,
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      ...(body !== undefined && { body: JSON.stringify(body) }),
     });
 
     if (!res.ok) {

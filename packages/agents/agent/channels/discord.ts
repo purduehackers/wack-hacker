@@ -267,11 +267,11 @@ async function publishDesiredRender(
     phase: input.phase,
     text: liveText,
     activity: state.activity,
-    ...(input.footer === undefined ? {} : { footer: input.footer }),
-    ...(traceparent === undefined ? {} : { traceparent }),
+    ...(input.footer !== undefined && { footer: input.footer }),
+    ...(traceparent !== undefined && { traceparent }),
     authoredAt: new Date().toISOString(),
-    ...(inputRequests.length === 0 ? {} : { inputRequests }),
-    ...(authorizations.length === 0 ? {} : { authorizations }),
+    ...(inputRequests.length !== 0 && { inputRequests }),
+    ...(authorizations.length !== 0 && { authorizations }),
   };
 
   /** `undefined` means the counter fell behind and this call resynced it. Try again. */
@@ -390,15 +390,15 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
           // rides in this trusted assertion, and `turn.started` adopts it.
           auth: authFor(payload.principal, {
             channelId: payload.channel.id,
-            ...(payload.thread === undefined ? {} : { threadId: payload.thread.id }),
+            ...(payload.thread !== undefined && { threadId: payload.thread.id }),
             messageId: payload.messageId,
             dispatchId: payload.dispatchId,
             renderChannelId,
             source: payload.kind === "scheduled" ? "scheduled" : "chat",
-            ...(payload.scheduleId === undefined ? {} : { scheduleId: payload.scheduleId }),
-            ...(payload.occurrenceId === undefined ? {} : { occurrenceId: payload.occurrenceId }),
+            ...(payload.scheduleId !== undefined && { scheduleId: payload.scheduleId }),
+            ...(payload.occurrenceId !== undefined && { occurrenceId: payload.occurrenceId }),
           }),
-          ...(context.length === 0 ? {} : { context }),
+          ...(context.length !== 0 && { context }),
           state: stateForMessage(payload),
         });
 
@@ -454,18 +454,18 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
           [
             {
               requestId: payload.requestId,
-              ...(payload.optionId === undefined ? {} : { optionId: payload.optionId }),
-              ...(payload.freeform === undefined ? {} : { text: payload.freeform }),
+              ...(payload.optionId !== undefined && { optionId: payload.optionId }),
+              ...(payload.freeform !== undefined && { text: payload.freeform }),
             },
           ],
           {
             auth: authFor(payload.principal, {
               channelId: payload.authChannelId,
-              ...(payload.authThreadId === undefined ? {} : { threadId: payload.authThreadId }),
+              ...(payload.authThreadId !== undefined && { threadId: payload.authThreadId }),
               inputRequestId: payload.requestId,
-              ...(payload.approvalRequester === undefined
-                ? {}
-                : { approvalRequester: payload.approvalRequester }),
+              ...(payload.approvalRequester !== undefined && {
+                approvalRequester: payload.approvalRequester,
+              }),
             }),
           },
         );
@@ -602,14 +602,14 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
         const expiresAt = safeExpiration(challenge?.expiresAt);
         const storedChallenge = {
           description: sliceText(data.description, 1_000),
-          ...(url === undefined ? {} : { url }),
-          ...(challenge?.userCode === undefined
-            ? {}
-            : { userCode: sliceText(challenge.userCode, 128) }),
-          ...(expiresAt === undefined ? {} : { expiresAt }),
-          ...(challenge?.instructions === undefined
-            ? {}
-            : { instructions: sliceText(challenge.instructions, 1_000) }),
+          ...(url !== undefined && { url }),
+          ...(challenge?.userCode !== undefined && {
+            userCode: sliceText(challenge.userCode, 128),
+          }),
+          ...(expiresAt !== undefined && { expiresAt }),
+          ...(challenge?.instructions !== undefined && {
+            instructions: sliceText(challenge.instructions, 1_000),
+          }),
         };
         await conversations.authorizations.store(
           dispatchId,
@@ -621,9 +621,9 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
           id,
           name: data.name === "" ? "connection" : sliceText(data.name, 128),
           recipientUserId: userId,
-          ...(challenge?.displayName === undefined
-            ? {}
-            : { displayName: sliceText(challenge.displayName, 128) }),
+          ...(challenge?.displayName !== undefined && {
+            displayName: sliceText(challenge.displayName, 128),
+          }),
         };
         state.renderAuthorizations = [
           ...state.renderAuthorizations.filter((current) => current.id !== id),
@@ -730,10 +730,10 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
       const tokens = await readTurnTokens(ctx.session.id, data.turnId);
       state.finalRenderFooter = renderFooter({
         referenceId: ctx.session.id.slice(-8),
-        ...(state.turnStartedAt === undefined
-          ? {}
-          : { durationMs: Date.now() - state.turnStartedAt }),
-        ...(tokens === undefined ? {} : { tokens }),
+        ...(state.turnStartedAt !== undefined && {
+          durationMs: Date.now() - state.turnStartedAt,
+        }),
+        ...(tokens !== undefined && { tokens }),
         toolCalls: state.toolCalls,
       });
     },
@@ -754,9 +754,9 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
       state.finalRenderPhase ??= "completed";
       state.finalRenderFooter ??= renderFooter({
         referenceId: ctx.session.id.slice(-8),
-        ...(state.turnStartedAt === undefined
-          ? {}
-          : { durationMs: Date.now() - state.turnStartedAt }),
+        ...(state.turnStartedAt !== undefined && {
+          durationMs: Date.now() - state.turnStartedAt,
+        }),
         toolCalls: state.toolCalls,
       });
       await settleAndNotifyParked(state, ctx.session.id, data.turnId);
@@ -858,8 +858,8 @@ async function settleAndNotifyParked(
     phase,
     text: sliceText(state.text, FINAL_TEXT_CHARS),
     activity: state.activity,
-    ...(state.finalRenderFooter === undefined ? {} : { footer: state.finalRenderFooter }),
-    ...(traceparent === undefined ? {} : { traceparent }),
+    ...(state.finalRenderFooter !== undefined && { footer: state.finalRenderFooter }),
+    ...(traceparent !== undefined && { traceparent }),
     authoredAt: new Date().toISOString(),
   };
 

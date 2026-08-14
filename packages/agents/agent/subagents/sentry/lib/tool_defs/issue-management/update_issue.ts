@@ -32,13 +32,13 @@ export const update_issue = defineTool({
   }),
   execute: async ({ issue_id, ...input }) => {
     const body = {
-      ...(input.status === undefined ? {} : { status: input.status }),
-      ...(input.assigned_to === undefined ? {} : { assignedTo: input.assigned_to }),
-      ...(input.has_seen === undefined ? {} : { hasSeen: input.has_seen }),
-      ...(input.is_bookmarked === undefined ? {} : { isBookmarked: input.is_bookmarked }),
-      ...(input.priority === undefined ? {} : { priority: input.priority }),
-      ...(input.status_details === undefined ? {} : { statusDetails: input.status_details }),
-      ...(input.substatus === undefined ? {} : { substatus: input.substatus }),
+      ...(input.status !== undefined && { status: input.status }),
+      ...(input.assigned_to !== undefined && { assignedTo: input.assigned_to }),
+      ...(input.has_seen !== undefined && { hasSeen: input.has_seen }),
+      ...(input.is_bookmarked !== undefined && { isBookmarked: input.is_bookmarked }),
+      ...(input.priority !== undefined && { priority: input.priority }),
+      ...(input.status_details !== undefined && { statusDetails: input.status_details }),
+      ...(input.substatus !== undefined && { substatus: input.substatus }),
     };
     const result = await updateAnIssue({
       ...sentryOpts(),

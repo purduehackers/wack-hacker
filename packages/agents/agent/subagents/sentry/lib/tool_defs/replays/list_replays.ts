@@ -31,11 +31,11 @@ export const list_replays = defineTool({
       ...sentryOpts(),
       path: { organization_id_or_slug: sentryOrg() },
       query: {
-        ...(projectId === undefined ? {} : { project: [projectId] }),
+        ...(projectId !== undefined && { project: [projectId] }),
         statsPeriod: stat_period ?? "7d",
-        ...(per_page === undefined ? {} : { per_page }),
-        ...(query === undefined ? {} : { query }),
-        ...(sort === undefined ? {} : { sort }),
+        ...(per_page !== undefined && { per_page }),
+        ...(query !== undefined && { query }),
+        ...(sort !== undefined && { sort }),
       },
     });
     const { data } = unwrapResult(result, "listReplays");

@@ -17,7 +17,7 @@ export const list_emails = defineTool({
       const res = await payload.find({
         collection: "emails",
         ...paginationQuery(input),
-        ...(event_id !== undefined ? { where: { event: { equals: event_id } } } : {}),
+        ...(event_id !== undefined && { where: { event: { equals: event_id } } }),
       });
       return JSON.stringify({
         total_docs: res.totalDocs,

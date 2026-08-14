@@ -45,7 +45,7 @@ export const create_alert_rule = defineTool({
         actions,
         actionMatch: action_match ?? "all",
         frequency: frequency ?? 30,
-        ...(environment === undefined ? {} : { environment }),
+        ...(environment !== undefined && { environment }),
       },
     });
     const { data } = unwrapResult(result, "createAlertRule");

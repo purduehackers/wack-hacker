@@ -18,8 +18,8 @@ export const list_dns_records = defineTool({
     const page = await cloudflare().dns.records.list({
       zone_id,
       per_page,
-      ...(name === undefined ? {} : { name: { exact: name } }),
-      ...(type === undefined ? {} : { type }),
+      ...(name !== undefined && { name: { exact: name } }),
+      ...(type !== undefined && { type }),
     });
     return JSON.stringify(page.result);
   },

@@ -55,9 +55,9 @@ for (const domain of domains) {
   if (!(await exists(join(root, "lib/registry.ts")))) continue;
 
   const constant = domain.toUpperCase().replaceAll("-", "_");
-  const registry = z
-    .record(z.string(), z.unknown())
-    .parse(await import(pathToFileURL(join(root, "lib/registry.ts")).href));
+  // The registry module resolves at runtime, so its namespace arrives untyped.
+  // The concrete schemas below validate every field this script consumes.
+  const registry = await import(pathToFileURL(join(root, "lib/registry.ts")).href);
   const skills = z.array(skillSchema).parse(registry[`${constant}_SKILLS`]);
   const baseTools = z.array(z.string()).parse(registry[`${constant}_BASE_TOOL_NAMES`]);
   const tools = z.record(z.string(), toolSpecSchema).parse(registry[`${constant}_TOOLS`]);
@@ -77,7 +77,7 @@ for (const domain of domains) {
     skills: docs,
     baseTools,
     tools,
-    ...(existing === undefined ? {} : { existing }),
+    ...(existing !== undefined && { existing }),
   });
   if (existing === undefined || normalizeReadme(next) !== normalizeReadme(existing)) {
     await writeFile(readmePath, next);

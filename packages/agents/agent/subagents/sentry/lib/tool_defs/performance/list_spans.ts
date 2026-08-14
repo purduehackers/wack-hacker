@@ -34,11 +34,11 @@ export const list_spans = defineTool({
       query: {
         dataset: "spans",
         field: fields ?? defaultFields,
-        ...(project_slug === undefined ? {} : { project: [projectId] }),
+        ...(project_slug !== undefined && { project: [projectId] }),
         statsPeriod: stat_period ?? "24h",
-        ...(query === undefined ? {} : { query }),
-        ...(sort === undefined ? {} : { sort }),
-        ...(per_page === undefined ? {} : { per_page }),
+        ...(query !== undefined && { query }),
+        ...(sort !== undefined && { sort }),
+        ...(per_page !== undefined && { per_page }),
       },
     });
     const { data } = unwrapResult(result, "listSpans");

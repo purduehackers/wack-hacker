@@ -74,7 +74,12 @@ function executePositions(source: string): number[] {
   ].sort((left, right) => left - right);
 }
 
-function lineAndColumn(source: string, index: number): { line: number; column: number } {
+interface SourcePosition {
+  readonly line: number;
+  readonly column: number;
+}
+
+function lineAndColumn(source: string, index: number): SourcePosition {
   const before = source.slice(0, index);
   const lines = before.split("\n");
   return { line: lines.length, column: (lines.at(-1)?.length ?? 0) + 1 };

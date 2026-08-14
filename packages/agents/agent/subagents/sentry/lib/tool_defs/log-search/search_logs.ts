@@ -32,11 +32,11 @@ export const search_logs = defineTool({
       query: {
         dataset: "logs",
         field: fields ?? defaultFields,
-        ...(project_slug === undefined ? {} : { project: [projectId] }),
+        ...(project_slug !== undefined && { project: [projectId] }),
         statsPeriod: stat_period ?? "24h",
-        ...(query === undefined ? {} : { query }),
+        ...(query !== undefined && { query }),
         sort: sort ?? "-timestamp",
-        ...(per_page === undefined ? {} : { per_page }),
+        ...(per_page !== undefined && { per_page }),
       },
     });
     const { data } = unwrapResult(result, "searchLogs");

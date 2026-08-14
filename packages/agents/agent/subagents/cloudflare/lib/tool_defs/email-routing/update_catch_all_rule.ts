@@ -30,7 +30,7 @@ export const update_catch_all_rule = defineTool({
         matchers: [{ type: "all" }],
         actions: action === "drop" ? [{ type: "drop" }] : [{ type: "forward", value: forward_to }],
         enabled,
-        ...(name === undefined ? {} : { name }),
+        ...(name !== undefined && { name }),
       }),
     );
   },

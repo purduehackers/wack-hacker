@@ -143,7 +143,7 @@ export function createDiscordRest(rest: RestClient) {
               components,
               message_reference: { message_id: messageId, fail_if_not_exists: false },
               allowed_mentions: { parse: [] },
-              ...(nonce === undefined ? {} : { nonce, enforce_nonce: true as const }),
+              ...(nonce !== undefined && { nonce, enforce_nonce: true as const }),
             },
             signal: AbortSignal.timeout(30_000),
           }),
