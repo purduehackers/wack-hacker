@@ -1,3 +1,4 @@
+import { messageOf } from "@repo/shared/errors";
 import { defineDynamic, defineTool } from "eve/tools";
 import { z } from "zod";
 
@@ -92,12 +93,21 @@ export default defineDynamic({
               });
               return { ok: true as const, repo, ...outcome };
             } catch (cause) {
-              return failed(
-                "harness_failed",
-                cause instanceof Error
-                  ? sanitizeText(cause.message, 2_000).text
-                  : "The Codex session did not complete.",
+              // Whatever it was. The `instanceof Error` check this replaces fell
+              // through to a fixed string for anything else thrown, and the
+              // harness does throw non-Errors — so every Codex failure reported
+              // the same eleven words and the one place that still held the
+              // reason discarded it.
+              const reason = messageOf(cause);
+              console.warn(
+                JSON.stringify({
+                  event: "code.harness_failed",
+                  repo,
+                  sessionKey: ctx.session.id,
+                  reason,
+                }),
               );
+              return failed("harness_failed", sanitizeText(reason, 2_000).text);
             }
           });
         },
