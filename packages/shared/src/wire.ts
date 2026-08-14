@@ -33,7 +33,7 @@
 
 import { z } from "zod";
 
-import { ConfirmMode, ScheduleActionType } from "./db/enums.ts";
+import { ConfirmMode, ScheduleActionType } from "./db/column-enums.ts";
 import { UserRole } from "./discord/roles.ts";
 import { InvalidInput } from "./errors.ts";
 import { discordSnowflake as snowflake, shortId, traceparent } from "./formats.ts";

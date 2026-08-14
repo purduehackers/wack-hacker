@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { figma } from "../../client.ts";
-import { summarizeFile } from "../../constants.ts";
+import { summarizeFile } from "../../projections.ts";
 
 export const search_files = defineTool({
   description:

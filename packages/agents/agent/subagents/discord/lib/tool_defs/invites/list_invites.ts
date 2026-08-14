@@ -3,7 +3,8 @@ import { Routes, type RESTGetAPIGuildInvitesResult } from "discord-api-types/v10
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { discordArray, discordRest } from "../../client.ts";
-import { empty, summarizeInvite } from "../../constants.ts";
+import { empty } from "../../constants.ts";
+import { summarizeInvite } from "../../projections.ts";
 
 export const list_invites = defineTool({
   access: { risk: "read", minRole: "admin" },

@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { figma } from "../../client.ts";
-import { summarizeStyle } from "../../constants.ts";
+import { summarizeStyle } from "../../projections.ts";
 
 export const get_style = defineTool({
   description: "Get full details of a published style by its key.",

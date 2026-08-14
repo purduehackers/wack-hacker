@@ -3,8 +3,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { notion, resolveDataSourceId } from "../../client.ts";
-import { parseCover, parseIcon } from "../../constants.ts";
 import { isCreatePageProperties } from "../../notion-input.ts";
+import { parseCover, parseIcon } from "../../page-decoration.ts";
 
 export const create_page = defineTool({
   description: `Create a new Notion page. Can be a subpage of another page, or a new entry in a database. Pass markdown for the page body — the first # heading becomes the title if properties.title is omitted. For database entries, set properties matching the database schema (use retrieve_database first).`,

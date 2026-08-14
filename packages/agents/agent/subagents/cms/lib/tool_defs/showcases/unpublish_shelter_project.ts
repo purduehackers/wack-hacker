@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { documentId, payload, wrapPayloadError } from "../../client.ts";
-import { projectShelter } from "../../constants.ts";
+import { projectShelter } from "../../projections.ts";
 
 export const unpublish_shelter_project = defineTool({
   description: "Hide a shelter project from the public showcase (visible: false).",

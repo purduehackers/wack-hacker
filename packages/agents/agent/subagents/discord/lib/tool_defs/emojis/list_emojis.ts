@@ -3,7 +3,8 @@ import { Routes, type RESTGetAPIGuildEmojisResult } from "discord-api-types/v10"
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { discordArray, discordRest } from "../../client.ts";
-import { empty, summarizeEmoji } from "../../constants.ts";
+import { empty } from "../../constants.ts";
+import { summarizeEmoji } from "../../projections.ts";
 
 export const list_emojis = defineTool({
   access: { risk: "read" },

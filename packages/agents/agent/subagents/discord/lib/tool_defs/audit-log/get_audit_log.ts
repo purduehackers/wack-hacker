@@ -1,5 +1,3 @@
-/* oxlint-disable unicorn/no-null -- Discord's JSON API uses null for explicit absence/field clearing. */
-
 import { makeURLSearchParams } from "@discordjs/rest";
 import { DISCORD_GUILD_ID } from "@repo/shared/discord";
 import {
@@ -51,9 +49,9 @@ export const get_audit_log = defineTool({
       return {
         id: entry.id,
         actionType: entry.action_type,
-        executor: executorId === undefined ? null : (userNames.get(executorId) ?? executorId),
-        targetId: entry.target_id ?? null,
-        reason: entry.reason ?? null,
+        executor: executorId === undefined ? null : (userNames.get(executorId) ?? executorId), // oxlint-disable-line unicorn/no-null -- Discord's JSON API uses null for explicit absence
+        targetId: entry.target_id ?? null, // oxlint-disable-line unicorn/no-null -- Discord's JSON API uses null for explicit absence
+        reason: entry.reason ?? null, // oxlint-disable-line unicorn/no-null -- Discord's JSON API uses null for explicit absence
         changes: entry.changes,
       };
     });

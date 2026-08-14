@@ -2,7 +2,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { hcbGet, hcbOrgSlug } from "../../client.ts";
-import { hcbOrganizationSchema, type HcbOrganization } from "../../constants.ts";
+import { hcbOrganizationSchema } from "../../constants.ts";
+import type { HcbOrganization } from "../../projections.ts";
 
 export const get_balance = defineTool({
   description:

@@ -10,14 +10,12 @@ import { z } from "zod";
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { compact, discordObject, discordRest } from "../../client.ts";
 import {
-  autoModAction,
   autoModActionSchema,
-  autoModMetadata,
   autoModMetadataSchema,
   AUTO_MOD_EVENT_TYPES,
   discordSnowflakeSchema,
-  summarizeAutoModRule,
 } from "../../constants.ts";
+import { autoModAction, autoModMetadata, summarizeAutoModRule } from "../../projections.ts";
 
 /** Only creation names a trigger. An update cannot change what a rule triggers on. */
 const AUTO_MOD_TRIGGER_TYPES = {

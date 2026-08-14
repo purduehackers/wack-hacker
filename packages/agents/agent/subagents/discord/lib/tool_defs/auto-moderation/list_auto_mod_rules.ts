@@ -3,7 +3,8 @@ import { Routes, type RESTGetAPIAutoModerationRulesResult } from "discord-api-ty
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { discordArray, discordRest } from "../../client.ts";
-import { empty, summarizeAutoModRule } from "../../constants.ts";
+import { empty } from "../../constants.ts";
+import { summarizeAutoModRule } from "../../projections.ts";
 
 export const list_auto_mod_rules = defineTool({
   access: { risk: "read" },

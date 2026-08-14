@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { figma } from "../../client.ts";
-import { summarizeStyle } from "../../constants.ts";
+import { summarizeStyle } from "../../projections.ts";
 
 export const list_team_styles = defineTool({
   description: "List published styles (colors, text, effects, grids) across the team. Paginated.",

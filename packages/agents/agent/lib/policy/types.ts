@@ -4,10 +4,11 @@
  * its callers both depend on these shapes, so they live apart from either.
  */
 
-import { ConfirmMode, PolicySource, RiskLevel } from "@repo/shared/db/enums";
-import type { ConfirmMode as ConfirmationValue } from "@repo/shared/db/enums";
+import type { PolicySource, RiskLevel } from "@repo/shared/db/enums";
 import type { UserRole } from "@repo/shared/discord";
 import type { SessionAuthContext } from "eve/context";
+
+import type { CapabilityKind, Confirmation } from "./kinds.ts";
 
 /**
  * One entry of Eve's authenticated attribute bag: a single string or a list of
@@ -15,17 +16,8 @@ import type { SessionAuthContext } from "eve/context";
  */
 export type AuthAttribute = SessionAuthContext["attributes"][string];
 
-export const CapabilityKind = {
-  Subagent: "subagent",
-  Tool: "tool",
-  Skill: "skill",
-} as const;
-export type CapabilityKind = (typeof CapabilityKind)[keyof typeof CapabilityKind];
-
-export { PolicySource, RiskLevel };
-
-export const Confirmation = ConfirmMode;
-export type Confirmation = ConfirmationValue;
+export { CapabilityKind, Confirmation } from "./kinds.ts";
+export { PolicySource, RiskLevel } from "@repo/shared/db/enums";
 
 /** A copyable, JSON-only descriptor for every model-visible capability. */
 export interface CapabilityDescriptor {

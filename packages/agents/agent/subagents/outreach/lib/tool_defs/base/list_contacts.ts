@@ -3,8 +3,9 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { notion } from "../../client.ts";
-import { CONTACTS_DATA_SOURCE_ID, summarizePage } from "../../constants.ts";
+import { CONTACTS_DATA_SOURCE_ID } from "../../constants.ts";
 import { isQueryFilter, isQuerySorts } from "../../notion-input.ts";
+import { summarizePage } from "../../projections.ts";
 import { crmQueryInputShape } from "../../shared-constants.ts";
 
 export const list_contacts = defineTool({

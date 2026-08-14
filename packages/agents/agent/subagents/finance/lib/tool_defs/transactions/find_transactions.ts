@@ -2,7 +2,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { hcbOrgSlug, hcbPaginate } from "../../client.ts";
-import { hcbTransactionSchema, projectTransaction, type HcbTransaction } from "../../constants.ts";
+import { hcbTransactionSchema } from "../../constants.ts";
+import { projectTransaction, type HcbTransaction } from "../../projections.ts";
 
 const findTransactionsInput = z.strictObject({
   memo_contains: z

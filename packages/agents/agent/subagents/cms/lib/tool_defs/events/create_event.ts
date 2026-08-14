@@ -2,7 +2,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { payload, wrapPayloadError } from "../../client.ts";
-import { eventFields, projectEvent, richTextParagraph } from "../../constants.ts";
+import { eventFields } from "../../constants.ts";
+import { projectEvent, richTextParagraph } from "../../projections.ts";
 
 export const create_event = defineTool({
   description:

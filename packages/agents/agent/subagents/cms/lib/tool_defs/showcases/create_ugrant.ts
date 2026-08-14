@@ -2,7 +2,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { payload, wrapPayloadError } from "../../client.ts";
-import { projectUgrant, ugrantFields } from "../../constants.ts";
+import { ugrantFields } from "../../constants.ts";
+import { projectUgrant } from "../../projections.ts";
 
 export const create_ugrant = defineTool({
   description:

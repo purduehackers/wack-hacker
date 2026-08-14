@@ -1,5 +1,3 @@
-/* oxlint-disable unicorn/no-null -- Discord's JSON API uses null for explicit absence/field clearing. */
-
 import { makeURLSearchParams } from "@discordjs/rest";
 import { DISCORD_GUILD_ID } from "@repo/shared/discord";
 import {
@@ -33,14 +31,14 @@ export const get_server_info = defineTool({
       memberCount: guild.approximate_member_count,
       presenceCount: guild.approximate_presence_count,
       ownerId: guild.owner_id,
-      description: guild.description ?? null,
+      description: guild.description ?? null, // oxlint-disable-line unicorn/no-null -- Discord's JSON API uses null for explicit absence
       icon:
         icon === undefined
-          ? null
+          ? null // oxlint-disable-line unicorn/no-null -- Discord's JSON API uses null for explicit absence
           : `https://cdn.discordapp.com/icons/${DISCORD_GUILD_ID}/${icon}.png`,
       banner:
         banner === undefined
-          ? null
+          ? null // oxlint-disable-line unicorn/no-null -- Discord's JSON API uses null for explicit absence
           : `https://cdn.discordapp.com/banners/${DISCORD_GUILD_ID}/${banner}.png`,
       boostLevel: guild.premium_tier,
       boostCount: guild.premium_subscription_count,

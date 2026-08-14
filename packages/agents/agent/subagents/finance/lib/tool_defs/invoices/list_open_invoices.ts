@@ -2,7 +2,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { hcbOrgSlug, hcbPaginate } from "../../client.ts";
-import { hcbInvoiceSchema, projectInvoice } from "../../constants.ts";
+import { hcbInvoiceSchema } from "../../constants.ts";
+import { projectInvoice } from "../../projections.ts";
 
 /** HCB has no `open` status. An invoice is open until it reaches one of these. */
 const CLOSED_INVOICE_STATUSES = new Set(["paid", "void", "voided", "deposited"]);

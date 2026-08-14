@@ -2,7 +2,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { vercel } from "../../client.ts";
-import { redactTokens, TEAM } from "../../constants.ts";
+import { TEAM } from "../../constants.ts";
+import { redactTokens } from "../../redaction.ts";
 
 export const get_global_config_token = defineTool({
   description:

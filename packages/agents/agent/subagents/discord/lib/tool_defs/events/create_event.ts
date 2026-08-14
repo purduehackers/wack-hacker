@@ -13,12 +13,10 @@ import { compact, discordObject, discordRest } from "../../client.ts";
 import {
   discordSnowflakeSchema,
   EVENT_IMAGE_MAX_BYTES,
-  guildChannel,
   httpUrl,
-  imageDataUri,
   isoDateTime,
-  summarizeEvent,
 } from "../../constants.ts";
+import { guildChannel, imageDataUri, summarizeEvent } from "../../projections.ts";
 
 const EVENT_TYPES = {
   stage: GuildScheduledEventEntityType.StageInstance,

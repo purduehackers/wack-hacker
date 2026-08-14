@@ -8,7 +8,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { discordArray, discordRest } from "../../client.ts";
-import { channelId, guildChannel, summarizeWebhook } from "../../constants.ts";
+import { channelId } from "../../constants.ts";
+import { guildChannel, summarizeWebhook } from "../../projections.ts";
 
 export const list_webhooks = defineTool({
   access: { risk: "read" },

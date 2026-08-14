@@ -11,7 +11,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { discordArray, discordObject, discordRest } from "../../client.ts";
-import { discordSnowflakeSchema, summarizeMember } from "../../constants.ts";
+import { discordSnowflakeSchema } from "../../constants.ts";
+import { summarizeMember } from "../../projections.ts";
 
 export const search_members = defineTool({
   access: { risk: "read" },

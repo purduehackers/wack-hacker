@@ -2,7 +2,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { hcbGet } from "../../client.ts";
-import { hcbDonationSchema, projectDonation } from "../../constants.ts";
+import { hcbDonationSchema } from "../../constants.ts";
+import { projectDonation } from "../../projections.ts";
 
 export const get_donation = defineTool({
   description:

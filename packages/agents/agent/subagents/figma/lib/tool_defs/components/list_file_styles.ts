@@ -3,7 +3,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { figma } from "../../client.ts";
-import { fileKey, summarizeStyle } from "../../constants.ts";
+import { fileKey } from "../../constants.ts";
+import { summarizeStyle } from "../../projections.ts";
 
 export const list_file_styles = defineTool({
   description: "List styles in a specific Figma file.",

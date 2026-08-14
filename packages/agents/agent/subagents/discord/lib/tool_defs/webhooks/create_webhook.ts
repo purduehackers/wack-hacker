@@ -7,13 +7,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { compact, discordObject, discordRest } from "../../client.ts";
-import {
-  channelId,
-  guildChannel,
-  httpUrl,
-  imageDataUri,
-  summarizeWebhook,
-} from "../../constants.ts";
+import { channelId, httpUrl } from "../../constants.ts";
+import { guildChannel, imageDataUri, summarizeWebhook } from "../../projections.ts";
 
 export const create_webhook = defineTool({
   access: { risk: "destructive" },

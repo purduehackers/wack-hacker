@@ -1,5 +1,3 @@
-/* oxlint-disable unicorn/no-null -- Discord's JSON API uses null for explicit absence/field clearing. */
-
 import { DISCORD_GUILD_ID } from "@repo/shared/discord";
 import { Routes, type RESTGetAPIGuildPreviewResult } from "discord-api-types/v10";
 
@@ -21,7 +19,7 @@ export const get_guild_preview = defineTool({
     return {
       id: preview.id,
       name: preview.name,
-      description: preview.description ?? null,
+      description: preview.description ?? null, // oxlint-disable-line unicorn/no-null -- Discord's JSON API uses null for explicit absence
       memberCount: preview.approximate_member_count,
       onlineCount: preview.approximate_presence_count,
       features: Array.isArray(preview.features) ? preview.features : [],

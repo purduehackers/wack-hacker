@@ -14,11 +14,9 @@ import {
   AUTO_ARCHIVE_DURATIONS,
   channelName,
   discordSnowflakeSchema,
-  guildChannel,
   slowmode,
-  summarizeChannel,
-  type GuildChannelResult,
 } from "../../constants.ts";
+import { guildChannel, summarizeChannel, type GuildChannelResult } from "../../projections.ts";
 
 /** The channel kinds this domain will create. Threads come from create_thread. */
 const CHANNEL_TYPES = {

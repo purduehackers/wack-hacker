@@ -9,14 +9,12 @@ import { z } from "zod";
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { compact, discordObject, discordRest } from "../../client.ts";
 import {
-  autoModAction,
   autoModActionSchema,
-  autoModMetadata,
   autoModMetadataSchema,
   AUTO_MOD_EVENT_TYPES,
   discordSnowflakeSchema,
-  summarizeAutoModRule,
 } from "../../constants.ts";
+import { autoModAction, autoModMetadata, summarizeAutoModRule } from "../../projections.ts";
 
 export const update_auto_mod_rule = defineTool({
   access: { risk: "destructive" },

@@ -2,7 +2,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { vercel } from "../../client.ts";
-import { redactEnvValues, TEAM } from "../../constants.ts";
+import { TEAM } from "../../constants.ts";
+import { redactEnvValues } from "../../redaction.ts";
 
 export const remove_project_env_var = defineTool({
   description: "Remove a single environment variable from a project by its id.",

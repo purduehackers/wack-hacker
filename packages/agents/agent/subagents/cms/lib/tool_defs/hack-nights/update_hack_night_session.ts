@@ -2,7 +2,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { documentId, payload, wrapPayloadError } from "../../client.ts";
-import { projectSession, richTextParagraph, sessionFields } from "../../constants.ts";
+import { sessionFields } from "../../constants.ts";
+import { projectSession, richTextParagraph } from "../../projections.ts";
 
 export const update_hack_night_session = defineTool({
   description:

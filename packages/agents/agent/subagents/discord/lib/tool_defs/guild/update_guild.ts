@@ -1,5 +1,3 @@
-/* oxlint-disable unicorn/no-null -- Discord's JSON API uses null for explicit absence/field clearing. */
-
 import { DISCORD_GUILD_ID } from "@repo/shared/discord";
 import {
   Routes,
@@ -10,7 +8,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { compact, discordObject, discordRest } from "../../client.ts";
-import { discordSnowflakeSchema, guildChannel } from "../../constants.ts";
+import { discordSnowflakeSchema } from "../../constants.ts";
+import { guildChannel } from "../../projections.ts";
 
 /** The guild PATCH carries imagery inline, so the model must supply bytes, not a URL. */
 const dataUri = z
@@ -56,6 +55,6 @@ export const update_guild = defineTool({
       }),
       "update guild",
     );
-    return { id: guild.id, name: guild.name, description: guild.description ?? null };
+    return { id: guild.id, name: guild.name, description: guild.description ?? null }; // oxlint-disable-line unicorn/no-null -- Discord's JSON API uses null for explicit absence
   },
 });

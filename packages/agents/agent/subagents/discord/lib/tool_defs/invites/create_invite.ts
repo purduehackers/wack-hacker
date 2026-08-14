@@ -1,5 +1,3 @@
-/* oxlint-disable unicorn/no-null -- Discord's JSON API uses null for explicit absence/field clearing. */
-
 import {
   Routes,
   type RESTPostAPIChannelInviteJSONBody,
@@ -9,7 +7,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { compact, discordObject, discordRest } from "../../client.ts";
-import { channelId, guildChannel, reason, responseString } from "../../constants.ts";
+import { channelId, reason, responseString } from "../../constants.ts";
+import { guildChannel } from "../../projections.ts";
 
 export const create_invite = defineTool({
   access: { risk: "destructive", minRole: "admin" },
@@ -41,12 +40,12 @@ export const create_invite = defineTool({
     const code = responseString.safeParse(invite.code).data;
     return {
       code: invite.code,
-      url: code === undefined ? null : `https://discord.gg/${code}`,
+      url: code === undefined ? null : `https://discord.gg/${code}`, // oxlint-disable-line unicorn/no-null -- Discord's JSON API uses null for explicit absence
       channelId: invite.channel?.id ?? input.channel_id,
       maxAge: invite.max_age,
       maxUses: invite.max_uses,
       temporary: invite.temporary,
-      expiresAt: invite.expires_at ?? null,
+      expiresAt: invite.expires_at ?? null, // oxlint-disable-line unicorn/no-null -- Discord's JSON API uses null for explicit absence
     };
   },
 });

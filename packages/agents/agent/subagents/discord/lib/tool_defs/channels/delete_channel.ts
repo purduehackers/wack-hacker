@@ -3,7 +3,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { discordObject, discordRest } from "../../client.ts";
-import { channelId, guildChannel, type GuildChannelResult } from "../../constants.ts";
+import { channelId } from "../../constants.ts";
+import { guildChannel, type GuildChannelResult } from "../../projections.ts";
 
 export const delete_channel = defineTool({
   access: { risk: "destructive" },

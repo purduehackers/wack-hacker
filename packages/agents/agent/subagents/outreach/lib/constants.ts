@@ -1,9 +1,3 @@
-import type {
-  CreatePageResponse,
-  GetPageResponse,
-  QueryDataSourceResponse,
-} from "@notionhq/client/build/src/api-endpoints";
-
 /**
  * Workspace-fixed identifiers for the Purdue Hackers CRM in Notion.
  * These are the same in every deployment environment and are not secrets,
@@ -36,16 +30,3 @@ export const OUTREACH_REPLY_TO_EMAIL = "phackers@purdue.edu";
  */
 // oxlint-disable-next-line unicorn/no-null -- serialized tool output distinguishes an empty field from an absent key
 export const ABSENT = null;
-
-type CrmPage = QueryDataSourceResponse["results"][number] | GetPageResponse | CreatePageResponse;
-
-/** Compact projection every CRM tool returns for a Notion page. */
-export function summarizePage(page: CrmPage) {
-  return {
-    id: page.id,
-    url: "url" in page ? page.url : undefined,
-    properties: "properties" in page ? page.properties : undefined,
-    created_time: "created_time" in page ? page.created_time : undefined,
-    last_edited_time: "last_edited_time" in page ? page.last_edited_time : undefined,
-  };
-}

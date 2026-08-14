@@ -7,11 +7,9 @@ import {
   autoArchiveDuration,
   AUTO_ARCHIVE_DURATIONS,
   discordSnowflakeSchema,
-  guildChannel,
   slowmode,
-  summarizeThread,
-  type ThreadResult,
 } from "../../constants.ts";
+import { guildChannel, summarizeThread, type ThreadResult } from "../../projections.ts";
 
 export const edit_thread = defineTool({
   access: { risk: "write" },

@@ -2,7 +2,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { documentId, payload, wrapPayloadError } from "../../client.ts";
-import { projectShelter, shelterProjectFields } from "../../constants.ts";
+import { shelterProjectFields } from "../../constants.ts";
+import { projectShelter } from "../../projections.ts";
 
 export const update_shelter_project = defineTool({
   description: "Update a shelter project. Only fields you pass are changed.",

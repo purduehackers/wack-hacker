@@ -7,7 +7,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { discordObject, discordRest } from "../../client.ts";
-import { channelId, guildChannel } from "../../constants.ts";
+import { channelId } from "../../constants.ts";
+import { guildChannel } from "../../projections.ts";
 
 export const follow_announcement_channel = defineTool({
   access: { risk: "destructive" },

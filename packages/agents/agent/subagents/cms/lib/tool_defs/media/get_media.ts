@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { documentId, payload, wrapPayloadError } from "../../client.ts";
-import { projectMedia } from "../../constants.ts";
+import { projectMedia } from "../../projections.ts";
 
 export const get_media = defineTool({
   description: "Fetch a single media asset by ID.",

@@ -2,7 +2,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { documentId, paginationQuery, payload, wrapPayloadError } from "../../client.ts";
-import { paginationInputShape, projectEmail } from "../../constants.ts";
+import { paginationInputShape } from "../../constants.ts";
+import { projectEmail } from "../../projections.ts";
 
 export const list_emails = defineTool({
   description:

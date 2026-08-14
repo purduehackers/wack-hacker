@@ -2,7 +2,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { vercel } from "../../client.ts";
-import { ENV_TARGETS, ENV_TYPES, redactEnvValues, TEAM } from "../../constants.ts";
+import { ENV_TARGETS, ENV_TYPES, TEAM } from "../../constants.ts";
+import { redactEnvValues } from "../../redaction.ts";
 
 export const create_project_env_vars = defineTool({
   description:

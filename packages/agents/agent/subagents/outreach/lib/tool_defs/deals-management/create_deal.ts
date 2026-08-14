@@ -3,7 +3,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { notion } from "../../client.ts";
-import { DEALS_DATA_SOURCE_ID, summarizePage } from "../../constants.ts";
+import { DEALS_DATA_SOURCE_ID } from "../../constants.ts";
+import { summarizePage } from "../../projections.ts";
 
 export const create_deal = defineTool({
   description: `Create a new Deal row. "name" becomes the Deal title. Stage defaults to "Lead" when omitted. Call retrieve_crm_schema first to confirm Stage/Priority option labels.`,

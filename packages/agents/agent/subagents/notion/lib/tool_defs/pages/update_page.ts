@@ -3,8 +3,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { notion } from "../../client.ts";
-import { parseCover, parseIcon } from "../../constants.ts";
 import { isUpdatePageProperties } from "../../notion-input.ts";
+import { parseCover, parseIcon } from "../../page-decoration.ts";
 
 export const update_page = defineTool({
   description: `Update a page's properties, icon, cover, or archived status. Only include fields to change. For database entries, properties must match the database schema. Set archived: true to soft-delete.`,

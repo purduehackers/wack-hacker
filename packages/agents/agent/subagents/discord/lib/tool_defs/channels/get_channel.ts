@@ -2,7 +2,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { discordRest } from "../../client.ts";
-import { channelId, guildChannel, summarizeChannel } from "../../constants.ts";
+import { channelId } from "../../constants.ts";
+import { guildChannel, summarizeChannel } from "../../projections.ts";
 
 export const get_channel = defineTool({
   access: { risk: "read" },

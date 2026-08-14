@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { check, index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
-import { ScheduleActionType, ScheduleType, ScheduledTaskStatus } from "../enums.ts";
+import { ScheduleActionType, ScheduleType, ScheduledTaskStatus } from "../column-enums.ts";
 
 /** Durable prompts claimed by the once-a-minute Eve dispatcher. */
 export const scheduledTasks = sqliteTable(

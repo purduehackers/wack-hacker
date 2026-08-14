@@ -19,13 +19,8 @@ import {
   discordRest,
   malformedDiscordResponse,
 } from "../../client.ts";
-import {
-  channelId,
-  guildChannel,
-  responseInt,
-  summarizeThread,
-  type ThreadResult,
-} from "../../constants.ts";
+import { channelId, responseInt } from "../../constants.ts";
+import { guildChannel, summarizeThread, type ThreadResult } from "../../projections.ts";
 
 /** Only these parent types expose the archived-thread routes. */
 const PUBLIC_THREAD_PARENTS = new Set<number>([

@@ -8,7 +8,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { compact, discordObject, discordRest } from "../../client.ts";
-import { discordSnowflakeSchema, emojiName, roleId, summarizeEmoji } from "../../constants.ts";
+import { discordSnowflakeSchema, emojiName, roleId } from "../../constants.ts";
+import { summarizeEmoji } from "../../projections.ts";
 
 export const edit_emoji = defineTool({
   access: { risk: "write" },

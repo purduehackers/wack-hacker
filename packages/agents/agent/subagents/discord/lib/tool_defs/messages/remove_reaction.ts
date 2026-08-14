@@ -3,7 +3,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { discordRest } from "../../client.ts";
-import { channelId, discordSnowflakeSchema, guildChannel, messageId } from "../../constants.ts";
+import { channelId, discordSnowflakeSchema, messageId } from "../../constants.ts";
+import { guildChannel } from "../../projections.ts";
 
 export const remove_reaction = defineTool({
   access: { risk: "destructive" },

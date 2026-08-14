@@ -1,5 +1,3 @@
-/* oxlint-disable unicorn/no-null -- Discord's JSON API uses null for explicit absence/field clearing. */
-
 import { makeURLSearchParams } from "@discordjs/rest";
 import { DISCORD_GUILD_ID } from "@repo/shared/discord";
 import {
@@ -41,7 +39,7 @@ export const list_bans = defineTool({
       return {
         userId: user.id,
         username: user.global_name ?? user.username,
-        reason: ban.reason ?? null,
+        reason: ban.reason ?? null, // oxlint-disable-line unicorn/no-null -- Discord's JSON API uses null for explicit absence
       };
     });
   },

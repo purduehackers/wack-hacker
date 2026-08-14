@@ -4,7 +4,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { discordObject, discordRest } from "../../client.ts";
-import { discordSnowflakeSchema, summarizeAutoModRule } from "../../constants.ts";
+import { discordSnowflakeSchema } from "../../constants.ts";
+import { summarizeAutoModRule } from "../../projections.ts";
 
 export const get_auto_mod_rule = defineTool({
   access: { risk: "read" },

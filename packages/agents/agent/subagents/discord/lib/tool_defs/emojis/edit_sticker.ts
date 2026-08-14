@@ -8,7 +8,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { compact, discordObject, discordRest } from "../../client.ts";
-import { discordSnowflakeSchema, summarizeSticker } from "../../constants.ts";
+import { discordSnowflakeSchema } from "../../constants.ts";
+import { summarizeSticker } from "../../projections.ts";
 
 export const edit_sticker = defineTool({
   access: { risk: "write" },

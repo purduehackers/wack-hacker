@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { documentId, payload, wrapPayloadError } from "../../client.ts";
-import { projectUgrant } from "../../constants.ts";
+import { projectUgrant } from "../../projections.ts";
 
 export const get_ugrant = defineTool({
   description: "Fetch a single ugrant by ID.",

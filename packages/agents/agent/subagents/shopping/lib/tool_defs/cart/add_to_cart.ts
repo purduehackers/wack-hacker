@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { addCartItem } from "../../cart-store.ts";
-import { summarize, toPublic } from "../../constants.ts";
+import { summarize, toPublic } from "../../projections.ts";
 
 export const add_to_cart = defineTool({
   description:

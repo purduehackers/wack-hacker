@@ -3,7 +3,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { discordObject, discordRest } from "../../client.ts";
-import { discordSnowflakeSchema, guildChannel, type ThreadResult } from "../../constants.ts";
+import { discordSnowflakeSchema } from "../../constants.ts";
+import { guildChannel, type ThreadResult } from "../../projections.ts";
 
 export const delete_thread = defineTool({
   access: { risk: "destructive" },

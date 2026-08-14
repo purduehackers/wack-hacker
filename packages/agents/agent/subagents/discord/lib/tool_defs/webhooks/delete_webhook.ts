@@ -3,7 +3,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { discordRest } from "../../client.ts";
-import { discordSnowflakeSchema, guildWebhook } from "../../constants.ts";
+import { discordSnowflakeSchema } from "../../constants.ts";
+import { guildWebhook } from "../../projections.ts";
 
 export const delete_webhook = defineTool({
   access: { risk: "destructive" },

@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { documentId, payload, wrapPayloadError } from "../../client.ts";
-import { projectUgrant } from "../../constants.ts";
+import { projectUgrant } from "../../projections.ts";
 
 export const unpublish_ugrant = defineTool({
   description: "Hide a ugrant from the public showcase (visible: false).",

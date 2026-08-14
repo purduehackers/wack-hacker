@@ -8,7 +8,8 @@ import {
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { discordArray, discordRest } from "../../client.ts";
-import { empty, summarizeEvent } from "../../constants.ts";
+import { empty } from "../../constants.ts";
+import { summarizeEvent } from "../../projections.ts";
 
 export const list_events = defineTool({
   access: { risk: "read" },

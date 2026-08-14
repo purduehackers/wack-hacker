@@ -8,12 +8,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { discordArray, discordRest } from "../../client.ts";
-import {
-  channelId,
-  discordSnowflakeSchema,
-  guildChannel,
-  summarizeMessage,
-} from "../../constants.ts";
+import { channelId, discordSnowflakeSchema } from "../../constants.ts";
+import { guildChannel, summarizeMessage } from "../../projections.ts";
 
 export const fetch_messages = defineTool({
   access: { risk: "read" },

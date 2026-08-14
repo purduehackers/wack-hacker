@@ -2,7 +2,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { hcbGet, hcbOrgSlug, hcbPaginate, hcbTxnUrl } from "../../client.ts";
-import { paginationInputShape, paginationQuery } from "../../constants.ts";
+import { paginationInputShape } from "../../constants.ts";
+import { paginationQuery } from "../../projections.ts";
 
 const hcbCardChargeSchema = z.object({
   id: z.string().optional(),

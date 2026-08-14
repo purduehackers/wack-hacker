@@ -12,12 +12,10 @@ import {
   autoArchiveDuration,
   AUTO_ARCHIVE_DURATIONS,
   channelId,
-  guildChannel,
   messageId,
   slowmode,
-  summarizeThread,
-  type ThreadResult,
 } from "../../constants.ts";
+import { guildChannel, summarizeThread, type ThreadResult } from "../../projections.ts";
 
 export const create_thread = defineTool({
   access: { risk: "write" },

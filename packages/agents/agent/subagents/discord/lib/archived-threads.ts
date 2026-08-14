@@ -21,7 +21,8 @@ import type {
 import { z } from "zod";
 
 import { discordArray, discordObject, malformedDiscordResponse } from "./client.ts";
-import { discordSnowflakeSchema, type ThreadResult } from "./constants.ts";
+import { discordSnowflakeSchema } from "./constants.ts";
+import { type ThreadResult } from "./projections.ts";
 
 const ARCHIVED_THREAD_PAGE_LIMIT = 100;
 const MAX_ARCHIVED_THREAD_PAGES = 100;

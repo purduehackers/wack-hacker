@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { documentId, payload, wrapPayloadError } from "../../client.ts";
-import { projectRsvp } from "../../constants.ts";
+import { projectRsvp } from "../../projections.ts";
 
 export const get_rsvp = defineTool({
   description: "Fetch a single RSVP by ID.",

@@ -52,7 +52,7 @@ class FigmaClient {
     // needs either this assertion or a runtime validator that would change what the client
     // accepts. Keep the assertion at this one transport boundary. Every caller supplies the
     // generated response export for its concrete endpoint.
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- generated response boundary
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- this transport boundary narrows to generated Figma response types
     return res.json() as Promise<T>;
   }
 }

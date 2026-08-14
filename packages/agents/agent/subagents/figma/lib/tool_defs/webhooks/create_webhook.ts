@@ -3,7 +3,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { figma } from "../../client.ts";
-import { summarizeWebhook, webhookEventSchema } from "../../constants.ts";
+import { webhookEventSchema } from "../../constants.ts";
+import { summarizeWebhook } from "../../projections.ts";
 
 export const create_webhook = defineTool({
   description:

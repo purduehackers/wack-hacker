@@ -3,7 +3,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { figma } from "../../client.ts";
-import { fileKey, summarizeComponent } from "../../constants.ts";
+import { fileKey } from "../../constants.ts";
+import { summarizeComponent } from "../../projections.ts";
 
 export const list_file_components = defineTool({
   description: "List components in a specific Figma file.",

@@ -9,11 +9,9 @@ import {
   channelId,
   channelName,
   discordSnowflakeSchema,
-  guildChannel,
   slowmode,
-  summarizeChannel,
-  type GuildChannelResult,
 } from "../../constants.ts";
+import { guildChannel, summarizeChannel, type GuildChannelResult } from "../../projections.ts";
 
 export const edit_channel = defineTool({
   access: { risk: "write" },

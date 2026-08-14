@@ -9,7 +9,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { compact, discordObject, discordRest } from "../../client.ts";
-import { download, httpUrl, summarizeSticker } from "../../constants.ts";
+import { httpUrl } from "../../constants.ts";
+import { download, summarizeSticker } from "../../projections.ts";
 
 /** Discord infers a sticker's format from the upload's filename, not its bytes. */
 function stickerFilename(contentType: string): string {

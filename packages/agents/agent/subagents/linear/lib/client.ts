@@ -1,7 +1,11 @@
 import { IssueRelationType, LinearClient } from "@linear/sdk";
+import type { z } from "zod";
 
 import { env } from "../../../env.ts";
-import type { IssueRelation } from "./constants.ts";
+import type { issueRelationSchema } from "./constants.ts";
+
+/** One semantic relation entry as `issueRelationSchema` parses it. */
+type IssueRelation = NonNullable<z.output<typeof issueRelationSchema>>[number];
 
 const linearApiKey = env.LINEAR_API_KEY ?? "missing-linear-api-key";
 export const linear = new LinearClient({ apiKey: linearApiKey });

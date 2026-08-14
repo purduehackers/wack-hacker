@@ -31,8 +31,6 @@ export const issueRelationSchema = z
   .optional()
   .describe("Relations to add or remove");
 
-export type IssueRelation = NonNullable<z.output<typeof issueRelationSchema>>[number];
-
 /**
  * Linear renders label colors from a six-digit hex triple. The regex spells out
  * the case-insensitive class rather than carrying an `i` flag, because

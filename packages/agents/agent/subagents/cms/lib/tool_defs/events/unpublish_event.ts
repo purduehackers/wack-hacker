@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { documentId, payload, wrapPayloadError } from "../../client.ts";
-import { projectEvent } from "../../constants.ts";
+import { projectEvent } from "../../projections.ts";
 
 export const unpublish_event = defineTool({
   description: "Mark an event as unpublished (hidden from the website).",

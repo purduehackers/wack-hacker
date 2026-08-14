@@ -2,7 +2,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { paginationQuery, payload, wrapPayloadError } from "../../client.ts";
-import { paginationInputShape, projectUser } from "../../constants.ts";
+import { paginationInputShape } from "../../constants.ts";
+import { projectUser } from "../../projections.ts";
 
 export const list_users = defineTool({
   description:

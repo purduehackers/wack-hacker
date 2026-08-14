@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { documentId, payload, wrapPayloadError } from "../../client.ts";
-import { projectEvent } from "../../constants.ts";
+import { projectEvent } from "../../projections.ts";
 
 export const get_event = defineTool({
   description: "Fetch a single event by ID.",

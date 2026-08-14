@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { documentId, payload, wrapPayloadError } from "../../client.ts";
-import { projectEmail } from "../../constants.ts";
+import { projectEmail } from "../../projections.ts";
 
 export const send_email = defineTool({
   description:

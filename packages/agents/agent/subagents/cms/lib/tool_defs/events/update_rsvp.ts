@@ -2,7 +2,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { documentId, payload, wrapPayloadError } from "../../client.ts";
-import { projectRsvp, rsvpFields } from "../../constants.ts";
+import { rsvpFields } from "../../constants.ts";
+import { projectRsvp } from "../../projections.ts";
 
 export const update_rsvp = defineTool({
   description:

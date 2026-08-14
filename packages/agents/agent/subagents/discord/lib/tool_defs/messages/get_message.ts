@@ -3,7 +3,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { discordObject, discordRest } from "../../client.ts";
-import { channelId, guildChannel, messageId, summarizeMessage } from "../../constants.ts";
+import { channelId, messageId } from "../../constants.ts";
+import { guildChannel, summarizeMessage } from "../../projections.ts";
 
 export const get_message = defineTool({
   access: { risk: "read" },

@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { payload, wrapPayloadError } from "../../client.ts";
-import { projectMedia } from "../../constants.ts";
+import { projectMedia } from "../../projections.ts";
 
 const UPLOAD_FETCH_TIMEOUT_MS = 15_000;
 

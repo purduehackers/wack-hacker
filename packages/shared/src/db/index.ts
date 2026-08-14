@@ -20,7 +20,7 @@ import * as scheduledTasks from "./schemas/scheduled-tasks.ts";
 import * as shoppingCartItems from "./schemas/shopping-cart-items.ts";
 import * as shoppingCarts from "./schemas/shopping-carts.ts";
 
-export * from "./enums.ts";
+export * from "./column-enums.ts";
 export { actionAudit } from "./schemas/action-audit.ts";
 export { scheduledTasks } from "./schemas/scheduled-tasks.ts";
 export { shoppingCartItems } from "./schemas/shopping-cart-items.ts";

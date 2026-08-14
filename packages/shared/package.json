@@ -20,7 +20,7 @@
     "./discord": "./src/discord/index.ts",
     "./conversations": "./src/conversations/index.ts",
     "./db": "./src/db/index.ts",
-    "./db/enums": "./src/db/enums.ts",
+    "./db/enums": "./src/db/column-enums.ts",
     "./redis": "./src/redis/client.ts"
   },
   "scripts": {

@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { notion } from "../../client.ts";
-import { summarizePage } from "../../constants.ts";
+import { summarizePage } from "../../projections.ts";
 
 export const get_deal = defineTool({
   description: `Retrieve a single Deal page by its Notion page ID.`,

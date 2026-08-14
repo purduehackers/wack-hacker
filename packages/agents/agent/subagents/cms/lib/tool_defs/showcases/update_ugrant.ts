@@ -2,7 +2,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { documentId, payload, wrapPayloadError } from "../../client.ts";
-import { projectUgrant, ugrantFields } from "../../constants.ts";
+import { ugrantFields } from "../../constants.ts";
+import { projectUgrant } from "../../projections.ts";
 
 export const update_ugrant = defineTool({
   description: "Update a ugrant. Only fields you pass are changed.",

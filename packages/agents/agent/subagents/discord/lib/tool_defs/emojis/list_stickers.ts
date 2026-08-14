@@ -3,7 +3,8 @@ import { Routes, type RESTGetAPIGuildStickersResult } from "discord-api-types/v1
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { discordArray, discordRest } from "../../client.ts";
-import { empty, summarizeSticker } from "../../constants.ts";
+import { empty } from "../../constants.ts";
+import { summarizeSticker } from "../../projections.ts";
 
 export const list_stickers = defineTool({
   access: { risk: "read" },

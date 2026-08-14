@@ -9,7 +9,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { compact, discordObject, discordRest } from "../../client.ts";
-import { hexColor, httpUrl, imageDataUri, positionedRole, summarizeRole } from "../../constants.ts";
+import { hexColor, httpUrl } from "../../constants.ts";
+import { imageDataUri, positionedRole, summarizeRole } from "../../projections.ts";
 
 export const create_role = defineTool({
   access: { risk: "write" },

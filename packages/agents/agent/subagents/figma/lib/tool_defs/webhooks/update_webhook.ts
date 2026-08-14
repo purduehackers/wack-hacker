@@ -3,7 +3,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { figma } from "../../client.ts";
-import { summarizeWebhook, webhookEventSchema } from "../../constants.ts";
+import { webhookEventSchema } from "../../constants.ts";
+import { summarizeWebhook } from "../../projections.ts";
 
 const webhookStatusSchema = z.enum(["ACTIVE", "PAUSED"]) satisfies z.ZodType<WebhookV2Status>;
 

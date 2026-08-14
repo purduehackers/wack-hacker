@@ -1,7 +1,7 @@
 import { index, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 import type { UserRole } from "../../discord/roles.ts";
-import type { AuditDecision, PolicySource, RiskLevel } from "../enums.ts";
+import type { AuditDecision, PolicySource, RiskLevel } from "../column-enums.ts";
 
 /**
  * Append-only audit trail for policy-relevant actions.

@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { getCart } from "../../cart-store.ts";
-import { summarize, toPublic } from "../../constants.ts";
+import { summarize, toPublic } from "../../projections.ts";
 
 const PAGE_SIZE = 10;
 

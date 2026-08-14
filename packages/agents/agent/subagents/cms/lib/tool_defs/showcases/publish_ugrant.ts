@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { documentId, payload, wrapPayloadError } from "../../client.ts";
-import { projectUgrant } from "../../constants.ts";
+import { projectUgrant } from "../../projections.ts";
 
 export const publish_ugrant = defineTool({
   description: "Make a ugrant visible on the public showcase (visible: true).",

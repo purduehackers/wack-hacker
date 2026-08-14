@@ -2,7 +2,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { hcbGet } from "../../client.ts";
-import { hcbTransferSchema, projectTransfer } from "../../constants.ts";
+import { hcbTransferSchema } from "../../constants.ts";
+import { projectTransfer } from "../../projections.ts";
 
 export const get_transfer = defineTool({
   description:

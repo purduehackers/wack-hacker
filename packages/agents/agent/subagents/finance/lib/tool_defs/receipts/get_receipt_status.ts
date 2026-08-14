@@ -2,7 +2,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { hcbGet, hcbTxnUrl } from "../../client.ts";
-import { hcbTransactionSchema, type HcbTransaction } from "../../constants.ts";
+import { hcbTransactionSchema } from "../../constants.ts";
+import type { HcbTransaction } from "../../projections.ts";
 
 export const get_receipt_status = defineTool({
   description:

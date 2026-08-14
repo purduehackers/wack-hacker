@@ -2,12 +2,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { hcbGet, hcbOrgSlug } from "../../client.ts";
-import {
-  hcbTransactionSchema,
-  paginationInputShape,
-  paginationQuery,
-  projectTransaction,
-} from "../../constants.ts";
+import { hcbTransactionSchema, paginationInputShape } from "../../constants.ts";
+import { paginationQuery, projectTransaction } from "../../projections.ts";
 
 export const list_transactions = defineTool({
   description:

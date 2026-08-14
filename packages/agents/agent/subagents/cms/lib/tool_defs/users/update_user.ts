@@ -2,7 +2,8 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { documentId, payload, wrapPayloadError } from "../../client.ts";
-import { projectUser, userFields } from "../../constants.ts";
+import { userFields } from "../../constants.ts";
+import { projectUser } from "../../projections.ts";
 
 export const update_user = defineTool({
   description:

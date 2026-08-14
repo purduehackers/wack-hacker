@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain-tools.ts";
 import { figma } from "../../client.ts";
-import { summarizeComponent } from "../../constants.ts";
+import { summarizeComponent } from "../../projections.ts";
 
 export const get_component_set = defineTool({
   description: "Get full details of a published component set by its key.",
