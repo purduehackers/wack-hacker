@@ -84,7 +84,68 @@
     "rayhanadev/zinfer-instead-of-zoutput": "error",
     "rayhanadev/zod3-string-format-method": "error",
     "rayhanadev/zodtype-annotation-instead-of-satisfies": "error",
-    "rayhanadev/zodtype-t-generic-helper": "error"
+    "rayhanadev/zodtype-t-generic-helper": "error",
+    "rayhanadev/comment-explains-why": "warn",
+    // Merged by `ox` and staged rather than enabled. Each one below is a rule
+    // this codebase does not yet satisfy, with the violation count at the time
+    // it arrived — 2,304 in total, which is a body of work rather than a diff to
+    // fix. They are recorded here at "off" so `bun run lint` still gates
+    // everything that does pass, and so the debt is visible instead of absent.
+    //
+    // This is the one place the project's "never waive a rule wholesale" rule
+    // bends, and only for rules that were never on. Turning one back on is the
+    // start of its cleanup, not a regression.
+    //
+    //   Result adoption        695   no-throw, no-try-catch, no-promise-catch,
+    //                                no-error-sentinel, wrap-throwing-api,
+    //                                require-tagged-error
+    //   comment style        1,185   comment-ste100 (+heuristics),
+    //                                require-jsdoc-comments, complex-file-header
+    //   type discipline        310   no-conditional-empty-object-spread (262),
+    //                                no-known-value-widening, no-zod-type-erasure,
+    //                                no-json-parse-stringify-codec,
+    //                                no-chained-type-assertions
+    //   file organization       99   constants/errors/enum/types
+    //   suppressions            15   lint-suppression-requires-reason
+    //
+    // `no-conditional-empty-object-spread` needs a decision before adoption
+    // rather than a cleanup: `...(x === undefined ? {} : { k: x })` is how an
+    // optional property is set under `exactOptionalPropertyTypes`, which this
+    // repo has on, so the rule and the compiler currently disagree.
+    "rayhanadev/comment-ste100": "off",
+    "rayhanadev/comment-ste100-heuristics": "off",
+    "rayhanadev/commented-out-code-requires-reason": "error",
+    "rayhanadev/complex-file-header": "off",
+    "rayhanadev/constants-file-organization": "off",
+    "rayhanadev/domain-knowledge-in-agents": "error",
+    "rayhanadev/enum-file-organization": "off",
+    "rayhanadev/errors-file-organization": "off",
+    "rayhanadev/filename-match-export": "error",
+    "rayhanadev/lint-suppression-requires-reason": "off",
+    "rayhanadev/no-ad-hoc-result": "error",
+    "rayhanadev/no-async-result-try": "error",
+    "rayhanadev/no-chained-type-assertions": "off",
+    "rayhanadev/no-conditional-empty-object-spread": "off",
+    "rayhanadev/no-error-sentinel": "off",
+    "rayhanadev/no-exported-function-expressions": "error",
+    "rayhanadev/no-json-parse-stringify-codec": "off",
+    "rayhanadev/no-known-value-widening": "off",
+    "rayhanadev/no-promise-catch": "off",
+    "rayhanadev/no-promise-reject": "error",
+    "rayhanadev/no-result-unwrap": "error",
+    "rayhanadev/no-throw": "off",
+    "rayhanadev/no-try-catch": "off",
+    "rayhanadev/no-unknown-type-aliases": "error",
+    "rayhanadev/no-unsafe-dictionary-type": "error",
+    "rayhanadev/no-widen-then-assert": "error",
+    "rayhanadev/no-zod-type-erasure": "off",
+    "rayhanadev/prefer-result-await": "error",
+    "rayhanadev/require-jsdoc-comments": "off",
+    "rayhanadev/require-result-gen-return": "error",
+    "rayhanadev/require-tagged-error": "off",
+    "rayhanadev/schemas-file-organization": "error",
+    "rayhanadev/types-file-organization": "off",
+    "rayhanadev/wrap-throwing-api": "off"
   },
   "env": {
     "builtin": true
@@ -98,6 +159,7 @@
   ],
   "options": {
     "typeAware": true,
-    "typeCheck": true
+    "typeCheck": true,
+    "reportUnusedDisableDirectives": "error"
   }
 }

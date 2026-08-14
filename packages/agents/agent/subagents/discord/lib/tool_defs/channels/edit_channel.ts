@@ -1,5 +1,3 @@
-/* oxlint-disable unicorn/no-null -- Discord's JSON API uses null for explicit absence/field clearing. */
-
 import { Routes, VideoQualityMode, type RESTPatchAPIChannelJSONBody } from "discord-api-types/v10";
 import { z } from "zod";
 

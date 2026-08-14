@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
-  "ignorePatterns": [],
+  "ignorePatterns": ["AGENTS.md"],
   "sortImports": true,
   "sortPackageJson": true,
   "sortTailwindcss": true

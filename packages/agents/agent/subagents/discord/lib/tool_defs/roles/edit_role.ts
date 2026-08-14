@@ -1,5 +1,3 @@
-/* oxlint-disable unicorn/no-null -- Discord's JSON API uses null for explicit absence/field clearing. */
-
 import { DISCORD_GUILD_ID } from "@repo/shared/discord";
 import {
   Routes,

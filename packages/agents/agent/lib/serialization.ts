@@ -57,12 +57,13 @@ function isFunction(value: unknown): value is (...args: never[]) => unknown {
 /**
  * Everything that is neither a primitive nor callable.
  *
- * `Object(value) === value` holds for exactly the objects; callables are then
- * excluded so a function is reported as a function rather than walked as a
- * record.
+ * `typeof` reports "object" for arrays and null alongside objects, so only null
+ * needs excluding; functions report "function" and fall out on their own, which
+ * is what lets `visit` name one rather than walk it as a record.
  */
 function isJsonContainer(value: unknown): value is JsonContainer {
-  return Object(value) === value && !isFunction(value);
+  // oxlint-disable-next-line rayhanadev/no-typeof -- this walk is the boundary the rule asks input to be parsed at, and it must admit every typeof-object so `visitRecord` can name a Date or a class instance in its error rather than let it fall through
+  return typeof value === "object" && value !== null;
 }
 
 /**
