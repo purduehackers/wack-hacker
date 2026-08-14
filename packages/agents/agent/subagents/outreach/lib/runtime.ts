@@ -7,8 +7,9 @@ import { OUTREACH_TOOLS } from "./registry.ts";
 
 /**
  * `find_email_for_lead` only reaches Notion when it has to derive the company
- * domain from a CRM page: a page id is present and no usable domain came with
- * the call. Matched against the raw arguments, before the tool schema parses.
+ * domain from a CRM page. That means a page id is present and no usable domain
+ * came with the call. Matched against the raw arguments, before the tool
+ * schema parses.
  *
  * This is the one credential requirement in this domain that depends on the
  * call rather than the tool. Every other one is a `requires` key on the tool

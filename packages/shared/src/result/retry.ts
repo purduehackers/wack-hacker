@@ -13,7 +13,7 @@
  *
  * Together these replace the prior implementation's hand-rolled
  * `Math.min(300, 2 ** deliveryCount * 5)` backoff and its `eventRetryPolicy` /
- * task-retry directives, which keyed off a delivery counter that knew nothing
+ * task-retry directives. Those keyed off a delivery counter that knew nothing
  * about the cause.
  */
 
@@ -21,9 +21,9 @@ import { isRetryable, retryAfterMs } from "../errors.ts";
 
 /**
  * Mirrors better-result's `RetryConfig`, which the package declares but does not
- * export. Because the policies below are passed straight to
- * `Result.tryPromise`, an upstream shape change surfaces as a compile error at
- * the call site rather than drifting silently.
+ * export. Because call sites pass the policies below straight to
+ * `Result.tryPromise`, an upstream shape change surfaces as a compile error
+ * there rather than drifting silently.
  */
 export interface RetryPolicy<E> {
   /** Forwarded unchanged to every attempt and retry decision. */
@@ -41,8 +41,8 @@ export interface RetryPolicy<E> {
  *
  * `delayMs` is a function so an upstream-advised `retryAfterMs` wins over our
  * curve — a service telling us when to come back knows better than we do.
- * Dynamic delay cannot be combined with `backoff` or `jitter`, so the fallback
- * curve and its jitter are computed here.
+ * Dynamic delay does not combine with `backoff` or `jitter`, so `delayMs`
+ * computes the fallback curve and its jitter itself.
  */
 export const upstreamRetry: RetryPolicy<unknown> = {
   retry: {

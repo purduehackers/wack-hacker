@@ -2,14 +2,14 @@
  * The only thing that writes scheduled-occurrence receipts.
  *
  * A cron can fire the same occurrence twice — a retry, an overlapping tick, a
- * redeploy mid-fire — and running a scheduled task twice is visible to whoever
+ * redeploy mid-fire. Running a scheduled task twice is visible to whoever
  * scheduled it. The occurrence id is stable across all of that, so the receipt
  * under it is what makes the second fire a no-op.
  *
- * The identity check is not paranoia. An occurrence id that comes back describing
- * a different schedule, owner, channel, or action means two schedules have
- * collided on one id, and quietly running one of them would run the wrong thing
- * in the wrong place.
+ * The identity check is not paranoia. An occurrence id that comes back
+ * describing a different schedule, owner, channel, or action means two
+ * schedules collided on one id. To quietly run one of them would run the wrong
+ * thing in the wrong place.
  */
 
 import { z } from "zod";
@@ -29,8 +29,8 @@ const RECEIPT_TTL_SECONDS = 7 * 24 * 60 * 60;
 /**
  * What makes two fires the same occurrence.
  *
- * Its own schema rather than a bare shape, so the type below is derived from the
- * thing that validates it instead of restated next to it.
+ * Its own schema rather than a bare shape. The type below then comes from the
+ * thing that validates it, not from a restatement next to it.
  */
 const identitySchema = z.object({
   scheduleId: z.uuid(),
@@ -93,6 +93,11 @@ return 1
 /** `accepted` means this occurrence already ran and must not run again. */
 export type ScheduleClaim = "claimed" | "in-progress" | "accepted";
 
+/**
+ * Serializes the claim, complete, and release steps of one scheduled fire.
+ * Each method runs one Lua script, so the read-check-write on a receipt stays
+ * atomic even with concurrent fires of the same occurrence.
+ */
 export class ScheduleWriter {
   private readonly redis: Pick<RedisClient, "eval">;
 
@@ -121,12 +126,13 @@ export class ScheduleWriter {
       });
     }
     const known = z.enum(["claimed", "in-progress", "accepted"]).safeParse(raw);
-    // Unrecognised reads as in-progress: refusing to fire is the safe answer when
-    // the receipt cannot be understood, since the alternative is firing twice.
+    // Unrecognised reads as in-progress: refusing to fire is the safe answer
+    // when the receipt cannot be understood, since the alternative is to fire
+    // twice.
     return known.success ? known.data : "in-progress";
   }
 
-  /** Record that the occurrence ran, so a re-fire is refused for good. */
+  /** Record that the occurrence ran, so `claim` refuses every re-fire for good. */
   async complete(payload: ScheduledFirePayload, claimToken: string): Promise<boolean> {
     return evalFlag(
       this.redis,

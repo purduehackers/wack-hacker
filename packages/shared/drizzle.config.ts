@@ -7,7 +7,7 @@ import { defineConfig } from "drizzle-kit";
  * touch anything.
  *
  * `migrations/` starts from a single generated baseline. There is no prior
- * production database to preserve, so a migration that recreates unrelated
+ * production database to preserve. A migration that recreates unrelated
  * tables means the schema drifted — treat that as a bug, not a new baseline.
  */
 const url = process.env["TURSO_DATABASE_URL"];

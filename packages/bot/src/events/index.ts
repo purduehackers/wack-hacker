@@ -1,13 +1,13 @@
 /**
  * The event registry.
  *
- * Explicit, for the same reason the command registry is: the prior implementation
+ * Explicit, for the same reason the command registry is. The prior implementation
  * discovered handlers by scanning barrel re-exports, so a forgotten export
  * silently unregistered a behaviour.
  *
  * Order within the list does not matter — the router buckets handlers by kind
- * and runs each bucket concurrently — except that `kind: "mention"` handlers
- * always complete before `kind: "message"` ones, which is how `agent-chat`
+ * and runs each bucket concurrently. The exception: `kind: "mention"` handlers
+ * always complete before `kind: "message"` ones. That is how `agent-chat`
  * claims a message before the community handlers see it.
  */
 
@@ -39,6 +39,11 @@ export interface EventDeps {
   readonly groqApiKey: string;
 }
 
+/**
+ * Builds the full handler list with its dependencies wired, so registering a
+ * behaviour means adding one entry here. Each integration client builds once,
+ * and every handler that needs it receives the same instance.
+ */
 export function buildEventHandlers(deps: EventDeps): readonly AnyEventHandler[] {
   const cms = createCmsClient({ apiKey: deps.cmsApiKey });
   const slugStore = createThreadSlugStore(deps.redis);

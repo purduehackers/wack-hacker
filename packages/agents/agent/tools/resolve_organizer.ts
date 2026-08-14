@@ -68,6 +68,14 @@ async function findOrganizer(query: string) {
   );
 }
 
+/**
+ * Looks up one organizer in the Global Config roster: by Discord ID first,
+ * then by slug, name, or alias, case-insensitively. Returns `found: false`
+ * when nothing matches, so the model gets an answer instead of an error. With
+ * `platform` set, the result carries only that platform's ID, `null` when the
+ * organizer lacks one. Throws `UpstreamError` when the roster is not
+ * configured.
+ */
 export async function resolveOrganizer(input: z.output<typeof resolveOrganizerInputSchema>) {
   const organizer = await findOrganizer(input.name);
   if (organizer === undefined) return { found: false } as const;

@@ -26,8 +26,8 @@ const findTransactionsInput = z.strictObject({
 type FindFilter = z.output<typeof findTransactionsInput>;
 
 /**
- * HCB's transaction endpoint takes no filters, so every criterion is applied
- * locally over a capped page walk.
+ * HCB's transaction endpoint takes no filters, so the tool applies every
+ * criterion locally over a capped page walk.
  */
 function buildTransactionFilter(filter: FindFilter): (entry: HcbTransaction) => boolean {
   const needle = filter.memo_contains?.toLowerCase();

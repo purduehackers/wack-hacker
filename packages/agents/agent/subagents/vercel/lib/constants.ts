@@ -1,9 +1,6 @@
-import { z } from "zod";
-
-import { env as runtimeEnv } from "../../../env.ts";
-
 /**
- * Fixed identifiers, shared input fields, and redaction helpers for this domain.
+ * @fileoverview Fixed identifiers, shared input fields, and redaction helpers
+ * for this domain.
  *
  * Vercel reuses a handful of query-parameter shapes across almost every
  * paginated endpoint, and three products return secrets inline. Declaring both
@@ -12,7 +9,14 @@ import { env as runtimeEnv } from "../../../env.ts";
  * call sites.
  */
 
-/** Typed SDK configuration; execution is denied before this fallback can be used. */
+import { z } from "zod";
+
+import { env as runtimeEnv } from "../../../env.ts";
+
+/**
+ * Typed SDK configuration. The domain runtime denies execution before any call
+ * can reach this empty fallback.
+ */
 export const env = { VERCEL_API_TOKEN: runtimeEnv.VERCEL_API_TOKEN ?? "" };
 
 /**
@@ -52,16 +56,16 @@ export const isoTimestamp = z.iso.datetime({ offset: true });
  */
 export const numericString = z.string().regex(z.regexes.integer);
 
-/** The environments a project environment variable can be scoped to. */
+/** The environments a caller can scope a project environment variable to. */
 export const ENV_TARGETS = ["production", "preview", "development"] as const;
 
 /** How Vercel stores an environment variable's value. */
 export const ENV_TYPES = ["system", "encrypted", "plain", "sensitive"] as const;
 
 /**
- * Any non-array object payload. Arrays are handled by the branch above the
- * check, so `looseObject` is exactly the "walkable record" case — and it keeps
- * every key, which is the point: the walk only removes the one named key.
+ * Any non-array object payload. The branch above the check handles arrays, so
+ * `looseObject` is exactly the "walkable record" case. It keeps every key,
+ * which is the point: the walk only removes the one named key.
  */
 const objectPayload = z.looseObject({});
 
@@ -86,14 +90,14 @@ function dropKeyDeep(input: unknown, key: string): unknown {
 /**
  * Vercel renamed Edge Config to Global Config, but `@vercel/sdk` 1.19.40 still
  * exposes the accessor as `edgeConfig` with `*EdgeConfig*` method and parameter
- * names. Those are upstream identifiers, so they stay as they are; every name
+ * names. Those are upstream identifiers, so they stay as they are. Every name
  * this domain owns — tools, inputs, descriptions — uses the current product
  * name.
  *
  * Strip the secret `token` field from Global Config token payloads. The Vercel
- * SDK returns raw tokens on list/get/create; surfacing those into Discord or
- * logs would leak credentials. The SDK's `id` field is explicitly documented as
- * a non-secret reference, so it is kept along with label/createdAt.
+ * SDK returns raw tokens on list/get/create. Surfacing those into Discord or
+ * logs would leak credentials. The SDK explicitly documents the `id` field as
+ * a non-secret reference, so it stays along with label/createdAt.
  */
 export function redactTokens(input: unknown): unknown {
   return dropKeyDeep(input, "token");

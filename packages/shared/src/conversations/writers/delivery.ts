@@ -1,13 +1,13 @@
 /**
- * The only thing that writes the delivery record.
+ * @fileoverview The only thing that writes the delivery record.
  *
  * One method per transition, named for the transition, with no `set` or `update`
- * escape hatch — so the set of things that can happen to this record is the set
- * of methods on this class, readable in one screen.
+ * escape hatch. The set of things that can happen to this record is then the
+ * set of methods on this class, readable in one screen.
  *
  * Every script fences before it writes and writes through `writeRecord`, which
  * carries `KEEPTTL`. A bare `SET` clears a Redis expiry, and that mistake once
- * made conversations immortal moments after `claim` had bounded them.
+ * made conversations immortal moments after `claim` bounded them.
  */
 
 import { z } from "zod";
@@ -47,8 +47,8 @@ const SEEN_TTL_SECONDS = 7 * 24 * 60 * 60;
  *
  * Six scripts refuse while it exists, so a `beginReset` whose follow-through
  * never lands mutes the conversation for exactly this long. The whole operation
- * is one round trip, an 8-second drain and a second round trip, so this is more
- * than ten times the budget — and an hour, which is what it used to be, is an
+ * is one round trip, an 8-second drain and a second round trip, so this is
+ * more than ten times the budget. An hour, which is what it used to be, is an
  * hour of a bot that answers nothing and says nothing.
  */
 const RESET_BARRIER_TTL_SECONDS = 5 * 60;
@@ -77,11 +77,11 @@ export const RECOVERY_FOOTER =
  * Put back what a reset diverted but never cut over.
  *
  * The shadow queue's only reader used to be `commitReset`, which requires the
- * barrier token — so a reset whose cutover never ran left the messages that
- * arrived during it in a key nothing would ever read again, and the barrier
- * lapsing made them permanently unreachable. Anything that observes no barrier
- * drains them first, which puts them back in front of whatever arrives next:
- * they got here earlier.
+ * barrier token. A reset whose cutover never ran therefore left the messages
+ * that arrived during it in a key nothing would ever read again. The barrier
+ * lapsing then made them permanently unreachable. Anything that observes no
+ * barrier drains them first, which puts them back in front of whatever arrives
+ * next: they got here earlier.
  */
 const DRAIN_SHADOW_LUA = `
 local function drainShadow(pendingKey, shadowKey)
@@ -176,9 +176,9 @@ return 1
  * Fenced on the delivery's identity, not on a lease.
  *
  * Both processes confirm — the bot after a successful send, the agent after eve
- * accepts — and they hold different tokens: the bot has the handoff it minted in
- * `claim`, the agent only the ingress attempt `markLive` handed back. A lease
- * fence here can therefore only ever be satisfied by one of them. `dispatchId`
+ * accepts — and they hold different tokens. The bot has the handoff it minted
+ * in `claim`, the agent only the ingress attempt `markLive` handed back. Only
+ * one of them can therefore ever satisfy a lease fence here. `dispatchId`
  * and `messageId` are the two things both sides genuinely have, and they identify
  * the delivery exactly.
  */
@@ -199,7 +199,7 @@ return 1
  * May this process hand the delivery to eve, and if not, why not.
  *
  * The five statuses survive because the caller genuinely branches on all of
- * them: eve has no callable "is a turn already running", so this is the only
+ * them. Eve has no callable "is a turn already running", so this is the only
  * place that answer exists.
  */
 const MARK_LIVE = `
@@ -247,10 +247,10 @@ return 1
 `;
 
 /**
- * Release the conversation once the turn is finished and its paint is durable.
+ * Release the conversation once the turn finishes and its paint is durable.
  *
  * The render outcome check is the cross-machine guard. It was an ordering comment
- * in the bot's sweep, enforced by one `if` buried here; ordering is not a
+ * in the bot's sweep, enforced by one `if` buried here. Ordering is not a
  * guarantee.
  */
 const COMPLETE = `
@@ -320,10 +320,10 @@ end
 `;
 
 /**
- * Give up on a turn whose hold has lapsed.
+ * Give up on a turn whose hold lapsed.
  *
- * The lease is refreshed by evidence of progress, so a lapsed one means nothing
- * has shown its work for a full lease period.
+ * Evidence of progress refreshes the lease, so a lapsed one means nothing
+ * showed its work for a full lease period.
  */
 const EXPIRE = `
 ${DELIVERY_RECORD_LUA}
@@ -397,8 +397,8 @@ export type CompletionStatus = "completed" | "missing" | "pending" | "stale";
  * Whether this process may hand the delivery to eve.
  *
  * `attempt` is the ingress holder, and the caller must give it back through
- * `releaseIngress` once eve has answered — otherwise the slot stays taken until
- * its lease lapses and every later delivery reads `in-progress`.
+ * `releaseIngress` once eve answers. Otherwise the slot stays taken until
+ * its lease lapses, and every later delivery reads `in-progress`.
  */
 export type Admission =
   | { readonly status: "start"; readonly attempt: string }
@@ -407,8 +407,8 @@ export type Admission =
 
 /**
  * `accepted` carries its session after a colon — the one status with a payload,
- * kept in-band so the whole answer is one atomic read rather than a word plus a
- * follow-up lookup that could race.
+ * kept in-band. The whole answer is then one atomic read rather than a word
+ * plus a follow-up lookup that could race.
  */
 function readAdmission(raw: unknown, attempt: string): Admission {
   const [status = "", sessionId = ""] = z.string().safeParse(raw).data?.split(":", 2) ?? [];
@@ -420,6 +420,11 @@ function readAdmission(raw: unknown, attempt: string): Admission {
   return { status: known.success ? known.data : "stale" };
 }
 
+/**
+ * The only mutation surface for the delivery record. Transitions exist only as
+ * named methods because that keeps every possible state change enumerable.
+ * The file header records the `KEEPTTL` discipline the scripts follow.
+ */
 export class DeliveryWriter {
   private readonly redis: RedisClient;
   private readonly reader: DeliveryReader;
@@ -433,12 +438,13 @@ export class DeliveryWriter {
    * Put a message on the queue, once.
    *
    * The dedupe set is the gate: a Discord id seen before returns without
-   * queueing anything, which is the only reason a redelivered webhook does not
+   * queueing anything. That is the only reason a redelivered webhook does not
    * run a turn twice.
    *
-   * The dispatch id is minted here rather than by the caller — it is the identity
-   * every later fence compares against — and the render target is written in the
-   * same step, because a delivery with nowhere to paint has nothing to say.
+   * This method mints the dispatch id rather than the caller — it is the
+   * identity every later fence compares against. It also writes the render
+   * target in the same step, because a delivery with nowhere to paint has
+   * nothing to say.
    */
   async enqueue(payload: MessagePayload): Promise<void> {
     const delivery: DeliveryPayload = { ...payload, dispatchId: crypto.randomUUID() };
@@ -529,8 +535,8 @@ export class DeliveryWriter {
   /**
    * Ask whether this process may hand the delivery to eve.
    *
-   * `accepted` carries the session of an earlier attempt, so a retry is answered
-   * from the record instead of running the turn again.
+   * `accepted` carries the session of an earlier attempt, so the record answers
+   * a retry instead of running the turn again.
    */
   async markLive(
     continuationKey: string,
@@ -547,7 +553,7 @@ export class DeliveryWriter {
     return readAdmission(raw, attempt);
   }
 
-  /** Give up the ingress slot once eve has answered, however it answered. */
+  /** Give up the ingress slot once eve answers, however it answers. */
   async releaseIngress(continuationKey: string, attempt: string): Promise<boolean> {
     return evalFlag(this.redis, RELEASE_INGRESS, [activeKey(continuationKey)], [attempt]);
   }
@@ -594,8 +600,9 @@ export class DeliveryWriter {
    * Give up on a turn that has gone quiet for a full lease, announcing it.
    *
    * Returns the delivery it abandoned so the caller can report it, or nothing
-   * when the hold is still live. The record is read first because the intent key
-   * has to be a `KEYS` entry, and only the record knows which dispatch it is.
+   * when the hold is still live. This method reads the record first because
+   * the intent key has to be a `KEYS` entry. Only the record knows which
+   * dispatch it is.
    */
   async expire(
     continuationKey: string,
@@ -663,9 +670,9 @@ export class DeliveryWriter {
   /**
    * Install the reset barrier, or return the one already installed.
    *
-   * Idempotent by returning the existing token: a retried reset must reuse the id
-   * it started with, or the cutover it eventually performs would belong to a
-   * different attempt than the one that stopped the traffic.
+   * Idempotent by returning the existing token: a retried reset must reuse the
+   * id it started with. Otherwise the cutover it eventually performs would
+   * belong to a different attempt than the one that stopped the traffic.
    */
   async beginReset(continuationKey: string): Promise<string> {
     const raw: unknown = await this.redis.eval(
@@ -686,8 +693,8 @@ export class DeliveryWriter {
   /**
    * Drop a conversation's advertisement in the parked-reconcile set.
    *
-   * For a member whose marker is gone: nothing else removes it, because every
-   * other path that does needs the marker or the record it points at.
+   * For a member whose marker is gone: nothing else removes it. Every other
+   * path that does needs the marker or the record it points at.
    */
   async unadvertise(continuationKey: string): Promise<void> {
     await this.redis.srem(AGENT_READY_SET_KEY, queueMember(continuationKey));
@@ -696,9 +703,9 @@ export class DeliveryWriter {
   /**
    * Clear everything the reset replaces, then let what arrived meanwhile through.
    *
-   * The shadow queue is the point: messages that landed during the reset are
-   * moved back onto the real one rather than discarded, so a reset loses the
-   * conversation's history without losing the person's words.
+   * The shadow queue is the point: the script moves messages that landed during
+   * the reset back onto the real one rather than discarding them. A reset thus
+   * loses the conversation's history without losing the person's words.
    */
   async commitReset(continuationKey: string, resetId: string): Promise<boolean> {
     return evalFlag(

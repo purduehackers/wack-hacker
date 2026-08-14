@@ -4,10 +4,11 @@
  * A `SET NX PX` is the whole mechanism: the first caller to claim a key wins and
  * everyone after it is told no, until the key expires.
  *
- * The five-minute TTL is carried over from the prior implementation and is a deliberate
- * trade-off, not a guess. Long enough to cover a gateway `RESUME` replay and the
- * overlap window when two deployments briefly both hold a connection; short
- * enough that the keyspace stays bounded without any sweeping.
+ * The five-minute TTL carries over from the prior implementation and is a
+ * deliberate trade-off, not a guess. Long enough to cover a gateway `RESUME`
+ * replay and the overlap window when two deployments briefly both hold a
+ * connection. Short enough that the keyspace stays bounded without any
+ * sweeping.
  *
  * It fails **closed**. This claim is load-bearing during overlapping Sandbox
  * generations: executing nothing is recoverable, while executing a mutation
@@ -24,8 +25,9 @@ const DEDUP_TTL_MS = 300_000;
 
 /**
  * `z.number()` rejects the non-finite doubles that `typeof` still calls
- * numbers, so `NaN` and both infinities are matched alongside it. Without them
- * a non-finite rejection would be reported as an object.
+ * numbers, so the union matches `NaN` and both infinities alongside it.
+ * Without them `failureTypeOf` would report a non-finite rejection as an
+ * object.
  */
 const numberSchema = z.union([
   z.number(),
@@ -43,8 +45,9 @@ const functionSchema = z.function();
 /**
  * The name this alert has always carried for a non-`Error` rejection.
  *
- * The vocabulary is `typeof`'s, because operators grep for these exact words;
- * it is derived from positive tests over the disjoint primitive sets instead.
+ * The vocabulary is `typeof`'s, because operators grep for these exact words.
+ * The function derives it from positive tests over the disjoint primitive sets
+ * instead.
  * `null` is not special-cased on purpose — `typeof null` is `"object"`, and the
  * final fallthrough reports every remaining value, `null` included, as one.
  */
@@ -59,6 +62,12 @@ function failureTypeOf(cause: unknown): string {
   return "object";
 }
 
+/**
+ * Builds the `Deduplicator` the event router consults before it runs a
+ * handler. `claim` answers true only for the first holder of a key. It fails
+ * closed: a Redis outage reads as "already claimed", because a skipped event
+ * is recoverable and a doubled mutation is not.
+ */
 export function createDeduplicator(redis: RedisClient): Deduplicator {
   return {
     claim: async (key: string) => {

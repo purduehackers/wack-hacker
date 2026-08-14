@@ -49,10 +49,10 @@ class FigmaClient {
     }
 
     // The Figma package publishes generated response types but no runtime client or schemas,
-    // and `Response.json()` is typed `Promise<unknown>` here, so narrowing to `T` needs either
-    // this assertion or a runtime validator that would change what the client accepts. Keep the
-    // assertion at this one transport boundary; every caller supplies the generated response
-    // export for its concrete endpoint.
+    // and TypeScript types `Response.json()` as `Promise<unknown>` here, so narrowing to `T`
+    // needs either this assertion or a runtime validator that would change what the client
+    // accepts. Keep the assertion at this one transport boundary. Every caller supplies the
+    // generated response export for its concrete endpoint.
     // oxlint-disable-next-line typescript/consistent-type-assertions -- generated response boundary
     return res.json() as Promise<T>;
   }
@@ -60,6 +60,7 @@ class FigmaClient {
 
 export const figma = new FigmaClient();
 
+/** Builds the web URL for a file key, so tool replies can link straight into Figma. */
 export function figmaFileUrl(fileKey: string): string {
   return `https://www.figma.com/file/${fileKey}`;
 }

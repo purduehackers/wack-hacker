@@ -15,11 +15,11 @@ import { builder as privacy } from "../src/commands/privacy.ts";
  * Only the two variables this script needs.
  *
  * `src/env.ts` validates the bot's *whole* environment, which this script does
- * not have and must not require: registering commands needs a token and an
+ * not have and must not require. Registering commands needs a token and an
  * application id, not a Groq key.
  *
  * Untrimmed, for the same reason `src/env.ts` leaves a credential untrimmed:
- * the value presented to Discord is the value that was configured.
+ * the value presented to Discord is the value the operator configured.
  */
 const credentialsSchema = z.object({
   DISCORD_BOT_TOKEN: z.string().min(1),

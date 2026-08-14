@@ -4,8 +4,8 @@ import { messageOf, Transient } from "./errors.ts";
 
 /**
  * `messageOf` replaced two dozen hand-written copies of
- * `x instanceof Error ? x.message : String(x)`, so it has to agree with that
- * expression on every shape those call sites could have been handed.
+ * `x instanceof Error ? x.message : String(x)`. It has to agree with that
+ * expression on every shape those call sites could receive.
  */
 test("agrees with the expression it replaced", () => {
   const cases: readonly unknown[] = [

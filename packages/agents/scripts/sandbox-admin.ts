@@ -1,5 +1,14 @@
 #!/usr/bin/env bun
 
+/**
+ * @fileoverview Operator CLI for the Discord bot's Vercel Sandbox fleet.
+ * It lists managed sandboxes, deletes superseded generations, and can stop
+ * the active sandbox after an explicit two-flag confirmation. Every mutation
+ * re-checks the supervisor mutex and the active generation record first.
+ * A concurrent supervisor run therefore aborts the operation instead of
+ * deleting a live sandbox.
+ */
+
 import {
   BOT_SUPERVISOR_MUTEX_KEY,
   readActiveBotGeneration,
@@ -60,8 +69,8 @@ async function assertStable(redis: RedisClient, expected: ActiveBotGeneration): 
 }
 
 async function managedSandboxes() {
-  // One tag filter only; the API rejects more ("Only one tag filter is supported
-  // at a time"). The rest of the managed set is matched below.
+  // One tag filter only. The API rejects more ("Only one tag filter is supported at a time").
+  // The loop below matches the rest of the managed set.
   const paginator = await Sandbox.list({
     tags: { managedBy: MANAGED_TAGS.managedBy },
     ...auth(),

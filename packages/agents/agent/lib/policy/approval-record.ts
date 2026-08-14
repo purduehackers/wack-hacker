@@ -19,7 +19,7 @@ export interface SecondPartyApprovalRecord {
 
 /**
  * Exactly what `putSecondParty` writes. Upstash may return it as the stored JSON
- * text rather than an object, so `storedJson` accepts both forms; the previous
+ * text rather than an object, so `storedJson` accepts both forms. The previous
  * hand-written decoder rejected the text form outright.
  */
 const secondPartyApprovalSchema = storedJson(
@@ -36,6 +36,12 @@ function approvalPolicyKey(sessionId: string, callId: string): string {
   return `policy:approval:${sessionId}:${callId}`;
 }
 
+/**
+ * Redis-backed record of pending second-party approvals, keyed by session and
+ * call. Records expire after fifteen minutes, so an unanswered approval lapses
+ * instead of staying claimable forever. Reads fail with `Transient`, and a
+ * malformed stored record is a failure, never a silent grant.
+ */
 export class ApprovalPolicyStore {
   private readonly redis: RedisClient;
 

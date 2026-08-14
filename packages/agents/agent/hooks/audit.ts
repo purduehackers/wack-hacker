@@ -25,7 +25,7 @@ function isAuditedTool(value: string): value is AuditedTool {
   return Object.hasOwn(risks, value);
 }
 
-/** A completed action is audited by its outcome shape, never by the model's arguments again. */
+/** This hook audits a completed action by its outcome shape, never by the model's arguments again. */
 interface ToolResultAudit {
   readonly kind: "tool-result";
   readonly failed: boolean | undefined;
@@ -72,8 +72,8 @@ async function record(
     return;
   }
 
-  // After the row, never instead of it. The table is the record and this is the
-  // feed; a Discord outage must cost the notification only.
+  // After the row, never instead of it. The table is the record and this is
+  // the feed. A Discord outage must cost the notification only.
   await publishAuditEntry({
     tool,
     risk: risks[tool],
@@ -85,7 +85,7 @@ async function record(
   });
 }
 
-/** The requested input is worth showing; a result's own shape is not. */
+/** The requested input is worth showing. A result's own shape is not. */
 function describeInput(input: JsonValue | ToolResultAudit): string | undefined {
   const parsed = toolResultAuditSchema.safeParse(input);
   return parsed.success ? undefined : JSON.stringify(input, undefined, 2);

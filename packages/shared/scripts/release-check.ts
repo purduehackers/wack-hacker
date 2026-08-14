@@ -87,9 +87,9 @@ async function smoke(expectedImage: string): Promise<void> {
 
 /**
  * The digest currently serving, for a release record to name as the rollback
- * target. Prints `unknown` rather than failing when nothing is active yet — the
- * first promotion into an empty environment has no predecessor, and that is not
- * an error.
+ * target. Prints `unknown` rather than failing when nothing is active yet. The
+ * first promotion into an empty environment has no predecessor, and that is
+ * not an error.
  */
 async function printActiveImage(): Promise<void> {
   const active = await readActiveBotGeneration(new Redis(redisEnv()));

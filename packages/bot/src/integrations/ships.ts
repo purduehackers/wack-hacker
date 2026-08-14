@@ -1,8 +1,9 @@
 /**
- * Client for the ship gallery at ships.purduehackers.com.
+ * @fileoverview Client for the ship gallery at ships.purduehackers.com.
  *
- * Anything posted in `#ship` is mirrored to the public gallery. The service
- * downloads the media itself given source URLs, so this only forwards metadata.
+ * This client mirrors anything posted in `#ship` to the public gallery. The
+ * service downloads the media itself given source URLs, so this only forwards
+ * metadata.
  *
  * Creation is idempotent on `messageId` — the service answers `alreadyExists`
  * rather than duplicating — which matters because a gateway `RESUME` can replay
@@ -45,7 +46,7 @@ export type ShipsError = InvalidInput | RateLimited | Transient | UpstreamError;
 /**
  * Response shapes, validated rather than cast.
  *
- * `.loose()` because the gallery may add fields; we only depend on these.
+ * `.loose()` because the gallery may add fields. We only depend on these.
  */
 const createResponseSchema = z
   .looseObject({
@@ -91,8 +92,8 @@ function classify(status: number, detail: string): ShipsError {
 }
 
 /**
- * Passes a failure `classify` or `parseOr` already typed straight through;
- * anything else reached us as a transport fault, which is retryable.
+ * Passes a failure `classify` or `parseOr` already typed straight through.
+ * Anything else reached us as a transport fault, which is retryable.
  */
 function toShipsError(operation: string) {
   return (cause: unknown): ShipsError =>
@@ -107,6 +108,11 @@ function toShipsError(operation: string) {
         });
 }
 
+/**
+ * Builds the gallery client with `deps.apiKey` baked into every request.
+ * Each operation returns a typed `ShipsError` instead of rejecting, and
+ * retries transient faults under `upstreamRetry`.
+ */
 export function createShipsClient(deps: ShipsDeps) {
   const headers = {
     Authorization: `Bearer ${deps.apiKey}`,
@@ -141,8 +147,8 @@ export function createShipsClient(deps: ShipsDeps) {
     /**
      * Removes the ship for a Discord message.
      *
-     * A 404 is success with `deleted: false`, not a failure: a message deleted
-     * from `#ship` that was never mirrored is the common case, and treating it
+     * A 404 is success with `deleted: false`, not a failure. A message deleted
+     * from `#ship` that was never mirrored is the common case. Treating it
      * as an error would report noise on every non-ship deletion.
      */
     deleteShipByMessageId: async (

@@ -1,3 +1,14 @@
+/**
+ * @fileoverview The guard on Eve's JSON serialization boundary.
+ *
+ * Tool output and state values must survive `JSON.stringify` without loss.
+ * The recursive walk rejects every value the serializer would drop or distort.
+ * That covers `undefined`, symbols, non-finite numbers, accessors, class
+ * instances, cycles, and `Result` values nobody unwrapped. A rejected value
+ * fails with its exact path, so the defect surfaces at the boundary rather
+ * than as corrupt state downstream.
+ */
+
 import { InvariantViolated } from "@repo/shared/errors";
 import { z } from "zod";
 
@@ -37,9 +48,10 @@ function isBoolean(value: unknown): value is boolean {
 /**
  * Every number, including the ones JSON cannot carry.
  *
- * `z.number()` rejects `NaN` and both infinities, so they are matched
- * separately — otherwise a non-finite number would fall past this guard and be
- * reported as some other kind entirely, instead of as a non-finite number.
+ * `z.number()` rejects `NaN` and both infinities, so this guard matches them
+ * separately. Otherwise a non-finite number would fall past this guard. The
+ * walk would then report it as some other kind entirely, not as a non-finite
+ * number.
  */
 function isNumber(value: unknown): value is number {
   return (
@@ -58,18 +70,18 @@ function isFunction(value: unknown): value is (...args: never[]) => unknown {
  * Everything that is neither a primitive nor callable.
  *
  * `typeof` reports "object" for arrays and null alongside objects, so only null
- * needs excluding; functions report "function" and fall out on their own, which
+ * needs excluding. Functions report "function" and fall out on their own, which
  * is what lets `visit` name one rather than walk it as a record.
  */
 function isJsonContainer(value: unknown): value is JsonContainer {
-  // oxlint-disable-next-line rayhanadev/no-typeof -- this walk is the boundary the rule asks input to be parsed at, and it must admit every typeof-object so `visitRecord` can name a Date or a class instance in its error rather than let it fall through
+  // oxlint-disable-next-line rayhanadev/no-typeof -- this walk is the boundary where the rule asks callers to parse input. It must admit every typeof-object so `visitRecord` can name a Date or a class instance in its error rather than let it fall through
   return typeof value === "object" && value !== null;
 }
 
 /**
  * The kind name a rejected value carries into the boundary error.
  *
- * Only reached once `visit` has ruled out null, string, boolean, number,
+ * Only reached once `visit` rules out null, string, boolean, number,
  * undefined and every container, which leaves exactly bigint, symbol and
  * function.
  */

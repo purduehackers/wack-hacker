@@ -1,17 +1,17 @@
 /**
- * Splitting text to fit Discord's message limit.
+ * @fileoverview Splitting text to fit Discord's message limit.
  *
  * Lives in shared because the bot uses the same readable splitting policy for
  * transcriptions and agent render intents.
  *
  * The split priority is what makes the output readable rather than merely
- * short — break at a paragraph if there is one, then a sentence, then a word,
- * and only chop mid-word as a last resort. Splitting a code block or a sentence
- * at an arbitrary character is the difference between a message that reads
- * naturally across two posts and one that looks corrupted.
+ * short. Break at a paragraph if there is one, then a sentence, then a word.
+ * Only chop mid-word as a last resort. Splitting a code block or a sentence
+ * at an arbitrary character is the difference between two outcomes. The
+ * message either reads naturally across two posts or looks corrupted.
  */
 
-/** Discord's hard limit is 2000; the default leaves room for a footer. */
+/** Discord's hard limit is 2000. The default leaves room for a footer. */
 const DEFAULT_MAX_CHARS = 1_900;
 
 const SENTENCE_ENDINGS = [". ", "! ", "? "] as const;
@@ -73,10 +73,10 @@ export function splitText(text: string, maxChars: number = DEFAULT_MAX_CHARS): s
 /**
  * Splits text and appends a footer to the final chunk.
  *
- * The footer is measured as part of the budget rather than appended blindly,
- * which is the bug this exists to avoid: a last chunk sitting just under the
- * limit plus a footer pushes the message over and Discord rejects the whole
- * thing.
+ * This function measures the footer as part of the budget rather than
+ * appending it blindly, which is the bug this exists to avoid. A last chunk
+ * sitting just under the limit plus a footer pushes the message over, and
+ * Discord rejects the whole thing.
  */
 export function splitWithFooter(
   text: string,

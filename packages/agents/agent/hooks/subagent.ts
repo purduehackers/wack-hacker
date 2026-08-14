@@ -1,23 +1,23 @@
 /**
- * Announces that this turn has handed work to a subagent, and hands over a token
+ * Announces that this turn handed work to a subagent, and hands over a token
  * for reading its stream.
  *
  * A delegated turn goes silent from outside: the parent suspends while the child
- * runs, publishes no renders, and is reclaimed by the sweep as though it had died.
- * Something has to watch, and the only side that can hold a stream is the bot. It
- * has no Vercel identity of its own, so it asks this deployment for a credential
- * per connection over `WIRE_ROUTES.streamToken` — this record carries only the
- * address.
+ * runs and publishes no renders. The sweep then reclaims it as though it were
+ * dead. Something has to watch, and the only side that can hold a stream is the
+ * bot. It has no Vercel identity of its own, so it asks this deployment for a
+ * credential per connection over `WIRE_ROUTES.streamToken`. This record carries
+ * only the address.
  *
- * **On `actions.requested`, not `subagent.called`.** The latter never reaches a
- * hook: eve dispatches it through `callAdapterEventHandler` to the channel adapter
- * and onto the parent's event stream, and authored `ChannelEvents` does not carry
- * it either. A probe on both settled it.
+ * **On `actions.requested`, not `subagent.called`** — the latter never reaches a
+ * hook. eve dispatches it through `callAdapterEventHandler` to the channel
+ * adapter and onto the parent's event stream. Authored `ChannelEvents` does not
+ * carry it either. A probe on both settled it.
  *
- * That costs the child's session id, which exists only on the stream — and the
- * child is where the work happens, since eve publishes a delegated subagent's
- * progress on its own child-session stream. So this records the parent, and the
- * bot reads `childSessionId` off the parent's stream where the hook could not.
+ * That costs the child's session id, which exists only on the stream. The child
+ * is where the work happens, since eve publishes a delegated subagent's progress
+ * on its own child-session stream. So this records the parent, and the bot reads
+ * `childSessionId` off the parent's stream where the hook could not.
  */
 
 import { createConversationStore } from "@repo/shared/conversations";

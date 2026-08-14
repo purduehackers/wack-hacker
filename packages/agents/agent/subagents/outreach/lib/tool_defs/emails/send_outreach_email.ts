@@ -13,10 +13,10 @@ import {
 /**
  * Records a completed send on the CRM row.
  *
- * Kept private rather than exposed as its own tool: the only correct time to
- * write these three properties is immediately after a send, and the previous
+ * Kept private rather than exposed as its own tool. The only correct time to
+ * write these three properties is immediately after a send. The previous
  * implementation's separate `set_company_last_outreach` / `set_contact_last_outreach`
- * tools let the model claim an email had been sent without one leaving the building.
+ * tools let the model claim an email went out without one leaving the building.
  */
 async function recordSend(pageId: string, messageId: string, sentAt: string): Promise<void> {
   await notion.pages.update({
@@ -32,12 +32,13 @@ async function recordSend(pageId: string, messageId: string, sentAt: string): Pr
 /**
  * Refuses a send that must not happen.
  *
- * Two independent checks, both fail-closed. The page must belong to the CRM data
- * source the caller named, so a mistyped `target` cannot email a row from an
- * unrelated database; and `Do Not Contact` is honored, which is the only thing
- * standing between this tool and mailing someone who asked not to be contacted.
+ * Two independent checks, both fail-closed. The page must belong to the CRM
+ * data source the caller named, so a mistyped `target` cannot email a row from
+ * an unrelated database. The tool also honors `Do Not Contact`. That flag is
+ * the only thing standing between this tool and mailing someone who asked for
+ * no contact.
  *
- * Returns the reason a send was refused, or undefined when it may proceed.
+ * Returns the reason the tool refused the send, or undefined when it may proceed.
  */
 async function refusalReason(
   pageId: string,
@@ -68,8 +69,8 @@ async function refusalReason(
 export const send_outreach_email = defineTool({
   description: `Send one outreach email to one recipient and record the message id on the target Notion row ("Last Outreach ID", "Outreach Status" = Sent, "Outreach Last Event At"). Refuses to send when the row has "Do Not Contact" checked or does not belong to the named CRM data source. Sends from ${OUTREACH_FROM_EMAIL} with ${OUTREACH_REPLY_TO_EMAIL} as Reply-To. For mass campaigns use the broadcasts skill instead.`,
   access: { risk: "destructive", confirm: "second-party" },
-  // Cloudflare sends the mail; Notion holds the Do Not Contact flag this
-  // refuses on, and the row the message id is written back to.
+  // Cloudflare sends the mail. Notion holds the Do Not Contact flag this
+  // refuses on, and the row the tool writes the message id back to.
   requires: ["CLOUDFLARE_API_TOKEN", "NOTION_TOKEN"],
   input: z.strictObject({
     target: z.literal(["company", "contact"]).describe("Which CRM data source owns the page"),
@@ -93,9 +94,9 @@ export const send_outreach_email = defineTool({
       ...(html === undefined ? {} : { html }),
     });
 
-    // A permanent bounce is reported in the success body rather than as an
-    // error, so an address Cloudflare already knows is dead would otherwise be
-    // recorded as a successful send.
+    // Cloudflare reports a permanent bounce in the success body, not as an
+    // error. Without this check, an address Cloudflare already knows is dead
+    // would count as a successful send.
     if (result.permanent_bounces.includes(to)) {
       return { sent: false, refused: `${to} permanently bounced`, message_id: result.message_id };
     }

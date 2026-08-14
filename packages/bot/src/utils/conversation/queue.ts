@@ -1,8 +1,8 @@
 /**
- * The inbound operations: everything a caller asks the flow to do.
+ * @fileoverview The inbound operations: everything a caller asks the flow to do.
  *
- * Each one moves the durable queue forward exactly one step and then, where a
- * delivery slot may have opened, calls `kick` to claim the next item. Nothing
+ * Each one moves the durable queue forward exactly one step. Where that step
+ * may open a delivery slot, it calls `kick` to claim the next item. Nothing
  * here loops — the sweep owns repetition.
  */
 
@@ -29,6 +29,11 @@ import type {
   FlowRuntime,
 } from "./types.ts";
 
+/**
+ * Claims the next queued delivery for this conversation and sends it to eve.
+ * A claim failure becomes a defect report while the item stays queued for
+ * the sweep. A send failure comes back for the caller to handle.
+ */
 export async function kick(
   deps: ConversationFlowDeps,
   continuationKey: string,
@@ -89,15 +94,15 @@ function transient(operation: string) {
 }
 
 /**
- * Fold the request being corrected into the correction itself.
+ * Fold the request under correction into the correction itself.
  *
  * Steering cancels the running turn, and eve's durable history "keeps only what
  * had already settled" — so a turn cancelled a second in takes its request with
  * it. Asked to check some channels and then told "the channels are in discord
  * btw", the agent replied asking what you wanted, having genuinely forgotten.
  *
- * Both utterances are in hand right here, so they go in as one message rather
- * than being stashed somewhere for the agent to reassemble. eve then has the
+ * Both utterances are in hand right here, so this function folds them into one
+ * message rather than stashing them for the agent to reassemble. eve then has the
  * whole request in the only place it needs to look, which is the message. This
  * is what eve's own TUI means by coalescing a queued message into the next turn.
  */
@@ -110,10 +115,11 @@ function coalesce(payload: MessagePayload, superseded: string | undefined): Mess
 /**
  * Interrupt the turn holding this conversation, if one is.
  *
- * Someone who types while the agent is working is correcting it, not waiting in
- * line. Cancelling happens agent-side; this only tells it to. Failures are
- * reported and swallowed — the message stays queued either way, and the hard cap
- * eventually releases the conversation even if the agent is unreachable.
+ * Someone who types during a running turn means to correct it, not to wait in
+ * line. Cancelling happens agent-side. This function only tells it to, and it
+ * reports and swallows failures — the message stays queued either way. The
+ * hard cap eventually releases the conversation even if the agent is
+ * unreachable.
  */
 async function steerHolder(
   deps: ConversationFlowDeps,
@@ -131,6 +137,12 @@ async function steerHolder(
   });
 }
 
+/**
+ * Enqueues one inbound message, then kicks the queue so a free conversation
+ * delivers at once. When a turn already holds the conversation, this folds
+ * the held request into the new message and steers the turn. See `coalesce`
+ * for why.
+ */
 export async function submitMessage(
   runtime: FlowRuntime,
   payload: MessagePayload,
@@ -138,12 +150,12 @@ export async function submitMessage(
   const { deps } = runtime;
   const submitted = await Result.tryPromise({
     try: async () => {
-      // Asked before anything is enqueued or claimed. A turn holding the
-      // conversation now was started by an earlier delivery and is working on a
-      // request this message corrects, so its text joins this one and then it is
-      // interrupted to let the queue move. Asking after the claim instead finds
-      // the turn *this* message just started and cancels it, which is a turn
-      // that never gets to answer anything.
+      // This lookup runs before the enqueue and before the claim. A turn that
+      // holds the conversation now came from an earlier delivery and works on
+      // a request this message corrects. So its text joins this one, and then
+      // the steer interrupts the turn to let the queue move. Asking after the
+      // claim instead finds the turn *this* message just started and cancels
+      // it, which is a turn that never gets to answer anything.
       const holder = await deps.store.deliveries.holder(payload.continuationKey);
       await deps.store.delivery.enqueue(coalesce(payload, holder?.content));
       if (runtime.isStopped()) return undefined;
@@ -156,6 +168,11 @@ export async function submitMessage(
   return submitted.value === undefined ? Result.ok(undefined) : Result.err(submitted.value);
 }
 
+/**
+ * Runs the reset cutover behind a barrier, then kicks the queue. The barrier
+ * survives an ambiguous remote result, so a later reset reuses the same id
+ * and safely finishes or retries the cutover.
+ */
 export async function resetAndKick(
   runtime: FlowRuntime,
   payload: ResetPayload,
@@ -190,6 +207,11 @@ export async function resetAndKick(
   return Result.ok(undefined);
 }
 
+/**
+ * Delivers one human answer to a pending HITL request, exactly once. The
+ * claim makes a racing answer lose with a plain status instead of a double
+ * send. A completion failure after the send is a defect, not a retry.
+ */
 export async function answerHitl(
   deps: ConversationFlowDeps,
   { claim, payload }: ConversationAnswer,
@@ -212,6 +234,12 @@ export async function answerHitl(
   return { status: "accepted" };
 }
 
+/**
+ * Admits one scheduled occurrence under a claim token, exactly once. A
+ * receipt from an earlier admission makes this a no-op, and a concurrent
+ * admitter is an error. When admission fails, this function releases the
+ * claim so a redelivered fire can try again.
+ */
 export async function admitScheduledFire(
   deps: ConversationFlowDeps,
   payload: ScheduledFirePayload,
@@ -236,9 +264,15 @@ export async function admitScheduledFire(
   }
 }
 
+/**
+ * Completes a delivery after eve parks the turn, but only once a render
+ * outcome exists for the dispatch. Until then the dispatch id joins the
+ * pending set and the next sweep tries again, so completion never outruns
+ * the visible reply.
+ */
 export async function onParked(runtime: FlowRuntime, payload: ParkedPayload): Promise<void> {
   const { deps } = runtime;
-  /** The paint has not landed yet; the next sweep will try again. */
+  /** The paint has not landed yet. The next sweep will try again. */
   const waitForPaint = (): void => {
     runtime.pendingDispatches.add(payload.dispatchId);
     reportPendingRender(deps, payload);

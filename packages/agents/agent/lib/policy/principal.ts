@@ -14,8 +14,8 @@ function stringArray(value: AuthAttribute | undefined): readonly string[] | unde
 
 /**
  * The sole conversion from Eve's nullable `auth.current` into project policy data.
- * Role is re-derived for every resolver/call. Raw Discord roles win when present;
- * a validated asserted role is only the fallback for non-Discord/scheduled adapters.
+ * Role is re-derived for every resolver/call. Raw Discord roles win when present.
+ * A validated asserted role is only the fallback for non-Discord/scheduled adapters.
  */
 export function requirePrincipal(
   current: SessionAuthContext | null | undefined,

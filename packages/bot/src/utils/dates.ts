@@ -1,19 +1,20 @@
 /**
  * Wall-clock helpers for the one timezone this bot cares about.
  *
- * The process runs in UTC. Hack night being an Indiana event is a fact about
- * the domain, not about whichever host happens to run the image, so the zone
- * lives here in version control rather than in a container's `TZ` — the bot
- * runs on Vercel Sandbox, on persistent container hosts, and on laptops, and
- * only one of those was ever configured.
+ * The process runs in UTC. Hack night is an Indiana event, which is a fact
+ * about the domain, not about whichever host happens to run the image. The
+ * zone therefore lives here in version control rather than in a container's
+ * `TZ`. The bot runs on Vercel Sandbox, on persistent container hosts, and
+ * on laptops, and only one of those was ever configured.
  *
  * `minuteId` is why this matters rather than being a style preference: it is a
  * cross-process coordination key. Two bot instances claim a schedule fire by
- * racing `SET NX` on the same key, so if they ever disagreed about local time
- * their keys would not collide, both claims would win, and the schedule would
- * fire twice with no error anywhere. Deriving it from ambient host config makes
- * that correctness property unasserted; deriving it from `TIME_ZONE` makes it
- * a property of the code.
+ * racing `SET NX` on the same key. If they ever disagreed about local time,
+ * their keys would not collide and both claims would win. The schedule would
+ * then fire twice with no error anywhere.
+ *
+ * Deriving it from ambient host config makes that correctness property
+ * unasserted. Deriving it from `TIME_ZONE` makes it a property of the code.
  */
 export const TIME_ZONE = "America/Indiana/Indianapolis";
 
@@ -78,16 +79,18 @@ function offsetMs(at: Date): number {
 /**
  * `at` as a Date whose *local component getters* read this zone's wall clock.
  *
- * For libraries that are ambient-local: `@purduehackers/time` derives Lightning
- * Time from `getHours()`/`getMinutes()`/`getSeconds()`/`getMilliseconds()` on
- * the Date handed to it, so a raw instant reports whichever zone the host runs
- * in — UTC here — and the hack night countdown renders `2~a~9|a` instead of
- * `f~f~f|0`, never reaching `0~0~0|0`. Feeding it a Date built from this zone's
- * parts through the local constructor makes those getters read Indiana on any
- * host, since the constructor is the exact inverse of the getters.
+ * This exists for libraries that are ambient-local. `@purduehackers/time`
+ * derives Lightning Time from `getHours()`/`getMinutes()`/`getSeconds()`/
+ * `getMilliseconds()` on the Date handed to it. A raw instant therefore
+ * reports whichever zone the host runs in — UTC here. The hack night countdown
+ * then renders `2~a~9|a` instead of `f~f~f|0`, never reaching `0~0~0|0`.
  *
- * The instant this Date names is meaningless; only its components are. Never
- * compare it, store it, or subtract it — convert, read, discard.
+ * Feeding it a Date built from this zone's parts through the local constructor
+ * makes those getters read Indiana on any host. This works because the
+ * constructor is the exact inverse of the getters.
+ *
+ * The instant this Date names is meaningless. Only its components carry
+ * meaning. Never compare it, store it, or subtract it — convert, read, discard.
  */
 export function wallClockDate(at: Date): Date {
   const { year, month, day, hour, minute, second } = wallClock(at);
@@ -115,13 +118,14 @@ export function nextMidnight(at: Date): Date {
 /**
  * The Friday of the hack night week containing `at`.
  *
- * `(weekday + 2) % 7` maps Sunday to 2 and Saturday to 1, so both weekend days
+ * `(weekday + 2) % 7` maps Sunday to 2 and Saturday to 1. Both weekend days
  * walk back to the Friday that started the event rather than forward to the
  * next one.
  *
- * The result is anchored at noon UTC, which reads as 07:00 or 08:00 in this
- * zone and therefore as the same calendar date — the only thing any consumer
- * takes from it. Anchoring this way keeps the zone conversion one-directional.
+ * This function anchors the result at noon UTC. Noon UTC reads as 07:00 or
+ * 08:00 in this zone, and therefore as the same calendar date. The calendar
+ * date is the only thing any consumer takes from it. Anchoring this way keeps
+ * the zone conversion one-directional.
  */
 export function fridayOfWeek(at: Date): Date {
   const { year, month, day } = calendarDate(at);

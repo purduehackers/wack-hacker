@@ -1,4 +1,4 @@
-/** Durable scheduled-task storage and atomic libSQL lease settlement. */
+/** @fileoverview Durable scheduled-task storage and atomic libSQL lease settlement. */
 
 import { createHash } from "node:crypto";
 
@@ -154,7 +154,7 @@ function isLibsqlNull<T>(value: T | null): value is null {
   return value === null;
 }
 
-/** libSQL models SQL NULL as `null`; `undefined` is not a bindable `InValue`. */
+/** libSQL models SQL NULL as `null`. `undefined` is not a bindable `InValue`. */
 // oxlint-disable-next-line unicorn/no-null -- sole SQL NULL bind argument in this module
 const SQL_NULL = null;
 
@@ -202,7 +202,7 @@ const anchorSchema = z.iso.datetime();
 /**
  * `scheduled_tasks_shape_check` in the durable schema already forbids the two
  * mismatched combinations, so the discriminated union restates the SQL CHECK
- * rather than adding a rule: `once` carries neither cron nor timezone,
+ * rather than adding a rule. `once` carries neither cron nor timezone, and
  * `recurring` carries both.
  */
 const onceShape = {
@@ -217,9 +217,10 @@ const recurringShape = {
 };
 
 /**
- * Elements stay bare strings. The column is documented as an advisory
+ * Elements stay bare strings. The schema documents the column as an advisory
  * creation-time snapshot, and a claim batch aborts on the first undecodable
- * row, so a stricter element format would let one odd row stall the dispatcher.
+ * row. A stricter element format would therefore let one odd row stall the
+ * dispatcher.
  */
 const memberRolesJsonSchema = jsonCodec(z.array(z.string()));
 
@@ -652,7 +653,7 @@ export type ScheduleStore = ReturnType<typeof createScheduleStore>;
 
 let defaultStore: Promise<ScheduleStore> | undefined;
 
-/** Defers Drizzle/libSQL loading until execution; Eve evaluates authored modules at discovery. */
+/** Defers Drizzle/libSQL loading until execution. Eve evaluates authored modules at discovery. */
 export function getScheduleStore(): Promise<ScheduleStore> {
   defaultStore ??= Promise.all([import("@repo/shared/db"), import("../../env.ts")]).then(
     ([{ getDb }, { tursoConfig }]) => createScheduleStore({ db: getDb(tursoConfig()) }),

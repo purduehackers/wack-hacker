@@ -1,3 +1,11 @@
+/**
+ * @fileoverview The policy runtime every domain subagent shares. A domain
+ * hands `createDomainRuntime` its tool registry and credentials. The runtime
+ * then owns the full life of a tool call: discovery, approval, execution, and
+ * audit. It re-checks principal and role, verifies credentials, records
+ * audits, and maps thrown provider causes onto typed failures.
+ */
+
 import { AuditDecision } from "@repo/shared/db/enums";
 import {
   UserRole,
@@ -44,8 +52,8 @@ export interface DomainRuntimeAdapter<R extends DomainToolRegistry> {
   /**
    * Values for the env keys this domain's tools declare in `requires`.
    *
-   * Passed explicitly rather than read from `env` by key, so the lookup stays
-   * a concrete object the type checker can see rather than an index into the
+   * Passed explicitly rather than read from `env` by key. The lookup then
+   * stays a concrete object the type checker can see, not an index into the
    * whole environment.
    */
   readonly credentials?: Readonly<Record<string, string | undefined>>;
@@ -242,10 +250,11 @@ function expectedApproverRole(requesterMinRole: UserRoleValue): Exclude<UserRole
 /**
  * Who this call executes as.
  *
- * Without an approval in flight that is simply the caller. With one, the
- * approval is rebound to the requester who owns execution, and every
- * authority-bearing field is re-checked against the durable policy record and
- * the bot's freshly fetched Discord roles before the approver can resume it.
+ * Without an approval in flight that is simply the caller. With one, this
+ * function rebinds the approval to the requester who owns execution. It
+ * re-checks every authority-bearing field against the durable policy record
+ * and the bot's freshly fetched Discord roles before the approver can resume
+ * it.
  */
 async function executionAuthorityOf<R extends DomainToolRegistry>(
   adapter: DomainRuntimeAdapter<R>,
@@ -319,7 +328,7 @@ async function runToolExecution<R extends DomainToolRegistry>(
   });
 }
 
-/** Result stays internal; this is the plain JSON Eve boundary. */
+/** Result stays internal. This is the plain JSON Eve boundary. */
 async function executeToolFor<R extends DomainToolRegistry>(
   adapter: DomainRuntimeAdapter<R>,
   name: DomainToolName<R>,
@@ -399,6 +408,11 @@ function missingCredential<R extends DomainToolRegistry>(
   });
 }
 
+/**
+ * Binds one domain's adapter into the runtime object its subagent exposes to
+ * Eve. Every entry point funnels through the same policy checks, so a domain
+ * cannot skip approval, audit, or credential enforcement by accident.
+ */
 export function createDomainRuntime<const R extends DomainToolRegistry>(
   adapter: DomainRuntimeAdapter<R>,
 ) {

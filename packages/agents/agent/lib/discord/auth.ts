@@ -20,6 +20,11 @@ export interface DiscordAuthTarget {
   approvalRequester?: InteractionPayload["approvalRequester"];
 }
 
+/**
+ * The authenticated assertion for one delivery, shaped for eve's session auth.
+ * Policy rules read these attributes, so the role derives from member roles
+ * here, once, instead of inside every rule.
+ */
 export function authFor(principal: Principal, target: DiscordAuthTarget): SessionAuthContext {
   return {
     authenticator: "discord",

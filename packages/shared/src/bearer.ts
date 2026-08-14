@@ -1,16 +1,18 @@
 /**
  * Shared-secret authentication for the two internal routes.
  *
- * The bot presents a bearer to the agent; the agent presents a different one
+ * The bot presents a bearer to the agent. The agent presents a different one
  * back on the park callback. Both directions compare a secret, and both live
  * here so there is one implementation to get right.
  *
  * The comparison is constant-time. `===` on strings returns as soon as it finds
- * a differing byte, so its running time leaks how long a shared prefix an
- * attacker has guessed — enough, over many requests, to recover a secret one
- * character at a time. Length is compared first and non-constant-time, which is
- * fine: the length of these secrets is not the part worth protecting, and the
- * alternative is indexing past the end of a string.
+ * a differing byte. Its running time therefore leaks how long a shared prefix
+ * an attacker guessed. Over many requests that is enough to recover a secret
+ * one character at a time.
+ *
+ * The length check runs first and is not constant-time, which is fine. The
+ * length of these secrets is not the part worth protecting, and the
+ * alternative would index past the end of a string.
  */
 
 /** Extracts the credential from an `Authorization: Bearer <token>` header. */
@@ -36,7 +38,7 @@ function secretMatches(presented: string, expected: string): boolean {
  * True when the request carries the expected bearer.
  *
  * Accepts `undefined` because that is what a missing header looks like on both
- * runtimes in play — `Headers.get` reports absence as `null`, so call sites pass
+ * runtimes in play. `Headers.get` reports absence as `null`, so call sites pass
  * `header ?? undefined`.
  */
 export function bearerMatches(header: string | undefined, expected: string): boolean {

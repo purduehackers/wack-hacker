@@ -16,6 +16,11 @@ export interface DomainAuditHookAdapter<N extends string> {
   readonly redactInput?: boolean;
 }
 
+/**
+ * Builds the hook that records one audit row per requested tool call in this
+ * domain. An unavailable store or a failed write logs a warning and drops the
+ * row, so auditing never blocks the action itself.
+ */
 export function defineDomainAuditHook<N extends string>(adapter: DomainAuditHookAdapter<N>) {
   return defineHook({
     events: {

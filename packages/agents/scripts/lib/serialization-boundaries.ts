@@ -1,15 +1,16 @@
 /**
- * Static counterpart to `serialization.ts`.
+ * @fileoverview Static counterpart to `serialization.ts`.
  *
  * `serialization.ts` rejects a non-JSON value at runtime, but only if it is
- * actually reached. This proves it is reached, by reading the source: every
- * `defineTool` executor must return through `guardToolExecution`, and every
- * `defineState` initializer through `assertStateValue`. Namespace imports of
- * `eve/tools` / `eve/context` are refused outright, because a call behind one
- * would be invisible to the patterns below — the analysis is textual, so it
- * bans the indirection it cannot follow rather than pretending to see through it.
+ * actually reached. This module proves, by reading the source, that execution
+ * reaches it: every `defineTool` executor must return through
+ * `guardToolExecution`, and every `defineState` initializer through
+ * `assertStateValue`. This analysis refuses namespace imports of `eve/tools` /
+ * `eve/context` outright, because a call behind one would be invisible to the
+ * patterns below. The analysis is textual, so it bans the indirection it
+ * cannot follow rather than pretending to see through it.
  *
- * Pure and I/O-free; `scripts/check-serialization-boundaries.ts` walks `agent/**`
+ * Pure and I/O-free. `scripts/check-serialization-boundaries.ts` walks `agent/**`
  * and feeds each file in.
  */
 
@@ -83,6 +84,13 @@ function guardPattern(bindings: ReadonlySet<string>): string {
   return [...bindings].map(escapePattern).join("|");
 }
 
+/**
+ * Scans one file's source for tool and state guard violations.
+ *
+ * The counts in the result let the caller prove the scan saw real
+ * definitions. An empty diagnostics list from a misparsed tree then cannot
+ * pass as a clean one.
+ */
 export function analyzeSerializationBoundaries(
   source: string,
   path = "source.ts",

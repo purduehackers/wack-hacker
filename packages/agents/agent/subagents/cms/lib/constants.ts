@@ -1,18 +1,24 @@
+/**
+ * @fileoverview Input fields, projections, and wire helpers shared across
+ * this domain's tools.
+ *
+ * Payload exposes nine collections through one REST shape, so every
+ * collection needs the same three things:
+ *
+ * - the pagination fields its list tool accepts,
+ * - the writable fields its create tool requires and its update tool takes a
+ *   partial of,
+ * - the projection that renames Payload's camelCase columns to the snake_case
+ *   the model reads.
+ *
+ * Declaring each once keeps a create and its update from drifting apart.
+ * That drift is the failure this domain is most prone to — an update that
+ * silently accepts a field the create does not.
+ */
+
 import { z } from "zod";
 
 import { cmsAdminUrl, documentId, type PayloadDocument, relationship } from "./client.ts";
-
-/**
- * Input fields, projections, and wire helpers shared across this domain's tools.
- *
- * Payload exposes nine collections through one REST shape, so every collection
- * needs the same three things: the pagination fields its list tool accepts, the
- * writable fields its create tool requires and its update tool takes a partial
- * of, and the projection that renames Payload's camelCase columns to the
- * snake_case the model reads. Declaring each once keeps a create and its update
- * from drifting apart, which is the failure this domain is most prone to — an
- * update that silently accepts a field the create does not.
- */
 
 /** Shared limit/page/sort input fields — spread into a tool's `z.strictObject({...})`. */
 export const paginationInputShape = {
@@ -48,7 +54,7 @@ export const cmsRole = z.enum([
 /**
  * Lexical encodes "inherit the parent's text direction" as an explicit JSON
  * `null` on every node. Payload rejects the field when it is missing, so the
- * literal is required on the wire; naming it once keeps the rest of this module
+ * wire must carry the literal. Naming it once keeps the rest of this module
  * under the no-null rule.
  */
 // oxlint-disable-next-line unicorn/no-null -- Payload's Lexical wire format requires an explicit null direction
@@ -84,7 +90,7 @@ export function richTextParagraph(text: string) {
   };
 }
 
-/** Writable event fields. `create_event` requires them; `update_event` takes the partial. */
+/** Writable event fields. `create_event` requires them. `update_event` takes the partial. */
 export const eventFields = {
   name: z.string(),
   start: cmsDatetime.describe("ISO 8601 datetime for event start"),
@@ -96,6 +102,10 @@ export const eventFields = {
   published: z.boolean().optional(),
 };
 
+/**
+ * An event as the model reads it: snake_case columns and an admin `href`
+ * when the document has an id.
+ */
 export function projectEvent(e: PayloadDocument<"events">) {
   return {
     id: e.id,
@@ -115,7 +125,7 @@ export function projectEvent(e: PayloadDocument<"events">) {
   };
 }
 
-/** Writable RSVP fields. `create_rsvp` requires them; `update_rsvp` takes the partial. */
+/** Writable RSVP fields. `create_rsvp` requires them. `update_rsvp` takes the partial. */
 export const rsvpFields = {
   event_id: documentId,
   email: z.email(),
@@ -123,6 +133,10 @@ export const rsvpFields = {
   unsubscribed: z.boolean().optional(),
 };
 
+/**
+ * An RSVP as the model reads it. The `event` relationship flattens to a bare
+ * `event_id`, whichever shape Payload returned it in.
+ */
 export function projectRsvp(r: PayloadDocument<"rsvps">) {
   return {
     id: r.id,
@@ -136,13 +150,17 @@ export function projectRsvp(r: PayloadDocument<"rsvps">) {
   };
 }
 
-/** Writable email fields. `create_email` requires them; `update_email` takes the partial. */
+/** Writable email fields. `create_email` requires them. `update_email` takes the partial. */
 export const emailFields = {
   event_id: documentId,
   subject: z.string(),
   body: z.string().describe("Plain-text or HTML email body"),
 };
 
+/**
+ * An email as the model reads it: the flattened `event_id`, the send state,
+ * and an admin `href` when the document has an id.
+ */
 export function projectEmail(e: PayloadDocument<"emails">) {
   return {
     id: e.id,
@@ -157,7 +175,7 @@ export function projectEmail(e: PayloadDocument<"emails">) {
   };
 }
 
-/** Writable session fields. Create requires them; update takes the partial. */
+/** Writable session fields. Create requires them. Update takes the partial. */
 export const sessionFields = {
   title: z.string(),
   date: cmsDatetime.describe("ISO 8601 datetime"),
@@ -167,6 +185,10 @@ export const sessionFields = {
   published: z.boolean().optional(),
 };
 
+/**
+ * A hack-night session as the model reads it: snake_case columns and `host`
+ * as Payload stores it. The admin `href` needs an id.
+ */
 export function projectSession(s: PayloadDocument<"hack-night-sessions">) {
   return {
     id: s.id,
@@ -180,6 +202,10 @@ export function projectSession(s: PayloadDocument<"hack-night-sessions">) {
   };
 }
 
+/**
+ * A media document as the model reads it: snake_case file metadata plus the
+ * Discord columns. The admin `href` appears only when the document has an id.
+ */
 export function projectMedia(m: PayloadDocument<"media">) {
   return {
     id: m.id,
@@ -201,7 +227,7 @@ export function projectMedia(m: PayloadDocument<"media">) {
   };
 }
 
-/** Writable ugrant fields. Create requires them; update takes the partial. */
+/** Writable ugrant fields. Create requires them. Update takes the partial. */
 export const ugrantFields = {
   name: z.string(),
   author: z.string(),
@@ -212,6 +238,10 @@ export const ugrantFields = {
   visible: z.boolean().optional(),
 };
 
+/**
+ * A ugrant as the model reads it. The `image` relationship resolves to
+ * `image_id` plus `image_url` so the model never handles a populated document.
+ */
 export function projectUgrant(u: PayloadDocument<"ugrants">) {
   const image = relationship(u.image);
   return {
@@ -230,7 +260,7 @@ export function projectUgrant(u: PayloadDocument<"ugrants">) {
   };
 }
 
-/** Writable shelter-project fields. Create requires them; update takes the partial. */
+/** Writable shelter-project fields. Create requires them. Update takes the partial. */
 export const shelterProjectFields = {
   name: z.string(),
   last_division: z.string(),
@@ -240,6 +270,10 @@ export const shelterProjectFields = {
   visible: z.boolean().optional(),
 };
 
+/**
+ * A shelter project as the model reads it: snake_case columns plus the
+ * resolved image id and url. The admin `href` needs an id.
+ */
 export function projectShelter(s: PayloadDocument<"shelter-projects">) {
   const image = relationship(s.image);
   return {
@@ -257,13 +291,17 @@ export function projectShelter(s: PayloadDocument<"shelter-projects">) {
   };
 }
 
-/** Writable user fields. Create requires them; update takes the partial minus `password`. */
+/** Writable user fields. Create requires them. Update takes the partial minus `password`. */
 export const userFields = {
   email: z.email(),
   password: z.string().min(8).describe("Initial password (user can change it after login)"),
   roles: z.array(cmsRole).min(1),
 };
 
+/**
+ * A user as the model reads it: email and roles, the shared timestamps, and
+ * an admin `href`. The `password` never comes back through this projection.
+ */
 export function projectUser(u: PayloadDocument<"users">) {
   return {
     id: u.id,
@@ -275,13 +313,17 @@ export function projectUser(u: PayloadDocument<"users">) {
   };
 }
 
-/** Writable service-account fields. Create requires them; update takes the partial. */
+/** Writable service-account fields. Create requires them. Update takes the partial. */
 export const serviceAccountFields = {
   name: z.string(),
   roles: z.array(cmsRole).min(1),
   revoked: z.boolean().optional(),
 };
 
+/**
+ * A service account as the model reads it: name, roles, and `revoked`, so a
+ * dead credential is visible without a separate lookup.
+ */
 export function projectServiceAccount(s: PayloadDocument<"service-accounts">) {
   return {
     id: s.id,

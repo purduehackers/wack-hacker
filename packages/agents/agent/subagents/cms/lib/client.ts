@@ -1,3 +1,12 @@
+/**
+ * @fileoverview Typed REST client for the Payload CMS.
+ *
+ * Every response passes through the collection's Zod schema before a caller
+ * sees it. Drift in the CMS then surfaces as a 502-shaped error, not as bad
+ * data deeper in a tool. Auth is a service-account API key, and every fetch
+ * carries a bounded timeout by default.
+ */
+
 import { z } from "zod";
 
 import { env } from "../../../env.ts";
@@ -6,7 +15,7 @@ const CMS_WEB_ORIGIN = "https://cms.purduehackers.com";
 const CMS_AUTH_COLLECTION = "service-accounts";
 const REQUEST_TIMEOUT_MS = 15_000;
 
-/** Payload assigns numeric ids on Postgres and string ids on Mongo; both reach us on the wire. */
+/** Payload assigns numeric ids on Postgres and string ids on Mongo. Both reach us on the wire. */
 export const documentId = z.union([z.string(), z.number()]);
 
 type DocumentId = z.output<typeof documentId>;
@@ -422,6 +431,11 @@ export function paginationQuery(input: {
   };
 }
 
+/**
+ * Rewrites a Payload failure into remediation the caller can act on. A 401
+ * becomes a key hint, and a 404 points at the id or slug. Anything else
+ * passes through, wrapped as an `Error` when it is not one already.
+ */
 export function wrapPayloadError(error: unknown): Error {
   if (error instanceof PayloadCmsError) {
     if (error.status === 401) {

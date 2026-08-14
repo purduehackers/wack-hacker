@@ -1,5 +1,6 @@
 /**
- * The seam: the bot's gateway on one side, a durable agent session on the other.
+ * @fileoverview The seam: the bot's gateway on one side, a durable agent
+ * session on the other.
  *
  * A custom channel rather than eve's built-in Discord one, for two reasons. The
  * built-in channel speaks HTTP Interactions, which cannot see the message events
@@ -15,7 +16,7 @@
  *    what makes the permission model work at all.
  * 2. **Addressing.** The channel-local address is the Discord thread or channel
  *    id, so a conversation maps to a durable session with nothing else to look
- *    up. `continuationKey` on the wire is that address; it reaches Eve through
+ *    up. `continuationKey` on the wire is that address. It reaches Eve through
  *    `from(address)` and `resolveSession(address)`.
  * 3. **Delivery.** The `events` map drives durable, coalesced render intent.
  */
@@ -72,15 +73,15 @@ const conversations = createConversationStore({ redis });
 /**
  * Cancels a turn that a newly arrived message supersedes.
  *
- * Someone who types while the agent is working is correcting it, not waiting in
+ * Someone who types while the agent works means to correct it, not to wait in
  * line behind it. Cancelling the live turn lets the replacement act on the
- * correction; without this the agent finishes researching the wrong thing and
- * answers the question that was already withdrawn.
+ * correction. Without this the agent finishes researching the wrong thing and
+ * answers a question the person already withdrew.
  *
- * A session parked on an input request is left alone: its turn is suspended
- * rather than working, and cancelling it would kill the request the person is
- * being asked to answer. `cancel` reports `no_active_turn` on its own when
- * nothing is running, so the only case worth checking here is the parked one.
+ * A session parked on an input request stays untouched. Its turn sits
+ * suspended rather than working, and cancelling it would kill the request the
+ * person still has to answer. `cancel` reports `no_active_turn` on its own
+ * when nothing runs, so the only case worth checking here is the parked one.
  */
 async function steerActiveTurn(
   active: Session | undefined,
@@ -126,13 +127,13 @@ function botAuthenticated(request: Request): boolean {
 /**
  * Turns the bot's assertion into the caller identity the agent runs as.
  *
- * `principalType: "user"` matters beyond permissions: user-scoped Vercel Connect
- * OAuth refuses to start without a user principal, so a session created any
- * other way could never authorize an integration on someone's behalf.
+ * `principalType: "user"` matters beyond permissions: user-scoped Vercel
+ * Connect OAuth refuses to start without a user principal. A session created
+ * any other way could never authorize an integration on someone's behalf.
  *
- * The role is derived here rather than trusted from the wire. The bot sends raw
- * role snowflakes; a bot that could name its own access tier would make the
- * permission model advisory.
+ * The channel derives the role here rather than trusting the wire. The bot
+ * sends raw role snowflakes. A bot that could name its own access tier would
+ * make the permission model advisory.
  */
 function ok(sessionId: string, continuationToken: string): Response {
   const body: WireResponse = { ok: true, sessionId, continuationToken };
@@ -148,9 +149,9 @@ function failed(error: Error, status = 400): Response {
 /**
  * Replay the answer a previous attempt already got.
  *
- * The receipt's shape used to be restated here as a local zod schema — two
- * declarations of one record, kept in step by nobody. The reader owns it now, so
- * this only has to say which part of it the wire response needs.
+ * A local zod schema used to restate the receipt's shape here — two
+ * declarations of one record, kept in step by nobody. The reader owns it now,
+ * so this only has to say which part of it the wire response needs.
  */
 async function acceptedInteractionResponse(interactionId: string): Promise<Response> {
   const receipt = await conversations.interactions.receipt(interactionId);
@@ -229,8 +230,8 @@ async function publishDesiredRender(
   // ARGV[5] then return -1`. An empty one is not a harmless blank: every empty
   // id compares equal to every other, so publishing one would let an unrelated
   // turn's render satisfy this turn's fence. The bot rejects the intent at its
-  // wire boundary, which is correct but leaves the render silently undelivered;
-  // refuse here instead, where the reason is visible.
+  // wire boundary, which is correct but leaves the render silently undelivered.
+  // Refuse here instead, where the reason is visible.
   if (input.eveTurnId === "") {
     console.warn("render intent skipped: no active eve turn to fence it to");
     return false;
@@ -273,7 +274,7 @@ async function publishDesiredRender(
     ...(authorizations.length === 0 ? {} : { authorizations }),
   };
 
-  /** `undefined` means the counter was behind and has been resynced; try again. */
+  /** `undefined` means the counter fell behind and this call resynced it. Try again. */
   const land = async (attempt: RenderIntent): Promise<boolean | undefined> => {
     const publication = await renderPublisher.publish(attempt);
     if (publication.accepted) {
@@ -286,7 +287,7 @@ async function publishDesiredRender(
     // behind — it advances only on a publish that lands, and anything that
     // knocked one out (a retried step, a restored checkpoint) leaves every
     // later attempt re-offering a number Redis has already seen. Resync to what
-    // it holds and go once more; the intent was built from current state, so
+    // it holds and go once more. The intent already reflects current state, so
     // only the tag was wrong.
     if (publication.behindRevision === undefined) return false;
     state.renderRevision = publication.behindRevision;
@@ -311,8 +312,8 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
 
   /**
    * Builds the `channel` argument handed to every event handler. Without it the
-   * handlers receive no state at all, and mutations made here are written back
-   * to adapter state by the framework.
+   * handlers receive no state at all, and the framework writes mutations made
+   * here back to adapter state.
    */
   context: (state) => ({ state }),
 
@@ -337,7 +338,7 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
       const payload = decoded.value;
 
       // Context is durable history. Add the lead-in only when this delivery
-      // creates the session; resending it on every follow-up duplicates history.
+      // creates the session. Resending it on every follow-up duplicates history.
       const active = await resolveSession(payload.continuationKey);
       const context =
         active === undefined
@@ -384,9 +385,9 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
 
       try {
         const session = await from(payload.continuationKey).send(messageContent(payload), {
-          // Eve refreshes current auth on every delivery even though state seeds
-          // are ignored for existing sessions. Transport targeting therefore
-          // rides in this trusted assertion and is adopted at `turn.started`.
+          // Eve refreshes current auth on every delivery even though it ignores
+          // state seeds for existing sessions. Transport targeting therefore
+          // rides in this trusted assertion, and `turn.started` adopts it.
           auth: authFor(payload.principal, {
             channelId: payload.channel.id,
             ...(payload.thread === undefined ? {} : { threadId: payload.thread.id }),
@@ -484,11 +485,11 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
     /**
      * A fresh credential for reading a session's event stream.
      *
-     * Minted per request, never stored. These are issued with a *fixed* expiry
-     * shared across every mint rather than a lifetime measured from issuance, so
-     * one handed out at 20:52 died at 21:38 — a stored copy is a credential that
-     * silently stops working partway through the delegation it was meant to
-     * cover. The bot asks again on every reconnect instead.
+     * Minted per request, never stored. The OIDC issuer stamps a *fixed*
+     * expiry shared across every mint, not a lifetime measured from issuance.
+     * One handed out at 20:52 therefore died at 21:38. A stored copy is a
+     * credential that silently stops working partway through the delegation it
+     * was meant to cover. The bot asks again on every reconnect instead.
      */
     POST(WIRE_ROUTES.streamToken, async (request) => {
       if (!botAuthenticated(request)) {
@@ -540,7 +541,7 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
     }),
 
     /**
-     * Someone typed while a turn was running: stop it so the queue can move.
+     * Someone typed during a live turn: stop it so the queue can move.
      *
      * The message itself is already durable on the bot's pending queue. This
      * only cancels, and the cancellation is what releases `agent:active` — the
@@ -673,9 +674,9 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
 
       // Each action kind names itself differently and reads differently to a
       // person watching — a tool call is the agent working, a subagent call is
-      // it handing off. The switch is written against eve's union rather than a
-      // structural guess, so a kind added upstream fails to compile here instead
-      // of silently blanking the status line.
+      // it handing off. The switch narrows eve's union rather than a structural
+      // guess, so a kind added upstream fails to compile here instead of
+      // silently blanking the status line.
       const phrases = data.actions.map((action) => {
         switch (action.kind) {
           case "tool-call":
@@ -702,7 +703,7 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
     },
 
     async "action.result"(data, channel, ctx) {
-      // Work finished; drop the status line rather than leaving a stale one.
+      // Work finished. Drop the status line rather than leaving a stale one.
       channel.state.activity = "";
       await publishDesiredRender(channel.state, {
         sessionId: ctx.session.id,
@@ -747,7 +748,7 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
       // neither of which could ever finish.
       //
       // The earlier note here said the replacement turn would paint over this.
-      // It cannot. The replacement turn is the thing being blocked.
+      // It cannot. The stale active record blocks the replacement turn itself.
       const state = channel.state;
       state.activity = "";
       state.finalRenderPhase ??= "completed";
@@ -882,7 +883,7 @@ async function settleAndNotifyParked(
     });
     if (!response.ok) throw new Error(`bot callback returned ${response.status}`);
   } catch (cause) {
-    // Both markers are durable; HTTP is only the low-latency wakeup.
+    // Both markers are durable. HTTP is only the low-latency wakeup.
     console.warn(
       "bot callback failed; its recovery sweep will consume the parked/render markers",
       cause,

@@ -5,10 +5,10 @@ import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain
 import { sentryOpts, sentryOrg } from "../../client.ts";
 
 /**
- * `role` is returned by Sentry but absent from the generated response type.
- * `.catch` keeps the "can never fail" property the previous `z.unknown()` had:
- * this projection is read through a throwing `.parse`, so a shape `z.json()`
- * rejects must degrade to "absent" rather than fail the invite.
+ * Sentry returns `role`, but the generated response type omits it.
+ * `.catch` keeps the "can never fail" property the previous `z.unknown()` had.
+ * A throwing `.parse` reads this projection, so a shape `z.json()` rejects
+ * must degrade to "absent" rather than fail the invite.
  */
 const invitedMemberProjectionSchema = z.looseObject({
   role: z.json().optional().catch(undefined),

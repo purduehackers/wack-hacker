@@ -13,15 +13,25 @@ function now(): string {
   return new Date().toISOString();
 }
 
+/**
+ * The full cart as the model sees it: items in insertion order plus the last
+ * mutation time. `updatedAt` is null until the first mutation, so the tools
+ * can tell an empty cart from an untouched one.
+ */
 export async function getCart(): Promise<CartSnapshot> {
   const [cart] = await db().select({ updatedAt: shoppingCarts.updatedAt }).from(shoppingCarts);
   const items = await db().select().from(shoppingCartItems).orderBy(shoppingCartItems.addedAt);
-  // `updatedAt` reaches the model as the `updated_at` field of view_cart, where a cart that has
-  // never been touched must read as an explicit null rather than a missing key.
+  // `updatedAt` reaches the model as the `updated_at` field of view_cart, where a cart with
+  // no updates yet must read as an explicit null rather than a missing key.
   // oxlint-disable-next-line unicorn/no-null -- serialized cart snapshot reports "never updated" as null
   return { items, updatedAt: cart?.updatedAt ?? null };
 }
 
+/**
+ * Adds an item, or merges quantities when the ASIN is already in the cart.
+ * Every mutation returns the affected row plus a fresh snapshot, so the tool
+ * can answer without a second read.
+ */
 export async function addCartItem(input: NewCartItemInput): Promise<CartMutation> {
   return db().transaction(async (tx) => {
     await tx.insert(shoppingCarts).values({ id: GLOBAL_CART_ID }).onConflictDoNothing();
@@ -57,6 +67,11 @@ export async function addCartItem(input: NewCartItemInput): Promise<CartMutation
   });
 }
 
+/**
+ * Removes one ASIN, answering undefined when it was never in the cart. That
+ * lets callers report "not found" without treating it as a failure. The
+ * snapshot reflects the cart after the removal.
+ */
 export async function removeCartItem(asin: string): Promise<CartMutation | undefined> {
   return db().transaction(async (tx) => {
     const current = await tx.select().from(shoppingCartItems).orderBy(shoppingCartItems.addedAt);
@@ -71,6 +86,11 @@ export async function removeCartItem(asin: string): Promise<CartMutation | undef
   });
 }
 
+/**
+ * Sets an exact quantity, where zero deletes the row entirely. Answers
+ * undefined for an ASIN that is not in the cart, so the tool reports it rather
+ * than adding implicitly.
+ */
 export async function setCartItemQuantity(
   asin: string,
   quantity: number,
@@ -95,6 +115,10 @@ export async function setCartItemQuantity(
   });
 }
 
+/**
+ * Empties the cart in one transaction and stamps `updatedAt`, so a cleared
+ * cart reads as "just changed" rather than "never used".
+ */
 export async function clearCart(): Promise<void> {
   await db().transaction(async (tx) => {
     await tx.insert(shoppingCarts).values({ id: GLOBAL_CART_ID }).onConflictDoNothing();

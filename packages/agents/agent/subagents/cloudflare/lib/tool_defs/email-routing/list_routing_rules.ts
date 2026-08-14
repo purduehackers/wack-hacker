@@ -12,8 +12,8 @@ export const list_routing_rules = defineTool({
   input: z.strictObject({ zone_id: zoneId }),
   execute: async ({ zone_id }) => {
     // The SDK maps create/get/update/delete for rules but not list, so this one
-    // goes through the generic request method and is parsed here rather than
-    // being trusted as whatever the caller declares it to be.
+    // goes through the generic request method. This tool parses the response
+    // here rather than trusting whatever the caller declares it to be.
     const raw = await cloudflare().get(`/zones/${zone_id}/email/routing/rules`);
     const parsed = routingRuleListSchema.safeParse(raw);
     if (!parsed.success) {

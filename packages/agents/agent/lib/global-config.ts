@@ -1,8 +1,8 @@
 /**
  * Reads items out of a Vercel Global Config store.
  *
- * Vercel renamed Edge Config to Global Config; ids still carry the `ecfg_`
- * prefix and existing connection strings still point at
+ * Vercel renamed Edge Config to Global Config. Ids still carry the `ecfg_`
+ * prefix, and existing connection strings still point at
  * `edge-config.vercel.com`, so both forms have to keep working. Nothing here
  * reads the hostname, which is what makes that free.
  *
@@ -38,10 +38,20 @@ function parseGlobalConfigConnection(connectionString: string) {
   }
 }
 
+/**
+ * True when the connection string parses into a usable endpoint. Policy uses
+ * this to hide the organizer lookup rather than fail it at request time.
+ */
 export function isGlobalConfigConnectionConfigured(connectionString: string): boolean {
   return parseGlobalConfigConnection(connectionString) !== undefined;
 }
 
+/**
+ * Fetches every item in the store in one authenticated GET.
+ *
+ * @throws UpstreamError when the connection string does not parse, the request
+ *   fails, or the response is not a JSON record.
+ */
 export async function readGlobalConfigItems(connectionString: string) {
   const connection = parseGlobalConfigConnection(connectionString);
   if (connection === undefined) {

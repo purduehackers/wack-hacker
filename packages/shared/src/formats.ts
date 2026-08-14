@@ -6,18 +6,19 @@
  * A rejection names the domain concept — `invalid discord-snowflake` — instead
  * of echoing an anonymous pattern at whoever has to fix the payload. And the
  * same declaration backs both a schema field and a standalone membership test
- * (`discordSnowflake.safeParse(value).success`), so a hand-written `typeof` +
- * `.test()` pair can no longer drift away from the schema it duplicates.
+ * (`discordSnowflake.safeParse(value).success`). A hand-written `typeof` +
+ * `.test()` pair can therefore no longer drift away from the schema it
+ * duplicates.
  *
- * The patterns are kept byte-for-byte as they were: several of these *look*
- * like a built-in (`z.nanoid`, `z.hash("sha256")`) but differ in length or
- * case-sensitivity, and substituting the built-in would silently change what
- * the durable records accept.
+ * The patterns stay byte-for-byte as they were. Several of these *look* like a
+ * built-in (`z.nanoid`, `z.hash("sha256")`) but differ in length or
+ * case-sensitivity. Substituting the built-in would silently change what the
+ * durable records accept.
  */
 
 import { z } from "zod";
 
-/** Discord snowflakes are numeric strings; bounds keep obvious junk out. */
+/** Discord snowflakes are numeric strings. Bounds keep obvious junk out. */
 export const discordSnowflake = z.stringFormat("discord-snowflake", /^\d{17,20}$/u);
 
 /** W3C trace context persisted through the durable Redis handoff. */
@@ -37,9 +38,9 @@ export const shortId = z.stringFormat("short-id", /^[A-Za-z0-9_-]{22}$/u);
 export const contentHash = z.stringFormat("content-hash", /^[A-Za-z0-9_-]{16}$/u);
 
 /**
- * A container reference pinned to an immutable digest. A mutable tag carries no
- * digest and is rejected. Lowercase hex only, so not `z.hash("sha256")`, which
- * accepts either case.
+ * A container reference pinned to an immutable digest. A mutable tag carries
+ * no digest, so this format rejects it. Lowercase hex only, so not
+ * `z.hash("sha256")`, which accepts either case.
  */
 export const digestPinnedImage = z.stringFormat("digest-pinned-image", /@sha256:[a-f0-9]{64}$/u);
 

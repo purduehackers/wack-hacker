@@ -1,3 +1,12 @@
+/**
+ * @fileoverview Runtime type guards for Notion request fragments.
+ *
+ * The Notion SDK ships parameter types with no runtime validators, and tool
+ * input arrives as untyped JSON from the model. Each guard checks the
+ * structure the SDK type demands, so a malformed fragment fails at the tool
+ * boundary, not deep inside a Notion call.
+ */
+
 import type {
   AppendBlockChildrenParameters,
   CreateDatabaseParameters,
@@ -138,6 +147,12 @@ function hasPropertyKind(value: JsonValue, kind: z.ZodType<string>): boolean {
   return object.success && Object.keys(object.data).some((key) => kind.safeParse(key).success);
 }
 
+/**
+ * Narrows raw JSON to the SDK's query filter union. An `and`/`or` group must
+ * recurse, and a property or timestamp leaf must carry a nested condition
+ * object. The check is structural, so an obviously malformed filter never
+ * reaches the Notion API.
+ */
 export function isQueryFilter(value: unknown): value is QueryFilter {
   const object = jsonObjectSchema.safeParse(value);
   if (!object.success) return false;
@@ -156,10 +171,19 @@ export function isQueryFilter(value: unknown): value is QueryFilter {
   return false;
 }
 
+/**
+ * Narrows raw JSON to the SDK's sort list. Each entry must name exactly one
+ * target — a property or a timestamp — never both nor neither.
+ */
 export function isQuerySorts(value: unknown): value is QuerySorts {
   return querySortsSchema.safeParse(value).success;
 }
 
+/**
+ * Narrows raw JSON to page properties for a create call. Every value must
+ * carry at least one known property-kind key, so a bag of bare scalars cannot
+ * pass as a property map.
+ */
 export function isCreatePageProperties(value: unknown): value is CreatePageProperties {
   const object = jsonObjectSchema.safeParse(value);
   return (
@@ -168,10 +192,19 @@ export function isCreatePageProperties(value: unknown): value is CreatePagePrope
   );
 }
 
+/**
+ * Update accepts the same property shapes as create, so this reuses the
+ * create-side guard rather than maintaining a second kind list.
+ */
 export function isUpdatePageProperties(value: unknown): value is UpdatePageProperties {
   return isCreatePageProperties(value);
 }
 
+/**
+ * Narrows raw JSON to a new data source's property schema. Every value must
+ * carry a known property kind, and at least one entry must be a `title`
+ * property, because Notion requires one.
+ */
 export function isCreateDataSourceProperties(value: unknown): value is CreateDataSourceProperties {
   const object = jsonObjectSchema.safeParse(value);
   if (!object.success) return false;
@@ -182,6 +215,11 @@ export function isCreateDataSourceProperties(value: unknown): value is CreateDat
   );
 }
 
+/**
+ * Narrows raw JSON to a data source schema update. A value may be `null` to
+ * remove a property, a bare rename, or a typed property change. Nothing
+ * outside those three forms passes.
+ */
 export function isUpdateDataSourceProperties(value: unknown): value is UpdateDataSourceProperties {
   const object = jsonObjectSchema.safeParse(value);
   return (
@@ -216,6 +254,11 @@ function hasSingleBlockKind(value: JsonObject, metadataKey: z.ZodType<string>): 
   return present[0] === value.type;
 }
 
+/**
+ * Narrows raw JSON to a block update. The envelope must carry a `block_id`,
+ * and the body may hold at most one block-kind payload, because a block only
+ * ever has one type.
+ */
 export function isUpdateBlockParameters(value: unknown): value is UpdateBlockParameters {
   const object = jsonObjectSchema.safeParse(value);
   return (
@@ -225,6 +268,11 @@ export function isUpdateBlockParameters(value: unknown): value is UpdateBlockPar
   );
 }
 
+/**
+ * Narrows raw JSON to an append-children call. The children list must not be
+ * empty, and every child must carry exactly one block-kind payload, so each
+ * appended block has a definite type.
+ */
 export function isAppendBlockChildrenParameters(
   value: unknown,
 ): value is AppendBlockChildrenParameters {

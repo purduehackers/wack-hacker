@@ -21,7 +21,7 @@ export const list_issue_tags = defineTool({
     issue_id: sentryNumericId.describe("Sentry issue ID (numeric)"),
   }),
   execute: async ({ issue_id }) => {
-    // No direct SDK method for listing all tags; use raw fetch
+    // No direct SDK method for listing all tags. Use raw fetch.
     const data = sentryResponse(
       issueTagsResponseSchema,
       await sentryGet(`/issues/${issue_id}/tags/`),

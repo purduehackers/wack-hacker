@@ -1,14 +1,15 @@
 /**
  * Mirrors every audited action into Discord, one embed per decision.
  *
- * The audit table is the record; this is the feed. A row in Turso answers "what
- * happened" only if somebody thinks to look, and nobody looks until something
- * has already gone wrong. An embed in a channel is read by whoever is around.
+ * The audit table is the record. This is the feed. A row in Turso answers
+ * "what happened" only if somebody thinks to look, and nobody looks until
+ * something has already gone wrong. An embed in a channel reaches whoever is
+ * around.
  *
- * Best-effort by construction. The audit row is written first and this runs
- * after it, so a Discord outage costs the notification and never the record —
- * and a failure here is logged rather than raised, because an action that
- * already happened must not be reported as failed on account of its own
+ * Best-effort by construction. The caller writes the audit row first and runs
+ * this after it, so a Discord outage costs the notification and never the
+ * record. A failure here goes to the log rather than the caller. An action
+ * that already happened must not surface as failed on account of its own
  * announcement.
  */
 
@@ -38,7 +39,7 @@ const TITLES: Record<AuditDecision, string> = {
   [AuditDecision.Denied]: "Action denied",
   [AuditDecision.Failed]: "Action failed",
   [AuditDecision.Timeout]: "Approval timed out",
-  /** The prompt never reached anyone, so nothing was attempted. */
+  /** The prompt never reached anyone, so the agent attempted nothing. */
   [AuditDecision.PromptFailed]: "Approval undeliverable",
 };
 
@@ -72,6 +73,11 @@ function describe(entry: AuditFeedEntry): string {
   return lines.join("\n");
 }
 
+/**
+ * Posts one decision embed to the audit channel. Failure never propagates.
+ * The audit row already exists, so this logs the miss and returns, because
+ * the announcement must not fail the action it announces.
+ */
 export async function publishAuditEntry(entry: AuditFeedEntry): Promise<void> {
   try {
     await discordRest().post(`/channels/${DISCORD_IDS.channels.AGENT_AUDIT}/messages`, {
@@ -84,8 +90,8 @@ export async function publishAuditEntry(entry: AuditFeedEntry): Promise<void> {
             timestamp: new Date().toISOString(),
           },
         ],
-        // The actor is named so the row can be read, never so they are pinged:
-        // an audit feed that notifies people is one they mute.
+        // The embed names the actor so a reader can tell who acted, never to
+        // ping them. An audit feed that notifies people is one they mute.
         allowed_mentions: { parse: [] },
       },
     });

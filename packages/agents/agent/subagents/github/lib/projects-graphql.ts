@@ -5,9 +5,10 @@ import { z } from "zod";
  * The decoding layer for GitHub Projects v2.
  *
  * Projects v2 has no REST surface, so every project tool goes through Octokit's
- * `graphql()`, which returns an untyped payload. Each response is decoded
- * against a schema here rather than read field-by-field at the call site, so a
- * schema change upstream fails once, loudly, with the path that broke.
+ * `graphql()`, which returns an untyped payload. This module decodes each
+ * response against a schema rather than reading it field-by-field at the call
+ * site. A schema change upstream then fails once, loudly, with the path that
+ * broke.
  */
 
 const pageInfoSchema = z.strictObject({
@@ -15,7 +16,7 @@ const pageInfoSchema = z.strictObject({
   endCursor: z.string(),
 });
 
-/** The fields every ProjectV2 selection asks for; the detail query adds to them. */
+/** The fields every ProjectV2 selection asks for. The detail query adds to them. */
 const projectSummaryShape = {
   id: z.string(),
   title: z.string(),

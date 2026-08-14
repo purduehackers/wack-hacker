@@ -1,21 +1,21 @@
 /// <reference types="node" />
 
 /**
- * Cross-file invariants for the agent's capability surface.
+ * @fileoverview Cross-file invariants for the agent's capability surface.
  *
  * Every check here is a relationship *between* files, which is exactly what a
- * code review cannot see: each hunk reads as correct on its own and the defect
+ * code review cannot see. Each hunk reads as correct on its own and the defect
  * only exists in the pairing. A skill listing a tool the registry no longer
- * defines, or a registry tool no skill can reach, is a silent runtime failure —
- * the tool either fails to resolve or is undiscoverable by any role.
+ * defines, or a registry tool no skill can reach, is a silent runtime failure.
+ * The tool either fails to resolve or is undiscoverable by any role.
  *
  * Deriving the surface also imports every registry, so a top-level throw in any
  * of them fails here rather than at boot.
  *
  * This deliberately does NOT snapshot the surface. A `minRole` change is one
- * line in a registry and shows up in the diff on its own; pinning a generated
- * copy of it only adds a second file to update and invites regenerating past
- * the very change the pin was meant to surface.
+ * line in a registry and shows up in the diff on its own. Pinning a generated
+ * copy of it only adds a second file to update. It also invites regenerating
+ * past the very change the pin was meant to surface.
  */
 
 import { access, readFile, readdir } from "node:fs/promises";
@@ -35,7 +35,7 @@ const agentRoot = join(packageRoot, "agent");
  * A skill as declared today: policy here, prose in `lib/skill_defs/<name>.md`.
  *
  * Converted domains export these as `<DOMAIN>_SKILLS` from `lib/registry.ts`
- * alongside the tools; the rest still export `<DOMAIN>_SKILL_DEFINITIONS` from
+ * alongside the tools. The rest still export `<DOMAIN>_SKILL_DEFINITIONS` from
  * `skills/catalog.ts` until their tools are split. The shape is the same either
  * way — only the module differs.
  */
@@ -112,7 +112,7 @@ async function integrationDomains(subagents: readonly string[]): Promise<string[
   return domains;
 }
 
-/** Every `.md` in `lib/skill_defs/` must be claimed by the registry, and vice versa. */
+/** The registry must claim every `.md` in `lib/skill_defs/`, and vice versa. */
 async function skillDocNames(root: string): Promise<string[]> {
   const dir = join(root, "lib/skill_defs");
   if (!(await fileExists(dir))) return [];
@@ -172,7 +172,7 @@ async function checkDomain(domain: string): Promise<DomainSurface> {
     throw new Error(`${domain} registry tools lack skill/base coverage: ${uncovered.join(",")}`);
   }
 
-  // Prose lives in files for every domain now, so these run everywhere; the
+  // Prose lives in files for every domain now, so these run everywhere. The
   // README check is the only part that waits for `lib/registry.ts`.
   await checkSkillDocs(domain, root, skills);
   await checkToolLayout(domain, root, skills, baseTools, tools);
@@ -190,10 +190,10 @@ type ToolSpecs =
  * `lib/tool_defs/` must mirror the skill list: one directory per skill plus
  * `base`, one file per tool, each file in the bundle whose skill lists it.
  *
- * Nothing else enforces this. The registry compiles whatever it imports, so an
+ * Nothing else enforces this. The registry compiles whatever it imports. An
  * orphan file, a tool filed under the wrong skill, or a directory named after a
- * skill that no longer exists all ship silently — the exact drift the split was
- * done to remove.
+ * skill that no longer exists all ship silently. That is the exact drift the
+ * split set out to remove.
  */
 async function checkToolLayout(
   domain: string,
@@ -208,7 +208,7 @@ async function checkToolLayout(
   const expectedBundles = new Set(skills.map((entry) => entry.name));
   if (baseTools.length > 0) expectedBundles.add("base");
 
-  // A tool may be listed by more than one skill, so it may legitimately live in
+  // More than one skill may list a tool, so it may legitimately live in
   // any bundle that claims it.
   const claimedBy = new Map<string, Set<string>>();
   const claim = (tool: string, bundle: string) =>
@@ -248,7 +248,7 @@ async function checkToolLayout(
   }
 }
 
-/** Prose and policy are separate files; neither may name a skill the other lacks. */
+/** Prose and policy are separate files. Neither may name a skill the other lacks. */
 async function checkSkillDocs(
   domain: string,
   root: string,
@@ -272,7 +272,7 @@ async function checkSkillDocs(
   }
 }
 
-/** The README's tool table is derived, so it cannot be allowed to rot. */
+/** The README's tool table derives from the registry, so this check refuses to let it rot. */
 async function checkReadme(
   domain: string,
   root: string,

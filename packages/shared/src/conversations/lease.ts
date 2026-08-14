@@ -1,16 +1,18 @@
 /**
  * Holding something, expressed once.
  *
- * Two rules make the shape safe, and both were learned the hard way here.
+ * Two rules make the shape safe, and this codebase learned both the hard way.
  *
- * **A lease is fenced on its holder, never on the conversation.** A follower or
- * a sweep left over from a delivery that has moved on must not be able to renew
- * or release the one that replaced it.
+ * **A lease fences on its holder, never on the conversation.**
  *
- * **A lease is refreshed by evidence, not by the clock.** An absolute deadline
- * measured from acquisition kills healthy long work; a deadline pushed out by
- * observable progress does not. The value to choose is therefore the widest
- * plausible *gap between signals*, not the longest job.
+ * A follower or a sweep can be left over from a delivery that moved on. It must
+ * not be able to renew or release the one that replaced it.
+ *
+ * **Evidence refreshes a lease, not the clock.**
+ *
+ * An absolute deadline measured from acquisition kills healthy long work. A
+ * deadline pushed out by observable progress does not. The value to choose is
+ * therefore the widest plausible *gap between signals*, not the longest job.
  */
 
 import { z } from "zod";
@@ -19,7 +21,7 @@ import { z } from "zod";
 export const LeaseDuration = {
   /** Handing one delivery from the queue to a process. Seconds, not minutes. */
   Handoff: 30 * 1_000,
-  /** A turn that is working. Refreshed by every render it publishes. */
+  /** A working turn. Every render it publishes refreshes the hold. */
   Turn: 30 * 60 * 1_000,
   /** A turn parked on a person. Bounded because nothing here may be immortal. */
   Person: 24 * 60 * 60 * 1_000,
@@ -33,8 +35,8 @@ export const LeaseDuration = {
  * The key's own expiry, well past the longest lease it can carry.
  *
  * The sweep needs the record readable at the moment it decides to give up,
- * because what it announces is stored inside it. If the sweep never runs at all,
- * this is what still bounds the key.
+ * because what it announces lives inside the record. If the sweep never runs at
+ * all, this is what still bounds the key.
  */
 export const RECORD_TTL_MS = 2 * LeaseDuration.Person;
 
@@ -46,6 +48,10 @@ export const leaseSchema = z.strictObject({
 
 export type Lease = z.output<typeof leaseSchema>;
 
+/**
+ * Expiry at exactly `now` counts as expired, to match the `<=` in
+ * `leaseAvailable`. Both runtimes then agree on the instant a hold ends.
+ */
 export function leaseExpired(lease: Lease, now: number): boolean {
   return lease.expiresAtMs <= now;
 }

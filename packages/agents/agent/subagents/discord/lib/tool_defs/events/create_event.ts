@@ -27,7 +27,7 @@ const EVENT_TYPES = {
 } as const;
 
 /**
- * Discord's three event kinds take mutually exclusive fields, and rejecting the
+ * Discord's three event kinds take mutually exclusive fields. Rejecting the
  * wrong combination here names the missing field rather than returning a 400
  * the model has to guess at.
  */

@@ -1,21 +1,21 @@
 /**
- * `#ship` and `#checkpoints` housekeeping.
+ * @fileoverview `#ship` and `#checkpoints` housekeeping.
  *
  * Two jobs in one handler, because both hinge on the same question — does this
  * message actually show work?
  *
- * 1. **Enforcement.** A post with no URL and no attachment is deleted, and the
- *    author is DM'd their text back so nothing is lost. Forwarded message
- *    snapshots are inspected too, since a forward carries its evidence in the
- *    snapshot rather than the message body — miss that and legitimate forwards
- *    get deleted.
+ * 1. **Enforcement.** The handler deletes a post with no URL and no
+ *    attachment, and DMs the author their text back so nothing is lost. It
+ *    inspects forwarded message snapshots too, since a forward carries its
+ *    evidence in the snapshot rather than the message body. Miss that and
+ *    legitimate forwards get deleted.
  * 2. **Threading.** A compliant post gets a thread, so replies do not bury the
  *    next person's work. Authors holding the WACKY role also get reactions and a
  *    celebration message.
  *
  * The DM is best-effort: a user with DMs closed still gets their message
- * removed, because the channel rule matters more than the courtesy copy. That is
- * carried over deliberately — the alternative leaves non-compliant posts up
+ * removed, because the channel rule matters more than the courtesy copy. That
+ * is a deliberate carry-over — the alternative leaves non-compliant posts up
  * based on a stranger's privacy settings.
  */
 
@@ -61,7 +61,7 @@ const WATCHED_CHANNELS: readonly string[] = [
 /** Discord's longest auto-archive window, in minutes: three days. */
 const AUTO_ARCHIVE_MINUTES = 4_320;
 
-/** Thread names are capped at 100; 54 leaves room for the author prefix. */
+/** Discord caps thread names at 100 characters. 54 leaves room for the author prefix. */
 const THREAD_TITLE_CHARS = 54;
 
 function randomItem<T>(items: readonly T[]): T | undefined {
@@ -72,7 +72,7 @@ function randomItem<T>(items: readonly T[]): T | undefined {
  * Whether the message shows work.
  *
  * The forwarded-snapshot case is the subtle part: a forwarded message keeps its
- * URL and attachments in the snapshot, so checking only the body would delete
+ * URL and attachments in the snapshot. Checking only the body would delete
  * legitimate forwards.
  */
 function showsWork(message: Message): boolean {
@@ -116,7 +116,7 @@ async function celebrate(
 export const autoThread = defineEvent({
   name: "auto-thread",
   kind: "message",
-  // Deleting or threading twice would be visible, and a RESUME can replay.
+  /** Deleting or threading twice would be visible, and a RESUME can replay. */
   dedupKey: (message) => message.id,
   handle: async (message, context) => {
     if (context.isBotMention) return Result.ok(undefined);

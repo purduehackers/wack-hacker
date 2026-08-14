@@ -25,7 +25,7 @@ export const scheduledTasks = sqliteTable(
       .$type<ScheduledTaskStatus>()
       .notNull()
       .default(ScheduledTaskStatus.Active),
-    /** The stable occurrence anchor; retries never advance it. */
+    /** The stable occurrence anchor. Retries never advance it. */
     nextRunAt: text("next_run_at").notNull(),
     /** Retry eligibility, independently movable from `nextRunAt`. */
     availableAt: text("available_at").notNull(),

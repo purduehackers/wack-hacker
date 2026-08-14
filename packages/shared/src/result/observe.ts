@@ -2,16 +2,16 @@
  * The observability seam.
  *
  * The point of adopting Result here is that error *reporting* stops being
- * something you have to remember. Wrap an operation once and every failure is
- * classified, counted, and — only when it is genuinely our bug — reported as an
- * issue. That replaces the prior implementation's scattered
- * `logger.error(err)` → `captureException` → evlog chain, and preserves its one
+ * something you have to remember. Wrap an operation once. This seam then
+ * classifies and counts every failure, and reports it as an issue only when it
+ * is genuinely our bug. That replaces the prior implementation's scattered
+ * `logger.error(err)` → `captureException` → evlog chain. It preserves its one
  * good rule: exactly one reporting path, never a bare `captureException` next
  * to a `logger.error`, which double-reports.
  *
  * `Reporter` is an interface rather than a direct Sentry import so this package
  * stays dependency-light and each deployable chooses its own backend. The bot
- * wires it to `@sentry/bun`; the agent wires it to eve instrumentation.
+ * wires it to `@sentry/bun`. The agent wires it to eve instrumentation.
  */
 
 import { isDefect, messageOf, tagOf } from "../errors.ts";
@@ -30,7 +30,7 @@ export type Attributes = Readonly<Record<string, string | number | boolean>>;
 /**
  * One wide event per unit of work, matching the wide-event discipline.
  *
- * The named fields are the ones every event has; `attributes` carries whatever
+ * The named fields are the ones every event has. `attributes` carries whatever
  * makes a *particular* event answerable without a second query. That bag is the
  * point of a wide event — an error you cannot attribute to a conversation is a
  * count, not a diagnosis.
@@ -57,9 +57,9 @@ export interface Reporter {
 /**
  * Classifies a failure and routes it, returning the result unchanged.
  *
- * An `AppError` is expected: it is counted as `status: "error"` and never
- * paged. A defect — a raw throw, better-result's `UnhandledException`, or an
- * `InvariantViolated` — is additionally captured as an issue.
+ * An `AppError` is an expected failure: it counts as `status: "error"` and
+ * never pages. A defect — a raw throw, better-result's `UnhandledException`,
+ * or an `InvariantViolated` — additionally becomes a captured issue.
  */
 export function observe<T, E>(op: string, reporter: Reporter, result: Result<T, E>): Result<T, E> {
   return ResultOps.tapError(result, (error) => {

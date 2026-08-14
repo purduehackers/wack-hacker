@@ -5,12 +5,12 @@
  * `turn-message:<messageId>` when a turn completes. The bot reads it to decide
  * whether a reaction landed on an agent reply.
  *
- * That lookup *is* the filter. Only finalized agent replies are indexed, so a
- * miss means the reaction was on something else — no Discord fetch is needed to
- * work that out, which matters because reactions are frequent and most of them
- * have nothing to do with the agent.
+ * That lookup *is* the filter. The index holds only finalized agent replies,
+ * so a miss means the reaction was on something else. The bot needs no Discord
+ * fetch to work that out. That matters because reactions are frequent and most
+ * of them have nothing to do with the agent.
  *
- * The bot paint coordinator is the sole writer; reaction handlers only read.
+ * The bot paint coordinator is the sole writer. Reaction handlers only read.
  */
 
 import { messageOf, Transient } from "@repo/shared/errors";
@@ -43,14 +43,14 @@ function turnMessageKey(messageId: string): string {
 /**
  * Looks up the turn a message belongs to.
  *
- * A malformed or expired entry is indistinguishable from a miss here, and both
+ * A malformed or expired entry is indistinguishable from a miss here. Both
  * mean the same thing to the caller: this is not a reply we can attribute.
  */
 export function createTurnMessageStore(redis: RedisClient) {
   return {
     get: async (messageId: string): Promise<TurnMessage | undefined> => {
-      // Upstash reports a missing key as null and a decode failure as a throw;
-      // the schema rejects both alongside a malformed entry.
+      // Upstash reports a missing key as null and a decode failure as a throw.
+      // The schema rejects both alongside a malformed entry.
       const raw = await redis.get(turnMessageKey(messageId)).catch(() => undefined);
       const parsed = turnMessageSchema.safeParse(raw);
       return parsed.success ? parsed.data : undefined;

@@ -1,17 +1,17 @@
 #!/usr/bin/env bun
 
 /**
- * Does the render writer actually move a paint through Redis?
+ * @fileoverview Does the render writer actually move a paint through Redis?
  *
  * The scripts are strings: a Lua typo, a wrong KEYS index, or a fence reading a
  * field the record does not carry all typecheck perfectly.
  *
  * Two properties matter more than the rest, and neither is visible to any other
- * gate. A paint landing behind the current intent must report `newer` rather than
- * settling — settling records an outcome, and the outcome releases the
+ * gate. A paint landing behind the current intent must report `newer` rather
+ * than settling. Settling records an outcome, and the outcome releases the
  * conversation, so getting it wrong strands everything queued behind a
- * half-painted turn. And a lease lost mid-paint must refuse the completion, since
- * a second painter is by then writing the same messages.
+ * half-painted turn. And a lease lost mid-paint must refuse the completion,
+ * since a second painter is by then writing the same messages.
  */
 
 import { LeaseDuration } from "../src/conversations/lease.ts";
@@ -46,9 +46,9 @@ const minted = new Set<string>();
 const scrub = (): Promise<void> => scrubProbe(redis, KEY, minted);
 
 /**
- * Scoped to this probe's dispatch rather than the whole set: `agent:render-ready`
- * is global, so asserting on its contents would fail on a busy environment and,
- * worse, pass on an empty one for the wrong reason.
+ * Scoped to this probe's dispatch rather than the whole set. `agent:render-ready`
+ * is global, so asserting on its contents would fail on a busy environment.
+ * Worse, it would pass on an empty one for the wrong reason.
  */
 async function advertised(dispatchId: string): Promise<boolean> {
   return (await reader.pending()).includes(dispatchId);
@@ -73,7 +73,7 @@ function intentFor(
   };
 }
 
-/** A frame that is waiting on a person, which is what the longer lease is for. */
+/** A frame that waits on a person, which is what the longer lease is for. */
 function asking(dispatchId: string, revision: number): RenderIntent {
   return {
     ...intentFor(dispatchId, revision, "streaming", "waiting for input…"),
@@ -124,9 +124,9 @@ check("the intent is bounded", (await redis.pttl(`agent:render-intent:${dispatch
 
 const again = await writer.publish(intentFor(dispatchId, 1, "streaming"));
 check("republishing the same frame is accepted", again.accepted, true);
-// Still wakes: the previous nudge is a best-effort HTTP call that may have been
-// lost, and the frame is by definition still unpainted. Only a publish that finds
-// the dispatch already advertised suppresses it.
+// Still wakes: the previous nudge is a best-effort HTTP call that can vanish in
+// flight, and the frame is by definition still unpainted. Only a publish that
+// finds the dispatch already advertised suppresses it.
 check("and nudges again, because the last nudge may have been lost", again.shouldWake, true);
 const reused = await writer.publish(intentFor(dispatchId, 1, "streaming", "different"));
 check("a reused revision with new content is refused", reused.accepted, false);
@@ -135,9 +135,9 @@ const advanced = await writer.publish(intentFor(dispatchId, 2, "streaming", "sec
 check("a newer frame replaces it", advanced.accepted, true);
 const readIntent = await reader.intent(dispatchId);
 check("and reads back", Result.isOk(readIntent) && readIntent.value?.revision, 2);
-// Only meaningful once a *higher* revision is stored. Asserted before the bump,
-// this re-tested the identical-replay path and expected `accepted: true` — the
-// opposite of being dropped.
+// Only meaningful once Redis stores a *higher* revision. Asserted before the
+// bump, this re-tested the identical-replay path and expected `accepted: true`
+// — the opposite of a drop.
 check(
   "a straggler behind the current frame is dropped",
   (await writer.publish(intentFor(dispatchId, 1, "streaming"))).accepted,
@@ -267,8 +267,8 @@ check("and withdraws the dispatch", await advertised(spare), false);
 check("the intent survives, bounded", (await redis.pttl(`agent:render-intent:${spare}`)) > 0, true);
 
 // The person lease, on its own dispatch so it cannot disturb the revisions above.
-// A turn showing buttons is suspended on a person and deliberately does not park,
-// so nothing refreshes its hold until they answer. On the ordinary turn lease the
+// A turn showing buttons waits on a person and deliberately does not park, so
+// nothing refreshes its hold until they answer. On the ordinary turn lease the
 // sweep expired it after thirty minutes and printed "it went quiet for too long"
 // over a question that was still on screen.
 await scrub();

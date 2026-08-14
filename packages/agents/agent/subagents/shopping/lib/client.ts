@@ -9,7 +9,7 @@ const SERPAPI_URL = "https://serpapi.com/search.json";
 /**
  * Value a {@link ProductResult} field carries when SerpAPI omitted it. Every
  * product in a search result keeps the same key set so the model can compare
- * rows, which means the gap has to serialize as an explicit null rather than a
+ * rows. The gap therefore has to serialize as an explicit null rather than a
  * missing key. One named sentinel keeps the rest of this module under the
  * no-null rule.
  */
@@ -53,6 +53,11 @@ function normalize(result: SerpApiOrganicResult): ProductResult | undefined {
   };
 }
 
+/**
+ * Searches Amazon through SerpAPI and normalizes rows for the model. A failed
+ * or malformed response throws so the subagent sees the upstream failure
+ * instead of an empty result. Rows missing an ASIN or title drop out.
+ */
 export async function searchAmazon(query: string, maxResults: number): Promise<ProductResult[]> {
   const params = new URLSearchParams({
     engine: "amazon",

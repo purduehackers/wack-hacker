@@ -10,9 +10,9 @@ export const list_bypass_ips = defineTool({
   input: z.strictObject({
     project_id: z.string(),
     sourceIp: z.string().optional(),
-    // Not `z.hostname()`: a bypass is scoped to a project domain, and project
-    // domains may be wildcards (`*.purduehackers.com`). The SDK documents this
-    // only as "Filter by domain", so no format is guaranteed.
+    // Not `z.hostname()`: Vercel scopes a bypass to a project domain, and
+    // project domains may be wildcards (`*.purduehackers.com`). The SDK
+    // documents this only as "Filter by domain" and guarantees no format.
     domain: z.string().optional().describe("Filter to this domain; may be a wildcard"),
     projectScope: z.boolean().optional(),
     limit: pageLimit.optional(),

@@ -10,8 +10,8 @@ const DISCORD_EPOCH = 1_420_070_400_000n;
 /**
  * Milliseconds between Discord minting the interaction and us reading it.
  *
- * Derived from the snowflake rather than measured against our own clock, because
- * the interesting number is how long the round trip took, and our clock and
+ * Derived from the snowflake rather than measured against our own clock. The
+ * interesting number is how long the round trip took, and our clock and
  * Discord's are not the same clock.
  */
 function latencyFromSnowflake(id: string, now: number): Result<number, NotFound> {
@@ -33,8 +33,10 @@ export const ping = {
 
     const body = Result.match(latency, {
       ok: (roundTripMs) => `pong — ${roundTripMs}ms round trip, ${websocket}ms gateway`,
-      // A snowflake we cannot parse is not worth failing the command over; the
-      // gateway ping alone still answers "is the bot alive".
+      /**
+       * A snowflake we cannot parse is not worth failing the command over.
+       * The gateway ping alone still answers "is the bot alive".
+       */
       err: () => `pong — ${websocket}ms gateway`,
     });
 

@@ -9,11 +9,11 @@ import type { CapabilityDescriptor } from "./types.ts";
  * Whether this principal may discover a subagent.
  *
  * Discovery is a function of role policy: an unauthenticated delivery and a
- * principal whose policy withholds discovery are both simply "not
- * discoverable", which keeps every resolver to a single hidden-capability exit.
+ * principal whose policy withholds discovery are both simply "not discoverable".
+ * That keeps every resolver to a single hidden-capability exit.
  *
  * Every `subagents/<domain>/agent.ts` calls this rather than inlining the
- * `requirePrincipal` → `decideCapability` → `.discover` sequence, so the gate
+ * `requirePrincipal` → `decideCapability` → `.discover` sequence. So the gate
  * cannot drift between domains — one of them getting this subtly wrong would be
  * invisible in review.
  */

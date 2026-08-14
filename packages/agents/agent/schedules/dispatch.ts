@@ -101,7 +101,7 @@ async function settleFailedDelivery(
   job: ClaimedSchedule,
   deliveryError: ScheduleStoreError | UpstreamError,
 ): Promise<void> {
-  // The task view is user-visible. Persist only a stable public reason; the
+  // The task view is user-visible. Persist only a stable public reason. The
   // failure class and trace retain the operational diagnosis.
   const attempted = await Result.tryPromise({
     try: () => scheduleStore.fail(job, "scheduled delivery failed"),

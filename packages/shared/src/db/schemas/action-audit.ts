@@ -6,14 +6,14 @@ import type { AuditDecision, PolicySource, RiskLevel } from "../enums.ts";
 /**
  * Append-only audit trail for policy-relevant actions.
  *
- * Redis holds live approval state, which expires minutes after a decision; this
+ * Redis holds live approval state, which expires minutes after a decision. This
  * table holds the durable history so "who deleted X" stays answerable long
  * after that key evaporates. Writes must never block the action they describe —
  * an audit outage degrades to a counted, logged failure.
  *
  * `inputHash` is a SHA-256 of the *redacted* input and `inputPreview` is a
- * truncated redacted copy. Redaction happens before both, so a short secret
- * cannot be recovered by brute-forcing the hash.
+ * truncated redacted copy. Redaction happens before both, so brute-forcing the
+ * hash cannot recover a short secret.
  */
 export const actionAudit = sqliteTable(
   "action_audit",

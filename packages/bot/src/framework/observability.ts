@@ -1,7 +1,7 @@
 /**
  * Structured logging, tracing, and metrics for the long-running bot.
  *
- * Expected failures are counted and logged; only defects become Sentry issues.
+ * The reporter counts and logs expected failures. Only defects become Sentry issues.
  * Metric dimensions deliberately exclude Discord/session identifiers so cardinality
  * stays bounded, while the wide JSON event retains those identifiers for diagnosis.
  */

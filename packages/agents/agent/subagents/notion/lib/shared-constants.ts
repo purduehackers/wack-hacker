@@ -8,7 +8,7 @@ export const cursorPaginationInputShape = {
 
 /**
  * A Notion data-source sort target. The API wants exactly one of `property` or
- * `timestamp`; `isQuerySorts` enforces that exclusivity once the input parses.
+ * `timestamp`. `isQuerySorts` enforces that exclusivity once the input parses.
  */
 export const notionSortSchema = z.strictObject({
   property: z.string().optional(),

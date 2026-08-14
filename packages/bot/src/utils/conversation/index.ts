@@ -1,5 +1,6 @@
 /**
- * The bot's single reconciler for queueing, rendering, HITL, reset, and schedules.
+ * @fileoverview The bot's single reconciler for queueing, rendering, HITL,
+ * reset, and schedules.
  *
  * This file owns only the mutable lifecycle state — started/stopped, the two
  * pending sets, and the sweep scheduler. The work itself lives beside it:
@@ -27,6 +28,11 @@ export type {
 
 const RECOVERY_INTERVAL_MS = 15_000;
 
+/**
+ * Builds the reconciler around one shared mutable state. Sweeps coalesce:
+ * `wake` marks work pending and schedules at most one drain, so a burst of
+ * events costs one pass. Call `start` before expecting any sweep to run.
+ */
 export function createConversationFlow(deps: ConversationFlowDeps): ConversationFlow {
   const pendingDispatches = new Set<string>();
   const pendingContinuations = new Set<string>();
@@ -101,7 +107,7 @@ export function createConversationFlow(deps: ConversationFlowDeps): Conversation
     stop: async () => {
       if (stopped) return;
       stopped = true;
-      // Child streams are held open by this process; nothing else will drop
+      // Child streams are held open by this process. Nothing else will drop
       // them, and a half-read stream would keep a lease alive past shutdown.
       stopAllFollowers();
       if (recoveryTimer) clearInterval(recoveryTimer);

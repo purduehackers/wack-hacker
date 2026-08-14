@@ -1,7 +1,7 @@
 /**
- * Gateway event authoring and routing.
+ * @fileoverview Gateway event authoring and routing.
  *
- * Far smaller than the prior equivalent because events are handled in-process.
+ * Far smaller than the prior equivalent because handlers now run in-process.
  * — a discord.js object goes straight to a handler. What survives from that
  * design is the part that was load-bearing rather than incidental:
  *
@@ -15,11 +15,11 @@
  *    to decide who owns the message.
  * 3. **Guarded listeners.** discord.js does not await listeners, so an
  *    unhandled rejection inside one is silently lost — the event just vanishes.
- *    Every dispatch is wrapped.
+ *    This module wraps every dispatch.
  *
  * Reactions are *not* force-fetched when partial. The prior gateway published
  * straight off the partial so a reaction on a just-deleted message still
- * relayed; a REST fetch here would throw instead. Handlers that need more data
+ * relayed. A REST fetch here would throw instead. Handlers that need more data
  * fetch it themselves and handle failure.
  */
 
@@ -34,9 +34,9 @@ import { isBotMention, isReplyToBot } from "../utils/mention.ts";
 import { traceOperation } from "./observability.ts";
 
 /**
- * `mention` is derived rather than a real gateway event: it is a `MESSAGE_CREATE`
- * addressed to the bot. Keeping it a separate kind is what lets the router order
- * the two groups.
+ * The router derives `mention` rather than reading a real gateway event: it is
+ * a `MESSAGE_CREATE` addressed to the bot. Keeping it a separate kind is what
+ * lets the router order the two groups.
  */
 type EventKind = "mention" | "message" | "messageDelete" | "reactionAdd" | "reactionRemove";
 
@@ -67,11 +67,11 @@ interface EventPayloads {
  * The payload-independent part of an event handler.
  *
  * `EventHandler` below pins this to the payload of a single kind. The router's
- * internals stay parameterized on the payload alone, which is load-bearing:
+ * internals stay parameterized on the payload alone, which is load-bearing.
  * `mention` and `message` are distinct kinds over the same payload, so
  * `runEventHandlerGroups` takes both buckets in one call. Keying those helpers
  * on `EventKind` instead would demand `EventHandler<"mention" | "message">`,
- * which neither bucket satisfies — each declares the narrower `kind` literal —
+ * which neither bucket satisfies. Each declares the narrower `kind` literal,
  * and only a cast would bridge that.
  */
 interface RoutedEventHandler<P> {
@@ -96,7 +96,7 @@ interface EventHandler<K extends EventKind = EventKind> extends RoutedEventHandl
  * A handler of any kind, as a discriminated union on `kind`.
  *
  * Distributed over `EventKind` rather than written as `EventHandler<EventKind>`,
- * because only a real union narrows: switching on `kind` then gives TypeScript
+ * because only a real union narrows. Switching on `kind` then gives TypeScript
  * the matching payload type with no cast.
  */
 export type AnyEventHandler = { [K in EventKind]: EventHandler<K> }[EventKind];
@@ -162,8 +162,9 @@ function buildRegistry(declared: readonly AnyEventHandler[]): Registry {
 /**
  * Runs one handler, deduplicated and instrumented. Never rejects.
  *
- * Failures are reported and swallowed on purpose: one handler failing must not
- * prevent its siblings from running, and there is no caller to propagate to.
+ * The router reports failures and then swallows them on purpose. One handler
+ * failing must not prevent its siblings from running, and there is no caller
+ * to propagate to.
  */
 async function runHandler<P>(
   handler: RoutedEventHandler<P>,
@@ -211,6 +212,12 @@ async function runEventHandlerGroups<P>(
   for (const group of handlerGroups) await runAll(group, payload, context, deps);
 }
 
+/**
+ * Subscribes the routed handlers to a ready discord.js client.
+ *
+ * Every dispatch runs inside a guard, because discord.js does not await
+ * listeners: a rejection would otherwise vanish without a report.
+ */
 export function attachEventRouter(client: Client<true>, deps: RouterDeps): void {
   const botUserId = client.user.id;
   const registry = buildRegistry(deps.handlers);
@@ -224,15 +231,15 @@ export function attachEventRouter(client: Client<true>, deps: RouterDeps): void 
 
   client.on(Events.MessageCreate, (message) => {
     guard("event.router.message", async () => {
-      // Bot messages are filtered at the edge, exactly as the prior gateway did:
-      // handlers never see them, so none of them need their own check.
+      // The router filters bot messages at the edge, exactly as the prior
+      // gateway did. Handlers never see them, so none of them need their own check.
       if (message.author.bot) return;
 
       const addressed = isBotMention(message, botUserId) || isReplyToBot(message, botUserId);
       const context: EventContext = { client, botUserId, isBotMention: addressed };
 
       // Mention handlers first, to completion. They decide whether a
-      // conversation starts; message handlers then see that decision.
+      // conversation starts. Message handlers then see that decision.
       await runEventHandlerGroups(
         addressed ? [registry.mention, registry.message] : [registry.message],
         message,

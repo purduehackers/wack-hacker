@@ -13,6 +13,11 @@ export function richTextToPlain(richText: RichTextItemResponse[]) {
   return richText.map((t) => t.plain_text).join("");
 }
 
+/**
+ * The first data-source child behind a database container — the queryable
+ * half of a v5 database. Throws when Notion returns a partial response or a
+ * database with no data source, because no query can proceed without one.
+ */
 export function firstDataSourceId(database: GetDatabaseResponse): string {
   if (!("data_sources" in database)) {
     throw new Error(`Notion returned a partial database response for ${database.id}`);

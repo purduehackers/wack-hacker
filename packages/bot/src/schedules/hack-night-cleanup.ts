@@ -4,10 +4,10 @@
  * Counts the photos, posts a top-five photographer leaderboard, then archives and
  * locks the thread.
  *
- * The thread is archived on *every* path, including when no photos were found.
- * The prior implementation did the same, and it matters: a thread left open collects
- * stray messages all week and the next Friday's job then has two candidate
- * threads to choose between.
+ * The job archives the thread on *every* path, including when it finds no
+ * photos. The prior implementation did the same, and it matters: a thread left
+ * open collects stray messages all week. The next Friday's job then has two
+ * candidate threads to choose between.
  */
 
 import { DISCORD_IDS } from "@repo/shared/discord";
@@ -36,6 +36,11 @@ function leaderboardMessage(images: readonly HackNightImage[]): string | undefin
   return `**Top Photographers:**\n${rows}`;
 }
 
+/**
+ * Builds the Sunday close-out job. Its run maps every failure to `Transient`
+ * so the reporter counts a bad week as an expected error rather than paging it
+ * as a defect.
+ */
 export function hackNightCleanup(deps: {
   readonly slugStore: ThreadSlugStore;
   readonly cms: CmsClient;
@@ -59,7 +64,7 @@ export function hackNightCleanup(deps: {
           }
 
           // Sunday, so the slug belongs to Friday. A stored slug wins, because a
-          // hack night that ran past midnight is dated to when it started.
+          // hack night that ran past midnight takes its date from when it started.
           const slug = await resolveEventSlug(deps.slugStore, thread.id, fridayOfWeek(new Date()));
 
           const listed = await deps.cms.listImages(slug);

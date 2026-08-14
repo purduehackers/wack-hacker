@@ -1,15 +1,15 @@
 /**
  * Validated environment for the bot process.
  *
- * This schema deliberately declares only what the bot *currently uses*. Adding
- * a variable before the code that reads it lands would either block local
- * development (if required) or turn a missing credential into a runtime failure
- * deep inside a handler (if optional). Variables arrive alongside the feature
- * that needs them; `.env.example` at the repo root documents the full set with
- * the phase each belongs to.
+ * This schema deliberately declares only what the bot *currently uses*. A
+ * required variable added before the code that reads it lands would block local
+ * development. An optional one would turn a missing credential into a runtime
+ * failure deep inside a handler. Variables arrive alongside the feature that
+ * needs them. `.env.example` at the repo root documents the full set with the
+ * phase each belongs to.
  *
  * Note what is *not* here: Turso. The bot writes no durable rows — the audit
- * log, scheduled tasks, and the shopping cart are all agent-side — and its own
+ * log, scheduled tasks, and the shopping cart are all agent-side. Its own
  * state (dedup keys, per-key locks, the pending-turn queue, hack-night thread
  * mapping) is short-lived and lives in Redis. Giving the bot database
  * credentials it does not need would be a needless blast radius.
@@ -22,11 +22,11 @@ import { z } from "zod";
  * A credential, presented verbatim.
  *
  * Deliberately *not* trimmed, matching `packages/agents/agent/env.ts`.
- * `AGENT_INGRESS_SECRET` and `BOT_INGRESS_SECRET` are compared byte for byte by
- * `bearerMatches`, and the agent's Sandbox supervisor injects the *same raw
- * string* into this process that the agent itself holds. Trimming on one side
- * only would turn a value with stray whitespace — which both sides previously
- * agreed on — into a 401 on every request in both directions.
+ * `bearerMatches` compares `AGENT_INGRESS_SECRET` and `BOT_INGRESS_SECRET` byte
+ * for byte. The agent's Sandbox supervisor injects the *same raw string* into
+ * this process that the agent itself holds. Trimming on one side only would
+ * break a value with stray whitespace that both sides previously agreed on.
+ * Every request in both directions would then get a 401.
  */
 const secret = z.string().min(1);
 
@@ -86,7 +86,7 @@ export const env = createEnv({
   },
   runtimeEnv: process.env,
   /**
-   * An unset variable and one set to "" should behave identically; otherwise a
+   * An unset variable and one set to "" should behave identically. Otherwise a
    * blank line in a .env file silently satisfies a required secret.
    */
   emptyStringAsUndefined: true,

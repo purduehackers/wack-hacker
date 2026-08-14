@@ -1,7 +1,7 @@
 /**
- * Countdown — the rollover into a new Lightning Time day.
+ * @fileoverview Countdown — the rollover into a new Lightning Time day.
  *
- * Purdue Hackers keeps time in [Lightning Time][1]: the day is split into 16
+ * Purdue Hackers keeps time in [Lightning Time][1]. The day splits into 16
  * bolts, each into 16 zaps, each into 16 sparks, each into 16 charges, written
  * `bolts~zaps~sparks|charges`. Every unit is a single hex digit, so a day runs
  * from `0~0~0|0` to `f~f~f|f` and back.
@@ -12,8 +12,8 @@
  * the usual ten.
  *
  * This job posts a heads-up two minutes out, then edits that same message when
- * the final spark actually starts, so the channel does not accumulate two posts
- * for one event.
+ * the final spark actually starts. That way the channel does not accumulate two
+ * posts for one event.
  *
  * [1]: https://blog.purduehackers.com/posts/lightning-time
  */
@@ -36,8 +36,8 @@ const SPARK_MS = 86_400_000 / (16 * 16 * 16);
  * Current Lightning Time, for example `f~f~a|4`.
  *
  * Via `wallClockDate` because the library reads local component getters off the
- * Date it is given: the process runs in UTC, so a raw instant would render UTC's
- * Lightning Time and the countdown would never roll over to `0~0~0|0`.
+ * Date it receives. The process runs in UTC, so a raw instant would render
+ * UTC's Lightning Time. The countdown would then never roll over to `0~0~0|0`.
  */
 function lightningNow(at: Date): string {
   return lightning.convertToLightning(wallClockDate(at)).lightningString;
@@ -54,7 +54,7 @@ const UPCOMING_MESSAGE = "countdown is in two minutes!! ⚡⚡";
 /**
  * The live message during the countdown.
  *
- * The second line is the clock as it actually reads, not a fixed label: it
+ * The second line is the clock as it actually reads, not a fixed label. It
  * starts at `f~f~f|0`, ticks up through `f~f~f|f`, and lands on `0~0~0|0`. That
  * ticking *is* the countdown, which is why this message is re-edited on every
  * charge rather than written once.
@@ -74,15 +74,15 @@ const CHARGES_PER_SPARK = 16;
  * boundaries in the final spark, then midnight itself.
  *
  * Absolute instants rather than repeated fixed sleeps, so a slow edit cannot
- * make the clock drift behind the real time it is displaying.
+ * make the clock drift behind the real time it displays.
  *
  * Counted backwards from the next Indiana midnight rather than via
  * `convertFromLightning`, which truncates to whole seconds and so returns
- * 23:59:38.000 — nine hundred milliseconds early, while the clock still reads
- * `f~f~e|f`. Deriving from that midnight also stays correct across a DST
+ * 23:59:38.000. That is nine hundred milliseconds early, while the clock still
+ * reads `f~f~e|f`. Deriving from that midnight also stays correct across a DST
  * boundary, where the day is not 24 hours long.
  *
- * Each boundary is rounded *up*: a spark is 21093.75 ms, so it falls on a
+ * Each boundary rounds *up*: a spark is 21093.75 ms, so it falls on a
  * quarter millisecond that `Date` cannot represent. Truncating would land at
  * 23:59:38.906, a hair before the spark, where the clock still reads
  * `f~f~e|f`. Ceiling lands on 23:59:38.907, the first millisecond that actually
@@ -102,7 +102,7 @@ function countdownTicks(at: Date): readonly Date[] {
 }
 
 /**
- * Ceiling on how far ahead of a boundary an edit may be sent.
+ * Ceiling on how far ahead of a boundary the job may send an edit.
  *
  * A quarter of a charge. Beyond that a slow measurement would have us rendering
  * the next value well before the previous one stopped being true.
@@ -115,15 +115,15 @@ const MAX_LEAD_MS = CHARGE_MS / 4;
  *
  * Measured once and then held constant for the whole countdown. An earlier
  * version re-estimated it after every edit with a moving average, and that was
- * measurably worse: round-trip time to Discord is jitter, not a trend, so
- * chasing it adds the variance of the estimate on top of the variance of the
- * network — roughly doubling the spread in when frames actually land. A live
- * run showed one 1037ms request inflate the lead to 607ms, which then fired the
+ * measurably worse. Round-trip time to Discord is jitter, not a trend. Chasing
+ * it adds the variance of the estimate on top of the variance of the network.
+ * That roughly doubles the spread in when frames actually land. A live run
+ * showed one 1037ms request inflate the lead to 607ms, which then fired the
  * next two frames 201ms and 261ms early.
  *
  * Even spacing matters more than absolute alignment here. A clock that is
- * uniformly a little late still reads as a smooth countdown; one that is
- * centred but jittery reads as skipping.
+ * uniformly a little late still reads as a smooth countdown. A centred but
+ * jittery clock reads as skipping.
  */
 function leadFrom(samplesMs: readonly number[]): number {
   const usable = samplesMs.filter((sample) => Number.isFinite(sample) && sample >= 0);
@@ -176,7 +176,7 @@ async function measureLead(rest: Pick<Client["rest"], "get">): Promise<number> {
       await rest.get("/users/@me");
       samples.push(now().getTime() - startedAt);
     } catch {
-      // A failed probe tells us nothing about latency; the median covers it.
+      // A failed probe tells us nothing about latency. The median covers it.
     }
     if (probe < LEAD_SAMPLES - 1) await sleep(LEAD_SAMPLE_GAP_MS);
   }
@@ -184,6 +184,12 @@ async function measureLead(rest: Pick<Client["rest"], "get">): Promise<number> {
   return leadFrom(samples);
 }
 
+/**
+ * The schedule entry for Friday countdown duty. It posts the heads-up at
+ * 23:58, measures Discord latency, then live-edits one message through all
+ * 16 charges. One post, edited in place, keeps the channel to a single
+ * message per countdown.
+ */
 export function hackNightCountdown() {
   return {
     name: "hack-night-countdown",
@@ -213,12 +219,12 @@ export function hackNightCountdown() {
           const lead = await measureLead(client.rest);
 
           // Absolute instants, so a slow edit shortens the next wait instead of
-          // pushing the whole countdown late. The cron fires on the minute; the
+          // pushing the whole countdown late. The cron fires on the minute. The
           // first tick is at 23:59:38.907.
           for (const tick of schedule) {
             // Send early by the measured round trip so the edit *lands* on the
             // boundary. Waiting until the boundary and then sending puts every
-            // frame a round trip behind the clock it is displaying.
+            // frame a round trip behind the clock it displays.
             const waitMs = tick.getTime() - lead - now().getTime();
             if (waitMs > 0) await sleep(waitMs);
 

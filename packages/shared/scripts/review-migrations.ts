@@ -1,21 +1,21 @@
 #!/usr/bin/env bun
 
 /**
- * What a schema change would do to production, decided before it merges.
+ * @fileoverview What a schema change would do to production, decided before it merges.
  *
  * Two questions, both answerable without touching the database:
  *
  * 1. Did the schema move without a migration to carry it? `drizzle-kit generate`
- *    is the authority — if running it produces a file, the branch is missing one,
- *    and `db:migrate` on `main` would silently apply nothing while the code
+ *    is the authority. If running it produces a file, the branch is missing one.
+ *    `db:migrate` on `main` would then silently apply nothing while the code
  *    expects new columns.
  * 2. Would applying the new migrations lose data? SQLite has no `DROP COLUMN`
- *    before 3.35 and drizzle still rebuilds tables for most alterations, so the
- *    dangerous shapes show up as a `__new_` table plus a `DROP TABLE` rather
- *    than as an obvious `ALTER`. Both spellings are matched.
+ *    before 3.35 and drizzle still rebuilds tables for most alterations. The
+ *    dangerous shapes therefore show up as a `__new_` table plus a `DROP TABLE`
+ *    rather than as an obvious `ALTER`. This reviewer matches both spellings.
  *
- * Reports rather than guesses: every statement it cannot classify is listed as
- * unclassified instead of being assumed safe.
+ * Reports rather than guesses: every statement it cannot classify appears as
+ * unclassified instead of counting as safe.
  */
 
 import { $ } from "bun";
@@ -104,13 +104,14 @@ async function migrationStatus(): Promise<Set<string>> {
 }
 
 /**
- * Whether the schema has moved without a migration to carry it.
+ * Whether the schema moved without a migration to carry it.
  *
- * Compares the working tree before and after `drizzle-kit generate` rather than
- * asking whether it is dirty: a branch that correctly *adds* a migration is
- * dirty for a good reason, and testing dirtiness alone flags every honest
+ * Compares the working tree before and after `drizzle-kit generate` rather
+ * than asking whether it is dirty. A branch that correctly *adds* a migration
+ * is dirty for a good reason. Testing dirtiness alone flags every honest
  * schema change as a missing one. Only entries that appear because of the
- * generate run count, and they are reverted so the caller is left as it started.
+ * generate run count. This function then reverts them, so the working tree
+ * ends as it started.
  */
 async function missingMigration(): Promise<boolean> {
   const before = await migrationStatus();

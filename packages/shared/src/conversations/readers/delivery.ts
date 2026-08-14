@@ -2,7 +2,7 @@
  * Reads of the delivery record. Never writes.
  *
  * Split from the writer so a "quick lookup" cannot quietly become a transition.
- * A record that fails to decode reads as absent rather than being guessed at.
+ * A record that fails to decode reads as absent. The reader never guesses at it.
  */
 
 import { z } from "zod";
@@ -28,22 +28,27 @@ import { deliveryRecordSchema } from "../records/delivery.ts";
 const storedRecord = stored(deliveryRecordSchema);
 
 /**
- * Only the field a superseded request is recovered from.
+ * Only the field needed to recover a superseded request.
  *
- * Loose because the rest of the delivery is not this reader's business, and
- * tightening it here would mirror every wire change into a place that only ever
- * wanted one string.
+ * Loose because the rest of the delivery is not this reader's business.
+ * Tightening it here would mirror every wire change into a place that only
+ * ever wanted one string.
  */
 const storedContent = stored(z.looseObject({ content: z.string() }));
 
-/** What a live turn is holding a conversation for. */
+/** What a live turn holds a conversation for. */
 export interface Holder {
   readonly sessionId: string;
   readonly dispatchId: string;
-  /** The request being worked on, so a steer can carry it forward. */
+  /** The request the turn works on, so a steer can carry it forward. */
   readonly content?: string;
 }
 
+/**
+ * Read-only view of one conversation's delivery state in Redis. It answers
+ * who holds a turn, what waits in the queue, and which holds lapsed, without
+ * the power to transition anything.
+ */
 export class DeliveryReader {
   private readonly redis: Pick<RedisClient, "get" | "llen" | "smembers">;
 
@@ -61,8 +66,8 @@ export class DeliveryReader {
   /**
    * The turn currently holding this conversation, if one is.
    *
-   * `claim` refuses while such a record exists — the turn is still running — so
-   * this is how the bot finds out there is something to interrupt, and what.
+   * `claim` refuses while such a record exists — the turn is still running.
+   * This is how the bot finds out there is something to interrupt, and what.
    */
   async holder(continuationKey: string): Promise<Holder | undefined> {
     const record = await this.read(continuationKey);
@@ -77,7 +82,7 @@ export class DeliveryReader {
     };
   }
 
-  /** Whether the turn's hold has lapsed, which is what the sweep acts on. */
+  /** Whether the turn's hold lapsed by `now`, which is what the sweep acts on. */
   async lapsed(continuationKey: string, now: number): Promise<boolean> {
     const record = await this.read(continuationKey);
     return record !== undefined && leaseExpired(record.turn, now);
@@ -100,15 +105,16 @@ export class DeliveryReader {
     return continuationKeys(await this.redis.smembers(QUEUE_INDEX_KEY));
   }
 
-  /** Conversations with a parked turn waiting to be reconciled. */
+  /** Conversations with a parked turn waiting for reconciliation. */
   async awaitingReconcile(): Promise<readonly string[]> {
     return continuationKeys(await this.redis.smembers(AGENT_READY_SET_KEY));
   }
 }
 
 /**
- * A malformed index member is dropped rather than thrown on: these sets are
- * swept every pass, and one bad member must not stop the sweep reaching the rest.
+ * This helper drops a malformed index member instead of throwing on it. The
+ * sweep reads these sets every pass, and one bad member must not stop the
+ * sweep reaching the rest.
  */
 function continuationKeys(members: readonly unknown[]): readonly string[] {
   return members.flatMap((entry) => {

@@ -5,7 +5,8 @@ import type { JsonValue } from "./serialization.ts";
 const MAX_DEPTH = 8;
 
 /**
- * Everything `Object.entries` must not be walked into: the primitives plus functions.
+ * Everything the redactor must never walk into with `Object.entries`: the
+ * primitives plus functions.
  * `z.number()` rejects `NaN` and both infinities even though they are numbers, so
  * `z.nan()` and the two infinity comparisons restore the full number domain.
  */
@@ -68,7 +69,7 @@ export function plainJson(value: unknown): JsonValue {
   return JSON.parse(serialized);
 }
 
-/** Audit previews are JSON stored as text; a malformed row fails closed. */
+/** Audit previews are JSON stored as text. A malformed row fails closed. */
 export function redactAuditPreview(preview: string): string {
   try {
     return JSON.stringify(plainJson(JSON.parse(preview)));

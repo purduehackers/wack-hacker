@@ -1,3 +1,9 @@
+/**
+ * @fileoverview Shared vocabulary for the capability policy: what a capability
+ * declares, who asks for it, and what the evaluation decides. The engine and
+ * its callers both depend on these shapes, so they live apart from either.
+ */
+
 import { ConfirmMode, PolicySource, RiskLevel } from "@repo/shared/db/enums";
 import type { ConfirmMode as ConfirmationValue } from "@repo/shared/db/enums";
 import type { UserRole } from "@repo/shared/discord";
@@ -27,7 +33,7 @@ export interface CapabilityDescriptor {
   readonly name: string;
   readonly minRole: UserRole;
   readonly risk: RiskLevel;
-  /** Reads and writes default to none; destructive actions default to self confirmation. */
+  /** Reads and writes default to none. Destructive actions default to self confirmation. */
   readonly confirmation?: Confirmation;
 }
 

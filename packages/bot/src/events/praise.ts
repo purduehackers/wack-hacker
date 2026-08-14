@@ -1,7 +1,7 @@
 /**
  * The WACKY role, granted and revoked by magic words.
  *
- * `wackity hackity praise me` grants it; `wackity hackity go away` takes it back.
+ * `wackity hackity praise me` grants it. `wackity hackity go away` takes it back.
  * The role unlocks the celebration reactions in `auto-thread`.
  */
 
@@ -20,7 +20,7 @@ const ZIPPER_MOUTH = "\u{1F910}";
 export const praise = defineEvent({
   name: "praise",
   kind: "message",
-  // Granting a role twice is harmless, but reacting twice is visible noise.
+  /** Granting a role twice is harmless, but reacting twice is visible noise. */
   dedupKey: (message) => message.id,
   handle: async (message, context) => {
     if (context.isBotMention) return Result.ok(undefined);

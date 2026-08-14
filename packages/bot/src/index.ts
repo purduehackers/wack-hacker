@@ -5,17 +5,17 @@
  *
  * The health server binds *first*, so a supervisor polling `/health` during a
  * slow or failing login gets a structured 503 rather than a refused connection.
- * Readiness stays honest regardless of order, because it is derived from the
+ * Readiness stays honest regardless of order, because it derives from the
  * gateway's current WebSocket status rather than from a flag set at startup.
  *
- * Login readiness is then *awaited*, so a bad token aborts the process instead
- * of leaving a bot that is running and receiving nothing. Exiting is deliberate:
- * every host this runs on restarts a failed container with backoff, which is a
- * better outcome than a live process that silently does nothing.
+ * Startup then *awaits* login readiness, so a bad token aborts the process
+ * instead of leaving a bot that runs and receives nothing. Exiting is
+ * deliberate: every host this runs on restarts a failed container with backoff.
+ * That is a better outcome than a live process that silently does nothing.
  *
  * Event handlers and schedules attach only *after* readiness, because both need
- * a `Client<true>` — and because a schedule firing mid-login would act on a
- * gateway that cannot yet send anything.
+ * a `Client<true>`. A schedule firing mid-login would also act on a gateway
+ * that cannot yet send anything.
  */
 
 import { createConversationStore, type ConversationStore } from "@repo/shared/conversations";

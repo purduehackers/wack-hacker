@@ -1,3 +1,11 @@
+/**
+ * @fileoverview HTTP access to the HCB v3 public API for the finance subagent.
+ *
+ * Every request runs read-only against Transparency Mode, so the client holds
+ * no credential. `hcbGet` validates each response against a caller-supplied
+ * zod schema, so malformed HCB data fails loudly instead of flowing onward.
+ */
+
 import { UpstreamError } from "@repo/shared/errors";
 import { z } from "zod";
 
@@ -14,14 +22,19 @@ type HcbQuery = Readonly<Record<string, HcbQueryScalar | HcbQueryScalar[] | null
 /**
  * HCB takes no date parameters, so every scalar it accepts is one `String`
  * already renders correctly. This replaced a general `unknown` stringifier that
- * handled symbols, functions and objects for a caller that passes none of them —
- * and whose `JSON.stringify` fallback made a `Date` serialize as a *quoted* ISO
- * string, a footgun the narrowed type now makes unrepresentable.
+ * handled symbols, functions and objects for a caller that passes none of them.
+ * That stringifier's `JSON.stringify` fallback also made a `Date` serialize as
+ * a *quoted* ISO string, a footgun the narrowed type now makes unrepresentable.
  */
 function stringifyQueryValue(value: HcbQueryScalar): string {
   return String(value);
 }
 
+/**
+ * The configured HCB organization slug, or an empty string when `HCB_ORG_SLUG`
+ * is absent. An empty slug makes the API answer 404, which `hcbGet` reports
+ * with a hint to check the slug.
+ */
 export function hcbOrgSlug(): string {
   return env.HCB_ORG_SLUG ?? "";
 }
@@ -31,7 +44,7 @@ export function hcbTxnUrl(id: string): string {
   return `https://hcb.hackclub.com/hcb/${id}`;
 }
 
-/** GET against the HCB v3 public API. Read-only; no auth required (Transparency Mode). */
+/** GET against the HCB v3 public API. Read-only. No auth required (Transparency Mode). */
 export async function hcbGet<S extends z.ZodType>(
   path: string,
   query: HcbQuery | undefined,
@@ -73,7 +86,7 @@ export async function hcbGet<S extends z.ZodType>(
   return parsed.data;
 }
 
-/** Paginate through a list endpoint until an empty page or the cap is reached. */
+/** Paginate through a list endpoint until an empty page or until results reach the cap. */
 export async function hcbPaginate<S extends z.ZodType>(
   path: string,
   query: HcbQuery,

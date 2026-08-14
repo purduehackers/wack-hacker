@@ -1,4 +1,4 @@
-/** Hack Night photo archive backed by Payload's documented REST API. */
+/** @fileoverview Hack Night photo archive backed by Payload's documented REST API. */
 
 import { httpStatusOf, messageOf, Transient, UpstreamError } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
@@ -257,6 +257,11 @@ function deleteImagesForMessage(
   );
 }
 
+/**
+ * Binds the archive operations to one API key and the production CMS URL so
+ * call sites never carry credentials. Failures arrive as `CmsError` results.
+ * Every operation except `uploadImage` retries through `upstreamRetry`.
+ */
 export function createCmsClient(deps: CmsDeps) {
   const cms = { apiKey: deps.apiKey, baseUrl: CMS_URL };
   return {
@@ -275,7 +280,7 @@ export type CmsClient = ReturnType<typeof createCmsClient>;
  * Photo counts per Discord user, highest first.
  *
  * Split out from the schedule so the ranking is a plain function of the data,
- * independent of how the photos were fetched.
+ * independent of how the caller fetched the photos.
  */
 export function rankPhotographers(
   images: readonly HackNightImage[],

@@ -5,7 +5,7 @@ import { z } from "zod";
  *
  * Cloudflare scopes DNS and Email Routing per zone and Email Sending per
  * account, so nearly every tool takes a zone id. Declaring it once keeps the
- * description identical everywhere — the model should always learn it can get
+ * description identical everywhere. The model should always learn it can get
  * one from `list_zones`, not only in the tools that happen to say so.
  */
 
@@ -50,9 +50,9 @@ export const routingRuleListSchema = z.looseObject({
  * The SDK's create parameter is a 21-member union discriminated on `type`,
  * several of whose members need structured `data` rather than a string. This
  * narrows to the six types that carry a plain `content` string, which covers
- * everything web and mail setup needs — including the MX and TXT records SPF,
- * DKIM and DMARC live in. A model asking for CAA or SVCB gets a schema
- * rejection naming the supported set rather than a malformed request.
+ * everything web and mail setup needs. That set includes the MX and TXT
+ * records SPF, DKIM and DMARC live in. A model asking for CAA or SVCB gets a
+ * schema rejection naming the supported set rather than a malformed request.
  */
 export const recordInput = {
   name: z.string().min(1).describe("Record name, e.g. `mail.example.com` or `@` for the apex"),

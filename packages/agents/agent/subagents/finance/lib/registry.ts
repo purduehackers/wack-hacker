@@ -2,17 +2,18 @@
  * Every tool and skill this domain declares.
  *
  * One registry rather than a tool map here and a skill catalog there: the two
- * are the same fact seen twice, and the pair drifts the moment they live in
+ * are the same fact seen twice. The pair drifts the moment they live in
  * different files. `tool_defs/` mirrors the skill list, and
  * `check:capabilities` fails if it stops doing so.
  *
- * Skill prose lives in `lib/skill_defs/<name>.md` and is imported as text, so the
- * markdown is a real document while policy stays here next to the tools.
+ * Skill prose lives in `lib/skill_defs/<name>.md` and arrives as a text
+ * import. The markdown stays a real document while policy sits here next to
+ * the tools.
  *
  * `list_transactions` and `get_transaction` are base tools that the
- * `transactions` skill also lists, so their definitions sit in `tool_defs/base/`
- * — the placement follows the stronger claim, which is that they are reachable
- * without loading anything.
+ * `transactions` skill also lists, so their definitions sit in
+ * `tool_defs/base/`. The placement follows the stronger claim: they are
+ * reachable without loading anything.
  */
 
 import type { DomainToolSpec } from "../../../lib/policy/domain-tools.ts";

@@ -8,6 +8,10 @@ import { interactionReceiptKey } from "../keys.ts";
 import type { InteractionReceipt } from "../records/interaction.ts";
 import { interactionReceiptSchema } from "../records/interaction.ts";
 
+/**
+ * Read-only view of interaction receipts. A receipt is what makes a retried
+ * click idempotent, so this class takes only `get` and can never mint one.
+ */
 export class InteractionReader {
   private readonly redis: Pick<RedisClient, "get">;
 
@@ -15,7 +19,7 @@ export class InteractionReader {
     this.redis = redis;
   }
 
-  /** What was decided about this click, if anything. */
+  /** What the admission decided about this click, if anything. */
   async receipt(
     interactionId: string,
   ): Promise<Result<InteractionReceipt | undefined, InvalidInput>> {

@@ -1,4 +1,10 @@
-/** Applies one coalesced desired agent presentation through Discord. */
+/**
+ * @fileoverview Applies one coalesced desired agent presentation through
+ * Discord. The renderer diffs desired content against the stored projection
+ * and edits, posts, or deletes messages until they match. Every mutation
+ * verifies the render lease first and checkpoints the projection after, so a
+ * successor resumes from the last saved projection.
+ */
 
 import { createHash } from "node:crypto";
 
@@ -26,9 +32,9 @@ const TRUNCATED = "-# response truncated";
  * The stored projection, minus the revision, as mutable working state.
  *
  * Derived rather than restated. This was a hand-written copy of
- * `renderProjectionSchema`, and the copy is how the input request's message id
- * came to be dropped in transit when the schema grew it: three declarations of
- * one shape, and only two of them were updated.
+ * `renderProjectionSchema`. That copy is how the input request's message id
+ * came to drop in transit when the schema grew it. Three declarations of one
+ * shape existed, and only two of them changed.
  */
 export type RendererProjection = {
   -readonly [K in keyof RenderProjection]: RenderProjection[K];
@@ -37,7 +43,8 @@ export type RendererProjection = {
 /**
  * The stored projection as this renderer's working state.
  *
- * `overflow` is copied because the renderer mutates what it is handed.
+ * This function copies `overflow` because the renderer mutates the projection
+ * it holds.
  */
 export function toRendererProjection({
   appliedRevision: _appliedRevision,
@@ -61,8 +68,8 @@ interface RenderInput {
 function renderBody(input: Omit<RenderInput, "terminal">): string {
   const sections: string[] = [];
   if (input.activity !== "") sections.push(`-# ${input.activity}`);
-  // Sits under the agent's own status line: it is a child's report of what it
-  // is doing, which is narrower than what this turn is doing.
+  // Sits under the agent's own status line. It is a child's report of its own
+  // work, narrower than the work of this turn.
   if (input.subagentActivity !== undefined && input.subagentActivity !== "") {
     sections.push(`-# ↳ ${input.subagentActivity}`);
   }
@@ -73,8 +80,9 @@ function renderBody(input: Omit<RenderInput, "terminal">): string {
 }
 
 /**
- * The streaming body alone. The notice that used to be appended here now has its
- * own message, so a mention inside it arrives as a new message and pings.
+ * The streaming body alone. This function once appended the notice here. The
+ * notice now has its own message, so a mention inside it arrives as a new
+ * message and pings.
  */
 function liveChunk(input: RenderInput): string {
   const { notice: _notice, terminal: _terminal, hitlKey: _hitlKey, ...bodyInput } = input;
@@ -119,12 +127,14 @@ function nonce(messageId: string, index: number): string {
  *
  * `enforce_nonce` is what makes a retried post idempotent, so the value has to
  * stay the same across attempts at the same question. It also has to *change*
- * between questions: a turn that asks twice used to reuse one nonce for both,
+ * between questions. A turn that asks twice used to reuse one nonce for both,
  * and Discord answered the second post by returning the first message
- * unmodified — leaving the projection holding the new content's hash against a
- * message that still showed the old question, which no later render would
- * correct because the hash then matched. Four base64url characters of SHA-256
- * keep the whole value inside Discord's 25-character limit.
+ * unmodified. That left the projection holding the new content's hash against
+ * a message that still showed the old question. No later render would correct
+ * it because the hash then matched.
+ *
+ * Four base64url characters of SHA-256 keep the whole value inside Discord's
+ * 25-character limit.
  */
 function requestNonce(messageId: string, key: string): string {
   return `${messageId}:${hash(key).slice(0, 4)}`;
@@ -137,7 +147,7 @@ interface RendererDeps {
   readonly channelId: string;
   readonly sourceMessageId: string;
   readonly replyToMessageId?: string;
-  /** Fenced durable checkpoint; called after every externally visible mutation. */
+  /** Fenced durable checkpoint. Called after every externally visible mutation. */
   readonly checkpoint: (state: RendererProjection) => Promise<boolean>;
   /** Renews and verifies ownership immediately before every Discord mutation. */
   readonly verifyLease: () => Promise<boolean>;
@@ -305,12 +315,12 @@ async function writeOverflow(
  * Take the controls off the message carrying the current request and forget it.
  *
  * Used both when a request is over and when a later one supersedes it. The
- * message itself is left in the channel: it is the thread's record that the
- * question was asked, and for one that was answered the interaction handler has
- * already written the outcome into it. This used to delete the message, which
- * erased that record — and, because the next request then reused the same
- * per-turn nonce, Discord returned the deleted message's slot instead of
- * posting the new question at all.
+ * message itself stays in the channel: it is the thread's record that someone
+ * asked the question. For an answered one, the interaction handler has already
+ * written the outcome into it. This used to delete the message, which erased
+ * that record. The next request then reused the same per-turn nonce, so
+ * Discord returned the deleted message's slot instead of posting the new
+ * question.
  */
 async function retireRequestMessage(
   rendering: RenderContext,
@@ -331,10 +341,11 @@ async function retireRequestMessage(
  * The input request, on a message of its own.
  *
  * Created rather than edited into place, and posted allowing exactly the
- * mentions the notice names. Both halves are required: the anchor is edited on
- * every streaming tick and Discord never notifies for an edit, and every render
- * message otherwise suppresses mentions so streamed prose cannot ping people.
- * Together they are why "Input required for @someone" arrived silently.
+ * mentions the notice names. Both halves matter: the renderer edits the anchor
+ * on every streaming tick, and Discord never notifies for an edit. Every
+ * render message otherwise suppresses mentions so streamed prose cannot ping
+ * people. Together they are why "Input required for @someone" arrived
+ * silently.
  *
  * One message per request: a turn that asks twice leaves two records rather
  * than editing the first into the second.
@@ -359,11 +370,12 @@ async function writeHitl(
     if (Result.isError(retired)) return retired;
   }
 
-  // A request that is no longer wanted has been answered, expired, or was
-  // withdrawn. The message stays either way: it is the thread's record that the
-  // question was asked, and for an answered one the interaction handler has
-  // already written the outcome into it. Only the controls come off, and only
-  // if they are still there — an answered request cleared them on the way out.
+  // A request that is no longer wanted got its answer, expired, or was
+  // withdrawn. The message stays either way: it is the thread's record that
+  // someone asked the question. For an answered one, the interaction handler
+  // has already written the outcome into it. Only the controls come off, and
+  // only if they are still there — an answered request cleared them on the way
+  // out.
   if (!wanted) return retireRequestMessage(rendering);
 
   const contentHash = anchorHash(content, components);
@@ -409,7 +421,7 @@ async function writeHitl(
   return checkpoint(rendering);
 }
 
-/** Take the turn's own message back down; a deleted one is already gone. */
+/** Take the turn's own message back down. A deleted one is already gone. */
 async function removeAnchor(
   rendering: RenderContext,
 ): Promise<Result<undefined, RenderWriteError>> {
@@ -443,6 +455,11 @@ async function removeStaleOverflow(
   return Result.ok(undefined);
 }
 
+/**
+ * Builds the writer that applies one desired presentation to Discord. Every
+ * mutation verifies the lease first and checkpoints after, so a takeover by
+ * another worker halts this writer instead of double-posting.
+ */
 export function createRenderer(deps: RendererDeps, state: RendererProjection) {
   const rendering: RenderContext = { deps, state };
   return {
@@ -457,8 +474,8 @@ export function createRenderer(deps: RendererDeps, state: RendererProjection) {
         state.subagentActivity = input.subagentActivity;
       }
       if (!input.terminal) {
-        // The anchor keeps only the streamed body; the request gets its own
-        // message so its mention is delivered as a notification.
+        // The anchor keeps only the streamed body. The request gets its own
+        // message so Discord delivers its mention as a notification.
         const anchor = await writeAnchor(rendering, liveChunk(input), [], false);
         if (Result.isError(anchor)) return anchor;
         return writeHitl(
@@ -470,8 +487,8 @@ export function createRenderer(deps: RendererDeps, state: RendererProjection) {
         );
       }
       const [head = "", ...tail] = finalChunks(input);
-      // A turn that was steered away before it said anything settles with no
-      // body, and the footer alone is a message showing a bare reference id and
+      // A turn that someone steered away before it said anything settles with
+      // no body. The footer alone is a message showing a bare reference id and
       // nothing else. There is nothing to report, so the anchor goes.
       if (head === "" && tail.length === 0) {
         const cleared = await removeAnchor(rendering);

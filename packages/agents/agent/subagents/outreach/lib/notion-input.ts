@@ -4,9 +4,9 @@ import { z } from "zod";
 /**
  * The CRM's own Notion input guard.
  *
- * Query filter and sort validation is Notion's and is re-exported rather than
- * copied — this module used to carry its own forks of both, which had begun to
- * drift from the originals.
+ * Query filter and sort validation is Notion's and comes re-exported rather
+ * than copied. This module used to carry its own forks of both, which had
+ * begun to drift from the originals.
  */
 export { isQueryFilter, isQuerySorts } from "../../notion/lib/notion-input.ts";
 
@@ -16,11 +16,11 @@ type CreateProperties = CreatePageParameters["properties"];
 const jsonObjectSchema = z.record(z.string(), z.json());
 
 /**
- * The property kinds a CRM row is built from.
+ * The property kinds that can compose a CRM row.
  *
- * Narrower than `notion`'s equivalent on purpose: a Company, Contact or Deal is
- * created from this fixed set, so a body carrying anything else is a mistake
- * worth rejecting rather than forwarding.
+ * Narrower than `notion`'s equivalent on purpose. A Company, Contact or Deal
+ * comes from this fixed set alone. A body carrying anything else is therefore
+ * a mistake worth rejecting rather than forwarding.
  */
 const propertyKind = z.enum([
   "title",
@@ -39,6 +39,11 @@ const propertyKind = z.enum([
   "relation",
 ]);
 
+/**
+ * Guards a tool-supplied body before it becomes a Notion page create call.
+ * Every property must be an object that names at least one supported kind, so
+ * free-form or misspelled payloads fail here rather than at Notion.
+ */
 export function isCreateProperties(value: unknown): value is CreateProperties {
   const object = jsonObjectSchema.safeParse(value);
   return (

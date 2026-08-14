@@ -1,15 +1,15 @@
 /**
- * The bot↔agent wire contract.
+ * @fileoverview The bot↔agent wire contract.
  *
  * This is the seam. The bot listens to the Discord gateway and forwards work
- * here; the agent owns durability, reasoning, and semantic desired state while
- * the bot alone materializes Discord output. Both sides import these schemas, so
+ * here. The agent owns durability, reasoning, and semantic desired state.
+ * The bot alone materializes Discord output. Both sides import these schemas, so
  * the contract cannot drift silently.
  *
  * Three properties are deliberate:
  *
  * 1. **The bot asserts identity, it does not resolve policy.** It sends raw
- *    Discord role snowflakes in `principal.memberRoles`; the agent maps those to
+ *    Discord role snowflakes in `principal.memberRoles`. The agent maps those to
  *    an access tier. Every capability gate then hangs off one place. If the bot
  *    sent a pre-resolved role, two components would own permissions.
  *
@@ -17,7 +17,7 @@
  *    durable agent session. Thread first, so parallel threads in one channel do
  *    not collide.
  *
- * 3. **Requests are validated, never trusted.** `decodeX` returns a
+ * 3. **Each side validates requests, never trusts them.** `decodeX` returns a
  *    `Result<T, InvalidInput>` listing every failing path, so a malformed
  *    payload is a typed rejection rather than a runtime surprise deep inside a
  *    turn. A payload that passes transport but fails schema is an
@@ -26,8 +26,8 @@
  *
  * Note that a `Result` is never itself serialized across this boundary.
  * better-result's `hydrate` could rebuild one, but an `Err` carrying an `Error`
- * loses its message to `JSON.stringify` (Error fields are non-enumerable), and
- * an explicit response union is clearer than a rehydrated class. See
+ * loses its message to `JSON.stringify` (Error fields are non-enumerable). An
+ * explicit response union is also clearer than a rehydrated class. See
  * `WireResponse`.
  */
 
@@ -54,8 +54,8 @@ const principalSchema = z.strictObject({
   nickname: z.string().trim().min(1).max(64),
   /**
    * Raw role snowflakes, resolved to an access tier by the agent. Re-sent on
-   * every turn rather than cached: a follow-up from a different person must be
-   * evaluated with their roles, not the conversation opener's.
+   * every turn rather than cached. The agent must evaluate a follow-up from a
+   * different person with their roles, not the conversation opener's.
    */
   memberRoles: z.array(snowflake).max(64),
 });
@@ -108,7 +108,7 @@ const messagePayloadSchema = z
     /**
      * A placeholder message the bot already posted. The agent's paint layer
      * claims it as the anchor to edit, so the user sees a response before the
-     * agent has produced one.
+     * agent produces one.
      */
     anchorMessageId: snowflake.optional(),
     /** Originating span retained when Redis recovery performs delivery later. */
@@ -166,7 +166,7 @@ const renderInputRequestSchema = z
     inputPreview: z.string().trim().min(1).max(2_000).optional(),
     options: z.array(renderInputOptionSchema).max(100).optional(),
     /**
-     * Trusted projection of the policy record; never sourced from a component
+     * Trusted projection of the policy record, never sourced from a component
      * id. Both come from the storage enums so a tier cannot drift out of the
      * set the policy engine actually persists.
      */
@@ -199,7 +199,7 @@ const renderAuthorizationSchema = z.strictObject({
 });
 
 /**
- * `abort` matters here: without it a value that is not a URL at all still
+ * `abort` matters here. Without it a value that is not a URL at all still
  * reaches the refinement, where `new URL` throws rather than failing the parse.
  */
 const privateAuthorizationUrl = z
@@ -271,16 +271,16 @@ const resetPayloadSchema = z.strictObject({
   principal: principalSchema,
 });
 
-/** Bot-internal reset request after a durable queue cutover has been installed. */
+/** Bot-internal reset request that follows a durable queue cutover install. */
 /**
- * Bot → agent: someone typed while a turn was running.
+ * Bot → agent: someone typed while a turn ran.
  *
  * Carries no content. The message itself is already durable in the pending
- * queue; this only asks the agent to stop what it is doing so that queue can
- * move. Steering used to ride on the delivery itself, which meant it could only
- * happen after `claim` handed the delivery over — and `claim` refuses while a
- * turn holds the conversation, so it never fired in the one situation it exists
- * for.
+ * queue. This only asks the agent to stop the turn in flight so that queue
+ * can move. Steering used to ride on the delivery itself, which meant it
+ * could only happen after `claim` handed the delivery over. But `claim`
+ * refuses while a turn holds the conversation, so steering never fired in the
+ * one situation it exists for.
  */
 const steerRequestPayloadSchema = z.strictObject({
   continuationKey: snowflake,
@@ -305,7 +305,7 @@ const parkedPayloadSchema = z.strictObject({
   sessionId: z.string().min(1).max(128),
   /** Discord user message for the exact turn that parked. */
   messageId: snowflake,
-  /** Exact queue delivery epoch; protects even when a message is retried. */
+  /** Exact queue delivery epoch. It protects even when the queue retries a message. */
   dispatchId: z.uuid(),
   /** Eve turn that emitted the waiting boundary. */
   eveTurnId: z.string().min(1).max(128),
@@ -342,10 +342,11 @@ const renderIntentSchema = z.strictObject({
   /**
    * When the agent authored this desired state, ISO-8601.
    *
-   * Redis holds no time anywhere in the render path, so a stuck or truncated
-   * render could not be lined up against anything — not the workflow streams,
-   * not the trace, not the Discord message. `traceparent` gives the trace and
-   * this gives the moment, which together are what a post-mortem starts from.
+   * Redis holds no time anywhere in the render path. Without this, nobody
+   * could line up a stuck or truncated render against anything — not the
+   * workflow streams, not the trace, not the Discord message. `traceparent`
+   * gives the trace and this gives the moment, which together are what a
+   * post-mortem starts from.
    */
   authoredAt: z.iso.datetime().optional(),
   inputRequests: z.array(renderInputRequestSchema).max(1).optional(),
@@ -366,13 +367,13 @@ const scheduledFirePayloadSchema = z.strictObject({
   description: z.string().trim().min(1).max(256),
   actionType: z.enum(ScheduleActionType),
   prompt: z.string().trim().min(1).max(8_000),
-  /** Creation snapshot; used only when current Discord roles cannot be fetched. */
+  /** Creation snapshot, used only when a fetch of current Discord roles fails. */
   memberRoles: z.array(snowflake).max(64).optional(),
   /** Originating schedule span, retained if bot admission retries later. */
   traceparent: traceparent.optional(),
   /** One-based delivery attempt, used only for accurate user-visible remediation. */
   attemptNumber: z.int().min(1).max(100),
-  /** True when another automatic retry will not be scheduled after this attempt. */
+  /** True when no further automatic retry follows this attempt. */
   finalAttempt: z.boolean(),
   scheduledFor: z.iso.datetime({ offset: true }),
 });
@@ -404,10 +405,10 @@ export type ScheduledFirePayload = z.output<typeof scheduledFirePayloadSchema>;
  * the agent's producer cannot restate the contract differently.
  *
  * Deliberately not `strictObject`, unlike the payload schemas above. Those are
- * durable records the writer and reader agree on before either is deployed;
- * this is a live response read by whatever bot generation happens to be running
- * when the agent deploys. An additive field on the acknowledgement must not
- * make every older bot treat a successful turn as a contract violation.
+ * durable records the writer and reader agree on before either side deploys.
+ * This is a live response read by whatever bot generation happens to run when
+ * the agent deploys. An additive field on the acknowledgement must not make
+ * every older bot treat a successful turn as a contract violation.
  */
 export const wireResponseSchema = z
   .discriminatedUnion("ok", [
@@ -425,6 +426,11 @@ export type WireResponse = z.output<typeof wireResponseSchema>;
 /** What `WIRE_ROUTES.streamToken` answers with. */
 export const streamTokenSchema = z.object({ token: z.string().min(1).max(4_096) }).readonly();
 
+/**
+ * Decodes the agent's answer to a `streamToken` request. A malformed body
+ * becomes a typed `InvalidInput`, so the bot never treats junk as a live
+ * credential.
+ */
 export function decodeStreamToken(
   input: unknown,
 ): Result<z.output<typeof streamTokenSchema>, InvalidInput> {
@@ -435,7 +441,7 @@ export function decodeStreamToken(
  * Every route on the agent's custom Discord channel.
  *
  * Mounted exactly as the channel declares them, with no prefix. The `/eve/v1`
- * namespace seen elsewhere is not a framework-wide mount point — eve's built-in
+ * namespace seen elsewhere is not a framework-wide mount point. eve's built-in
  * channel simply writes that prefix into its own route paths, and a custom
  * channel gets whatever it asks for.
  */
@@ -447,9 +453,9 @@ export const WIRE_ROUTES = {
   /**
    * A freshly minted credential for reading a session's event stream.
    *
-   * The bot has no Vercel identity of its own, so it cannot mint one; the agent
-   * runs inside a function and can. Asked for on demand rather than stored,
-   * because these live under an hour — see `streamTokenSchema`.
+   * The bot has no Vercel identity of its own, so it cannot mint one. The
+   * agent runs inside a function and can. Asked for on demand rather than
+   * stored, because these live under an hour — see `streamTokenSchema`.
    */
   streamToken: "/discord/stream-token",
 } as const;
@@ -479,48 +485,97 @@ function decode<S extends z.ZodType>(
   return Result.err(new InvalidInput({ subject, issues }));
 }
 
+/**
+ * Decodes one queued delivery before the agent acts on it. A malformed
+ * payload becomes a typed rejection that lists every failing path, not a
+ * crash deep inside a turn.
+ */
 export function decodeDeliveryPayload(input: unknown): Result<DeliveryPayload, InvalidInput> {
   return decode(deliveryPayloadSchema, "delivery payload", input);
 }
 
+/**
+ * Decodes one component or modal submission before it resolves a pending
+ * human-input request. Failure is a typed rejection that lists every failing
+ * path, so a bad interaction never reaches the session.
+ */
 export function decodeInteractionPayload(input: unknown): Result<InteractionPayload, InvalidInput> {
   return decode(interactionPayloadSchema, "interaction payload", input);
 }
 
+/**
+ * Decodes a bot-internal reset request before the agent retires a session. A
+ * malformed payload becomes a typed `InvalidInput` instead of a half-applied
+ * reset.
+ */
 export function decodeResetRequestPayload(
   input: unknown,
 ): Result<ResetRequestPayload, InvalidInput> {
   return decode(resetRequestPayloadSchema, "reset request payload", input);
 }
 
+/**
+ * Decodes a steer request before the agent interrupts a running turn. The
+ * schema carries only a `continuationKey`, so a bad address is the only way
+ * this can fail.
+ */
 export function decodeSteerRequestPayload(
   input: unknown,
 ): Result<SteerRequestPayload, InvalidInput> {
   return decode(steerRequestPayloadSchema, "steer request payload", input);
 }
 
+/**
+ * Decodes the agent's parked signal, which tells the bot a turn reached its
+ * waiting boundary. Validation must reject a malformed signal, because this
+ * payload alone lets the bot release the next queued turn.
+ */
 export function decodeParkedPayload(input: unknown): Result<ParkedPayload, InvalidInput> {
   return decode(parkedPayloadSchema, "parked payload", input);
 }
 
+/**
+ * Decodes one private connection challenge before delivery to its recipient.
+ * The URL rule is strict here — HTTPS only, no embedded credentials — because
+ * this content ends up in a user-facing prompt.
+ */
 export function decodeAuthorizationChallenge(
   input: unknown,
 ): Result<AuthorizationChallenge, InvalidInput> {
   return decode(authorizationChallengeSchema, "authorization challenge", input);
 }
 
+/**
+ * Decodes the immutable Discord target stored for one queued delivery. A
+ * malformed record becomes a typed `InvalidInput` that names every failing
+ * path, so no reader trusts a half-valid Discord address.
+ */
 export function decodeRenderTarget(input: unknown): Result<RenderTarget, InvalidInput> {
   return decode(renderTargetSchema, "render target", input);
 }
 
+/**
+ * Decodes one desired-state render intent read from Redis. Validation keeps a
+ * stale or truncated intent from reaching Discord as trusted agent output.
+ */
 export function decodeRenderIntent(input: unknown): Result<RenderIntent, InvalidInput> {
   return decode(renderIntentSchema, "render intent", input);
 }
 
+/**
+ * Decodes the agent's render wakeup, which only carries a `dispatchId`. The
+ * wake is best-effort — Redis stays the durable source of truth — so a bad
+ * payload costs latency, never correctness.
+ */
 export function decodeRenderWakePayload(input: unknown): Result<RenderWakePayload, InvalidInput> {
   return decode(renderWakePayloadSchema, "render wake payload", input);
 }
 
+/**
+ * Decodes one scheduled-fire payload before bot admission accepts it. The
+ * attempt fields must survive intact, because user-visible remediation and
+ * retry cutoff both key off them.
+ */
 export function decodeScheduledFirePayload(
   input: unknown,
 ): Result<ScheduledFirePayload, InvalidInput> {

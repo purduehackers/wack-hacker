@@ -6,6 +6,12 @@ import { notion } from "../../notion/lib/client.ts";
 
 export { notion };
 
+/**
+ * GET against the Hunter v2 API with the key from the environment. Skips
+ * `undefined` params, so optional filters stay absent from the query string.
+ * The caller's schema validates the response, so a Hunter shape change fails
+ * loudly at the boundary.
+ */
 export async function hunter<S extends z.ZodType>(
   path: string,
   params: Record<string, string | undefined>,

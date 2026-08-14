@@ -8,8 +8,8 @@
  *
  * Two things worth knowing about the upstream shape:
  *
- * - `Result` is exported as both a value and a type, so `Result<T, E>` and
- *   `Result.ok(…)` both work from a single import.
+ * - better-result exports `Result` as both a value and a type, so
+ *   `Result<T, E>` and `Result.ok(…)` both work from a single import.
  * - `Result.partition` returns a **tuple** `[values, errors]`, not an object.
  */
 

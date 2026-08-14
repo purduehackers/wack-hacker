@@ -2,8 +2,8 @@
  * Process lifecycle for the long-running bot.
  *
  * The bot is a single always-on process, so shutdown is a real concern rather
- * than an afterthought: whatever host it runs on (Vercel Sandbox, Fly, a
- * homelab box) will eventually send SIGTERM, and the gateway socket, the HTTP
+ * than an afterthought. Whatever host it runs on (Vercel Sandbox, Fly, a
+ * homelab box) will eventually send SIGTERM. The gateway socket, the HTTP
  * server, and any in-flight Redis lock all need releasing before the process
  * goes away. Handlers run in reverse registration order, so a resource always
  * tears down before the thing it depends on.
@@ -14,17 +14,21 @@ const handlers: { name: string; run: () => Promise<void> | void }[] = [];
 
 let shuttingDown = false;
 
+/**
+ * Registers a teardown step. Handlers run in reverse registration order on
+ * shutdown, so register a resource after the things it depends on.
+ */
 export function onShutdown(name: string, run: () => Promise<void> | void): void {
   handlers.push({ name, run });
 }
 
 /**
- * Runs every registered handler, newest first. Each handler is isolated: one
- * that throws is reported and the rest still run, because a failed teardown
- * must not strand the resources behind it.
+ * Runs every registered handler, newest first. Each handler runs isolated, and
+ * the loop reports one that throws. The rest still run, because a failed
+ * teardown must not strand the resources behind it.
  *
  * Returns the names of handlers that failed, so the caller decides the exit
- * code. Idempotent — a second signal while draining is ignored.
+ * code. Idempotent — a second signal while draining does nothing.
  */
 export async function shutdown(reason: string): Promise<readonly string[]> {
   if (shuttingDown) return [];
@@ -44,7 +48,7 @@ export async function shutdown(reason: string): Promise<readonly string[]> {
 
 /**
  * Installs the signal handlers. `graceMs` bounds the drain so a wedged handler
- * cannot hold the process open past the host's own grace period — Vercel
+ * cannot hold the process open past the host's own grace period. Vercel
  * Sandbox and most container hosts allow about 30s before SIGKILL.
  */
 export function installSignalHandlers(graceMs = 20_000): void {

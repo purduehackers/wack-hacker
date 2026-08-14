@@ -1,10 +1,10 @@
 /**
- * Column enumerations for the Turso schema.
+ * @fileoverview Column enumerations for the Turso schema.
  *
- * These live in `db/` rather than beside the policy logic that consumes them
- * because they are part of the *storage contract*: persisted rows carry these
- * exact strings. The agent's policy modules import them from here so a value
- * can never drift away from what is written.
+ * These live in `db/` rather than beside the policy logic that consumes them,
+ * because they are part of the *storage contract*. Persisted rows carry these
+ * exact strings. The agent's policy modules import them from here, so a value
+ * can never drift away from what the database stores.
  *
  * All are `as const` objects rather than TS `enum`s, which `erasableSyntaxOnly`
  * forbids because an enum emits runtime code.
@@ -51,7 +51,7 @@ export const AuditDecision = {
   /** The tool ran and threw. */
   Failed: "failed",
   /**
-   * The approval prompt could not be delivered, so the tool never ran. Kept
+   * Delivery of the approval prompt failed, so the tool never ran. Kept
    * distinct from `Failed` so the audit trail does not imply an attempt.
    */
   PromptFailed: "prompt_failed",
@@ -75,7 +75,7 @@ export const ScheduledTaskStatus = {
 } as const;
 
 export type ScheduledTaskStatus = (typeof ScheduledTaskStatus)[keyof typeof ScheduledTaskStatus];
-/** How a durable schedule is materialized at fire time. */
+/** How the dispatcher materializes a durable schedule at fire time. */
 export const ScheduleActionType = {
   /** Run a fresh Eve turn with current Discord authority. */
   Agent: "agent",

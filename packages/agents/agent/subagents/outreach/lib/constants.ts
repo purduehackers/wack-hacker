@@ -7,8 +7,8 @@ import type {
 /**
  * Workspace-fixed identifiers for the Purdue Hackers CRM in Notion.
  * These are the same in every deployment environment and are not secrets,
- * so they live here instead of in env. The values were discovered via the
- * Notion MCP and belong to the `CRM` database's three sibling data sources.
+ * so they live here instead of in env. The values came from a Notion MCP
+ * lookup and belong to the `CRM` database's three sibling data sources.
  */
 export const COMPANIES_DATA_SOURCE_ID = "50e03139-7a46-4877-b2b7-710ff51cc068";
 export const CONTACTS_DATA_SOURCE_ID = "8b79755b-242b-4524-961a-d309b080db67";
@@ -17,9 +17,9 @@ export const DEALS_DATA_SOURCE_ID = "723bf767-d942-4c55-ab11-f759ce39f4da";
 /**
  * Verified Cloudflare sending address for 1:1 outreach.
  *
- * The apex is already onboarded for Cloudflare Email Sending — `cf-bounce`
- * carries the MX and SPF records and `cf-bounce._domainkey` the DKIM key — so
- * mail from this address authenticates without any further DNS work.
+ * The apex is already onboarded for Cloudflare Email Sending, so mail from
+ * this address authenticates without any further DNS work. `cf-bounce` carries
+ * the MX and SPF records and `cf-bounce._domainkey` the DKIM key.
  */
 export const OUTREACH_FROM_EMAIL = "hello@purduehackers.com";
 
@@ -27,7 +27,8 @@ export const OUTREACH_FROM_EMAIL = "hello@purduehackers.com";
 export const OUTREACH_REPLY_TO_EMAIL = "phackers@purdue.edu";
 
 /**
- * Value a tool reports for a field the upstream was asked for and left empty.
+ * Value a tool reports when it asked the upstream for a field and the upstream
+ * left it empty.
  *
  * The model has to see "it was read and there was nothing there" rather than a
  * missing key, so the JSON output carries an explicit null. One named sentinel

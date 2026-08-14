@@ -36,7 +36,7 @@ type PostedMessage = Pick<APIMessage, "content" | "id">;
 /** The only fields this module reads back from a created message. */
 const postedMessageSchema = z.object({ id: z.string().min(1), content: z.string() });
 
-/** `REST#post` is declared as `Promise<unknown>`, so this is the parse boundary. */
+/** discord.js declares `REST#post` as `Promise<unknown>`, so this is the parse boundary. */
 function readPostedMessage(created: unknown): Result<PostedMessage, DiscordError> {
   const parsed = postedMessageSchema.safeParse(created);
   if (parsed.success) return Result.ok(parsed.data);
@@ -49,6 +49,11 @@ function readPostedMessage(created: unknown): Result<PostedMessage, DiscordError
   );
 }
 
+/**
+ * Builds the REST port from the gateway client's own rate-limit manager, so
+ * bot traffic and render traffic share one 429 budget. Every call carries a
+ * 30-second abort signal and maps failures onto typed Discord errors.
+ */
 export function createDiscordRest(rest: RestClient) {
   return {
     postMessage: async (
@@ -86,9 +91,9 @@ export function createDiscordRest(rest: RestClient) {
     /**
      * Take the controls off a message without touching what it says.
      *
-     * `content` is omitted from the body rather than sent as `""` — Discord
-     * leaves an absent field alone, and the text here is a record of a decision
-     * that something else already wrote.
+     * The body omits `content` rather than sending `""`. Discord leaves an
+     * absent field alone, and the text here is a record of a decision that
+     * something else already wrote.
      */
     clearComponents: async (
       channelId: string,

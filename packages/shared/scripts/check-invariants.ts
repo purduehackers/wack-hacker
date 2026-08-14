@@ -1,12 +1,12 @@
 #!/usr/bin/env bun
 
 /**
- * Does the control plane still hold together?
+ * @fileoverview Does the control plane still hold together?
  *
  * Drives one delivery through the real Lua — enqueue, claim, admission, render,
  * park, complete — checking every invariant after every transition. Then it cuts
  * the sequence short at each step in turn, which is what a crash actually looks
- * like, and asks the only question that matters afterwards: is the state bounded,
+ * like. Afterwards it asks the only question that matters: is the state bounded,
  * or has this conversation been taken hostage.
  *
  * The properties are not type-level, so nothing but this checks them.
@@ -48,7 +48,7 @@ const KEY = "99999999999999901";
 const MESSAGE_ID = "99999999999999900";
 const SESSION_ID = "wrun_invariant_probe";
 
-/** Only the fields the invariants below are stated in terms of. */
+/** Only the fields this script states the invariants in terms of. */
 const activeRecordSchema = z.looseObject({
   phase: z.string(),
   turn: z.looseObject({ expiresAtMs: z.number() }).optional(),
@@ -91,7 +91,7 @@ function parkedFor(dispatchId: string): ParkedPayload {
   };
 }
 
-/** The delivery the claim handed back; every later step is fenced on its id. */
+/** The delivery the claim handed back. Every later step uses its id as the fence. */
 let claimed: DeliveryPayload | undefined;
 /** Every step after the claim needs this, and none of them can run without it. */
 function dispatchId(): string {
@@ -133,10 +133,10 @@ async function scrub(): Promise<void> {
 /**
  * The declared lifecycles, driven beside the real thing.
  *
- * `machines/` says which transitions are legal; Lua decides what happened. The two
- * can drift silently — a guard tightened in one and not the other reads as a
- * conversation that mysteriously stops — so every step advances both and the
- * phases are compared. Without this the tables are decoration.
+ * `machines/` says which transitions are legal. Lua decides what happened. The
+ * two can drift silently — a guard tightened in one and not the other reads as
+ * a conversation that mysteriously stops. So every step advances both and
+ * compares the phases. Without this the tables are decoration.
  */
 interface MachineState {
   delivery: DeliveryPhase;
@@ -161,7 +161,7 @@ const STORED_PHASES: ReadonlySet<string> = new Set(StoredPhase.options);
 
 /**
  * Printed beside a violation rather than instead of it. The invariant really was
- * broken; naming the likeliest third party turns twenty minutes of reading Lua
+ * broken. Naming the likeliest third party turns twenty minutes of reading Lua
  * into one re-run after a deploy.
  */
 const FOREIGN_WRITER = "     (a process running older code may be competing for the probe)";
@@ -183,7 +183,7 @@ interface MachineStep {
 
 function advanceMachine(step: MachineStep): readonly string[] {
   const violations: string[] = [];
-  // Context first: a guard reads what the transition is about to be judged on.
+  // Context first: a guard judges the transition on the context it reads here.
   machine.deliveryContext = { ...machine.deliveryContext, ...step.deliveryContext };
   machine.renderContext = { ...machine.renderContext, ...step.renderContext };
   if (step.delivery !== undefined) {
@@ -220,8 +220,8 @@ async function compareMachine(
   if (stored === undefined) {
     if (!UNSTORED_PHASES.includes(machine.delivery)) {
       violations.push(`M3 the machine says ${machine.delivery}, but Redis holds no record`);
-      // This probe is the only legitimate writer of its conversation, so a record
-      // vanishing under it was deleted by somebody else — and it has to advertise
+      // This probe is the only legitimate writer of its conversation, so somebody
+      // else deleted any record that vanishes under it — and it has to advertise
       // itself in the global indexes for I1 and I4 to mean anything.
       violations.push(FOREIGN_WRITER);
     }
@@ -345,7 +345,7 @@ const steps: readonly Step[] = [
     },
   },
   {
-    // Stands in for the bot: `complete` refuses until the paint is recorded.
+    // Stands in for the bot: `complete` refuses until the bot records the paint.
     name: "bot records the paint",
     run: async () => {
       await redis.set(`agent:render-outcome:${dispatchId()}`, "applied");
@@ -374,7 +374,7 @@ function fail(...lines: readonly string[]): void {
 }
 
 /**
- * A step that throws mid-sequence is the crash under test; one that throws on the
+ * A step that throws mid-sequence is the crash under test. One that throws on the
  * happy path is a failure. Either way the tables only advance on success, because
  * a step that threw did not happen in Redis either.
  */

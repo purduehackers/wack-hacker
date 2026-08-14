@@ -1,9 +1,10 @@
 /**
  * The three things every reader and writer here does to Redis.
  *
- * Upstash hands a value back as JSON text or as the value itself, depending on
- * how it was written and what the REST client decided to parse. Both are normal,
- * and a reader that assumes either one works until it meets the other.
+ * Upstash hands a value back as JSON text or as the value itself. The shape
+ * depends on how the writer stored it and what the REST client decided to
+ * parse. Both are normal, and a reader that assumes either one works until it
+ * meets the other.
  */
 
 import { z } from "zod";

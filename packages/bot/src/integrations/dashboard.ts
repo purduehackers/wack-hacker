@@ -6,9 +6,9 @@
  *
  * Uses the REST endpoint directly rather than `@vercel/sdk`. The prior code
  * called `vercel.edgeConfig.patchEdgeConfigItems(...)`, but that accessor no
- * longer exists: as of `@vercel/sdk` 1.28 those operations moved under
- * `globalConfig` and the item-*write* methods were dropped entirely, leaving
- * only reads. This is the same HTTP call the SDK used to make, without
+ * longer exists. As of `@vercel/sdk` 1.28 those operations moved under
+ * `globalConfig`, and the SDK dropped the item-*write* methods entirely,
+ * leaving only reads. This is the same HTTP call the SDK used to make, without
  * depending on a large SDK for one request.
  *
  * Kept behind the `DashboardWriter` interface the command depends on, so this
@@ -34,12 +34,12 @@ export interface DashboardDeps {
  * Extracts the Global Config id from its connection string.
  *
  * Ids still carry the `ecfg_` prefix and Vercel still emits
- * `edge-config.vercel.com` connection strings; `parseConnectionString` accepts
+ * `edge-config.vercel.com` connection strings. `parseConnectionString` accepts
  * both those and the newer `global-config` forms.
  *
- * Resolved once at construction rather than per call, so a malformed connection
- * string fails at startup instead of the first time an organizer runs the
- * command during a hack night.
+ * Resolved once at construction rather than per call, so a malformed
+ * connection string fails at startup. Otherwise it would fail the first time
+ * an organizer runs the command during a hack night.
  */
 function globalConfigIdFrom(connectionString: string): Result<string, UpstreamError> {
   const connection = parseConnectionString(connectionString);
@@ -55,6 +55,11 @@ function globalConfigIdFrom(connectionString: string): Result<string, UpstreamEr
   return Result.ok(connection.id);
 }
 
+/**
+ * Builds the `DashboardWriter` behind the `/hack-night start` command. It
+ * validates the connection string up front, so a misconfigured deploy fails
+ * here rather than on first use.
+ */
 export function createDashboardWriter(deps: DashboardDeps): Result<DashboardWriter, UpstreamError> {
   const globalConfigId = globalConfigIdFrom(deps.connectionString);
   if (Result.isError(globalConfigId)) return globalConfigId;
@@ -79,8 +84,8 @@ export function createDashboardWriter(deps: DashboardDeps): Result<DashboardWrit
 
             if (!response.ok) {
               const detail = (await response.text().catch(() => "")).slice(0, 200);
-              // A 4xx means the token or id is wrong and retrying cannot help;
-              // a 5xx is worth another attempt.
+              // A 4xx means the token or id is wrong and retrying cannot help.
+              // A 5xx is worth another attempt.
               throw response.status < 500
                 ? new UpstreamError({
                     service: "vercel-global-config",

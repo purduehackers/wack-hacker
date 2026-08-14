@@ -1,3 +1,10 @@
+/**
+ * @fileoverview Lazy singletons for the policy stores: Redis-backed approval
+ * and budget stores plus a deferred libSQL audit store. The Redis client
+ * exists once per process, and libSQL loads only when an action needs an
+ * audit row. `readBudgetContext` wraps the budget read for the policy engine.
+ */
+
 import { UserRole } from "@repo/shared/discord";
 import { serializeError } from "@repo/shared/errors";
 import { Transient } from "@repo/shared/errors";
@@ -75,10 +82,18 @@ function stores() {
   return redisStores;
 }
 
+/**
+ * Hands out the process-wide approval store. The first call creates the
+ * shared Redis client, so importing this module stays side-effect free.
+ */
 export function getApprovalPolicyStore(): ApprovalPolicyStore {
   return stores().approval;
 }
 
+/**
+ * Hands out the process-wide budget store. It shares the lazily created
+ * Redis client with the approval store, so one client serves both.
+ */
 export function getBudgetStore(): BudgetStore {
   return stores().budget;
 }
@@ -92,11 +107,11 @@ export function getAuditStore(): Promise<AuditStore> {
 /**
  * The budget half of a policy evaluation context, read fail-open.
  *
- * Two rules live here rather than at each call site. Only `public` principals
- * are budgeted, so a higher role skips the Redis round trip entirely — the
- * engine's `withinBudget` returns true for them regardless of what was read.
- * And the budget backend is the policy spine's sole fail-open dependency: an
- * unavailable store yields an empty context, never a denial.
+ * Two rules live here rather than at each call site. The budget applies to
+ * `public` principals only, so a higher role skips the Redis round trip
+ * entirely. The engine's `withinBudget` returns true for them regardless of
+ * the read. And the budget backend is the policy spine's sole fail-open
+ * dependency: an unavailable store yields an empty context, never a denial.
  */
 export async function readBudgetContext(
   principal: PolicyPrincipal,

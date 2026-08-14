@@ -6,11 +6,12 @@ import { u32, u8 } from "@noble/hashes/utils.js";
 /**
  * NaCl sealed-box encryption for the GitHub Actions secrets API.
  *
- * GitHub will not accept a secret in the clear: the value must arrive sealed to
- * the repository's or organization's public key, which is `crypto_box_seal`
- * from libsodium. Nothing in the runtime ships libsodium, so the three
- * primitives it composes — X25519, HSalsa20, XSalsa20-Poly1305 — are assembled
- * here from `@noble`. This is the only place plaintext secret material exists.
+ * GitHub will not accept a secret in the clear. The value must arrive sealed
+ * to the repository's or organization's public key — `crypto_box_seal` from
+ * libsodium. Nothing in the runtime ships libsodium, so this module assembles
+ * the three primitives behind `crypto_box_seal` — X25519, HSalsa20,
+ * XSalsa20-Poly1305 — from `@noble`. This is the only place plaintext secret
+ * material exists.
  */
 
 // NaCl "expand 32-byte k" sigma constant

@@ -1,21 +1,21 @@
 /**
  * The only thing that writes the render aggregate.
  *
- * Both directions live here because they are one record seen from two sides — the
- * agent publishes what it wants shown, the bot paints it and records what landed —
- * and splitting them by process would put the revision fence, the one rule making
- * them safe to run concurrently, in two files.
+ * Both directions live here because they are one record seen from two sides.
+ * The agent publishes what it wants shown. The bot paints it and records what
+ * landed. Splitting them by process would put the revision fence, the one rule
+ * making them safe to run concurrently, in two files.
  *
  * Painting Discord is not atomic: several HTTP calls, any of which can fail or be
  * overtaken. So a paint holds a lease and checkpoints after every externally
- * visible change, and a process dying mid-paint leaves a projection describing
+ * visible change. A process dying mid-paint then leaves a projection describing
  * exactly how far it got, which is what stops a retry duplicating messages.
  *
  * `publish` and `settleAndPark` also write the delivery record, through the same
  * `writeRecord` the delivery writer uses. Deliberate rather than a layering slip:
- * publishing is the only signal frequent enough to prove a turn is alive, and
- * parking both ends the turn and fixes the final frame — split across two round
- * trips, either could half-happen.
+ * publishing is the only signal frequent enough to prove a turn is alive. Parking
+ * both ends the turn and fixes the final frame — split across two round trips,
+ * either could half-happen.
  */
 
 import { z } from "zod";
@@ -44,16 +44,16 @@ import { projectionCodec, RENDER_TTL_SECONDS } from "../records/render.ts";
 /**
  * Say what should be on screen, and prove the turn is still alive doing it.
  *
- * Fenced on the revision: a lower one is a straggler and is dropped, and the same
- * one with different content is a bug in the publisher rather than a race, so it
- * is refused loudly instead of silently picking a winner.
+ * Fenced on the revision: a lower one is a straggler, which the script drops.
+ * The same one with different content is a bug in the publisher rather than a
+ * race. The script refuses that loudly instead of silently picking a winner.
  *
- * The equal-revision branch is phase-blind — a terminal frame arriving at a
- * revision a streaming frame already used is refused like any other reuse. That
- * case is real, because agent state can crash after a publish it never recorded,
- * and `settleAndPark` is what handles it: it bumps the revision rather than
- * colliding. The one thing phase decides here is the reverse, above: a streaming
- * frame may never overwrite a settled one.
+ * The equal-revision branch is phase-blind — it refuses a terminal frame
+ * arriving at a revision a streaming frame already used, like any other reuse.
+ * That case is real, because agent state can crash after a publish it never
+ * recorded. `settleAndPark` is what handles it: it bumps the revision rather
+ * than colliding. The one thing phase decides here is the reverse, above: a
+ * streaming frame may never overwrite a settled one.
  */
 const PUBLISH = `
 ${DELIVERY_RECORD_LUA}
@@ -94,11 +94,11 @@ return 3
  * Fix the final frame and hand the conversation to a person, atomically.
  *
  * The revision arithmetic is the subtle part. The agent's own state can crash
- * after a publish it never recorded, so a terminal intent has to fence above what
- * Redis holds rather than above what the agent remembers — otherwise it lands at a
- * revision the last streaming frame already used and is rejected as a reuse.
- * Returns the revision it actually settled at, which the caller needs because it
- * may not be the one it asked for.
+ * after a publish it never recorded. So a terminal intent has to fence above
+ * what Redis holds rather than above what the agent remembers. Otherwise it
+ * lands at a revision the last streaming frame already used, and the fence
+ * rejects it as a reuse. Returns the revision it actually settled at, which the
+ * caller needs because it may not be the one it asked for.
  */
 const SETTLE_AND_PARK = `
 ${DELIVERY_RECORD_LUA}
@@ -151,7 +151,7 @@ redis.call("SADD", KEYS[3], ARGV[6])
 return settledRevision
 `;
 
-/** `SET NX PX` is the whole transition; a holder wanting to hold on calls `renew`. */
+/** `SET NX PX` is the whole transition. A holder wanting to hold on calls `renew`. */
 const CLAIM = `
 -- render:claim
 if redis.call("SET", KEYS[1], ARGV[1], "PX", tonumber(ARGV[2]), "NX") then return 1 end
@@ -167,7 +167,7 @@ return 1
 
 /**
  * Record progress without giving up the lease, after every mutation Discord can
- * see, so a crash leaves a projection matching the channel rather than one
+ * see. A crash then leaves a projection matching the channel rather than one
  * predating the last message posted.
  */
 const CHECKPOINT = `
@@ -183,8 +183,8 @@ return 1
  *
  * A paint that lands behind the current intent is not finished: the dispatch stays
  * advertised so the sweep drains the rest. Only a terminal paint that caught up
- * records an outcome, because that outcome is what releases the delivery, and
- * releasing on a half-painted turn strands everything queued behind it.
+ * records an outcome, because that outcome is what releases the delivery.
+ * Releasing on a half-painted turn strands everything queued behind it.
  */
 const COMPLETE = `
 -- render:complete
@@ -209,8 +209,8 @@ return 0
 
 /**
  * Give up on a paint that can never land — a deleted message, or a 4xx that will
- * not improve on retry. Intent, target and projection are bounded rather than
- * deleted so a late reader can still see what was attempted.
+ * not improve on retry. The script bounds intent, target and projection rather
+ * than deleting them, so a late reader can still see the attempt.
  */
 const DISCARD = `
 -- render:discard
@@ -236,14 +236,14 @@ export interface PaintCompletion {
 }
 
 /**
- * `accepted` is whether the intent is now the desired state; `shouldWake` is
+ * `accepted` is whether the intent is now the desired state. `shouldWake` is
  * whether anyone needs telling. They differ when the dispatch was already
  * advertised, where waking again would only add a redundant pass.
  *
- * `behindRevision` is set when the publish was refused because Redis already
- * holds that revision or a later one. It carries what Redis holds, so a caller
- * whose own counter has fallen behind can resync and try again rather than
- * retrying the same rejected number forever.
+ * The writer sets `behindRevision` when Redis refuses the publish because it
+ * already holds that revision or a later one. It carries what Redis holds. A
+ * caller whose own counter fell behind can then resync and try again rather
+ * than retrying the same rejected number forever.
  */
 export interface RenderPublication {
   readonly accepted: boolean;
@@ -251,6 +251,11 @@ export interface RenderPublication {
   readonly behindRevision?: number;
 }
 
+/**
+ * Single writer over the render aggregate, for both processes. Each method runs
+ * one Lua script, so every transition is atomic and fenced. Agent-side intents
+ * fence on the revision, bot-side paints on the claim token.
+ */
 export class RenderWriter {
   private readonly redis: RedisClient;
 
@@ -260,7 +265,7 @@ export class RenderWriter {
 
   /** Agent side: say what should be on screen. */
   async publish(intent: RenderIntent): Promise<RenderPublication> {
-    // A turn showing buttons is suspended on a person, and it deliberately does
+    // A turn showing buttons waits on a person, and it deliberately does
     // not park — an input request is a resumption of this turn, not a boundary
     // where an unrelated queued message may enter. So nothing refreshes its hold
     // until the answer arrives, and on the ordinary turn lease the sweep expired
@@ -298,7 +303,7 @@ export class RenderWriter {
   /**
    * Agent side: fix the final frame and hand the conversation to a person.
    *
-   * Returns the revision it settled at, or nothing if the record had moved on.
+   * Returns the revision it settled at, or nothing if the record moved on.
    */
   async settleAndPark(intent: RenderIntent, parked: ParkedPayload): Promise<number | undefined> {
     if (intent.phase === "streaming") throw new Error("cannot settle a streaming render intent");
@@ -411,7 +416,7 @@ export class RenderWriter {
     return evalFlag(this.redis, RELEASE, [renderClaimKey(dispatchId)], [claimToken]);
   }
 
-  /** Record that this dispatch can never be painted. */
+  /** Record that nothing can ever paint this dispatch. */
   async discard(dispatchId: string): Promise<void> {
     await this.redis.eval(
       DISCARD,
@@ -427,7 +432,7 @@ export class RenderWriter {
   }
 }
 
-/** `appliedRevision` is stamped at write time, never carried by the caller. */
+/** The writer stamps `appliedRevision` at write time. The caller never carries it. */
 function encodeProjection(projection: RenderProjection, appliedRevision: number): string {
   return z.encode(projectionCodec, { ...projection, appliedRevision });
 }

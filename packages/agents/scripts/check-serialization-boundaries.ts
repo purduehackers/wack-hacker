@@ -71,9 +71,9 @@ const expectedCatalogs = INTEGRATION_DOMAINS.size;
 // `stateInitializers` is deliberately not asserted non-empty. It was, back when
 // the code subagent's workspace machine was the only `defineState` in the repo,
 // and removing that subagent turned a scan with nothing to find into a failure.
-// The two counts below still prove the scan is looking at real files: executors
-// come from every tool in the tree, and the catalog count is derived from
-// `INTEGRATION_DOMAINS` so a new domain cannot slip past unscanned.
+// The two counts below still prove the scan looks at real files. Executors
+// come from every tool in the tree. The catalog count comes from
+// `INTEGRATION_DOMAINS`, so a new domain cannot slip past unscanned.
 if (toolExecutors === 0 || integrationCatalogs !== expectedCatalogs) {
   throw new Error(
     `serialization boundary scan found ${toolExecutors} tool executors, ` +

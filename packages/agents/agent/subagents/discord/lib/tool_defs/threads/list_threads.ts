@@ -36,7 +36,7 @@ const PUBLIC_THREAD_PARENTS = new Set<number>([
 ]);
 
 /**
- * A text channel's archived threads live behind three separate routes; only a
+ * A text channel's archived threads live behind three separate routes. Only a
  * text channel exposes the private and joined-private ones.
  */
 async function archivedThreadsOf(

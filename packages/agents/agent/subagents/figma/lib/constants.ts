@@ -13,20 +13,25 @@ import { figmaFileUrl } from "./client.ts";
 /**
  * Input fields and response shapes shared across this domain's tools.
  *
- * Figma keys files, nodes, comments, variables and dev resources off a file key
- * that only ever appears in a file's URL, so nearly every tool takes one.
- * Declaring it once keeps the description identical everywhere — the model
+ * Figma keys files, nodes, comments, variables and dev resources off a file
+ * key that only ever appears in a file's URL. So nearly every tool takes one.
+ * Declaring it once keeps the description identical everywhere. The model
  * should always learn it can turn a file name into a key with `search_files`,
- * not only in the tools that happen to say so.
+ * not only in the tools that say so.
  *
  * The summarizers are the other half. Figma's REST responses are wide and
- * snake_cased, and each summarizer is the single shape this domain returns for
- * that entity, so a component reads the same whether it arrived from a team
+ * snake_cased. Each summarizer is the single shape this domain returns for
+ * that entity. A component then reads the same whether it arrived from a team
  * listing or a single lookup.
  */
 
 export const fileKey = z.string().describe("The file key (from the Figma URL)");
 
+/**
+ * The single shape this domain returns for a file. It carries the file key
+ * and a ready-made URL together, so the model never has to reassemble one
+ * from the other.
+ */
 export function summarizeFile(
   file: GetProjectFilesResponse["files"][number],
   projectName?: string,
@@ -55,6 +60,10 @@ export function summarizeComponent(component: PublishedComponent | PublishedComp
   };
 }
 
+/**
+ * The single shape this domain returns for a published style, keyed the same
+ * way as components so both kinds of library entry read alike.
+ */
 export function summarizeStyle(style: PublishedStyle) {
   return {
     key: style.key,
@@ -80,6 +89,11 @@ export const webhookEventSchema = z.enum([
   "DEV_MODE_STATUS_UPDATE",
 ]) satisfies z.ZodType<WebhookV2Event>;
 
+/**
+ * The single shape this domain returns for a webhook. Status and endpoint
+ * stay visible so the model can tell an active hook from a paused or
+ * misdirected one.
+ */
 export function summarizeWebhook(webhook: WebhookV2) {
   return {
     id: webhook.id,

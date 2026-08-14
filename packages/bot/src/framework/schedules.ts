@@ -64,6 +64,14 @@ async function claimScheduleFire(
   });
 }
 
+/**
+ * Starts every schedule as an in-process Croner job.
+ *
+ * Each fire first claims its nominal occurrence in Redis, so an overlapping
+ * process during sandbox replacement cannot run the same occurrence twice. A
+ * fire that loses the claim does nothing. The returned handle stops every job
+ * and lists the next fire times for startup logging.
+ */
 export function startScheduler(deps: SchedulerDeps): RunningScheduler {
   const jobs = deps.schedules.map((schedule) => {
     const job = new Cron(
@@ -73,7 +81,10 @@ export function startScheduler(deps: SchedulerDeps): RunningScheduler {
         timezone: TIME_ZONE,
         // A job that overruns its interval must not stack up a second copy.
         protect: true,
-        // croner would otherwise swallow a throw; everything is reported.
+        /**
+         * Croner would otherwise swallow a throw. This handler reports every
+         * one as a defect.
+         */
         catch: (cause: unknown) => {
           deps.reporter.captureDefect(cause, { op: `schedule.${schedule.name}` });
         },

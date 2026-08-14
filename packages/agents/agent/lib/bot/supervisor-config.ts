@@ -2,15 +2,15 @@
  * The bot container's environment, projected from this deployment's own.
  *
  * The split matters: the agent validates *its* env at boot, but the bot's env
- * is data handed to another process, so it is assembled and validated here
- * rather than read from a singleton inside the supervision code. Every variable
- * the bot needs is optional in `env.ts` and required here, which is what makes
- * "supervision disabled" a working deployment and "supervision enabled but
+ * is data handed to another process. This module assembles and validates it,
+ * rather than reading a singleton inside the supervision code. Every variable
+ * the bot needs is optional in `env.ts` and required here. That is what makes
+ * "supervision disabled" a working deployment, and "supervision enabled but
  * incomplete" a loud failure on the reconcile tick rather than a half-started
  * bot.
  *
- * Reasoning and domain tools never read these values; they exist only to be
- * injected into the container this deployment starts.
+ * Reasoning and domain tools never read these values. They exist only for
+ * injection into the container this deployment starts.
  */
 
 import type { AgentEnv } from "../../env.ts";
@@ -41,14 +41,14 @@ function required(value: string | undefined, field: keyof BotProcessEnvironment)
  * Explicit Vercel credentials, or nothing at all.
  *
  * The *token* decides which mode this is, not the presence of any of the three.
- * `VERCEL_PROJECT_ID` is a system variable Vercel injects into every runtime, so
- * a rule of "all three absent means OIDC" can never be satisfied on Vercel —
- * which was the only platform it existed for. It failed every reconcile with
+ * `VERCEL_PROJECT_ID` is a system variable Vercel injects into every runtime.
+ * A rule of "all three absent means OIDC" can therefore never hold on Vercel —
+ * the only platform it existed for. It failed every reconcile with
  * `InvalidBotSandboxConfig` instead, and the bot was never provisioned.
  *
- * A partial set is still rejected once a token is present: a token without its
- * team or project means someone intended token auth and mistyped a name, and
- * silently falling back would authenticate as the wrong identity.
+ * A partial set still fails once a token is present. A token without its team
+ * or project means someone intended token auth and mistyped a name. Silently
+ * falling back would authenticate as the wrong identity.
  */
 function credentials(source: AgentEnv): BotSandboxCredentials | undefined {
   const token = source.VERCEL_TOKEN;

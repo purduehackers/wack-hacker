@@ -1,15 +1,16 @@
 /**
  * Reading a caller's roles off an interaction.
  *
- * discord.js hands back one of two shapes depending on whether the guild member
- * was resolvable from cache: a `GuildMember`, whose `roles` is a manager with a
- * `cache` collection keyed by role id, or a raw `APIInteractionGuildMember`,
- * whose `roles` is already a `string[]`. Both occur in practice, so both are
- * handled here rather than at every call site.
+ * discord.js hands back one of two shapes depending on whether the guild
+ * member was resolvable from cache. A `GuildMember` carries `roles` as a
+ * manager with a `cache` collection keyed by role id. A raw
+ * `APIInteractionGuildMember` carries `roles` as a plain `string[]`. Both
+ * occur in practice, so this module handles both instead of every call site
+ * doing it.
  *
- * Roles are read fresh from the interaction every time. That is what makes a
- * follow-up from a different person evaluate with *their* permissions, and it is
- * why there is no caching layer here to go stale.
+ * This module reads roles fresh from the interaction every time. That is what
+ * makes a follow-up from a different person evaluate with *their* permissions.
+ * It is also why there is no caching layer here to go stale.
  */
 
 import { UserRole, roleFromMemberRoles } from "@repo/shared/discord";

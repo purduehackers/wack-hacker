@@ -5,16 +5,16 @@
     "correctness": "error"
   },
   "rules": {
-    // Hard project requirements. No `any`, no unchecked assertions, no `null`
-    // in our own code, and every invariant explicit. An exception must be an
-    // inline `oxlint-disable-next-line <rule> -- <why>`, so it is documented
-    // at the site rather than waived wholesale in this file.
     "typescript/no-explicit-any": "error",
     "typescript/no-non-null-assertion": "error",
     "typescript/no-unnecessary-type-assertion": "error",
-    "typescript/consistent-type-assertions": ["error", { "assertionStyle": "never" }],
+    "typescript/consistent-type-assertions": [
+      "error",
+      {
+        "assertionStyle": "never"
+      }
+    ],
     "unicorn/no-null": "error",
-
     "oxclippy/needless-bool": "warn",
     "oxclippy/collapsible-if": "warn",
     "oxclippy/neg-multiply": "warn",
@@ -86,58 +86,40 @@
     "rayhanadev/zodtype-annotation-instead-of-satisfies": "error",
     "rayhanadev/zodtype-t-generic-helper": "error",
     "rayhanadev/comment-explains-why": "warn",
-    // Merged by `ox`, and still being adopted. A rule sits at "off" here only
-    // while the code does not satisfy it, with the violation count it arrived
-    // with, so the remaining work is visible rather than absent. Each one moves
-    // to its real severity in the commit that clears it.
-    //
-    // This is the one place the project's "never waive a rule wholesale" rule
-    // bends, and only for rules that were never on.
-    //
-    //   comment style        1,187   CLEARED — enabled below
-    //   Result adoption        695   no-throw, no-try-catch, no-promise-catch,
-    //                                no-error-sentinel, wrap-throwing-api,
-    //                                require-tagged-error
-    //   type discipline        309   no-conditional-empty-object-spread (262),
-    //                                no-known-value-widening, no-zod-type-erasure,
-    //                                no-json-parse-stringify-codec,
-    //                                no-chained-type-assertions
-    //   file organization       99   constants/errors/enum/types
-    //   suppressions            10   lint-suppression-requires-reason
     "rayhanadev/comment-ste100": "error",
-    "rayhanadev/comment-ste100-heuristics": "warn",
+    "rayhanadev/comment-ste100-heuristics": "error",
     "rayhanadev/commented-out-code-requires-reason": "error",
-    "rayhanadev/complex-file-header": "warn",
-    "rayhanadev/constants-file-organization": "off",
+    "rayhanadev/complex-file-header": "error",
+    "rayhanadev/constants-file-organization": "error",
     "rayhanadev/domain-knowledge-in-agents": "error",
-    "rayhanadev/enum-file-organization": "off",
-    "rayhanadev/errors-file-organization": "off",
+    "rayhanadev/enum-file-organization": "error",
+    "rayhanadev/errors-file-organization": "error",
     "rayhanadev/filename-match-export": "error",
-    "rayhanadev/lint-suppression-requires-reason": "off",
+    "rayhanadev/lint-suppression-requires-reason": "error",
     "rayhanadev/no-ad-hoc-result": "error",
     "rayhanadev/no-async-result-try": "error",
-    "rayhanadev/no-chained-type-assertions": "off",
-    "rayhanadev/no-conditional-empty-object-spread": "off",
-    "rayhanadev/no-error-sentinel": "off",
+    "rayhanadev/no-chained-type-assertions": "error",
+    "rayhanadev/no-conditional-empty-object-spread": "error",
+    "rayhanadev/no-error-sentinel": "error",
     "rayhanadev/no-exported-function-expressions": "error",
-    "rayhanadev/no-json-parse-stringify-codec": "off",
-    "rayhanadev/no-known-value-widening": "off",
-    "rayhanadev/no-promise-catch": "off",
+    "rayhanadev/no-json-parse-stringify-codec": "error",
+    "rayhanadev/no-known-value-widening": "error",
+    "rayhanadev/no-promise-catch": "error",
     "rayhanadev/no-promise-reject": "error",
     "rayhanadev/no-result-unwrap": "error",
-    "rayhanadev/no-throw": "off",
-    "rayhanadev/no-try-catch": "off",
+    "rayhanadev/no-throw": "error",
+    "rayhanadev/no-try-catch": "error",
     "rayhanadev/no-unknown-type-aliases": "error",
     "rayhanadev/no-unsafe-dictionary-type": "error",
     "rayhanadev/no-widen-then-assert": "error",
-    "rayhanadev/no-zod-type-erasure": "off",
+    "rayhanadev/no-zod-type-erasure": "error",
     "rayhanadev/prefer-result-await": "error",
     "rayhanadev/require-jsdoc-comments": "error",
     "rayhanadev/require-result-gen-return": "error",
-    "rayhanadev/require-tagged-error": "off",
+    "rayhanadev/require-tagged-error": "error",
     "rayhanadev/schemas-file-organization": "error",
-    "rayhanadev/types-file-organization": "off",
-    "rayhanadev/wrap-throwing-api": "off"
+    "rayhanadev/types-file-organization": "error",
+    "rayhanadev/wrap-throwing-api": "error"
   },
   "env": {
     "builtin": true

@@ -2,7 +2,7 @@
  * The only thing that writes delegations.
  *
  * No Lua: there is nothing to fence. One agent process writes both transitions
- * within one turn, so a second `begin` replacing the first is intended.
+ * within one turn, so a second `begin` replacing the first is deliberate.
  */
 
 import { z } from "zod";
@@ -15,6 +15,12 @@ import { DELEGATION_TTL_SECONDS, delegationSchema } from "../records/delegation.
 
 const delegationCodec = jsonCodec(delegationSchema);
 
+/**
+ * Records which delivery currently waits on a child session.
+ *
+ * Writes are plain `SET`/`DEL` with a TTL, so an abandoned delegation
+ * expires on its own instead of parking the delivery forever.
+ */
 export class DelegationWriter {
   private readonly redis: Pick<RedisClient, "set" | "del">;
 
@@ -29,7 +35,7 @@ export class DelegationWriter {
     });
   }
 
-  /** The child returned; there is nothing left to follow. */
+  /** The child returned. There is nothing left to follow. */
   async end(dispatchId: string): Promise<void> {
     await this.redis.del(subagentKey(dispatchId));
   }

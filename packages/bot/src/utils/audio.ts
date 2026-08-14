@@ -1,18 +1,20 @@
 /**
- * Splitting an Ogg Opus stream into smaller, still-valid Ogg Opus streams.
+ * @fileoverview Splitting an Ogg Opus stream into smaller, still-valid Ogg
+ * Opus streams.
  *
  * Whisper rejects uploads past a size limit, and Discord voice messages can
  * exceed it. Cutting the bytes at an arbitrary offset produces something no
- * decoder will accept, so each piece has to be a complete stream in its own
- * right. That means three things per chunk:
+ * decoder will accept. Each piece therefore has to be a complete stream in
+ * its own right. That means three things per chunk:
  *
- * 1. The two header pages (OpusHead, OpusTags) are replicated into it.
- * 2. Page sequence numbers are renumbered from zero.
- * 3. The end-of-stream flag is set on the last page and cleared everywhere else.
+ * 1. The chunk replicates the two header pages (OpusHead, OpusTags).
+ * 2. The split renumbers page sequence numbers from zero.
+ * 3. Only the last page carries the end-of-stream flag. Every other page
+ *    loses it.
  *
- * And because all three edit the page header in place, every page's CRC has to
- * be recomputed — a page whose checksum no longer matches its bytes is
- * discarded by the decoder, silently losing audio.
+ * And because all three edit the page header in place, the splitter recomputes
+ * every page's CRC. The decoder silently discards a page whose checksum no
+ * longer matches its bytes, losing audio.
  */
 
 import { InvalidInput, messageOf } from "@repo/shared/errors";
@@ -98,7 +100,7 @@ function emitChunk(headerPages: readonly OggPage[], audioGroup: readonly OggPage
 
     writeU32LE(chunk, slot.offset + OFFSET_PAGE_SEQUENCE, index);
 
-    // The checksum field must read as zero while the page is being summed.
+    // The checksum field must read as zero while the CRC sums the page.
     writeU32LE(chunk, slot.offset + OFFSET_CHECKSUM, 0);
     const crc = oggCrc32(chunk.subarray(slot.offset, slot.offset + slot.length));
     writeU32LE(chunk, slot.offset + OFFSET_CHECKSUM, crc);
@@ -110,7 +112,7 @@ function emitChunk(headerPages: readonly OggPage[], audioGroup: readonly OggPage
 /**
  * Splits into streams that each fit `targetBytes`.
  *
- * A stream already under the target is returned unchanged, so the caller can
+ * A stream already under the target comes back unchanged, so the caller can
  * treat the single-chunk case exactly like the many-chunk one.
  */
 export function splitOggOpus(

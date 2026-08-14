@@ -1,4 +1,4 @@
-/** Trusted schedule ownership and policy derived from Eve's current delivery. */
+/** @fileoverview Trusted schedule ownership and policy derived from Eve's current delivery. */
 
 import { UserRole } from "@repo/shared/discord";
 import type { InvariantViolated, Unauthenticated } from "@repo/shared/errors";
@@ -42,6 +42,12 @@ function scheduleMutationDecision(
   });
 }
 
+/**
+ * The identity a schedule runs under: an authenticated Discord user, the
+ * channel it delivers into, and the user's current member roles. Throws when
+ * the session cannot prove any of the three, so no schedule ends up unowned
+ * or undeliverable.
+ */
 export function requireScheduleOwner(ctx: SessionContext): ScheduleOwner {
   const auth = ctx.session.auth.current;
   if (
@@ -70,6 +76,11 @@ export function requireScheduleOwner(ctx: SessionContext): ScheduleOwner {
   return { ownerId: auth.principalId, channelId, memberRoles: memberRoles.data };
 }
 
+/**
+ * The owner check plus the capability policy for the two schedule mutations.
+ * Throws when policy denies the mutation, so the tool body never acts for a
+ * caller the policy engine refused.
+ */
 export function requireScheduleMutationOwner(
   ctx: SessionContext,
   name: ScheduleMutationName,

@@ -17,9 +17,9 @@ const objectSchema = z.object({});
 /**
  * `z.object({})` accepts exactly `typeof value === "object" && value !== null &&
  * !Array.isArray(value)`. Arrays already returned above, so this covers the same
- * values the old `typeof value === "object" && value !== null` test did, and
+ * values the old `typeof value === "object" && value !== null` test did. It
  * leaves `null`, booleans and every number — `NaN` and the infinities included —
- * to be handed back untouched.
+ * untouched.
  */
 function isJsonObject(value: JsonValue): value is JsonObject {
   return objectSchema.safeParse(value).success;
@@ -103,7 +103,7 @@ export async function applyInputRequests(deps: ApplyInputRequestsDeps): Promise<
           // Requiring one unconditionally threw for every self-approval, which
           // failed the whole batch and rendered no control at all. `schedule_task`
           // asked for approval, Discord showed a truncated sentence and no button,
-          // and the scheduled task could never be approved.
+          // and nobody could ever approve the scheduled task.
           if (policy.value !== undefined) {
             if (
               policy.value.requesterUserId !== userId ||

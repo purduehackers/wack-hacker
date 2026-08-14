@@ -4,8 +4,8 @@ import type { CartItem, PublicCartItem } from "./shopping-types.ts";
  * Projections shared across this domain's cart tools.
  *
  * Every cart mutation answers the same two questions — what changed, and what
- * the cart now totals — so the row projection and the running total live here
- * once instead of being restated per tool and drifting apart.
+ * the cart now totals. The row projection and the running total therefore
+ * live here once. Restating them per tool would let the two drift apart.
  */
 
 /** A cart row as the model sees it: snake_case, no cart id, no storage columns. */

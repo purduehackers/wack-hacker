@@ -1,10 +1,10 @@
 /**
- * Fenced Vercel Sandbox supervisor for the long-running Discord bot.
+ * @fileoverview Fenced Vercel Sandbox supervisor for the long-running Discord bot.
  *
  * Redis is the authority for both mutual exclusion and the active generation.
  * A sandbox is never made active until its structured `/health` response says
  * that the Discord gateway is ready. The bot token and the rest of the bot's
- * already-validated environment are explicit dependencies; this module never
+ * already-validated environment are explicit dependencies. This module never
  * reads an agent or bot environment singleton.
  */
 
@@ -48,9 +48,9 @@ const MANAGED_TAGS = Object.freeze({
  *
  * `list` rejects more than one — "Only one tag filter is supported at a time" —
  * so passing the whole managed set failed every call. The orphan sweep swallowed
- * that as a non-fatal issue and reconciled anyway, which is why terminated
- * candidates accumulated instead of being reaped. The remaining tags are matched
- * client-side against what the API returns.
+ * that as a non-fatal issue and reconciled anyway. Terminated candidates
+ * therefore accumulated, and no sweep reaped them. The supervisor matches the
+ * remaining tags client-side against what the API returns.
  */
 const LIST_FILTER_TAG = Object.freeze({ managedBy: MANAGED_TAGS.managedBy });
 
@@ -115,6 +115,11 @@ type BotSandboxOperation =
   | "stop-sandbox"
   | "delete-sandbox";
 
+/**
+ * Signals that the image, bot environment, or credentials failed validation.
+ * Validation runs before any Sandbox or Redis call, so nothing needs cleanup
+ * when this returns.
+ */
 export class InvalidBotSandboxConfig extends TaggedError("InvalidBotSandboxConfig")<{
   field: "BOT_IMAGE" | "botEnv" | "credentials";
   detail: string;
@@ -125,6 +130,10 @@ export class InvalidBotSandboxConfig extends TaggedError("InvalidBotSandboxConfi
   }
 }
 
+/**
+ * Signals that another supervisor holds the Redis mutex, so this run must
+ * back off instead of racing the holder for the same sandbox.
+ */
 export class BotSupervisorBusy extends TaggedError("BotSupervisorBusy")<{
   message: string;
 }> {
@@ -133,6 +142,11 @@ export class BotSupervisorBusy extends TaggedError("BotSupervisorBusy")<{
   }
 }
 
+/**
+ * Reports a Redis command failure during lease or generation coordination.
+ * The supervisor cannot tell who owns the mutex after this, so the run stops
+ * rather than acting without a fence.
+ */
 export class BotSupervisorCoordinationFailed extends TaggedError(
   "BotSupervisorCoordinationFailed",
 )<{
@@ -151,6 +165,11 @@ export class BotSupervisorCoordinationFailed extends TaggedError(
   }
 }
 
+/**
+ * Signals a malformed active-generation record, one that changed mid-run, or
+ * a commit that fails to advance the fencing token. The supervisor must not
+ * replace state it cannot prove it owns.
+ */
 export class InvalidBotActiveGeneration extends TaggedError("InvalidBotActiveGeneration")<{
   detail: string;
   message: string;
@@ -160,6 +179,11 @@ export class InvalidBotActiveGeneration extends TaggedError("InvalidBotActiveGen
   }
 }
 
+/**
+ * Signals that the mutex no longer holds this run's lease. Every later write
+ * must stop: another supervisor with a newer generation now owns the sandbox
+ * fleet.
+ */
 export class BotSupervisorFenceLost extends TaggedError("BotSupervisorFenceLost")<{
   generation: number;
   stage: string;
@@ -173,6 +197,10 @@ export class BotSupervisorFenceLost extends TaggedError("BotSupervisorFenceLost"
   }
 }
 
+/**
+ * Wraps a Vercel Sandbox API failure so the caller can see which operation
+ * broke and against which sandbox, without parsing provider messages.
+ */
 export class BotSandboxOperationFailed extends TaggedError("BotSandboxOperationFailed")<{
   operation: BotSandboxOperation;
   sandboxName?: string;
@@ -189,6 +217,11 @@ export class BotSandboxOperationFailed extends TaggedError("BotSandboxOperationF
   }
 }
 
+/**
+ * Signals a candidate that never became ready, so the supervisor tore it
+ * down instead of activating it. `cleanupIssues` lists what that teardown
+ * itself could not finish.
+ */
 export class BotSandboxUnhealthy extends TaggedError("BotSandboxUnhealthy")<{
   sandboxName: string;
   detail: string;
@@ -207,6 +240,11 @@ export class BotSandboxUnhealthy extends TaggedError("BotSandboxUnhealthy")<{
   }
 }
 
+/**
+ * Reports sandboxes this run could not tear down. The desired generation is
+ * already live when this error returns, so callers must treat it as a
+ * cleanup alarm, not a failed activation.
+ */
 export class BotSandboxCleanupFailed extends TaggedError("BotSandboxCleanupFailed")<{
   issues: readonly string[];
   message: string;
@@ -239,9 +277,9 @@ export type BotSandboxSupervisorOutcome =
     };
 
 /**
- * SDK projections. Every parameter and member is derived from @vercel/sandbox
- * rather than restated, so an upstream signature change is a compile error here
- * instead of a runtime failure in production.
+ * SDK projections. This module derives every parameter and member from
+ * @vercel/sandbox and does not restate them. An upstream signature change then
+ * becomes a compile error here, not a runtime failure in production.
  */
 type SandboxCreateParams = NonNullable<Parameters<typeof Sandbox.create>[0]>;
 type SandboxGetParams = Parameters<typeof Sandbox.get>[0];
@@ -259,8 +297,8 @@ export type BotSandboxCredentials = Pick<
 /**
  * The Sandbox calls this module makes, bound to one identity.
  *
- * It exists so credentials are threaded in exactly one place rather than at
- * every call site, which is also what keeps OIDC and token auth
+ * It exists so this module threads credentials in exactly one place rather
+ * than at every call site. That is also what keeps OIDC and token auth
  * indistinguishable to the reconcile path.
  */
 interface SandboxApi {
@@ -310,7 +348,7 @@ const REQUIRED_BOT_ENV_KEYS = [
 
 export interface BotSandboxSupervisorDeps {
   readonly redis: SupervisorRedis;
-  /** Digest-pinned VCR image. Tags, including `latest`, are rejected. */
+  /** Digest-pinned VCR image. The supervisor rejects tags, including `latest`. */
   readonly image: string;
   /** A validated bot-process record supplied by the composition root. */
   readonly botEnv: BotProcessEnvironment;
@@ -345,9 +383,9 @@ interface HealthResult {
  *
  * `null` is deliberately absent: `typeof null` is `"object"`, so the caller
  * rejects it with its own explicit comparison, exactly as before. `z.number()`
- * rejects the non-finite doubles, so `NaN` and both infinities are matched
- * separately — otherwise a non-finite `botEnv` would slip past this gate and
- * fail later with the wrong diagnostic.
+ * rejects the non-finite doubles, so this schema matches `NaN` and both
+ * infinities separately. Otherwise a non-finite `botEnv` would slip past this
+ * gate and fail later with the wrong diagnostic.
  */
 const nonObjectSchema = z.union([
   z.string(),
@@ -362,7 +400,7 @@ const nonObjectSchema = z.union([
   z.function(),
 ]);
 
-/** Env values arrive as strings; anything else is a caller error. */
+/** Env values arrive as strings. Anything else is a caller error. */
 const envValueSchema = z.string();
 
 function detailOf(cause: unknown): string {
@@ -523,9 +561,10 @@ function createSandboxApi(credentials?: BotSandboxCredentials): SandboxApi {
 }
 
 /**
- * What `ACQUIRE_MUTEX_SCRIPT` returns from `cjson.encode`. Upstash hands it back
- * either as that JSON text or as an already-deserialized object, so both are
- * accepted; the Lua `INCR` result may likewise arrive as a number or as text.
+ * What `ACQUIRE_MUTEX_SCRIPT` returns from `cjson.encode`. Upstash hands it
+ * back either as that JSON text or as an already-deserialized object, so this
+ * schema accepts both. The Lua `INCR` result may likewise arrive as a number
+ * or as text.
  */
 const leaseSchema = storedJson(
   z.looseObject({
@@ -755,16 +794,17 @@ async function inspectActive(
 }
 
 /**
- * Fingerprint of the environment a container was started with.
+ * Fingerprint of the environment a container received at creation.
  *
- * A sandbox receives its environment once, at creation. Rotating a secret on the
- * project changes what *this* deployment reads and nothing about the process
- * already running, so without this the bot kept a revoked credential until the
- * image digest happened to change or the sandbox aged out — a day, for a
- * key rotation that looked like it had taken effect immediately.
+ * A sandbox receives its environment once, at creation. Rotating a secret on
+ * the project changes what *this* deployment reads and nothing about the
+ * process already running. Without this fingerprint, the bot kept a revoked
+ * credential until the image digest happened to change or the sandbox aged
+ * out. That could take a day, for a key rotation that looked like it took
+ * effect immediately.
  *
- * Hashed rather than compared: the value is a record of secrets, and the
- * generation record is read by tooling that has no business seeing them.
+ * Hashed rather than compared: the value is a record of secrets, and tooling
+ * that has no business seeing them reads the generation record.
  */
 function environmentFingerprint(botEnv: Readonly<Record<string, string>>): string {
   const canonical = Object.keys(botEnv)
@@ -812,7 +852,7 @@ async function terminateSandbox(
       }
     } catch (cause) {
       // A command that has already exited is gone, not a failure to stop: the
-      // candidate we are tearing down is usually one whose process died on its
+      // candidate we tear down is usually one whose process died on its
       // own, which is why we are here at all.
       if (!isNotFound(cause)) issues.push(`SIGTERM ${sandbox.name}: ${detailOf(cause)}`);
     }
@@ -893,6 +933,11 @@ function candidateName(): string {
   return `wack-bot-${suffix.slice(0, 20)}`;
 }
 
+/**
+ * Builds the supervisor around explicit dependencies. Each `ensure` call
+ * takes the Redis mutex, reconciles the fleet toward one healthy fenced
+ * sandbox, and releases the lease afterward, even when reconcile fails.
+ */
 export function createBotSandboxSupervisor(deps: BotSandboxSupervisorDeps): BotSandboxSupervisor {
   return {
     ensure: async () => {
@@ -1012,9 +1057,9 @@ async function useHealthyActive(
       }),
     );
   }
-  // The Redis endpoint is consumed by the agent, while this URL comes from
-  // the inspected Sandbox. A record pointing anywhere else must be rotated
-  // even when the Sandbox itself is healthy.
+  // The agent consumes the Redis endpoint, while this URL comes from
+  // the inspected Sandbox. The supervisor must rotate a record pointing
+  // anywhere else even when the Sandbox itself is healthy.
   if (record.healthUrl !== healthUrl) return Result.ok(undefined);
 
   const health = await checkHealth(healthUrl);

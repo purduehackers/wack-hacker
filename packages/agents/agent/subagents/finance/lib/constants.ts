@@ -1,16 +1,17 @@
-import { z } from "zod";
-
-import { hcbTxnUrl } from "./client.ts";
-
 /**
- * Input shapes and response projections shared across this domain's tools.
+ * @fileoverview Input shapes and response projections shared across this
+ * domain's tools.
  *
- * HCB's v3 API returns wide records where almost every field is optional, and a
+ * HCB's v3 API returns wide records where almost every field is optional. A
  * tool that forwarded them verbatim would spend most of its output budget on
  * keys no one asked about. Each resource therefore gets one parse schema and
  * one projection, declared here so that `list_*` and `get_*` cannot drift into
  * describing the same record differently.
  */
+
+import { z } from "zod";
+
+import { hcbTxnUrl } from "./client.ts";
 
 export const paginationInputShape = {
   per_page: z.int().min(1).max(100).optional().describe("Page size (default 50)"),
@@ -121,6 +122,7 @@ export const hcbInvoiceSchema = z.object({
 });
 export type HcbInvoice = z.output<typeof hcbInvoiceSchema>;
 
+/** Sponsor contact fields flatten to name and email so the output stays one level deep. */
 export function projectInvoice(entry: HcbInvoice) {
   return {
     id: entry.id,

@@ -20,7 +20,7 @@ import {
   type GuildChannelResult,
 } from "../../constants.ts";
 
-/** The channel kinds this domain will create; threads are made by create_thread. */
+/** The channel kinds this domain will create. Threads come from create_thread. */
 const CHANNEL_TYPES = {
   text: ChannelType.GuildText,
   voice: ChannelType.GuildVoice,

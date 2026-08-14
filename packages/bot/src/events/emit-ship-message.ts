@@ -1,13 +1,14 @@
 /**
- * Mirrors `#ship` posts to the public gallery at ships.purduehackers.com.
+ * @fileoverview Mirrors `#ship` posts to the public gallery at
+ * ships.purduehackers.com.
  *
  * Two handlers, kept together because they are the two halves of one behaviour:
  * a post creates a ship, and deleting that post removes it. Splitting them
  * across files would make it easy to change one and forget the other.
  *
- * Forwarded snapshots are folded into the content and attachment list for the
- * same reason as in `auto-thread`: a forwarded post carries its work in the
- * snapshot, and reading only the message body would mirror an empty ship.
+ * The handlers fold forwarded snapshots into the content and attachment list
+ * for the same reason as in `auto-thread`. A forwarded post carries its work in
+ * the snapshot, and reading only the message body would mirror an empty ship.
  */
 
 import { DISCORD_IDS } from "@repo/shared/discord";
@@ -21,7 +22,7 @@ import type { ShipAttachmentInput, ShipsClient } from "../integrations/ships.ts"
 
 const URL_PATTERN = /https?:\/\/\S+/i;
 
-/** The gallery truncates titles; do it here so the ellipsis is ours. */
+/** The gallery truncates titles. Do it here so the ellipsis is ours. */
 const MAX_TITLE_CHARS = 100;
 
 /** Discord's default avatars, indexed by the user's snowflake. */
@@ -89,6 +90,11 @@ function avatarUrlFor(userId: string, avatarHash: string | null): string {
   return `https://cdn.discordapp.com/embed/avatars/${index}.png`;
 }
 
+/**
+ * Mirrors an eligible `#ship` post into the gallery. Skips bot mentions,
+ * opted-out authors, and posts with neither a URL nor an attachment, because a
+ * bare chat message in `#ship` is not a ship.
+ */
 export function emitShipMessage(ships: ShipsClient, redis: RedisClient) {
   return defineEvent({
     name: "emit-ship-message",
@@ -102,7 +108,7 @@ export function emitShipMessage(ships: ShipsClient, redis: RedisClient) {
       const shipText = shipContent(message);
       const attachments = shipAttachments(message);
       // Any attachment makes a valid ship even when the gallery cannot render
-      // that file type; eligibility and media projection are separate concerns.
+      // that file type. Eligibility and media projection are separate concerns.
       if (!URL_PATTERN.test(shipText) && message.attachments.size === 0)
         return Result.ok(undefined);
 
@@ -121,6 +127,10 @@ export function emitShipMessage(ships: ShipsClient, redis: RedisClient) {
   });
 }
 
+/**
+ * Removes the mirrored ship when its source post disappears from `#ship`.
+ * Deleting a post the gallery never mirrored is a no-op, not an error.
+ */
 export function deleteShipMessage(ships: ShipsClient) {
   return defineEvent({
     name: "delete-ship-message",

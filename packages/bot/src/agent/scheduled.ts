@@ -1,4 +1,4 @@
-/** Materialize an agent-owned scheduled fire through the normal bot turn path. */
+/** @fileoverview Materialize an agent-owned scheduled fire through the normal bot turn path. */
 
 import { DiscordAPIError } from "@discordjs/rest";
 import { DISCORD_GUILD_ID } from "@repo/shared/discord";
@@ -32,8 +32,9 @@ export interface ScheduledDiscordAdapter {
 /**
  * A usable channel name, or `unknown`.
  *
- * discord.js types `name` as a string, but the raw gateway payload omits it for
- * some channel types, so the value is validated rather than trusted.
+ * discord.js types `name` as a string, but the raw gateway payload omits it
+ * for some channel types. This schema therefore validates the value rather
+ * than trusts it.
  */
 const channelNameSchema = z.string().min(1).catch("unknown");
 
@@ -86,7 +87,7 @@ function errorCode(cause: unknown): string | undefined {
   return codedCauseSchema.safeParse(cause).data?.code;
 }
 
-/** Narrow fail-closed classifier for outages where a role snapshot is permitted. */
+/** Narrow fail-closed classifier for outages that permit a role snapshot. */
 function isTransientDiscordFailure(cause: unknown): boolean {
   if (cause instanceof DiscordAPIError) return cause.status === 429 || cause.status >= 500;
   if (cause instanceof DOMException) {
@@ -206,8 +207,9 @@ async function admitOccurrence(
   } else {
     let placeholder: Awaited<ReturnType<typeof destination.send>> | undefined;
     try {
-      // Force bypasses discord.js's cache. Missing members are downgraded to
-      // public; a transient Discord outage alone may use the creation snapshot.
+      // Force bypasses discord.js's cache. A missing member downgrades the run
+      // to public. A transient Discord outage alone may use the creation
+      // snapshot.
       const owner = await resolveScheduleOwner(guild, guildId, payload);
       if (owner.warning !== undefined) {
         await destination.send({
@@ -226,8 +228,9 @@ async function admitOccurrence(
         enforceNonce: true,
         allowedMentions: { parse: [] },
       });
-      // A retry can receive the prior enforced-nonce message after it was changed
-      // to remediation text. Restore its in-progress state before resubmission.
+      // A retry can receive the prior enforced-nonce message after the failure
+      // path changed it to remediation text. Restore its in-progress state
+      // before resubmission.
       if (payload.attemptNumber > 1) await placeholder.edit(PLACEHOLDER);
 
       const refs = await channelRefs(destination);
@@ -273,6 +276,11 @@ async function admitOccurrence(
   }
 }
 
+/**
+ * Wires the gateway client into the conversation flow's scheduled-fire seam.
+ * `admit` rethrows every failure, so the durable scheduler, not the bot, owns
+ * retries — attempt numbers and final-attempt remediation come in the payload.
+ */
 export function createScheduledDiscordAdapter(deps: ScheduledFireDeps): ScheduledDiscordAdapter {
   const guildId = DISCORD_GUILD_ID;
   return {

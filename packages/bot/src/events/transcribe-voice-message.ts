@@ -1,9 +1,9 @@
 /**
- * Transcribes Discord voice messages with Whisper.
+ * @fileoverview Transcribes Discord voice messages with Whisper.
  *
  * The interesting part is size. Whisper rejects uploads past a limit that
- * Discord voice messages can exceed, so anything large is split into several
- * valid Ogg Opus streams and transcribed in parallel.
+ * Discord voice messages can exceed. The transcriber splits anything large
+ * into several valid Ogg Opus streams and transcribes them in parallel.
  *
  * Two behaviours carried over deliberately:
  *
@@ -11,7 +11,7 @@
  *   place is held by a `[part n/m failed]` marker and the rest is still posted.
  *   A forty-minute recording losing thirty seconds is far better than losing all
  *   of it.
- * - **The fast path can fall back.** A file under the threshold is sent whole,
+ * - **The fast path can fall back.** A file under the threshold goes up whole,
  *   but Whisper's limit is not exactly ours, so a size complaint on that path
  *   retries as chunks rather than giving up.
  */
@@ -43,6 +43,13 @@ export interface TranscriberDeps {
   readonly apiKey: string;
 }
 
+/**
+ * Builds a Whisper transcriber bound to one Groq API key.
+ *
+ * The returned `transcribe` never rejects: upstream failures come back as a
+ * `Transient` error, so the caller never needs a try/catch. A partly failed
+ * chunked run still returns text with inline failure markers.
+ */
 export function createTranscriber(deps: TranscriberDeps) {
   const groq = createGroq({ apiKey: deps.apiKey });
 
@@ -108,7 +115,7 @@ export function createTranscriber(deps: TranscriberDeps) {
       });
       if (Result.isOk(whole)) return Result.ok({ text: whole.value, partCount: 1 });
 
-      // Our threshold is a guess at Whisper's; when it disagrees, chunk.
+      // Our threshold is a guess at Whisper's. When it disagrees, chunk.
       if (TOO_LARGE_PATTERN.test(String(whole.error))) return chunked(buffer);
 
       return Result.err(
@@ -137,6 +144,11 @@ async function postTranscript(message: Message, text: string, partCount: number)
   }
 }
 
+/**
+ * Binds the transcriber into a message event. Deduplicates on message id and
+ * ignores bot mentions, because a mention starts an agent turn rather than a
+ * plain transcription.
+ */
 export function transcribeVoiceMessage(transcriber: Transcriber) {
   return defineEvent({
     name: "transcribe-voice-message",

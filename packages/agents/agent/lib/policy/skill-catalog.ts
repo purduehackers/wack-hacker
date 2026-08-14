@@ -11,8 +11,8 @@ import { requirePrincipal } from "./principal.ts";
  *
  * `doc` is the whole `lib/skill_defs/<name>.md` file, imported as text. Keeping
  * the markdown in a real document rather than an escaped string literal is the
- * point — a 1,700-character one-liner cannot be reviewed, and every one of
- * these used to be one.
+ * point. Nobody can review a 1,700-character one-liner, and every one of these
+ * used to be one.
  */
 export interface IntegrationSkillDefinition {
   readonly name: string;
@@ -24,9 +24,10 @@ export interface IntegrationSkillDefinition {
 /**
  * Splits leading frontmatter off a skill document.
  *
- * Only `description` is read, because that is all `defineSkill` takes besides
- * the body. Anything else is ignored rather than rejected, so a document can
- * carry editor metadata without this needing to know about it.
+ * This function reads only `description`, because that is all `defineSkill`
+ * takes besides the body. It ignores anything else rather than rejecting it,
+ * so a document can carry editor metadata without this needing to know about
+ * it.
  */
 export function parseSkillDoc(doc: string): { description: string; markdown: string } {
   const match = /^---\n([\s\S]*?)\n---\n?/u.exec(doc);
@@ -42,9 +43,9 @@ export function parseSkillDoc(doc: string): { description: string; markdown: str
  * Converts the current principal's catalog into Eve-native loadable skills.
  *
  * The role filter is why this stays a dynamic resolver. Eve binds *static*
- * skills at graph-resolution time, before any session exists, so a static skill
- * is advertised to everyone who can reach the subagent. Filtering here is the
- * only place `minRole` can mean anything.
+ * skills at graph-resolution time, before any session exists, so Eve
+ * advertises a static skill to everyone who can reach the subagent. Filtering
+ * here is the only place `minRole` can mean anything.
  */
 export function resolveIntegrationSkills(
   current: SessionAuthContext | null | undefined,

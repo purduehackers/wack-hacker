@@ -7,8 +7,8 @@ import { shoppingCarts } from "./shopping-carts.ts";
  * Line items in the shared cart.
  *
  * The unique index on `(cart_id, asin)` is what lets "add this again" be an
- * upsert that increments `quantity` rather than a duplicate row, which is the
- * behaviour the shopping tools rely on.
+ * upsert that increments `quantity` rather than a duplicate row. The shopping
+ * tools rely on that behaviour.
  */
 export const shoppingCartItems = sqliteTable(
   "shopping_cart_items",

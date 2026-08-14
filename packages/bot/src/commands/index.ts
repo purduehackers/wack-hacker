@@ -6,9 +6,9 @@
  * meant a forgotten re-export silently unregistered a command. A literal list
  * is one line longer and cannot do that.
  *
- * Dependencies are passed in rather than read from module-level singletons, so
- * construction failures surface at one call site during startup rather than the
- * first time someone runs the command.
+ * Callers pass dependencies in rather than reading them from module-level
+ * singletons. Construction failures then surface at one call site during
+ * startup, not the first time someone runs the command.
  */
 
 import type { UpstreamError } from "@repo/shared/errors";
@@ -28,11 +28,12 @@ export interface CommandDeps {
 }
 
 /**
- * Builds every command, or fails if a dependency cannot be constructed.
+ * Builds every command, or fails if a dependency fails to construct.
  *
- * The dashboard writer parses a Global Config connection string, which can be
- * malformed. Surfacing that here means the process refuses to start rather than
- * failing the first time an organizer runs `/hack-night` mid-event.
+ * The dashboard writer parses a Global Config connection string, and that
+ * string can arrive malformed. Surfacing that here means the process refuses
+ * to start rather than failing the first time an organizer runs `/hack-night`
+ * mid-event.
  */
 export function buildCommands(deps: CommandDeps): Result<readonly SlashCommand[], UpstreamError> {
   const dashboard = createDashboardWriter({

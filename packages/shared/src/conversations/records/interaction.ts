@@ -2,9 +2,10 @@
  * What happened to one component click.
  *
  * Discord retries an interaction webhook, and a retry must not run the turn
- * again, so the answer is written down under the interaction's own id. The
- * identity fields are the fence: a receipt that does not describe *this* click is
- * a different click reusing an id, which is a conflict rather than a duplicate.
+ * again. The handler therefore records the answer under the interaction's own
+ * id. The identity fields are the fence. A receipt that does not describe
+ * *this* click is a different click reusing an id — a conflict rather than a
+ * duplicate.
  */
 
 import { z } from "zod";

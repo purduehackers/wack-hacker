@@ -66,6 +66,12 @@ function protectAuditRow(row: z.output<typeof auditRowSchema>) {
   return { ...row, inputPreview: redactAuditPreview(row.inputPreview) };
 }
 
+/**
+ * Runs the audit query against Turso and validates every returned row. An
+ * unconfigured database or a malformed row becomes an `UpstreamError`,
+ * because a wrong audit answer is worse than none. Each preview comes back
+ * redacted before the model sees it.
+ */
 export async function queryAuditLog(input: z.output<typeof auditLogInputSchema>) {
   if (env.TURSO_DATABASE_URL.length === 0) {
     throw new UpstreamError({

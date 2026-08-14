@@ -1,13 +1,14 @@
 /**
  * Every tool and skill this domain declares.
  *
- * One registry rather than a tool map here and a skill catalog there: the two
- * are the same fact seen twice, and a Linear workspace is wide enough that the
+ * One registry rather than a tool map here and a skill catalog there. The two
+ * are the same fact seen twice. A Linear workspace is wide enough that the
  * drift shows up as a tool no skill teaches. `tool_defs/` mirrors the skill
  * list, so a new bundle is a directory and a list entry, never a third place.
  *
- * Skill prose lives in `lib/skill_defs/<name>.md` and is imported as text, so the
- * markdown is a real document while policy stays here next to the tools.
+ * Skill prose lives in `lib/skill_defs/<name>.md`, and this module imports it
+ * as text. The markdown thus stays a real document while policy sits here
+ * next to the tools.
  */
 
 import type { DomainToolSpec } from "../../../lib/policy/domain-tools.ts";

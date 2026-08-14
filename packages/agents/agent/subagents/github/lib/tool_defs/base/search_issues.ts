@@ -6,8 +6,9 @@ import { env, paginationInputShape } from "../../constants.ts";
 
 /**
  * The issue search endpoint returns a label as either a bare name or a label
- * object, so the two shapes are decoded rather than branched on at runtime. A
- * label we cannot read is dropped instead of failing the whole search.
+ * object. This schema decodes both shapes rather than branching on them at
+ * runtime. It drops a label we cannot read instead of failing the whole
+ * search.
  */
 const issueLabelNameSchema = z
   .union([z.string(), z.looseObject({ name: z.string().optional() }).transform((l) => l.name)])

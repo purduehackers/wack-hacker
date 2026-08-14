@@ -64,9 +64,10 @@ export interface ConversationFlow {
 /**
  * The reconciler's shared state, as seen by one sweep step.
  *
- * The two pending sets are held by reference, and `isStopped` is read at the
- * moment a step is about to do more work — the same points the flow always
- * observed a stop, so a shutdown landing mid-sweep still cuts in where it did.
+ * The runtime holds the two pending sets by reference, and a step reads
+ * `isStopped` at the moment it is about to do more work. Those are the same
+ * points the flow always observed a stop, so a shutdown landing mid-sweep
+ * still cuts in where it did.
  */
 export interface FlowRuntime {
   readonly deps: ConversationFlowDeps;

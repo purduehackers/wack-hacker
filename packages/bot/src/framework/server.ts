@@ -1,13 +1,14 @@
 /**
- * The bot's HTTP surface.
+ * @fileoverview The bot's HTTP surface.
  *
- * Deliberately tiny. The bot is not a web service; this exists so a host can
+ * Deliberately tiny. The bot is not a web service. This exists so a host can
  * tell whether the process is actually doing its job. One endpoint serves every
- * host we might use — a Fly or Railway liveness probe, a Docker `HEALTHCHECK`,
- * and the Vercel Sandbox supervisor that decides whether to replace the sandbox.
+ * host we might use. That includes a Fly or Railway liveness probe, a Docker
+ * `HEALTHCHECK`, and the Vercel Sandbox supervisor that decides whether to
+ * replace the sandbox.
  *
- * The distinction that makes it useful: readiness means *the gateway is
- * connected*, not *the process is running*. A bot whose socket has dropped is
+ * The distinction that makes it useful: readiness means *the gateway holds a
+ * live connection*, not merely *the process runs*. A bot whose socket dropped is
  * alive and useless, and a probe that only proved the process existed would
  * never restart it.
  */
@@ -53,7 +54,7 @@ interface ServerDeps {
   readonly conversations: ConversationSink;
   /** Bearer the agent must present on internal callbacks. */
   readonly ingressSecret: string;
-  /** Final startup latch: recovery, handlers, and schedules must all be attached. */
+  /** Final startup latch: recovery, handlers, and schedules must all finish attaching. */
   readonly operationalReady: () => boolean;
 }
 
@@ -104,9 +105,10 @@ async function handleRequest(request: Request, deps: ServerDeps): Promise<Respon
  * The queue-release callback from the agent.
  *
  * It carries no render body. The router waits for the matching durable terminal
- * paint outcome before releasing the next queued turn. Answering 200 on a payload
- * we could not act on would be a lie, but answering 500 would invite the agent
- * to retry a callback that will never succeed, so a bad payload is a 400.
+ * paint outcome before releasing the next queued turn. Answering 200 on a
+ * payload we could not act on would be a lie. Answering 500 would invite the
+ * agent to retry a callback that will never succeed. A bad payload is
+ * therefore a 400.
  */
 async function handleParked(request: Request, deps: ServerDeps): Promise<Response> {
   if (request.method !== "POST") {
@@ -187,7 +189,7 @@ export function startServer(deps: ServerDeps): RunningServer {
   };
   onShutdown("http-server", stop);
 
-  // Bun types `port` as optional because a server can bind a unix socket; this
+  // Bun types `port` as optional because a server can bind a unix socket. This
   // one always binds TCP, so the requested port is a sound fallback.
   const port = server.port ?? deps.port;
   console.info(`health server listening on :${port}${BOT_ROUTES.health}`);

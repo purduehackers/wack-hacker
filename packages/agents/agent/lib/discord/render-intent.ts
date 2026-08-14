@@ -15,6 +15,11 @@ export interface FooterInput {
   readonly toolCalls?: number;
 }
 
+/**
+ * Builds the stats footer under a reply. Each part renders only when present,
+ * and a zero tool-call count vanishes too, so a paint without stats shows no
+ * stray separators.
+ */
 export function renderFooter(input: FooterInput): string {
   const parts: string[] = [];
   if (input.referenceId !== undefined) parts.push(`\`${input.referenceId}\``);
@@ -32,6 +37,11 @@ export interface RenderPublisherDeps {
   readonly botSecret: string;
 }
 
+/**
+ * Wraps the render store so a publish also wakes the bot over HTTP. The wakeup
+ * is best-effort: Redis already holds the intent, so a dead bot only delays
+ * the paint until its recovery sweep.
+ */
 export function createRenderPublisher(deps: RenderPublisherDeps) {
   return {
     publish: async (intent: RenderIntent): Promise<RenderPublication> => {

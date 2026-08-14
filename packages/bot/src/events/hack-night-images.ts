@@ -1,13 +1,14 @@
 /**
  * The hack night photo thread.
  *
- * Images posted in a `Hack Night Images` thread are filed to the CMS under the
- * event slug, which is what the Sunday cleanup counts and ranks. Two handlers:
- * the upload, and an ❌ reaction that takes a photo back out again.
+ * Two handlers: the upload, and an ❌ reaction that takes a photo back out
+ * again. The upload handler files images from a `Hack Night Images` thread to
+ * the CMS under the event slug. That archive is what the Sunday cleanup
+ * counts and ranks.
  *
- * The ✅ / ❌ reactions are the whole feedback mechanism — uploading happens in
- * the background and a photo that silently failed to file would only be noticed
- * when it was missing from the leaderboard.
+ * The ✅ / ❌ reactions are the whole feedback mechanism. Uploading happens in
+ * the background, and nobody would notice a photo that silently failed to
+ * file until it went missing from the leaderboard.
  */
 
 import { DISCORD_IDS, UserRole, roleAtLeast, roleFromMemberRoles } from "@repo/shared/discord";
@@ -33,6 +34,12 @@ function isPhotoThread(message: Message): boolean {
   return channel.name.startsWith(THREAD_NAME_PREFIX);
 }
 
+/**
+ * The upload half. It files each image attachment to the CMS under the event
+ * slug and checks each one independently. A replay after a partial failure
+ * then resumes only the missing files. It skips an opted-out photographer
+ * entirely because the archive is public.
+ */
 export function hackNightImages(deps: {
   readonly cms: CmsClient;
   readonly slugStore: ThreadSlugStore;
@@ -124,7 +131,7 @@ export function hackNightImageRemoval(deps: {
       const removed = await deps.cms.deleteImagesForMessage(slug, message.id);
       if (Result.isError(removed)) return Result.map(removed, () => undefined);
 
-      // Clear our own ✅ so the message no longer claims to be archived.
+      // Clear our own ✅ so the message no longer claims a place in the archive.
       if (removed.value > 0) {
         await message.reactions.cache.get(CHECK)?.users.remove(message.client.user.id);
       }

@@ -24,7 +24,7 @@ const scheduleShape = z.discriminatedUnion("type", [
  * Models routinely serialize a nested tool argument as a string rather than an
  * object, and reliably so for a discriminated union. Eve validates
  * `inputSchema` before the executor runs, so such a call never reaches this
- * file: the model just sees a type error about a shape it has already decided
+ * file. The model just sees a type error about a shape it has already decided
  * how to emit, and retries it unchanged. Accepting both is the same boundary
  * parse this package already does for values Redis hands back either way.
  */

@@ -1,14 +1,15 @@
 /**
  * Every tool and skill this domain declares.
  *
- * One registry rather than a tool map here and a skill catalog there: the two
- * are the same fact seen twice, and splitting them is how a domain this wide
+ * One registry rather than a tool map here and a skill catalog there. The two
+ * are the same fact seen twice. Splitting them is how a domain this wide
  * grows tools no skill describes. `tool_defs/` mirrors the skill list exactly —
  * one directory per skill, one file per tool — and `check:capabilities` fails
  * if it stops doing so.
  *
- * Skill prose lives in `lib/skill_defs/<name>.md` and is imported as text, so the
- * markdown is a real document while policy stays here next to the tools.
+ * Skill prose lives in `lib/skill_defs/<name>.md`, and this module imports it
+ * as text. The markdown thus stays a real document while policy sits here
+ * next to the tools.
  */
 
 import type { DomainToolSpec } from "../../../lib/policy/domain-tools.ts";

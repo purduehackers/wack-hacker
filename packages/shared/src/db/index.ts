@@ -2,11 +2,12 @@
  * Turso (libSQL) access.
  *
  * The prior implementation read `env` directly at module scope, which coupled the data
- * layer to one env schema. Here the config is passed in: each package resolves
- * its own env and calls `getDb` once.
+ * layer to one env schema. Here the caller passes the config in: each package
+ * resolves its own env and calls `getDb` once.
  *
- * The connection is memoized because a libSQL client holds an HTTP agent, and
- * rebuilding it per query would leak sockets in a long-running process.
+ * This module memoizes the connection because a libSQL client holds an HTTP
+ * agent. Rebuilding the client per query would leak sockets in a long-running
+ * process.
  */
 
 import type { Client } from "@libsql/client";
@@ -45,7 +46,7 @@ function buildDb(client: Client): Db {
 let cached: Db | undefined;
 
 /**
- * Process-wide database handle. The first call decides the config; later calls
+ * Process-wide database handle. The first call decides the config. Later calls
  * ignore theirs and return the same handle, which is what makes it safe to call
  * from anywhere without threading a singleton around.
  */

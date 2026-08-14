@@ -1,4 +1,4 @@
-/** Durable Discord adapter state and its per-turn transitions. */
+/** @fileoverview Durable Discord adapter state and its per-turn transitions. */
 
 import type { DeliveryPayload, RenderAuthorization, RenderInputRequest } from "@repo/shared/wire";
 import type { SessionAuthContext } from "eve/context";
@@ -12,7 +12,7 @@ const presentAttribute = z.string().min(1);
 export interface DiscordChannelState {
   channelId: string;
   threadId?: string;
-  /** Discord user message currently being answered. Correlates the park signal. */
+  /** Discord user message that the current turn answers. Correlates the park signal. */
   activeMessageId?: string;
   /** Exact queue delivery epoch for replay-safe completion. */
   activeDispatchId?: string;
@@ -28,15 +28,16 @@ export interface DiscordChannelState {
   turnStartedAt?: number;
   toolCalls: number;
   /**
-   * The last assistant block appended, so a replayed `message.completed` is
-   * recognised by what it says rather than by where it claimed to be.
+   * The last assistant block appended, so `completeStreamingMessage` recognises
+   * a replayed `message.completed` by what it says rather than by where it
+   * claimed to be.
    *
    * `stepIndex` cannot do this job. Eve reports `stepIndex: 0` — and
-   * `sequence: 0` — for *every* step of a turn that suspends and resumes, so a
-   * second model call after a subagent is indistinguishable from a replay of
-   * the first by either field. Event ids do not work either: a retry is emitted
-   * under a fresh id, so keying on those double-counts a replay instead of
-   * dropping it. What actually differs is the text.
+   * `sequence: 0` — for *every* step of a turn that suspends and resumes. A
+   * second model call after a subagent is therefore indistinguishable from a
+   * replay of the first by either field. Event ids do not work either. Eve
+   * emits a retry under a fresh id, so keying on those double-counts a replay
+   * instead of dropping it. What actually differs is the text.
    */
   lastCompletedMessage: string;
   /** Outstanding HITL requests keep normal Discord messages queued. */
@@ -57,6 +58,11 @@ export interface DiscordChannelState {
   finalRenderFooter?: string;
 }
 
+/**
+ * The empty adapter state a channel starts from. `channelId` stays blank until
+ * a delivery supplies a real transport target, because no default channel is a
+ * safe place to render into.
+ */
 export function initialDiscordState(): DiscordChannelState {
   return {
     channelId: "",
@@ -78,7 +84,7 @@ export function initialDiscordState(): DiscordChannelState {
   };
 }
 
-/** Seed used only when Eve creates a new session. Follow-ups are hydrated from auth attributes. */
+/** Seed used only when Eve creates a new session. Auth attributes hydrate follow-ups. */
 export function stateForMessage(payload: DeliveryPayload): DiscordChannelState {
   return {
     ...initialDiscordState(),
@@ -130,7 +136,7 @@ export function beginDiscordTurn(
           ...unrenderable,
         ];
       } else {
-        // Once every required request is covered Eve dismisses any omitted
+        // Once answers cover every required request, Eve dismisses any omitted
         // questions, so keeping their controls would manufacture stale turns.
         state.renderInputRequests = [];
         state.pendingInputRequestIds = [];
@@ -178,6 +184,11 @@ export function beginDiscordTurn(
   delete state.finalRenderFooter;
 }
 
+/**
+ * True while any HITL request or authorization challenge remains open. The
+ * channel must keep the turn parked and its controls on screen. A final
+ * render here would settle a turn a human still owes an answer.
+ */
 export function isWaitingForHuman(state: DiscordChannelState): boolean {
   return state.pendingInputRequestIds.length > 0 || state.pendingAuthorizationNames.length > 0;
 }
@@ -187,6 +198,10 @@ function appendBlock(existing: string, block: string): string {
   return existing === "" ? block : `${existing}\n\n${block}`;
 }
 
+/**
+ * Projects a `message.appended` delta into the visible turn text. Safe under
+ * replay because the delta carries the whole message so far, never a suffix.
+ */
 export function appendStreamingMessage(
   state: DiscordChannelState,
   input: { readonly messageSoFar: string },

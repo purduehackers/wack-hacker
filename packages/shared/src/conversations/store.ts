@@ -3,7 +3,7 @@
  *
  * Every surface is split the same way: a reader that only looks, and a writer
  * that owns every transition of one record. Names are plural for the reader and
- * singular for the writer, so a call site says which it is doing.
+ * singular for the writer, so a call site says which it does.
  */
 
 import type { RedisClient } from "../redis/client.ts";
@@ -21,6 +21,12 @@ import { InteractionWriter } from "./writers/interaction.ts";
 import { RenderWriter } from "./writers/render.ts";
 import { ScheduleWriter } from "./writers/schedule.ts";
 
+/**
+ * Builds every reader and writer over one shared Redis client.
+ *
+ * The object shape is the API: plural names only read, singular names own
+ * writes, so a caller states its intent by the surface it picks.
+ */
 export function createConversationStore(deps: { readonly redis: RedisClient }) {
   const { redis } = deps;
   const deliveries = new DeliveryReader(redis);
@@ -34,7 +40,7 @@ export function createConversationStore(deps: { readonly redis: RedisClient }) {
     /** One component click, and the receipt that makes its retry idempotent. */
     interactions: new InteractionReader(redis),
     interaction: new InteractionWriter(redis),
-    /** Which child session a delegated turn is waiting on. */
+    /** Which child session a delegated turn waits on. */
     delegations: new DelegationReader(redis),
     delegation: new DelegationWriter(redis),
     /** Third-party consent challenges hanging off a dispatch. */
@@ -47,8 +53,8 @@ export function createConversationStore(deps: { readonly redis: RedisClient }) {
     /**
      * Whether a reset may proceed.
      *
-     * `busy` means a delivery is mid-flight into eve, which is a lease on the
-     * record rather than a second key that had to be kept in step with it.
+     * `busy` means a delivery is mid-flight into eve. That state is a lease on
+     * the record, not a second key that someone must keep in step with it.
      */
     resetCutoverStatus: async (
       continuationKey: string,

@@ -5,12 +5,12 @@
  * the bot could not see. These fetches give the agent the surrounding messages
  * so it does not answer as though the channel were empty.
  *
- * Lead-in is fetched **only on the first turn**. The agent pins it for the life
- * of the session, so re-sending it every turn would both waste tokens and break
- * prompt caching by changing bytes the model has already seen. Turn-to-turn
- * memory comes from the durable session instead.
+ * The bot fetches lead-in **only on the first turn**. The agent pins it for the
+ * life of the session. Re-sending it every turn would both waste tokens and
+ * break prompt caching by changing bytes the model has already seen.
+ * Turn-to-turn memory comes from the durable session instead.
  *
- * Every fetch here is best-effort. Missing context degrades an answer; a thrown
+ * Every fetch here is best-effort. Missing context degrades an answer. A thrown
  * error would lose the message entirely, which is much worse.
  */
 
@@ -27,8 +27,8 @@ const REFERENCED_CONTEXT_SIZE = 15;
 /**
  * Per-message cap inside a lead-in block.
  *
- * The block is pinned for the conversation's lifetime, so one pasted wall of
- * text would be re-billed on every step of every turn.
+ * The agent pins the block for the conversation's lifetime. One pasted wall of
+ * text would then cost tokens again on every step of every turn.
  */
 const MAX_MESSAGE_CHARS = 300;
 
@@ -47,13 +47,13 @@ function ellipsize(content: string): string {
  * Renders one message as a single prompt line.
  *
  * A string rather than a structured object because each entry crosses the wire
- * as one `context` item, and eve appends each as its own user message. Keeping
+ * as one `context` item. Eve appends each as its own user message. Keeping
  * the shape flat means the model sees a transcript rather than serialized JSON.
  *
- * The zone is passed explicitly because the process runs in UTC. These lines are
- * the model's only clock for the conversation it is joining, so an unqualified
- * `toLocaleTimeString` would label evening hack-night backscroll with the next
- * morning's hours and make every time-relative answer wrong.
+ * This function passes the zone explicitly because the process runs in UTC.
+ * These lines are the model's only clock for the conversation it joins. An
+ * unqualified `toLocaleTimeString` would label evening hack-night backscroll
+ * with the next morning's hours and make every time-relative answer wrong.
  */
 function renderLeadInLine(message: Message): string {
   const author = message.author.globalName ?? message.author.username;
@@ -71,8 +71,8 @@ function renderLeadInLine(message: Message): string {
 /**
  * Channel backscroll immediately before the mention, oldest first.
  *
- * Discord returns newest-first, so the order is reversed — a transcript the
- * model reads backwards is worse than no transcript.
+ * Discord returns newest-first, so this function reverses the order — a
+ * transcript the model reads backwards is worse than no transcript.
  */
 async function fetchRecentMessages(message: Message): Promise<readonly Message[]> {
   try {
@@ -91,9 +91,9 @@ async function fetchRecentMessages(message: Message): Promise<readonly Message[]
  * The replied-to message plus what preceded it, oldest first.
  *
  * Used when a mention replies to older chatter that has already scrolled out of
- * the recent tail, so the model can see both the anchor and how it came up.
- * The anchor is kept last even when it has no text, so "last entry is the reply
- * target" always holds.
+ * the recent tail. The model can then see both the anchor and how it came up.
+ * This function keeps the anchor last even when it has no text, so "last entry
+ * is the reply target" always holds.
  */
 async function fetchReferencedContext(
   message: Message,
@@ -126,11 +126,10 @@ interface LeadIn {
 /**
  * Both lead-in blocks for a mention, rendered for the wire.
  *
- * The referenced fetch is skipped in two cases: when the reply target lives in
- * another channel, and when it is already in the recent tail. The second check
- * is why the fetches above return messages rather than lines — it needs ids,
- * and without it a reply to something just said would send the same fifteen
- * messages twice.
+ * Two cases skip the referenced fetch: a reply target in another channel, and
+ * one already in the recent tail. That second check is why the fetches above
+ * return messages rather than lines — it needs ids. Without it, a reply to
+ * something just said would send the same fifteen messages twice.
  */
 export async function fetchLeadIn(message: Message): Promise<LeadIn> {
   const recent = await fetchRecentMessages(message);

@@ -2,18 +2,18 @@
  * Reaction feedback on agent replies.
  *
  * A reaction on one of the agent's finished replies is the cheapest quality
- * signal available — nobody has to be asked for it. It is recorded as a wide
- * event joinable to the turn's trace and session, so a run of 👎 can be traced
- * to the turns that earned them.
+ * signal available — the user gives it unprompted. The handler records it as a
+ * wide event joinable to the turn's trace and session. A run of 👎 then traces
+ * back to the turns that earned them.
  *
- * The turn-message lookup doubles as the "is this an agent reply?" filter: only
- * finalized replies are indexed, so a miss ends the handler with no Discord
- * fetch. Bot reactions never arrive here — the router drops them before
+ * The turn-message lookup doubles as the "is this an agent reply?" filter: the
+ * index only holds finalized replies, so a miss ends the handler with no
+ * Discord fetch. Bot reactions never arrive here — the router drops them before
  * dispatch.
  *
- * This handler records; it does not notify the agent. Feedback is about turns
- * that are already over, and reopening a finished session to tell it someone
- * gave a thumbs-up would cost a model call for something nothing acts on.
+ * This handler records. It does not notify the agent. Feedback is about turns
+ * that are already over. Reopening a finished session to tell it someone gave
+ * a thumbs-up would cost a model call for something nothing acts on.
  */
 
 import { Result } from "@repo/shared/result";
@@ -33,9 +33,10 @@ type Sentiment = "positive" | "negative" | "unknown";
 /**
  * Classifies a reaction.
  *
- * Unrecognised emoji are recorded as `unknown` rather than dropped. What people
- * actually react with is worth knowing, and guessing sentiment from an arbitrary
- * emoji would make the positive and negative counts untrustworthy.
+ * The handler records unrecognised emoji as `unknown` rather than dropping
+ * them. What people actually react with is worth knowing, and guessing
+ * sentiment from an arbitrary emoji would make the positive and negative
+ * counts untrustworthy.
  */
 function sentimentOf(emoji: string): Sentiment {
   if (POSITIVE_EMOJI.has(emoji)) return "positive";
@@ -48,6 +49,12 @@ export interface ChatIndexerDeps {
   readonly reporter: Reporter;
 }
 
+/**
+ * Builds the reaction-feedback handler with its dependencies injected.
+ *
+ * The dedup key spans message, user, and emoji, so removing and re-adding the
+ * same reaction still counts once.
+ */
 export function chatFeedback(deps: ChatIndexerDeps) {
   return defineEvent({
     name: "chat-feedback",

@@ -1,5 +1,12 @@
 /// <reference types="node" />
 
+/**
+ * @fileoverview Renders a subagent README from the policy registry and skill
+ * markdown. Everything below `GENERATED_MARKER` regenerates from that data.
+ * Hand-written prose above the marker survives. `normalizeReadme` exists so
+ * the staleness check can compare content while oxfmt re-pads the tables.
+ */
+
 import type { UserRole } from "@repo/shared/discord";
 
 /** One skill's policy plus the description lifted from its markdown frontmatter. */
@@ -25,8 +32,9 @@ export interface ReadmeInput {
 }
 
 /**
- * Everything below this line is derived from `lib/registry.ts` and the skill
- * markdown. Prose above it is hand-written and preserved across regeneration.
+ * The generator derives everything below this line from `lib/registry.ts` and
+ * the skill markdown. Prose above it stays hand-written and survives
+ * regeneration.
  */
 export const GENERATED_MARKER = "<!-- generated: do not edit below this line -->";
 
@@ -36,7 +44,7 @@ export const GENERATED_MARKER = "<!-- generated: do not edit below this line -->
  * Mirrors `descriptorOf` in `lib/policy/domain-runtime.ts`: a tool that does not
  * declare one gets `public` when it only reads and `organizer` otherwise.
  * Recomputing it here rather than importing keeps this script free of the
- * runtime's module graph, at the cost of one rule that must stay in step — if
+ * runtime's module graph. The cost is one rule that must stay in step — if
  * that default ever changes, this table starts lying.
  */
 function effectiveRole(spec: ToolSpec): string {
@@ -90,6 +98,11 @@ export function normalizeReadme(markdown: string): string {
     .trimEnd();
 }
 
+/**
+ * Builds the full README text for one subagent domain. Prose above
+ * `GENERATED_MARKER` in `input.existing` carries over untouched, so a
+ * regeneration never destroys hand-written identity text.
+ */
 export function renderSubagentReadme(input: ReadmeInput): string {
   const { domain, skills, baseTools, tools, existing } = input;
   const toolCount = Object.keys(tools).length;

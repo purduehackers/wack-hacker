@@ -1,9 +1,10 @@
 /**
  * The schedule registry.
  *
- * Explicit, like the command and event registries. Dependencies are passed in
- * because two of the three jobs need the slug store and the CMS client, and a job
- * reaching for a module-level singleton would be untraceable at startup.
+ * Explicit, like the command and event registries. The caller passes
+ * dependencies in because two of the three jobs need the slug store and the
+ * CMS client. A job reaching for a module-level singleton would be untraceable
+ * at startup.
  */
 
 import type { RedisClient } from "@repo/shared/redis";
@@ -20,6 +21,10 @@ export interface ScheduleDeps {
   readonly cmsApiKey: string;
 }
 
+/**
+ * Builds every schedule with its dependencies wired explicitly, so startup
+ * shows exactly which job talks to Redis or the CMS.
+ */
 export function buildSchedules(deps: ScheduleDeps): readonly Schedule[] {
   const slugStore = createThreadSlugStore(deps.redis);
   const cms = createCmsClient({ apiKey: deps.cmsApiKey });

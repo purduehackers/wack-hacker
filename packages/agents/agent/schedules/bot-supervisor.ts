@@ -3,13 +3,17 @@
  *
  * The bot is one always-on container because it owns a Discord gateway, and
  * Vercel Sandbox caps a container at 24 hours. This schedule is what replaces
- * it before that deadline: it holds a Redis fencing lock, starts a
- * digest-pinned candidate, waits for the candidate's own `/health` to report a
- * connected gateway, publishes the new generation atomically, drains the
- * previous one, and sweeps orphans it can prove are its own.
+ * it before that deadline. Each replacement:
+ *
+ * - holds a Redis fencing lock
+ * - starts a digest-pinned candidate
+ * - waits for the candidate's own `/health` to report a connected gateway
+ * - publishes the new generation atomically
+ * - drains the previous one
+ * - sweeps orphans it can prove are its own
  *
  * It lives here rather than in its own deployment because Eve already owns a
- * durable cron surface, and because this app is already the *reader* of the
+ * durable cron surface. Also, this app is already the *reader* of the
  * generation record it writes (`lib/bot/endpoint.ts`). One deployment now owns
  * both sides of that record.
  *
@@ -18,9 +22,10 @@
  * and fenced, so a missed tick costs at most five minutes and a concurrent one
  * loses the Redis mutex race harmlessly.
  *
- * Not to be confused with the other two Sandbox surfaces in this app: Eve's
- * own code-subagent sandboxes and the Vercel provider tools that inspect team
- * sandboxes. This one manages exactly one workload, identified by its tags.
+ * Two other Sandbox surfaces exist in this app: Eve's own code-subagent
+ * sandboxes and the Vercel provider tools that inspect team sandboxes. This
+ * schedule is neither. It manages exactly one workload, identified by its
+ * tags.
  */
 
 import { getRedis } from "@repo/shared/redis";
@@ -40,10 +45,10 @@ const redis = getRedis({
 async function reconcileBotSandbox(): Promise<void> {
   if (!env.BOT_SANDBOX_ENABLED) return;
 
-  // Configuration is assembled per tick rather than at module scope so a
-  // missing bot credential fails this schedule alone. Reasoning, tools, and
-  // the channel routes must keep serving a deployment whose supervision is
-  // misconfigured.
+  // The tick assembles configuration each time rather than at module scope,
+  // so a missing bot credential fails this schedule alone. Reasoning, tools,
+  // and the channel routes must keep serving a deployment whose supervision
+  // config is wrong.
   const result = await Result.tryPromise({
     try: async () => {
       const config = botSupervisionConfig(env);

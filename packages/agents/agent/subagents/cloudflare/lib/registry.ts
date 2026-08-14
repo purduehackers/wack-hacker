@@ -2,12 +2,11 @@
  * Every tool and skill this domain declares.
  *
  * One registry rather than a tool map here and a skill catalog there: the two
- * are the same fact seen twice, and splitting them is what let the old
- * `edge.ts` accumulate 34 tools that no single skill described. `tool_defs/`
- * mirrors the skill list exactly, and `check:capabilities` fails if it stops
- * doing so.
+ * are the same fact seen twice. Splitting them is what let the old `edge.ts`
+ * accumulate 34 tools that no single skill described. `tool_defs/` mirrors the
+ * skill list exactly, and `check:capabilities` fails if it stops doing so.
  *
- * Skill prose lives in `lib/skill_defs/<name>.md` and is imported as text, so the
+ * Skill prose lives in `lib/skill_defs/<name>.md` and loads as text, so the
  * markdown is a real document while policy stays here next to the tools.
  */
 

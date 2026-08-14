@@ -1,19 +1,19 @@
 /**
- * The project's error taxonomy.
+ * @fileoverview The project's error taxonomy.
  *
  * Every failure this codebase produces is a tagged class, never a bare `Error`
  * and never a string. `TaggedError(tag)` gives each one:
  *
- * - props as readonly instance fields (`error.kind`, not `error.props.kind`);
+ * - props as readonly instance fields (`error.kind`, not `error.props.kind`).
  * - `toJSON()`, so it survives the bot↔agent wire — worth stating because
  *   `Error#message` and `#stack` are non-enumerable and
- *   `JSON.stringify(new Error("x"))` is `"{}"`;
- * - a static `.is()` guard and an exhaustive instance `.match()`;
+ *   `JSON.stringify(new Error("x"))` is `"{}"`.
+ * - a static `.is()` guard and an exhaustive instance `.match()`.
  * - `[Symbol.iterator]`, which makes an error directly yieldable inside
  *   `Result.gen`.
  *
- * Messages are derived in each constructor rather than passed in, so the same
- * failure always reads the same way in a log or an audit row.
+ * Each constructor derives its message rather than accepting one. The same
+ * failure then always reads the same way in a log or an audit row.
  *
  * The one distinction that drives observability: an error declared here is
  * *expected*. A `Panic`, an `UnhandledException` from an uncaught
@@ -38,9 +38,10 @@ export class NotFound extends TaggedError("NotFound")<{
 /**
  * The caller's role is insufficient.
  *
- * Tool gating is deny-by-absence — a tool above the caller's role is never
- * shown, so it cannot be called. This exists for the paths where absence is not
- * possible, such as `load_skill` naming a skill that exists but outranks them.
+ * Tool gating is deny-by-absence — a tool above the caller's role never
+ * appears, so the caller cannot call it. This exists for the paths where
+ * absence is not possible, such as `load_skill` naming a skill that exists but
+ * outranks them.
  */
 export class Forbidden extends TaggedError("Forbidden")<{
   required: string;
@@ -136,9 +137,9 @@ export class UpstreamError extends TaggedError("UpstreamError")<{
 }
 
 /**
- * A contract between two of our own components was violated — a payload that
- * passed transport but not schema, a lease released by the wrong owner. Always
- * our bug, so it counts as a defect despite being tagged.
+ * A broken contract between two of our own components — a payload that passed
+ * transport but not schema, a lease released by the wrong owner. Always our
+ * bug, so it counts as a defect despite its tag.
  */
 export class InvariantViolated extends TaggedError("InvariantViolated")<{
   invariant: string;
@@ -168,10 +169,10 @@ export type KnownError =
 /**
  * True when a failure means "we are broken" rather than "that didn't work".
  *
- * Defects belong in Sentry Issues; expected failures belong in metrics. The
+ * Defects belong in Sentry Issues. Expected failures belong in metrics. The
  * prior error handling blurred this and compensated with an
  * `ignoreErrors: ["LockContentionError", "DuplicateMessageError"]` denylist.
- * With tags the distinction is structural, so no denylist is needed.
+ * With tags the distinction is structural, so no denylist is necessary.
  */
 export function isDefect(value: unknown): boolean {
   if (isPanic(value)) return true;
@@ -201,8 +202,8 @@ export function tagOf(value: unknown): string {
 }
 
 /**
- * `Number(...)` reproduces what the hand-written guard did — an SDK that
- * reports `"404"` still resolves — and `.catch(undefined)` keeps one unusable
+ * `Number(...)` reproduces what the hand-written guard did: an SDK that
+ * reports `"404"` still resolves. `.catch(undefined)` keeps one unusable
  * field from hiding a usable one on the other key.
  */
 const httpStatusSchema = z.coerce
@@ -253,8 +254,9 @@ export function serializeError(value: unknown): SerializedError {
 /**
  * What a thrown value says, whatever it turned out to be.
  *
- * `cause instanceof Error ? cause.message : String(cause)` is written out by hand
- * in two dozen places across this repo; every one of them means this.
+ * Two dozen places across this repo write out
+ * `cause instanceof Error ? cause.message : String(cause)` by hand. Every one
+ * of them means this.
  */
 export function messageOf(value: unknown): string {
   return serializeError(value).message;

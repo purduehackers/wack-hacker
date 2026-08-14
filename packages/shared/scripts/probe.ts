@@ -2,9 +2,12 @@
  * Shared scaffolding for the writer checks.
  *
  * `check:delivery` and `check:render` drive different transitions but need the
- * same three things: a synthetic conversation that is safe to point at any
- * environment, a way to erase it either side of a run, and an assertion that
- * prints rather than throws so one failure does not hide the rest.
+ * same three things:
+ *
+ * - a synthetic conversation that is safe to point at any environment
+ * - a way to erase it either side of a run
+ * - an assertion that prints rather than throws so one failure does not hide
+ *   the rest
  */
 
 import {
@@ -35,6 +38,10 @@ interface ProbeIds {
   readonly userId: string;
 }
 
+/**
+ * A synthetic mention payload built from probe-owned ids, so a check can push
+ * work through the real queue without touching real traffic.
+ */
 export function probeMessage(ids: ProbeIds, content: string): MessagePayload {
   return {
     kind: "mention",
@@ -49,10 +56,10 @@ export function probeMessage(ids: ProbeIds, content: string): MessagePayload {
 /**
  * Erase everything a probe can touch.
  *
- * Through the key catalog, not by re-spelling it: a probe that scrubs a key the
- * code no longer writes leaves the real one behind, and the next run inherits it.
- * Render keys are per-dispatch and `enqueue` mints those ids itself, so the caller
- * collects them as it goes and hands them back here.
+ * Through the key catalog, not by re-spelling it. A probe that scrubs a key
+ * the code no longer writes leaves the real one behind, and the next run
+ * inherits it. Render keys are per-dispatch and `enqueue` mints those ids
+ * itself, so the caller collects them as it goes and hands them back here.
  */
 export async function scrubProbe(
   redis: RedisClient,
@@ -97,6 +104,11 @@ interface Probe {
   report: (success: string) => never;
 }
 
+/**
+ * Builds the check/report pair over one shared failure counter. A failed
+ * check prints and keeps going, so one failure does not hide the rest, and
+ * `report` still exits non-zero at the end.
+ */
 export function createProbe(): Probe {
   let failures = 0;
   return {

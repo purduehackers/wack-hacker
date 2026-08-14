@@ -1,16 +1,16 @@
 /**
  * The agent's own Discord REST identity.
  *
- * Discord operations are ordinary provider calls, exactly like Linear or Notion:
- * this subagent talks to Discord's API directly rather than asking the bot to do
- * it for us. What stays on the bot is *paint* — the messages the renderer writes
- * to present the agent's own replies — because those share rate-limit buckets
- * with the gateway client and need a single writer for nonce and visible-commit
- * convergence.
+ * Discord operations are ordinary provider calls, exactly like Linear or
+ * Notion. This subagent talks to Discord's API directly rather than asking the
+ * bot to do it for us. What stays on the bot is *paint* — the messages the
+ * renderer writes to present the agent's own replies. Those share rate-limit
+ * buckets with the gateway client and need a single writer for nonce and
+ * visible-commit convergence.
  *
- * Missing configuration is reported by the runtime's `configurationError`, the
- * same way every other integration declines when its credential is absent, so
- * tool discovery stays a function of role policy rather than credential
+ * The runtime's `configurationError` reports missing configuration, the same
+ * way every other integration declines when its credential is absent. Tool
+ * discovery then stays a function of role policy rather than credential
  * presence.
  */
 
@@ -24,8 +24,8 @@ import { env } from "../../../env.ts";
  * A type parameter restated property by property.
  *
  * Used as a self-constraint, it requires a generic to be a declared shape
- * without naming the bare `object` keyword, which erases every property of
- * whatever it is applied to. `Shaped<T>` is `T`, so nothing about the caller's
+ * without naming the bare `object` keyword. That keyword erases every property
+ * of the type it constrains. `Shaped<T>` is `T`, so nothing about the caller's
  * type is lost or widened on the way through.
  */
 type Shaped<T> = { [K in keyof T]: T[K] };
@@ -33,11 +33,11 @@ type Shaped<T> = { [K in keyof T]: T[K] };
 /**
  * A decoded Discord v10 payload: an object that is neither `null` nor an array.
  *
- * `z.object({})` accepts exactly that set — `null`, every primitive, arrays and
+ * `z.object({})` accepts exactly that set. `null`, every primitive, arrays and
  * functions all fail it, while `Date`, class instances and null-prototype
- * objects pass — so it is a drop-in for the `typeof` test it replaces. The
- * empty shape makes it O(1) and non-recursive, so a cyclic body is answered
- * rather than walked.
+ * objects pass. It is therefore a drop-in for the `typeof` test it replaces.
+ * The empty shape makes it O(1) and non-recursive, so the schema answers a
+ * cyclic body instead of walking it.
  */
 const jsonObjectSchema = z.object({});
 
@@ -47,11 +47,22 @@ function isJsonObject(value: unknown): value is NonNullable<unknown> {
 
 let cached: REST | undefined;
 
+/**
+ * The lazily built REST client every Discord tool shares. The token fallback
+ * keeps construction total. The runtime's `configurationError` declines before
+ * any tool runs without `DISCORD_BOT_TOKEN`, so the placeholder never reaches
+ * the wire.
+ */
 export function discordRest(): REST {
   cached ??= new REST({ version: "10" }).setToken(env.DISCORD_BOT_TOKEN ?? "missing-discord-token");
   return cached;
 }
 
+/**
+ * Builds the `UpstreamError` for a response body that fails this subagent's
+ * shape checks. The 502 signals that Discord answered, but not with the
+ * endpoint's published v10 shape, so the fault is upstream.
+ */
 export function malformedDiscordResponse(endpoint: string): UpstreamError {
   return new UpstreamError({
     service: "Discord",
@@ -66,7 +77,7 @@ export function malformedDiscordResponse(endpoint: string): UpstreamError {
  * Shared by every operations module: the pruning rule is a property of Discord's
  * wire format, not of any one endpoint family.
  *
- * The copy is made by spread and pruned in place because that preserves the
+ * The function copies by spread and prunes in place because that preserves the
  * declared shape `T` on its own. Rebuilding it with `Object.fromEntries` erases
  * the key identity and forces the caller to assert the result back to `T`.
  */
@@ -84,21 +95,20 @@ export function discordObject<T extends Shaped<T>>(value: unknown, endpoint: str
   if (!isJsonObject(value)) {
     throw malformedDiscordResponse(endpoint);
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- REST returns unknown; T is the endpoint's exported v10 result.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- REST returns unknown. T is the endpoint's exported v10 result.
   return value as T;
 }
 
 /**
- * The element constraint is carried by `isJsonObject` rather than by the type
- * parameter: an element type spelled here would have to be written over
- * `T[number]`, which collapses the unions these v10 result types are built from.
- * Every entry is still checked, and an array of anything but objects still
- * throws.
+ * `isJsonObject` carries the element constraint rather than the type parameter.
+ * An element type spelled here would need the form `T[number]`, which collapses
+ * the unions that compose these v10 result types. The guard still checks every
+ * entry, and an array of anything but objects still throws.
  */
 export function discordArray<T extends readonly unknown[]>(value: unknown, endpoint: string): T {
   if (!Array.isArray(value) || value.some((entry) => !isJsonObject(entry))) {
     throw malformedDiscordResponse(endpoint);
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- REST returns unknown; T is the endpoint's exported v10 result.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- REST returns unknown. T is the endpoint's exported v10 result.
   return value as unknown as T;
 }

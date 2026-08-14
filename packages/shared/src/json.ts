@@ -1,13 +1,17 @@
 /**
  * JSON at the Redis boundary.
  *
- * Upstash returns a value either as JSON text or already deserialized,
- * depending on how it was written and which client wrote it, so both shapes
- * have to decode. A codec keeps the two directions in one declaration:
- * `stored(schema)` reads either form, and `z.encode(jsonCodec(schema), value)`
- * produces exactly the text that reads back — the encode half is validated
- * against the same schema, so a record can no longer be written in a shape its
- * own reader rejects.
+ * Upstash returns a value either as JSON text or already deserialized. The
+ * shape depends on how the writer stored it and which client wrote it, so
+ * both shapes have to decode. A codec keeps the two directions in one
+ * declaration:
+ *
+ * - `stored(schema)` reads either form,
+ * - `z.encode(jsonCodec(schema), value)` produces exactly the text that
+ *   reads back.
+ *
+ * The same schema checks the encode half, so no writer can produce a record
+ * in a shape its own reader rejects.
  */
 
 import { z } from "zod";

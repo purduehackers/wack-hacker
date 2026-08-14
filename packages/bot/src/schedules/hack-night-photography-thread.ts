@@ -5,7 +5,7 @@
  * records the event slug so Sunday's cleanup can find the archive.
  *
  * One subtlety carried over verbatim, because getting it wrong destroys the
- * announcement: pinning a message makes Discord emit a `ChannelPinnedMessage`
+ * announcement. Pinning a message makes Discord emit a `ChannelPinnedMessage`
  * system notice in the channel, which is noise. Deleting it means finding *that*
  * message specifically — a naive "delete the most recent message" races the pin
  * and can wipe the announcement that was just posted.
@@ -45,11 +45,16 @@ function threadDateLabel(date: Date): string {
   return `${String(month).padStart(2, "0")}/${String(day).padStart(2, "0")}`;
 }
 
+/**
+ * Builds the Friday-night schedule around an injected slug store, so tests
+ * can watch the recorded slug without a real Redis. The returned `run` carries
+ * the pin-notice cleanup the header warns about.
+ */
 export function hackNightPhotographyThread(deps: { readonly slugStore: ThreadSlugStore }) {
   return {
     name: "hack-night-photography-thread",
     // Friday at 20:00 local. The former cron said "0 0 * * 6" because Vercel
-    // evaluates in UTC; running in-process with an explicit timezone means the
+    // evaluates in UTC. Running in-process with an explicit timezone means the
     // expression can say what it means.
     cron: "0 20 * * 5",
     run: async ({ client }) =>
@@ -83,7 +88,7 @@ export function hackNightPhotographyThread(deps: { readonly slugStore: ThreadSlu
 
           await thread.send(`(<@&${DISCORD_IDS.roles.HACK_NIGHT_PING}>)`);
 
-          // Recorded last: the thread must exist before anything can be filed
+          // Recorded last: the thread must exist before anything can file
           // against its slug.
           const stored = await deps.slugStore.set(thread.id, generateEventSlug(today));
           if (Result.isError(stored)) throw stored.error;

@@ -14,7 +14,7 @@ export const documentationInputSchema = z.strictObject({
   prompt: z.string().describe("The question to ask about Purdue Hackers"),
 });
 
-/** Query ask.purduehackers.com directly; no SDK or Discord credential crosses this boundary. */
+/** Query ask.purduehackers.com directly. No SDK or Discord credential crosses this boundary. */
 export async function queryDocumentation(input: z.output<typeof documentationInputSchema>) {
   if (env.PHACK_ASK_API_KEY === undefined) {
     throw new UpstreamError({

@@ -6,7 +6,7 @@ export default defineAgent({
   model: "deepseek/deepseek-v4-flash-0731",
   modelOptions: {
     providerOptions: {
-      // DeepSeek caches implicitly; `auto` also covers a gateway fallback to a
+      // DeepSeek caches implicitly. `auto` also covers a gateway fallback to a
       // provider that needs explicit cache_control breakpoints.
       gateway: { caching: "auto" },
     },

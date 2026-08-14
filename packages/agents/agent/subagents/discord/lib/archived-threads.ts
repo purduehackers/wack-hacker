@@ -1,12 +1,16 @@
 /**
  * Paging Discord's three archived-thread routes.
  *
- * Only `list_threads` needs this, but it is not a detail of that tool: each
- * route pages on a different cursor — public and private archived threads on the
- * last thread's `archive_timestamp`, joined-private threads on the thread
- * snowflake — and a cursor that fails to strictly advance loops forever against
- * a server that is merely misbehaving. Keeping the walk and its termination
- * proof in one module is what makes that guarantee reviewable.
+ * Only `list_threads` needs this, but it is not a detail of that tool. Each
+ * route pages on a different cursor:
+ *
+ * - public and private archived threads page on the last thread's
+ *   `archive_timestamp`
+ * - joined-private threads page on the thread snowflake
+ *
+ * A cursor that fails to strictly advance loops forever against a server that
+ * is merely misbehaving. Keeping the walk and its termination proof in one
+ * module is what makes that guarantee reviewable.
  */
 
 import { makeURLSearchParams, type REST, type RouteLike } from "@discordjs/rest";
@@ -54,6 +58,13 @@ function nextArchiveCursor(
   return parsed.data;
 }
 
+/**
+ * Walks one archived-thread route to exhaustion and returns every thread.
+ *
+ * Termination is the contract: the cursor must strictly advance on every
+ * page, and a hard page cap backstops it. A misbehaving server therefore
+ * ends in a malformed-response error, not an infinite loop.
+ */
 export async function archivedThreadPages<
   ResultType extends RESTGetAPIChannelUsersThreadsArchivedResult,
 >(

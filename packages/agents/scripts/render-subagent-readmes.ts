@@ -5,8 +5,8 @@
  *
  * The tool table is the part that rots: 689 rows nobody will hand-maintain past
  * the first rename. Generating it and having `check:capabilities` re-render in
- * memory and compare means the table is either correct or CI is red — the same
- * job that script already does for skill/tool coverage.
+ * memory and compare means the table is either correct or CI is red. That
+ * script already does the same job for skill/tool coverage.
  *
  * Prose above the marker is hand-written and preserved.
  */

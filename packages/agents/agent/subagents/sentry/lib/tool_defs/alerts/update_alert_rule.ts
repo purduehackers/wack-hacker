@@ -25,7 +25,7 @@ export const update_alert_rule = defineTool({
     environment: z.string().optional(),
   }),
   execute: async ({ project_slug, rule_id, ...input }) => {
-    // The SDK requires all body fields; we fetch first then merge
+    // The SDK requires all body fields. We fetch the existing rule first, then merge.
     const getResult = await deprecatedRetrieveAnIssueAlertRuleForAProject({
       ...sentryOpts(),
       path: {

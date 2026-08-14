@@ -1,11 +1,11 @@
 /**
  * The only thing that writes authorization challenges.
  *
- * A challenge — an OAuth consent, a device code — is stored rather than kept in
- * agent state because the button that resolves it is clicked in the bot process,
- * which cannot read that state. The index exists so the pair can be cleaned up
- * together: a challenge key alone is unreachable once the turn that knew its id
- * is gone.
+ * A challenge — an OAuth consent, a device code — lives here rather than in
+ * agent state. The person clicks the button that resolves it in the bot
+ * process, and the bot process cannot read agent state. The index exists so
+ * cleanup can remove the pair together. A challenge key alone is unreachable
+ * once the turn that knew its id is gone.
  */
 
 import type { RedisClient } from "../../redis/client.ts";
@@ -31,6 +31,11 @@ if redis.call("SCARD", KEYS[2]) == 0 then redis.call("DEL", KEYS[2]) end
 return 1
 `;
 
+/**
+ * Owns the challenge keys and the per-dispatch index as one unit. Each Lua
+ * script writes both together, so a crash cannot leave a challenge that no
+ * index entry points at.
+ */
 export class AuthorizationWriter {
   private readonly redis: Pick<RedisClient, "eval">;
 

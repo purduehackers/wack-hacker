@@ -9,8 +9,8 @@ import { fileKey } from "../../constants.ts";
  * The mutation grammar Figma's variables endpoint speaks.
  *
  * One POST carries collection, mode and variable changes together, each entry
- * tagged with an action. The generated request types are wide unions, so these
- * schemas are declared against them with `satisfies` — the model gets a schema
+ * tagged with an action. The generated request types are wide unions, so each
+ * schema pins itself to them with `satisfies`. The model then gets a schema
  * rejection naming the supported fields rather than a 400 from Figma.
  */
 

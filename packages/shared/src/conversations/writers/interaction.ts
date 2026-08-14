@@ -1,15 +1,15 @@
 /**
  * The only thing that writes interaction receipts.
  *
- * One script does the whole admission, because every part of it has to be decided
- * against the same instant of the render intent: the click names a revision, and
- * a revision that has moved on means the buttons the person pressed are no longer
- * the buttons being offered. Split across reads and a write, a fast second click
- * answers a question that was already replaced.
+ * One script does the whole admission, because it must decide every part against
+ * the same instant of the render intent. The click names a revision, and a
+ * revision that moved on means the person pressed buttons the intent no longer
+ * offers. Split across reads and a write, a fast second click answers a question
+ * that was already replaced.
  *
  * It also takes the delivery's ingress lease. An answer and a message enter eve
  * through the same slot, so a click arriving mid-handover waits rather than racing
- * it — see `records/delivery.ts` for why that slot is a lease on the record rather
+ * it. See `records/delivery.ts` for why that slot is a lease on the record rather
  * than the separate key it used to be.
  */
 
@@ -113,8 +113,8 @@ return "claimed"
 
 /**
  * `claimed` is the only one that runs the turn. `in-progress` is a duplicate that
- * should wait; `accepted` is one whose answer already exists and must be replayed
- * rather than recomputed; `stale` no longer matches what is on screen.
+ * should wait. `accepted` is one whose answer already exists, so the caller must
+ * replay it rather than recompute it. `stale` no longer matches what is on screen.
  */
 export type InteractionClaim = "claimed" | "in-progress" | "accepted" | "stale";
 
@@ -124,6 +124,11 @@ export interface ClaimedInteraction {
   readonly identity: InteractionIdentity;
 }
 
+/**
+ * Writes interaction receipts through the `CLAIM` script, so every admission
+ * decision happens inside one Redis round trip. Callers act only on the returned
+ * claim: it alone says whether to run, wait, replay, or drop.
+ */
 export class InteractionWriter {
   private readonly redis: Pick<RedisClient, "eval" | "set">;
 
@@ -196,7 +201,10 @@ export class InteractionWriter {
   }
 }
 
-/** The kind is separated in so an option id cannot collide with freeform text. */
+/**
+ * The digest covers the kind as well as the value, so an option id cannot
+ * collide with freeform text.
+ */
 function digestOf(kind: string, value: string): string {
   return createHash("sha256").update(kind).update("\0").update(value).digest("base64url");
 }

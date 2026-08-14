@@ -1,9 +1,9 @@
 /**
- * What the bot has painted into Discord for one delivery.
+ * What the bot painted into Discord for one delivery.
  *
  * The counterpart to the intent: the agent publishes what it wants shown, this
- * records what is actually on screen. Keeping them apart is what lets a paint be
- * retried without duplicating messages — the projection says which message ids
+ * records what is actually on screen. Keeping them apart is what lets a paint
+ * retry without duplicating messages. The projection says which message ids
  * already exist and what they currently say, so a retry edits rather than posts.
  */
 
@@ -19,14 +19,14 @@ export const renderProjectionSchema = z.object({
   /**
    * The message carrying an input request's prose and buttons.
    *
-   * Separate from the anchor because the anchor is edited on every streaming
-   * tick, and Discord does not notify anyone for an edit — a mention added that
-   * way never pings the person being asked for input.
+   * Separate from the anchor: every streaming tick edits the anchor, and
+   * Discord does not notify anyone for an edit. A mention added that way never
+   * pings the person the request addresses.
    */
   hitlMessageId: discordSnowflake.optional(),
   hitlContentHash: contentHash.optional(),
   /**
-   * Which request `hitlMessageId` is asking about.
+   * Which request `hitlMessageId` asks about.
    *
    * A turn can ask more than once — an input request, then a tool approval for
    * what the answer led to. A change in this value means "post a new message",
@@ -34,10 +34,10 @@ export const renderProjectionSchema = z.object({
    */
   hitlRequestKey: z.string().min(1).max(128).optional(),
   /**
-   * What a subagent is doing, as read off its own stream.
+   * What a subagent currently does, as read off its own stream.
    *
-   * The one bot-owned field here: the agent is suspended while the child runs,
-   * which is the whole reason this exists, so the follower writes it and the
+   * The one bot-owned field here. The agent suspends while the child runs —
+   * the whole reason this field exists — so the follower writes it and the
    * renderer merges it in. The intent stays the agent's alone.
    */
   subagentActivity: z.string().min(1).max(200).optional(),
@@ -52,7 +52,7 @@ export const projectionCodec = jsonCodec(renderProjectionSchema);
 
 export type StoredRenderProjection = z.output<typeof renderProjectionSchema>;
 
-/** What the bot has painted. `appliedRevision` is stamped on at write time. */
+/** What the bot painted. The writer stamps `appliedRevision` on at write time. */
 export type RenderProjection = Omit<StoredRenderProjection, "appliedRevision">;
 
 /**
@@ -69,11 +69,12 @@ export type RenderOutcome = (typeof RenderOutcome)[keyof typeof RenderOutcome];
 export const RENDER_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 /**
- * Where a delivery may be painted, fixed at the moment it is queued.
+ * Where the bot may paint a delivery, fixed at the moment the delivery enters
+ * the queue.
  *
  * Immutable for the life of the delivery, which is what lets a paint retry
- * without re-deriving a channel that may since have changed. Built here rather
- * than in the delivery writer that stores it, so one place owns the shape.
+ * without re-deriving a channel that may change in the meantime. Built here
+ * rather than in the delivery writer that stores it, so one place owns the shape.
  */
 export function renderTargetFor(delivery: DeliveryPayload): RenderTarget {
   return {

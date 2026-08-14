@@ -3,14 +3,15 @@
 /**
  * Does the delivery writer actually move a record through Redis?
  *
- * It exists because "it compiles" has been a misleading signal in this layer
- * more than once: the scripts are strings, and a Lua typo, a wrong KEYS index,
- * or a fence reading a field the record does not carry all typecheck perfectly.
+ * It exists because "it compiles" was a misleading signal in this layer more
+ * than once. The scripts are strings. A Lua typo, a wrong KEYS index, or a
+ * fence reading a field the record does not carry all typecheck perfectly.
  *
- * The dispatch id is read back from the claim rather than fixed here. `enqueue`
- * mints it, and a check that asserts against an id the code never used passes
- * while testing nothing — which is exactly how an earlier checker in this repo
- * managed to report success against scripts that were all answering "stale".
+ * This check reads the dispatch id back from the claim rather than fixing it
+ * here. `enqueue` mints it. A check that asserts against an id the code never
+ * used passes while testing nothing. That is exactly how an earlier checker in
+ * this repo managed to report success against scripts that were all answering
+ * "stale".
  *
  * Synthetic conversation key, scrubbed either side, so it is safe anywhere.
  */

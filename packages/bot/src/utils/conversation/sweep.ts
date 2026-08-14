@@ -1,5 +1,6 @@
 /**
- * The recovery loop: durable indexes, not HTTP delivery luck, are the truth.
+ * @fileoverview The recovery loop: durable indexes, not HTTP delivery luck,
+ * are the truth.
  *
  * One sweep renders every ready dispatch, reconciles every parked delivery, and
  * then re-claims every active queue, in that order. Each step re-checks
@@ -40,8 +41,9 @@ type BadEnding = typeof EXPIRED | typeof UNACKNOWLEDGED;
 /**
  * Report whichever way a bad ending went, and say whether the sweep may continue.
  *
- * `false` means the transition itself failed rather than the delivery — nothing
- * useful is known about this conversation, so the pass moves on to the next.
+ * `false` means the transition itself failed rather than the delivery. The
+ * sweep then knows nothing useful about this conversation, so the pass moves
+ * on to the next.
  */
 function announce(
   deps: ConversationFlowDeps,
@@ -73,10 +75,10 @@ function announce(
 }
 
 /**
- * Make sure a delegated turn is being watched.
+ * Make sure the delegated turn for this conversation, if any, has a follower.
  *
- * Started here rather than from a paint, because a paint only happens when a
- * render is published and a delegated turn publishes none — that silence is the
+ * The watch starts here rather than from a paint. A paint only follows a
+ * published render, and a delegated turn publishes none — that silence is the
  * whole reason the follower exists.
  *
  * Idempotent per delivery, so revisiting a conversation every sweep costs a
@@ -89,7 +91,7 @@ async function watchDelegation(deps: ConversationFlowDeps, continuationKey: stri
   const delegation = await deps.store.delegations.current(dispatchId);
   if (Result.isError(delegation)) {
     // Silence here is indistinguishable from "no delegation": the follower never
-    // starts, the turn narrates nothing, and its lease is refreshed by nothing.
+    // starts, the turn narrates nothing, and nothing refreshes its lease.
     deps.reporter.captureDefect(delegation.error, {
       op: "agent.router.decode-delegation",
       attributes: { continuationKey, dispatchId },
@@ -111,9 +113,9 @@ async function recoverActiveQueues(runtime: FlowRuntime): Promise<void> {
   for (const continuationKey of await deps.store.deliveries.conversations()) {
     if (runtime.isStopped()) break;
     try {
-      // Before anything else: a delivery that has held this conversation past the
-      // hard cap is given up on, which is what lets a turn that died without
-      // parking stop blocking every message behind it.
+      // Before anything else: the sweep gives up on a delivery that has held
+      // this conversation past the hard cap. That is what lets a turn that died
+      // without parking stop blocking every message behind it.
       announce(deps, continuationKey, await deps.store.delivery.expire(continuationKey), EXPIRED);
 
       // Recovery needs the dispatch named, because unlike expiry the record
@@ -173,7 +175,7 @@ async function renderDispatches(runtime: FlowRuntime): Promise<void> {
       if (dispatchId === undefined) return;
       try {
         while ((await applyLatest(deps, dispatchId)) === "newer" && !runtime.isStopped()) {
-          // Drain revisions that arrived while the previous one was painted.
+          // Drain revisions that arrived during the previous paint.
         }
       } catch (error) {
         reportFailure(deps, dispatchId, "agent.render.worker", error);
@@ -186,6 +188,12 @@ async function renderDispatches(runtime: FlowRuntime): Promise<void> {
   );
 }
 
+/**
+ * One full recovery pass: render ready dispatches, reconcile parked
+ * deliveries, then re-claim active queues. Rendering runs first so a durable
+ * terminal outcome exists before a queue transition tries to advance past a
+ * parked delivery.
+ */
 export async function sweepOnce(runtime: FlowRuntime): Promise<void> {
   // Render first so a durable terminal outcome is present before the queue
   // transition tries to advance past the parked delivery.

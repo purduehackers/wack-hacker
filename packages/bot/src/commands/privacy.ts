@@ -5,13 +5,13 @@
  * answer to the channel.
  *
  * The command is self-scoped by construction — the user id comes from the
- * interaction, never from an option — so there is no way to read or change
- * someone else's setting and therefore no role gate to get wrong.
+ * interaction, never from an option. There is no way to read or change
+ * someone else's setting, and therefore no role gate to get wrong.
  *
  * One toggle, not a mode enum. The thing a person actually wants to say is
- * "don't put my stuff on the internet", and the previous three modes plus
- * per-project overrides expressed distinctions nobody was making — while the
- * gate itself was never wired up, so none of it had any effect.
+ * "don't put my stuff on the internet". The previous three modes plus
+ * per-project overrides expressed distinctions nobody made. The gate itself
+ * was never wired up, so none of it had any effect.
  */
 
 import { messageOf, Transient } from "@repo/shared/errors";
@@ -26,9 +26,9 @@ import type { SlashCommand } from "../framework/commands.ts";
 /**
  * What opting out does and does not do.
  *
- * It is forward-looking only. Saying so is the honest version — the previous
- * command promised a permanent cross-project deletion that was carried out by
- * an unretried fan-out whose failures were never read.
+ * It is forward-looking only. Saying so is the honest version. The previous
+ * command promised a permanent cross-project deletion, but an unretried
+ * fan-out carried it out and nobody read its failures.
  */
 const OPTED_OUT_NOTICE =
   "You are **opted out**. Wack Hacker will not mirror your messages, ships, or photos " +
@@ -82,11 +82,16 @@ async function run(
   });
 }
 
+/**
+ * Builds the `/privacy` command bound to the shared Redis client. Replies are
+ * ephemeral so that a privacy question never broadcasts its answer. A Redis
+ * failure surfaces as a `Transient` for the framework to retry.
+ */
 export function privacyCommand(redis: RedisClient) {
   return {
     builder,
     execute: async (interaction) => {
-      // Preferences are personal, so nothing here is posted publicly.
+      // Preferences are personal, so this command never posts anything publicly.
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
       const outcome = await run(interaction, redis);

@@ -5,10 +5,10 @@ import { renderProjectionSchema } from "@repo/shared/conversations";
 import { toRendererProjection } from "./renderer.ts";
 
 /**
- * The mapping used to be a hand-written copy of the schema, so a field added to
- * one was silently dropped by the other — which is how an input request's message
- * id stopped reaching the renderer, making every paint post a new question
- * instead of editing the one already on screen.
+ * The mapping used to be a hand-written copy of the schema, so the copy
+ * silently dropped a field added to only one side. That is how an input
+ * request's message id stopped reaching the renderer. Every paint posted a new
+ * question instead of editing the one already on screen.
  */
 test("every stored field but the revision reaches the renderer", () => {
   const stored = renderProjectionSchema.parse({
@@ -33,7 +33,7 @@ test("every stored field but the revision reaches the renderer", () => {
   expect(Object.hasOwn(projection, "appliedRevision")).toBe(false);
 });
 
-/** The renderer mutates what it is handed, so it must not share the stored array. */
+/** The renderer mutates what it receives, so it must not share the stored array. */
 test("overflow is copied rather than aliased", () => {
   const stored = renderProjectionSchema.parse({ overflow: [], appliedRevision: 0 });
   const projection = toRendererProjection(stored);

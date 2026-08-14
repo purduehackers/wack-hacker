@@ -1,5 +1,5 @@
 /**
- * Turning a stored render intent into Discord messages.
+ * @fileoverview Turning a stored render intent into Discord messages.
  *
  * One dispatch at a time, under a Redis claim: load the desired intent and its
  * immutable target, paint it, then record the applied revision. Every failure
@@ -33,7 +33,7 @@ function emit(
   });
 }
 
-/** Something went wrong with this paint; the sweep will try it again. */
+/** Something went wrong with this paint. The sweep will try it again. */
 export function reportFailure(
   deps: ConversationFlowDeps,
   dispatchId: string,
@@ -46,8 +46,8 @@ export function reportFailure(
 /**
  * Something is wrong with the *record*, so retrying cannot help.
  *
- * Captured as a defect rather than counted as an error: the intent, target or
- * projection was written by us and cannot be read back by us.
+ * Captured as a defect rather than counted as an error: we wrote the intent,
+ * target or projection, and we cannot read it back.
  */
 async function discardDefect(
   deps: ConversationFlowDeps,
@@ -144,8 +144,9 @@ async function paint(
   claimToken: string,
   work: RenderWork,
 ): Promise<boolean> {
-  // Never on a terminal frame: the follower is stopped just below, and a finished
-  // turn showing "code: reading files" is a line about work that is over.
+  // Never on a terminal frame: this function stops the follower just below. A
+  // finished turn showing "code: reading files" is a line about work that is
+  // over.
   const progress = work.intent.phase === "streaming" ? subagentProgress(dispatchId) : undefined;
   // The revision alone cannot decide this. A delegated turn publishes no renders
   // for the whole span a subagent runs, so its narration changes what is on
@@ -182,7 +183,7 @@ async function paint(
     ...(progress === undefined ? {} : { subagentActivity: progress }),
     terminal: work.intent.phase !== "streaming",
   });
-  // A turn that has stopped streaming has nothing left to narrate.
+  // A turn that no longer streams has nothing left to narrate.
   if (work.intent.phase !== "streaming") stopFollowing(dispatchId);
 
   if (Result.isError(painted)) {
@@ -200,6 +201,13 @@ async function paint(
   return work.intent.phase === "streaming" || indexTurn(deps, dispatchId, work);
 }
 
+/**
+ * Applies the newest stored intent for one dispatch under a Redis claim.
+ *
+ * A "newer" result means a fresher revision landed while this one painted, so
+ * the caller loops until the dispatch is quiet. Every failure path either
+ * leaves the claim for a retry or discards the dispatch.
+ */
 export async function applyLatest(
   deps: ConversationFlowDeps,
   dispatchId: string,
@@ -261,6 +269,12 @@ export async function applyLatest(
   }
 }
 
+/**
+ * Records that a parked payload still waits on its terminal Discord render.
+ *
+ * Tagged as a Transient error: the caller re-queues the dispatch, and the next
+ * sweep tries the paint again.
+ */
 export function reportPendingRender(deps: ConversationFlowDeps, payload: ParkedPayload): void {
   deps.reporter.emit({
     op: "agent.router.parked",

@@ -16,7 +16,7 @@ const migrations = readMigrationFiles({
 const latest = migrations.at(-1);
 if (latest === undefined) throw new Error("repository has no database migrations");
 
-/** `PRAGMA table_info` names every column; a non-string means a broken driver. */
+/** `PRAGMA table_info` names every column. A non-string means a broken driver. */
 const columnNameSchema = z.string();
 
 function rowName(row: Row): string {

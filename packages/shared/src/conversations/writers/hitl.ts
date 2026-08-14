@@ -1,12 +1,12 @@
 /**
  * The only thing that writes the HITL claim.
  *
- * One question, one answerer. Two people can see the same buttons — that is the
- * point of rendering them in a channel — so the first click wins and the rest are
+ * One question, one answerer. Two people can see the same buttons — that is
+ * the point of rendering them in a channel. The first click wins. The rest are
  * told the question is taken, rather than every click forwarding an answer.
  *
  * Fenced on the render revision rather than the request id, because a turn can
- * ask again: a new revision supersedes the claim on the old one, which is what
+ * ask again. A new revision supersedes the claim on the old one. That is what
  * lets an approval follow the question it came out of.
  */
 
@@ -18,14 +18,16 @@ import { evalFlag } from "../io.ts";
 import { hitlClaimKey, renderIntentKey, resetKey } from "../keys.ts";
 
 /**
- * How long a click may hold the question while it is being forwarded.
+ * How long a click may hold the question during the forward.
  *
- * Short on purpose, and this is the only thing that unwedges a forward that never
- * landed. `answerHitl` has no honest release to call: a failed `sendInteraction`
- * is ambiguous — a 4xx means eve never saw it, a timeout means it may be running
- * right now — so releasing on failure risks forwarding the same question twice.
- * Waiting the window out decides nothing it cannot know. The forward's own budget
- * is two attempts of ten seconds, so this is roughly four times it.
+ * Short on purpose, and this is the only thing that unwedges a forward that
+ * never landed. `answerHitl` has no honest release to call: a failed
+ * `sendInteraction` is ambiguous. A 4xx means eve never saw it. A timeout
+ * means it may still run right now. Releasing on failure therefore risks
+ * forwarding the same question twice.
+ *
+ * Waiting the window out decides nothing it cannot know. The forward's own
+ * budget is two attempts of ten seconds, so this is roughly four times it.
  */
 const FORWARDING_TTL_MS = 90 * 1_000;
 
@@ -88,9 +90,14 @@ export interface HitlClaimInput {
   readonly interactionId: string;
 }
 
-/** `taken` means somebody else got there first; `stale` means the question moved on. */
+/** `taken` means somebody else got there first. `stale` means the question moved on. */
 export type HitlClaim = "acquired" | "taken" | "stale";
 
+/**
+ * Applies the HITL claim transitions through atomic Lua scripts. Atomicity is
+ * what makes the first click win: two racing clicks cannot both see an
+ * unclaimed question.
+ */
 export class HitlWriter {
   private readonly redis: Pick<RedisClient, "eval">;
 
@@ -126,7 +133,7 @@ export class HitlWriter {
     return known.success ? known.data : "stale";
   }
 
-  /** Mark the claim answered, once eve has taken the response. */
+  /** Mark the claim answered, once eve takes the response. */
   async accept(dispatchId: string, revision: number, interactionId: string): Promise<boolean> {
     return evalFlag(
       this.redis,

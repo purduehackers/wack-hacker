@@ -19,7 +19,7 @@ import {
   summarizeAutoModRule,
 } from "../../constants.ts";
 
-/** Only creation names a trigger; an update cannot change what a rule triggers on. */
+/** Only creation names a trigger. An update cannot change what a rule triggers on. */
 const AUTO_MOD_TRIGGER_TYPES = {
   1: AutoModerationRuleTriggerType.Keyword,
   3: AutoModerationRuleTriggerType.Spam,

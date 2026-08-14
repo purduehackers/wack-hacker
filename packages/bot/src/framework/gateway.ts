@@ -3,8 +3,8 @@
  *
  * Interactions and events arrive over one WebSocket and all REST calls share
  * discord.js's rate-limit manager. The selected intents are the minimum needed
- * for message content, reactions, and community features; partials cover events
- * for messages that were not cached by this process.
+ * for message content, reactions, and community features. Partials cover
+ * events for messages this process never cached.
  */
 
 import { messageOf, Transient } from "@repo/shared/errors";
@@ -19,6 +19,10 @@ interface GatewayDeps {
   readonly onError: (error: Error, context: { readonly op: string }) => void;
 }
 
+/**
+ * Builds the client without logging in, so callers can attach listeners
+ * before the first event can fire. `connect` performs the actual login.
+ */
 export function createClient(): Client {
   return new Client({
     intents: [
@@ -40,9 +44,9 @@ export function createClient(): Client {
 /**
  * Logs in and resolves once the gateway reports ready.
  *
- * Readiness is awaited rather than assumed so the health endpoint cannot report
- * a bot that is up while its socket is still connecting, and so a bad token
- * fails at startup instead of silently never receiving events.
+ * This function awaits readiness rather than assuming it. The health endpoint
+ * then cannot report a bot that is up while its socket is still connecting.
+ * A bad token also fails at startup instead of silently never receiving events.
  */
 export async function connect(
   client: Client,

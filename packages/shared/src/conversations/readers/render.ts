@@ -1,10 +1,14 @@
 /**
  * Reads of the render aggregate. Never writes.
  *
- * Four keys per delivery, each answering a different question: the *intent* is
- * what the agent wants shown, the *target* is where it may be shown, the
- * *projection* is what is currently on screen, and the *outcome* is whether the
- * final state is durable. A paint needs all four.
+ * Four keys per delivery, each answering a different question:
+ *
+ * - the *intent* is what the agent wants shown,
+ * - the *target* is where the bot may paint it,
+ * - the *projection* is what is currently on screen,
+ * - the *outcome* is whether the final state is durable.
+ *
+ * A paint needs all four.
  */
 
 import type { InvalidInput } from "../../errors.ts";
@@ -24,6 +28,10 @@ import {
 import type { RenderOutcome, StoredRenderProjection } from "../records/render.ts";
 import { renderProjectionSchema } from "../records/render.ts";
 
+/**
+ * Read-only view of the four render keys of one delivery. It takes only
+ * `get` and `smembers`, so holding a reader can never mutate a paint.
+ */
 export class RenderReader {
   private readonly redis: Pick<RedisClient, "get" | "smembers">;
 
@@ -47,7 +55,7 @@ export class RenderReader {
     return decodeRenderIntent(redisValue(raw));
   }
 
-  /** Where it may be shown. Immutable for the life of the delivery. */
+  /** Where the bot may paint it. Immutable for the life of the delivery. */
   async target(dispatchId: string): Promise<Result<RenderTarget | undefined, InvalidInput>> {
     const raw: unknown = await this.redis.get(renderTargetKey(dispatchId));
     if (raw === null || raw === undefined) return Result.ok(undefined);
@@ -57,8 +65,8 @@ export class RenderReader {
   /**
    * What is currently on screen.
    *
-   * An absent projection is a delivery nothing has painted yet, which is a
-   * normal starting state — so it reads as an empty one, seeded with the anchor
+   * An absent projection is a delivery before its first paint, which is a
+   * normal starting state. So it reads as an empty one, seeded with the anchor
    * the bot may have already posted.
    */
   async projection(

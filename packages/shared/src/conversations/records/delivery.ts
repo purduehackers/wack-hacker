@@ -7,7 +7,7 @@ import { LEASE_LUA, leaseSchema } from "../lease.ts";
 /**
  * Mirrors `DeliveryPhase` in `machines/delivery.ts`.
  *
- * Restated as a zod enum because this is the io boundary: the machine describes
+ * Restated as a zod enum because this is the io boundary. The machine describes
  * what may happen, this decides what may be *read back* out of Redis. `queued`
  * is absent because a queued delivery is a list entry, not a record.
  */
@@ -15,7 +15,7 @@ export const StoredPhase = z.enum(["claimed", "live", "parked", "recovery-requir
 
 export const deliveryRecordSchema = z.strictObject({
   phase: StoredPhase,
-  /** Identity every fence compares against; never re-derived. */
+  /** Identity every fence compares against. Never re-derived. */
   dispatchId: z.uuid(),
   messageId: z.string().min(1).max(32),
   /** Empty until eve acknowledges. Several transitions turn on that emptiness. */
@@ -47,7 +47,7 @@ export type DeliveryRecord = z.output<typeof deliveryRecordSchema>;
  * Fence, then write. Prepended to every script that touches this record.
  *
  * `writeRecord` carries `KEEPTTL`, because a bare `SET` clears a Redis expiry —
- * the mistake that once made conversations immortal moments after `claim` had
+ * the mistake that once made conversations immortal moments after `claim`
  * bounded them.
  */
 export const DELIVERY_RECORD_LUA = `

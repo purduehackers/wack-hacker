@@ -8,7 +8,7 @@ import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain
 import { discordObject, discordRest } from "../../client.ts";
 import { reason } from "../../constants.ts";
 
-/** An invite code is globally addressable, so scope must be proved before revoking. */
+/** An invite code is globally addressable, so this check must prove scope before a revoke. */
 async function requireGuildInvite(rest: REST, code: string): Promise<void> {
   const invite = discordObject<RESTGetAPIInviteResult>(
     await rest.get(Routes.invite(code)),

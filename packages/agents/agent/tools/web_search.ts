@@ -93,6 +93,12 @@ const exaResponseSchema = z.strictObject({
     .optional(),
 });
 
+/**
+ * Runs one Exa search and renders the results as numbered markdown for the
+ * model. It throws `UpstreamError` for a missing key, an Exa rejection, or a
+ * response that fails schema validation. The caller therefore maps every
+ * failure onto one tool-facing shape.
+ */
 export async function searchWeb(input: z.output<typeof webSearchInputSchema>) {
   if (env.EXA_API_KEY === undefined) {
     throw new UpstreamError({

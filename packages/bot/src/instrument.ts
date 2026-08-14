@@ -4,10 +4,11 @@ import { z } from "zod";
 /**
  * The trace sample rate, parsed rather than coerced.
  *
- * This module is a `--preload`, so it runs before `env.ts` and cannot use it:
- * validating the whole environment here would move every missing-credential
- * failure ahead of `Sentry.init`, which is the one thing that has to survive a
- * bad configuration. Hence a local schema for the single variable it reads.
+ * This module is a `--preload`, so it runs before `env.ts` and cannot use it.
+ * Validating the whole environment here would move every missing-credential
+ * failure ahead of `Sentry.init`. That init is the one thing that has to
+ * survive a bad configuration. Hence a local schema for the single variable it
+ * reads.
  *
  * `Number("")` is 0 and `Number("abc")` is NaN — the old `Number.isFinite`
  * guard caught the second and silently accepted the first as "never sample".

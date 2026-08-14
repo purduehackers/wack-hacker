@@ -28,13 +28,13 @@ function integrationConfigured(name: CoreToolName): boolean {
         env.GLOBAL_CONFIG !== undefined && isGlobalConfigConnectionConfigured(env.GLOBAL_CONFIG)
       );
     case "list_audit_log":
-      // `TURSO_DATABASE_URL` is required by `env.ts`, so the audit log is
+      // `env.ts` requires `TURSO_DATABASE_URL`, so the audit log counts as
       // configured whenever the process started at all.
       return true;
   }
 }
 
-/** Role-gated discovery is resolved from the current Eve delivery on every turn. */
+/** Resolves role-gated discovery from the current Eve delivery on every turn. */
 export function isCoreToolVisible(name: CoreToolName, current: SessionAuthContext | null): boolean {
   if (!integrationConfigured(name)) return false;
   const principal = requirePrincipal(current);
@@ -43,6 +43,13 @@ export function isCoreToolVisible(name: CoreToolName, current: SessionAuthContex
   return !Result.isError(decision) && decision.value.discover;
 }
 
+/**
+ * The execute-time gate that runs before every core tool touches its
+ * integration. A denial comes back as a ready-to-return tool output, so tool
+ * bodies never invent their own denial shape. The output names the missing
+ * role, the exhausted budget, or the required confirmation. An unconfigured
+ * integration denies the same way, with a 503 in the output.
+ */
 export async function authorizeCoreTool(name: CoreToolName, ctx: ToolContext) {
   if (!integrationConfigured(name)) {
     return {

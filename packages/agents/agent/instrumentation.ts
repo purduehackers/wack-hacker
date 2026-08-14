@@ -2,10 +2,10 @@ import * as Sentry from "@sentry/node";
 import { defineInstrumentation } from "eve/instrumentation";
 
 export default defineInstrumentation({
-  // Prompts and completions are attached to spans, which is what Sentry's AI
-  // conversation view reconstructs a turn from — without them it has spans and
+  // Eve attaches prompts and completions to spans. Sentry's AI conversation
+  // view reconstructs a turn from them — without them it has spans and
   // timings but nothing to show. This is an internal Discord assistant for one
-  // guild, and the alternative was being unable to see why a turn was slow.
+  // guild, and the alternative was no way to see why a turn was slow.
   recordInputs: true,
   recordOutputs: true,
   // Eve extracts W3C traceparent from authored-channel request headers and
@@ -16,21 +16,21 @@ export default defineInstrumentation({
    * Group a conversation's turns in Sentry.
    *
    * Every `gen_ai.*` attribute was already populated except the one that groups
-   * them: `gen_ai.conversation.id` arrived as `""`, so the AI conversation view
-   * had spans, models, and token counts but nothing to file them under, and
+   * them: `gen_ai.conversation.id` arrived as `""`. The AI conversation view
+   * had spans, models, and token counts but nothing to file them under. It
    * listed no conversations at all while the project traced at 100%.
    *
    * The session id is the right key. This channel resolves one Eve session per
-   * Discord continuation key, so it is stable across every turn of a thread and
-   * changes exactly when the conversation does. The turn id rides along because
-   * a trace covers one turn, and finding the rest of the conversation from a
-   * single slow trace is the whole point.
+   * Discord continuation key. It is therefore stable across every turn of a
+   * thread and changes exactly when the conversation does. The turn id rides
+   * along because a trace covers one turn. Finding the rest of the conversation
+   * from a single slow trace is the whole point.
    */
   events: {
     "step.started": ({ session, turn }) => ({
       runtimeContext: {
         "gen_ai.conversation.id": session.id,
-        // Not `eve.*`: that prefix is reserved and eve drops those keys.
+        // Not `eve.*`: eve reserves that prefix and drops those keys.
         "wack.turn_id": turn.id,
         "wack.turn_sequence": turn.sequence,
       },
@@ -47,8 +47,8 @@ export default defineInstrumentation({
       release: process.env["SENTRY_RELEASE"],
       serverName: agentName,
       // Same call: this deployment serves one internal guild, and a trace
-      // without the requester attached cannot be tied back to the turn someone
-      // is asking about.
+      // without the requester attached cannot point back to the turn someone
+      // asks about.
       sendDefaultPii: true,
       enableLogs: true,
       integrations: [Sentry.consoleLoggingIntegration({ levels: ["info", "warn", "error"] })],

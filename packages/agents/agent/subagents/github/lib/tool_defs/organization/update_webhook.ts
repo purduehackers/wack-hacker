@@ -13,7 +13,7 @@ export const update_webhook = defineTool({
     url: webhookUrl.exactOptional(),
     content_type: z.enum(["json", "form"]).exactOptional(),
     // An empty secret is not "leave it alone" — GitHub reads it as "clear the
-    // signing secret", so it is rejected rather than forwarded.
+    // signing secret", so the schema rejects it rather than forwarding it.
     secret: z.string().min(1).exactOptional(),
     events: z.array(z.string()).exactOptional(),
     active: z.boolean().exactOptional(),

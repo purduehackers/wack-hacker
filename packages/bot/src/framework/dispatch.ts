@@ -7,9 +7,9 @@
  *    handler produces an ephemeral message, never a silent acknowledgement.
  *    Discord shows an unanswered interaction as "the application did not
  *    respond", which reads as the whole bot being broken.
- * 2. **Failures are classified, not swallowed.** Every outcome passes through
- *    `instrument`, so an expected failure is counted and a defect is reported —
- *    exactly once, from one place.
+ * 2. **No failure goes unclassified or swallowed.** Every outcome passes
+ *    through `instrument`, which counts an expected failure and reports a
+ *    defect — exactly once, from one place.
  */
 
 import { InvariantViolated, messageOf, Transient } from "@repo/shared/errors";
@@ -109,8 +109,8 @@ async function dispatchInteractionInSpan(
         try: () => command.execute(interaction),
         catch: (cause) => cause,
       }).then((settled) =>
-        // A handler that throws instead of returning is itself a failure; flatten
-        // so both shapes land on the same path.
+        // A handler that throws instead of returning is itself a failure.
+        // Flatten so both shapes land on the same path.
         Result.isError(settled) ? Result.err(settled.error) : settled.value,
       ),
   );
@@ -120,6 +120,12 @@ async function dispatchInteractionInSpan(
   }
 }
 
+/**
+ * Single entry point for every gateway interaction, run inside its own trace
+ * span. A Redis claim on the interaction id keeps an overlapping process from
+ * answering the same interaction twice. The header guarantees — a reply
+ * always, failures classified — hold from here down.
+ */
 export async function dispatchInteraction(
   interaction: Interaction,
   deps: DispatchDeps,

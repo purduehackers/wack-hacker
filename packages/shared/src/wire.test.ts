@@ -5,10 +5,10 @@ import { decodeDeliveryPayload, MAX_CONTENT_CHARS, MAX_SCHEDULE_CONTENT_CHARS } 
 
 /**
  * `content` carries `max(9_000)` on the schema, but a refinement holds anything
- * that did not come from a schedule to 4_000. Nothing validates on the way *in* —
- * `enqueue` stringifies whatever it is handed — so an over-long fold is only
- * caught by `claim`, at which point the delivery is already on the queue and can
- * never be decoded off it.
+ * that did not come from a schedule to 4_000. Nothing validates on the way *in*
+ * — `enqueue` stringifies whatever it receives — so only `claim` catches an
+ * over-long fold. By then the delivery is already on the queue, and no decode
+ * can ever take it off.
  */
 function deliveryOfLength(kind: "mention" | "scheduled", length: number): unknown {
   return {

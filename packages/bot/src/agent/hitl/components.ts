@@ -1,3 +1,12 @@
+/**
+ * @fileoverview Renders human-in-the-loop asks as Discord components and
+ * parses clicked component ids back into locators.
+ *
+ * Every custom id carries the dispatch id, the render revision, and the
+ * position of the ask inside the dispatch. The interaction handler can then
+ * route any click, however old, without storage of its own.
+ */
+
 import { sliceText } from "@repo/shared/text";
 import type {
   RenderAuthorization,
@@ -35,21 +44,21 @@ export type HitlLocator =
 interface HitlView {
   readonly notice?: string;
   /**
-   * Identity of the question being asked, stable across re-renders of it.
+   * Identity of the question the agent asks, stable across re-renders of it.
    *
    * The renderer posts a new message when this changes rather than editing the
-   * previous one, so a turn that asks twice leaves two records instead of one
-   * overwritten one.
+   * previous one. A turn that asks twice therefore leaves two records instead
+   * of one overwritten one.
    */
   readonly key?: string;
   readonly components: APIActionRowComponent<APIComponentInMessageActionRow>[];
   /**
-   * Users the notice mentions and who should actually be notified.
+   * Users the notice mentions and who the bot should actually notify.
    *
-   * Every render message is posted with mentions suppressed, which is right for
-   * streamed assistant prose — it must never ping someone because the model
-   * wrote an `@`. An input request is the exception: it names one person and is
-   * useless if they are not told.
+   * The bot posts every render message with mentions suppressed, which is
+   * right for streamed assistant prose. It must never ping someone because the
+   * model wrote an `@`. An input request is the exception: it names one person
+   * and is useless if they are not told.
    */
   readonly mentionUserIds: readonly string[];
 }
@@ -149,10 +158,10 @@ function inputRows(
  * Ask the person, then say what for.
  *
  * The request used to open with a bold banner and put the actual question
- * underneath, so the first line was the label rather than the ask. The mention
- * leads now — it is a direct address, and it is the line that pings — and the
- * question follows as a quote so it reads as the thing being asked rather than
- * more assistant prose. What is being approved is detail, and sits last.
+ * underneath. The first line was then the label rather than the ask. The
+ * mention leads now: it is a direct address, and it is the line that pings.
+ * The question follows as a quote, so it reads as the ask itself rather than
+ * more assistant prose. The subject of the approval is detail, and sits last.
  */
 function publicInputNotice(request: RenderInputRequest): string {
   const approving = request.kind === "tool-approval";
@@ -184,6 +193,12 @@ function authorizationName(authorization: RenderAuthorization): string {
   return authorization.displayName ?? authorization.name;
 }
 
+/**
+ * Projects the intent's pending asks into one Discord view. Discord allows at
+ * most five component rows, so authorization buttons pack into the last row
+ * of buttons and any overflow drops silently. Only the first input request
+ * renders.
+ */
 export function renderHitl(intent: RenderIntent): HitlView {
   const request = intent.inputRequests?.[0];
   const authorizations = intent.authorizations ?? [];
@@ -225,8 +240,8 @@ export function renderHitl(intent: RenderIntent): HitlView {
     }
   }
 
-  // Authorizations have no request id of their own, so they are keyed by what
-  // they are asking to connect — which is what changes when the ask changes.
+  // Authorizations have no request id of their own, so their key names what
+  // they ask to connect. That is what changes when the ask changes.
   const key =
     request?.requestId ??
     (authorizations.length === 0
@@ -242,8 +257,9 @@ export function renderHitl(intent: RenderIntent): HitlView {
 }
 
 /**
- * The same schema the wire contract declares `dispatchId` with, so a custom id
- * this bot minted is never rejected by a stricter local copy of the format.
+ * The same schema the wire contract declares `dispatchId` with. Reuse prevents
+ * a stricter local copy of the format from rejecting a custom id this bot
+ * minted.
  */
 const dispatchId = z.uuid();
 
@@ -283,6 +299,11 @@ function parseInputCustomId(customId: string): HitlLocator | undefined {
   };
 }
 
+/**
+ * Recovers the locator a HITL custom id encodes. A malformed or foreign id
+ * yields undefined, so the interaction handler reports an unsupported control
+ * instead of crashing the dispatcher.
+ */
 export function parseLocator(customId: string): HitlLocator | undefined {
   return parseInputCustomId(customId) ?? parseAuthorizationCustomId(customId);
 }
@@ -302,6 +323,11 @@ function parseAuthorizationCustomId(customId: string): HitlLocator | undefined {
   };
 }
 
+/**
+ * Mints the custom id for the modal a freeform click opens. It reuses the
+ * input encoding with action `m`, so the modal submit routes back to the same
+ * request as the button that opened it.
+ */
 export function modalCustomId(locator: Extract<HitlLocator, { readonly kind: "input" }>): string {
   return inputCustomId(locator.dispatchId, locator.revision, locator.requestIndex, "m");
 }

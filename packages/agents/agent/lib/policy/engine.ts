@@ -83,7 +83,7 @@ const capabilities = module("capabilities", { input: inputSchema })
     const confirmation = confirmationFor(ctx.input.capability);
     if (ctx.input.principal.source !== PolicySource.Scheduled) return confirmation;
     // Scheduled work has nobody present to answer a confirmation. Only tools
-    // that require no confirmation may run; converting a required confirmation
+    // that require no confirmation may run. Converting a required confirmation
     // to none would turn scheduling into an approval bypass.
     return confirmation === Confirmation.None ? Confirmation.None : undefined;
   });

@@ -9,9 +9,9 @@ import { z } from "zod";
 /**
  * Input fields, enums and response sentinels shared across this domain's tools.
  *
- * Anything more than one tool file needs lives here rather than being copied:
- * the issue field set alone is read by two write tools, and a field that drifts
- * between create and update is a bug the type system cannot see.
+ * Anything more than one tool file needs lives here rather than in copies. The
+ * issue field set alone feeds two write tools. A field that drifts between
+ * create and update is a bug the type system cannot see.
  */
 
 export const issueRelationSchema = z
@@ -34,9 +34,9 @@ export const issueRelationSchema = z
 export type IssueRelation = NonNullable<z.output<typeof issueRelationSchema>>[number];
 
 /**
- * Linear renders label colors from a six-digit hex triple. The case-insensitive
- * class is spelled out rather than carried on an `i` flag because
- * `z.toJSONSchema` emits `RegExp.source` and drops flags — a lowercase-only
+ * Linear renders label colors from a six-digit hex triple. The regex spells out
+ * the case-insensitive class rather than carrying an `i` flag, because
+ * `z.toJSONSchema` emits `RegExp.source` and drops flags. A lowercase-only
  * `pattern` would advertise a narrower field than this schema accepts.
  */
 export const hexColor = z.stringFormat("hex-color", /^#[0-9a-fA-F]{6}$/u);
@@ -58,10 +58,10 @@ export const issueFields = {
   parentId: z.string().exactOptional().describe("Parent issue ID for sub-issues"),
 };
 
-/** Health on a project update; distinct from the initiative-update enum. */
+/** Health on a project update. Distinct from the initiative-update enum. */
 export const projectUpdateHealth = z.enum(ProjectUpdateHealthType).exactOptional();
 
-/** Health on an initiative update; distinct from the project-update enum. */
+/** Health on an initiative update. Distinct from the project-update enum. */
 export const initiativeUpdateHealth = z.enum(InitiativeUpdateHealthType).exactOptional();
 
 export const initiativeStatus = z.enum(InitiativeStatus);
@@ -80,8 +80,8 @@ export const INVITE_ROLE: Record<"admin" | "member" | "guest", UserRoleType> = {
 /**
  * Value the label projections report for a workspace-wide label, which has no
  * team. Every label in a list keeps the same key set so the model can compare
- * rows, which means "no team" has to serialize as an explicit null rather than
- * a missing key. One named sentinel keeps the label tools under the no-null
+ * rows. "No team" therefore has to serialize as an explicit null rather than a
+ * missing key. One named sentinel keeps the label tools under the no-null
  * rule.
  */
 // oxlint-disable-next-line unicorn/no-null -- serialized label rows keep a stable key set, so an unscoped label is an explicit null

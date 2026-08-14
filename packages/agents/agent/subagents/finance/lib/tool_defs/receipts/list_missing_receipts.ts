@@ -8,7 +8,7 @@ import { hcbTransactionSchema, projectTransaction, type HcbTransaction } from ".
  * List transactions flagged as missing a receipt.
  *
  * IMPORTANT: the HCB public API v3 does not expose receipt files/URLs. This
- * tool can only report whether a receipt is attached (via the
+ * tool can only report whether a transaction carries a receipt (via the
  * `receipts: { count, missing }` summary on each transaction). Uploading or
  * viewing actual receipt files still requires the HCB web UI.
  */

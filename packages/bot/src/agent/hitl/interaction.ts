@@ -1,3 +1,14 @@
+/**
+ * @fileoverview Discord-side handling for human-in-the-loop controls.
+ *
+ * A click on an agent-rendered button, select, or modal lands here. The
+ * handler resolves the locator against the stored render intent and target,
+ * refuses stale or misdirected interactions, and checks who may answer.
+ * A valid answer flows to the agent through the conversation flow, and the
+ * source message becomes a record of the decision. Authorization clicks
+ * reveal the pending challenge instead of forwarding an answer.
+ */
+
 import type { ConversationStore } from "@repo/shared/conversations";
 import { roleAtLeast, roleFromMemberRoles, UserRole } from "@repo/shared/discord";
 import { messageOf, tagOf } from "@repo/shared/errors";
@@ -178,12 +189,12 @@ type ApproverOutcome =
   | { readonly ok: false; readonly rejection: string };
 
 /**
- * Decides whether this interaction's user is allowed to answer the request.
+ * Decides whether this interaction's user may answer the request.
  *
  * A second-party approval needs two distinct people who both still hold the
- * minimum role — the original requester's authority is re-checked here, because
- * it may have been revoked since the request was raised. Every other request is
- * answerable only by the person it was addressed to.
+ * minimum role. This check re-verifies the original requester's authority,
+ * because a role change between request and answer can revoke it. Every other
+ * request accepts an answer only from the person it addresses.
  */
 async function resolveApprover(
   deps: HitlInteractionDeps,
@@ -245,8 +256,8 @@ async function checkSourceMessage(
   }
   // The request now lives on its own message so its mention actually notifies.
   // Older projections have no `hitlMessageId` and still carry their buttons on
-  // the anchor, so both are accepted rather than invalidating a live request
-  // that was rendered before this shipped.
+  // the anchor. This check accepts both, so a live request rendered before
+  // this shipped stays answerable.
   const carrier = projection.value.hitlMessageId ?? projection.value.anchorMessageId;
   if (carrier !== sourceMessageId) {
     return "This input request is no longer active.";
@@ -387,18 +398,18 @@ async function handleInput(
 }
 
 /**
- * Turn the request into a record of what was decided.
+ * Turn the request into a record of the decision.
  *
- * The prompt stays, the controls go, and a line naming the answer and who gave
- * it is appended. Previously the message kept its live buttons and the only
- * feedback was an ephemeral "Your answer was sent." that nobody else could see
- * and that vanished on dismiss, so the thread was left showing an open question
- * that had already been answered.
+ * The prompt stays, the controls go, and an appended line names the answer and
+ * who gave it. Previously the message kept its live buttons. The only feedback
+ * was an ephemeral "Your answer was sent." that nobody else could see and that
+ * vanished on dismiss. The thread then showed an open question that already
+ * had an answer.
  *
- * The source message is edited directly rather than through `editReply`: the
- * interaction is deferred as an ephemeral reply before the locator is even
- * parsed, so `editReply` addresses that hidden reply. Deleting it afterwards is
- * what removes the receipt.
+ * This function edits the source message directly rather than through
+ * `editReply`. The handler defers the interaction as an ephemeral reply before
+ * it even parses the locator, so `editReply` addresses that hidden reply.
+ * Deleting that reply afterwards removes the receipt.
  */
 async function settleRequestMessage(
   interaction: Interaction,
@@ -482,8 +493,8 @@ async function handleAuthorization(
     await ephemeral(interaction, "This authorization challenge is temporarily unavailable.");
     return;
   }
-  // The same carrier rule as an input request: the anchor is written with no
-  // components at all, so a Connect button is always on the HITL message.
+  // The same carrier rule as an input request applies here. The anchor carries
+  // no components at all, so a Connect button is always on the HITL message.
   // Comparing against the anchor refused every click.
   const carrier = projection.value.hitlMessageId ?? projection.value.anchorMessageId;
   if (carrier !== sourceMessageId) {
@@ -503,6 +514,14 @@ async function handleAuthorization(
   await revealAuthorization(interaction, authorization, challenge.value);
 }
 
+/**
+ * Builds the interaction listener for agent HITL controls.
+ *
+ * The listener returns `false` for interactions that carry no `eve-hitl:`
+ * custom id, so that the caller can offer them to other handlers. Once it
+ * claims an interaction, every failure ends in an ephemeral notice — an
+ * unhandled rejection here would leave the click spinning forever.
+ */
 export function createHitlInteractionHandler(deps: HitlInteractionDeps) {
   return async (interaction: Interaction): Promise<boolean> => {
     const customId =

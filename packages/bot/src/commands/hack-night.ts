@@ -30,8 +30,8 @@ export type HackNightError = Forbidden | InvalidInput | Transient | UpstreamErro
 /**
  * Swaps the leading emoji, leaving the rest of the channel name alone.
  *
- * Only one leading pictographic character is stripped, so a name that never had
- * a prefix simply gains one and repeated runs do not accumulate emoji.
+ * The pattern strips only one leading pictographic character. A name that never
+ * had a prefix simply gains one, and repeated runs do not accumulate emoji.
  */
 function withEmojiPrefix(currentName: string, emoji: string): string {
   return `${emoji}${currentName.replace(/^\p{Extended_Pictographic}/u, "")}`;
@@ -40,8 +40,9 @@ function withEmojiPrefix(currentName: string, emoji: string): string {
 /**
  * A single emoji, nothing else.
  *
- * Discord accepts almost anything in a channel name, so an unchecked value here
- * would let a typo rename the busiest channel in the server to arbitrary text.
+ * Discord accepts almost anything in a channel name. An unchecked value here
+ * would therefore let a typo rename the busiest channel in the server to
+ * arbitrary text.
  */
 function isSingleEmoji(value: string): boolean {
   return /^\p{Extended_Pictographic}$/u.test(value);
@@ -158,6 +159,11 @@ async function run(
   );
 }
 
+/**
+ * Builds the `/hack-night` command around an injected dashboard writer, so the
+ * ordering guarantee is testable without a live dashboard. Failures flow back
+ * as `Result` errors for the dispatcher to classify and report.
+ */
 export function hackNightCommand(dashboard: DashboardWriter) {
   return {
     builder,

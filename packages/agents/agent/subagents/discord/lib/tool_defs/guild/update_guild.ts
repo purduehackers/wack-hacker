@@ -12,7 +12,7 @@ import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain
 import { compact, discordObject, discordRest } from "../../client.ts";
 import { discordSnowflakeSchema, guildChannel } from "../../constants.ts";
 
-/** Guild imagery is uploaded inline, so the model must supply bytes, not a URL. */
+/** The guild PATCH carries imagery inline, so the model must supply bytes, not a URL. */
 const dataUri = z
   .stringFormat("image-data-uri", /^data:image\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=]+$/iu)
   .max(8_000_000);

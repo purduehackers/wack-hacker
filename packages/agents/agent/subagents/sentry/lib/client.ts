@@ -1,3 +1,12 @@
+/**
+ * @fileoverview Shared plumbing for the Sentry domain's tools.
+ *
+ * Wraps the SDK auth and base URL in one place, and adds raw GET/PUT helpers
+ * for endpoints the generated methods do not cover. `sentryResponse` then
+ * decodes payloads against a projection, so an unexpected Sentry shape
+ * surfaces as a typed upstream failure.
+ */
+
 import { UpstreamError } from "@repo/shared/errors";
 import { retrieveAProject, unwrapResult } from "@sentry/api";
 import { z } from "zod";
@@ -16,6 +25,10 @@ function stringifyQueryValue(value: SentryQueryScalar): string {
   return String(value);
 }
 
+/**
+ * The organization slug that every Sentry path parameter needs, resolved
+ * from the environment so no tool hard-codes an org.
+ */
 export function sentryOrg(): string {
   return env.SENTRY_ORG;
 }
@@ -102,9 +115,9 @@ export async function sentryPut(
 }
 
 /**
- * Decode a raw Sentry payload against a projection, reporting a shape the
- * projection does not cover as a typed upstream failure carrying the offending
- * path rather than as a bare `ZodError` thrown out of the tool.
+ * Decode a raw Sentry payload against a projection. A shape the projection
+ * does not cover becomes a typed upstream failure carrying the offending
+ * path, not a bare `ZodError` thrown out of the tool.
  */
 export function sentryResponse<S extends z.ZodType>(schema: S, payload: unknown): z.output<S> {
   const parsed = schema.safeParse(payload);

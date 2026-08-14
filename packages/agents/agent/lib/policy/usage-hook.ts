@@ -47,5 +47,5 @@ export function defineUsageHook(budgets: BudgetStore) {
   });
 }
 
-/** Every subagent re-exports this; the budget store is resolved once, here. */
+/** Every subagent re-exports this. This module resolves the budget store once, here. */
 export default defineUsageHook(getBudgetStore());

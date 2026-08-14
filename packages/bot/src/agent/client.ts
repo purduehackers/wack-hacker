@@ -1,5 +1,5 @@
 /**
- * The bot's HTTP client for the agent.
+ * @fileoverview The bot's HTTP client for the agent.
  *
  * Three calls, one per route on the agent's custom Discord channel. Everything
  * the bot knows about the agent is here and in `@repo/shared/wire`.
@@ -7,12 +7,12 @@
  * The retry policy differs per route on purpose, and the distinction is
  * correctness rather than tuning:
  *
- * - `sendMessage` makes one HTTP attempt. A claimed delivery can be retried
+ * - `sendMessage` makes one HTTP attempt. The bot may retry a claimed delivery
  *   after its lease only until agent ingress atomically fences it as live. Once
- *   live, completion or explicit reset is required; ambiguous redelivery would
- *   risk invoking Eve twice.
+ *   live, the delivery requires completion or an explicit reset. Ambiguous
+ *   redelivery would risk invoking Eve twice.
  * - Reset retries because it is naturally idempotent. HITL input retries with
- *   the same Discord interaction id; agent ingress receipts return the accepted
+ *   the same Discord interaction id. Agent ingress receipts return the accepted
  *   acknowledgement or wedge the ambiguous admission window.
  */
 
@@ -54,7 +54,7 @@ interface AgentClientDeps {
  * Turns a non-2xx into a typed error.
  *
  * A 5xx is `Transient` and a 4xx is `UpstreamError`, which is what makes the
- * retry policies above mean anything: `isRetryable` keys on the tag, so the
+ * retry policies above mean anything. `isRetryable` keys on the tag, so the
  * classification decided here is the classification the retry loop obeys.
  */
 async function errorFor(response: Response, operation: string): Promise<AgentError> {
@@ -92,6 +92,12 @@ function traceparentOf(payload: AgentRequestPayload): string | undefined {
   return "traceparent" in payload ? payload.traceparent : undefined;
 }
 
+/**
+ * Builds the client the bot uses for every call to the agent. Each method
+ * returns a typed `Result`, and its retry policy follows the per-route rules
+ * in the header above. Failures classify as `Transient` for 5xx and network
+ * faults, `UpstreamError` otherwise.
+ */
 export function createAgentClient(deps: AgentClientDeps) {
   const post = async <T>(
     route: string,
@@ -145,9 +151,9 @@ export function createAgentClient(deps: AgentClientDeps) {
     /**
      * A credential for reading a session's event stream.
      *
-     * Asked for per connection rather than stored: these carry a fixed expiry
-     * shared across every mint, so a copy taken when a delegation started can be
-     * dead well before that delegation is.
+     * Asked for per connection rather than stored. These carry a fixed expiry
+     * shared across every mint. A copy taken when a delegation started can
+     * therefore be dead well before that delegation is.
      */
     streamToken: async (): Promise<Result<string, AgentError>> => {
       const answered = await post(
@@ -197,7 +203,7 @@ function decodeSessionAck(value: unknown, status: number): AgentAck {
  * The reset route's acknowledgement: `ok: true`, with an advisory status.
  *
  * Not `wireResponseSchema` — the reset route answers with a status string in
- * place of the session pair, so it is a different body on the same route family.
+ * place of the session pair. It is a different body on the same route family.
  */
 const commandAckSchema = z.object({ ok: z.literal(true), status: z.string().optional() });
 

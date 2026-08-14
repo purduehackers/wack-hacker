@@ -12,12 +12,12 @@
  * **Never in production.** A principal chosen by an environment variable is
  * privilege escalation if it survives the deployment that matters. The gate is
  * a property of the deployment rather than of the request, the same shape eve's
- * own `localDev()` uses, so no header can flip it.
+ * own `localDev()` uses. No header can therefore flip it.
  *
- * **Roles are read from the guild, never supplied.** Roles passed in would mint
- * an admin who does not exist. Read from Discord, this can only ever impersonate
- * somebody who already holds the access, and revoking their role revokes this
- * too.
+ * **Roles always come from the guild, never from the caller.** Roles passed in
+ * would mint an admin who does not exist. Because roles come from Discord, this
+ * can only ever impersonate somebody who already holds the access, and revoking
+ * their role revokes this too.
  */
 
 import { DISCORD_GUILD_ID } from "@repo/shared/discord";
@@ -28,7 +28,7 @@ import { z } from "zod";
 import { env } from "../../env.ts";
 import { authFor } from "./auth.ts";
 
-/** Only the fields a principal is built from. */
+/** Only the fields that go into a principal. */
 const guildMemberSchema = z.looseObject({
   roles: z.array(z.string()),
   nick: z.string().nullish(),
@@ -40,13 +40,12 @@ const guildMemberSchema = z.looseObject({
 });
 
 /**
- * A deployment that is allowed to impersonate.
+ * A deployment that may impersonate.
  *
- * `VERCEL_ENV` is set by the platform on every deployment and is absent when
- * running locally, so anything that is not explicitly a production deployment
- * qualifies: local development, and preview deployments — which is the surface
- * worth testing on, because it runs the same code against the same
- * infrastructure.
+ * The platform sets `VERCEL_ENV` on every deployment and local runs lack it.
+ * Anything that is not explicitly a production deployment therefore qualifies:
+ * local development, and preview deployments. Previews are the surface worth
+ * testing on, because they run the same code against the same infrastructure.
  */
 function impersonationAllowed(): boolean {
   return process.env["VERCEL_ENV"] !== "production";
@@ -72,9 +71,9 @@ async function readGuildMember(userId: string, token: string): Promise<Principal
 /**
  * The assertion an impersonated invocation runs under, or nothing.
  *
- * Refuses loudly rather than falling back to an unprivileged session: a test
+ * Refuses loudly rather than falling back to an unprivileged session. A test
  * that quietly runs as nobody reports a policy denial as though it were the
- * behaviour under test, which is worse than one that will not start.
+ * behaviour under test. That is worse than one that will not start.
  */
 export async function impersonatedAuth(): Promise<SessionAuthContext | undefined> {
   const userId = process.env["DISCORD_IMPERSONATE_USER_ID"];

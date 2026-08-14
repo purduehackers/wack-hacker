@@ -1,18 +1,19 @@
-import { z } from "zod";
-
-import { env as runtimeEnv } from "../../../env.ts";
-
 /**
- * Configuration, plus every input field more than one tool declares.
+ * @fileoverview Configuration, plus every input field more than one tool
+ * declares.
  *
  * GitHub scopes almost everything to one organization and one repository, and
- * the owner half is never a tool input — it comes from `env.GITHUB_ORG`, so a
+ * the owner half is never a tool input. It comes from `env.GITHUB_ORG`, so a
  * model only ever names the repo. Declaring the shared fields once is what
  * keeps the description a model reads identical in all 119 tools rather than
  * drifting per module.
  */
 
-/** Typed SDK configuration; execution is denied before these fallbacks can be used. */
+import { z } from "zod";
+
+import { env as runtimeEnv } from "../../../env.ts";
+
+/** Typed SDK configuration. The domain runtime denies execution before anything reads these fallbacks. */
 export const env = {
   GITHUB_APP_ID: runtimeEnv.GITHUB_APP_ID ?? "",
   GITHUB_APP_PRIVATE_KEY: runtimeEnv.GITHUB_APP_PRIVATE_KEY ?? "",

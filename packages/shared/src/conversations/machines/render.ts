@@ -1,11 +1,11 @@
 /**
  * What may happen to one dispatch's paint, declared once.
  *
- * A specification like its delivery counterpart; see `./delivery.ts` for why the
+ * A specification like its delivery counterpart. See `./delivery.ts` for why the
  * guards cannot move out of Lua.
  *
  * The lifecycle is short but its terminal states are load-bearing, because they
- * are what release the delivery. `applied` means Discord shows the final state;
+ * are what release the delivery. `applied` means Discord shows the final state.
  * `discarded` means it never can — a message deleted underneath us, or a 4xx that
  * will not improve on retry.
  */
@@ -15,7 +15,7 @@ import { setup } from "xstate";
 export const RenderPhase = {
   /** Desired state published, nothing holds the paint. */
   Unclaimed: "unclaimed",
-  /** A renderer holds the lease and is writing to Discord. */
+  /** A renderer holds the lease and writes to Discord. */
   Claimed: "claimed",
   Applied: "applied",
   Discarded: "discarded",
@@ -25,7 +25,7 @@ export type RenderPhase = (typeof RenderPhase)[keyof typeof RenderPhase];
 
 export interface RenderContext {
   /**
-   * A paint that finishes behind the desired revision is not finished: the
+   * A paint that finishes behind the desired revision is not finished. The
    * renderer goes back to unclaimed so the sweep drains the rest, which is the
    * `"newer"` result the bot loops on.
    */
@@ -58,7 +58,7 @@ export const renderMachine = setup({
     [RenderPhase.Unclaimed]: {
       on: {
         CLAIM: RenderPhase.Claimed,
-        // A newer revision arrives while nothing holds the paint; still nothing
+        // A newer revision arrives while nothing holds the paint. Still nothing
         // to release, so this only moves the target.
         PUBLISH: RenderPhase.Unclaimed,
         DISCARD: RenderPhase.Discarded,

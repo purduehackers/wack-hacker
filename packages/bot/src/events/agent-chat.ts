@@ -1,12 +1,12 @@
 /**
- * Opening and closing a conversation with the agent.
+ * @fileoverview Opening and closing a conversation with the agent.
  *
  * Two handlers, kept together because they are the two ends of one behaviour: a
  * mention starts a conversation, and a ✅ on the reply ends it.
  *
- * The bot's share of the work is deciding *where* the conversation lives,
- * gathering context the agent cannot see, and giving the person immediate
- * feedback that something is happening.
+ * The bot's share of the work: it decides *where* the conversation lives and
+ * gathers context the agent cannot see. It also gives the person immediate
+ * feedback that something is underway.
  */
 
 import { RECOVERY_FOOTER, RECOVERY_TEXT } from "@repo/shared/conversations";
@@ -30,7 +30,7 @@ const PLACEHOLDER = "> Thinking...";
 
 const DELIVERY_FAILURE_NOTICE = `${RECOVERY_TEXT}\n\n${RECOVERY_FOOTER}`;
 
-/** Discord's cap is 100; the author's name and separator take the rest. */
+/** Discord's cap is 100. The author's name and separator take the rest. */
 const MAX_THREAD_NAME_CHARS = 54;
 
 /** Threads close themselves after an hour of quiet. */
@@ -42,10 +42,11 @@ const EMPTY_MENTION_REPLY = "Hey! What can I help you with?";
 /**
  * Identity as the bot observes it, for the agent to resolve into an access tier.
  *
- * Raw role snowflakes, never a resolved role. The bot is trusted to say *who*
- * someone is; it is deliberately not trusted to say what they may do. Roles are
- * re-read on every turn, so a follow-up from a second person in the thread is
- * evaluated as that person rather than as whoever opened it.
+ * Raw role snowflakes, never a resolved role. The agent trusts the bot to say
+ * *who* someone is. It deliberately does not trust the bot to say what they may
+ * do. The handler re-reads roles on every turn. A follow-up from a second
+ * person in the thread therefore carries that person's identity, not the
+ * opener's.
  */
 function principalOf(message: Message): Principal {
   return {
@@ -63,9 +64,9 @@ function principalOf(message: Message): Principal {
 /**
  * Identity of someone who reacted, rather than someone who posted.
  *
- * A reaction carries only a user, so guild roles have to be fetched. The lookup
- * is best-effort: failing it yields a principal with no roles, which the agent
- * resolves to the lowest access tier. Degrading to *less* access on an
+ * A reaction carries only a user, so this helper fetches guild roles itself.
+ * The lookup is best-effort: failing it yields a principal with no roles,
+ * which the agent resolves to the lowest access tier. Degrading to *less* access on an
  * infrastructure failure is the safe direction.
  */
 async function principalOfReactor(
@@ -130,7 +131,7 @@ export interface ConversationDoneDeps extends AgentChatDeps {
  * A mention, or a reply to the bot inside a thread.
  *
  * Registered as `kind: "mention"`, so it runs to completion before the plain
- * `message` handlers see the same message — which is what lets those handlers
+ * `message` handlers see the same message. That ordering lets those handlers
  * check `ctx.isBotMention` and stay out of the way.
  */
 export function agentChat(deps: AgentChatDeps) {
@@ -151,9 +152,9 @@ export function agentChat(deps: AgentChatDeps) {
 
       const inThread = message.channel.isThread();
 
-      // Thread creation and the lead-in fetch are independent — they only meet
-      // when the payload is assembled — so running them together saves a
-      // Discord round trip on the path where someone is waiting.
+      // Thread creation and the lead-in fetch are independent: they only meet
+      // when the handler assembles the payload. Running them together saves a
+      // Discord round trip on the path where someone waits.
       const [thread, leadIn] = await Promise.all([
         inThread ? undefined : openThread(message, prompt),
         fetchLeadIn(message),
@@ -164,8 +165,9 @@ export function agentChat(deps: AgentChatDeps) {
       const traceparent = activeTraceparent();
 
       // Posted before the agent is even reachable, because the whole point is to
-      // acknowledge instantly. The bot renderer claims it as the anchor; its stable nonce also makes a
-      // fallback create converge if this response was lost.
+      // acknowledge instantly. The bot renderer claims it as the anchor. Its
+      // stable nonce also makes a fallback create converge if this response
+      // was lost.
       const placeholder = await postPlaceholder(target, message.id);
 
       const payload: MessagePayload = {
@@ -218,7 +220,7 @@ async function postPlaceholder(
 }
 
 /**
- * Everything the channel reference can be built from: the channel a message
+ * Every source that can supply the channel reference: the channel a message
  * arrived in, or the parent a thread hangs off.
  */
 type NameableChannel = Message["channel"] | NonNullable<AnyThreadChannel["parent"]>;
@@ -243,7 +245,7 @@ function categoryOf(channel: NameableChannel): string | undefined {
 
 function channelRefOf(message: Message): MessagePayload["channel"] {
   const channel = message.channel;
-  // A thread's parent is the channel the conversation belongs to; for a
+  // A thread's parent is the channel the conversation belongs to. For a
   // top-level message it is the channel itself. `?? undefined` because
   // discord.js reports a parent it cannot resolve as null.
   const source = channel.isThread() ? (channel.parent ?? undefined) : channel;
@@ -265,9 +267,9 @@ function threadRefOf(
 
   if (channel.isThread()) {
     const parent = channel.parent ?? undefined;
-    // A thread whose parent cannot be resolved still works as a conversation —
-    // the continuation key is the thread id — so the reference is simply omitted
-    // rather than treated as an error.
+    // A thread whose parent discord.js cannot resolve still works as a
+    // conversation, because the continuation key is the thread id. The helper
+    // therefore omits the reference rather than treat it as an error.
     if (parent === undefined) return {};
     return { thread: { id: channel.id, parentId: parent.id, parentName: nameOf(parent) } };
   }
@@ -284,7 +286,7 @@ interface ConversationResetInput {
   readonly principal: Principal;
 }
 
-/** The authorization decision, kept independent of how the principal was fetched. */
+/** The authorization decision, kept independent of how the caller fetched the principal. */
 async function resetConversationForPrincipal(
   agent: Pick<ConversationFlow, "reset">,
   input: ConversationResetInput,
@@ -306,8 +308,8 @@ async function resetConversationForPrincipal(
  * ✅ on one of the bot's replies ends the conversation early.
  *
  * Restricted to bot-authored messages so a ✅ on someone's *question* in the
- * thread does not kill the conversation they are having. The bot also adds ✅
- * itself — on hack-night uploads — so its own reactions are ignored too.
+ * thread does not kill their ongoing conversation. The bot also adds ✅ itself
+ * — on hack-night uploads — so the handler skips the bot's own reactions too.
  *
  * The prior implementation had to distinguish "workflow resumed" from "workflow
  * already expired" and clean up a stale Redis key in the second case. Retiring a

@@ -1,16 +1,16 @@
 /**
- * Mirrors public channel messages to the Purdue Hackers dashboard.
+ * @fileoverview Mirrors public channel messages to the Purdue Hackers dashboard.
  *
- * Discord markdown is rendered to HTML here rather than on the dashboard,
- * because only the bot can resolve what the mentions in a message actually
- * refer to — `<@123>` is a name, `<#456>` is a channel, `<@&789>` is a role with
- * a colour. The dashboard has no Discord credentials, so it receives both the
- * raw markdown and the rendered HTML.
+ * The bot renders Discord markdown to HTML here rather than on the dashboard,
+ * because only the bot can resolve what a mention refers to. `<@123>` is a
+ * name, `<#456>` is a channel, and `<@&789>` is a role with a colour. The
+ * dashboard has no Discord credentials, so it receives both the raw markdown
+ * and the rendered HTML.
  *
- * Internal categories are excluded. That check is the only thing standing
- * between a private channel and a public webpage, which is why it runs before
- * anything else and fails closed: an unresolvable category is treated as
- * internal rather than public.
+ * The handler excludes internal categories. That check is the only thing
+ * standing between a private channel and a public webpage. It therefore runs
+ * before anything else and fails closed. The check treats an unresolvable
+ * category as internal rather than public.
  */
 
 import {
@@ -50,8 +50,8 @@ const UNRESOLVED = null;
  * Hydrates Discord mention nodes from the REST API.
  *
  * Every method answers `null` on failure so the renderer falls back to a
- * generic form. A deleted role or a member who left must not stop the whole
- * message from being mirrored.
+ * generic form. A deleted role or a member who left must not stop the bot
+ * from mirroring the whole message.
  */
 function createResolver(client: Client, guildId: string): Resolver {
   return {
@@ -94,11 +94,11 @@ async function renderHtml(content: string, resolver: Resolver): Promise<string> 
 }
 
 /**
- * Whether a message may be mirrored publicly.
+ * Whether the bot may mirror a message publicly.
  *
- * Fails closed. A message whose category cannot be determined is treated as
- * internal, because the cost of wrongly publishing a private message is far
- * higher than the cost of missing a public one.
+ * Fails closed. The check treats a message as internal when it cannot
+ * determine the category. Wrongly publishing a private message costs far more
+ * than missing a public one.
  */
 function isPubliclyMirrorable(message: Message): boolean {
   if (!message.inGuild()) return false;
@@ -115,6 +115,12 @@ function isPubliclyMirrorable(message: Message): boolean {
   return parent.permissionsFor(everyone)?.has(PermissionFlagsBits.ViewChannel) ?? false;
 }
 
+/**
+ * Forwards each publicly mirrorable message to the dashboard API, deduplicated
+ * by message id. Opted-out authors and bot mentions never reach the dashboard.
+ * A non-2xx response becomes a `Transient` failure, so `upstreamRetry` can try
+ * the POST again.
+ */
 export function emitDashboardMessage(deps: {
   readonly apiToken: string;
   readonly redis: RedisClient;

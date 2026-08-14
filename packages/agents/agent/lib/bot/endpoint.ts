@@ -5,7 +5,7 @@ import {
 
 /**
  * Resolve the fenced live Sandbox domain. A static host remains the fallback
- * for non-Sandbox deployments; malformed, unreadable, or expired active state
+ * for non-Sandbox deployments. Malformed, unreadable, or expired active state
  * fails closed rather than routing work to a stale generation.
  */
 export async function resolveBotBaseUrl(

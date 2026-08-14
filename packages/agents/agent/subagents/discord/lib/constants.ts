@@ -1,12 +1,13 @@
 /**
- * Input fields, enum tables and response projections shared across this
- * domain's tools.
+ * @fileoverview Input fields, enum tables and response projections shared
+ * across this domain's tools.
  *
- * Discord's wire format is the same in every endpoint family — a snowflake is a
- * snowflake whether it names a channel, a role or a message — so the primitives
- * are declared once here rather than restated per tool. The projections live
- * here for the same reason: `summarize*` is the shape the model reads, and a
- * list tool and its matching get tool must never disagree about it.
+ * Discord's wire format is the same in every endpoint family. A snowflake is a
+ * snowflake whether it names a channel, a role or a message. This module
+ * therefore declares the primitives once rather than restating them per tool.
+ * The projections live here for the same reason. `summarize*` is the shape the
+ * model reads, and a list tool and its matching get tool must never disagree
+ * about it.
  */
 /* oxlint-disable unicorn/no-null -- Discord's JSON API uses null for explicit absence/field clearing. */
 
@@ -55,9 +56,10 @@ export const reason = z.string().trim().min(1).max(512);
  *
  * Narrower than the string-plus-refine form it replaces in one respect: because
  * this pattern is zod's own `httpProtocol`, zod additionally requires a literal
- * `://`. The scheme-only spellings `http:example.com` and `https:/path` used to
- * be accepted and are now rejected. Both are model-authored tool inputs, so the
- * stricter shape is the useful one; nothing else in the accept set moves.
+ * `://`. The old form accepted the scheme-only spellings `http:example.com`
+ * and `https:/path`. This one rejects them. Both are model-authored tool
+ * inputs, so the stricter shape is the useful one. Nothing else in the accept
+ * set moves.
  */
 export const httpUrl = z
   .url({ protocol: /^https?$/u, abort: true })
@@ -71,7 +73,7 @@ export const autoArchiveDuration = z.enum(["60", "1440", "4320", "10080"]);
 
 /**
  * Response-projection primitives. The v10 result types leave many fields
- * loosely typed, and Discord signals absence with `null`/`undefined` rather than
+ * loosely typed. Discord signals absence with `null`/`undefined` rather than
  * an empty value, so a summarizer narrows with these instead of a `typeof`.
  */
 export const responseString = z.string().min(1);
@@ -167,6 +169,11 @@ export const autoModActionSchema = z.discriminatedUnion("type", [
 type AutoModMetadataInput = z.output<typeof autoModMetadataSchema> | undefined;
 type AutoModActionInput = z.output<typeof autoModActionSchema>;
 
+/**
+ * Projects validated trigger metadata onto the wire body. A field the model
+ * left unset stays absent instead of becoming a present `undefined` key,
+ * because Discord's wire format distinguishes the two.
+ */
 export function autoModMetadata(
   metadata: AutoModMetadataInput,
 ): RESTPostAPIAutoModerationRuleJSONBody["trigger_metadata"] {
@@ -193,6 +200,11 @@ function autoModActionMetadata(action: AutoModActionInput) {
   return action.metadata === undefined ? undefined : message;
 }
 
+/**
+ * Projects one validated action onto the wire shape. The metadata arm follows
+ * the action's type. An alert keeps its channel, a timeout keeps its duration,
+ * and nothing else leaks through.
+ */
 export function autoModAction(
   action: AutoModActionInput,
 ): RESTPostAPIAutoModerationRuleJSONBody["actions"][number] {
@@ -241,12 +253,23 @@ export async function guildWebhook(rest: REST, id: string): Promise<WebhookResul
 
 // ──────────────── projection helpers ────────────────
 
+/**
+ * Names a raw channel type for the model. A number outside the table comes
+ * back as `unknown(n)` so a new Discord channel kind degrades visibly instead
+ * of failing the whole projection. A non-integer value throws as a malformed
+ * Discord response.
+ */
 export function channelType(value: number): string {
   const parsed = responseInt.safeParse(value);
   if (!parsed.success) throw malformedDiscordResponse("channel type");
   return CHANNEL_TYPE_NAMES[parsed.data] ?? `unknown(${parsed.data})`;
 }
 
+/**
+ * The channel projection every listing and mutation returns. `topic` and
+ * `position` appear only on the kinds that carry them, and `compact` keeps the
+ * absent ones out of the model's context.
+ */
 export function summarizeChannel(channel: GuildChannelResult) {
   return compact({
     id: channel.id,
@@ -258,6 +281,11 @@ export function summarizeChannel(channel: GuildChannelResult) {
   });
 }
 
+/**
+ * The role projection the model reads. The raw color integer becomes a CSS
+ * hex string because the model round-trips that spelling through `hexColor`
+ * on writes.
+ */
 export function summarizeRole(role: RESTGetAPIGuildRolesResult[number]) {
   return {
     id: role.id,
@@ -269,7 +297,7 @@ export function summarizeRole(role: RESTGetAPIGuildRolesResult[number]) {
   };
 }
 
-/** A role's position is set by a second call, whose result carries the new order. */
+/** A second call sets a role's position, and its result carries the new order. */
 export function positionedRole(
   value: unknown,
   targetRoleId: string,
@@ -284,6 +312,11 @@ export function positionedRole(
   return positioned;
 }
 
+/**
+ * The member projection the model reads. A member payload must carry its
+ * `user` object, so the projection throws on one that does not rather than
+ * inventing a partial member.
+ */
 export function summarizeMember(member: RESTGetAPIGuildMemberResult) {
   const user = discordObject<RESTGetAPIGuildMemberResult["user"]>(member.user, "guild member user");
   return {
@@ -297,6 +330,11 @@ export function summarizeMember(member: RESTGetAPIGuildMemberResult) {
   };
 }
 
+/**
+ * The auto-mod rule projection the model reads. It carries the full trigger
+ * and exemption detail so the model can reason about a rule before editing
+ * it.
+ */
 export function summarizeAutoModRule(rule: RESTGetAPIAutoModerationRuleResult) {
   return {
     id: rule.id,
@@ -313,6 +351,11 @@ export function summarizeAutoModRule(rule: RESTGetAPIAutoModerationRuleResult) {
 
 type ScheduledEventResult = RESTGetAPIGuildScheduledEventsResult[number];
 
+/**
+ * The scheduled-event projection the model reads. The CDN image URL exists
+ * only when both the event id and image hash validate. A malformed pair
+ * degrades to `null` rather than a broken link.
+ */
 export function summarizeEvent(event: ScheduledEventResult) {
   const metadata =
     event.entity_metadata === null
@@ -342,6 +385,11 @@ export function summarizeEvent(event: ScheduledEventResult) {
   };
 }
 
+/**
+ * The invite projection the model reads. Discord may omit the channel or the
+ * inviter, so both collapse to `null` instead of surfacing two different
+ * absence spellings.
+ */
 export function summarizeInvite(invite: RESTGetAPIGuildInvitesResult[number]) {
   const channel =
     invite.channel === null
@@ -372,6 +420,11 @@ export function summarizeInvite(invite: RESTGetAPIGuildInvitesResult[number]) {
 type EmojiResult = RESTGetAPIGuildEmojisResult[number];
 type StickerResult = RESTGetAPIGuildStickersResult[number];
 
+/**
+ * The emoji projection the model reads. The CDN URL picks `gif` for animated
+ * emojis, and an id that fails the snowflake check yields a `null` URL rather
+ * than a fabricated link.
+ */
 export function summarizeEmoji(emoji: EmojiResult) {
   const animated = emoji.animated ?? false;
   const id = discordSnowflake.safeParse(emoji.id).data;
@@ -388,6 +441,10 @@ export function summarizeEmoji(emoji: EmojiResult) {
   };
 }
 
+/**
+ * The sticker projection the model reads. A Lottie sticker gets a `json` CDN
+ * URL while every raster format gets `png`, and a bad id yields a `null` URL.
+ */
 export function summarizeSticker(sticker: StickerResult) {
   const id = discordSnowflake.safeParse(sticker.id).data;
   return {
@@ -404,6 +461,11 @@ export function summarizeSticker(sticker: StickerResult) {
   };
 }
 
+/**
+ * The webhook projection the model reads. The token never appears here — see
+ * `WebhookResult` — and the avatar URL exists only when both the id and the
+ * avatar hash validate.
+ */
 export function summarizeWebhook(webhook: WebhookResult) {
   const id = discordSnowflake.safeParse(webhook.id).data;
   const avatar = responseString.safeParse(webhook.avatar).data;
@@ -419,6 +481,11 @@ export function summarizeWebhook(webhook: WebhookResult) {
   };
 }
 
+/**
+ * The thread projection the model reads. Thread metadata is optional on the
+ * wire, so archive and lock state default to `false` and the counts default
+ * to zero rather than reporting absence.
+ */
 export function summarizeThread(thread: ThreadResult) {
   const metadata =
     thread.thread_metadata === undefined
@@ -441,6 +508,11 @@ export function summarizeThread(thread: ThreadResult) {
   };
 }
 
+/**
+ * The message projection the model reads. Attachments keep name and URL only,
+ * and embeds collapse to a count, so a media-heavy message cannot flood the
+ * context window.
+ */
 export function summarizeMessage(message: RESTGetAPIChannelMessageResult) {
   const author = discordObject<RESTGetAPIChannelMessageResult["author"]>(
     message.author,
@@ -472,6 +544,13 @@ export function summarizeMessage(message: RESTGetAPIChannelMessageResult) {
 const IMAGE_TIMEOUT_MS = 15_000;
 export const EVENT_IMAGE_MAX_BYTES = 8 * 1_024 * 1_024;
 
+/**
+ * Fetches an image with a 15-second timeout and a hard size cap. Only content
+ * types on the caller's accept list pass. The check reads the declared
+ * `content-length` first, but the real byte count decides, because a server
+ * can lie about or omit the header. Rejections carry the matching HTTP
+ * status: 415 for type, 413 for size.
+ */
 export async function download(url: string, maxBytes: number, accepted: readonly string[]) {
   const response = await fetch(url, {
     signal: AbortSignal.timeout(IMAGE_TIMEOUT_MS),
@@ -512,6 +591,11 @@ export async function download(url: string, maxBytes: number, accepted: readonly
   return { bytes, contentType };
 }
 
+/**
+ * Inlines a remote image as a base64 data URI, the spelling Discord's asset
+ * endpoints expect. The 256 KiB default suits the smallest asset budgets, and
+ * a caller with a larger cap, like event banners, passes its own.
+ */
 export async function imageDataUri(url: string, maxBytes = 256 * 1_024): Promise<string> {
   const image = await download(url, maxBytes, [
     "image/png",

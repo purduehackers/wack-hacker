@@ -1,5 +1,14 @@
 #!/usr/bin/env bun
 
+/**
+ * @fileoverview Read-only operations probe for a stuck conversation.
+ *
+ * The `redis` command prints supervisor state, queue depths, and the lease
+ * records for one continuation or render dispatch. The `schedules` command
+ * lists active and failed scheduled tasks from Turso. The tool only reads,
+ * so an operator can run it against production without changing anything.
+ */
+
 import { createClient } from "@libsql/client";
 import { Redis } from "@upstash/redis";
 import { z } from "zod";
@@ -30,7 +39,7 @@ import { jsonCodec } from "../src/json.ts";
  *
  * This used to live in `json.ts` as an export, where it was a standing invitation
  * to skip validation at an io boundary. This tool is the one place the shape
- * genuinely is unknown: it prints whatever is under an arbitrary Redis key, for a
+ * genuinely is unknown. It prints whatever is under an arbitrary Redis key, for a
  * person reading the output. Every other reader of a Redis record knows what it
  * expects and says so with `stored(schema)`.
  */
@@ -51,7 +60,7 @@ function option(arguments_: readonly string[], name: string): string | undefined
   return value;
 }
 
-/** Redis keys are built by interpolation, so an argument's shape is a guard. */
+/** The key helpers build Redis keys by interpolation, so an argument's shape is a guard. */
 const continuationKeySchema = z
   .string()
   .max(256)
@@ -68,14 +77,14 @@ function check<S extends z.ZodType<string, string>>(
   return parsed.data;
 }
 
-/** Any keyed blob; the fields wanted differ per key, so none are declared. */
+/** Any keyed blob. The wanted fields differ per key, so this schema declares none. */
 const anyRecordSchema = z.looseObject({});
 
 /**
- * Picks fields out of an arbitrary Redis blob for display. Nothing here is
- * validated beyond "is it a keyed object", so the result stays `unknown`: it is
- * the any-barrier over `JSON.parse`/`Object.fromEntries`, not an erasure. The
- * only consumer is `JSON.stringify`.
+ * Picks fields out of an arbitrary Redis blob for display. This function
+ * validates nothing beyond "is it a keyed object", so the result stays
+ * `unknown`: it is the any-barrier over `JSON.parse`/`Object.fromEntries`, not
+ * an erasure. The only consumer is `JSON.stringify`.
  */
 function summary(raw: unknown, fields: readonly string[]): unknown {
   const text = z.string().safeParse(raw);
@@ -187,8 +196,8 @@ async function inspectRedis(arguments_: readonly string[]): Promise<void> {
       resetPendingDepth: resetPending,
       resetPresent: reset === 1,
       readyMember: readyMember === 1,
-      // Which lease is held and until when is the whole answer to "why is this
-      // stuck", so all three are printed.
+      // "Why is this stuck" comes down to who holds which lease and until
+      // when, so the report prints all three.
       active: summary(activeRecord, [
         "phase",
         "messageId",

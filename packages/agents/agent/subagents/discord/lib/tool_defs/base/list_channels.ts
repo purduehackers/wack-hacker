@@ -10,7 +10,7 @@ import {
 } from "../../client.ts";
 import { empty, responseInt, summarizeChannel, type GuildChannelResult } from "../../constants.ts";
 
-/** Threads are channels on the wire; the server layout the model reads is not. */
+/** Threads are channels on the wire. The server layout the model reads is not. */
 const THREAD_CHANNEL_TYPES = new Set<number>([
   ChannelType.AnnouncementThread,
   ChannelType.PublicThread,

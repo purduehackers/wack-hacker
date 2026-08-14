@@ -4,7 +4,7 @@ import { defineDomainTool as defineTool } from "../../../../../lib/policy/domain
 import { hcbOrgSlug, hcbPaginate } from "../../client.ts";
 import { hcbDonationSchema } from "../../constants.ts";
 
-/** Anything else — refunded, failed, pending — is not money the org has raised. */
+/** Anything else — refunded, failed, pending — is not money the org raised. */
 const SETTLED_DONATION_STATUSES = new Set(["deposited", "succeeded", "in_transit"]);
 
 export const donation_totals = defineTool({

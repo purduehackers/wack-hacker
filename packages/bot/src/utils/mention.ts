@@ -1,5 +1,5 @@
 /**
- * Detecting when the bot is being addressed.
+ * Detecting when someone addresses the bot.
  *
  * Both checks are deliberately narrow. Being generous here means the agent wakes
  * up for messages nobody aimed at it, which costs tokens and is confusing in a
@@ -11,11 +11,10 @@ import type { Message } from "discord.js";
 /**
  * True when the bot is @-mentioned *at the start* of the message.
  *
- * Two signals combined: Discord's own `mentions` collection, which excludes
- * literal `<@id>` text that is not actually pinging anyone, and a
- * content-position check, which preserves the rule that a mention has to lead
- * the message. `<@id>` and `<@!id>` are both emitted — the second is the older
- * nickname form.
+ * Two signals combined. Discord's own `mentions` collection excludes literal
+ * `<@id>` text that is not actually pinging anyone. A content-position check
+ * preserves the rule that a mention has to lead the message. `<@id>` and
+ * `<@!id>` are both emitted — the second is the older nickname form.
  */
 export function isBotMention(message: Message, botUserId: string): boolean {
   if (!message.mentions.users.has(botUserId)) return false;
