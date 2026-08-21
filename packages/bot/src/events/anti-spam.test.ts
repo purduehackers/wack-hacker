@@ -1,194 +1,119 @@
-import { expect, test, describe } from "bun:test";
+import { expect, test } from "bun:test";
 
-import { SpamDetector, type MessageData } from "./anti-spam.ts";
+import { createSpamDetector, type SpamMessage } from "./anti-spam.ts";
 
-// oxlint-disable oxclippy/too-many-lines, oxclippy/identity-op, oxclippy/similar-names
-
-describe("spam detection logic", () => {
-  // Helper to generate a generic message
-  const makeMsg = (
-    authorId: string,
-    channelId: string,
-    content: string,
-    timeOffsetMs: number = 0,
-    attachments: { size: number; contentType: string | null; name: string }[] = [],
-  ): MessageData => ({
+function post(
+  authorId: string,
+  channelId: string,
+  content: string,
+  overrides: Partial<SpamMessage> = {},
+): SpamMessage {
+  return {
     authorId,
     channelId,
     content,
-    createdAt: new Date(Date.now() + timeOffsetMs),
+    createdAt: new Date(),
     url: `https://discord.com/${channelId}`,
-    attachments,
-  });
+    attachments: [],
+    ...overrides,
+  };
+}
 
-  test("basic spam detection", () => {
-    const detector = new SpamDetector();
+const MINUTE_MS = 60_000;
 
-    let action = detector.processMessage(makeMsg("user1", "chan1", "spam"));
-    expect(action).toMatchInlineSnapshot(`
-      {
-        "do": "nothing",
-      }
-    `);
+/**
+ * Four channels, not three: the threshold counts channels the run has *passed*,
+ * so the message that crosses it is the fourth. The alert lists every copy,
+ * including the one that triggered it, because a moderator acting on it needs
+ * to reach all of them.
+ */
+test("the same content in four channels is a spree", () => {
+  const detector = createSpamDetector();
 
-    action = detector.processMessage(makeMsg("user1", "chan2", "spam"));
-    expect(action).toMatchInlineSnapshot(`
-      {
-        "do": "nothing",
-      }
-    `);
+  expect(detector.observe(post("user1", "chan1", "spam"))).toBeUndefined();
+  expect(detector.observe(post("user1", "chan2", "spam"))).toBeUndefined();
+  expect(detector.observe(post("user1", "chan3", "spam"))).toBeUndefined();
 
-    action = detector.processMessage(makeMsg("user1", "chan3", "spam"));
-    expect(action).toMatchInlineSnapshot(`
-      {
-        "do": "nothing",
-      }
-    `);
+  expect(detector.observe(post("user1", "chan4", "spam"))).toBe(
+    [
+      "# Likely spammer",
+      "- https://discord.com/chan1",
+      "- https://discord.com/chan2",
+      "- https://discord.com/chan3",
+      "- https://discord.com/chan4",
+      "",
+      "-# False alarm? Please ping Kian to let him know.",
+    ].join("\n"),
+  );
+});
 
-    action = detector.processMessage(makeMsg("user1", "chan4", "spam"));
-    expect(action).toMatchInlineSnapshot(`
-      {
-        "alertContent": 
-      "# Likely spammer
-      - https://discord.com/chan1
-      - https://discord.com/chan2
-      - https://discord.com/chan3
-      - https://discord.com/chan4
+/** Repeating yourself in one place is rude, not an attack. */
+test("repetition inside a single channel is never a spree", () => {
+  const detector = createSpamDetector();
+  for (let attempt = 0; attempt < 5; attempt++) {
+    expect(detector.observe(post("user1", "same-chan", "spam"))).toBeUndefined();
+  }
+});
 
-      -# False alarm? Please ping Kian to let him know."
-      ,
-        "do": "alert",
-        "signature": 13628138375735518580n,
-      }
-    `);
-  });
+/** Each further copy re-reports the whole run, so the handler edits one alert. */
+test("a copy after the threshold reports the run again, grown by one", () => {
+  const detector = createSpamDetector();
+  for (const channelId of ["chan1", "chan2", "chan3", "chan4"]) {
+    detector.observe(post("user1", channelId, "spam"));
+  }
 
-  test("repeated message in one channel is not flagged", () => {
-    const detector = new SpamDetector();
-    for (let i = 0; i < 5; i++) {
-      const action = detector.processMessage(makeMsg("user1", "same-chan", "spam"));
-      expect(action).toMatchInlineSnapshot(`
-        {
-          "do": "nothing",
-        }
-      `);
-    }
-  });
+  const body = detector.observe(post("user1", "chan5", "spam"));
+  expect(body).toContain("- https://discord.com/chan1");
+  expect(body).toContain("- https://discord.com/chan5");
+});
 
-  test("continued spam after the alerting updates the alert", () => {
-    const detector = new SpamDetector();
-    detector.processMessage(makeMsg("user1", "chan1", "spam"));
-    detector.processMessage(makeMsg("user1", "chan2", "spam"));
-    detector.processMessage(makeMsg("user1", "chan3", "spam"));
+/** The window is what separates a spree from someone posting the same link all day. */
+test("copies spread beyond the window do not accumulate", () => {
+  const detector = createSpamDetector();
+  detector.observe(
+    post("user1", "chan1", "spam", { createdAt: new Date(Date.now() - 3 * MINUTE_MS) }),
+  );
+  detector.observe(
+    post("user1", "chan2", "spam", { createdAt: new Date(Date.now() - 2 * MINUTE_MS) }),
+  );
+  detector.observe(post("user1", "chan3", "spam", { createdAt: new Date(Date.now() - MINUTE_MS) }));
 
-    // 4th message crosses threshold
-    let action = detector.processMessage(makeMsg("user1", "chan4", "spam"));
-    expect(action).toMatchInlineSnapshot(`
-      {
-        "alertContent": 
-      "# Likely spammer
-      - https://discord.com/chan1
-      - https://discord.com/chan2
-      - https://discord.com/chan3
-      - https://discord.com/chan4
+  expect(detector.observe(post("user1", "chan4", "spam"))).toBeUndefined();
+});
 
-      -# False alarm? Please ping Kian to let him know."
-      ,
-        "do": "alert",
-        "signature": 13628138375735518580n,
-      }
-    `);
+/**
+ * The deliberate bias towards missing a spree: one ordinary message in the
+ * window ends the run, so a member cross-posting while talking is never named.
+ */
+test("anything else the author says ends the run", () => {
+  const detector = createSpamDetector();
+  detector.observe(post("user1", "chan1", "spam"));
+  detector.observe(post("user1", "chan2", "spam"));
+  detector.observe(post("user1", "chan3", "spam"));
+  detector.observe(post("user1", "chan4", "hello guys"));
 
-    // 5th message appends to the alert
-    action = detector.processMessage(makeMsg("user1", "chan5", "spam"));
-    expect(action).toMatchInlineSnapshot(`
-      {
-        "alertContent": 
-      "# Likely spammer
-      - https://discord.com/chan1
-      - https://discord.com/chan2
-      - https://discord.com/chan3
-      - https://discord.com/chan4
-      - https://discord.com/chan5
+  expect(detector.observe(post("user1", "chan5", "spam"))).toBeUndefined();
+});
 
-      -# False alarm? Please ping Kian to let him know."
-      ,
-        "do": "alert",
-        "signature": 13628138375735518580n,
-      }
-    `);
-  });
+/** Identical captions are not enough; the attachment is part of what was posted. */
+test("a different attachment breaks the signature", () => {
+  const detector = createSpamDetector();
+  const first = [{ name: "first.png", size: 100, contentType: "image/png" }];
+  const second = [{ name: "second.png", size: 999, contentType: "image/png" }];
 
-  test("slow repeated messages are not flagged as spam", () => {
-    const detector = new SpamDetector();
+  for (const channelId of ["chan1", "chan2", "chan3"]) {
+    detector.observe(post("user1", channelId, "look", { attachments: first }));
+  }
 
-    // Send 3 messages, each 1 minute apart
-    const minuteAgo = -60 * 1000;
-    detector.processMessage(makeMsg("user1", "chan1", "spam", 3 * minuteAgo));
-    detector.processMessage(makeMsg("user1", "chan2", "spam", 2 * minuteAgo));
-    detector.processMessage(makeMsg("user1", "chan3", "spam", 1 * minuteAgo));
+  expect(detector.observe(post("user1", "chan4", "look", { attachments: second }))).toBeUndefined();
+});
 
-    // Send 4th message now
-    const action = detector.processMessage(makeMsg("user1", "chan4", "spam", 0));
+/** Two members posting the same popular link must not add up to one spree. */
+test("runs are tracked per author", () => {
+  const detector = createSpamDetector();
+  detector.observe(post("userA", "chan1", "spam"));
+  detector.observe(post("userA", "chan2", "spam"));
+  detector.observe(post("userB", "chan3", "spam"));
 
-    // Because there was enough time between messages, they should not count as spam
-    expect(action).toMatchInlineSnapshot(`
-      {
-        "do": "nothing",
-      }
-    `);
-  });
-
-  test("a non-spam message cancels spam flag", () => {
-    const detector = new SpamDetector();
-    detector.processMessage(makeMsg("user1", "chan1", "spam"));
-    detector.processMessage(makeMsg("user1", "chan2", "spam"));
-    detector.processMessage(makeMsg("user1", "chan3", "spam"));
-
-    // Interrupt with normal message
-    detector.processMessage(makeMsg("user1", "chan4", "hello guys"));
-
-    // 4th spam message
-    const action = detector.processMessage(makeMsg("user1", "chan5", "spam"));
-
-    expect(action).toMatchInlineSnapshot(`
-      {
-        "do": "nothing",
-      }
-    `);
-  });
-
-  test("image signatures differentiate substantially different images", () => {
-    const detector = new SpamDetector();
-    const imgA = [{ size: 100, contentType: "image/png", name: "imgA.png" }];
-    const imgB = [{ size: 999, contentType: "image/png", name: "imgB.png" }];
-
-    detector.processMessage(makeMsg("user1", "chan1", "look", 0, imgA));
-    detector.processMessage(makeMsg("user1", "chan2", "look", 0, imgA));
-    detector.processMessage(makeMsg("user1", "chan3", "look", 0, imgA));
-
-    // 4th message has different image
-    const action = detector.processMessage(makeMsg("user1", "chan4", "look", 0, imgB));
-
-    expect(action).toMatchInlineSnapshot(`
-      {
-        "do": "nothing",
-      }
-    `);
-  });
-
-  test("different users do not share spam alert state", () => {
-    const detector = new SpamDetector();
-    detector.processMessage(makeMsg("userA", "chan1", "spam"));
-    detector.processMessage(makeMsg("userA", "chan2", "spam"));
-
-    detector.processMessage(makeMsg("userB", "chan3", "spam"));
-    const action = detector.processMessage(makeMsg("userB", "chan4", "spam"));
-
-    expect(action).toMatchInlineSnapshot(`
-      {
-        "do": "nothing",
-      }
-    `);
-  });
+  expect(detector.observe(post("userB", "chan4", "spam"))).toBeUndefined();
 });
