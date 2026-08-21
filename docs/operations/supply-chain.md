@@ -10,10 +10,10 @@ The image workflow is the release record:
   against a pinned SHA-256 before execution. The database workflow no longer
   installs the Turso CLI: it recorded a restore point instead of cloning, and
   the clone was the only thing that needed it.
-- `bun install --frozen-lockfile`, format/type/lint, production dependency audit,
-  migration validation, and a `linux/amd64` image build run in CI. There is no
-  automated test suite, so an attested image is backed by static checks and
-  builds only, never by a passing test run.
+- `bun install --frozen-lockfile`, format/type/lint, migration validation, and a
+  `linux/amd64` image build run in CI. There is no automated test suite, so an
+  attested image is backed by static checks and builds only, never by a passing
+  test run.
 - BuildKit emits maximum SLSA provenance. A checksum-pinned Syft binary exports a
   reviewable SPDX JSON SBOM. Trivy blocks fixable HIGH/CRITICAL findings.
 - Provenance and the SBOM are attested to **GitHub's attestation store**,
@@ -27,8 +27,8 @@ application/vnd.dev.cosign.simplesigning.v1+json`), and `cosign attest` has no
 
 Do not weaken a scan inline. A temporary exception needs an owner, expiry,
 advisory/CVE, proof that the vulnerable path is absent, and a reviewed policy
-file. The existing Bun-audit ignore is dev-only and documented in the root
-README; it is not present in the runtime image.
+file. There is no dependency or image scan in CI today, so that rule binds
+whichever one is added back rather than any that runs now.
 
 Registry retention must preserve every production and rollback digest; its
 attestations live in GitHub and are keyed by that digest. Deleting a tag is not rollback and does not alter an

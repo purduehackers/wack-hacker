@@ -41,8 +41,6 @@ jobs:
         working-directory: packages/agents
       - run: bun run check:serialization
         working-directory: packages/agents
-      # drizzle-kit carries a dev-server-only esbuild advisory; no such server is run or shipped.
-      - run: bun audit --ignore GHSA-67mh-4wv8-2f99
       - name: Validate database migrations
         run: |
           database="$(mktemp /tmp/wack-hacker-ci-XXXXXX.db)"
