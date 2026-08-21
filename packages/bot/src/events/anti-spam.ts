@@ -1,197 +1,188 @@
 /**
- * Spam detection and prevention.
+ * Cross-channel spam detection.
+ *
+ * The signal is one person posting the *same* thing in several channels within
+ * a couple of minutes — the shape a compromised account takes when it fires a
+ * scam link at every channel it can see. Repetition inside a single channel is
+ * exempt on purpose: that is someone being annoying, not an attack.
+ *
+ * Anything else the author says inside the window ends the run, so a member
+ * cross-posting a link while also talking is never flagged. That bias is
+ * deliberate — the alert names a member to the organizers and asks them to act,
+ * so the detector would rather miss a spree than invent one.
+ *
+ * One alert per spree, edited as further copies land. A spammer reaching twenty
+ * channels must not become twenty pings in the organizer channel.
  */
 
-import { DISCORD_GUILD_ID, DISCORD_IDS } from "@repo/shared/discord";
+import { DISCORD_IDS } from "@repo/shared/discord";
 import { messageOf, Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
-import type { Message } from "discord.js";
+import type { Client, Message } from "discord.js";
 
 import { defineEvent } from "../framework/events.ts";
 
-const minutes = (n: number) => n * 60_000;
-const SWEEP_INTERVAL_MS = minutes(5);
+/** How long a message keeps counting towards its author's run. */
+const SPAM_WINDOW_MS = 120_000;
 
-export type SpamSignature = bigint;
+/** A spree is the same content in more distinct channels than this. */
+const SPAM_CHANNEL_LIMIT = 3;
 
-export type SpamAction =
-  | { do: "nothing" }
-  | { do: "alert"; signature: SpamSignature; alertContent: string };
+/** Both maps expire by timestamp on read; this only frees the slots. */
+const SWEEP_INTERVAL_MS = 300_000;
 
-export interface MessageData {
-  authorId: string;
-  channelId: string;
-  content: string;
-  createdAt: Date;
-  url: string;
-  attachments: { size: number; contentType: string | null; name: string }[];
+/**
+ * What the detector reasons about, and nothing from discord.js — the decision
+ * is the part worth testing, and it should not need a gateway to exercise.
+ */
+export interface SpamMessage {
+  readonly authorId: string;
+  readonly channelId: string;
+  readonly content: string;
+  readonly createdAt: Date;
+  readonly url: string;
+  readonly attachments: readonly {
+    readonly name: string;
+    readonly size: number;
+    readonly contentType: string | undefined;
+  }[];
 }
 
-interface MessageInfo {
-  signature: SpamSignature;
-  message: MessageData;
+interface Seen {
+  readonly signature: bigint;
+  readonly channelId: string;
+  readonly url: string;
+  readonly at: number;
 }
 
 /**
- * SpamDetector handles detecting spam messages and deciding when to alert about
- * them. It avoids integrating with Discord.js so that it can be unit tested.
+ * Hashed rather than kept whole, so a window of long messages cannot pin its
+ * own text in memory. Attachments count towards identity because the spam that
+ * matters here is often an image with a one-word caption.
  */
-export class SpamDetector {
-  // If an identical message is posted in more than SPAM_CHANNEL_THRESHOLD
-  // channels within SPAM_WINDOW_MS, it is spam.
-  public readonly SPAM_WINDOW_MS = minutes(2);
-  public readonly SPAM_CHANNEL_THRESHOLD = 3;
-
-  private latestMessages: Map<string, MessageInfo[]> = new Map();
-
-  public processMessage(message: MessageData): SpamAction {
-    const newMessageSignature = this.signature(message);
-    const userLatestMessages = this.getUserLatestMessages(message.authorId);
-
-    const addMessageToList = () => {
-      userLatestMessages.push({
-        signature: newMessageSignature,
-        message,
-      });
-      if (!this.latestMessages.has(message.authorId)) {
-        this.latestMessages.set(message.authorId, userLatestMessages);
-      }
-    };
-
-    // Only flag if all of the messages have the same signature
-    if (!userLatestMessages.every((m) => m.signature === newMessageSignature)) {
-      addMessageToList();
-      return { do: "nothing" };
-    }
-
-    // Flag if the number of unique channels is >threshold
-    const channels = new Set(userLatestMessages.map((m) => m.message.channelId));
-    channels.add(message.channelId);
-
-    if (channels.size > this.SPAM_CHANNEL_THRESHOLD) {
-      addMessageToList();
-      const urls = userLatestMessages.map((m) => m.message.url);
-      return {
-        do: "alert",
-        signature: newMessageSignature,
-        alertContent: this.makeAlertContent(urls),
-      };
-    }
-
-    addMessageToList();
-    return { do: "nothing" };
-  }
-
-  public sweepStaleData() {
-    for (const userId of this.latestMessages.keys()) {
-      this.getUserLatestMessages(userId);
-    }
-  }
-
-  private getUserLatestMessages(userId: string): MessageInfo[] {
-    const userLatestMessages = this.latestMessages.get(userId);
-    if (userLatestMessages === undefined) return [];
-    const now = Date.now();
-    const stillFresh = userLatestMessages.filter(
-      (m) => now - m.message.createdAt.getTime() <= this.SPAM_WINDOW_MS,
-    );
-    if (stillFresh.length > 0) {
-      this.latestMessages.set(userId, stillFresh);
-    } else {
-      this.latestMessages.delete(userId);
-    }
-    return stillFresh;
-  }
-
-  public signature(message: MessageData): SpamSignature {
-    return Bun.hash.wyhash(
-      message.content +
-        message.attachments.map((a) => (a.contentType ?? "") + a.name + String(a.size)).join(""),
-    );
-  }
-
-  public makeAlertContent(spamMessageUrls: string[]): string {
-    const spamList = spamMessageUrls.map((url) => "- " + url).join("\n");
-    return `# Likely spammer\n${spamList}\n\n-# False alarm? Please ping Kian to let him know.`;
-  }
-}
-
-const detector = new SpamDetector();
-// We keep track of the actual Discord Message objects for active alerts so we can call .edit() on them.
-// Promises are stored to avoid races between concurrent handlers for the same signature.
-const activeAlertMessages: Map<SpamSignature, Promise<Message<true> | undefined>> = new Map();
-
-export const antiSpam = defineEvent({
-  name: "anti-spam",
-  kind: "message",
-  dedupKey: (message) => message.id,
-  handle: async (message) => {
-    if (message.author.bot || !message.inGuild() || message.guildId !== DISCORD_GUILD_ID)
-      return Result.ok(undefined);
-    const data: MessageData = {
-      authorId: message.author.id,
-      channelId: message.channelId,
-      content: message.content,
-      createdAt: message.createdAt,
-      url: message.url,
-      attachments: message.attachments.map((a) => ({
-        size: a.size,
-        contentType: a.contentType,
-        name: a.name,
-      })),
-    };
-    const action = detector.processMessage(data);
-    if (action.do === "nothing") return Result.ok(undefined);
-    return await Result.tryPromise({
-      try: async () => {
-        if (action.do === "alert") {
-          const activeAlert = await activeAlertMessages.get(action.signature);
-          if (activeAlert) {
-            await activeAlert.edit(action.alertContent);
-          } else {
-            const sendAlertPromise = message.client.channels
-              .fetch(DISCORD_IDS.channels.COMMUNITY)
-              .then((alertChannel) => {
-                if (!alertChannel) throw new Error("alert channel not found");
-                if (!alertChannel.isTextBased() || alertChannel.isDMBased())
-                  throw new Error("alert channel is not a guild text channel");
-                return alertChannel.send(action.alertContent);
-              });
-            activeAlertMessages.set(
-              action.signature,
-              sendAlertPromise.catch(() => undefined),
-            );
-            await sendAlertPromise;
-          }
-        }
-      },
-      catch: (cause) =>
-        new Transient({
-          operation: "send/edit spam alert message",
-          detail: messageOf(cause),
-        }),
-    });
-  },
-});
-
-async function sweepStaleData() {
-  detector.sweepStaleData();
-
-  // Clean up stale alerts
-  const now = Date.now();
-  await Promise.all(
-    activeAlertMessages.entries().map(async ([signature, msgPromise]) => {
-      const msg = await msgPromise;
-      if (!msg) {
-        activeAlertMessages.delete(signature);
-      } else {
-        const lastUpdated = msg.editedAt ?? msg.createdAt;
-        if (lastUpdated.getTime() + detector.SPAM_WINDOW_MS < now) {
-          activeAlertMessages.delete(signature);
-        }
-      }
-    }),
+function signatureOf(message: SpamMessage): bigint {
+  const parts = message.attachments.map(
+    (file) => `${file.contentType ?? ""}${file.name}${file.size}`,
   );
+  return Bun.hash.wyhash(message.content + parts.join(""));
 }
 
-setInterval(sweepStaleData, SWEEP_INTERVAL_MS).unref();
+function alertBody(copies: readonly string[]): string {
+  const links = copies.map((url) => `- ${url}`).join("\n");
+  return `# Likely spammer\n${links}\n\n-# False alarm? Please ping Kian to let him know.`;
+}
+
+/**
+ * Per-author message history, and the verdict on each new message.
+ *
+ * A factory rather than a module singleton so a test gets its own state, for
+ * the same reason the registries build their dependencies explicitly.
+ */
+export function createSpamDetector() {
+  const recent = new Map<string, Seen[]>();
+
+  const fresh = (authorId: string): Seen[] => {
+    const cutoff = Date.now() - SPAM_WINDOW_MS;
+    return (recent.get(authorId) ?? []).filter((seen) => seen.at >= cutoff);
+  };
+
+  return {
+    /** The alert body when this message tips its author over the line. */
+    observe: (message: SpamMessage): string | undefined => {
+      const signature = signatureOf(message);
+      const seen = fresh(message.authorId);
+      seen.push({
+        signature,
+        channelId: message.channelId,
+        url: message.url,
+        at: message.createdAt.getTime(),
+      });
+      recent.set(message.authorId, seen);
+
+      if (seen.some((prior) => prior.signature !== signature)) return undefined;
+      if (new Set(seen.map((prior) => prior.channelId)).size <= SPAM_CHANNEL_LIMIT)
+        return undefined;
+      return alertBody(seen.map((prior) => prior.url));
+    },
+
+    /** Forgets authors whose runs have fully aged out. */
+    sweep: (): void => {
+      for (const authorId of recent.keys()) {
+        if (fresh(authorId).length === 0) recent.delete(authorId);
+      }
+    },
+  };
+}
+
+async function postAlert(client: Client, body: string): Promise<Message> {
+  const channel = await client.channels.fetch(DISCORD_IDS.channels.COMMUNITY);
+  if (!channel?.isTextBased() || channel.isDMBased()) {
+    throw new Error("spam alert channel is not a guild text channel");
+  }
+  return channel.send(body);
+}
+
+export function antiSpam() {
+  const detector = createSpamDetector();
+
+  /**
+   * The open alert per author. The promise rather than the message is stored,
+   * and stored before it settles, so two copies landing at once cannot both
+   * post — the second one edits what the first is still sending.
+   */
+  const alerts = new Map<
+    string,
+    { readonly at: number; readonly message: Promise<Message | undefined> }
+  >();
+
+  setInterval(() => {
+    detector.sweep();
+    const cutoff = Date.now() - SPAM_WINDOW_MS;
+    for (const [authorId, open] of alerts) if (open.at < cutoff) alerts.delete(authorId);
+  }, SWEEP_INTERVAL_MS).unref();
+
+  return defineEvent({
+    name: "anti-spam",
+    kind: "message",
+    // A RESUME replay must not count one message towards a run twice.
+    dedupKey: (message) => message.id,
+    handle: async (message) => {
+      const body = detector.observe({
+        authorId: message.author.id,
+        channelId: message.channelId,
+        content: message.content,
+        createdAt: message.createdAt,
+        url: message.url,
+        attachments: message.attachments.map((file) => ({
+          name: file.name,
+          size: file.size,
+          contentType: file.contentType ?? undefined,
+        })),
+      });
+      if (body === undefined) return Result.ok(undefined);
+
+      return Result.tryPromise({
+        try: async () => {
+          const open = alerts.get(message.author.id);
+          // A run that aged out earns its own alert; editing the previous one
+          // would graft a fresh spree onto a stale list of links.
+          const posting =
+            open && Date.now() - open.at < SPAM_WINDOW_MS
+              ? open.message.then((alert) => alert?.edit(body) ?? postAlert(message.client, body))
+              : postAlert(message.client, body);
+          alerts.set(message.author.id, {
+            at: Date.now(),
+            message: posting.catch(() => undefined),
+          });
+          await posting;
+          return undefined;
+        },
+        catch: (cause) =>
+          new Transient({
+            operation: "post spam alert",
+            detail: messageOf(cause),
+          }),
+      });
+    },
+  });
+}
