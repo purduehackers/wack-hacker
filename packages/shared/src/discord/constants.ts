@@ -28,6 +28,7 @@ export const DISCORD_IDS = {
     /** Every audited agent action is mirrored here, one embed per decision. */
     AGENT_AUDIT: "1537154519182344302",
     HACK_NIGHT: "1020777328172859412",
+    COMMUNITY: "938671895430180865",
   },
   categories: {
     /**

@@ -21,6 +21,7 @@ import { createThreadSlugStore } from "../integrations/hack-night.ts";
 import { createShipsClient } from "../integrations/ships.ts";
 import type { ConversationFlow } from "../utils/conversation/index.ts";
 import { agentChat, conversationDone } from "./agent-chat.ts";
+import { antiSpam } from "./anti-spam.ts";
 import { autoThread } from "./auto-thread.ts";
 import { chatFeedback } from "./chat-indexer.ts";
 import { emitDashboardMessage } from "./emit-dashboard-message.ts";
@@ -57,5 +58,6 @@ export function buildEventHandlers(deps: EventDeps): readonly AnyEventHandler[] 
     hackNightImageRemoval({ cms, slugStore }),
     emitDashboardMessage({ apiToken: deps.dashboardApiToken, redis: deps.redis }),
     transcribeVoiceMessage(createTranscriber({ apiKey: deps.groqApiKey })),
+    antiSpam,
   ];
 }
