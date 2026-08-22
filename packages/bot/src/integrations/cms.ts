@@ -6,6 +6,17 @@ import { upstreamRetry } from "@repo/shared/result/retry";
 import { z } from "zod";
 
 const COLLECTION = "media";
+/**
+ * The collection the API key is looked up in, not a role.
+ *
+ * `PAYLOAD_CMS_API_KEY` belongs to a service account, and both `users` and
+ * `service-accounts` set `useAPIKey`, so naming the wrong one is accepted as a
+ * well-formed header and then resolves to no principal. The request proceeds
+ * anonymously, which is only visible on the media fields gated by `loggedIn`:
+ * `where[source]` and friends come back as "path cannot be queried" rather than
+ * as a 401.
+ */
+const AUTH_COLLECTION = "service-accounts";
 const SOURCE = "hack-night";
 const LIST_PAGE_SIZE = 100;
 const LIST_PAGE_CAP = 20;
@@ -93,7 +104,7 @@ async function payloadRequest<S extends z.ZodType>(
   init: RequestInit = {},
 ): Promise<z.output<S>> {
   const headers = new Headers(init.headers);
-  headers.set("Authorization", `users API-Key ${apiKey}`);
+  headers.set("Authorization", `${AUTH_COLLECTION} API-Key ${apiKey}`);
   const response = await fetch(url, {
     ...init,
     headers,
