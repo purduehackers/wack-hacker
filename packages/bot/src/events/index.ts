@@ -54,7 +54,7 @@ export function buildEventHandlers(deps: EventDeps): readonly AnyEventHandler[] 
     autoThread,
     emitShipMessage(ships, deps.redis),
     deleteShipMessage(ships),
-    hackNightImages({ cms, slugStore, redis: deps.redis }),
+    hackNightImages({ cms, slugStore, redis: deps.redis, reporter: deps.reporter }),
     hackNightImageRemoval({ cms, slugStore }),
     emitDashboardMessage({ apiToken: deps.dashboardApiToken, redis: deps.redis }),
     transcribeVoiceMessage(createTranscriber({ apiKey: deps.groqApiKey })),

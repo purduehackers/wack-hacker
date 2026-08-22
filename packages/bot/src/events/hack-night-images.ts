@@ -11,9 +11,11 @@
  */
 
 import { DISCORD_IDS, UserRole, roleAtLeast, roleFromMemberRoles } from "@repo/shared/discord";
+import { messageOf, tagOf } from "@repo/shared/errors";
 import { isOptedOut } from "@repo/shared/privacy";
 import type { RedisClient } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
+import type { Reporter } from "@repo/shared/result/observe";
 import type { Message } from "discord.js";
 
 import { defineEvent } from "../framework/events.ts";
@@ -37,7 +39,29 @@ export function hackNightImages(deps: {
   readonly cms: CmsClient;
   readonly slugStore: ThreadSlugStore;
   readonly redis: RedisClient;
+  readonly reporter: Reporter;
 }) {
+  /**
+   * A per-attachment failure, under its own op so the two CMS calls are
+   * separable in metrics: a failing existence check means the archive cannot be
+   * read, a failing upload means a photo was lost. The handler itself still
+   * returns ok, so without this the wide event for the whole message reports
+   * success and only the ❌ says otherwise.
+   */
+  const reportFailure = (
+    op: "hack-night.image.check" | "hack-night.image.upload",
+    error: unknown,
+    attributes: { readonly slug: string; readonly filename: string; readonly messageId: string },
+  ): void => {
+    deps.reporter.emit({
+      op,
+      status: "error",
+      errorTag: tagOf(error),
+      errorMessage: messageOf(error),
+      attributes,
+    });
+  };
+
   return defineEvent({
     name: "hack-night-images",
     kind: "message",
@@ -63,7 +87,9 @@ export function hackNightImages(deps: {
         // treating the whole Discord message as complete.
         const filename = `${message.id}-${attachment.name}`;
         const existing = await deps.cms.hasImageForMessage(slug, message.id, filename);
+        const reported = { slug, filename, messageId: message.id };
         if (Result.isError(existing)) {
+          reportFailure("hack-night.image.check", existing.error, reported);
           failed += 1;
           continue;
         }
@@ -77,7 +103,10 @@ export function hackNightImages(deps: {
           filename,
           contentType: attachment.contentType ?? "image/jpeg",
         });
-        if (Result.isError(uploaded)) failed += 1;
+        if (Result.isError(uploaded)) {
+          reportFailure("hack-night.image.upload", uploaded.error, reported);
+          failed += 1;
+        }
       }
 
       // One reaction for the message, not one per attachment: a post with four
