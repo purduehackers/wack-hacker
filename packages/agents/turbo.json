@@ -3,7 +3,7 @@
   "extends": ["//"],
   "tasks": {
     "build": {
-      "outputs": [".output/**"],
+      "outputs": [".output/**", ".vercel/output/**"],
       "env": [
         "AGENT_INGRESS_SECRET",
         "AGENT_URL",
