@@ -180,7 +180,7 @@ async function main(): Promise<void> {
     cmsApiKey: env.PAYLOAD_CMS_API_KEY,
     shipApiKey: env.SHIP_API_KEY,
     dashboardApiUrl: env.PHACK_API_URL,
-    dashboardApiToken: env.PHACK_API_TOKEN,
+    dashboardApiToken: env.PHACK_API_KEY,
     groqApiKey: env.GROQ_API_KEY,
   });
   attachEventRouter(ready, {

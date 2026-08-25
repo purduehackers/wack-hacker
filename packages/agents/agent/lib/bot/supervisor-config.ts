@@ -79,7 +79,7 @@ function botEnvironment(source: AgentEnv): BotProcessEnvironment {
     DASHBOARD_GLOBAL_CONFIG: required(source.DASHBOARD_GLOBAL_CONFIG, "DASHBOARD_GLOBAL_CONFIG"),
     PAYLOAD_CMS_API_KEY: required(source.PAYLOAD_CMS_API_KEY, "PAYLOAD_CMS_API_KEY"),
     SHIP_API_KEY: required(source.SHIP_API_KEY, "SHIP_API_KEY"),
-    PHACK_API_TOKEN: required(source.PHACK_API_TOKEN, "PHACK_API_TOKEN"),
+    PHACK_API_KEY: required(source.PHACK_API_KEY, "PHACK_API_KEY"),
     GROQ_API_KEY: required(source.GROQ_API_KEY, "GROQ_API_KEY"),
     PORT: String(BOT_PORT_DEFAULT),
     ...(source.SENTRY_DSN === undefined ? {} : { SENTRY_DSN: source.SENTRY_DSN }),

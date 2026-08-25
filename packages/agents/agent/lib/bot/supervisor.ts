@@ -288,7 +288,7 @@ export type BotProcessEnvironment = Readonly<Record<string, string>> & {
   readonly DASHBOARD_GLOBAL_CONFIG: string;
   readonly PAYLOAD_CMS_API_KEY: string;
   readonly SHIP_API_KEY: string;
-  readonly PHACK_API_TOKEN: string;
+  readonly PHACK_API_KEY: string;
   readonly GROQ_API_KEY: string;
 };
 
@@ -304,7 +304,7 @@ const REQUIRED_BOT_ENV_KEYS = [
   "DASHBOARD_GLOBAL_CONFIG",
   "PAYLOAD_CMS_API_KEY",
   "SHIP_API_KEY",
-  "PHACK_API_TOKEN",
+  "PHACK_API_KEY",
   "GROQ_API_KEY",
 ] as const satisfies readonly (keyof BotProcessEnvironment)[];
 
