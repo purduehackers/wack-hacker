@@ -96,7 +96,7 @@ export const env = createEnv({
     AGENT_URL: httpUrl.optional(),
     DASHBOARD_GLOBAL_CONFIG: secret.optional(),
     SHIP_API_KEY: secret.optional(),
-    PHACK_API_TOKEN: secret.optional(),
+    PHACK_API_KEY: secret.optional(),
     GROQ_API_KEY: secret.optional(),
     /**
      * Omit `VERCEL_TOKEN` to use the deployment's OIDC identity for the Sandbox

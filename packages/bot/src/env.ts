@@ -84,11 +84,11 @@ export const env = createEnv({
       .url({ protocol: /^https?$/u })
       .default("https://api-v4-purdue-hackers.vercel.app"),
     /**
-     * Bearer for `POST /discord/bot` on the Purdue Hackers API. api-v4 uses
-     * one shared secret (`PHACK_API_KEY` on the API side) and answers 401,
+     * Bearer for `POST /discord/bot` on the Purdue Hackers API — the API's
+     * shared secret, under the same name on both sides. api-v4 answers 401,
      * not 403, when it is wrong.
      */
-    PHACK_API_TOKEN: secret,
+    PHACK_API_KEY: secret,
 
     /** Voice-message transcription via Groq whisper-large-v3-turbo. */
     GROQ_API_KEY: secret,
