@@ -36,6 +36,7 @@ export interface EventDeps {
   readonly reporter: Reporter;
   readonly cmsApiKey: string;
   readonly shipApiKey: string;
+  readonly dashboardApiUrl: string;
   readonly dashboardApiToken: string;
   readonly groqApiKey: string;
 }
@@ -56,7 +57,11 @@ export function buildEventHandlers(deps: EventDeps): readonly AnyEventHandler[] 
     deleteShipMessage(ships),
     hackNightImages({ cms, slugStore, redis: deps.redis, reporter: deps.reporter }),
     hackNightImageRemoval({ cms, slugStore }),
-    emitDashboardMessage({ apiToken: deps.dashboardApiToken, redis: deps.redis }),
+    emitDashboardMessage({
+      apiUrl: deps.dashboardApiUrl,
+      apiToken: deps.dashboardApiToken,
+      redis: deps.redis,
+    }),
     transcribeVoiceMessage(createTranscriber({ apiKey: deps.groqApiKey })),
     antiSpam(),
   ];

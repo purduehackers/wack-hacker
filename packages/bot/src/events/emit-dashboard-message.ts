@@ -34,8 +34,6 @@ import { unified } from "unified";
 import { defineEvent } from "../framework/events.ts";
 import { TIME_ZONE } from "../utils/dates.ts";
 
-const DASHBOARD_URL = "https://api.purduehackers.com/discord/bot";
-
 /**
  * The single value the upstream `Resolver` contract defines for "unresolved".
  *
@@ -116,9 +114,12 @@ function isPubliclyMirrorable(message: Message): boolean {
 }
 
 export function emitDashboardMessage(deps: {
+  readonly apiUrl: string;
   readonly apiToken: string;
   readonly redis: RedisClient;
 }) {
+  const dashboardUrl = `${deps.apiUrl}/discord/bot`;
+
   return defineEvent({
     name: "emit-dashboard-message",
     kind: "message",
@@ -137,7 +138,7 @@ export function emitDashboardMessage(deps: {
       return Result.tryPromise(
         {
           try: async () => {
-            const response = await fetch(DASHBOARD_URL, {
+            const response = await fetch(dashboardUrl, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
