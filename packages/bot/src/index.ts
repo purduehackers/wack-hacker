@@ -179,6 +179,7 @@ async function main(): Promise<void> {
     reporter: consoleReporter,
     cmsApiKey: env.PAYLOAD_CMS_API_KEY,
     shipApiKey: env.SHIP_API_KEY,
+    dashboardApiUrl: env.PHACK_API_URL,
     dashboardApiToken: env.PHACK_API_TOKEN,
     groqApiKey: env.GROQ_API_KEY,
   });

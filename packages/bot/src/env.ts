@@ -76,7 +76,18 @@ export const env = createEnv({
     /** Mirroring #ship posts to ships.purduehackers.com. */
     SHIP_API_KEY: secret,
 
-    /** Mirroring public messages to the dashboard at api.purduehackers.com. */
+    /**
+     * Base URL of the Purdue Hackers API (api-v4) that receives mirrored
+     * messages. No trailing slash.
+     */
+    PHACK_API_URL: z
+      .url({ protocol: /^https?$/u })
+      .default("https://api-v4-purdue-hackers.vercel.app"),
+    /**
+     * Bearer for `POST /discord/bot` on the Purdue Hackers API. api-v4 uses
+     * one shared secret (`PHACK_API_KEY` on the API side) and answers 401,
+     * not 403, when it is wrong.
+     */
     PHACK_API_TOKEN: secret,
 
     /** Voice-message transcription via Groq whisper-large-v3-turbo. */
