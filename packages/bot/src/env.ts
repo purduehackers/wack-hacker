@@ -82,7 +82,7 @@ export const env = createEnv({
      */
     PHACK_API_URL: z
       .url({ protocol: /^https?$/u })
-      .default("https://api-v4-purdue-hackers.vercel.app"),
+      .default("https://api.purduehackers.com"),
     /**
      * Bearer for `POST /discord/bot` on the Purdue Hackers API — the API's
      * shared secret, under the same name on both sides. api-v4 answers 401,
