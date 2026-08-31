@@ -172,8 +172,8 @@ cd packages/bot
 CONFIRM_COMMAND_GUILD=772576325897945119 bun run register-commands
 ```
 
-Registration PUTs exactly `/ping`, `/privacy`, and `/hack-night` to the fixed
-guild and refuses a mismatched confirmation guild, so the CI job cannot reach a
+Registration PUTs exactly `/ping`, `/privacy`, `/hack-night`, and `/image-drop`
+to the fixed guild and refuses a mismatched confirmation guild, so the CI job cannot reach a
 different guild even with a misconfigured secret. The PUT replaces the whole
 command set, which is what makes repeating it on every merge safe.
 
@@ -211,7 +211,7 @@ command cannot read or change anyone else's setting and needs no role gate.
 
 Enforcement is local and lives at the three publish points, each checking
 `isOptedOut` before it uploads: `emit-ship-message`, `emit-dashboard-message`,
-and `hack-night-images`. Opting out is forward-looking — it stops future
+and `image-drops`. Opting out is forward-looking — it stops future
 uploads and does not delete what is already public.
 
 ### `/hack-night`
@@ -224,6 +224,30 @@ Current organizer/admin only, always ephemeral:
 
 Discord rename precedes Global Config update. A partial failure may leave the
 channel renamed; rerunning is the convergence path.
+
+`start` also takes an optional `event`, the slug of a CMS event. Both lookups it
+needs — the event, and the newest active `Hack Night Images` thread — run before
+the rename, so an unknown slug or a missing thread rejects the whole command with
+a specific ephemeral answer and no side effects. Linking then rewrites the
+thread's drop record _additively_: the night keeps the batch it already had, so a
+link made mid-night does not split the archive, and photos already filed under
+that batch are attached to the event in one read-modify-write. A CMS that refuses
+`events.images[]` is reported in the reply rather than failing the command.
+
+### `/image-drop`
+
+Organizer/admin only, ephemeral, one required `event` slug. It reads the event
+from the CMS first, then posts an announcement in the invoking channel, opens a
+one-week `Image Drop — <event name>` thread on it, and records the drop as
+`batchId = <event slug>`, `source = discord-drop`. If the record cannot be
+stored, the thread and announcement are deleted — a drop thread with no record
+ignores every upload, which is indistinguishable from a working one until someone
+checks the CMS.
+
+Opening a drop is gated; posting into one is not. A wrong slug, a channel that
+cannot hold a thread, and a CMS that refuses to read events are all answered
+ephemerally rather than raised, because the dispatcher renders a raised failure as
+a generic "Something went wrong".
 
 ## Community message and reaction handlers
 
@@ -281,19 +305,31 @@ Uncertain category/permission fails closed. Mention resolution failures degrade
 the rendered mention rather than aborting the whole mirror. There are no edit or
 delete mirror handlers.
 
-### Hack-night photo upload/removal
+### Image drop upload/removal
 
-A direct image attachment is archived when the message is in any public or
-private thread whose parent is fixed #hack-night and whose name begins
-`Hack Night Images`. The handler resolves a Redis event slug (or date fallback),
-deduplicates each `(source, batch, message, filename)` through Payload, downloads
-and uploads sequentially, then reacts ✅ if every image succeeded or ❌ if any
-failed.
+A thread is a drop when `image-drop:<threadId>` holds a record. The weekly photo
+thread is the one exception: any public or private thread whose parent is fixed
+#hack-night and whose name begins `Hack Night Images` also resolves, falling back
+to a date-derived batch when the record is gone. No other thread is ever filed on
+a guess.
+
+A direct image attachment in a drop thread is deduplicated by
+`(source, batch, message, filename)` through Payload, then downloaded and
+uploaded sequentially. When the drop names a CMS event, each upload is also
+appended to that event's `images[]`. The handler reacts ✅ if every image was
+filed or ❌ if any failed.
+
+`events.images[]` is a whole-array write, so appends are serialized per event
+in-process and verified after the write; a lost update raises `Transient` and is
+retried. A 403 there is a permission fact rather than a failure: the photo stays
+archived under its batch, the reaction stays ✅, and the thread gets one Redis-
+claimed notice telling an editor to bulk-attach from the media library.
 
 On ❌ reaction, the original author or a freshly resolved organizer/admin may
-bulk-delete Payload media for that Discord message. The bot clears its own ✅
-reaction after removal. Per-attachment CMS failures are represented principally
-by the visible ❌; the outer handler currently returns an instrumented success.
+bulk-delete Payload media for that Discord message; the removed ids are then
+detached from the linked event. The bot clears its own ✅ reaction after removal.
+Per-attachment CMS failures are represented principally by the visible ❌; the
+outer handler currently returns an instrumented success.
 
 ### Voice transcription
 
@@ -323,8 +359,8 @@ key.
 
 Posts and pins a random hack-night greeting, removes one recent pin system
 notice, starts `Hack Night Images - MM/DD`, pings the hack-night role in the
-thread, then stores `hack-night-thread:<threadId> = hack-night-YYYY-MM-DD` for
-seven days. Completed Discord effects are not rolled back if a later step fails.
+thread, then stores `image-drop:<threadId>` as an unlinked hack-night drop
+batched `hack-night-YYYY-MM-DD` for thirty days. Completed Discord effects are not rolled back if a later step fails.
 
 ### Friday 23:58 — Lightning Time countdown
 
@@ -336,20 +372,20 @@ edit failures warn and continue; initial setup failure ends the job.
 ### Sunday 18:00 — cleanup
 
 Chooses the first thread-bearing message from the latest ten hack-night channel
-messages, resolves the stored slug or Friday fallback, lists CMS images, posts a
+messages, resolves the stored drop or Friday fallback, lists CMS images, posts a
 total/top-five contributor summary when nonempty, then archives and locks the
 thread. A CMS/send failure before the final step prevents archive on that run.
 
 ## Community integrations
 
-| Service                 | Data/behavior                                                | Failure/timeout notes                                                |
-| ----------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------- |
-| Privacy DB              | Self preference CRUD                                         | Typed retries for rate/5xx/transport; no explicit fetch timeout      |
-| Dashboard Global Config | Hack-night version                                           | Parsed at startup; typed retry; no explicit fetch timeout            |
-| Dashboard message API   | Public message identity/content/HTML/attachments             | All non-2xx currently treated transient; no explicit timeout         |
-| Ships                   | User/message/title/content/media metadata                    | Upstream message ID idempotence; rate/5xx retry; no explicit timeout |
-| Payload CMS             | Hack-night media binary + source/batch/message/user metadata | 15s requests; 2,000-document listing cap; uploads not shared-retried |
-| Groq                    | Raw Discord voice audio/transcript                           | Whole-file size fallback; chunk retry once                           |
+| Service                 | Data/behavior                                                                             | Failure/timeout notes                                                |
+| ----------------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Privacy DB              | Self preference CRUD                                                                      | Typed retries for rate/5xx/transport; no explicit fetch timeout      |
+| Dashboard Global Config | Hack-night version                                                                        | Parsed at startup; typed retry; no explicit fetch timeout            |
+| Dashboard message API   | Public message identity/content/HTML/attachments                                          | All non-2xx currently treated transient; no explicit timeout         |
+| Ships                   | User/message/title/content/media metadata                                                 | Upstream message ID idempotence; rate/5xx retry; no explicit timeout |
+| Payload CMS             | Drop media binary + source/batch/message/user metadata, and the linked event's `images[]` | 15s requests; 2,000-document listing cap; uploads not shared-retried |
+| Groq                    | Raw Discord voice audio/transcript                                                        | Whole-file size fallback; chunk retry once                           |
 
 ## Current behavior and limitations
 
@@ -368,8 +404,11 @@ These details matter when diagnosing effects:
   five minutes because that handler's dedup key omits emoji.
 - Payload attachment errors are collapsed into an outer success plus ❌ signal.
 - Photography/cleanup select records by broad recent-name/thread heuristics.
-- Missing post-midnight slug mapping can split Saturday uploads from Friday's
+- Missing post-midnight drop record can split Saturday uploads from Friday's
   archive batch.
+- Event attach serialization is in-process only, so two overlapping deployments
+  can still contend for `events.images[]`; the write is verified and retried
+  rather than locked across processes.
 - Several provider/CDN requests have no common deadline; CMS is the consistent
   timeout exception. Voice attachment download buffers the whole Discord CDN
   response before applying the 24 MiB whole-vs-chunk decision.

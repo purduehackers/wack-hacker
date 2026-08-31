@@ -16,9 +16,9 @@ import { Result } from "@repo/shared/result";
 
 import type { Schedule } from "../framework/schedules.ts";
 import { rankPhotographers } from "../integrations/cms.ts";
-import type { CmsClient, HackNightImage } from "../integrations/cms.ts";
-import { resolveEventSlug } from "../integrations/hack-night.ts";
-import type { ThreadSlugStore } from "../integrations/hack-night.ts";
+import type { CmsClient, DropImage } from "../integrations/cms.ts";
+import { hackNightDrop, resolveDrop } from "../integrations/image-drop.ts";
+import type { ImageDropStore } from "../integrations/image-drop.ts";
 import { fridayOfWeek } from "../utils/dates.ts";
 
 /** Enough to find the thread-bearing announcement from the last event. */
@@ -26,7 +26,7 @@ const ANNOUNCEMENT_LOOKBACK = 10;
 
 const LEADERBOARD_SIZE = 5;
 
-function leaderboardMessage(images: readonly HackNightImage[]): string | undefined {
+function leaderboardMessage(images: readonly DropImage[]): string | undefined {
   const ranked = rankPhotographers(images).slice(0, LEADERBOARD_SIZE);
   if (ranked.length === 0) return undefined;
 
@@ -37,7 +37,7 @@ function leaderboardMessage(images: readonly HackNightImage[]): string | undefin
 }
 
 export function hackNightCleanup(deps: {
-  readonly slugStore: ThreadSlugStore;
+  readonly drops: ImageDropStore;
   readonly cms: CmsClient;
 }) {
   return {
@@ -58,11 +58,16 @@ export function hackNightCleanup(deps: {
             return undefined;
           }
 
-          // Sunday, so the slug belongs to Friday. A stored slug wins, because a
-          // hack night that ran past midnight is dated to when it started.
-          const slug = await resolveEventSlug(deps.slugStore, thread.id, fridayOfWeek(new Date()));
+          // Sunday, so the fallback batch belongs to Friday. A stored drop wins:
+          // it names the CMS event when one was linked, and a hack night that ran
+          // past midnight is dated to when it started.
+          const drop = await resolveDrop(
+            deps.drops,
+            thread.id,
+            hackNightDrop(fridayOfWeek(new Date())),
+          );
 
-          const listed = await deps.cms.listImages(slug);
+          const listed = await deps.cms.listImages(drop);
           if (Result.isError(listed)) throw listed.error;
           const images = listed.value;
 

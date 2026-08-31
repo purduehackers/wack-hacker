@@ -2,7 +2,11 @@
  * Friday 8 PM — open hack night.
  *
  * Posts an announcement, pins it, opens the photo thread, pings the role, and
- * records the event slug so Sunday's cleanup can find the archive.
+ * records the drop so Sunday's cleanup can find the archive.
+ *
+ * The drop it records is unlinked: photos are filed under a date-derived batch
+ * until an organizer runs `/hack-night start event:<slug>` to point tonight at a
+ * CMS event.
  *
  * One subtlety carried over verbatim, because getting it wrong destroys the
  * announcement: pinning a message makes Discord emit a `ChannelPinnedMessage`
@@ -17,8 +21,8 @@ import { Result } from "@repo/shared/result";
 import { MessageType, ThreadAutoArchiveDuration } from "discord.js";
 
 import type { Schedule } from "../framework/schedules.ts";
-import { generateEventSlug } from "../integrations/hack-night.ts";
-import type { ThreadSlugStore } from "../integrations/hack-night.ts";
+import { HACK_NIGHT_THREAD_PREFIX, hackNightDrop } from "../integrations/image-drop.ts";
+import type { ImageDropStore } from "../integrations/image-drop.ts";
 import { calendarDate } from "../utils/dates.ts";
 
 const ANNOUNCEMENTS = [
@@ -45,7 +49,7 @@ function threadDateLabel(date: Date): string {
   return `${String(month).padStart(2, "0")}/${String(day).padStart(2, "0")}`;
 }
 
-export function hackNightPhotographyThread(deps: { readonly slugStore: ThreadSlugStore }) {
+export function hackNightPhotographyThread(deps: { readonly drops: ImageDropStore }) {
   return {
     name: "hack-night-photography-thread",
     // Friday at 20:00 local. The former cron said "0 0 * * 6" because Vercel
@@ -77,15 +81,15 @@ export function hackNightPhotographyThread(deps: { readonly slugStore: ThreadSlu
 
           const today = new Date();
           const thread = await announcement.startThread({
-            name: `Hack Night Images - ${threadDateLabel(today)}`,
+            name: `${HACK_NIGHT_THREAD_PREFIX} - ${threadDateLabel(today)}`,
             autoArchiveDuration: THREAD_ARCHIVE_DURATION,
           });
 
           await thread.send(`(<@&${DISCORD_IDS.roles.HACK_NIGHT_PING}>)`);
 
           // Recorded last: the thread must exist before anything can be filed
-          // against its slug.
-          const stored = await deps.slugStore.set(thread.id, generateEventSlug(today));
+          // against its batch.
+          const stored = await deps.drops.set(thread.id, hackNightDrop(today));
           if (Result.isError(stored)) throw stored.error;
           return undefined;
         },

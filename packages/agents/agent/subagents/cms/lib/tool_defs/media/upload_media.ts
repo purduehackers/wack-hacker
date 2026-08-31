@@ -17,7 +17,7 @@ export const upload_media = defineTool({
     alt: z.string(),
     filename: z.string().optional(),
     source: z
-      .enum(["manual", "hack-night"])
+      .enum(["manual", "hack-night", "discord-drop"])
       .optional()
       .describe("Upload source tag (default: manual)"),
     batch_id: z.string().optional(),

@@ -29,11 +29,11 @@ src/
   utils/
     conversation/     the reconciler (see below)
     dates.ts          wall-clock helpers for one timezone
-  commands/         /ping /privacy /hack-night
+  commands/         /ping /privacy /hack-night /image-drop
   events/           agent chat, auto-thread, praise, ship + dashboard mirrors,
-                    voice transcription, hack-night images, chat indexer
+                    voice transcription, image drops, chat indexer
   schedules/        hack-night countdown, photography thread, cleanup
-  integrations/     ships, dashboard, CMS, hack-night
+  integrations/     ships, dashboard, CMS, image drops
 scripts/
   register-commands.ts   explicit guild registration; never runs at startup
 ```

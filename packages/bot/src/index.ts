@@ -129,6 +129,7 @@ async function main(): Promise<void> {
     redis,
     vercelToken: env.VERCEL_API_TOKEN,
     dashboardGlobalConfig: env.DASHBOARD_GLOBAL_CONFIG,
+    cmsApiKey: env.PAYLOAD_CMS_API_KEY,
   });
   if (Result.isError(built)) {
     console.error(`startup aborted: ${messageOf(built.error)}`);
