@@ -17,7 +17,7 @@ import type { Reporter } from "@repo/shared/result/observe";
 import { createTurnMessageStore } from "../agent/turn-messages.ts";
 import type { AnyEventHandler } from "../framework/events.ts";
 import { createCmsClient } from "../integrations/cms.ts";
-import { createThreadSlugStore } from "../integrations/hack-night.ts";
+import { createImageDropStore } from "../integrations/image-drop.ts";
 import { createShipsClient } from "../integrations/ships.ts";
 import type { ConversationFlow } from "../utils/conversation/index.ts";
 import { agentChat, conversationDone } from "./agent-chat.ts";
@@ -26,7 +26,7 @@ import { autoThread } from "./auto-thread.ts";
 import { chatFeedback } from "./chat-indexer.ts";
 import { emitDashboardMessage } from "./emit-dashboard-message.ts";
 import { deleteShipMessage, emitShipMessage } from "./emit-ship-message.ts";
-import { hackNightImageRemoval, hackNightImages } from "./hack-night-images.ts";
+import { imageDropRemoval, imageDropUploads } from "./image-drops.ts";
 import { praise } from "./praise.ts";
 import { createTranscriber, transcribeVoiceMessage } from "./transcribe-voice-message.ts";
 
@@ -43,7 +43,7 @@ export interface EventDeps {
 
 export function buildEventHandlers(deps: EventDeps): readonly AnyEventHandler[] {
   const cms = createCmsClient({ apiKey: deps.cmsApiKey });
-  const slugStore = createThreadSlugStore(deps.redis);
+  const drops = createImageDropStore(deps.redis);
   const ships = createShipsClient({ apiKey: deps.shipApiKey });
   const turnMessages = createTurnMessageStore(deps.redis);
 
@@ -55,8 +55,8 @@ export function buildEventHandlers(deps: EventDeps): readonly AnyEventHandler[] 
     autoThread,
     emitShipMessage(ships, deps.redis),
     deleteShipMessage(ships),
-    hackNightImages({ cms, slugStore, redis: deps.redis, reporter: deps.reporter }),
-    hackNightImageRemoval({ cms, slugStore }),
+    imageDropUploads({ cms, drops, redis: deps.redis, reporter: deps.reporter }),
+    imageDropRemoval({ cms, drops }),
     emitDashboardMessage({
       apiUrl: deps.dashboardApiUrl,
       apiToken: deps.dashboardApiToken,

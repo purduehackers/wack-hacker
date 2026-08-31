@@ -70,7 +70,7 @@ export const env = createEnv({
     VERCEL_API_TOKEN: secret,
     DASHBOARD_GLOBAL_CONFIG: secret,
 
-    /** The hack night photo archive in Payload CMS. */
+    /** The image-drop archive in Payload CMS, and the events photos are filed against. */
     PAYLOAD_CMS_API_KEY: secret,
 
     /** Mirroring #ship posts to ships.purduehackers.com. */
@@ -80,9 +80,7 @@ export const env = createEnv({
      * Base URL of the Purdue Hackers API (api-v4) that receives mirrored
      * messages. No trailing slash.
      */
-    PHACK_API_URL: z
-      .url({ protocol: /^https?$/u })
-      .default("https://api.purduehackers.com"),
+    PHACK_API_URL: z.url({ protocol: /^https?$/u }).default("https://api.purduehackers.com"),
     /**
      * Bearer for `POST /discord/bot` on the Purdue Hackers API — the API's
      * shared secret, under the same name on both sides. api-v4 answers 401,

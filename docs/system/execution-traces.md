@@ -321,7 +321,7 @@ Discord MESSAGE_CREATE
       ├─ praise
       ├─ auto-thread
       ├─ ship mirror
-      ├─ hack-night image upload
+      ├─ image drop upload
       ├─ dashboard mirror
       └─ voice transcription
 ```
@@ -338,7 +338,7 @@ Croner nominal Indiana instant                           packages/bot/src/framew
    ├─ SET bot:schedule:<name>:<IndianaMinute> NX EX 14d
    └─ schedule.run()
       ├─ Friday photography thread                      packages/bot/src/schedules/hack-night-photography-thread.ts
-      │  └─ message + pin + thread + role ping + Redis slug mapping
+      │  └─ message + pin + thread + role ping + Redis drop record
       ├─ Friday Lightning Time countdown                packages/bot/src/schedules/hack-night-countdown.ts
       │  └─ REST latency probes + absolute-time message edits
       └─ Sunday cleanup                                 packages/bot/src/schedules/hack-night-cleanup.ts

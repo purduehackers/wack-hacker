@@ -16,8 +16,11 @@ import type { RedisClient } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
 
 import type { SlashCommand } from "../framework/commands.ts";
+import { createCmsClient } from "../integrations/cms.ts";
 import { createDashboardWriter } from "../integrations/dashboard.ts";
+import { createImageDropStore } from "../integrations/image-drop.ts";
 import { hackNightCommand } from "./hack-night.ts";
+import { imageDropCommand } from "./image-drop.ts";
 import { ping } from "./ping.ts";
 import { privacyCommand } from "./privacy.ts";
 
@@ -25,6 +28,7 @@ export interface CommandDeps {
   readonly redis: RedisClient;
   readonly vercelToken: string;
   readonly dashboardGlobalConfig: string;
+  readonly cmsApiKey: string;
 }
 
 /**
@@ -41,5 +45,13 @@ export function buildCommands(deps: CommandDeps): Result<readonly SlashCommand[]
   });
   if (Result.isError(dashboard)) return dashboard;
 
-  return Result.ok([ping, privacyCommand(deps.redis), hackNightCommand(dashboard.value)]);
+  const cms = createCmsClient({ apiKey: deps.cmsApiKey });
+  const drops = createImageDropStore(deps.redis);
+
+  return Result.ok([
+    ping,
+    privacyCommand(deps.redis),
+    hackNightCommand({ dashboard: dashboard.value, cms, drops }),
+    imageDropCommand({ cms, drops }),
+  ]);
 }

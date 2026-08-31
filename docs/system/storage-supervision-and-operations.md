@@ -22,7 +22,9 @@ families. Adjacent owners use these additional families:
 | `dedup:<handler>:<eventKey>`             | bot gateway router     | Five-minute handler-scoped event claim                               |
 | `bot:interaction:<interactionId>`        | slash dispatcher       | 24-hour command interaction claim                                    |
 | `bot:schedule:<name>:<IndianaMinute>`    | bot local scheduler    | 14-day nominal occurrence claim                                      |
-| `hack-night-thread:<threadId>`           | hack-night jobs/photos | Seven-day event slug mapping                                         |
+| `image-drop:<threadId>`                  | image drops/hack night | 30-day drop record: batch, source, linked CMS event                  |
+| `image-drop:attach-notice:<threadId>`    | image drop uploads     | 30-day claim; one "cannot write the event" notice per thread         |
+| `hack-night-thread:<threadId>`           | image drops (legacy)   | Pre-drop seven-day slug string; read as an unlinked hack night drop  |
 | `turn-message:<messageId>`               | bot renderer           | Seven-day terminal agent-reply index for reset/feedback              |
 | `agent:turn-tokens:<sessionId>:<turnId>` | Eve telemetry          | 24-hour token total; adjacent event-ID set deduplicates usage events |
 | `policy:approval:<sessionId>:<callId>`   | policy runtime         | 15-minute second-party authority record                              |

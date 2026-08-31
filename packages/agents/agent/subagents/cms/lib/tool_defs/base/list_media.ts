@@ -6,7 +6,7 @@ import { paginationInputShape, projectMedia } from "../../constants.ts";
 
 export const list_media = defineTool({
   description:
-    "List media assets uploaded to Payload CMS. Supports filtering by `source` ('manual' / 'hack-night') and `batch_id` (to group hack-night uploads).",
+    "List media assets uploaded to Payload CMS. Supports filtering by `source` ('manual' / 'hack-night' / 'discord-drop') and `batch_id` (to group a bot upload batch).",
   access: { risk: "read" },
   input: z.strictObject({
     ...paginationInputShape,
