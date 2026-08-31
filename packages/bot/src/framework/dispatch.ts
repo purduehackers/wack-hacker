@@ -18,11 +18,38 @@ import { Result } from "@repo/shared/result";
 import { instrument } from "@repo/shared/result/observe";
 import type { Reporter } from "@repo/shared/result/observe";
 import { MessageFlags } from "discord.js";
-import type { ChatInputCommandInteraction, Interaction } from "discord.js";
+import type { AutocompleteInteraction, ChatInputCommandInteraction, Interaction } from "discord.js";
 
 import type { HitlInteractionHandler } from "../agent/hitl/interaction.ts";
 import type { SlashCommand } from "./commands.ts";
 import { traceOperation } from "./observability.ts";
+
+/**
+ * Fills an autocomplete option.
+ *
+ * Deliberately unlike the command path in two ways. There is no interaction
+ * claim: Discord sends one of these per keystroke, each with its own id, so a
+ * claim would be a Redis write per character to deduplicate something that is
+ * already unique. And there is no user-facing failure notice, because an
+ * autocomplete has no channel to speak on — a failure leaves the person's typed
+ * text untouched, which is the correct outcome for an option that accepts free
+ * text anyway.
+ */
+async function dispatchAutocomplete(
+  interaction: AutocompleteInteraction,
+  deps: DispatchDeps,
+): Promise<void> {
+  const command = deps.commands.find((entry) => entry.builder.name === interaction.commandName);
+  const fill = command?.autocomplete;
+  if (fill === undefined) return;
+
+  await instrument(`interaction.autocomplete.${interaction.commandName}`, deps.reporter, () =>
+    Result.tryPromise({
+      try: () => fill(interaction),
+      catch: (cause) => cause,
+    }).then((settled) => (Result.isError(settled) ? Result.err(settled.error) : settled.value)),
+  );
+}
 
 interface DispatchDeps {
   readonly commands: readonly SlashCommand[];
@@ -71,6 +98,7 @@ async function dispatchInteractionInSpan(
   deps: DispatchDeps,
 ): Promise<void> {
   if (await deps.hitl(interaction)) return;
+  if (interaction.isAutocomplete()) return dispatchAutocomplete(interaction, deps);
   if (!interaction.isChatInputCommand()) return;
 
   const claimed = await claimCommandInteraction(deps.redis, interaction.id);

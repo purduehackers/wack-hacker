@@ -28,6 +28,7 @@ import type { AnyThreadChannel, ChatInputCommandInteraction } from "discord.js";
 import type { SlashCommand } from "../framework/commands.ts";
 import { isEventSlug, isPermissionDenied } from "../integrations/cms.ts";
 import type { CmsClient, CmsEvent } from "../integrations/cms.ts";
+import type { EventDirectory } from "../integrations/event-directory.ts";
 import {
   HACK_NIGHT_THREAD_PREFIX,
   hackNightDrop,
@@ -36,6 +37,7 @@ import {
 import type { ImageDrop, ImageDropStore } from "../integrations/image-drop.ts";
 import { fridayOfWeek } from "../utils/dates.ts";
 import { roleOf } from "../utils/roles.ts";
+import { EVENT_OPTION, eventAutocomplete } from "./event-autocomplete.ts";
 
 /** 🌙 — the channel's resting state between hack nights. */
 const DEFAULT_EMOJI = "\u{1F319}";
@@ -75,6 +77,7 @@ export interface HackNightDeps {
   readonly dashboard: DashboardWriter;
   readonly cms: CmsClient;
   readonly drops: ImageDropStore;
+  readonly directory: EventDirectory;
 }
 
 export const builder = new SlashCommandBuilder();
@@ -99,9 +102,10 @@ builder
       )
       .addStringOption((opt) =>
         opt
-          .setName("event")
+          .setName(EVENT_OPTION)
           .setDescription("CMS event slug to file tonight's photos under (optional)")
-          .setRequired(false),
+          .setRequired(false)
+          .setAutocomplete(true),
       ),
   )
   .addSubcommand((sub) =>
@@ -328,7 +332,7 @@ async function run(
 
   const emoji = interaction.options.getString("emoji", true);
   const version = interaction.options.getString("version", true);
-  const slug = interaction.options.getString("event")?.trim().toLowerCase();
+  const slug = interaction.options.getString(EVENT_OPTION)?.trim().toLowerCase();
 
   if (!isSingleEmoji(emoji)) {
     return Result.err(
@@ -370,6 +374,7 @@ async function run(
 export function hackNightCommand(deps: HackNightDeps) {
   return {
     builder,
+    autocomplete: eventAutocomplete(deps.directory),
     execute: async (interaction) => {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 

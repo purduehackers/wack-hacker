@@ -130,6 +130,7 @@ async function main(): Promise<void> {
     vercelToken: env.VERCEL_API_TOKEN,
     dashboardGlobalConfig: env.DASHBOARD_GLOBAL_CONFIG,
     cmsApiKey: env.PAYLOAD_CMS_API_KEY,
+    reporter: consoleReporter,
   });
   if (Result.isError(built)) {
     console.error(`startup aborted: ${messageOf(built.error)}`);

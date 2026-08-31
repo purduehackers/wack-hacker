@@ -38,6 +38,8 @@ const EVENTS = "events";
 const AUTH_COLLECTION = "service-accounts";
 const LIST_PAGE_SIZE = 100;
 const LIST_PAGE_CAP = 20;
+/** Purdue Hackers has run a few hundred events, not tens of thousands. */
+const EVENT_PAGE_CAP = 5;
 const FETCH_TIMEOUT_MS = 15_000;
 
 /**
@@ -78,6 +80,18 @@ export interface CmsEvent {
   readonly id: number | string;
   readonly slug: string;
   readonly name: string;
+}
+
+/**
+ * A listed event, with the two fields that only matter for *choosing* one.
+ *
+ * Kept apart from `CmsEvent` because that shape is stored in a drop's Redis
+ * record under a strict schema: widening it there would reject every record
+ * written by the version before it.
+ */
+export interface CmsEventSummary extends CmsEvent {
+  readonly start?: string;
+  readonly published?: boolean;
 }
 
 export interface UploadImageInput {
@@ -124,9 +138,14 @@ const eventDocSchema = z.object({
   id: documentId,
   slug: z.string().optional(),
   name: z.string().optional(),
+  start: z.string().optional(),
+  published: z.boolean().optional(),
   images: z.array(eventImageRowSchema).optional(),
 });
-const eventListSchema = z.object({ docs: z.array(eventDocSchema) });
+const eventListSchema = z.object({
+  docs: z.array(eventDocSchema),
+  totalPages: z.int().nonnegative(),
+});
 const eventMutationSchema = z.object({ doc: eventDocSchema });
 
 type MediaDoc = z.output<typeof mediaDocSchema>;
@@ -431,6 +450,58 @@ function deleteImagesForMessage(
   );
 }
 
+/**
+ * Every event the CMS will show us, newest first.
+ *
+ * Backs the `event` option's autocomplete, so it takes a caller-supplied signal:
+ * Discord discards an autocomplete response after three seconds, and a request
+ * still running under this module's own fifteen-second timeout is answering
+ * nobody.
+ *
+ * An event without a slug is dropped rather than guessed at — the slug is what a
+ * drop is filed under, so a suggestion that cannot be filed is worse than no
+ * suggestion.
+ */
+function listEvents(
+  cms: CmsContext,
+  signal: AbortSignal,
+): Promise<Result<readonly CmsEventSummary[], CmsError>> {
+  return Result.tryPromise(
+    {
+      try: async () => {
+        const events: CmsEventSummary[] = [];
+        for (let page = 1; page <= EVENT_PAGE_CAP; page += 1) {
+          const found = await payloadRequest(
+            eventListSchema,
+            collectionUrl(cms.baseUrl, EVENTS, {
+              limit: String(LIST_PAGE_SIZE),
+              page: String(page),
+              depth: "0",
+              sort: "-start",
+            }),
+            cms.apiKey,
+            { signal },
+          );
+          for (const doc of found.docs) {
+            if (doc.slug === undefined) continue;
+            events.push({
+              id: doc.id,
+              slug: doc.slug,
+              name: doc.name ?? doc.slug,
+              ...(doc.start !== undefined && { start: doc.start }),
+              ...(doc.published !== undefined && { published: doc.published }),
+            });
+          }
+          if (page >= found.totalPages) return events;
+        }
+        return events;
+      },
+      catch: toCmsError("list CMS events"),
+    },
+    { ...upstreamRetry, signal },
+  );
+}
+
 /** The event with this slug, or `undefined` when the CMS has no such event. */
 function findEventBySlug(
   cms: CmsContext,
@@ -565,6 +636,7 @@ export function createCmsClient(deps: CmsDeps) {
     deleteImagesForMessage: (batch: MediaBatch, discordMessageId: string) =>
       deleteImagesForMessage(cms, batch, discordMessageId),
     findEventBySlug: (slug: string) => findEventBySlug(cms, slug),
+    listEvents: (signal: AbortSignal) => listEvents(cms, signal),
     attachImages: (eventId: DocumentId, mediaIds: readonly DocumentId[]) =>
       attachImages(cms, eventId, mediaIds),
     detachImages: (eventId: DocumentId, removedIds: readonly DocumentId[]) =>

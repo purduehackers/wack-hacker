@@ -183,12 +183,19 @@ command set, which is what makes repeating it on every merge safe.
 Discord InteractionCreate
 └─ dispatchInteraction()
    ├─ HITL handler first
-   ├─ ignore non-chat-input
+   ├─ autocomplete → instrument(command.autocomplete) → respond(choices)
+   ├─ ignore other non-chat-input
    ├─ SET bot:interaction:<id> NX EX 86400
    ├─ find command by registered name
    └─ trace + instrument(command.run)
       └─ reply/defer/edit/followUp
 ```
+
+Autocomplete deliberately skips the interaction claim: Discord sends one per
+keystroke, each already unique, so a claim would be a Redis write per character
+to deduplicate nothing. It also has no failure notice — an autocomplete has no
+channel to speak on, and leaving the typed text alone is the correct outcome for
+an option that accepts free text anyway.
 
 A Redis claim outage fails closed with an ephemeral temporary-unavailable
 message. A duplicate is silently ignored because the winner should reply.
@@ -225,7 +232,8 @@ Current organizer/admin only, always ephemeral:
 Discord rename precedes Global Config update. A partial failure may leave the
 channel renamed; rerunning is the convergence path.
 
-`start` also takes an optional `event`, the slug of a CMS event. Both lookups it
+`start` also takes an optional `event`, the slug of a CMS event, autocompleted
+from the [event directory](#event-directory). Both lookups it
 needs — the event, and the newest active `Hack Night Images` thread — run before
 the rename, so an unknown slug or a missing thread rejects the whole command with
 a specific ephemeral answer and no side effects. Linking then rewrites the
@@ -236,7 +244,8 @@ that batch are attached to the event in one read-modify-write. A CMS that refuse
 
 ### `/image-drop`
 
-Organizer/admin only, ephemeral, one required `event` slug. It reads the event
+Organizer/admin only, ephemeral, one required `event` slug, autocompleted from
+the [event directory](#event-directory). It reads the event
 from the CMS first, then posts an announcement in the invoking channel, opens a
 one-week `Image Drop — <event name>` thread on it, and records the drop as
 `batchId = <event slug>`, `source = discord-drop`. If the record cannot be
@@ -248,6 +257,34 @@ Opening a drop is gated; posting into one is not. A wrong slug, a channel that
 cannot hold a thread, and a CMS that refuses to read events are all answered
 ephemerally rather than raised, because the dispatcher renders a raised failure as
 a generic "Something went wrong".
+
+### Event directory
+
+Both `event` options suggest from one cached list of CMS events, ranked against
+what has been typed: prefix matches first, then word-boundary matches, then
+substrings, each group most-recent-first. An empty query — the option focused
+before anything is typed — answers with the most recent events. Choices read as
+`<name> — <date>`, marked `(draft)` when the CMS says the event is unpublished,
+and carry the slug as their value.
+
+Three layers keep the CMS off a path Discord abandons after three seconds: an
+in-process memo (60s) that absorbs a burst of keystrokes, `cms:events:v1` in
+Redis (10 minutes) so a restart or a second instance starts warm, and the CMS
+itself under a two-second budget with a 30-second cooldown after a failure. One
+refresh serves a whole burst of keystrokes, and a keystroke waits at most 1.2s
+on it before answering with what it already has — a cold cache answers the next
+keystroke instead of missing the deadline on this one. A failed refresh serves
+the last good list; a cold one serves nothing and the option still accepts free
+text.
+
+Suggestions are organizer-gated even though the commands are visible to
+everyone: an unpublished event is a plan, and the CMS's event list is not
+public. A non-organizer gets an empty list rather than an error.
+
+Staleness is the trade for that budget. An event created a minute ago may not be
+suggested yet, which is exactly why these are autocomplete options rather than
+fixed choices — a hand-typed slug is still accepted, and both commands resolve it
+against the CMS rather than against the cache.
 
 ## Community message and reaction handlers
 
