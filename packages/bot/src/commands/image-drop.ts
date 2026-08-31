@@ -27,8 +27,10 @@ import type { ChatInputCommandInteraction, SendableChannels } from "discord.js";
 import type { SlashCommand } from "../framework/commands.ts";
 import { isEventSlug, isPermissionDenied, MediaSource } from "../integrations/cms.ts";
 import type { CmsClient, CmsEvent } from "../integrations/cms.ts";
+import type { EventDirectory } from "../integrations/event-directory.ts";
 import type { ImageDropStore } from "../integrations/image-drop.ts";
 import { roleOf } from "../utils/roles.ts";
+import { EVENT_OPTION, eventAutocomplete } from "./event-autocomplete.ts";
 
 export type ImageDropError = Forbidden | Transient | UpstreamError;
 
@@ -45,10 +47,14 @@ builder
   .setDescription("Open a thread whose images are filed to a CMS event (organizers only)")
   .addStringOption((opt) =>
     opt
-      .setName("event")
+      .setName(EVENT_OPTION)
       .setDescription("The event's slug in the CMS (e.g. sound-galaxy-workshop)")
       .setRequired(true)
-      .setMaxLength(THREAD_NAME_LIMIT),
+      .setMaxLength(THREAD_NAME_LIMIT)
+      // Autocomplete rather than fixed choices: the suggestions come from a
+      // cache that can be a few minutes behind, and an event created moments
+      // ago has to remain typeable.
+      .setAutocomplete(true),
   );
 
 function threadNameFor(event: CmsEvent): string {
@@ -127,7 +133,7 @@ async function run(
     );
   }
 
-  const slug = interaction.options.getString("event", true).trim().toLowerCase();
+  const slug = interaction.options.getString(EVENT_OPTION, true).trim().toLowerCase();
   // Rejections below are *answers*, not errors: the dispatcher renders a failed
   // command as "Something went wrong", which cannot tell an organizer that the
   // slug was wrong or that they ran it in a thread.
@@ -162,9 +168,11 @@ async function run(
 export function imageDropCommand(deps: {
   readonly cms: CmsClient;
   readonly drops: ImageDropStore;
+  readonly directory: EventDirectory;
 }) {
   return {
     builder,
+    autocomplete: eventAutocomplete(deps.directory),
     execute: async (interaction) => {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 

@@ -14,10 +14,12 @@
 import type { UpstreamError } from "@repo/shared/errors";
 import type { RedisClient } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
+import type { Reporter } from "@repo/shared/result/observe";
 
 import type { SlashCommand } from "../framework/commands.ts";
 import { createCmsClient } from "../integrations/cms.ts";
 import { createDashboardWriter } from "../integrations/dashboard.ts";
+import { createEventDirectory } from "../integrations/event-directory.ts";
 import { createImageDropStore } from "../integrations/image-drop.ts";
 import { hackNightCommand } from "./hack-night.ts";
 import { imageDropCommand } from "./image-drop.ts";
@@ -29,6 +31,7 @@ export interface CommandDeps {
   readonly vercelToken: string;
   readonly dashboardGlobalConfig: string;
   readonly cmsApiKey: string;
+  readonly reporter: Reporter;
 }
 
 /**
@@ -47,11 +50,14 @@ export function buildCommands(deps: CommandDeps): Result<readonly SlashCommand[]
 
   const cms = createCmsClient({ apiKey: deps.cmsApiKey });
   const drops = createImageDropStore(deps.redis);
+  // One directory for both commands: the `event` option means the same thing in
+  // each, and a second cache would double the CMS traffic to say the same thing.
+  const directory = createEventDirectory({ cms, redis: deps.redis, reporter: deps.reporter });
 
   return Result.ok([
     ping,
     privacyCommand(deps.redis),
-    hackNightCommand({ dashboard: dashboard.value, cms, drops }),
-    imageDropCommand({ cms, drops }),
+    hackNightCommand({ dashboard: dashboard.value, cms, drops, directory }),
+    imageDropCommand({ cms, drops, directory }),
   ]);
 }

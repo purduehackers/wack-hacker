@@ -16,9 +16,25 @@
 
 import type { KnownError } from "@repo/shared/errors";
 import type { Result } from "@repo/shared/result";
-import type { ChatInputCommandInteraction, SlashCommandBuilder } from "discord.js";
+import type {
+  AutocompleteInteraction,
+  ChatInputCommandInteraction,
+  SlashCommandBuilder,
+} from "discord.js";
 
 export interface SlashCommand {
   readonly builder: SlashCommandBuilder;
   readonly execute: (interaction: ChatInputCommandInteraction) => Promise<Result<void, KnownError>>;
+  /**
+   * Fills an option marked `setAutocomplete(true)`.
+   *
+   * Optional because most options have nothing to suggest, and separate from
+   * `execute` because Discord sends it as its own interaction — one per
+   * keystroke, three seconds to answer, and no way to reply to the person if it
+   * fails. A handler that cannot answer should respond with no choices rather
+   * than raise, which leaves the typed text exactly as it is.
+   */
+  readonly autocomplete?: (
+    interaction: AutocompleteInteraction,
+  ) => Promise<Result<void, KnownError>>;
 }
