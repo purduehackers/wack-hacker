@@ -17,7 +17,7 @@
  */
 
 import { DISCORD_IDS, UserRole, roleAtLeast, roleFromMemberRoles } from "@repo/shared/discord";
-import { messageOf, tagOf } from "@repo/shared/errors";
+import { messageOf, tagOf, UpstreamError } from "@repo/shared/errors";
 import { isOptedOut } from "@repo/shared/privacy";
 import type { RedisClient } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
@@ -25,7 +25,6 @@ import type { Reporter } from "@repo/shared/result/observe";
 import type { Attachment, Message } from "discord.js";
 
 import { defineEvent } from "../framework/events.ts";
-import { isPermissionDenied } from "../integrations/cms.ts";
 import type { CmsClient } from "../integrations/cms.ts";
 import {
   altTextFor,
@@ -38,7 +37,7 @@ import type { ImageDrop, ImageDropStore } from "../integrations/image-drop.ts";
 const CHECK = "✅";
 const CROSS = "❌";
 
-/** How long the "attaching is not permitted" notice suppresses its repeats. */
+/** How long the "could not attach" notice suppresses its repeats. */
 const ATTACH_NOTICE_TTL_SECONDS = 30 * 24 * 60 * 60;
 
 /** The weekly photo thread, and not some other thread under the same channel. */
@@ -100,15 +99,28 @@ function reportFailure(
   });
 }
 
-/** What became of one attachment. `denied` is filed but not attached to the event. */
-type FilingOutcome = "filed" | "denied" | "failed";
+/**
+ * What became of one attachment.
+ *
+ * `refused` is archived but not on the event, and carries what the CMS said so
+ * the thread notice can quote it rather than guess at a cause.
+ */
+interface Filing {
+  readonly outcome: "filed" | "refused" | "failed";
+  readonly reason?: string;
+}
+
+/** Short enough for Discord; the full detail goes to telemetry. */
+function refusalReason(error: unknown): string {
+  return UpstreamError.is(error) ? `the CMS answered ${error.status}` : messageOf(error);
+}
 
 async function fileImage(
   deps: UploadDeps,
   drop: ImageDrop,
   message: Message,
   attachment: Attachment,
-): Promise<FilingOutcome> {
+): Promise<Filing> {
   // Check each attachment independently. If one upload succeeds and a later one
   // fails, replay must resume the missing file rather than treating the whole
   // Discord message as complete.
@@ -118,9 +130,9 @@ async function fileImage(
   const existing = await deps.cms.hasImageForMessage(drop, message.id, filename);
   if (Result.isError(existing)) {
     reportFailure(deps.reporter, "image-drop.check", existing.error, reported);
-    return "failed";
+    return { outcome: "failed" };
   }
-  if (existing.value) return "filed";
+  if (existing.value) return { outcome: "filed" };
 
   const uploaded = await deps.cms.uploadImage({
     batch: drop,
@@ -133,34 +145,40 @@ async function fileImage(
   });
   if (Result.isError(uploaded)) {
     reportFailure(deps.reporter, "image-drop.upload", uploaded.error, reported);
-    return "failed";
+    return { outcome: "failed" };
   }
 
-  if (drop.event === undefined) return "filed";
+  if (drop.event === undefined) return { outcome: "filed" };
 
   const attached = await deps.cms.attachImages(drop.event.id, [uploaded.value.id]);
-  if (!Result.isError(attached)) return "filed";
+  if (!Result.isError(attached)) return { outcome: "filed" };
 
-  // A refusal is permanent and the photo is still archived, so it is explained
-  // rather than counted; anything else is a photo that did not reach the event
-  // and belongs on the ❌.
-  if (isPermissionDenied(attached.error)) return "denied";
+  // Always reported, whatever the status. The photo is archived either way, so
+  // this never shows on the reaction — and an attach that fails silently is what
+  // once left an organizer chasing a wrong explanation through the CMS.
   reportFailure(deps.reporter, "image-drop.attach", attached.error, reported);
-  return "failed";
+  return { outcome: "refused", reason: refusalReason(attached.error) };
 }
 
 /**
  * Says once, in the thread, that images are landing in the archive but not on
  * the event.
  *
- * The CMS refusing `events.images[]` is a configuration fact, not a passing
- * failure — every upload for the rest of the night hits it — so the notice is
- * claimed through Redis and the reaction stays ✅: the photos really are filed.
+ * Whatever stops the attach usually stops every attach for the rest of the
+ * night, so the notice is claimed through Redis and said once. The reaction
+ * stays ✅ because the photos really are filed — only the event link is missing,
+ * and the batch is what an editor needs to finish the job by hand.
+ *
+ * It quotes what the CMS said rather than naming a cause. The status alone does
+ * not identify one: `attachImages` already treats a saved-then-failed write as
+ * success, so anything reaching here is genuinely not on the event, but *why* is
+ * a question for the telemetry this also emits.
  */
-async function noticeAttachDenied(
+async function noticeAttachRefused(
   deps: UploadDeps,
   message: Message,
   drop: ImageDrop,
+  reason: string,
 ): Promise<void> {
   const claimed = await Result.tryPromise({
     try: () =>
@@ -174,9 +192,9 @@ async function noticeAttachDenied(
   if (!message.channel.isSendable()) return;
 
   await message.channel.send(
-    `Heads up: these photos are being archived under batch \`${drop.batchId}\`, but the CMS ` +
-      "will not let me add them to the event itself. An editor can filter the media library " +
-      "by that batch and attach them in one go.",
+    `Heads up: these photos are archived under batch \`${drop.batchId}\`, but I could not add ` +
+      `them to the event itself (${reason}). An editor can filter the media library by that ` +
+      "batch and attach them in one go.",
   );
 }
 
@@ -201,13 +219,13 @@ export function imageDropUploads(deps: UploadDeps) {
       if (await isOptedOut(deps.redis, message.author.id)) return Result.ok(undefined);
 
       let failed = 0;
-      let denied = false;
+      let refusal: string | undefined;
       for (const attachment of images) {
-        const outcome = await fileImage(deps, drop, message, attachment);
-        if (outcome === "failed") failed += 1;
-        if (outcome === "denied") denied = true;
+        const filing = await fileImage(deps, drop, message, attachment);
+        if (filing.outcome === "failed") failed += 1;
+        if (filing.outcome === "refused") refusal ??= filing.reason;
       }
-      if (denied) await noticeAttachDenied(deps, message, drop);
+      if (refusal !== undefined) await noticeAttachRefused(deps, message, drop, refusal);
 
       // One reaction for the message, not one per attachment: a post with four
       // photos should not collect four checkmarks.
@@ -254,22 +272,23 @@ export function imageDropRemoval(deps: {
       if (Result.isError(removed)) return Result.map(removed, () => undefined);
       if (removed.value.length === 0) return Result.ok(undefined);
 
+      // Clear our own ✅ first: the media is already gone, so the reaction is
+      // wrong from this moment whatever the event write does next.
+      await message.reactions.cache.get(CHECK)?.users.remove(message.client.user.id);
+
       // Detach after the delete, because the delete is what names the media that
-      // were actually removed. A CMS that will not let the bot write the event
-      // leaves a row pointing at a deleted upload, which an editor can clear —
-      // the alternative is refusing to remove a photo someone asked to remove.
+      // were actually removed. A failure here leaves a row pointing at a deleted
+      // upload, which an editor can clear — the alternative is refusing to remove
+      // a photo someone asked to remove. It is still reported: `detachImages`
+      // verifies before believing a failing status, so what reaches here is real.
       if (drop.event !== undefined) {
         const detached = await deps.cms.detachImages(
           drop.event.id,
           removed.value.map((image) => image.id),
         );
-        if (Result.isError(detached) && !isPermissionDenied(detached.error)) {
-          return Result.map(detached, () => undefined);
-        }
+        if (Result.isError(detached)) return Result.map(detached, () => undefined);
       }
 
-      // Clear our own ✅ so the message no longer claims to be archived.
-      await message.reactions.cache.get(CHECK)?.users.remove(message.client.user.id);
       return Result.ok(undefined);
     },
   });
