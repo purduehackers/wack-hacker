@@ -13,9 +13,17 @@
  * `events.images[]` is the convenient one: it is what puts photos on the events
  * site without anyone opening the admin UI. Writing it is an `update` on
  * `events`, which Payload gates behind `editor` — a service account holding only
- * `wack_hacker` can upload all night and still be refused here. The refusal is a
+ * `wack_hacker` can upload all night and still be refused here. That refusal is a
  * 403 rather than an outage, so callers degrade to batch-only instead of failing
- * the upload; `isPermissionDenied` is how they tell the two apart.
+ * the upload.
+ *
+ * A failing status on that write does *not* mean the write failed. Payload runs a
+ * collection's `afterChange` hooks after the document is committed, so a hook
+ * that throws — the events collection's reminder-email blast, when the CMS's mail
+ * key is rejected — answers with that hook's status for a change that is already
+ * saved. We once read one of those as "permission denied" and told an organizer
+ * their photos had not been attached while they sat on the event. So the write is
+ * verified by reading it back before any failure is believed.
  */
 
 import { httpStatusOf, messageOf, Transient, UpstreamError } from "@repo/shared/errors";
@@ -560,12 +568,12 @@ function writeImageRows(
  * that a concurrent writer clobbered this append, and raising `Transient` is what
  * makes `upstreamRetry` reapply it against the array that won.
  */
-function attachImages(
+async function attachImages(
   cms: CmsContext,
   eventId: DocumentId,
   mediaIds: readonly DocumentId[],
 ): Promise<Result<number, CmsError>> {
-  return Result.tryPromise(
+  const written = await Result.tryPromise(
     {
       try: () =>
         serialize(cms.writes, String(eventId), async () => {
@@ -593,6 +601,28 @@ function attachImages(
     },
     upstreamRetry,
   );
+  if (!Result.isError(written)) return written;
+
+  // The status said no; the event is what actually knows. An `afterChange` hook
+  // failing after the commit looks exactly like a refused write from here.
+  const attached = await isAttached(cms, eventId, mediaIds);
+  return attached ? Result.ok(mediaIds.length) : written;
+}
+
+/** Whether every one of these is already on the event. Answers false if unreadable. */
+async function isAttached(
+  cms: CmsContext,
+  eventId: DocumentId,
+  mediaIds: readonly DocumentId[],
+): Promise<boolean> {
+  const event = await Result.tryPromise({
+    try: () => readEvent(cms, eventId),
+    catch: toCmsError("re-read CMS event"),
+  });
+  if (Result.isError(event)) return false;
+
+  const rows = imageRows(event.value);
+  return mediaIds.every((wanted) => rows.some((entry) => sameId(entry.image, wanted)));
 }
 
 /**
@@ -601,12 +631,12 @@ function attachImages(
  * Called before the media itself is deleted, so the event never points at a
  * document that no longer exists.
  */
-function detachImages(
+async function detachImages(
   cms: CmsContext,
   eventId: DocumentId,
   removedIds: readonly DocumentId[],
 ): Promise<Result<number, CmsError>> {
-  return Result.tryPromise(
+  const written = await Result.tryPromise(
     {
       try: () =>
         serialize(cms.writes, String(eventId), async () => {
@@ -624,6 +654,28 @@ function detachImages(
     },
     upstreamRetry,
   );
+  if (!Result.isError(written)) return written;
+
+  // Same as `attachImages`: an `afterChange` hook failing after the commit is
+  // indistinguishable from a refused write until the event is read back.
+  const gone = await isDetached(cms, eventId, removedIds);
+  return gone ? Result.ok(removedIds.length) : written;
+}
+
+/** Whether none of these remain on the event. Answers false if unreadable. */
+async function isDetached(
+  cms: CmsContext,
+  eventId: DocumentId,
+  removedIds: readonly DocumentId[],
+): Promise<boolean> {
+  const event = await Result.tryPromise({
+    try: () => readEvent(cms, eventId),
+    catch: toCmsError("re-read CMS event"),
+  });
+  if (Result.isError(event)) return false;
+
+  const rows = imageRows(event.value);
+  return !removedIds.some((removed) => rows.some((entry) => sameId(entry.image, removed)));
 }
 
 export function createCmsClient(deps: CmsDeps) {

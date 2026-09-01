@@ -358,9 +358,19 @@ filed or ❌ if any failed.
 
 `events.images[]` is a whole-array write, so appends are serialized per event
 in-process and verified after the write; a lost update raises `Transient` and is
-retried. A 403 there is a permission fact rather than a failure: the photo stays
-archived under its batch, the reaction stays ✅, and the thread gets one Redis-
-claimed notice telling an editor to bulk-attach from the media library.
+retried.
+
+A failing status on that write is not believed until the event is read back.
+Payload runs `afterChange` hooks _after_ the document commits, so a hook that
+throws — the events collection's reminder-email blast, when the CMS's mail key is
+rejected — answers with that hook's status for a change that is already saved.
+Read as a refusal, it once told an organizer their photos had not been attached
+while they sat on the event. Both `attachImages` and `detachImages` therefore
+re-read and treat a saved-but-errored write as the success it was.
+
+A genuinely failed attach leaves the photo archived under its batch: the reaction
+stays ✅, the failure is reported to telemetry, and the thread gets one Redis-
+claimed notice quoting what the CMS said and pointing an editor at the batch.
 
 On ❌ reaction, the original author or a freshly resolved organizer/admin may
 bulk-delete Payload media for that Discord message; the removed ids are then
