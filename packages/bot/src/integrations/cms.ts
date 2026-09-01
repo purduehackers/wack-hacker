@@ -26,9 +26,16 @@
  * verified by reading it back before any failure is believed.
  */
 
-import { httpStatusOf, messageOf, Transient, UpstreamError } from "@repo/shared/errors";
+import {
+  httpStatusOf,
+  isRetryable,
+  messageOf,
+  Transient,
+  UpstreamError,
+} from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { upstreamRetry } from "@repo/shared/result/retry";
+import type { RetryPolicy } from "@repo/shared/result/retry";
 import { upload } from "@vercel/blob/client";
 import { z } from "zod";
 
@@ -223,6 +230,34 @@ function imageRows(event: EventDoc): readonly ImageRow[] {
  * into an answer rather than a round trip that comes back empty for an
  * unexplained reason.
  */
+/**
+ * Vercel Blob's "this pathname is taken" conflict, which ships no error class of
+ * its own — the message is the only thing that identifies it.
+ *
+ * It means an earlier attempt stored the bytes and then failed before the
+ * document existed. Uploading again is neither possible nor necessary.
+ */
+function isBlobConflict(error: unknown): boolean {
+  return error instanceof Error && error.message.includes("This blob already exists");
+}
+
+/**
+ * Payload reports a request whose body did not arrive intact as one carrying no
+ * file at all.
+ *
+ * Nothing about the photo causes it: the same image, uploaded on its own moments
+ * later, succeeds. It appears under sustained sequential uploading, clusters in
+ * time rather than scattering, and is indifferent to pacing between photos.
+ * Backfilling a year of hack nights needed several passes to clear the last few.
+ */
+function isBodyLost(error: unknown): boolean {
+  return (
+    UpstreamError.is(error) &&
+    error.status === 400 &&
+    error.detail.includes("No files were uploaded")
+  );
+}
+
 export function isEventSlug(value: string): boolean {
   return /^[a-z0-9][a-z0-9.-]*$/.test(value);
 }
@@ -395,87 +430,117 @@ function listImages(
  * reads as "already stored", fetching the object itself to derive dimensions and
  * filesize. That fetch is an ordinary outbound request with no body limit.
  */
+/**
+ * Slower than `upstreamRetry`, and deliberately.
+ *
+ * The shared curve jitters down towards zero, so its attempts land inside the
+ * same bad window that failed the first one — measured against a real backfill,
+ * three of them in a row changed nothing. Seconds apart is what actually clears
+ * it, and even then not always, which is why a caller still reports what it
+ * could not file rather than assuming this succeeds.
+ */
+const uploadRetry: RetryPolicy<unknown> = {
+  retry: {
+    times: 3,
+    shouldRetry: isRetryable,
+    delayMs: (_error, context) => [1_000, 4_000, 10_000][context.attempt - 1] ?? 10_000,
+  },
+};
+
 function uploadImage(
   cms: CmsContext,
   input: UploadImageInput,
 ): Promise<Result<DropImage, CmsError>> {
-  return Result.tryPromise({
-    try: async () => {
-      const response = await fetch(input.url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
-      if (!response.ok) {
-        throw new UpstreamError({
-          service: "discord-cdn",
-          status: response.status,
-          detail: `could not fetch ${input.filename}`,
+  return Result.tryPromise(
+    {
+      try: async () => {
+        const response = await fetch(input.url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+        if (!response.ok) {
+          throw new UpstreamError({
+            service: "discord-cdn",
+            status: response.status,
+            detail: `could not fetch ${input.filename}`,
+          });
+        }
+        const blob = await response.blob();
+        const contentType = blob.type.length > 0 ? blob.type : input.contentType;
+
+        const stored = await upload(input.filename, blob, {
+          access: "public",
+          contentType,
+          // Read by the token route as the collection to authorise against.
+          clientPayload: MEDIA,
+          handleUploadUrl: `${cms.baseUrl}${CLIENT_UPLOAD_ROUTE}`,
+          // That route authenticates the way every other call here does; a browser
+          // would send a session cookie, and we have none.
+          headers: { Authorization: authorization(cms.apiKey) },
+          // Splits a large file into parallel parts with their own retries, which
+          // is the case this whole path exists for.
+          multipart: true,
+        }).catch((error: unknown) => {
+          // Left over from an attempt that stored the bytes and then failed to
+          // create the document. Carrying on with that object is what lets a retry
+          // finish the job instead of dying on an upload it no longer needs.
+          if (!isBlobConflict(error)) throw error;
+          return { pathname: input.filename };
         });
-      }
-      const blob = await response.blob();
-      const contentType = blob.type.length > 0 ? blob.type : input.contentType;
 
-      const stored = await upload(input.filename, blob, {
-        access: "public",
-        contentType,
-        // Read by the token route as the collection to authorise against.
-        clientPayload: MEDIA,
-        handleUploadUrl: `${cms.baseUrl}${CLIENT_UPLOAD_ROUTE}`,
-        // That route authenticates the way every other call here does; a browser
-        // would send a session cookie, and we have none.
-        headers: { Authorization: authorization(cms.apiKey) },
-        // Splits a large file into parallel parts with their own retries, which
-        // is the case this whole path exists for.
-        multipart: true,
-      });
-
-      // Built by hand rather than as `FormData`, because Payload only parses a
-      // multipart body when `Content-Length` is set and Bun sends a FormData of
-      // plain fields without one — the request then arrives carrying no fields
-      // at all and the create fails as "No files were uploaded".
-      const boundary = `----wackhacker${crypto.randomUUID()}`;
-      const field = (name: string, value: string) =>
-        `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`;
-      const body = new TextEncoder().encode(
-        field(
-          "_payload",
-          JSON.stringify({
-            alt: input.alt,
-            source: input.batch.source,
-            batchId: input.batch.batchId,
-            discordMessageId: input.discordMessageId,
-            discordUserId: input.discordUserId,
-          }),
-        ) +
-          // A *JSON* file field is how Payload is told the bytes are already in
-          // storage: it fetches the object itself instead of reading a body.
+        const boundary = `----wackhacker${crypto.randomUUID()}`;
+        const field = (name: string, value: string) =>
+          `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`;
+        const body = new TextEncoder().encode(
           field(
-            "file",
+            "_payload",
             JSON.stringify({
-              clientUploadContext: { prefix: "" },
-              collectionSlug: MEDIA,
-              filename: stored.pathname,
-              mimeType: contentType,
-              size: blob.size,
+              alt: input.alt,
+              source: input.batch.source,
+              batchId: input.batch.batchId,
+              discordMessageId: input.discordMessageId,
+              discordUserId: input.discordUserId,
             }),
           ) +
-          `--${boundary}--\r\n`,
-      );
+            // A *JSON* file field is how Payload is told the bytes are already in
+            // storage: it fetches the object itself instead of reading a body.
+            field(
+              "file",
+              JSON.stringify({
+                clientUploadContext: { prefix: "" },
+                collectionSlug: MEDIA,
+                filename: stored.pathname,
+                mimeType: contentType,
+                size: blob.size,
+              }),
+            ) +
+            `--${boundary}--\r\n`,
+        );
 
-      const created = await payloadRequest(
-        mediaMutationSchema,
-        collectionUrl(cms.baseUrl, MEDIA),
-        cms.apiKey,
-        {
-          method: "POST",
-          headers: {
-            "content-type": `multipart/form-data; boundary=${boundary}`,
-            "content-length": String(body.byteLength),
+        const created = await payloadRequest(
+          mediaMutationSchema,
+          collectionUrl(cms.baseUrl, MEDIA),
+          cms.apiKey,
+          {
+            method: "POST",
+            headers: {
+              "content-type": `multipart/form-data; boundary=${boundary}`,
+              "content-length": String(body.byteLength),
+            },
+            body,
           },
-          body,
-        },
-      );
-      return project(created.doc);
+        ).catch((error: unknown) => {
+          if (isBodyLost(error)) {
+            throw new Transient({
+              operation: "create media document",
+              detail: "the CMS saw a request with no file; the body did not arrive intact",
+            });
+          }
+          throw error;
+        });
+        return project(created.doc);
+      },
+      catch: toCmsError("upload drop image"),
     },
-    catch: toCmsError("upload drop image"),
-  });
+    uploadRetry,
+  );
 }
 
 function hasImageForMessage(
