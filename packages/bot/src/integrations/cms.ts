@@ -29,6 +29,7 @@
 import { httpStatusOf, messageOf, Transient, UpstreamError } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { upstreamRetry } from "@repo/shared/result/retry";
+import { upload } from "@vercel/blob/client";
 import { z } from "zod";
 
 const MEDIA = "media";
@@ -44,6 +45,13 @@ const EVENTS = "events";
  * as a 401.
  */
 const AUTH_COLLECTION = "service-accounts";
+/**
+ * The route Payload's Vercel Blob plugin mounts for minting upload tokens.
+ *
+ * Named by the plugin rather than by us — it is the adapter's
+ * `serverHandlerPath`, under the API root.
+ */
+const CLIENT_UPLOAD_ROUTE = "/api/vercel-blob-client-upload-route";
 const LIST_PAGE_SIZE = 100;
 const LIST_PAGE_CAP = 20;
 /** Purdue Hackers has run a few hundred events, not tens of thousands. */
@@ -254,6 +262,10 @@ function documentUrl(baseUrl: string, collection: string, id: DocumentId): URL {
   return new URL(`/api/${collection}/${encodeURIComponent(String(id))}?depth=0`, baseUrl);
 }
 
+function authorization(apiKey: string): string {
+  return `${AUTH_COLLECTION} API-Key ${apiKey}`;
+}
+
 async function payloadRequest<S extends z.ZodType>(
   schema: S,
   url: URL,
@@ -261,7 +273,7 @@ async function payloadRequest<S extends z.ZodType>(
   init: RequestInit = {},
 ): Promise<z.output<S>> {
   const headers = new Headers(init.headers);
-  headers.set("Authorization", `${AUTH_COLLECTION} API-Key ${apiKey}`);
+  headers.set("Authorization", authorization(apiKey));
   const response = await fetch(url, {
     ...init,
     headers,
@@ -368,6 +380,21 @@ function listImages(
   );
 }
 
+/**
+ * Files one image: the bytes go straight to Blob storage, and only metadata
+ * reaches the CMS.
+ *
+ * The obvious implementation — POST the file to `/api/media` — is capped at
+ * Vercel's 4.5MB function body limit, and a phone photo is routinely larger.
+ * That cap was quietly eating the archive rather than reporting itself: of one
+ * hack night's 136 photos, two were small enough to store.
+ *
+ * So this takes the two-step path the CMS's storage plugin exposes for browsers.
+ * The file is uploaded against a short-lived token the CMS mints, and the create
+ * request then carries a *JSON* `file` field instead of bytes — which Payload
+ * reads as "already stored", fetching the object itself to derive dimensions and
+ * filesize. That fetch is an ordinary outbound request with no body limit.
+ */
 function uploadImage(
   cms: CmsContext,
   input: UploadImageInput,
@@ -383,26 +410,67 @@ function uploadImage(
         });
       }
       const blob = await response.blob();
-      const file = new File([blob], input.filename, {
-        type: blob.type.length > 0 ? blob.type : input.contentType,
+      const contentType = blob.type.length > 0 ? blob.type : input.contentType;
+
+      const stored = await upload(input.filename, blob, {
+        access: "public",
+        contentType,
+        // Read by the token route as the collection to authorise against.
+        clientPayload: MEDIA,
+        handleUploadUrl: `${cms.baseUrl}${CLIENT_UPLOAD_ROUTE}`,
+        // That route authenticates the way every other call here does; a browser
+        // would send a session cookie, and we have none.
+        headers: { Authorization: authorization(cms.apiKey) },
+        // Splits a large file into parallel parts with their own retries, which
+        // is the case this whole path exists for.
+        multipart: true,
       });
-      const form = new FormData();
-      form.append("file", file);
-      form.append(
-        "_payload",
-        JSON.stringify({
-          alt: input.alt,
-          source: input.batch.source,
-          batchId: input.batch.batchId,
-          discordMessageId: input.discordMessageId,
-          discordUserId: input.discordUserId,
-        }),
+
+      // Built by hand rather than as `FormData`, because Payload only parses a
+      // multipart body when `Content-Length` is set and Bun sends a FormData of
+      // plain fields without one — the request then arrives carrying no fields
+      // at all and the create fails as "No files were uploaded".
+      const boundary = `----wackhacker${crypto.randomUUID()}`;
+      const field = (name: string, value: string) =>
+        `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`;
+      const body = new TextEncoder().encode(
+        field(
+          "_payload",
+          JSON.stringify({
+            alt: input.alt,
+            source: input.batch.source,
+            batchId: input.batch.batchId,
+            discordMessageId: input.discordMessageId,
+            discordUserId: input.discordUserId,
+          }),
+        ) +
+          // A *JSON* file field is how Payload is told the bytes are already in
+          // storage: it fetches the object itself instead of reading a body.
+          field(
+            "file",
+            JSON.stringify({
+              clientUploadContext: { prefix: "" },
+              collectionSlug: MEDIA,
+              filename: stored.pathname,
+              mimeType: contentType,
+              size: blob.size,
+            }),
+          ) +
+          `--${boundary}--\r\n`,
       );
+
       const created = await payloadRequest(
         mediaMutationSchema,
         collectionUrl(cms.baseUrl, MEDIA),
         cms.apiKey,
-        { method: "POST", body: form },
+        {
+          method: "POST",
+          headers: {
+            "content-type": `multipart/form-data; boundary=${boundary}`,
+            "content-length": String(body.byteLength),
+          },
+          body,
+        },
       );
       return project(created.doc);
     },
