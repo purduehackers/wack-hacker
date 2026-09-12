@@ -402,6 +402,27 @@ bot:schedule:<name>:<YYYYMMDDHHmm> = 1, NX, EX 14 days
 failure, there is no catch-up/retry queue, and the next cron time is a different
 key.
 
+### Daily 09:00 — website event sync
+
+`website-event-sync` queries the CMS for published events whose start time is
+still in the future, paging in start-time order. It creates missing external
+Discord events with their title, times, location, plain-text description, and
+website link. The bot needs the guild's Create Events permission.
+
+The link carries the CMS event id in its fragment, so later runs recognize an
+event even if its website slug or title changes. Existing website links and
+matching titles/start times also prevent duplicates of manually created events.
+This job creates missing events only; edits, cancellations, and removals stay
+with organizers. A failed create is reported without retrying it in the job;
+the next day's fresh Discord list detects a write whose response was lost.
+
+When the CMS has no usable end time, Discord gets an estimated two-hour duration
+and the description labels the estimate. Missing locations point users to the
+website. Drafts, past events, and records without a usable title, category, slug,
+or start are skipped. Descriptions are shortened to Discord's limit while
+preserving the website link. There is no startup catch-up; this becomes active
+when the bot version containing the schedule is deployed.
+
 ### Friday 20:00 — photography thread
 
 Posts and pins a random hack-night greeting, removes one recent pin system

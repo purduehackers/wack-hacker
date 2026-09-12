@@ -32,7 +32,7 @@ src/
   commands/         /ping /privacy /hack-night /image-drop
   events/           agent chat, auto-thread, praise, ship + dashboard mirrors,
                     voice transcription, image drops, chat indexer
-  schedules/        hack-night countdown, photography thread, cleanup
+  schedules/        daily website event sync, hack-night countdown, photography thread, cleanup
   integrations/     ships, dashboard, CMS, image drops
 scripts/
   register-commands.ts   explicit guild registration; never runs at startup
