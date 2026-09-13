@@ -171,6 +171,25 @@ const eventListSchema = z.object({
 });
 const eventMutationSchema = z.object({ doc: eventDocSchema });
 
+/** Separate from the strict event summary cached by autocomplete. */
+const syncEventSchema = z.object({
+  id: documentId,
+  slug: z.string().nullish(),
+  name: z.string().nullish(),
+  published: z.boolean().optional(),
+  eventType: z.string().nullish(),
+  start: z.string().nullish(),
+  end: z.string().nullish(),
+  location_name: z.string().nullish(),
+  description: z.unknown().optional(),
+});
+const syncEventListSchema = z.object({
+  docs: z.array(syncEventSchema),
+  totalPages: z.int().nonnegative(),
+});
+
+export type CmsSyncEvent = z.output<typeof syncEventSchema>;
+
 type MediaDoc = z.output<typeof mediaDocSchema>;
 type EventDoc = z.output<typeof eventDocSchema>;
 type DocumentId = z.output<typeof documentId>;
@@ -670,6 +689,43 @@ function findEventBySlug(
   );
 }
 
+/** Filter before paginating so archived events cannot crowd out upcoming ones. */
+function listUpcomingPublishedEvents(
+  cms: CmsContext,
+  after: Date,
+): Promise<Result<readonly CmsSyncEvent[], CmsError>> {
+  return Result.tryPromise(
+    {
+      try: async () => {
+        const events: CmsSyncEvent[] = [];
+        for (let page = 1; page <= EVENT_PAGE_CAP; page += 1) {
+          const found = await payloadRequest(
+            syncEventListSchema,
+            collectionUrl(cms.baseUrl, EVENTS, {
+              "where[published][equals]": "true",
+              "where[start][greater_than]": after.toISOString(),
+              limit: String(LIST_PAGE_SIZE),
+              page: String(page),
+              depth: "0",
+              sort: "start",
+            }),
+            cms.apiKey,
+          );
+          events.push(...found.docs);
+          if (page >= found.totalPages) return events;
+        }
+        throw new UpstreamError({
+          service: "payload-cms",
+          status: 502,
+          detail: `upcoming events exceeded the ${EVENT_PAGE_CAP}-page limit`,
+        });
+      },
+      catch: toCmsError("list upcoming published CMS events"),
+    },
+    upstreamRetry,
+  );
+}
+
 function readEvent(cms: CmsContext, eventId: DocumentId): Promise<EventDoc> {
   return payloadRequest(eventDocSchema, documentUrl(cms.baseUrl, EVENTS, eventId), cms.apiKey);
 }
@@ -822,6 +878,7 @@ export function createCmsClient(deps: CmsDeps) {
       deleteImagesForMessage(cms, batch, discordMessageId),
     findEventBySlug: (slug: string) => findEventBySlug(cms, slug),
     listEvents: (signal: AbortSignal) => listEvents(cms, signal),
+    listUpcomingPublishedEvents: (after: Date) => listUpcomingPublishedEvents(cms, after),
     attachImages: (eventId: DocumentId, mediaIds: readonly DocumentId[]) =>
       attachImages(cms, eventId, mediaIds),
     detachImages: (eventId: DocumentId, removedIds: readonly DocumentId[]) =>

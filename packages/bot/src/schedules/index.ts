@@ -2,7 +2,7 @@
  * The schedule registry.
  *
  * Explicit, like the command and event registries. Dependencies are passed in
- * because two of the three jobs need the drop store and the CMS client, and a job
+ * because jobs need the drop store and the CMS client, and a job
  * reaching for a module-level singleton would be untraceable at startup.
  */
 
@@ -14,6 +14,7 @@ import { createImageDropStore } from "../integrations/image-drop.ts";
 import { hackNightCleanup } from "./hack-night-cleanup.ts";
 import { hackNightCountdown } from "./hack-night-countdown.ts";
 import { hackNightPhotographyThread } from "./hack-night-photography-thread.ts";
+import { websiteEventSync } from "./website-event-sync.ts";
 
 export interface ScheduleDeps {
   readonly redis: RedisClient;
@@ -25,6 +26,7 @@ export function buildSchedules(deps: ScheduleDeps): readonly Schedule[] {
   const cms = createCmsClient({ apiKey: deps.cmsApiKey });
 
   return [
+    websiteEventSync({ cms }),
     hackNightCountdown(),
     hackNightPhotographyThread({ drops }),
     hackNightCleanup({ drops, cms }),
