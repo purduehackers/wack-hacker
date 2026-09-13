@@ -52,7 +52,7 @@ export type HackNightError = Forbidden | InvalidInput | Transient | UpstreamErro
  * Strip the whole first emoji, including selectors, modifiers, or joined parts,
  * so replacing it cannot leave an invisible suffix or half a flag behind.
  */
-export function withEmojiPrefix(currentName: string, emoji: string): string {
+function withEmojiPrefix(currentName: string, emoji: string): string {
   const first = graphemes.segment(currentName)[Symbol.iterator]().next().value?.segment;
   const suffix =
     first !== undefined && isSingleEmoji(first) ? currentName.slice(first.length) : currentName;
@@ -65,7 +65,7 @@ export function withEmojiPrefix(currentName: string, emoji: string): string {
  * Discord accepts almost anything in a channel name, so an unchecked value here
  * would let a typo rename the busiest channel in the server to arbitrary text.
  */
-export function isSingleEmoji(value: string): boolean {
+function isSingleEmoji(value: string): boolean {
   // RGI covers flags, skin tones, keycaps, and ZWJ sequences. Also accept a
   // pictograph with an optional selector: Discord can send `⚽️`, although
   // Unicode's recommended spelling of that emoji is just `⚽`.
@@ -73,7 +73,7 @@ export function isSingleEmoji(value: string): boolean {
 }
 
 /** The dashboard displays the string verbatim, including an optional `v` prefix. */
-export function isVersionString(value: string): boolean {
+function isVersionString(value: string): boolean {
   return /^v?\d+\.\d+(?:\.\d+)?$/u.test(value);
 }
 
