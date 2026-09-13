@@ -306,9 +306,11 @@ Full commit-SHA links use one anonymous contents API request. Cached source
 Branch and tag links fetch raw source alongside a fresh public-visibility check.
 Requests omit credentials, reject redirects, and stop after five seconds or
 1 MiB. Private, missing, rate-limited, binary, and out-of-range files produce no
-preview. Concurrent requests for the same file share a download, and Redis
-deduplication runs alongside fetching. Existing replies are not updated when
-messages or repository visibility change.
+preview. Failed requests other than 404 are reported through the event logger,
+including GitHub's retry and rate-limit headers when present. Concurrent requests
+for the same file share a download, and Redis deduplication runs alongside
+fetching. Existing replies are not updated when messages or repository visibility
+change.
 
 ### `praise`
 

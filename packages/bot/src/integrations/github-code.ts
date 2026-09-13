@@ -186,12 +186,17 @@ async function fetchText(
   }
   if (!response.ok) {
     await response.body?.cancel();
-    if (response.status === 404 || response.status === 403 || response.status === 429)
-      return undefined;
+    if (response.status === 404) return undefined;
+    const limits = ["retry-after", "x-ratelimit-remaining", "x-ratelimit-reset"]
+      .flatMap((name) => {
+        const value = response.headers.get(name);
+        return value === null ? [] : [`${name}=${value}`];
+      })
+      .join(", ");
     throw new UpstreamError({
       service: "github-code",
       status: response.status,
-      detail: "code preview request failed",
+      detail: `code preview request failed${limits ? `; ${limits}` : ""}`,
     });
   }
   // Directory listings use JSON even when the raw media type is requested.
