@@ -294,6 +294,24 @@ against the CMS rather than against the cache.
 
 ## Community message and reaction handlers
 
+### GitHub code previews
+
+`github-code-preview` quietly replies to public GitHub `blob` links with `#L10`
+or `#L10-L20` anchors. Each message gets at most three numbered code previews,
+limited to 30 lines and 1,400 characters each. Bot mentions, DMs, suppressed
+embeds, and links inside backticks or `<...>` are skipped.
+
+Full commit-SHA links use one anonymous contents API request. Cached source
+(32 files, at most 4 MiB) requires successful ETag revalidation on every use.
+Branch and tag links fetch raw source alongside a fresh public-visibility check.
+Requests omit credentials, reject redirects, and stop after five seconds or
+1 MiB. Private, missing, rate-limited, binary, and out-of-range files produce no
+preview. Failed requests other than 404 are reported through the event logger,
+including GitHub's retry and rate-limit headers when present. Concurrent requests
+for the same file share a download, and Redis deduplication runs alongside
+fetching. Existing replies are not updated when messages or repository visibility
+change.
+
 ### `praise`
 
 A non-agent guild message containing flexible/case-insensitive
