@@ -15,8 +15,10 @@ import type { RedisClient } from "@repo/shared/redis";
 import type { Reporter } from "@repo/shared/result/observe";
 
 import { createTurnMessageStore } from "../agent/turn-messages.ts";
+import { createDeduplicator } from "../framework/dedup.ts";
 import type { AnyEventHandler } from "../framework/events.ts";
 import { createCmsClient } from "../integrations/cms.ts";
+import { createGitHubCodeClient } from "../integrations/github-code.ts";
 import { createImageDropStore } from "../integrations/image-drop.ts";
 import { createShipsClient } from "../integrations/ships.ts";
 import type { ConversationFlow } from "../utils/conversation/index.ts";
@@ -26,6 +28,7 @@ import { autoThread } from "./auto-thread.ts";
 import { chatFeedback } from "./chat-indexer.ts";
 import { emitDashboardMessage } from "./emit-dashboard-message.ts";
 import { deleteShipMessage, emitShipMessage } from "./emit-ship-message.ts";
+import { githubCodePreview } from "./github-code-preview.ts";
 import { imageDropRemoval, imageDropUploads } from "./image-drops.ts";
 import { praise } from "./praise.ts";
 import { createTranscriber, transcribeVoiceMessage } from "./transcribe-voice-message.ts";
@@ -53,6 +56,7 @@ export function buildEventHandlers(deps: EventDeps): readonly AnyEventHandler[] 
     chatFeedback({ turnMessages, reporter: deps.reporter }),
     praise,
     autoThread,
+    githubCodePreview(createGitHubCodeClient(), createDeduplicator(deps.redis)),
     emitShipMessage(ships, deps.redis),
     deleteShipMessage(ships),
     imageDropUploads({ cms, drops, redis: deps.redis, reporter: deps.reporter }),
