@@ -225,9 +225,15 @@ uploads and does not delete what is already public.
 
 Current organizer/admin only, always ephemeral:
 
-- `start` validates one Extended_Pictographic code point and a version, renames
-  the fixed channel's leading emoji, then updates Dashboard Global Config;
+- `start` validates one Unicode emoji (including presentation selectors, skin
+  tones, flags, and joined sequences) and a version such as `v7.0` or `7.0`,
+  renames the fixed channel's whole leading emoji, then updates Dashboard Global
+  Config's `version` key with the version exactly as entered;
 - `reset` restores the moon prefix and does not change dashboard version.
+
+Invalid emoji or version input gets a specific ephemeral correction before any
+side effects. The dashboard's other config fields (`maintainer`, `title`, and
+`description`) are not changed by this command.
 
 Discord rename precedes Global Config update. A partial failure may leave the
 channel renamed; rerunning is the convergence path.
@@ -287,6 +293,24 @@ fixed choices — a hand-typed slug is still accepted, and both commands resolve
 against the CMS rather than against the cache.
 
 ## Community message and reaction handlers
+
+### GitHub code previews
+
+`github-code-preview` quietly replies to public GitHub `blob` links with `#L10`
+or `#L10-L20` anchors. Each message gets at most three numbered code previews,
+limited to 30 lines and 1,400 characters each. Bot mentions, DMs, suppressed
+embeds, and links inside backticks or `<...>` are skipped.
+
+Full commit-SHA links use one anonymous contents API request. Cached source
+(32 files, at most 4 MiB) requires successful ETag revalidation on every use.
+Branch and tag links fetch raw source alongside a fresh public-visibility check.
+Requests omit credentials, reject redirects, and stop after five seconds or
+1 MiB. Private, missing, rate-limited, binary, and out-of-range files produce no
+preview. Failed requests other than 404 are reported through the event logger,
+including GitHub's retry and rate-limit headers when present. Concurrent requests
+for the same file share a download, and Redis deduplication runs alongside
+fetching. Existing replies are not updated when messages or repository visibility
+change.
 
 ### `praise`
 

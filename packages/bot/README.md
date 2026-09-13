@@ -31,9 +31,9 @@ src/
     dates.ts          wall-clock helpers for one timezone
   commands/         /ping /privacy /hack-night /image-drop
   events/           agent chat, auto-thread, praise, ship + dashboard mirrors,
-                    voice transcription, image drops, chat indexer
+                    voice transcription, GitHub code previews, image drops, chat indexer
   schedules/        daily website event sync, hack-night countdown, photography thread, cleanup
-  integrations/     ships, dashboard, CMS, image drops
+  integrations/     ships, dashboard, CMS, GitHub public code, image drops
 scripts/
   register-commands.ts   explicit guild registration; never runs at startup
 ```
