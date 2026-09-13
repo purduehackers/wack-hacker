@@ -159,18 +159,34 @@ export async function syncWebsiteEvents(deps: WebsiteEventSyncDeps, now = new Da
     try: async () => {
       const existing = [...(await deps.events.list())];
       const initialCount = existing.length;
+      const attemptedIds = new Set<string>();
+      const failures: string[] = [];
       for (const source of listed.value) {
         const event = websiteEvent(source, now);
         if (event === undefined) {
           console.warn(`website-event-sync: skipped ineligible CMS event ${source.id}`);
           continue;
         }
-        if (existing.some((candidate) => alreadyExists(candidate, source, event))) continue;
+        const sourceId = String(source.id);
+        if (
+          attemptedIds.has(sourceId) ||
+          existing.some((candidate) => alreadyExists(candidate, source, event))
+        ) {
+          continue;
+        }
         // No blind retry on POST: an ambiguous failure may already have created
-        // the event. Tomorrow's fresh list resolves that without a duplicate.
-        existing.push(await deps.events.create(event.options));
+        // the event. Even duplicate CMS rows must get only one attempt per run.
+        attemptedIds.add(sourceId);
+        try {
+          existing.push(await deps.events.create(event.options));
+        } catch (cause) {
+          failures.push(`CMS event ${sourceId}: ${messageOf(cause)}`);
+        }
       }
       console.info(`website-event-sync: created ${existing.length - initialCount} event(s)`);
+      // Report partial failure after the batch so one bad event cannot starve
+      // the rest. Tomorrow's fresh Discord list reconciles ambiguous writes.
+      if (failures.length > 0) throw new Error(failures.join("\n"));
       return undefined;
     },
     catch: (cause) =>

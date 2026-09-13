@@ -413,8 +413,10 @@ The link carries the CMS event id in its fragment, so later runs recognize an
 event even if its website slug or title changes. Existing website links and
 matching titles/start times also prevent duplicates of manually created events.
 This job creates missing events only; edits, cancellations, and removals stay
-with organizers. A failed create is reported without retrying it in the job;
-the next day's fresh Discord list detects a write whose response was lost.
+with organizers. Each CMS event gets at most one create attempt per run. A
+failed create does not stop the remaining events; failures are reported together
+after the batch. The next day's fresh Discord list detects a write whose
+response was lost.
 
 When the CMS has no usable end time, Discord gets an estimated two-hour duration
 and the description labels the estimate. Missing locations point users to the

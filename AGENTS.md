@@ -18,17 +18,11 @@ Default to using Bun instead of Node.js.
 - Prefer `Bun.file` over `node:fs`'s readFile/writeFile
 - Bun.$`ls` instead of execa.
 
-## Testing
+## Validation
 
-Use `bun test` to run tests.
-
-```ts#index.test.ts
-import { test, expect } from "bun:test";
-
-test("hello world", () => {
-  expect(1).toBe(1);
-});
-```
+The repository currently has no committed test files. Validate changes with
+`bun run lint`, `bunx oxfmt --check .`, and focused manual checks appropriate to
+the change. If tests are added, use `bun test` to run them.
 
 ## Frontend
 
