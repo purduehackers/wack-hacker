@@ -225,9 +225,15 @@ uploads and does not delete what is already public.
 
 Current organizer/admin only, always ephemeral:
 
-- `start` validates one Extended_Pictographic code point and a version, renames
-  the fixed channel's leading emoji, then updates Dashboard Global Config;
+- `start` validates one Unicode emoji (including presentation selectors, skin
+  tones, flags, and joined sequences) and a version such as `v7.0` or `7.0`,
+  renames the fixed channel's whole leading emoji, then updates Dashboard Global
+  Config's `version` key with the version exactly as entered;
 - `reset` restores the moon prefix and does not change dashboard version.
+
+Invalid emoji or version input gets a specific ephemeral correction before any
+side effects. The dashboard's other config fields (`maintainer`, `title`, and
+`description`) are not changed by this command.
 
 Discord rename precedes Global Config update. A partial failure may leave the
 channel renamed; rerunning is the convergence path.

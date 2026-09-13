@@ -42,16 +42,21 @@ import { EVENT_OPTION, eventAutocomplete } from "./event-autocomplete.ts";
 /** 🌙 — the channel's resting state between hack nights. */
 const DEFAULT_EMOJI = "\u{1F319}";
 
+const graphemes = new Intl.Segmenter("en", { granularity: "grapheme" });
+
 export type HackNightError = Forbidden | InvalidInput | Transient | UpstreamError;
 
 /**
  * Swaps the leading emoji, leaving the rest of the channel name alone.
  *
- * Only one leading pictographic character is stripped, so a name that never had
- * a prefix simply gains one and repeated runs do not accumulate emoji.
+ * Strip the whole first emoji, including selectors, modifiers, or joined parts,
+ * so replacing it cannot leave an invisible suffix or half a flag behind.
  */
 function withEmojiPrefix(currentName: string, emoji: string): string {
-  return `${emoji}${currentName.replace(/^\p{Extended_Pictographic}/u, "")}`;
+  const first = graphemes.segment(currentName)[Symbol.iterator]().next().value?.segment;
+  const suffix =
+    first !== undefined && isSingleEmoji(first) ? currentName.slice(first.length) : currentName;
+  return `${emoji}${suffix}`;
 }
 
 /**
@@ -61,12 +66,15 @@ function withEmojiPrefix(currentName: string, emoji: string): string {
  * would let a typo rename the busiest channel in the server to arbitrary text.
  */
 function isSingleEmoji(value: string): boolean {
-  return /^\p{Extended_Pictographic}$/u.test(value);
+  // RGI covers flags, skin tones, keycaps, and ZWJ sequences. Also accept a
+  // pictograph with an optional selector: Discord can send `⚽️`, although
+  // Unicode's recommended spelling of that emoji is just `⚽`.
+  return /^(?:\p{RGI_Emoji}|\p{Extended_Pictographic}\uFE0F?)$/v.test(value);
 }
 
-/** Semver-ish, matching the dashboard's own expectation (for example `6.17`). */
+/** The dashboard displays the string verbatim, including an optional `v` prefix. */
 function isVersionString(value: string): boolean {
-  return /^\d+\.\d+(\.\d+)?$/.test(value);
+  return /^v?\d+\.\d+(?:\.\d+)?$/u.test(value);
 }
 
 export interface DashboardWriter {
@@ -97,7 +105,7 @@ builder
       .addStringOption((opt) =>
         opt
           .setName("version")
-          .setDescription("The version string shown on the dashboard (e.g. 6.17)")
+          .setDescription("The version string shown on the dashboard (e.g. v7.0 or 7.0)")
           .setRequired(true),
       )
       .addStringOption((opt) =>
@@ -335,13 +343,11 @@ async function run(
   const slug = interaction.options.getString(EVENT_OPTION)?.trim().toLowerCase();
 
   if (!isSingleEmoji(emoji)) {
-    return Result.err(
-      new InvalidInput({ subject: "emoji", issues: [`"${emoji}" is not a single emoji`] }),
-    );
+    return Result.ok("Use a single Unicode emoji for the channel prefix, such as ⚽️ or 👩‍💻.");
   }
   if (!isVersionString(version)) {
-    return Result.err(
-      new InvalidInput({ subject: "version", issues: [`"${version}" is not like 6.17`] }),
+    return Result.ok(
+      "Use a version like `v7.0` or `7.0` (an optional patch number, such as `v7.0.1`, is allowed).",
     );
   }
 
