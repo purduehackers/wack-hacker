@@ -1,4 +1,4 @@
-import { messageOf, Transient } from "@repo/shared/errors";
+import { httpStatusOf, messageOf, Transient, UpstreamError } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { MessageFlags } from "discord.js";
 import type { MessageReplyOptions } from "discord.js";
@@ -13,6 +13,7 @@ export async function replyWithGitHubCode(
     readonly id: string;
     readonly content: string;
     readonly reply: (options: MessageReplyOptions) => Promise<unknown>;
+    readonly suppressEmbeds: (suppress: boolean) => Promise<unknown>;
   },
   deps: {
     readonly github: GitHubCodeClient;
@@ -42,6 +43,28 @@ export async function replyWithGitHubCode(
         new Transient({ operation: "send GitHub code preview", detail: messageOf(cause) }),
     });
     if (Result.isError(sent)) return sent;
+
+    // Only suppress once the replacement is sent. Discord can still surface a
+    // delayed unfurl after this PATCH, so suppression is best-effort.
+    const suppressed = await Result.tryPromise({
+      try: () => message.suppressEmbeds(true),
+      catch: (cause) => {
+        const status = httpStatusOf(cause);
+        const detail = messageOf(cause);
+        return status !== undefined &&
+          status >= 400 &&
+          status < 500 &&
+          status !== 408 &&
+          status !== 429
+          ? new UpstreamError({
+              service: "discord",
+              status,
+              detail: `suppress GitHub link embeds: ${detail}`,
+            })
+          : new Transient({ operation: "suppress GitHub link embeds", detail });
+      },
+    });
+    if (Result.isError(suppressed)) return suppressed;
   }
   return errors[0] === undefined ? Result.ok(undefined) : Result.err(errors[0]);
 }

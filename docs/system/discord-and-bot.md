@@ -297,9 +297,26 @@ against the CMS rather than against the cache.
 ### GitHub code previews
 
 `github-code-preview` quietly replies to public GitHub `blob` links with `#L10`
-or `#L10-L20` anchors. Each message gets at most three numbered code previews,
-limited to 30 lines and 1,400 characters each. Bot mentions, DMs, suppressed
-embeds, and links inside backticks or `<...>` are skipped.
+or `#L10-L20` anchors. Each message gets at most three code previews with a linked
+`path:line-range` title, a code block without added line numbers, and a GitHub
+repository footer. Commit-SHA links show the repository-relative path; branch
+and tag links retain the full ref/path because refs can contain slashes.
+Previews are limited to 30 lines and 1,400 code characters
+each, with a “Show more…” source link when truncated. Long links can further
+reduce the snippet to stay within Discord's combined embed text limit. Bot
+mentions, DMs, suppressed embeds, and links inside backticks or `<...>` are skipped.
+
+After a preview reply is sent, the bot suppresses embeds on the original message
+to remove Discord's social card. This requires Manage Messages in the channel
+and affects all embeds on that message. Suppression is best-effort: Discord can
+still surface a delayed unfurl after the update, and this handler does not watch
+message updates to suppress it again. See
+[Discord's race-condition discussion](https://github.com/discord/discord-api-docs/issues/7771).
+Failed or empty previews leave the original embeds alone; suppression failures
+are reported through the event logger and leave the code reply in place.
+Permanent Discord 4xx failures, including missing permissions, are reported as
+non-retryable upstream errors; timeouts, rate limits, and transport failures
+remain transient.
 
 Full commit-SHA links use one anonymous contents API request. Cached source
 (32 files, at most 4 MiB) requires successful ETag revalidation on every use.

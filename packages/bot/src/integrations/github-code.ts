@@ -9,6 +9,7 @@ const MAX_PREVIEWS = 3;
 const MAX_FILE_BYTES = 1024 * 1024;
 const MAX_LINES = 30;
 const MAX_CODE_CHARS = 1_400;
+const MAX_EMBED_CHARS = 6_000 / MAX_PREVIEWS;
 const REQUEST_TIMEOUT_MS = 5_000;
 const RAW_MEDIA_TYPE = "application/vnd.github.raw+json";
 const MAX_CACHED_FILES = 32;
@@ -125,32 +126,38 @@ export function buildGitHubCodeEmbed(link: GitHubCodeLink, source: string): APIE
   const lastLine = Math.min(link.endLine, link.startLine + MAX_LINES - 1);
   const code = lines
     .slice(link.startLine - 1, lastLine)
-    .map(
-      (text, index) =>
-        `${String(link.startLine + index).padStart(String(lastLine).length)}  ${text}`,
-    )
     .join("\n")
     // Prevent source fences from closing the Discord code block.
     .replace(/`{3,}/g, (run) => run.split("").join("\u200b"));
-  const truncated = lastLine < link.endLine || code.length > MAX_CODE_CHARS;
-  const snippet = truncated ? `${sliceText(code, MAX_CODE_CHARS)}\n…` : code;
   const extension = link.blobPath.split(".").at(-1)?.toLowerCase() ?? "";
   const language = LANGUAGES.get(extension) ?? (/^[a-z]{1,12}$/.test(extension) ? extension : "");
   const range =
-    link.startLine === link.endLine
-      ? `Line ${link.startLine}`
-      : `Lines ${link.startLine}–${link.endLine}`;
+    link.startLine === link.endLine ? `:${link.startLine}` : `:${link.startLine}-${link.endLine}`;
+  // Only a full commit SHA gives us an unambiguous ref/path boundary. Preserve
+  // branch and tag refs rather than mistake part of a slash-containing ref for a directory.
+  const path = decodeURIComponent(link.blobPath.replace(/^[a-f\d]{40}\//i, ""));
+  const title = `${sliceText(path, 256 - range.length)}${range}`;
+  const footer = `${link.repository} | Added by GitHub`;
+  const truncated = lastLine < link.endLine || code.length > MAX_CODE_CHARS;
+  const more = truncated ? `\n[Show more…](<${link.url}>)` : "";
+  // Three previews share Discord's 6,000-character embed budget. Long source
+  // links in the description count toward it, unlike the embed's title URL.
+  const budget = Math.min(
+    MAX_CODE_CHARS,
+    MAX_EMBED_CHARS - title.length - footer.length - language.length - more.length - 10,
+  );
+  if (budget < 1) return undefined;
+  const snippet = truncated ? `${sliceText(code, budget)}\n…` : code;
 
   return {
     color: 0x24292f,
-    author: { name: link.repository, url: `https://github.com/${link.repository}` },
-    title: sliceText(
-      decodeURIComponent(link.blobPath).replace(/^[a-f\d]{40}\//i, (sha) => `${sha.slice(0, 7)}/`),
-      256,
-    ),
+    title,
     url: link.url,
-    description: `\`\`\`${language}\n${snippet}\n\`\`\``,
-    footer: { text: `${range}${truncated ? " · Preview truncated" : ""}` },
+    description: `\`\`\`${language}\n${snippet}\n\`\`\`${more}`,
+    footer: {
+      text: footer,
+      icon_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
+    },
   };
 }
 
