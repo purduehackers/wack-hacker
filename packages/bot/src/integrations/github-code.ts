@@ -133,7 +133,9 @@ export function buildGitHubCodeEmbed(link: GitHubCodeLink, source: string): APIE
   const language = LANGUAGES.get(extension) ?? (/^[a-z]{1,12}$/.test(extension) ? extension : "");
   const range =
     link.startLine === link.endLine ? `:${link.startLine}` : `:${link.startLine}-${link.endLine}`;
-  const path = decodeURIComponent(link.blobPath.replace(/^[^/]+\//, ""));
+  // Only a full commit SHA gives us an unambiguous ref/path boundary. Preserve
+  // branch and tag refs rather than mistake part of a slash-containing ref for a directory.
+  const path = decodeURIComponent(link.blobPath.replace(/^[a-f\d]{40}\//i, ""));
   const title = `${sliceText(path, 256 - range.length)}${range}`;
   const footer = `${link.repository} | Added by GitHub`;
   const truncated = lastLine < link.endLine || code.length > MAX_CODE_CHARS;
