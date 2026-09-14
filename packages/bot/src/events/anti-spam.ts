@@ -11,14 +11,15 @@
  * deliberate — the alert names a member to the organizers and asks them to act,
  * so the detector would rather miss a spree than invent one.
  *
- * One alert per spree, edited as further copies land. A spammer reaching twenty
- * channels must not become twenty pings in the organizer channel.
+ * Once detected, every copy in the run is removed and the author is notified
+ * once. One organizer alert per spree is edited as further copies land, so a
+ * spammer reaching twenty channels does not produce twenty alerts.
  */
 
 import { DISCORD_IDS } from "@repo/shared/discord";
 import { messageOf, Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
-import type { Client, Message } from "discord.js";
+import type { Client, Guild, Message } from "discord.js";
 
 import { defineEvent } from "../framework/events.ts";
 
@@ -28,7 +29,7 @@ const SPAM_WINDOW_MS = 120_000;
 /** A spree is the same content in more distinct channels than this. */
 const SPAM_CHANNEL_LIMIT = 3;
 
-/** Both maps expire by timestamp on read; this only frees the slots. */
+/** Detection state expires on read; this interval frees inactive spree state. */
 const SWEEP_INTERVAL_MS = 300_000;
 
 /**
@@ -40,7 +41,7 @@ export interface SpamMessage {
   readonly channelId: string;
   readonly content: string;
   readonly createdAt: Date;
-  readonly url: string;
+  readonly messageId: string;
   readonly attachments: readonly {
     readonly name: string;
     readonly size: number;
@@ -51,8 +52,18 @@ export interface SpamMessage {
 interface Seen {
   readonly signature: bigint;
   readonly channelId: string;
-  readonly url: string;
+  readonly messageId: string;
   readonly at: number;
+}
+
+export interface SpamCopy {
+  readonly channelId: string;
+  readonly messageId: string;
+}
+
+export interface SpamDetection {
+  readonly body: string;
+  readonly copies: readonly SpamCopy[];
 }
 
 /**
@@ -67,10 +78,17 @@ function signatureOf(message: SpamMessage): bigint {
   return Bun.hash.wyhash(message.content + parts.join(""));
 }
 
-function alertBody(copies: readonly string[]): string {
-  const links = copies.map((url) => `- ${url}`).join("\n");
-  return `# Likely spammer\n${links}\n\n-# False alarm? Please ping Kian to let him know.`;
+function alertBody(authorId: string, channelIds: readonly string[]): string {
+  const channels = [...new Set(channelIds)].map((id) => `- <#${id}>`).join("\n");
+  return `# Likely spammer\n<@${authorId}> sent repeated messages in:\n${channels}\n\n-# False alarm? Please ping Kian to let him know.`;
 }
+
+const SPAMMER_NOTICE = `Hello!
+
+I'm Wack Hacker, a bot for Purdue Hackers.
+
+I deleted some of your recent messages because they look like spam.
+If this is a mistake, please let an organizer know.`;
 
 /**
  * Per-author message history, and the verdict on each new message.
@@ -87,14 +105,14 @@ export function createSpamDetector() {
   };
 
   return {
-    /** The alert body when this message tips its author over the line. */
-    observe: (message: SpamMessage): string | undefined => {
+    /** The affected messages and alert body once this run crosses the limit. */
+    observe: (message: SpamMessage): SpamDetection | undefined => {
       const signature = signatureOf(message);
       const seen = fresh(message.authorId);
       seen.push({
         signature,
         channelId: message.channelId,
-        url: message.url,
+        messageId: message.messageId,
         at: message.createdAt.getTime(),
       });
       recent.set(message.authorId, seen);
@@ -102,7 +120,16 @@ export function createSpamDetector() {
       if (seen.some((prior) => prior.signature !== signature)) return undefined;
       if (new Set(seen.map((prior) => prior.channelId)).size <= SPAM_CHANNEL_LIMIT)
         return undefined;
-      return alertBody(seen.map((prior) => prior.url));
+      return {
+        body: alertBody(
+          message.authorId,
+          seen.map((prior) => prior.channelId),
+        ),
+        copies: seen.map((prior) => ({
+          channelId: prior.channelId,
+          messageId: prior.messageId,
+        })),
+      };
     },
 
     /** Forgets authors whose runs have fully aged out. */
@@ -119,26 +146,53 @@ async function postAlert(client: Client, body: string): Promise<Message> {
   if (!channel?.isTextBased() || channel.isDMBased()) {
     throw new Error("spam alert channel is not a guild text channel");
   }
-  return channel.send(body);
+  return channel.send({ content: body, allowedMentions: { parse: [] } });
+}
+
+async function deleteMessages(
+  guild: Guild,
+  targets: readonly SpamCopy[],
+  deleted: Set<string>,
+): Promise<void> {
+  const pending = targets.filter((entry) => !deleted.has(entry.messageId));
+  const settled = await Promise.allSettled(
+    pending.map(async (entry) => {
+      const channel = await guild.channels.fetch(entry.channelId);
+      if (channel === null || !channel.isTextBased()) {
+        throw new Error(`spam message channel is not text-based: ${entry.channelId}`);
+      }
+      await channel.messages.delete(entry.messageId);
+      deleted.add(entry.messageId);
+    }),
+  );
+  const failures = settled.flatMap((result) =>
+    result.status === "rejected" ? [result.reason] : [],
+  );
+  if (failures.length > 0)
+    throw new AggregateError(failures, "could not delete every spam message");
 }
 
 export function antiSpam() {
   const detector = createSpamDetector();
 
   /**
-   * The open alert per author. The promise rather than the message is stored,
-   * and stored before it settles, so two copies landing at once cannot both
-   * post — the second one edits what the first is still sending.
+   * The open moderation state per author. Promises are stored before they
+   * settle, so simultaneous copies serialize their alert edits and deletions.
    */
-  const alerts = new Map<
+  const sprees = new Map<
     string,
-    { readonly at: number; readonly message: Promise<Message | undefined> }
+    {
+      readonly at: number;
+      readonly alert: Promise<Message | undefined>;
+      readonly deletion: Promise<void>;
+      readonly deleted: Set<string>;
+    }
   >();
 
   setInterval(() => {
     detector.sweep();
     const cutoff = Date.now() - SPAM_WINDOW_MS;
-    for (const [authorId, open] of alerts) if (open.at < cutoff) alerts.delete(authorId);
+    for (const [authorId, open] of sprees) if (open.at < cutoff) sprees.delete(authorId);
   }, SWEEP_INTERVAL_MS).unref();
 
   return defineEvent({
@@ -147,39 +201,60 @@ export function antiSpam() {
     // A RESUME replay must not count one message towards a run twice.
     dedupKey: (message) => message.id,
     handle: async (message) => {
-      const body = detector.observe({
+      const guild = message.guild;
+      if (guild === null) return Result.ok(undefined);
+
+      const detection = detector.observe({
         authorId: message.author.id,
         channelId: message.channelId,
         content: message.content,
         createdAt: message.createdAt,
-        url: message.url,
+        messageId: message.id,
         attachments: message.attachments.map((file) => ({
           name: file.name,
           size: file.size,
           contentType: file.contentType ?? undefined,
         })),
       });
-      if (body === undefined) return Result.ok(undefined);
+      if (detection === undefined) return Result.ok(undefined);
 
       return Result.tryPromise({
         try: async () => {
-          const open = alerts.get(message.author.id);
+          const open = sprees.get(message.author.id);
+          const active = open && Date.now() - open.at < SPAM_WINDOW_MS ? open : undefined;
           // A run that aged out earns its own alert; editing the previous one
-          // would graft a fresh spree onto a stale list of links.
+          // would graft a fresh spree onto a stale list of channels.
           const posting =
-            open && Date.now() - open.at < SPAM_WINDOW_MS
-              ? open.message.then((alert) => alert?.edit(body) ?? postAlert(message.client, body))
-              : postAlert(message.client, body);
-          alerts.set(message.author.id, {
+            active === undefined
+              ? postAlert(message.client, detection.body)
+              : active.alert.then(
+                  (alert) =>
+                    alert?.edit({ content: detection.body, allowedMentions: { parse: [] } }) ??
+                    postAlert(message.client, detection.body),
+                );
+          const deleted = active?.deleted ?? new Set<string>();
+          const deletion = (active?.deletion ?? Promise.resolve())
+            .catch(() => undefined)
+            .then(() => deleteMessages(guild, detection.copies, deleted));
+          const notifying =
+            active === undefined
+              ? message.author.send(SPAMMER_NOTICE).catch((cause: unknown) => {
+                  console.warn(`could not notify spammer ${message.author.id}`, cause);
+                })
+              : Promise.resolve();
+
+          sprees.set(message.author.id, {
             at: Date.now(),
-            message: posting.catch(() => undefined),
+            alert: posting.catch(() => undefined),
+            deletion: deletion.catch(() => undefined),
+            deleted,
           });
-          await posting;
+          await Promise.all([posting, deletion, notifying]);
           return undefined;
         },
         catch: (cause) =>
           new Transient({
-            operation: "post spam alert",
+            operation: "remove spam and alert organizers",
             detail: messageOf(cause),
           }),
       });

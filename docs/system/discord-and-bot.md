@@ -340,6 +340,14 @@ contains a URL or direct/forwarded attachments exist.
 Sibling community handlers are concurrent, so deletion is not an ordered gate
 before external mirroring.
 
+### Anti-spam
+
+Four identical messages from one member in distinct channels within two minutes
+start a spam spree. The handler deletes every message in the spree, sends the
+member one best-effort DM, and posts one organizer alert in #community. Later
+copies are deleted and update that alert with a deduplicated list of affected
+channels; the member mention in the alert is rendered without pinging them.
+
 ### Ship mirror
 
 `emit-ship-message` folds direct/forwarded text, projects image/video media, and
