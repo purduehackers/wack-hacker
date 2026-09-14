@@ -13,6 +13,7 @@ export async function replyWithGitHubCode(
     readonly id: string;
     readonly content: string;
     readonly reply: (options: MessageReplyOptions) => Promise<unknown>;
+    readonly suppressEmbeds: (suppress: boolean) => Promise<unknown>;
   },
   deps: {
     readonly github: GitHubCodeClient;
@@ -42,6 +43,15 @@ export async function replyWithGitHubCode(
         new Transient({ operation: "send GitHub code preview", detail: messageOf(cause) }),
     });
     if (Result.isError(sent)) return sent;
+
+    // Keep the original preview if its replacement could not be sent. Suppressing
+    // the message flag also prevents a delayed Discord unfurl from appearing.
+    const suppressed = await Result.tryPromise({
+      try: () => message.suppressEmbeds(true),
+      catch: (cause) =>
+        new Transient({ operation: "suppress GitHub link embeds", detail: messageOf(cause) }),
+    });
+    if (Result.isError(suppressed)) return suppressed;
   }
   return errors[0] === undefined ? Result.ok(undefined) : Result.err(errors[0]);
 }

@@ -297,9 +297,18 @@ against the CMS rather than against the cache.
 ### GitHub code previews
 
 `github-code-preview` quietly replies to public GitHub `blob` links with `#L10`
-or `#L10-L20` anchors. Each message gets at most three numbered code previews,
-limited to 30 lines and 1,400 characters each. Bot mentions, DMs, suppressed
-embeds, and links inside backticks or `<...>` are skipped.
+or `#L10-L20` anchors. Each message gets at most three code previews with a linked
+`path:line-range` title, a code block without added line numbers, and a GitHub
+repository footer. Previews are limited to 30 lines and 1,400 code characters
+each, with a “Show more…” source link when truncated. Long links can further
+reduce the snippet to stay within Discord's combined embed text limit. Bot
+mentions, DMs, suppressed embeds, and links inside backticks or `<...>` are skipped.
+
+After a preview reply is sent, the bot suppresses embeds on the original message
+to remove Discord's social card, including delayed unfurls. This requires Manage
+Messages in the channel and affects all embeds on that message. Failed or empty
+previews leave the original embeds alone; suppression failures are reported through
+the event logger and leave the code reply in place.
 
 Full commit-SHA links use one anonymous contents API request. Cached source
 (32 files, at most 4 MiB) requires successful ETag revalidation on every use.
