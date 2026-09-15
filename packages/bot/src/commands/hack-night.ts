@@ -339,18 +339,21 @@ async function run(
   }
 
   const emoji = interaction.options.getString("emoji", true);
-  const version = interaction.options.getString("version", true);
+  const versionInput = interaction.options.getString("version", true);
   const slug = interaction.options.getString(EVENT_OPTION)?.trim().toLowerCase();
 
   if (!isSingleEmoji(emoji)) {
     return Result.ok("Use a single Unicode emoji for the channel prefix, such as ⚽️ or 👩‍💻.");
   }
-  if (!isVersionString(version)) {
+  if (!isVersionString(versionInput)) {
     return Result.ok(
       "Use a version like `7.0`, `7.11`, `7.0-beta`, or `7.0.0-beta`. " +
         "A patch number, tag, and leading `v` are optional.",
     );
   }
+
+  // The dashboard adds its own `v`; store only the validated version and tag.
+  const version = versionInput.replace(/^v/u, "");
 
   // Before the rename, so an unusable `event` option aborts the whole command
   // rather than half-starting a hack night the organizer has to unpick.

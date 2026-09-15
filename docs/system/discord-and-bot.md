@@ -230,7 +230,8 @@ Current organizer/admin only, always ephemeral:
   with an optional patch number, tag, and `v` prefix, such as `7.0`, `7.11`,
   `7.0-beta`, or `7.0.0-beta`,
   renames the fixed channel's whole leading emoji, then updates Dashboard Global
-  Config's `version` key with the version exactly as entered;
+  Config's `version` key after removing the optional leading `v`, which the
+  dashboard adds itself. The confirmation shows the normalized value;
 - `reset` restores the moon prefix and does not change dashboard version.
 
 Invalid emoji or version input gets a specific ephemeral correction before any
