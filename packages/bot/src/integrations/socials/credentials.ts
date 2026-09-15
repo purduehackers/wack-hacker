@@ -1,4 +1,4 @@
-import { InvalidInput, RecoveryRequired, Transient } from "@repo/shared/errors";
+import { RecoveryRequired, Transient } from "@repo/shared/errors";
 import { stored } from "@repo/shared/json";
 import type { RedisClient } from "@repo/shared/redis";
 import { z } from "zod";
@@ -7,20 +7,9 @@ import { createInstagramClient } from "./sources/instagram.ts";
 import type { SocialFetch } from "./types.ts";
 
 const DAY_MS = 24 * 60 * 60_000;
-const configSchema = z.object({ accountId: z.string().regex(/^\d+$/u), token: z.string().min(1) });
-export type InstagramConfig = z.output<typeof configSchema>;
-
-export function instagramConfig(
-  accountId: string | undefined,
-  token: string | undefined,
-): InstagramConfig {
-  const parsed = configSchema.safeParse({ accountId, token });
-  if (!parsed.success)
-    throw new InvalidInput({
-      subject: "Instagram configuration",
-      issues: ["set INSTAGRAM_USER_ID and INSTAGRAM_ACCESS_TOKEN"],
-    });
-  return parsed.data;
+export interface InstagramConfig {
+  readonly accountId: string;
+  readonly token: string;
 }
 const credentialSchema = z.object({
   revision: z.string(),
@@ -38,7 +27,6 @@ return 1`;
 export interface InstagramCredentials {
   readonly current: () => Promise<string>;
   readonly refresh: () => Promise<void>;
-  readonly replace: () => Promise<void>;
 }
 
 /** Redis holds the refreshed token across container restarts. Never log this record. */
@@ -69,7 +57,7 @@ export function createInstagramCredentials(options: {
       throw new RecoveryRequired({
         operation: "Instagram credentials",
         detail: "stored credential is invalid",
-        remediation: "run check-socials --replace-instagram-token with a new long-lived token",
+        remediation: "replace the token following docs/plans/socials.md",
       });
     }
     return parsed.data;
@@ -81,7 +69,7 @@ export function createInstagramCredentials(options: {
         throw new RecoveryRequired({
           operation: "Instagram credentials",
           detail: "token expired",
-          remediation: "generate a new token and run check-socials --replace-instagram-token",
+          remediation: "replace the token following docs/plans/socials.md",
         });
       }
       return state.token;
@@ -110,10 +98,6 @@ export function createInstagramCredentials(options: {
           operation: "Instagram refresh",
           detail: "credential changed concurrently; using the latest stored token",
         });
-    },
-    replace: async () => {
-      await apiFor(options.bootstrapToken).identity();
-      await options.redis.set(key, JSON.stringify(seed()));
     },
   };
 }

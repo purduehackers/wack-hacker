@@ -12,12 +12,8 @@ import { createInstagramSource } from "./sources/instagram.ts";
 import type { InstagramClientOptions } from "./sources/instagram.ts";
 import type { SocialSource } from "./types.ts";
 
-export function createSocialSources(instagram?: InstagramClientOptions): readonly SocialSource[] {
-  return [
-    createYouTubeSource(),
-    createBlogSource(),
-    ...(instagram === undefined ? [] : [createInstagramSource(instagram)]),
-  ];
+export function createSocialSources(instagram: InstagramClientOptions): readonly SocialSource[] {
+  return [createYouTubeSource(), createBlogSource(), createInstagramSource(instagram)];
 }
 
 /** Transport and schema exceptions may contain provider response bodies or tokens. */

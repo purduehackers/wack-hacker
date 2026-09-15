@@ -37,27 +37,20 @@ Generate the Instagram token in the club's **Wack Hacker** app in the
 setup with Instagram business login. Select `@purduehackers` and grant
 `instagram_business_basic`. The runtime needs no app secret.
 
-From `packages/bot`, with the environment files loaded:
-
-```sh
-bun run check-socials --source youtube  # Public feeds need no credentials.
-bun run check-socials                  # Read all three; never sends messages.
-bun run check-socials --preview /tmp/socials-preview.json
-bun run check-socials --baseline       # Requires Redis; silently records existing posts.
-```
-
-Run baseline and preview separately. An existing baseline is preserved. Configure
-credentials and create the baseline before first deployment. The bot checks View
-Channel, Send Messages, Embed Links, and Read Message History before delivery.
+Production baselines were initialized on September 15, 2026, without queuing old
+posts. Preserve them across deployments. The bot checks View Channel, Send Messages,
+Embed Links, and Read Message History before delivery.
 
 ## Tokens and recovery
 
 Redis stores the active Instagram token across restarts. Daily maintenance starts
 refreshing after 25 hours, then refreshes about every 30 days. To replace a revoked
-or expired token, update the environment secret and run
-`bun run check-socials --replace-instagram-token --source instagram`. This validates
-the account before replacing the stored token. Provider errors are sanitized;
-token refresh is excluded from tracing because Meta requires a query credential.
+or expired token, update `INSTAGRAM_ACCESS_TOKEN` and deploy it to the bot. Once
+the replacement bot is running, delete only the Redis credential key
+`socials:v1:772576325897945119:instagram:17841408764682550:credential` so the bot
+uses the new token. Every poll validates the account before reading media.
+Provider errors are sanitized; token refresh is excluded from tracing because
+Meta requires a query credential.
 
 Each source stores its baseline, checkpoint, known IDs, and pending posts under
 `socials:v1:772576325897945119:<platform>:<account>`, with no TTL. A 120-second lease
@@ -75,5 +68,4 @@ seven-day overlap, up to 2,000 posts; feeds expose only their recent window. A g
 or incomplete pagination stops discovery so missed posts can be reconciled before
 repairing the checkpoint. Do not delete state to clear a recovery error.
 
-Validate changes with `bun run lint`, `bunx oxfmt --check .`, and the read-only
-source checks above.
+Validate changes with `bun run lint`, `bunx oxfmt --check .`, and focused manual checks.

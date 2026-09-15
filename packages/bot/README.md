@@ -95,8 +95,7 @@ YouTube, blog, and Instagram adapters share a post contract, persistent Redis qu
 and Discord embed builder. Polling runs every five minutes; delivery retries run
 every minute. X and LinkedIn are deferred.
 
-Social announcements run whenever the bot runs. Use `bun run check-socials` for
-read-only source checks and `bun run check-socials --baseline` before first deployment.
+Social announcements run whenever the bot runs. Production baselines are already initialized.
 Instagram needs `INSTAGRAM_USER_ID` and a long-lived `INSTAGRAM_ACCESS_TOKEN`;
 YouTube and the blog need no credentials. Preserve the Redis state and refreshed
 token across deployments. See [setup and recovery](../../docs/plans/socials.md).

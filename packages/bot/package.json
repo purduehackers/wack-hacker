@@ -6,8 +6,7 @@
   "scripts": {
     "dev": "bun run --watch --preload ./src/instrument.ts src/index.ts",
     "start": "bun run --preload ./src/instrument.ts src/index.ts",
-    "register-commands": "bun scripts/register-commands.ts",
-    "check-socials": "bun scripts/check-socials.ts"
+    "register-commands": "bun scripts/register-commands.ts"
   },
   "dependencies": {
     "@ai-sdk/groq": "^4.0.24",

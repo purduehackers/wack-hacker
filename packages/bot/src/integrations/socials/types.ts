@@ -1,7 +1,6 @@
 import { z } from "zod";
 
-export const socialPlatformSchema = z.enum(["blog", "youtube", "instagram"]);
-export type SocialPlatform = z.output<typeof socialPlatformSchema>;
+export type SocialPlatform = "blog" | "youtube" | "instagram";
 
 export const socialPostSchema = z.object({
   id: z.string().min(1),

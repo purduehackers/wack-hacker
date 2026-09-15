@@ -12,25 +12,6 @@ function sortedPosts(entries: readonly SocialPost[]): SocialPost[] {
   );
 }
 
-export async function baselineSocialSource(
-  source: SocialSource,
-  lease: SocialLease,
-  now = Date.now(),
-): Promise<boolean> {
-  if ((await lease.load()) !== undefined) return false;
-  const posts = await source.read(new Date(now));
-  await lease.save({
-    version: 1,
-    account: source.account,
-    baselineAt: now,
-    checkedAt: now,
-    pollRetryAt: 0,
-    knownIds: posts.map((entry) => entry.id),
-    pending: [],
-  });
-  return true;
-}
-
 export async function requireSocialState(
   source: SocialSource,
   lease: SocialLease,
@@ -40,8 +21,7 @@ export async function requireSocialState(
     throw new RecoveryRequired({
       operation: `${source.id} polling`,
       detail: "source has no baseline",
-      remediation:
-        "run check-socials --baseline before first deployment; restore state after data loss",
+      remediation: "restore the initialized source state from backup",
     });
   }
   return state;

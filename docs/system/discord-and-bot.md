@@ -452,7 +452,7 @@ is a different key. Social announcements maintain their own persistent queue.
 public posts using a shared adapter contract. YouTube and blog feeds share
 `rss-parser`; Instagram uses the Instagram Login media API. Each source has its
 own baseline, pending posts, and known IDs in Redis without a
-TTL. Baseline explicitly with `bun run check-socials --baseline` before first deployment.
+TTL. Production baselines are already initialized and must be preserved across deployments.
 
 `socials-deliver-*` runs every minute and sends a consistent embed to #📡socials.
 Fenced source leases serialize polling and delivery across bot instances. Sends
