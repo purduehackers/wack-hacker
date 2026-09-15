@@ -110,6 +110,14 @@ function logStartupSummary(input: {
   );
 }
 
+function configuredSchedules(redis: RedisClient) {
+  return buildSchedules({
+    redis,
+    cmsApiKey: env.PAYLOAD_CMS_API_KEY,
+    socials: { accountId: env.INSTAGRAM_USER_ID, token: env.INSTAGRAM_ACCESS_TOKEN },
+  });
+}
+
 async function main(): Promise<void> {
   installSignalHandlers();
   // Registered first so reverse-order shutdown flushes Sentry last.
@@ -192,7 +200,7 @@ async function main(): Promise<void> {
   });
 
   const scheduler = startScheduler({
-    schedules: buildSchedules({ redis, cmsApiKey: env.PAYLOAD_CMS_API_KEY }),
+    schedules: configuredSchedules(redis),
     client: ready,
     reporter: consoleReporter,
     redis,

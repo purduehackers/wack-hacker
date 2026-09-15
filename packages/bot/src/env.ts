@@ -10,9 +10,9 @@
  *
  * Note what is *not* here: Turso. The bot writes no durable rows — the audit
  * log, scheduled tasks, and the shopping cart are all agent-side — and its own
- * state (dedup keys, per-key locks, the pending-turn queue, hack-night thread
- * mapping) is short-lived and lives in Redis. Giving the bot database
- * credentials it does not need would be a needless blast radius.
+ * state lives in Redis, including durable social-post baselines and queues.
+ * Giving the bot database credentials it does not need would be a needless
+ * blast radius.
  */
 
 import { createEnv } from "@t3-oss/env-core";
@@ -90,6 +90,9 @@ export const env = createEnv({
 
     /** Voice-message transcription via Groq whisper-large-v3-turbo. */
     GROQ_API_KEY: secret,
+
+    INSTAGRAM_USER_ID: z.string().regex(/^\d+$/u),
+    INSTAGRAM_ACCESS_TOKEN: secret,
 
     SENTRY_DSN: z.url({ protocol: /^https?$/u }).optional(),
   },

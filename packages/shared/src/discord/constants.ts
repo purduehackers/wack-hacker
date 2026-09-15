@@ -24,6 +24,8 @@ export const DISCORD_IDS = {
   channels: {
     /** Ships must carry a URL or attachment; text-only posts are removed. */
     SHIP: "904896819165814794",
+    /** New public YouTube, blog, and Instagram posts. */
+    SOCIALS: "1416915165609463888",
     CHECKPOINTS: "1052236377338683514",
     /** Every audited agent action is mirrored here, one embed per decision. */
     AGENT_AUDIT: "1537154519182344302",

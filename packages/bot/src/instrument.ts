@@ -32,6 +32,13 @@ Sentry.init({
   release: process.env["SENTRY_RELEASE"],
   sendDefaultPii: false,
   enableLogs: true,
-  integrations: [Sentry.consoleLoggingIntegration({ levels: ["info", "warn", "error"] })],
+  integrations: [
+    Sentry.consoleLoggingIntegration({ levels: ["info", "warn", "error"] }),
+    // Meta requires an access_token query parameter for token refresh.
+    Sentry.nativeNodeFetchIntegration({
+      ignoreOutgoingRequests: (url) =>
+        url.startsWith("https://graph.instagram.com/refresh_access_token"),
+    }),
+  ],
   tracesSampleRate,
 });
