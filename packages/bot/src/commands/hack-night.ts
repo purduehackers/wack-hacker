@@ -72,9 +72,9 @@ function isSingleEmoji(value: string): boolean {
   return /^(?:\p{RGI_Emoji}|\p{Extended_Pictographic}\uFE0F?)$/v.test(value);
 }
 
-/** The dashboard displays the string verbatim, so the `v` prefix is required. */
+/** Hack Night uses major.minor, with an optional patch, tag, and `v` prefix. */
 function isVersionString(value: string): boolean {
-  return /^v\d+\.\d+(?:\.\d+)?$/u.test(value);
+  return /^v?\d+\.\d+(?:\.\d+)?(?:-[\dA-Za-z]+(?:[.-][\dA-Za-z]+)*)?$/u.test(value);
 }
 
 export interface DashboardWriter {
@@ -105,9 +105,7 @@ builder
       .addStringOption((opt) =>
         opt
           .setName("version")
-          .setDescription(
-            "The version string shown on the dashboard (must start with v, e.g. v7.0)",
-          )
+          .setDescription("Hack Night version shown on the dashboard (e.g. 7.0, 7.11, or 7.0-beta)")
           .setRequired(true),
       )
       .addStringOption((opt) =>
@@ -349,7 +347,8 @@ async function run(
   }
   if (!isVersionString(version)) {
     return Result.ok(
-      "Versions must start with `v`, like `v7.0` or `v7.0.1` (with an optional patch number).",
+      "Use a version like `7.0`, `7.11`, `7.0-beta`, or `7.0.0-beta`. " +
+        "A patch number, tag, and leading `v` are optional.",
     );
   }
 
