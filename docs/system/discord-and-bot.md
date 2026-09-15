@@ -343,10 +343,22 @@ before external mirroring.
 ### Anti-spam
 
 Four identical messages from one member in distinct channels within two minutes
-start a spam spree. The handler deletes every message in the spree, sends the
-member one best-effort DM, and posts one organizer alert in #community. Later
-copies are deleted and update that alert with a deduplicated list of affected
-channels; the member mention in the alert is rendered without pinging them.
+start a spam spree, provided the member sent no different content in that window.
+Stale messages and replays do not count. The handler attempts to delete every
+copy and posts one organizer alert in #community. Once a deletion batch succeeds,
+it attempts one anti-spam DM to the member; closed DMs do not block moderation.
+Messages already removed by the author or another handler count as deleted.
+
+Later copies queue behind the current batch, retry failed deletions, and update
+the original alert even after an edit failure. Alerts show up to 50 distinct
+channels and an overflow count; the member mention is rendered without pinging
+them. Permission/API failures are reported, and no retry is scheduled after the
+last copy.
+
+Detection and spree state are process-local. Deployment overlap can split the
+window between instances because the router deduplicates events in Redis. As
+with auto-thread, deletion does not gate public mirroring or retract dashboard
+copies already sent, and other handlers can send their own notices.
 
 ### Ship mirror
 
