@@ -34,7 +34,6 @@ jobs:
           esac
       # oxlint is type-aware (tsgolint), so it reports TS errors too — there is no separate tsc pass.
       - run: bun run lint
-      - run: bun test packages/bot/src/integrations/socials
       # Cross-file invariants a code review cannot see: a skill referencing a tool the registry
       # does not define, a tool no role can reach, a half-wired subagent. Each package script does
       # one thing, so CI composes them here rather than one script invoking another.

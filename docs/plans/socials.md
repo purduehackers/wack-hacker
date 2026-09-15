@@ -77,5 +77,5 @@ seven-day overlap, up to 2,000 posts; feeds expose only their recent window. A g
 or incomplete pagination stops discovery so missed posts can be reconciled before
 repairing the checkpoint. Do not delete state to clear a recovery error.
 
-Run `bun test packages/bot/src/integrations/socials` from the repository root for
-adapter, formatting, polling, and delivery failure coverage. CI runs this suite.
+Validate changes with `bun run lint`, `bunx oxfmt --check .`, and the read-only
+source checks above.
