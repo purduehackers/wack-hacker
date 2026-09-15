@@ -479,10 +479,10 @@ failed create does not stop the remaining events; failures are reported together
 after the batch. The next day's fresh Discord list detects a write whose
 response was lost.
 
-When the CMS has no usable end time, Discord gets an estimated two-hour duration
-and the description labels the estimate. Missing locations point users to the
-website. Drafts, past events, and records without a usable title, category, slug,
-or start are skipped. Descriptions are shortened to Discord's limit while
+The CMS requires an explicit end time. The sync never infers one: legacy records
+with a missing, invalid, or non-increasing end time are skipped. Missing locations
+point users to the website. Drafts, past events, and records without a usable
+title, category, slug, or start are skipped. Descriptions are shortened to Discord's limit while
 preserving the website link. There is no startup catch-up; this becomes active
 when the bot version containing the schedule is deployed.
 

@@ -88,7 +88,7 @@ export function richTextParagraph(text: string) {
 export const eventFields = {
   name: z.string(),
   start: cmsDatetime.describe("ISO 8601 datetime for event start"),
-  end: cmsDatetime.optional().describe("ISO 8601 datetime for event end"),
+  end: cmsDatetime.describe("Required ISO 8601 datetime for event end; never infer or estimate"),
   event_type: z.string().optional().describe("Event type (default 'hack-night')"),
   location_name: z.string().optional(),
   location_url: z.url().optional(),
