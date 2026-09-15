@@ -91,12 +91,8 @@ export const env = createEnv({
     /** Voice-message transcription via Groq whisper-large-v3-turbo. */
     GROQ_API_KEY: secret,
 
-    /** Explicitly baseline each source before enabling announcements. */
-    SOCIALS_ENABLED: z
-      .stringbool({ truthy: ["true"], falsy: ["false"], case: "sensitive" })
-      .default(false),
-    INSTAGRAM_USER_ID: z.string().regex(/^\d+$/u).optional(),
-    INSTAGRAM_ACCESS_TOKEN: secret.optional(),
+    INSTAGRAM_USER_ID: z.string().regex(/^\d+$/u),
+    INSTAGRAM_ACCESS_TOKEN: secret,
 
     SENTRY_DSN: z.url({ protocol: /^https?$/u }).optional(),
   },

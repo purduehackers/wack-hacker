@@ -45,7 +45,6 @@ import { installSignalHandlers, onShutdown, shutdown } from "./framework/lifecyc
 import { consoleReporter } from "./framework/observability.ts";
 import { startScheduler } from "./framework/schedules.ts";
 import { startServer } from "./framework/server.ts";
-import { instagramConfig } from "./integrations/socials/credentials.ts";
 import { buildSchedules } from "./schedules/index.ts";
 import { createConversationFlow } from "./utils/conversation/index.ts";
 
@@ -115,9 +114,7 @@ function configuredSchedules(redis: RedisClient) {
   return buildSchedules({
     redis,
     cmsApiKey: env.PAYLOAD_CMS_API_KEY,
-    socials: env.SOCIALS_ENABLED
-      ? instagramConfig(env.INSTAGRAM_USER_ID, env.INSTAGRAM_ACCESS_TOKEN)
-      : undefined,
+    socials: { accountId: env.INSTAGRAM_USER_ID, token: env.INSTAGRAM_ACCESS_TOKEN },
   });
 }
 

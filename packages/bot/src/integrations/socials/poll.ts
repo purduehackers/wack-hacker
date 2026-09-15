@@ -40,7 +40,8 @@ export async function requireSocialState(
     throw new RecoveryRequired({
       operation: `${source.id} polling`,
       detail: "source has no baseline",
-      remediation: "run check-socials --baseline before enabling; restore state after data loss",
+      remediation:
+        "run check-socials --baseline before first deployment; restore state after data loss",
     });
   }
   return state;

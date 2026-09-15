@@ -2,7 +2,7 @@
 
 Wack Hacker checks YouTube, the blog, and Instagram every five minutes and sends
 new posts to **#📡socials** (`1416915165609463888`). Delivery runs separately every
-minute. X and LinkedIn are deferred. `SOCIALS_ENABLED` defaults to `false`.
+minute. These schedules always run with the bot. X and LinkedIn are deferred.
 
 ## Sources and embeds
 
@@ -28,7 +28,6 @@ thumbnails, and carousel covers link to the original publication. Mentions are d
 Set these in the bot's environment and the agent deployment that supervises it:
 
 ```dotenv
-SOCIALS_ENABLED=false
 INSTAGRAM_USER_ID=17841408764682550
 INSTAGRAM_ACCESS_TOKEN=<long-lived token>
 ```
@@ -47,10 +46,9 @@ bun run check-socials --preview /tmp/socials-preview.json
 bun run check-socials --baseline       # Requires Redis; silently records existing posts.
 ```
 
-Run baseline and preview separately. An existing baseline is preserved. Then set
-`SOCIALS_ENABLED=true` and deploy. The bot checks View Channel, Send Messages,
-Embed Links, and Read Message History before delivery. To pause, disable the flag
-and restart, preserving Redis state.
+Run baseline and preview separately. An existing baseline is preserved. Configure
+credentials and create the baseline before first deployment. The bot checks View
+Channel, Send Messages, Embed Links, and Read Message History before delivery.
 
 ## Tokens and recovery
 

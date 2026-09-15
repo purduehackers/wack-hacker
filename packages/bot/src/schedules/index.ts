@@ -21,7 +21,7 @@ import { websiteEventSync } from "./website-event-sync.ts";
 export interface ScheduleDeps {
   readonly redis: RedisClient;
   readonly cmsApiKey: string;
-  readonly socials: InstagramConfig | undefined;
+  readonly socials: InstagramConfig;
 }
 
 export function buildSchedules(deps: ScheduleDeps): readonly Schedule[] {
@@ -33,6 +33,6 @@ export function buildSchedules(deps: ScheduleDeps): readonly Schedule[] {
     hackNightCountdown(),
     hackNightPhotographyThread({ drops }),
     hackNightCleanup({ drops, cms }),
-    ...(deps.socials === undefined ? [] : socialsSchedules(deps.redis, deps.socials)),
+    ...socialsSchedules(deps.redis, deps.socials),
   ];
 }

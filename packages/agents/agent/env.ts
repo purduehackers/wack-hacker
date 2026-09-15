@@ -98,9 +98,6 @@ export const env = createEnv({
     SHIP_API_KEY: secret.optional(),
     PHACK_API_KEY: secret.optional(),
     GROQ_API_KEY: secret.optional(),
-    SOCIALS_ENABLED: z
-      .stringbool({ truthy: ["true"], falsy: ["false"], case: "sensitive" })
-      .default(false),
     INSTAGRAM_USER_ID: identifier.optional(),
     INSTAGRAM_ACCESS_TOKEN: secret.optional(),
     /**
