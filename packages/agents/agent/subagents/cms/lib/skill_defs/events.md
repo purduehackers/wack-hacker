@@ -15,6 +15,7 @@ Use when the user asks about Purdue Hackers events, RSVP lists, unsubscribe requ
 <events>
 
 - `events` holds name, start/end, eventType ('hack-night' by default), location, description (richText), published flag, and an email-send pipeline (send / sentAt).
+- Event creation requires an explicit end time. Never infer or estimate it; ask for the end time if it has not been provided.
 - `publish_event` and `unpublish_event` flip `published` — they are NOT approval-gated but are publicly visible, so confirm before flipping.
 - `send_blast` flips `send: true` on an event and Payload's afterChange hook dispatches real emails to all non-unsubscribed RSVPs via Cloudflare. Approval-gated. Confirm the event + draft first.
   </events>

@@ -179,6 +179,7 @@ const syncEventSchema = z.object({
   published: z.boolean().optional(),
   eventType: z.string().nullish(),
   start: z.string().nullish(),
+  // Legacy records may lack the now-required end time; the sync skips those rows.
   end: z.string().nullish(),
   location_name: z.string().nullish(),
   description: z.unknown().optional(),

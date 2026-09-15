@@ -11,7 +11,6 @@ import { z } from "zod";
 import type { Schedule } from "../framework/schedules.ts";
 import type { CmsClient, CmsSyncEvent } from "../integrations/cms.ts";
 
-const DEFAULT_DURATION_MS = 2 * 60 * 60 * 1_000;
 const DESCRIPTION_LIMIT = 1_000;
 const EVENTS_ORIGIN = "https://events.purduehackers.com";
 
@@ -78,10 +77,17 @@ async function createDiscordEvent(rest: REST, options: GuildScheduledEventCreate
   };
 }
 
-/** No draft or already-started event is eligible, even if the CMS filter fails. */
+/** Only published future events with explicit, valid start and end times are eligible. */
 export function websiteEvent(event: CmsSyncEvent, now: Date): WebsiteEvent | undefined {
   const start = Date.parse(event.start ?? "");
-  if (!event.published || !Number.isFinite(start) || start <= now.getTime()) {
+  const end = Date.parse(event.end ?? "");
+  if (
+    !event.published ||
+    !Number.isFinite(start) ||
+    start <= now.getTime() ||
+    !Number.isFinite(end) ||
+    end <= start
+  ) {
     return undefined;
   }
   const name = event.name?.trim();
@@ -92,10 +98,7 @@ export function websiteEvent(event: CmsSyncEvent, now: Date): WebsiteEvent | und
   const sourceUrl = `${EVENTS_ORIGIN}/events/${encodeURIComponent(category)}/${encodeURIComponent(slug)}`;
   // The id survives a title, slug, or category change. It is part of the link,
   // so the website remains the useful user-facing identity of the event.
-  const link = `${sourceUrl}#cms-event-${encodeURIComponent(String(event.id))}`;
-  const end = Date.parse(event.end ?? "");
-  const estimated = !Number.isFinite(end) || end <= start;
-  const footer = `${estimated ? "End time is estimated; check the website for details.\n\n" : ""}${link}`;
+  const footer = `${sourceUrl}#cms-event-${encodeURIComponent(String(event.id))}`;
   if (footer.length > DESCRIPTION_LIMIT) return undefined;
   const text = descriptionText(event.description);
   const available = DESCRIPTION_LIMIT - footer.length - 2;
@@ -106,7 +109,7 @@ export function websiteEvent(event: CmsSyncEvent, now: Date): WebsiteEvent | und
     options: {
       name: truncate(name, 100),
       scheduledStartTime: start,
-      scheduledEndTime: estimated ? start + DEFAULT_DURATION_MS : end,
+      scheduledEndTime: end,
       privacyLevel: GuildScheduledEventPrivacyLevel.GuildOnly,
       entityType: GuildScheduledEventEntityType.External,
       entityMetadata: {
