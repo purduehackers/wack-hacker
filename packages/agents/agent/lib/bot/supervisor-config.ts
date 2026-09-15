@@ -81,6 +81,13 @@ function botEnvironment(source: AgentEnv): BotProcessEnvironment {
     SHIP_API_KEY: required(source.SHIP_API_KEY, "SHIP_API_KEY"),
     PHACK_API_KEY: required(source.PHACK_API_KEY, "PHACK_API_KEY"),
     GROQ_API_KEY: required(source.GROQ_API_KEY, "GROQ_API_KEY"),
+    SOCIALS_ENABLED: String(source.SOCIALS_ENABLED),
+    ...(source.SOCIALS_ENABLED
+      ? {
+          INSTAGRAM_USER_ID: required(source.INSTAGRAM_USER_ID, "INSTAGRAM_USER_ID"),
+          INSTAGRAM_ACCESS_TOKEN: required(source.INSTAGRAM_ACCESS_TOKEN, "INSTAGRAM_ACCESS_TOKEN"),
+        }
+      : {}),
     PORT: String(BOT_PORT_DEFAULT),
     ...(source.SENTRY_DSN === undefined ? {} : { SENTRY_DSN: source.SENTRY_DSN }),
     ...(source.SENTRY_RELEASE === undefined ? {} : { SENTRY_RELEASE: source.SENTRY_RELEASE }),

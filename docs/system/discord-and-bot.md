@@ -443,8 +443,25 @@ bot:schedule:<name>:<YYYYMMDDHHmm> = 1, NX, EX 14 days
 ```
 
 `protect:true` blocks one process from overlapping itself. Claims survive body
-failure, there is no catch-up/retry queue, and the next cron time is a different
-key.
+failure, the scheduler supplies no catch-up/retry queue, and the next cron time
+is a different key. Social announcements maintain their own persistent queue.
+
+### Every five minutes — social announcements
+
+When `SOCIALS_ENABLED=true`, `socials-poll-{youtube,blog,instagram}` discover new
+public posts using a shared adapter contract. YouTube and blog feeds share
+`rss-parser`; Instagram uses the Instagram Login media API. Each source has its
+own baseline, pending posts, and known IDs in Redis without a
+TTL. Baseline explicitly with `bun run check-socials --baseline` before enabling.
+
+`socials-deliver-*` runs every minute and sends a consistent embed to #📡socials.
+Fenced source leases serialize polling and delivery across bot instances. Sends
+persist intent first, use a stable enforced nonce, and reconcile uncertain
+outcomes against bot-authored channel history before retrying. Instagram token
+maintenance runs daily at 09:15 and saves refreshed credentials in Redis.
+
+X and LinkedIn are deferred. See [socials setup and recovery](../plans/socials.md)
+for account IDs, credentials, baseline commands, feed-window limits, and repair.
 
 ### Daily 09:00 — website event sync
 

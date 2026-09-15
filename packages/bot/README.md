@@ -32,7 +32,7 @@ src/
   commands/         /ping /privacy /hack-night /image-drop
   events/           agent chat, auto-thread, praise, ship + dashboard mirrors,
                     voice transcription, GitHub code previews, image drops, chat indexer
-  schedules/        daily website event sync, hack-night countdown, photography thread, cleanup
+  schedules/        social announcements, website event sync, hack-night countdown, photography thread, cleanup
   integrations/     ships, dashboard, CMS, GitHub public code, image drops
 scripts/
   register-commands.ts   explicit guild registration; never runs at startup
@@ -88,6 +88,18 @@ CONFIRM_COMMAND_GUILD=772576325897945119 bun run register-commands
 ```
 
 The script refuses to run unless that variable matches the guild id compiled into `@repo/shared/discord`, so a misconfigured environment cannot register somewhere else. The PUT replaces the whole command set, so repeating it is safe.
+
+## Social announcements
+
+YouTube, blog, and Instagram adapters share a post contract, persistent Redis queue,
+and Discord embed builder. Polling runs every five minutes; delivery retries run
+every minute. X and LinkedIn are deferred.
+
+Run `bun run check-socials` for read-only source checks. Before activation, run
+`bun run check-socials --baseline`, then set `SOCIALS_ENABLED=true` and deploy.
+Instagram needs `INSTAGRAM_USER_ID` and a long-lived `INSTAGRAM_ACCESS_TOKEN`;
+YouTube and the blog need no credentials. Preserve the Redis state and refreshed
+token across deployments. See [setup and recovery](../../docs/plans/socials.md).
 
 ## Container
 

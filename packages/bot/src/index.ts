@@ -45,6 +45,7 @@ import { installSignalHandlers, onShutdown, shutdown } from "./framework/lifecyc
 import { consoleReporter } from "./framework/observability.ts";
 import { startScheduler } from "./framework/schedules.ts";
 import { startServer } from "./framework/server.ts";
+import { instagramConfig } from "./integrations/socials/credentials.ts";
 import { buildSchedules } from "./schedules/index.ts";
 import { createConversationFlow } from "./utils/conversation/index.ts";
 
@@ -108,6 +109,16 @@ function logStartupSummary(input: {
     `${input.commandCount} command(s), ${input.handlerCount} event handler(s), ` +
       `${input.nextRuns.size} schedule(s)${upcoming === "" ? "" : `: ${upcoming}`}`,
   );
+}
+
+function configuredSchedules(redis: RedisClient) {
+  return buildSchedules({
+    redis,
+    cmsApiKey: env.PAYLOAD_CMS_API_KEY,
+    socials: env.SOCIALS_ENABLED
+      ? instagramConfig(env.INSTAGRAM_USER_ID, env.INSTAGRAM_ACCESS_TOKEN)
+      : undefined,
+  });
 }
 
 async function main(): Promise<void> {
@@ -192,7 +203,7 @@ async function main(): Promise<void> {
   });
 
   const scheduler = startScheduler({
-    schedules: buildSchedules({ redis, cmsApiKey: env.PAYLOAD_CMS_API_KEY }),
+    schedules: configuredSchedules(redis),
     client: ready,
     reporter: consoleReporter,
     redis,

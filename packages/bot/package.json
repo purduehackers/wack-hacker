@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "bun run --watch --preload ./src/instrument.ts src/index.ts",
     "start": "bun run --preload ./src/instrument.ts src/index.ts",
-    "register-commands": "bun scripts/register-commands.ts"
+    "register-commands": "bun scripts/register-commands.ts",
+    "check-socials": "bun scripts/check-socials.ts"
   },
   "dependencies": {
     "@ai-sdk/groq": "^4.0.24",
@@ -28,6 +29,7 @@
     "rehype-stringify": "^10.0.1",
     "remark-parse": "^11.0.0",
     "remark-rehype": "^11.1.2",
+    "rss-parser": "^3.13.0",
     "unified": "^11.0.5",
     "zod": "4.4.3"
   },
