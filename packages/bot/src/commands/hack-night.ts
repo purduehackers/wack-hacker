@@ -72,9 +72,9 @@ function isSingleEmoji(value: string): boolean {
   return /^(?:\p{RGI_Emoji}|\p{Extended_Pictographic}\uFE0F?)$/v.test(value);
 }
 
-/** The dashboard displays the string verbatim, including an optional `v` prefix. */
+/** The dashboard displays the string verbatim, so the `v` prefix is required. */
 function isVersionString(value: string): boolean {
-  return /^v?\d+\.\d+(?:\.\d+)?$/u.test(value);
+  return /^v\d+\.\d+(?:\.\d+)?$/u.test(value);
 }
 
 export interface DashboardWriter {
@@ -105,7 +105,9 @@ builder
       .addStringOption((opt) =>
         opt
           .setName("version")
-          .setDescription("The version string shown on the dashboard (e.g. v7.0 or 7.0)")
+          .setDescription(
+            "The version string shown on the dashboard (must start with v, e.g. v7.0)",
+          )
           .setRequired(true),
       )
       .addStringOption((opt) =>
@@ -347,7 +349,7 @@ async function run(
   }
   if (!isVersionString(version)) {
     return Result.ok(
-      "Use a version like `v7.0` or `7.0` (an optional patch number, such as `v7.0.1`, is allowed).",
+      "Versions must start with `v`, like `v7.0` or `v7.0.1` (with an optional patch number).",
     );
   }
 
