@@ -226,8 +226,9 @@ uploads and does not delete what is already public.
 Current organizer/admin only, always ephemeral:
 
 - `start` validates one Unicode emoji (including presentation selectors, skin
-  tones, flags, and joined sequences) and a version with a required `v` prefix,
-  such as `v7.0` or `v7.0.1`,
+  tones, flags, and joined sequences) and a Hack Night version (`major.minor`),
+  with an optional patch number, tag, and `v` prefix, such as `7.0`, `7.11`,
+  `7.0-beta`, or `7.0.0-beta`,
   renames the fixed channel's whole leading emoji, then updates Dashboard Global
   Config's `version` key with the version exactly as entered;
 - `reset` restores the moon prefix and does not change dashboard version.
