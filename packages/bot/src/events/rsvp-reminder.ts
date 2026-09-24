@@ -15,52 +15,39 @@ const URL_PATTERN = /https?:\/\/[^\s<>]+/giu;
 const TRAILING_PUNCTUATION = /[)\].,!?;]+$/u;
 const CMS_MARKER = /^#cms-event-([a-z\d-]+)$/iu;
 
-interface RsvpLinks {
-  readonly luma?: string;
-  readonly website?: string;
-  readonly cmsEventId?: string;
-}
-
 /** Links embedded in an event's description or external-event location. */
-export function rsvpLinks(
-  description: string | null,
-  location: string | null | undefined,
-): RsvpLinks {
-  const candidates = [...`${description ?? ""}\n${location ?? ""}`.matchAll(URL_PATTERN)].flatMap(
-    ([match]) => {
-      const parsed = URL.parse(match.replace(TRAILING_PUNCTUATION, ""));
-      return parsed === null ? [] : [parsed];
-    },
-  );
+function rsvpLinks(description: string | null, location: string | null | undefined) {
+  let luma: string | undefined;
+  let website: URL | undefined;
+  let eventPage: URL | undefined;
+  let markedPage: URL | undefined;
 
-  const directLuma = candidates
-    .map((link) => lumaUrl(link.href))
-    .find((link) => link !== undefined);
-  // The sync appends its canonical, ID-marked link after the description, which
-  // may itself mention other events. Prefer that footer to those incidental links.
-  const isEventPage = (link: URL) =>
-    link.origin === EVENTS_ORIGIN && link.pathname.startsWith("/events/");
-  const website =
-    candidates.findLast((link) => isEventPage(link) && CMS_MARKER.test(link.hash)) ??
-    candidates.find(isEventPage) ??
-    candidates.find((link) => link.origin === EVENTS_ORIGIN);
-  const marker = website === undefined ? undefined : CMS_MARKER.exec(website.hash);
-  if (website !== undefined) website.hash = "";
+  for (const match of `${description ?? ""}\n${location ?? ""}`.match(URL_PATTERN) ?? []) {
+    const url = URL.parse(match.replace(TRAILING_PUNCTUATION, ""));
+    if (url === null) continue;
 
-  return {
-    ...(directLuma !== undefined && { luma: directLuma }),
-    ...(website !== undefined && { website: website.href }),
-    ...(marker?.[1] !== undefined && { cmsEventId: marker[1] }),
-  };
+    luma ??= lumaUrl(url.href);
+    if (url.origin !== EVENTS_ORIGIN) continue;
+    website ??= url;
+    if (!url.pathname.startsWith("/events/")) continue;
+    eventPage ??= url;
+    // The sync appends its ID-marked event page after the description.
+    if (CMS_MARKER.test(url.hash)) markedPage = url;
+  }
+
+  const chosen = markedPage ?? eventPage ?? website;
+  const cmsEventId = CMS_MARKER.exec(chosen?.hash ?? "")?.[1];
+  if (chosen !== undefined) chosen.hash = "";
+  return { luma, website: chosen?.href, cmsEventId };
 }
 
 function reminder(name: string, url: string, provider: "luma" | "website"): string {
-  const instruction =
-    provider === "luma"
-      ? "please RSVP on Luma too:"
-      : url === EVENTS_ORIGIN || url === `${EVENTS_ORIGIN}/`
-        ? "find the event on our events website and RSVP there too:"
-        : "please RSVP on our events website too:";
+  let instruction = "please RSVP on our events website too:";
+  if (provider === "luma") {
+    instruction = "please RSVP on Luma too:";
+  } else if (url === EVENTS_ORIGIN || url === `${EVENTS_ORIGIN}/`) {
+    instruction = "find the event on our events website and RSVP there too:";
+  }
   return (
     `Hey there, it looks like you're interested in **${name}** on Discord!! :D\n\n` +
     `You're almost there!! Discord's Interested button doesn't count as an RSVP, so ${instruction}\n\n` +
@@ -84,12 +71,11 @@ export function rsvpReminder(deps: {
         try: async () => {
           const fullEvent = event.partial ? await event.fetch() : event;
           const links = rsvpLinks(fullEvent.description, fullEvent.entityMetadata?.location);
-          let luma: string | undefined;
-          let cmsLookupFailed = false;
+          let luma = links.luma;
           if (links.cmsEventId !== undefined) {
             const found = await deps.cms.getEventLumaUrl(links.cmsEventId);
             if (Result.isError(found)) {
-              cmsLookupFailed = true;
+              luma = undefined;
               deps.reporter.emit({
                 op: "rsvp-reminder.cms",
                 status: "error",
@@ -98,12 +84,9 @@ export function rsvpReminder(deps: {
                 attributes: { eventId: fullEvent.id },
               });
             } else {
-              luma = found.value;
+              luma = found.value ?? links.luma;
             }
           }
-          // If the authoritative CMS read failed, the event page can still route
-          // people correctly without guessing from incidental description links.
-          if (!cmsLookupFailed) luma ??= links.luma;
 
           const target = luma ?? links.website ?? EVENTS_ORIGIN;
           const provider = luma === undefined ? "website" : "luma";
