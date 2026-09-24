@@ -55,10 +55,18 @@ export function rsvpLinks(
 }
 
 function reminder(name: string, url: string, provider: "luma" | "website"): string {
-  const introduction = `Thanks for marking yourself interested in ${name} on Discord!`;
-  return provider === "luma"
-    ? `${introduction} To complete your RSVP, please register on Luma: ${url}`
-    : `${introduction} To complete your RSVP, please RSVP on the events website: ${url}`;
+  const instruction =
+    provider === "luma"
+      ? "please RSVP on Luma too:"
+      : url === EVENTS_ORIGIN || url === `${EVENTS_ORIGIN}/`
+        ? "find the event on our events website and RSVP there too:"
+        : "please RSVP on our events website too:";
+  return (
+    `Hey there, it looks like you're interested in **${name}** on Discord!! :D\n\n` +
+    `You're almost there!! Discord's Interested button doesn't count as an RSVP, so ${instruction}\n\n` +
+    `${url}\n\n` +
+    "Cheers! ^•^"
+  );
 }
 
 export function rsvpReminder(deps: {
