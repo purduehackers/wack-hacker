@@ -2,7 +2,7 @@
  * The WACKY role, granted and revoked by magic words.
  *
  * `wackity hackity praise me` grants it; `wackity hackity go away` takes it back.
- * The role unlocks the celebration reactions in `auto-thread`.
+ * The role unlocks ship and checkpoint celebration replies in `auto-thread`.
  */
 
 import { DISCORD_IDS } from "@repo/shared/discord";

@@ -16,7 +16,7 @@ export const DISCORD_IDS = {
   roles: {
     ADMIN: "1344066433172373656",
     ORGANIZER: "1012751663322382438",
-    /** Granted by the `praise` handler; unlocks celebration reactions. */
+    /** Granted by `praise`; unlocks ship and checkpoint celebration replies. */
     WACKY: "1419119560627458129",
     /** Pinged by the weekly hack-night announcement. */
     HACK_NIGHT_PING: "1348025087894355979",

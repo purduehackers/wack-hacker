@@ -18,6 +18,7 @@ import type { Message } from "discord.js";
 
 import { defineEvent } from "../framework/events.ts";
 import type { ShipAttachmentInput, ShipsClient } from "../integrations/ships.ts";
+import { postContent } from "../utils/post-content.ts";
 
 const URL_PATTERN = /https?:\/\/\S+/i;
 
@@ -30,15 +31,6 @@ const DEFAULT_AVATAR_COUNT = 6;
 function isMedia(contentType: string | undefined): boolean {
   if (contentType === undefined) return false;
   return contentType.startsWith("image/") || contentType.startsWith("video/");
-}
-
-/** Message content plus any forwarded snapshot content, in order. */
-function shipContent(message: Message): string {
-  const sections = [message.content];
-  for (const snapshot of message.messageSnapshots.values()) {
-    if (snapshot.content !== undefined && snapshot.content !== "") sections.push(snapshot.content);
-  }
-  return sections.filter((value) => value !== "").join("\n");
 }
 
 function shipAttachments(message: Message): readonly ShipAttachmentInput[] {
@@ -99,7 +91,7 @@ export function emitShipMessage(ships: ShipsClient, redis: RedisClient) {
       if (message.channelId !== DISCORD_IDS.channels.SHIP) return Result.ok(undefined);
       if (await isOptedOut(redis, message.author.id)) return Result.ok(undefined);
 
-      const shipText = shipContent(message);
+      const shipText = postContent(message);
       const attachments = shipAttachments(message);
       // Any attachment makes a valid ship even when the gallery cannot render
       // that file type; eligibility and media projection are separate concerns.

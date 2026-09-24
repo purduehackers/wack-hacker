@@ -10,8 +10,8 @@
  *    snapshot rather than the message body — miss that and legitimate forwards
  *    get deleted.
  * 2. **Threading.** A compliant post gets a thread, so replies do not bury the
- *    next person's work. Authors holding the WACKY role also get reactions and a
- *    celebration message.
+ *    next person's work. Every ship and checkpoint gets three reactions chosen
+ *    from its text; the WACKY role still unlocks a celebration reply.
  *
  * The DM is best-effort: a user with DMs closed still gets their message
  * removed, because the channel rule matters more than the courtesy copy. That is
@@ -25,6 +25,8 @@ import { Result } from "@repo/shared/result";
 import type { AnyThreadChannel, Message } from "discord.js";
 
 import { defineEvent } from "../framework/events.ts";
+import { postContent } from "../utils/post-content.ts";
+import { selectPostEmojis } from "./post-emojis.ts";
 
 const URL_PATTERN = /https?:\/\/\S+/i;
 
@@ -49,9 +51,6 @@ const SHIP_RESPONSES = [
   "High-five on the ship! :D",
   "Boom, nice ship! :D",
 ] as const;
-
-const CHECKPOINT_EMOJIS = ["\u{1F389}", "\u2728", "\u{1F3C1}"] as const;
-const SHIP_EMOJIS = ["\u{1F389}", "\u2728", "\u{1F680}"] as const;
 
 const WATCHED_CHANNELS: readonly string[] = [
   DISCORD_IDS.channels.SHIP,
@@ -99,16 +98,17 @@ function savedMessageNotice(channelId: string, content: string): string {
   );
 }
 
-async function celebrate(
-  message: Message,
+async function addReactions(message: Message, emojis: readonly string[]): Promise<void> {
+  // Sequential, not concurrent: Discord orders reactions by arrival, and
+  // Promise.all would scramble them.
+  for (const glyph of emojis) await message.react(glyph);
+}
+
+async function sendCelebration(
   thread: AnyThreadChannel,
   responses: readonly string[],
   emojis: readonly string[],
 ): Promise<void> {
-  // Sequential, not concurrent: Discord orders reactions by arrival, and
-  // Promise.all would scramble them.
-  for (const glyph of emojis) await message.react(glyph);
-
   const chosen = randomItem(responses);
   if (chosen !== undefined) await thread.send(`${chosen} ${emojis.join(" ")}`);
 }
@@ -153,12 +153,13 @@ export const autoThread = defineEvent({
           autoArchiveDuration: AUTO_ARCHIVE_MINUTES,
         });
 
-        if (!message.member?.roles.cache.has(DISCORD_IDS.roles.WACKY)) return undefined;
+        const emojis = selectPostEmojis(postContent(message));
+        await addReactions(message, emojis);
 
-        if (message.channelId === DISCORD_IDS.channels.CHECKPOINTS) {
-          await celebrate(message, thread, CHECKPOINT_RESPONSES, CHECKPOINT_EMOJIS);
-        } else if (message.channelId === DISCORD_IDS.channels.SHIP) {
-          await celebrate(message, thread, SHIP_RESPONSES, SHIP_EMOJIS);
+        if (message.member?.roles.cache.has(DISCORD_IDS.roles.WACKY)) {
+          const responses =
+            message.channelId === DISCORD_IDS.channels.SHIP ? SHIP_RESPONSES : CHECKPOINT_RESPONSES;
+          await sendCelebration(thread, responses, emojis);
         }
         return undefined;
       },
