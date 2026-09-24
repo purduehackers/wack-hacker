@@ -23,7 +23,11 @@ const KEYWORD_EMOJIS = [
   { emoji: "🦀", pattern: /\b(?:rust|cargo)\b/i },
   { emoji: "🐍", pattern: /\bpython\b/i },
   { emoji: "⚛️", pattern: /\breact(?:\.js)?\b/i },
-  { emoji: "🌐", pattern: /\b(?:websites?|webpages?|web apps?|browsers?|homepages?|web demo)\b/i },
+  {
+    emoji: "🌐",
+    pattern:
+      /\b(?:sites?|websites?|webpages?|web apps?|browsers?|homepages?|web demo|web ?dev(?:elopment)?)\b/i,
+  },
   { emoji: "📱", pattern: /\b(?:mobile|ios|android|iphone|ipad|app store|play store)\b/i },
   { emoji: "💻", pattern: /\b(?:github|repository|repo|pull request|open source)\b/i },
   {
@@ -34,7 +38,12 @@ const KEYWORD_EMOJIS = [
   { emoji: "🔒", pattern: /\b(?:security|privacy|encryption|cryptography)\b/i },
   { emoji: "📊", pattern: /\b(?:data|graph|chart|statistics|analytics|metrics|benchmarks?)\b/i },
   { emoji: "🔬", pattern: /\b(?:science|research|experiment|laboratory)\b/i },
-  { emoji: "📚", pattern: /\b(?:book|story|novel|writing|blog)\b/i },
+  {
+    emoji: "📚",
+    pattern:
+      /\b(?:books?|stor(?:y|ies)|novels?|writing|blogs?|scribbl(?:e|es|ed|ing)|journals?|poems?|poetry|essays?|notes)\b/i,
+  },
+  { emoji: "🧶", pattern: /\b(?:crochet(?:s|ed|ing)?|yarns?|knit(?:s|ted|ting)?)\b/i },
   {
     emoji: "🍳",
     pattern:
@@ -45,6 +54,7 @@ const KEYWORD_EMOJIS = [
   { emoji: "🗺️", pattern: /\b(?:map|travel|trip|journey)\b/i },
   { emoji: "🚲", pattern: /\b(?:bike|bicycle|cycling)\b/i },
   { emoji: "🚗", pattern: /\b(?:car|trucks?|driving|vehicle)\b/i },
+  { emoji: "✈️", pattern: /\b(?:airplanes?|planes?|flights?|aircraft|aviation)\b/i },
   { emoji: "🚀", pattern: /\b(?:space|rocket|satellite|launch|black hole)\b/i },
 ];
 
