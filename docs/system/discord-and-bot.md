@@ -357,7 +357,7 @@ receive separate DM instructions when deleted.
 
 - compliant: create a `<displayName> - <first 54 chars>` thread with three-day
   archive; add three distinct reactions based on post text, filling gaps with
-  🎉 ✨ 🚀. WACKY members also get a celebration reply. No channel or seasonal
+  🎉 ✨ 🚀. Keyword matching ignores URLs. WACKY members also get a celebration reply. No channel or seasonal
   reactions are added;
 - noncompliant: copy, delete, then best-effort DM the author a saved copy and
   instructions.

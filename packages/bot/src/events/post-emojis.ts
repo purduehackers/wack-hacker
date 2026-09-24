@@ -1,10 +1,20 @@
+import { postTextWithoutUrls } from "../utils/post-content.ts";
+
 const KEYWORD_EMOJIS = [
-  { emoji: "🎮", pattern: /\b(?:game|gaming|minecraft|roblox|godot|unity)\b/i },
-  { emoji: "🎨", pattern: /\b(?:art|draw|drawing|paint|painting|illustration|design|figma)\b/i },
-  { emoji: "🎵", pattern: /\b(?:music|song|album|audio|podcast|soundcloud)\b/i },
-  { emoji: "📷", pattern: /\b(?:photo|photography|picture|camera)\b/i },
+  { emoji: "🎮", pattern: /\b(?:games?|gaming|minecraft|roblox|godot|unity)\b/i },
+  {
+    emoji: "🎨",
+    pattern:
+      /\b(?:art|draw|drawing|paint|painting|illustration|design|figma|sketch(?:es|books?|ing)?|shaders?|gradients?|redesign(?:ed|ing)?|logos?)\b/i,
+  },
+  { emoji: "🎵", pattern: /\b(?:music|songs?|album|audio|podcast|soundcloud|sounds?)\b/i },
+  {
+    emoji: "📷",
+    pattern: /\b(?:photos?|photography|pictures?|cameras?|line cam|screenshots?)\b/i,
+  },
   { emoji: "🎬", pattern: /\b(?:video|film|movie|animation|youtube)\b/i },
   { emoji: "🤖", pattern: /\b(?:robot|robotics|bot|automation|automated)\b/i },
+  { emoji: "🧠", pattern: /\b(?:ai|llms?|claude|agents?|gpt|machine learning)\b/i },
   {
     emoji: "🔧",
     pattern: /\b(?:hardware|circuit|pcb|solder|arduino|microcontroller|raspberry pi)\b/i,
@@ -13,28 +23,39 @@ const KEYWORD_EMOJIS = [
   { emoji: "🦀", pattern: /\b(?:rust|cargo)\b/i },
   { emoji: "🐍", pattern: /\bpython\b/i },
   { emoji: "⚛️", pattern: /\breact(?:\.js)?\b/i },
-  { emoji: "🌐", pattern: /\b(?:website|webpage|web app|browser)\b/i },
-  { emoji: "📱", pattern: /\b(?:mobile|ios|android|iphone|ipad)\b/i },
+  { emoji: "🌐", pattern: /\b(?:websites?|webpages?|web apps?|browsers?|homepages?|web demo)\b/i },
+  { emoji: "📱", pattern: /\b(?:mobile|ios|android|iphone|ipad|app store|play store)\b/i },
   { emoji: "💻", pattern: /\b(?:github|repository|repo|pull request|open source)\b/i },
+  {
+    emoji: "🧰",
+    pattern:
+      /\b(?:cli|tui|terminal|command[- ]line|parser|compiler|bytecode|plugin|browser extension|crate|dotfiles|scripting language|component library|developer tools?)\b/i,
+  },
   { emoji: "🔒", pattern: /\b(?:security|privacy|encryption|cryptography)\b/i },
-  { emoji: "📊", pattern: /\b(?:data|graph|chart|statistics|analytics)\b/i },
+  { emoji: "📊", pattern: /\b(?:data|graph|chart|statistics|analytics|metrics|benchmarks?)\b/i },
   { emoji: "🔬", pattern: /\b(?:science|research|experiment|laboratory)\b/i },
   { emoji: "📚", pattern: /\b(?:book|story|novel|writing|blog)\b/i },
-  { emoji: "🍳", pattern: /\b(?:food|cook|cooking|recipe|baking|pizza)\b/i },
+  {
+    emoji: "🍳",
+    pattern:
+      /\b(?:foods?|cook|cooking|recipe|baking|pizza|cakes?|sourdough|dining|meals?|blueberry jam)\b/i,
+  },
+  { emoji: "🛍️", pattern: /\b(?:etsy|merch|clothing)\b/i },
   { emoji: "🌱", pattern: /\b(?:plant|garden|flower|tree)\b/i },
   { emoji: "🗺️", pattern: /\b(?:map|travel|trip|journey)\b/i },
   { emoji: "🚲", pattern: /\b(?:bike|bicycle|cycling)\b/i },
-  { emoji: "🚗", pattern: /\b(?:car|driving|vehicle)\b/i },
-  { emoji: "🚀", pattern: /\b(?:space|rocket|satellite|launch)\b/i },
+  { emoji: "🚗", pattern: /\b(?:car|trucks?|driving|vehicle)\b/i },
+  { emoji: "🚀", pattern: /\b(?:space|rocket|satellite|launch|black hole)\b/i },
 ];
 
 const FALLBACK_EMOJIS = ["🎉", "✨", "🚀"];
 
 /** Pick the first three topic matches, filling any gaps with celebration emoji. */
 export function selectPostEmojis(text: string): readonly string[] {
+  const searchableText = postTextWithoutUrls(text);
   const matches = KEYWORD_EMOJIS.map(({ emoji, pattern }) => ({
     emoji,
-    index: text.search(pattern),
+    index: searchableText.search(pattern),
   }))
     .filter(({ index }) => index !== -1)
     .sort((left, right) => left.index - right.index);

@@ -8,3 +8,7 @@ export function postContent(message: Message): string {
   }
   return sections.filter((value) => value !== "").join("\n");
 }
+
+export function postTextWithoutUrls(content: string): string {
+  return content.replace(/https?:\/\/\S+/giu, " ");
+}
