@@ -19,6 +19,7 @@ import type { Message } from "discord.js";
 import { defineEvent } from "../framework/events.ts";
 import type { ShipAttachmentInput, ShipsClient } from "../integrations/ships.ts";
 import { postContent } from "../utils/post-content.ts";
+import { shipPostIssue } from "../utils/ship-post.ts";
 
 const URL_PATTERN = /https?:\/\/\S+/i;
 
@@ -92,12 +93,13 @@ export function emitShipMessage(ships: ShipsClient, redis: RedisClient) {
       if (await isOptedOut(redis, message.author.id)) return Result.ok(undefined);
 
       const shipText = postContent(message);
-      const attachments = shipAttachments(message);
       // Any attachment makes a valid ship even when the gallery cannot render
       // that file type; eligibility and media projection are separate concerns.
       if (!URL_PATTERN.test(shipText) && message.attachments.size === 0)
         return Result.ok(undefined);
+      if (shipPostIssue(shipText) !== undefined) return Result.ok(undefined);
 
+      const attachments = shipAttachments(message);
       const created = await ships.createShip({
         userId: message.author.id,
         username: message.member?.displayName ?? message.author.username,

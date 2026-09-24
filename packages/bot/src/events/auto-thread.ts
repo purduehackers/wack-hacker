@@ -4,8 +4,9 @@
  * Two jobs in one handler, because both hinge on the same question — does this
  * message actually show work?
  *
- * 1. **Enforcement.** A post with no URL and no attachment is deleted, and the
- *    author is DM'd their text back so nothing is lost. Forwarded message
+ * 1. **Enforcement.** A post with no URL and no attachment is deleted. Ships
+ *    also need more than five words explaining the work. The author gets a DM
+ *    explaining the problem and a copy of any text. Forwarded message
  *    snapshots are inspected too, since a forward carries its evidence in the
  *    snapshot rather than the message body — miss that and legitimate forwards
  *    get deleted.
@@ -26,6 +27,8 @@ import type { Message } from "discord.js";
 
 import { defineEvent } from "../framework/events.ts";
 import { postContent } from "../utils/post-content.ts";
+import { shipPostIssue } from "../utils/ship-post.ts";
+import type { ShipPostIssue } from "../utils/ship-post.ts";
 import { selectPostEmojis } from "./post-emojis.ts";
 
 const URL_PATTERN = /https?:\/\/\S+/i;
@@ -82,14 +85,34 @@ function showsWork(message: Message): boolean {
   return false;
 }
 
-/** The text DM'd back so a deleted post is never simply lost. */
-function savedMessageNotice(channelId: string, content: string): string {
+type PostIssue = "missing-evidence" | ShipPostIssue;
+
+const REMOVAL_DETAILS = {
+  "missing-evidence": {
+    reason: "It needs an attachment or URL so people can see your work.",
+    fix: "If you meant to ship or post a checkpoint, add an attachment or URL when you repost.",
+  },
+  "attachment-only": {
+    reason: "An attachment alone does not explain what you shipped.",
+    fix: "Repost your attachments with at least six words about what you made or changed. You'll need to attach the files again.",
+  },
+  "short-explanation": {
+    reason: "Your ship explanation needs more than five words.",
+    fix: "Repost with at least six words about what you made or changed. URLs do not count as words.",
+  },
+};
+
+function removalNotice(channelId: string, content: string, issue: PostIssue): string {
+  const { reason, fix } = REMOVAL_DETAILS[issue];
+  const savedText =
+    content.trim() === ""
+      ? ""
+      : `I saved your text for you! \u{1F643}\u{200D}\u{2195}\u{FE0F}\n\n\`\`\`${content}\`\`\`\n\n`;
   return (
-    `Hey there, it looks like you tried to send a message in <#${channelId}> without an attachment or URL!! D:\n\n` +
-    `It's okay!! I saved your message for you!! \u{1F643}\u{200D}\u{2195}\u{FE0F}\n\n` +
-    `\`\`\`${content}\`\`\`\n\n` +
+    `Hey there, I removed your post in <#${channelId}>. ${reason}\n\n` +
+    savedText +
     `- If you meant to reply to someone, send your message in the corresponding thread!\n` +
-    `- If you meant checkpoint or ship a project, add an attachment or URL so people can see your work :D\n\n` +
+    `- ${fix}\n\n` +
     `Cheers! ^•^`
   );
 }
@@ -103,18 +126,22 @@ export const autoThread = defineEvent({
     if (context.isBotMention) return Result.ok(undefined);
     if (!WATCHED_CHANNELS.includes(message.channelId)) return Result.ok(undefined);
 
-    if (!showsWork(message)) {
+    const postText = postContent(message);
+    let issue: PostIssue | undefined;
+    if (!showsWork(message)) issue = "missing-evidence";
+    else if (message.channelId === DISCORD_IDS.channels.SHIP) issue = shipPostIssue(postText);
+
+    if (issue !== undefined) {
       return Result.tryPromise({
         try: async () => {
-          const { content } = message;
           const author = message.author;
           await message.delete();
 
           // Best effort. A closed DM must not leave the post standing.
           try {
-            await author.send(savedMessageNotice(message.channelId, content));
+            await author.send(removalNotice(message.channelId, postText, issue));
           } catch (cause) {
-            console.warn(`could not DM ${author.id} their saved message`, cause);
+            console.warn(`could not DM ${author.id} about removed post`, cause);
           }
           return undefined;
         },
@@ -134,7 +161,7 @@ export const autoThread = defineEvent({
           autoArchiveDuration: AUTO_ARCHIVE_MINUTES,
         });
 
-        const reactions = selectPostEmojis(postContent(message));
+        const reactions = selectPostEmojis(postText);
         // Sequential awaits preserve reaction order in Discord.
         for (const emoji of reactions) await message.react(emoji);
 

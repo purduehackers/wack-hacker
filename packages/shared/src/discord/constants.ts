@@ -22,7 +22,7 @@ export const DISCORD_IDS = {
     HACK_NIGHT_PING: "1348025087894355979",
   },
   channels: {
-    /** Ships must carry a URL or attachment; text-only posts are removed. */
+    /** Ships need a URL or attachment and at least six explanation words. */
     SHIP: "904896819165814794",
     /** New public YouTube, blog, and Instagram posts. */
     SOCIALS: "1416915165609463888",
