@@ -4,7 +4,7 @@
  * Interactions and events arrive over one WebSocket and all REST calls share
  * discord.js's rate-limit manager. The selected intents are the minimum needed
  * for message content, reactions, and community features; partials cover events
- * for messages that were not cached by this process.
+ * for messages, scheduled events, and users that were not cached by this process.
  */
 
 import { messageOf, Transient } from "@repo/shared/errors";
@@ -27,9 +27,16 @@ export function createClient(): Client {
       // Privileged. Without it every message arrives with empty content.
       GatewayIntentBits.MessageContent,
       GatewayIntentBits.GuildMessageReactions,
+      GatewayIntentBits.GuildScheduledEvents,
     ],
-    // A reaction or delete can reference a message the client never cached.
-    partials: [Partials.Message, Partials.Reaction, Partials.Channel],
+    // An RSVP can reference an event or user the client never cached.
+    partials: [
+      Partials.Message,
+      Partials.Reaction,
+      Partials.Channel,
+      Partials.GuildScheduledEvent,
+      Partials.User,
+    ],
     presence: {
       activities: [{ name: "something eggz", type: ActivityType.Watching }],
       status: "online",
