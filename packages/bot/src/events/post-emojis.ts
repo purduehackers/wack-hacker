@@ -1,11 +1,3 @@
-/**
- * Pick three reactions from the words in a ship or checkpoint.
- *
- * Scrappy reacts to every matching keyword. Here the earliest matches win so
- * the bot adds exactly three distinct reactions, with familiar celebration
- * emojis filling slots when the post has little or no text.
- */
-
 const KEYWORD_EMOJIS = [
   { emoji: "🎮", pattern: /\b(?:game|gaming|minecraft|roblox|godot|unity)\b/i },
   { emoji: "🎨", pattern: /\b(?:art|draw|drawing|paint|painting|illustration|design|figma)\b/i },
@@ -34,33 +26,20 @@ const KEYWORD_EMOJIS = [
   { emoji: "🚲", pattern: /\b(?:bike|bicycle|cycling)\b/i },
   { emoji: "🚗", pattern: /\b(?:car|driving|vehicle)\b/i },
   { emoji: "🚀", pattern: /\b(?:space|rocket|satellite|launch)\b/i },
-] as const;
+];
 
-const FALLBACK_EMOJIS = ["🎉", "✨", "🚀"] as const;
+const FALLBACK_EMOJIS = ["🎉", "✨", "🚀"];
 
-export function selectPostEmojis(text: string): readonly [string, string, string] {
-  const matches: { readonly emoji: string; readonly index: number; readonly priority: number }[] =
-    [];
+/** Pick the first three topic matches, filling any gaps with celebration emoji. */
+export function selectPostEmojis(text: string): readonly string[] {
+  const matches = KEYWORD_EMOJIS.map(({ emoji, pattern }) => ({
+    emoji,
+    index: text.search(pattern),
+  }))
+    .filter(({ index }) => index !== -1)
+    .sort((left, right) => left.index - right.index);
 
-  for (const [priority, { emoji, pattern }] of KEYWORD_EMOJIS.entries()) {
-    const match = pattern.exec(text);
-    if (match !== null) matches.push({ emoji, index: match.index, priority });
-  }
-  matches.sort((left, right) => left.index - right.index || left.priority - right.priority);
-
-  const selected: string[] = [];
-  for (const { emoji } of matches) {
-    if (!selected.includes(emoji)) selected.push(emoji);
-    if (selected.length === 3) break;
-  }
-  for (const emoji of FALLBACK_EMOJIS) {
-    if (selected.length === 3) break;
-    if (!selected.includes(emoji)) selected.push(emoji);
-  }
-
-  const [first, second, third] = selected;
-  if (first === undefined || second === undefined || third === undefined) {
-    throw new Error("post emoji selection did not produce three reactions");
-  }
-  return [first, second, third];
+  const emojis = new Set(matches.map(({ emoji }) => emoji));
+  for (const fallback of FALLBACK_EMOJIS) emojis.add(fallback);
+  return [...emojis].slice(0, 3);
 }

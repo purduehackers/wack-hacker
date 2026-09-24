@@ -22,7 +22,7 @@
 import { DISCORD_IDS } from "@repo/shared/discord";
 import { messageOf, Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
-import type { AnyThreadChannel, Message } from "discord.js";
+import type { Message } from "discord.js";
 
 import { defineEvent } from "../framework/events.ts";
 import { postContent } from "../utils/post-content.ts";
@@ -63,10 +63,6 @@ const AUTO_ARCHIVE_MINUTES = 4_320;
 /** Thread names are capped at 100; 54 leaves room for the author prefix. */
 const THREAD_TITLE_CHARS = 54;
 
-function randomItem<T>(items: readonly T[]): T | undefined {
-  return items[Math.floor(Math.random() * items.length)];
-}
-
 /**
  * Whether the message shows work.
  *
@@ -96,21 +92,6 @@ function savedMessageNotice(channelId: string, content: string): string {
     `- If you meant checkpoint or ship a project, add an attachment or URL so people can see your work :D\n\n` +
     `Cheers! ^•^`
   );
-}
-
-async function addReactions(message: Message, emojis: readonly string[]): Promise<void> {
-  // Sequential, not concurrent: Discord orders reactions by arrival, and
-  // Promise.all would scramble them.
-  for (const glyph of emojis) await message.react(glyph);
-}
-
-async function sendCelebration(
-  thread: AnyThreadChannel,
-  responses: readonly string[],
-  emojis: readonly string[],
-): Promise<void> {
-  const chosen = randomItem(responses);
-  if (chosen !== undefined) await thread.send(`${chosen} ${emojis.join(" ")}`);
 }
 
 export const autoThread = defineEvent({
@@ -153,13 +134,15 @@ export const autoThread = defineEvent({
           autoArchiveDuration: AUTO_ARCHIVE_MINUTES,
         });
 
-        const emojis = selectPostEmojis(postContent(message));
-        await addReactions(message, emojis);
+        const reactions = selectPostEmojis(postContent(message));
+        // Sequential awaits preserve reaction order in Discord.
+        for (const emoji of reactions) await message.react(emoji);
 
         if (message.member?.roles.cache.has(DISCORD_IDS.roles.WACKY)) {
-          const responses =
+          const responseOptions =
             message.channelId === DISCORD_IDS.channels.SHIP ? SHIP_RESPONSES : CHECKPOINT_RESPONSES;
-          await sendCelebration(thread, responses, emojis);
+          const chosenReply = responseOptions[Math.floor(Math.random() * responseOptions.length)];
+          if (chosenReply !== undefined) await thread.send(`${chosenReply} ${reactions.join(" ")}`);
         }
         return undefined;
       },

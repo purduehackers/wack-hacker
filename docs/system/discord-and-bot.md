@@ -353,10 +353,9 @@ For fixed #ship and #checkpoints, a post shows work when direct/forwarded text
 contains a URL or direct/forwarded attachments exist.
 
 - compliant: create a `<displayName> - <first 54 chars>` thread with three-day
-  archive; every #ship and #checkpoints post gets three distinct, text-selected
-  reactions, with fallback celebration emoji when fewer than three keywords
-  match. No seasonal or channel reaction is added. WACKY members also receive
-  a celebration reply in the thread;
+  archive; add three distinct reactions based on post text, filling gaps with
+  🎉 ✨ 🚀. WACKY members also get a celebration reply. No channel or seasonal
+  reactions are added;
 - noncompliant: copy, delete, then best-effort DM the author a saved copy and
   instructions.
 
