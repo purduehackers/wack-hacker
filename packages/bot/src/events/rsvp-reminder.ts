@@ -26,16 +26,23 @@ function cmsEventId(hash: string): string | undefined {
   }
 }
 
-/** Prefer the website sync's final-line footer over incidental description links. */
+/** Prefer the website sync's marked page over incidental description links. */
 function rsvpLinks(description: string | null, location: string | null | undefined) {
-  const footer = description?.trimEnd().split("\n").at(-1)?.trim();
-  const footerUrl = URL.parse(footer ?? "");
-  if (footerUrl?.origin === EVENTS_ORIGIN && footerUrl.pathname.startsWith("/events/")) {
-    const id = cmsEventId(footerUrl.hash);
-    if (id !== undefined) {
-      footerUrl.hash = "";
-      return { luma: undefined, website: footerUrl.href, cmsEventId: id };
-    }
+  // The sync writes a marked URL on its own line. Keep the last such line when
+  // someone adds notes after the footer, without trimming a valid ID suffix.
+  let markedPage: URL | undefined;
+  let markedId: string | undefined;
+  for (const line of (description ?? "").split("\n")) {
+    const url = URL.parse(line.trim());
+    if (url?.origin !== EVENTS_ORIGIN || !url.pathname.startsWith("/events/")) continue;
+    const id = cmsEventId(url.hash);
+    if (id === undefined) continue;
+    markedPage = url;
+    markedId = id;
+  }
+  if (markedPage !== undefined) {
+    markedPage.hash = "";
+    return { luma: undefined, website: markedPage.href, cmsEventId: markedId };
   }
 
   let luma: string | undefined;
@@ -55,7 +62,11 @@ function rsvpLinks(description: string | null, location: string | null | undefin
 
   const chosen = eventPage ?? website;
   if (chosen !== undefined) chosen.hash = "";
-  return { luma, website: chosen?.href, cmsEventId: undefined };
+  return {
+    luma,
+    website: chosen?.href,
+    cmsEventId: undefined,
+  };
 }
 
 function reminder(name: string, url: string, provider: "luma" | "website"): string {
