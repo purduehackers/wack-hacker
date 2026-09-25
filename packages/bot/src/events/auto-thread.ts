@@ -162,8 +162,14 @@ export const autoThread = defineEvent({
         });
 
         const reactions = selectPostEmojis(postText);
-        // Sequential awaits preserve reaction order in Discord.
-        for (const emoji of reactions) await message.react(emoji);
+        // A failed reaction must not block later reactions or the WACKY reply.
+        for (const emoji of reactions) {
+          try {
+            await message.react(emoji);
+          } catch (cause) {
+            console.warn(`could not react to ${message.id} with ${emoji}`, cause);
+          }
+        }
 
         if (message.member?.roles.cache.has(DISCORD_IDS.roles.WACKY)) {
           const responseOptions =

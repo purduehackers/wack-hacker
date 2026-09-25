@@ -352,8 +352,9 @@ resumes Eve nor changes conversation state.
 For fixed #ship and #checkpoints, a post shows work when direct/forwarded text
 contains a URL or direct/forwarded attachments exist.
 In #ship, direct and forwarded text must also provide at least six explanation
-words after URLs are removed. Attachment-only posts and shorter explanations
-receive separate DM instructions when deleted.
+words after URLs are removed. Word segmentation supports languages written
+without spaces. Attachment-only posts and shorter explanations receive separate
+DM instructions when deleted.
 
 - compliant: create a `<displayName> - <first 54 chars>` thread with three-day
   archive; add three distinct reactions based on post text, filling gaps with
@@ -373,9 +374,9 @@ POSTs a stable message-ID record to `ships.purduehackers.com`. MessageDelete
 removes it; 404 is a normal no-op. There is no edit synchronization.
 
 Eligibility also requires the ship explanation rule above. A URL in folded text
-or at least one _direct_ attachment is still required. A
-forwarded attachment alone satisfies auto-thread but not ship mirror eligibility
-unless forwarded text also has a URL. This is current behavior.
+or at least one _direct_ attachment is still required. A forwarded attachment
+satisfies auto-thread's work-evidence check, but a #ship post still needs six
+explanation words. A forwarded attachment alone is insufficient for the mirror.
 
 ### Dashboard mirror
 

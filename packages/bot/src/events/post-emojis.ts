@@ -26,7 +26,7 @@ const KEYWORD_EMOJIS = [
   {
     emoji: "🌐",
     pattern:
-      /\b(?:sites?|websites?|webpages?|web apps?|browsers?|homepages?|web demo|web ?dev(?:elopment)?)\b/i,
+      /\b(?:sites?|websites?|webpages?|web apps?|browsers?|homepages?|web demo|web ?dev(?:elopment|elopers?)?)\b/i,
   },
   { emoji: "📱", pattern: /\b(?:mobile|ios|android|iphone|ipad|app store|play store)\b/i },
   { emoji: "💻", pattern: /\b(?:github|repository|repo|pull request|open source)\b/i },

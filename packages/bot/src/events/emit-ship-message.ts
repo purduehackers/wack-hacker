@@ -93,8 +93,8 @@ export function emitShipMessage(ships: ShipsClient, redis: RedisClient) {
       if (await isOptedOut(redis, message.author.id)) return Result.ok(undefined);
 
       const shipText = postContent(message);
-      // Any attachment makes a valid ship even when the gallery cannot render
-      // that file type; eligibility and media projection are separate concerns.
+      // A direct attachment meets the mirror's work-evidence check even if the
+      // gallery cannot render it. The explanation rule is checked separately.
       if (!URL_PATTERN.test(shipText) && message.attachments.size === 0)
         return Result.ok(undefined);
       if (shipPostIssue(shipText) !== undefined) return Result.ok(undefined);
