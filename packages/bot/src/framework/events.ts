@@ -38,7 +38,13 @@ import { traceOperation } from "./observability.ts";
  * addressed to the bot. Keeping it a separate kind is what lets the router order
  * the two groups.
  */
-type EventKind = "mention" | "message" | "messageDelete" | "reactionAdd" | "reactionRemove";
+type EventKind =
+  | "mention"
+  | "message"
+  | "messageDelete"
+  | "reactionAdd"
+  | "reactionRemove"
+  | "scheduledEventUserAdd";
 
 interface EventContext {
   readonly client: Client<true>;
@@ -60,6 +66,10 @@ interface EventPayloads {
   reactionRemove: {
     readonly reaction: ClientEvents[Events.MessageReactionRemove][0];
     readonly user: ClientEvents[Events.MessageReactionRemove][1];
+  };
+  scheduledEventUserAdd: {
+    readonly event: ClientEvents[Events.GuildScheduledEventUserAdd][0];
+    readonly user: ClientEvents[Events.GuildScheduledEventUserAdd][1];
   };
 }
 
@@ -133,6 +143,7 @@ function buildRegistry(declared: readonly AnyEventHandler[]): Registry {
     messageDelete: [],
     reactionAdd: [],
     reactionRemove: [],
+    scheduledEventUserAdd: [],
   };
 
   for (const handler of declared) {
@@ -152,6 +163,9 @@ function buildRegistry(declared: readonly AnyEventHandler[]): Registry {
         break;
       case "reactionRemove":
         registry.reactionRemove.push(handler);
+        break;
+      case "scheduledEventUserAdd":
+        registry.scheduledEventUserAdd.push(handler);
         break;
     }
   }
@@ -271,6 +285,18 @@ export function attachEventRouter(client: Client<true>, deps: RouterDeps): void 
       await runAll(
         registry.reactionRemove,
         { reaction, user },
+        { client, botUserId, isBotMention: false },
+        deps,
+      );
+    });
+  });
+
+  client.on(Events.GuildScheduledEventUserAdd, (event, user) => {
+    guard("event.router.scheduledEventUserAdd", async () => {
+      if (user.bot) return;
+      await runAll(
+        registry.scheduledEventUserAdd,
+        { event, user },
         { client, botUserId, isBotMention: false },
         deps,
       );

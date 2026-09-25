@@ -31,6 +31,7 @@ import { deleteShipMessage, emitShipMessage } from "./emit-ship-message.ts";
 import { githubCodePreview } from "./github-code-preview.ts";
 import { imageDropRemoval, imageDropUploads } from "./image-drops.ts";
 import { praise } from "./praise.ts";
+import { rsvpReminder } from "./rsvp-reminder.ts";
 import { createTranscriber, transcribeVoiceMessage } from "./transcribe-voice-message.ts";
 
 export interface EventDeps {
@@ -56,6 +57,7 @@ export function buildEventHandlers(deps: EventDeps): readonly AnyEventHandler[] 
     chatFeedback({ turnMessages, reporter: deps.reporter }),
     praise,
     autoThread,
+    rsvpReminder({ cms, reporter: deps.reporter }),
     githubCodePreview(createGitHubCodeClient(), createDeduplicator(deps.redis)),
     emitShipMessage(ships, deps.redis),
     deleteShipMessage(ships),

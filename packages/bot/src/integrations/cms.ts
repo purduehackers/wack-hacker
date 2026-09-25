@@ -163,6 +163,7 @@ const eventDocSchema = z.object({
   name: z.string().optional(),
   start: z.string().optional(),
   published: z.boolean().optional(),
+  luma_url: z.unknown().optional(),
   images: z.array(eventImageRowSchema).optional(),
 });
 const eventListSchema = z.object({
@@ -731,6 +732,37 @@ function readEvent(cms: CmsContext, eventId: DocumentId): Promise<EventDoc> {
   return payloadRequest(eventDocSchema, documentUrl(cms.baseUrl, EVENTS, eventId), cms.apiKey);
 }
 
+/** Only links hosted by Luma are usable as an alternate RSVP destination. */
+export function lumaUrl(value: string): string | undefined {
+  const trimmed = value.trim();
+  const parsed = URL.parse(trimmed);
+  if (parsed === null || (parsed.protocol !== "http:" && parsed.protocol !== "https:")) {
+    return undefined;
+  }
+  const { hostname } = parsed;
+  return ["luma.com", "lu.ma"].some(
+    (domain) => hostname === domain || hostname.endsWith(`.${domain}`),
+  )
+    ? parsed.href
+    : undefined;
+}
+
+function getEventLumaUrl(
+  cms: CmsContext,
+  eventId: DocumentId,
+): Promise<Result<string | undefined, CmsError>> {
+  return Result.tryPromise(
+    {
+      try: async () => {
+        const candidate = z.string().safeParse((await readEvent(cms, eventId)).luma_url);
+        return candidate.success ? lumaUrl(candidate.data) : undefined;
+      },
+      catch: toCmsError("read CMS event Luma URL"),
+    },
+    upstreamRetry,
+  );
+}
+
 function writeImageRows(
   cms: CmsContext,
   eventId: DocumentId,
@@ -878,6 +910,7 @@ export function createCmsClient(deps: CmsDeps) {
     deleteImagesForMessage: (batch: MediaBatch, discordMessageId: string) =>
       deleteImagesForMessage(cms, batch, discordMessageId),
     findEventBySlug: (slug: string) => findEventBySlug(cms, slug),
+    getEventLumaUrl: (eventId: DocumentId) => getEventLumaUrl(cms, eventId),
     listEvents: (signal: AbortSignal) => listEvents(cms, signal),
     listUpcomingPublishedEvents: (after: Date) => listUpcomingPublishedEvents(cms, after),
     attachImages: (eventId: DocumentId, mediaIds: readonly DocumentId[]) =>
