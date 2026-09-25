@@ -4,6 +4,7 @@ import { DISCORD_GUILD_ID } from "@repo/shared/discord";
 import { messageOf, tagOf, Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import type { Reporter } from "@repo/shared/result/observe";
+import { RESTJSONErrorCodes } from "discord-api-types/v10";
 import { DiscordAPIError } from "discord.js";
 
 import { defineEvent } from "../framework/events.ts";
@@ -13,14 +14,33 @@ import type { CmsClient } from "../integrations/cms.ts";
 const EVENTS_ORIGIN = "https://events.purduehackers.com";
 const URL_PATTERN = /https?:\/\/[^\s<>]+/giu;
 const TRAILING_PUNCTUATION = /[)\].,!?;]+$/u;
-const CMS_MARKER = /^#cms-event-([a-z\d-]+)$/iu;
+const CMS_MARKER = /^#cms-event-(.+)$/iu;
 
-/** Links embedded in an event's description or external-event location. */
+function cmsEventId(hash: string): string | undefined {
+  const encoded = CMS_MARKER.exec(hash)?.[1];
+  if (encoded === undefined) return undefined;
+  try {
+    return decodeURIComponent(encoded);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Prefer the website sync's final-line footer over incidental description links. */
 function rsvpLinks(description: string | null, location: string | null | undefined) {
+  const footer = description?.trimEnd().split("\n").at(-1)?.trim();
+  const footerUrl = URL.parse(footer ?? "");
+  if (footerUrl?.origin === EVENTS_ORIGIN && footerUrl.pathname.startsWith("/events/")) {
+    const id = cmsEventId(footerUrl.hash);
+    if (id !== undefined) {
+      footerUrl.hash = "";
+      return { luma: undefined, website: footerUrl.href, cmsEventId: id };
+    }
+  }
+
   let luma: string | undefined;
   let website: URL | undefined;
   let eventPage: URL | undefined;
-  let markedPage: URL | undefined;
 
   for (const match of `${description ?? ""}\n${location ?? ""}`.match(URL_PATTERN) ?? []) {
     const url = URL.parse(match.replace(TRAILING_PUNCTUATION, ""));
@@ -31,14 +51,11 @@ function rsvpLinks(description: string | null, location: string | null | undefin
     website ??= url;
     if (!url.pathname.startsWith("/events/")) continue;
     eventPage ??= url;
-    // The sync appends its ID-marked event page after the description.
-    if (CMS_MARKER.test(url.hash)) markedPage = url;
   }
 
-  const chosen = markedPage ?? eventPage ?? website;
-  const cmsEventId = CMS_MARKER.exec(chosen?.hash ?? "")?.[1];
+  const chosen = eventPage ?? website;
   if (chosen !== undefined) chosen.hash = "";
-  return { luma, website: chosen?.href, cmsEventId };
+  return { luma, website: chosen?.href, cmsEventId: undefined };
 }
 
 function reminder(name: string, url: string, provider: "luma" | "website"): string {
@@ -75,7 +92,6 @@ export function rsvpReminder(deps: {
           if (links.cmsEventId !== undefined) {
             const found = await deps.cms.getEventLumaUrl(links.cmsEventId);
             if (Result.isError(found)) {
-              luma = undefined;
               deps.reporter.emit({
                 op: "rsvp-reminder.cms",
                 status: "error",
@@ -84,20 +100,27 @@ export function rsvpReminder(deps: {
                 attributes: { eventId: fullEvent.id },
               });
             } else {
-              luma = found.value ?? links.luma;
+              luma = found.value;
             }
           }
 
           const target = luma ?? links.website ?? EVENTS_ORIGIN;
           const provider = luma === undefined ? "website" : "luma";
-          // A member with closed DMs must not make the gateway listener fail.
+          // Expected DM refusals must not make the gateway listener fail.
           try {
             await user.send({
               content: reminder(fullEvent.name, target, provider),
               allowedMentions: { parse: [] },
             });
           } catch (cause) {
-            if (!(cause instanceof DiscordAPIError && cause.code === 50_007)) throw cause;
+            if (
+              !(cause instanceof DiscordAPIError) ||
+              (cause.code !== RESTJSONErrorCodes.CannotSendMessagesToThisUser &&
+                cause.code !==
+                  RESTJSONErrorCodes.CannotSendMessagesToThisUserDueToHavingNoMutualGuilds)
+            ) {
+              throw cause;
+            }
             console.info(`Discord refused an RSVP DM to ${user.id} for event ${fullEvent.id}`);
           }
           return undefined;
