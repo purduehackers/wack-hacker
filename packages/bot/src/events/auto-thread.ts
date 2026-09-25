@@ -4,14 +4,15 @@
  * Two jobs in one handler, because both hinge on the same question — does this
  * message actually show work?
  *
- * 1. **Enforcement.** A post with no URL and no attachment is deleted, and the
- *    author is DM'd their text back so nothing is lost. Forwarded message
+ * 1. **Enforcement.** A post with no URL and no attachment is deleted. Ships
+ *    also need more than five words explaining the work. The author gets a DM
+ *    explaining the problem and a copy of any text. Forwarded message
  *    snapshots are inspected too, since a forward carries its evidence in the
  *    snapshot rather than the message body — miss that and legitimate forwards
  *    get deleted.
  * 2. **Threading.** A compliant post gets a thread, so replies do not bury the
- *    next person's work. Authors holding the WACKY role also get reactions and a
- *    celebration message.
+ *    next person's work. Every ship and checkpoint gets three reactions chosen
+ *    from its text; the WACKY role still unlocks a celebration reply.
  *
  * The DM is best-effort: a user with DMs closed still gets their message
  * removed, because the channel rule matters more than the courtesy copy. That is
@@ -22,9 +23,13 @@
 import { DISCORD_IDS } from "@repo/shared/discord";
 import { messageOf, Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
-import type { AnyThreadChannel, Message } from "discord.js";
+import type { Message } from "discord.js";
 
 import { defineEvent } from "../framework/events.ts";
+import { postContent } from "../utils/post-content.ts";
+import { shipPostIssue } from "../utils/ship-post.ts";
+import type { ShipPostIssue } from "../utils/ship-post.ts";
+import { selectPostEmojis } from "./post-emojis.ts";
 
 const URL_PATTERN = /https?:\/\/\S+/i;
 
@@ -50,9 +55,6 @@ const SHIP_RESPONSES = [
   "Boom, nice ship! :D",
 ] as const;
 
-const CHECKPOINT_EMOJIS = ["\u{1F389}", "\u2728", "\u{1F3C1}"] as const;
-const SHIP_EMOJIS = ["\u{1F389}", "\u2728", "\u{1F680}"] as const;
-
 const WATCHED_CHANNELS: readonly string[] = [
   DISCORD_IDS.channels.SHIP,
   DISCORD_IDS.channels.CHECKPOINTS,
@@ -63,10 +65,6 @@ const AUTO_ARCHIVE_MINUTES = 4_320;
 
 /** Thread names are capped at 100; 54 leaves room for the author prefix. */
 const THREAD_TITLE_CHARS = 54;
-
-function randomItem<T>(items: readonly T[]): T | undefined {
-  return items[Math.floor(Math.random() * items.length)];
-}
 
 /**
  * Whether the message shows work.
@@ -87,30 +85,36 @@ function showsWork(message: Message): boolean {
   return false;
 }
 
-/** The text DM'd back so a deleted post is never simply lost. */
-function savedMessageNotice(channelId: string, content: string): string {
+type PostIssue = "missing-evidence" | ShipPostIssue;
+
+const REMOVAL_DETAILS = {
+  "missing-evidence": {
+    reason: "It needs an attachment or URL so people can see your work.",
+    fix: "If you meant to ship or post a checkpoint, add an attachment or URL when you repost.",
+  },
+  "attachment-only": {
+    reason: "An attachment alone does not explain what you shipped.",
+    fix: "Repost your attachments with at least six words about what you made or changed. You'll need to attach the files again.",
+  },
+  "short-explanation": {
+    reason: "Your ship explanation needs more than five words.",
+    fix: "Repost with at least six words about what you made or changed. URLs do not count as words.",
+  },
+};
+
+function removalNotice(channelId: string, content: string, issue: PostIssue): string {
+  const { reason, fix } = REMOVAL_DETAILS[issue];
+  const savedText =
+    content.trim() === ""
+      ? ""
+      : `I saved your text for you! \u{1F643}\u{200D}\u{2195}\u{FE0F}\n\n\`\`\`${content}\`\`\`\n\n`;
   return (
-    `Hey there, it looks like you tried to send a message in <#${channelId}> without an attachment or URL!! D:\n\n` +
-    `It's okay!! I saved your message for you!! \u{1F643}\u{200D}\u{2195}\u{FE0F}\n\n` +
-    `\`\`\`${content}\`\`\`\n\n` +
+    `Hey there, I removed your post in <#${channelId}>. ${reason}\n\n` +
+    savedText +
     `- If you meant to reply to someone, send your message in the corresponding thread!\n` +
-    `- If you meant checkpoint or ship a project, add an attachment or URL so people can see your work :D\n\n` +
+    `- ${fix}\n\n` +
     `Cheers! ^•^`
   );
-}
-
-async function celebrate(
-  message: Message,
-  thread: AnyThreadChannel,
-  responses: readonly string[],
-  emojis: readonly string[],
-): Promise<void> {
-  // Sequential, not concurrent: Discord orders reactions by arrival, and
-  // Promise.all would scramble them.
-  for (const glyph of emojis) await message.react(glyph);
-
-  const chosen = randomItem(responses);
-  if (chosen !== undefined) await thread.send(`${chosen} ${emojis.join(" ")}`);
 }
 
 export const autoThread = defineEvent({
@@ -122,18 +126,22 @@ export const autoThread = defineEvent({
     if (context.isBotMention) return Result.ok(undefined);
     if (!WATCHED_CHANNELS.includes(message.channelId)) return Result.ok(undefined);
 
-    if (!showsWork(message)) {
+    const postText = postContent(message);
+    let issue: PostIssue | undefined;
+    if (!showsWork(message)) issue = "missing-evidence";
+    else if (message.channelId === DISCORD_IDS.channels.SHIP) issue = shipPostIssue(postText);
+
+    if (issue !== undefined) {
       return Result.tryPromise({
         try: async () => {
-          const { content } = message;
           const author = message.author;
           await message.delete();
 
           // Best effort. A closed DM must not leave the post standing.
           try {
-            await author.send(savedMessageNotice(message.channelId, content));
+            await author.send(removalNotice(message.channelId, postText, issue));
           } catch (cause) {
-            console.warn(`could not DM ${author.id} their saved message`, cause);
+            console.warn(`could not DM ${author.id} about removed post`, cause);
           }
           return undefined;
         },
@@ -153,12 +161,21 @@ export const autoThread = defineEvent({
           autoArchiveDuration: AUTO_ARCHIVE_MINUTES,
         });
 
-        if (!message.member?.roles.cache.has(DISCORD_IDS.roles.WACKY)) return undefined;
+        const reactions = selectPostEmojis(postText);
+        // A failed reaction must not block later reactions or the WACKY reply.
+        for (const emoji of reactions) {
+          try {
+            await message.react(emoji);
+          } catch (cause) {
+            console.warn(`could not react to ${message.id} with ${emoji}`, cause);
+          }
+        }
 
-        if (message.channelId === DISCORD_IDS.channels.CHECKPOINTS) {
-          await celebrate(message, thread, CHECKPOINT_RESPONSES, CHECKPOINT_EMOJIS);
-        } else if (message.channelId === DISCORD_IDS.channels.SHIP) {
-          await celebrate(message, thread, SHIP_RESPONSES, SHIP_EMOJIS);
+        if (message.member?.roles.cache.has(DISCORD_IDS.roles.WACKY)) {
+          const responseOptions =
+            message.channelId === DISCORD_IDS.channels.SHIP ? SHIP_RESPONSES : CHECKPOINT_RESPONSES;
+          const chosenReply = responseOptions[Math.floor(Math.random() * responseOptions.length)];
+          if (chosenReply !== undefined) await thread.send(`${chosenReply} ${reactions.join(" ")}`);
         }
         return undefined;
       },

@@ -33,6 +33,8 @@ import { unified } from "unified";
 
 import { defineEvent } from "../framework/events.ts";
 import { TIME_ZONE } from "../utils/dates.ts";
+import { postContent } from "../utils/post-content.ts";
+import { shipPostIssue } from "../utils/ship-post.ts";
 
 /**
  * The single value the upstream `Resolver` contract defines for "unresolved".
@@ -128,6 +130,11 @@ export function emitDashboardMessage(deps: {
       if (context.isBotMention) return Result.ok(undefined);
       if (!isPubliclyMirrorable(message)) return Result.ok(undefined);
       if (!message.inGuild()) return Result.ok(undefined);
+      if (
+        message.channelId === DISCORD_IDS.channels.SHIP &&
+        shipPostIssue(postContent(message)) !== undefined
+      )
+        return Result.ok(undefined);
       if (await isOptedOut(deps.redis, message.author.id)) return Result.ok(undefined);
 
       const html = await renderHtml(

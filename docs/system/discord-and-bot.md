@@ -351,14 +351,21 @@ resumes Eve nor changes conversation state.
 
 For fixed #ship and #checkpoints, a post shows work when direct/forwarded text
 contains a URL or direct/forwarded attachments exist.
+In #ship, direct and forwarded text must also provide at least six explanation
+words after URLs are removed. Word segmentation supports languages written
+without spaces. Attachment-only posts and shorter explanations receive separate
+DM instructions when deleted.
 
-- compliant: create a `<displayName> - <first 54 chars>` thread, three-day
-  archive; WACKY members also receive ordered reactions and a celebration;
+- compliant: create a `<displayName> - <first 54 chars>` thread with three-day
+  archive; add three distinct reactions based on post text, filling gaps with
+  🎉 ✨ 🚀. Keyword matching ignores URLs. WACKY members also get a celebration reply. No channel or seasonal
+  reactions are added;
 - noncompliant: copy, delete, then best-effort DM the author a saved copy and
   instructions.
 
-Sibling community handlers are concurrent, so deletion is not an ordered gate
-before external mirroring.
+Sibling community handlers are concurrent. The dashboard skips ships that fail
+the explanation rule, but deletion is not an ordered gate for other invalid
+posts.
 
 ### Ship mirror
 
@@ -366,9 +373,10 @@ before external mirroring.
 POSTs a stable message-ID record to `ships.purduehackers.com`. MessageDelete
 removes it; 404 is a normal no-op. There is no edit synchronization.
 
-Eligibility is URL in folded text or at least one _direct_ attachment. A
-forwarded attachment alone satisfies auto-thread but not ship mirror eligibility
-unless forwarded text also has a URL. This is current behavior.
+Eligibility also requires the ship explanation rule above. A URL in folded text
+or at least one _direct_ attachment is still required. A forwarded attachment
+satisfies auto-thread's work-evidence check, but a #ship post still needs six
+explanation words. A forwarded attachment alone is insufficient for the mirror.
 
 ### Dashboard mirror
 
