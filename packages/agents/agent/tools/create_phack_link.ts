@@ -11,6 +11,10 @@ const TEAM_ID = "team_kOQWJUQYzGW4blWthdK71Y8A";
 const ITEMS_URL = `https://api.vercel.com/v1/global-config/${GLOBAL_CONFIG_ID}/items?teamId=${TEAM_ID}`;
 const RESERVED_SLUGS = new Set(["404", "api", "dashboard", "favicon", "login"]);
 const PROPAGATION_NOTE = "The redirect may take a few seconds to start working everywhere.";
+const RANDOM_SLUG_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
+const RANDOM_SLUG_LENGTH = 8;
+const RANDOM_SLUG_ATTEMPTS = 5;
+const UNBIASED_BYTE_LIMIT = 252;
 
 const slugSchema = z
   .string()
@@ -41,19 +45,50 @@ const destinationSchema = z
   .transform((destination) => new URL(destination).href);
 
 export const createPhackLinkInputSchema = z.strictObject({
-  slug: slugSchema.describe("The bare, case-sensitive path after phack.rs/"),
+  slug: slugSchema
+    .optional()
+    .describe(
+      "Optional bare, case-sensitive path after phack.rs/. Omit for a random 8-character slug.",
+    ),
   destination: destinationSchema.describe("The absolute HTTPS URL this link should open"),
 });
 
 const itemSchema = z.looseObject({ value: z.looseObject({ d: z.string() }) });
+type LinkInput = { readonly slug: string; readonly destination: string };
 
 function linkUrl(slug: string): string {
   return `https://phack.rs/${slug}`;
 }
 
+/** Stable across Eve replay, while HMAC makes each call's slug unpredictable. */
+async function randomSlug(token: string, callKey: string, attempt: number): Promise<string> {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(token),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  let slug = "";
+  let block = 0;
+  while (slug.length < RANDOM_SLUG_LENGTH) {
+    const digest = new Uint8Array(
+      await crypto.subtle.sign("HMAC", key, encoder.encode(`${callKey}:${attempt}:${block}`)),
+    );
+    block += 1;
+    for (const byte of digest) {
+      if (byte >= UNBIASED_BYTE_LIMIT) continue;
+      slug += RANDOM_SLUG_ALPHABET[byte % RANDOM_SLUG_ALPHABET.length];
+      if (slug.length === RANDOM_SLUG_LENGTH) return slug;
+    }
+  }
+  return slug;
+}
+
 /** Read-only reconciliation for a conflict or a write whose outcome is uncertain. */
 async function reconcileLink(
-  input: z.output<typeof createPhackLinkInputSchema>,
+  input: LinkInput,
   token: string,
   failure: "invalid_request" | "conflict" | "unverified",
 ) {
@@ -109,19 +144,7 @@ async function reconcileLink(
 }
 
 /** A create-only write never replaces an existing redirect or resets its visit count. */
-export async function createPhackLink(
-  input: z.output<typeof createPhackLinkInputSchema>,
-  signal?: AbortSignal,
-) {
-  const token = env.VERCEL_API_TOKEN;
-  if (token === undefined) {
-    throw new UpstreamError({
-      service: "Vercel Global Config",
-      status: 503,
-      detail: "integration is not configured",
-    });
-  }
-
+async function createLinkOnce(input: LinkInput, token: string, signal?: AbortSignal) {
   const headers = {
     Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
@@ -162,13 +185,45 @@ export async function createPhackLink(
   });
 }
 
+/** Generated candidates are stable for this tool call and retried only after a confirmed collision. */
+export async function createPhackLink(
+  input: z.output<typeof createPhackLinkInputSchema>,
+  callKey: string,
+  signal?: AbortSignal,
+) {
+  const token = env.VERCEL_API_TOKEN;
+  if (token === undefined) {
+    throw new UpstreamError({
+      service: "Vercel Global Config",
+      status: 503,
+      detail: "integration is not configured",
+    });
+  }
+
+  if (input.slug !== undefined) {
+    return createLinkOnce({ slug: input.slug, destination: input.destination }, token, signal);
+  }
+
+  for (let attempt = 0; attempt < RANDOM_SLUG_ATTEMPTS; attempt += 1) {
+    const slug = await randomSlug(token, callKey, attempt);
+    const result = await createLinkOnce({ slug, destination: input.destination }, token, signal);
+    if (result.ok || result.code !== "slug_taken") return result;
+  }
+
+  return {
+    ok: false,
+    code: "slug_unavailable",
+    message: "Could not find an unused random slug. Try again.",
+  } as const;
+}
+
 export default defineDynamic({
   events: {
     "turn.started": (_event, ctx) => {
       if (!isCoreToolVisible("create_phack_link", ctx.session.auth.current)) return undefined;
       return defineTool({
         description:
-          "Create a phack.rs short link for an organizer. Use only when an organizer asks to create one. Provide a new bare slug and an HTTPS destination; existing slugs are never overwritten.",
+          "Create a phack.rs short link for an organizer. Use only when an organizer asks to create one. Provide an HTTPS destination; the optional slug defaults to a random 8-character path. Existing slugs are never overwritten.",
         inputSchema: createPhackLinkInputSchema,
         execute: async (input, toolCtx) => {
           return guardToolExecution(async () => {
@@ -176,7 +231,11 @@ export default defineDynamic({
             if (!authorization.allowed) return authorization.output;
             try {
               const signal = AbortSignal.any([toolCtx.abortSignal, AbortSignal.timeout(10_000)]);
-              return await createPhackLink(input, signal);
+              return await createPhackLink(
+                input,
+                `${toolCtx.session.id}:${toolCtx.callId}`,
+                signal,
+              );
             } catch (cause) {
               return coreToolFailure("Vercel Global Config", cause);
             }

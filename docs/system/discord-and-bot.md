@@ -269,11 +269,13 @@ a generic "Something went wrong".
 
 ### `/phack`
 
-Organizer/admin only, always ephemeral. Takes a `slug` and a full HTTPS
-`destination`, then creates `https://phack.rs/<slug>` in the shortener's Vercel
+Organizer/admin only, always ephemeral. Takes a full HTTPS `destination` and an
+optional `slug`; omitting the slug generates a random eight-character path.
+It creates `https://phack.rs/<slug>` in the shortener's Vercel
 Global Config. The item is `{ d: destination, v: 0 }`, matching the redirect
 middleware's storage format. Creation never overwrites an existing slug;
-collisions and invalid inputs receive a specific reply. Slugs preserve case.
+generated collisions retry with a new slug, while custom slug collisions and
+invalid inputs receive a specific reply. Slugs preserve case.
 
 ### Event directory
 

@@ -89,6 +89,8 @@ CONFIRM_COMMAND_GUILD=772576325897945119 bun run register-commands
 
 The script refuses to run unless that variable matches the guild id compiled into `@repo/shared/discord`, so a misconfigured environment cannot register somewhere else. The PUT replaces the whole command set, so repeating it is safe.
 
+Organizers can run `/phack destination:https://example.com` to create a phack.rs link with a random eight-character slug. The optional `slug` argument sets a custom path, such as `hack-night`. Existing paths are preserved.
+
 ## Social announcements
 
 YouTube, blog, and Instagram adapters share a post contract, persistent Redis queue,

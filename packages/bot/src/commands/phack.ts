@@ -12,6 +12,9 @@ import { roleOf } from "../utils/roles.ts";
 
 const RESERVED_SLUGS = new Set(["404", "api", "dashboard", "favicon", "login"]);
 const SLUG_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,62}[a-zA-Z0-9]$/u;
+const RANDOM_SLUG_CHARACTERS = "abcdefghijklmnopqrstuvwxyz0123456789";
+const RANDOM_SLUG_LENGTH = 8;
+const MAX_RANDOM_SLUG_ATTEMPTS = 5;
 
 export const builder = new SlashCommandBuilder();
 builder
@@ -19,17 +22,17 @@ builder
   .setDescription("Create a phack.rs short link (organizers only)")
   .addStringOption((option) =>
     option
-      .setName("slug")
-      .setDescription("Short path, such as hack-night")
-      .setRequired(true)
-      .setMaxLength(64),
-  )
-  .addStringOption((option) =>
-    option
       .setName("destination")
       .setDescription("Full destination URL, starting with https://")
       .setRequired(true)
       .setMaxLength(2048),
+  )
+  .addStringOption((option) =>
+    option
+      .setName("slug")
+      .setDescription("Optional short path; defaults to a random 8-character code")
+      .setRequired(false)
+      .setMaxLength(64),
   );
 
 function destinationFrom(input: string): string | undefined {
@@ -45,6 +48,18 @@ function destinationFrom(input: string): string | undefined {
 
 function isValidSlug(slug: string): boolean {
   return SLUG_PATTERN.test(slug) && !RESERVED_SLUGS.has(slug.toLowerCase());
+}
+
+function randomSlug(): string {
+  let slug = "";
+  while (slug.length < RANDOM_SLUG_LENGTH) {
+    const sample = crypto.getRandomValues(new Uint8Array(RANDOM_SLUG_LENGTH - slug.length));
+    for (const byte of sample) {
+      // Reject the top four values so each character has equal probability.
+      if (byte < 252) slug += RANDOM_SLUG_CHARACTERS.charAt(byte % RANDOM_SLUG_CHARACTERS.length);
+    }
+  }
+  return slug;
 }
 
 async function run(
@@ -63,24 +78,32 @@ async function run(
     return Result.ok("Enter a full https:// URL without embedded credentials.");
   }
 
-  const slug = interaction.options.getString("slug", true).trim();
-  if (!isValidSlug(slug)) {
+  const providedSlug = interaction.options.getString("slug")?.trim();
+  if (providedSlug !== undefined && !isValidSlug(providedSlug)) {
     return Result.ok(
       "Use 2–64 letters, numbers, or hyphens, starting and ending with a letter or number.",
     );
   }
 
-  const created = await writer.create(slug, destination);
-  if (Result.isError(created)) return created;
-  if (created.value === "exists") {
-    return Result.ok(`https://phack.rs/${slug} already exists. Choose another slug.`);
+  const retryLimit = providedSlug === undefined ? MAX_RANDOM_SLUG_ATTEMPTS : 1;
+  for (let index = 0; index < retryLimit; index++) {
+    const slug = providedSlug ?? randomSlug();
+    const created = await writer.create(slug, destination);
+    if (Result.isError(created)) return created;
+    if (created.value === "exists") {
+      if (providedSlug !== undefined) {
+        return Result.ok(`https://phack.rs/${slug} already exists. Choose another slug.`);
+      }
+    } else {
+      if (created.value === "same") {
+        return Result.ok(`https://phack.rs/${slug} already points to that destination.`);
+      }
+      return Result.ok(
+        `Created https://phack.rs/${slug} — it may take a few seconds to start redirecting.`,
+      );
+    }
   }
-  if (created.value === "same") {
-    return Result.ok(`https://phack.rs/${slug} already points to that destination.`);
-  }
-  return Result.ok(
-    `Created https://phack.rs/${slug} — it may take a few seconds to start redirecting.`,
-  );
+  return Result.ok("Could not find an unused random slug. Try again.");
 }
 
 export function phackCommand(writer: PhackLinkWriter): SlashCommand {

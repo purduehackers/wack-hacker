@@ -101,8 +101,10 @@ function describeInput(input: JsonValue | ToolResultAudit): string | undefined {
 /** A destination URL can carry access tokens in its query, so only audit the slug. */
 function protectInput(tool: AuditedTool, input: JsonValue | ToolResultAudit) {
   if (tool !== "create_phack_link" || toolResultAuditSchema.safeParse(input).success) return input;
-  const parsed = z.looseObject({ slug: z.string() }).safeParse(input);
-  return parsed.success ? { slug: parsed.data.slug, destination: "[redacted]" } : "[redacted]";
+  const parsed = z.looseObject({ slug: z.string().optional() }).safeParse(input);
+  return parsed.success
+    ? { slug: parsed.data.slug ?? "[generated]", destination: "[redacted]" }
+    : "[redacted]";
 }
 
 function usernameOf(current: Parameters<typeof requirePrincipal>[0]): string {
