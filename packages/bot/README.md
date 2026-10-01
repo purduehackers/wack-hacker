@@ -29,7 +29,7 @@ src/
   utils/
     conversation/     the reconciler (see below)
     dates.ts          wall-clock helpers for one timezone
-  commands/         /ping /privacy /hack-night /image-drop
+  commands/         /ping /privacy /hack-night /image-drop /phack
   events/           agent chat, auto-thread, praise, ship + dashboard mirrors,
                     voice transcription, GitHub code previews, image drops, chat indexer
   schedules/        social announcements, website event sync, hack-night countdown, photography thread, cleanup

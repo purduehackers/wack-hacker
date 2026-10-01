@@ -15,6 +15,7 @@ const risks = {
   documentation: CORE_TOOL_DESCRIPTORS.documentation.risk,
   web_search: CORE_TOOL_DESCRIPTORS.web_search.risk,
   resolve_organizer: CORE_TOOL_DESCRIPTORS.resolve_organizer.risk,
+  create_phack_link: CORE_TOOL_DESCRIPTORS.create_phack_link.risk,
   list_audit_log: CORE_TOOL_DESCRIPTORS.list_audit_log.risk,
   schedule_task: RiskLevel.Write,
   cancel_task: RiskLevel.Write,
@@ -36,6 +37,11 @@ const toolResultAuditSchema = z.strictObject({
   kind: z.literal("tool-result"),
   failed: z.boolean().optional(),
 });
+const toolFailureSchema = z.looseObject({ ok: z.literal(false) });
+const toolPolicyFailureSchema = z.looseObject({
+  ok: z.literal(false),
+  error: z.looseObject({ tag: z.enum(["Forbidden", "Unauthenticated"]) }),
+});
 
 const usernameSchema = z.string().trim().min(1).max(64);
 
@@ -48,6 +54,7 @@ async function record(
 ): Promise<void> {
   const principal = requirePrincipal(current);
   if (Result.isError(principal)) return;
+  const protectedInput = protectInput(tool, input);
   // Resolved here rather than at module scope: this hook loads on every cold
   // start, and building the store eagerly pulls libSQL into the boot path for
   // turns that never write an audit row.
@@ -63,7 +70,7 @@ async function record(
     principal: principal.value,
     tool,
     risk: risks[tool],
-    input,
+    input: protectedInput,
     decision,
     decidedBy: principal.value.userId,
   });
@@ -81,7 +88,7 @@ async function record(
     actorId: principal.value.userId,
     actorName: usernameOf(current),
     role: principal.value.role,
-    input: describeInput(input),
+    input: describeInput(protectedInput),
   });
 }
 
@@ -89,6 +96,13 @@ async function record(
 function describeInput(input: JsonValue | ToolResultAudit): string | undefined {
   const parsed = toolResultAuditSchema.safeParse(input);
   return parsed.success ? undefined : JSON.stringify(input, undefined, 2);
+}
+
+/** A destination URL can carry access tokens in its query, so only audit the slug. */
+function protectInput(tool: AuditedTool, input: JsonValue | ToolResultAudit) {
+  if (tool !== "create_phack_link" || toolResultAuditSchema.safeParse(input).success) return input;
+  const parsed = z.looseObject({ slug: z.string() }).safeParse(input);
+  return parsed.success ? { slug: parsed.data.slug, destination: "[redacted]" } : "[redacted]";
 }
 
 function usernameOf(current: Parameters<typeof requirePrincipal>[0]): string {
@@ -112,17 +126,23 @@ export default defineHook({
     async "action.result"(event, ctx) {
       const result = event.data.result;
       if (result.kind !== "tool-result" || !isAuditedTool(result.toolName)) return;
+      const phackPolicyFailure =
+        result.toolName === "create_phack_link" &&
+        toolPolicyFailureSchema.safeParse(result.output).success;
+      const phackFailure =
+        result.toolName === "create_phack_link" &&
+        toolFailureSchema.safeParse(result.output).success;
       const decision =
-        event.data.error?.code === "TOOL_EXECUTION_DENIED"
+        event.data.error?.code === "TOOL_EXECUTION_DENIED" || phackPolicyFailure
           ? AuditDecision.Denied
-          : result.isError
+          : result.isError || phackFailure
             ? AuditDecision.Failed
             : AuditDecision.Executed;
       await record(
         `${event.meta.id}:${result.callId}`,
         ctx.session.auth.current,
         result.toolName,
-        { kind: result.kind, failed: result.isError },
+        { kind: result.kind, failed: decision === AuditDecision.Failed },
         decision,
       );
     },

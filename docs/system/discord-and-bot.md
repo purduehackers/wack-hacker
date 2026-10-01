@@ -172,7 +172,7 @@ cd packages/bot
 CONFIRM_COMMAND_GUILD=772576325897945119 bun run register-commands
 ```
 
-Registration PUTs exactly `/ping`, `/privacy`, `/hack-night`, and `/image-drop`
+Registration PUTs exactly `/ping`, `/privacy`, `/hack-night`, `/image-drop`, and `/phack`
 to the fixed guild and refuses a mismatched confirmation guild, so the CI job cannot reach a
 different guild even with a misconfigured secret. The PUT replaces the whole
 command set, which is what makes repeating it on every merge safe.
@@ -266,6 +266,14 @@ Opening a drop is gated; posting into one is not. A wrong slug, a channel that
 cannot hold a thread, and a CMS that refuses to read events are all answered
 ephemerally rather than raised, because the dispatcher renders a raised failure as
 a generic "Something went wrong".
+
+### `/phack`
+
+Organizer/admin only, always ephemeral. Takes a `slug` and a full HTTPS
+`destination`, then creates `https://phack.rs/<slug>` in the shortener's Vercel
+Global Config. The item is `{ d: destination, v: 0 }`, matching the redirect
+middleware's storage format. Creation never overwrites an existing slug;
+collisions and invalid inputs receive a specific reply. Slugs preserve case.
 
 ### Event directory
 
