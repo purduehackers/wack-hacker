@@ -37,7 +37,8 @@ const toolResultAuditSchema = z.strictObject({
   kind: z.literal("tool-result"),
   failed: z.boolean().optional(),
 });
-const toolFailureSchema = z.looseObject({ ok: z.literal(false) });
+const toolFailureSchema = z.looseObject({ ok: z.literal(false), error: z.unknown() });
+const phackFailureSchema = z.looseObject({ ok: z.literal(false), code: z.string() });
 const toolPolicyFailureSchema = z.looseObject({
   ok: z.literal(false),
   error: z.looseObject({ tag: z.enum(["Forbidden", "Unauthenticated"]) }),
@@ -128,16 +129,15 @@ export default defineHook({
     async "action.result"(event, ctx) {
       const result = event.data.result;
       if (result.kind !== "tool-result" || !isAuditedTool(result.toolName)) return;
-      const phackPolicyFailure =
-        result.toolName === "create_phack_link" &&
-        toolPolicyFailureSchema.safeParse(result.output).success;
-      const phackFailure =
-        result.toolName === "create_phack_link" &&
-        toolFailureSchema.safeParse(result.output).success;
+      const policyFailure = toolPolicyFailureSchema.safeParse(result.output).success;
+      const failure =
+        toolFailureSchema.safeParse(result.output).success ||
+        (result.toolName === "create_phack_link" &&
+          phackFailureSchema.safeParse(result.output).success);
       const decision =
-        event.data.error?.code === "TOOL_EXECUTION_DENIED" || phackPolicyFailure
+        event.data.error?.code === "TOOL_EXECUTION_DENIED" || policyFailure
           ? AuditDecision.Denied
-          : result.isError || phackFailure
+          : result.isError || failure
             ? AuditDecision.Failed
             : AuditDecision.Executed;
       await record(

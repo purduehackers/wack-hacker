@@ -1,4 +1,5 @@
 import { UpstreamError } from "@repo/shared/errors";
+import { PHACK_RESERVED_SLUGS, PHACK_SLUG_PATTERN, writePhackLink } from "@repo/shared/phack";
 import { defineDynamic, defineTool } from "eve/tools";
 import { z } from "zod";
 
@@ -6,10 +7,6 @@ import { env } from "../env.ts";
 import { authorizeCoreTool, coreToolFailure, isCoreToolVisible } from "../lib/policy/core-tools.ts";
 import { guardToolExecution } from "../lib/serialization.ts";
 
-const GLOBAL_CONFIG_ID = "ecfg_k1ocmrcfwo57k9v2klgtljycqsqj";
-const TEAM_ID = "team_kOQWJUQYzGW4blWthdK71Y8A";
-const ITEMS_URL = `https://api.vercel.com/v1/global-config/${GLOBAL_CONFIG_ID}/items?teamId=${TEAM_ID}`;
-const RESERVED_SLUGS = new Set(["404", "api", "dashboard", "favicon", "login"]);
 const PROPAGATION_NOTE = "The redirect may take a few seconds to start working everywhere.";
 const RANDOM_SLUG_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
 const RANDOM_SLUG_LENGTH = 8;
@@ -21,10 +18,10 @@ const slugSchema = z
   .trim()
   .min(2)
   .max(64)
-  .regex(/^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])$/u, {
+  .regex(PHACK_SLUG_PATTERN, {
     error: "Use letters, numbers, and interior hyphens only.",
   })
-  .refine((slug) => !RESERVED_SLUGS.has(slug.toLowerCase()), {
+  .refine((slug) => !PHACK_RESERVED_SLUGS.has(slug.toLowerCase()), {
     error: "This path is reserved by the shortener.",
   });
 
@@ -35,12 +32,8 @@ const destinationSchema = z
   .max(2048)
   .pipe(z.url({ protocol: /^https$/u }))
   .refine((destination) => {
-    try {
-      const url = new URL(destination);
-      return url.username === "" && url.password === "";
-    } catch {
-      return false;
-    }
+    const url = URL.parse(destination);
+    return url?.username === "" && url.password === "";
   }, "Destination URLs cannot contain credentials.")
   .transform((destination) => new URL(destination).href);
 
@@ -52,13 +45,6 @@ export const createPhackLinkInputSchema = z.strictObject({
     ),
   destination: destinationSchema.describe("The absolute HTTPS URL this link should open"),
 });
-
-const itemSchema = z.looseObject({ value: z.looseObject({ d: z.string() }) });
-type LinkInput = { readonly slug: string; readonly destination: string };
-
-function linkUrl(slug: string): string {
-  return `https://phack.rs/${slug}`;
-}
 
 /** Stable across Eve replay, while HMAC makes each call's slug unpredictable. */
 async function randomSlug(token: string, callKey: string, attempt: number): Promise<string> {
@@ -86,110 +72,45 @@ async function randomSlug(token: string, callKey: string, attempt: number): Prom
   return slug;
 }
 
-/** Read-only reconciliation for a conflict or a write whose outcome is uncertain. */
-async function reconcileLink(
-  input: LinkInput,
+/** Map the shared create result into the tool's user-facing envelope. */
+async function createLinkOnce(
+  slug: string,
+  destination: string,
   token: string,
-  failure: "invalid_request" | "conflict" | "unverified",
+  signal: AbortSignal,
 ) {
-  try {
-    const response = await fetch(
-      `https://api.vercel.com/v1/global-config/${GLOBAL_CONFIG_ID}/item/${input.slug}?teamId=${TEAM_ID}`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-        signal: AbortSignal.timeout(3_000),
-      },
-    );
-    if (response.ok) {
-      const item = itemSchema.safeParse(await response.json());
-      if (item.success && item.data.value.d === input.destination) {
-        // An interrupted Eve step may run again after Vercel accepted its write.
-        return {
-          ok: true,
-          created: false,
-          url: linkUrl(input.slug),
-          note: PROPAGATION_NOTE,
-        } as const;
-      }
-      if (item.success) {
-        return {
-          ok: false,
-          code: "slug_taken",
-          message: `The slug ${input.slug} already points to a different destination.`,
-        } as const;
-      }
-    }
-  } catch {
-    // A read can fail while the create still commits; only another read may resolve it.
+  const result = await writePhackLink({ slug, destination, token, signal });
+  const url = `https://phack.rs/${slug}`;
+  if (result.kind === "created" || result.kind === "same") {
+    return { ok: true, created: result.kind === "created", url, note: PROPAGATION_NOTE } as const;
   }
-  if (failure === "invalid_request") {
+  if (result.kind === "exists") {
     return {
       ok: false,
-      code: failure,
-      message: "Vercel rejected this link. Check the slug and destination.",
+      code: "slug_taken",
+      message: `The slug ${slug} already points to a different destination.`,
     } as const;
   }
-  if (failure === "conflict") {
-    return {
-      ok: false,
-      code: failure,
-      message: `Vercel reported a conflict for ${input.slug}. Check the link before trying another slug.`,
-    } as const;
-  }
-  return {
-    ok: false,
-    code: failure,
-    message: `Could not verify whether ${linkUrl(input.slug)} was created. Check the link before retrying.`,
-  } as const;
-}
-
-/** A create-only write never replaces an existing redirect or resets its visit count. */
-async function createLinkOnce(input: LinkInput, token: string, signal?: AbortSignal) {
-  const headers = {
-    Authorization: `Bearer ${token}`,
-    "Content-Type": "application/json",
-  };
-  let response: Response;
-  try {
-    response = await fetch(ITEMS_URL, {
-      method: "PATCH",
-      headers,
-      body: JSON.stringify({
-        items: [{ operation: "create", key: input.slug, value: { d: input.destination, v: 0 } }],
-      }),
-      ...(signal === undefined ? {} : { signal }),
+  if (result.kind === "error") {
+    throw new UpstreamError({
+      service: "Vercel Global Config",
+      status: result.status,
+      detail: "link creation failed",
     });
-  } catch {
-    return reconcileLink(input, token, "unverified");
   }
-
-  if (response.ok) {
-    return {
-      ok: true,
-      created: true,
-      url: linkUrl(input.slug),
-      note: PROPAGATION_NOTE,
-    } as const;
-  }
-
-  if (response.status === 400) return reconcileLink(input, token, "invalid_request");
-  if (response.status === 409) return reconcileLink(input, token, "conflict");
-  if (response.status === 408 || response.status >= 500) {
-    return reconcileLink(input, token, "unverified");
-  }
-
-  throw new UpstreamError({
-    service: "Vercel Global Config",
-    status: response.status,
-    detail: "link creation failed",
-  });
+  const messages = {
+    invalid_request: "Vercel rejected this link. Check the slug and destination.",
+    conflict: `Vercel reported a conflict for ${slug}. Check the link before trying another slug.`,
+    unverified: `Could not verify whether ${url} was created. Check the link before retrying.`,
+  };
+  return { ok: false, code: result.kind, message: messages[result.kind] } as const;
 }
 
 /** Generated candidates are stable for this tool call and retried only after a confirmed collision. */
 export async function createPhackLink(
   input: z.output<typeof createPhackLinkInputSchema>,
   callKey: string,
-  signal?: AbortSignal,
+  signal = AbortSignal.timeout(10_000),
 ) {
   const token = env.VERCEL_API_TOKEN;
   if (token === undefined) {
@@ -201,12 +122,12 @@ export async function createPhackLink(
   }
 
   if (input.slug !== undefined) {
-    return createLinkOnce({ slug: input.slug, destination: input.destination }, token, signal);
+    return createLinkOnce(input.slug, input.destination, token, signal);
   }
 
   for (let attempt = 0; attempt < RANDOM_SLUG_ATTEMPTS; attempt += 1) {
     const slug = await randomSlug(token, callKey, attempt);
-    const result = await createLinkOnce({ slug, destination: input.destination }, token, signal);
+    const result = await createLinkOnce(slug, input.destination, token, signal);
     if (result.ok || result.code !== "slug_taken") return result;
   }
 

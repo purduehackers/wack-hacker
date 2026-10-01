@@ -2,6 +2,7 @@
 
 import { UserRole, roleAtLeast } from "@repo/shared/discord";
 import { Forbidden } from "@repo/shared/errors";
+import { PHACK_RESERVED_SLUGS, PHACK_SLUG_PATTERN } from "@repo/shared/phack";
 import { Result } from "@repo/shared/result";
 import { MessageFlags, SlashCommandBuilder } from "discord.js";
 import type { ChatInputCommandInteraction } from "discord.js";
@@ -10,8 +11,6 @@ import type { SlashCommand } from "../framework/commands.ts";
 import type { CreateLinkError, PhackLinkWriter } from "../integrations/phack-links.ts";
 import { roleOf } from "../utils/roles.ts";
 
-const RESERVED_SLUGS = new Set(["404", "api", "dashboard", "favicon", "login"]);
-const SLUG_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,62}[a-zA-Z0-9]$/u;
 const RANDOM_SLUG_CHARACTERS = "abcdefghijklmnopqrstuvwxyz0123456789";
 const RANDOM_SLUG_LENGTH = 8;
 const MAX_RANDOM_SLUG_ATTEMPTS = 5;
@@ -46,10 +45,6 @@ function destinationFrom(input: string): string | undefined {
   }
 }
 
-function isValidSlug(slug: string): boolean {
-  return SLUG_PATTERN.test(slug) && !RESERVED_SLUGS.has(slug.toLowerCase());
-}
-
 function randomSlug(): string {
   let slug = "";
   while (slug.length < RANDOM_SLUG_LENGTH) {
@@ -79,28 +74,30 @@ async function run(
   }
 
   const providedSlug = interaction.options.getString("slug")?.trim();
-  if (providedSlug !== undefined && !isValidSlug(providedSlug)) {
+  if (
+    providedSlug !== undefined &&
+    (!PHACK_SLUG_PATTERN.test(providedSlug) || PHACK_RESERVED_SLUGS.has(providedSlug.toLowerCase()))
+  ) {
     return Result.ok(
       "Use 2–64 letters, numbers, or hyphens, starting and ending with a letter or number.",
     );
   }
 
-  const retryLimit = providedSlug === undefined ? MAX_RANDOM_SLUG_ATTEMPTS : 1;
-  for (let index = 0; index < retryLimit; index++) {
+  const attempts = providedSlug === undefined ? MAX_RANDOM_SLUG_ATTEMPTS : 1;
+  for (let index = 0; index < attempts; index++) {
     const slug = providedSlug ?? randomSlug();
     const created = await writer.create(slug, destination);
     if (Result.isError(created)) return created;
-    if (created.value === "exists") {
-      if (providedSlug !== undefined) {
-        return Result.ok(`https://phack.rs/${slug} already exists. Choose another slug.`);
-      }
-    } else {
-      if (created.value === "same") {
-        return Result.ok(`https://phack.rs/${slug} already points to that destination.`);
-      }
+    if (created.value === "created") {
       return Result.ok(
         `Created https://phack.rs/${slug} — it may take a few seconds to start redirecting.`,
       );
+    }
+    if (created.value === "same") {
+      return Result.ok(`https://phack.rs/${slug} already points to that destination.`);
+    }
+    if (providedSlug !== undefined) {
+      return Result.ok(`https://phack.rs/${slug} already exists. Choose another slug.`);
     }
   }
   return Result.ok("Could not find an unused random slug. Try again.");

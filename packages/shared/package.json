@@ -9,6 +9,7 @@
     "./formats": "./src/formats.ts",
     "./json": "./src/json.ts",
     "./privacy": "./src/privacy.ts",
+    "./phack": "./src/phack.ts",
     "./env/scripts": "./src/env/scripts.ts",
     "./text": "./src/text.ts",
     "./wire": "./src/wire.ts",
