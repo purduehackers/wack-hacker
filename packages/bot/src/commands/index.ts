@@ -21,8 +21,10 @@ import { createCmsClient } from "../integrations/cms.ts";
 import { createDashboardWriter } from "../integrations/dashboard.ts";
 import { createEventDirectory } from "../integrations/event-directory.ts";
 import { createImageDropStore } from "../integrations/image-drop.ts";
+import { createPhackLinkWriter } from "../integrations/phack-links.ts";
 import { hackNightCommand } from "./hack-night.ts";
 import { imageDropCommand } from "./image-drop.ts";
+import { phackCommand } from "./phack.ts";
 import { ping } from "./ping.ts";
 import { privacyCommand } from "./privacy.ts";
 
@@ -59,5 +61,6 @@ export function buildCommands(deps: CommandDeps): Result<readonly SlashCommand[]
     privacyCommand(deps.redis),
     hackNightCommand({ dashboard: dashboard.value, cms, drops, directory }),
     imageDropCommand({ cms, drops, directory }),
+    phackCommand(createPhackLinkWriter(deps.vercelToken)),
   ]);
 }

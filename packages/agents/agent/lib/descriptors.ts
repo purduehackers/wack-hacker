@@ -29,6 +29,13 @@ export const CORE_TOOL_DESCRIPTORS = {
     risk: RiskLevel.Read,
     confirmation: Confirmation.None,
   },
+  create_phack_link: {
+    kind: CapabilityKind.Tool,
+    name: "create_phack_link",
+    minRole: UserRole.Organizer,
+    risk: RiskLevel.Write,
+    confirmation: Confirmation.None,
+  },
   list_audit_log: {
     kind: CapabilityKind.Tool,
     name: "list_audit_log",

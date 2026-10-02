@@ -364,16 +364,17 @@ project sensitive requested input, execution input, outputs and errors to
 
 The root agent has project tools outside provider domains:
 
-| Tool                           | Access/behavior                                                                                                                                    |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `documentation`                | Public read; Purdue Hackers documentation API; no confirmation                                                                                     |
-| `web_search`                   | Public read; configured search provider; no confirmation                                                                                           |
-| `resolve_organizer`            | Public read; Global Config-backed organizer lookup; no confirmation                                                                                |
-| `list_audit_log`               | Admin read of durable audit; no confirmation                                                                                                       |
-| `schedule_task`                | Intended organizer write with self approval and execution-time role recheck; currently affected by the Discord self-approval projection limitation |
-| `cancel_task`                  | Intended organizer write with self approval, owner scoping, execution-time role recheck; currently affected by the same limitation                 |
-| `list_scheduled_tasks`         | Authenticated Discord owner only; returns at most 50 owner rows                                                                                    |
-| `sleep`, experimental workflow | Eve lifecycle utilities; the generic root `agent` tool is explicitly disabled                                                                      |
+| Tool                           | Access/behavior                                                                                                                                       |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `documentation`                | Public read; Purdue Hackers documentation API; no confirmation                                                                                        |
+| `web_search`                   | Public read; configured search provider; no confirmation                                                                                              |
+| `resolve_organizer`            | Public read; Global Config-backed organizer lookup; no confirmation                                                                                   |
+| `create_phack_link`            | Organizer write; creates an optional or random eight-character slug in the phack.rs Global Config without replacing an existing link; no confirmation |
+| `list_audit_log`               | Admin read of durable audit; no confirmation                                                                                                          |
+| `schedule_task`                | Intended organizer write with self approval and execution-time role recheck; currently affected by the Discord self-approval projection limitation    |
+| `cancel_task`                  | Intended organizer write with self approval, owner scoping, execution-time role recheck; currently affected by the same limitation                    |
+| `list_scheduled_tasks`         | Authenticated Discord owner only; returns at most 50 owner rows                                                                                       |
+| `sleep`, experimental workflow | Eve lifecycle utilities; the generic root `agent` tool is explicitly disabled                                                                         |
 
 Core configuredness is checked at visibility and execution. Domain configuredness
 is deferred to execution to keep domain catalogs and skill evidence stable.

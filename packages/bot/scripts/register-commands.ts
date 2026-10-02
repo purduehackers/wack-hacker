@@ -9,6 +9,7 @@ import { z } from "zod";
 
 import { builder as hackNight } from "../src/commands/hack-night.ts";
 import { builder as imageDrop } from "../src/commands/image-drop.ts";
+import { builder as phack } from "../src/commands/phack.ts";
 import { ping } from "../src/commands/ping.ts";
 import { builder as privacy } from "../src/commands/privacy.ts";
 
@@ -32,6 +33,7 @@ const registrationBody: readonly RESTPostAPIChatInputApplicationCommandsJSONBody
   privacy.toJSON(),
   hackNight.toJSON(),
   imageDrop.toJSON(),
+  phack.toJSON(),
 ];
 
 async function registerCommands(deps: {
