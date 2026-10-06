@@ -47,10 +47,17 @@ const KEYWORD_EMOJIS = [
   {
     emoji: "🍳",
     pattern:
-      /\b(?:foods?|cook|cooking|recipe|baking|pizza|cakes?|sourdough|dining|meals?|blueberry jam)\b/i,
+      /\b(?:foods?|cook(?:s|ed|ing)?|cookbooks?|chefs?|recipes?|ingredients?|culinary|bak(?:e|es|ed|ing)|baker(?:s|y|ies)?|kitchens?|grill(?:s|ed|ing)?|roast(?:s|ed|ing)?|fried|fry(?:ing)?|fries|stews?|barbecue|bbq|desserts?|sweets|pastr(?:y|ies)|cookies?|brownies?|cakes?|cupcakes?|muffins?|donuts?|doughnuts?|pies?|tarts?|cheesecakes?|ice creams?|gelato|sorbets?|puddings?|custards?|chocolates?|cand(?:y|ies)|breads?|sourdough|croissants?|bagels?|pancakes?|waffles?|cinnamon rolls?|pizzas?|pastas?|noodles?|soups?|salads?|sandwich(?:es)?|burgers?|tacos?|sushi|dumplings?|ramen|breakfasts?|brunch(?:es)?|lunch(?:es)?|dinners?|snacks?|meals?|dining|blueberry jam)\b/i,
   },
   { emoji: "🛍️", pattern: /\b(?:etsy|merch|clothing)\b/i },
   { emoji: "🌱", pattern: /\b(?:plant|garden|flower|tree)\b/i },
+  {
+    emoji: "❄️",
+    pattern: /\b(?:winter(?:s|time)?|wintry|snow(?:y|fall|flakes?|ing)?|blizzards?)\b/i,
+  },
+  { emoji: "🌸", pattern: /\b(?:spring(?:time)?|blossom(?:s|ing)?)\b/i },
+  { emoji: "🍂", pattern: /\b(?:fall|autumn(?:al)?|foliage)\b/i },
+  { emoji: "☀️", pattern: /\b(?:summer(?:s|time|y)?|sunshine|heatwaves?)\b/i },
   { emoji: "🗺️", pattern: /\b(?:map|travel|trip|journey)\b/i },
   { emoji: "🚲", pattern: /\b(?:bike|bicycle|cycling)\b/i },
   { emoji: "🚗", pattern: /\b(?:car|trucks?|driving|vehicle)\b/i },
@@ -59,10 +66,13 @@ const KEYWORD_EMOJIS = [
 ];
 
 const FALLBACK_EMOJIS = ["🎉", "✨", "🚀"];
+const COMMIT_OVERFLOW_EMOJIS = ["🟩", "🟢", "💚"] as const;
 
-/** Pick the first three topic matches, filling any gaps with celebration emoji. */
+/** Pick three reactions, reserving a green set for Commit Overflow posts. */
 export function selectPostEmojis(text: string): readonly string[] {
   const searchableText = postTextWithoutUrls(text);
+  if (/\bcommit[\s-]+overflow\b/i.test(searchableText)) return COMMIT_OVERFLOW_EMOJIS;
+
   const matches = KEYWORD_EMOJIS.map(({ emoji, pattern }) => ({
     emoji,
     index: searchableText.search(pattern),
