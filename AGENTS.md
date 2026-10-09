@@ -20,9 +20,8 @@ Default to using Bun instead of Node.js.
 
 ## Validation
 
-The repository currently has no committed test files. Validate changes with
-`bun run lint`, `bunx oxfmt --check .`, and focused manual checks appropriate to
-the change. If tests are added, use `bun test` to run them.
+Validate changes with `bun run lint`, `bunx oxfmt --check .`, `bun test`, and focused
+manual checks appropriate to the change. Use Bun for any additional tests.
 
 ## Frontend
 
