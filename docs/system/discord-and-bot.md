@@ -472,11 +472,14 @@ public posts using a shared adapter contract. YouTube and blog feeds share
 own baseline, pending posts, and known IDs in Redis without a
 TTL. Production baselines are already initialized and must be preserved across deployments.
 
-`socials-deliver-*` runs every minute and sends a consistent embed to #📡socials.
-Fenced source leases serialize polling and delivery across bot instances. Sends
-persist intent first, use a stable enforced nonce, and reconcile uncertain
-outcomes against bot-authored channel history before retrying. Instagram token
-maintenance runs daily at 09:15 and saves refreshed credentials in Redis.
+`socials-deliver-*` runs every minute, sends a consistent embed to #📡socials, and
+publishes it to following channels. The configured channel must be an announcement
+channel. Fenced source leases serialize polling and delivery across bot instances.
+Sends persist intent first and use a stable enforced nonce; a post remains pending
+until both sending and publishing succeed. Retries reconcile against bot-authored
+channel history and publish an existing unpublished message without resending it.
+Instagram token maintenance runs daily at 09:15 and saves refreshed credentials
+in Redis.
 
 X and LinkedIn are deferred. See [socials setup and recovery](../plans/socials.md)
 for account IDs, credentials, baseline commands, feed-window limits, and repair.
