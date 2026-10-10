@@ -2,8 +2,8 @@ import { createHash } from "node:crypto";
 
 import { DISCORD_GUILD_ID } from "@repo/shared/discord";
 import { RecoveryRequired, retryAfterMs, UpstreamError } from "@repo/shared/errors";
-import { Routes } from "discord-api-types/v10";
-import { PermissionFlagsBits } from "discord.js";
+import { ChannelType, MessageFlags, RESTJSONErrorCodes, Routes } from "discord-api-types/v10";
+import { DiscordAPIError, PermissionFlagsBits } from "discord.js";
 import type { Client } from "discord.js";
 import { z } from "zod";
 
@@ -12,13 +12,19 @@ import { requireSocialState } from "./poll.ts";
 import type { SocialLease } from "./store.ts";
 import type { SocialPost, SocialSource } from "./types.ts";
 
+const receiptSchema = z.object({
+  id: z.string(),
+  flags: z.int().nonnegative().default(0),
+});
+type SocialMessage = z.output<typeof receiptSchema>;
+
 export interface SocialDelivery {
-  readonly send: (source: SocialSource, post: SocialPost) => Promise<void>;
-  readonly find: (post: SocialPost, attemptedAt: number) => Promise<boolean>;
+  readonly send: (source: SocialSource, post: SocialPost) => Promise<SocialMessage>;
+  readonly find: (post: SocialPost, attemptedAt: number) => Promise<SocialMessage | undefined>;
+  readonly publish: (message: SocialMessage) => Promise<void>;
 }
 
-const messageSchema = z.object({
-  id: z.string(),
+const messageSchema = receiptSchema.extend({
   author: z.object({ id: z.string() }),
   timestamp: z.string(),
   embeds: z.array(z.object({ url: z.string().optional() })),
@@ -27,11 +33,11 @@ const messageSchema = z.object({
 /** Discord can return empty history without Read Message History, not an error. */
 export async function verifySocialsAccess(client: Client<true>, channelId: string): Promise<void> {
   const channel = await client.channels.fetch(channelId, { force: true });
-  if (!channel?.isTextBased() || channel.isDMBased() || channel.guildId !== DISCORD_GUILD_ID) {
+  if (channel?.type !== ChannelType.GuildAnnouncement || channel.guildId !== DISCORD_GUILD_ID) {
     throw new UpstreamError({
       service: "discord socials",
       status: 403,
-      detail: "expected the configured guild text channel",
+      detail: "expected the configured guild announcement channel",
     });
   }
   await channel.guild.roles.fetch();
@@ -67,7 +73,7 @@ export function createSocialDelivery(
         .update(`${channelId}:${source.id}:${source.account}:${post.id}`)
         .digest("hex")
         .slice(0, 25);
-      await client.rest.post(Routes.channelMessages(channelId), {
+      const raw = await client.rest.post(Routes.channelMessages(channelId), {
         body: {
           embeds: [socialEmbed(source, enriched)],
           allowed_mentions: { parse: [] },
@@ -76,6 +82,7 @@ export function createSocialDelivery(
         },
         signal: AbortSignal.timeout(20_000),
       });
+      return receiptSchema.parse(raw);
     },
     find: async (post, attemptedAt) => {
       let before: string | undefined;
@@ -89,14 +96,15 @@ export function createSocialDelivery(
           signal: AbortSignal.timeout(20_000),
         });
         const messages = z.array(messageSchema).parse(raw);
-        const found = messages.some(
+        const found = messages.find(
           (entry) =>
             entry.author.id === client.user.id &&
             entry.embeds.some((embed) => embed.url === post.url),
         );
-        if (found) return true;
+        if (found !== undefined) return found;
         const last = messages.at(-1);
-        if (last === undefined || Date.parse(last.timestamp) < attemptedAt - 60_000) return false;
+        if (last === undefined || Date.parse(last.timestamp) < attemptedAt - 60_000)
+          return undefined;
         before = last.id;
       }
       throw new RecoveryRequired({
@@ -105,10 +113,26 @@ export function createSocialDelivery(
         remediation: "reconcile the pending post before resending it",
       });
     },
+    publish: async (message) => {
+      if ((message.flags & MessageFlags.Crossposted) !== 0) return;
+      await beforeRequest();
+      try {
+        await client.rest.post(Routes.channelMessageCrosspost(channelId, message.id), {
+          signal: AbortSignal.timeout(20_000),
+        });
+      } catch (cause) {
+        // A moderator or overlapping retry may have published after our read.
+        if (
+          !(cause instanceof DiscordAPIError) ||
+          cause.code !== RESTJSONErrorCodes.ThisMessageWasAlreadyCrossposted
+        )
+          throw cause;
+      }
+    },
   };
 }
 
-/** Persist intent before POST; a lost response/save is reconciled through Discord. */
+/** Keep intent until send and publication succeed; reconcile uncertain results through Discord. */
 export async function deliverSocialPosts(
   source: SocialSource,
   lease: SocialLease,
@@ -125,8 +149,11 @@ export async function deliverSocialPosts(
     await lease.save(state);
     try {
       const found =
-        previousAttempt !== undefined && (await delivery.find(pending.post, previousAttempt));
-      if (!found) await delivery.send(source, pending.post);
+        previousAttempt === undefined
+          ? undefined
+          : await delivery.find(pending.post, previousAttempt);
+      const message = found ?? (await delivery.send(source, pending.post));
+      await delivery.publish(message);
       state.pending = state.pending.filter((item) => item.post.id !== pending.post.id);
       await lease.save(state);
     } catch (cause) {

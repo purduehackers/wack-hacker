@@ -1,7 +1,8 @@
 # Social announcements
 
 Wack Hacker checks YouTube, the blog, and Instagram every five minutes and sends
-new posts to **#📡socials** (`1416915165609463888`). Delivery runs separately every
+new posts to **#📡socials** (`1416915165609463888`), then publishes each message to
+channels following that announcement channel. Delivery runs separately every
 minute. These schedules always run with the bot. X and LinkedIn are deferred.
 
 ## Sources and embeds
@@ -38,8 +39,9 @@ setup with Instagram business login. Select `@purduehackers` and grant
 `instagram_business_basic`. The runtime needs no app secret.
 
 Production baselines were initialized on September 15, 2026, without queuing old
-posts. Preserve them across deployments. The bot checks View Channel, Send Messages,
-Embed Links, and Read Message History before delivery.
+posts. Preserve them across deployments. The bot requires an announcement channel
+and checks View Channel, Send Messages, Embed Links, and Read Message History
+before delivery. Publishing its own messages needs no additional permissions.
 
 ## Tokens and recovery
 
@@ -56,12 +58,15 @@ Each source stores its baseline, checkpoint, known IDs, and pending posts under
 `socials:v1:772576325897945119:<platform>:<account>`, with no TTL. A 120-second lease
 serializes workers; saves check lease ownership atomically. Discovery saves the
 queue and checkpoint together. Delivery records an attempt before sending and
-removes the pending entry only after success. Retries back off up to six hours.
+removes the pending entry only after both sending and publishing succeed. Retries
+back off up to six hours.
 
 After an uncertain send, the bot searches its own Discord embeds for the source
-URL before retrying. Failed permission checks or incomplete history scans stop
-that batch. This reduces duplicates but cannot guarantee exactly-once delivery
-if Discord history is changed or removed.
+URL before retrying. If it finds an unpublished message, it publishes that same
+message; an already-published message completes delivery without another send.
+Failed permission checks or incomplete history scans stop that batch. This
+reduces duplicates but cannot guarantee exactly-once delivery if Discord history
+is changed or removed.
 
 Missing or corrupt state must be restored from backup. Instagram reads with a
 seven-day overlap, up to 2,000 posts; feeds expose only their recent window. A gap
