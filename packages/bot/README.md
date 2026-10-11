@@ -32,7 +32,7 @@ src/
   commands/         /ping /privacy /hack-night /image-drop /phack
   events/           agent chat, auto-thread, praise, ship + dashboard mirrors,
                     voice transcription, GitHub code previews, image drops, chat indexer
-  schedules/        social announcements, website event sync, hack-night countdown, photography thread, cleanup
+  schedules/        social announcements, Hack Night publication, website event sync, countdown, photography thread, cleanup
   integrations/     ships, dashboard, CMS, GitHub public code, image drops
 scripts/
   register-commands.ts   explicit guild registration; never runs at startup
@@ -101,6 +101,33 @@ Social announcements run whenever the bot runs. Production baselines are already
 Instagram needs `INSTAGRAM_USER_ID` and a long-lived `INSTAGRAM_ACCESS_TOKEN`;
 YouTube and the blog need no credentials. Preserve the Redis state and refreshed
 token across deployments. See [setup and recovery](../../docs/plans/socials.md).
+
+## Hack Night publication
+
+Every Monday at 8:55 AM in `America/Indiana/Indianapolis`, `hack-night-publication`
+publishes that week's approved CMS event before the daily 9 AM Discord event sync.
+It matches the CMS ID, exact name/version, Friday date, 8 PM–2 AM hours, and HIVE
+venue against `src/schedules/hack-night-calendar.ts`. Missing, changed, or duplicate
+records stop publication. The CMS record is checked again immediately before the
+write, and publication is verified by reading it back even if the write reports an
+error. It changes only `published`; it does not send an email blast or unpublish
+past events.
+
+The approved slots cover fall 2026 and spring 2027. Thanksgiving, winter break,
+spring break, and finals have no slot. Hack Lite on March 12 replaces that week's
+numbered event; April 30 is the `7.25.1` encore. Extend the calendar only after the
+next semester's dates and CMS records are approved. An edited date, version, or
+venue requires a corresponding reviewed calendar change.
+
+With `PAYLOAD_CMS_API_KEY` configured, preview a Monday without writing:
+
+```bash
+bun packages/bot/scripts/preview-hack-night-publication.ts 2026-10-19T08:55:00-04:00
+```
+
+This uses the bot's existing Redis occurrence claim and error reporting. Like the
+other community jobs, a missed Monday has no automatic catch-up; inspect the
+schedule error and approve any manual recovery before running it.
 
 ## Container
 
