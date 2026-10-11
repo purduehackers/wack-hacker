@@ -168,7 +168,7 @@ export async function syncWebsiteEvents(deps: WebsiteEventSyncDeps, now = new Da
       Date.parse(event.start ?? "") <= now.getTime() + PUBLICATION_LOOKAHEAD_MS,
   );
   if (next && !next.published) {
-    const published = await deps.cms.publishEvent(next.id);
+    const published = await deps.cms.publishEvent(next);
     if (Result.isError(published)) return published;
     next.published = true;
   }

@@ -727,17 +727,18 @@ function listUpcomingEvents(
   );
 }
 
-async function publishEvent(cms: CmsContext, eventId: DocumentId): Promise<Result<void, CmsError>> {
+async function publishEvent(cms: CmsContext, event: CmsSyncEvent): Promise<Result<void, CmsError>> {
   const written = await Result.tryPromise({
     try: async () => {
       await payloadRequest(
         eventMutationSchema,
-        documentUrl(cms.baseUrl, EVENTS, eventId),
+        documentUrl(cms.baseUrl, EVENTS, event.id),
         cms.apiKey,
         {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ published: true }),
+          // Supplying the current slug prevents the CMS from regenerating it.
+          body: JSON.stringify({ published: true, slug: event.slug }),
         },
       );
     },
@@ -747,7 +748,7 @@ async function publishEvent(cms: CmsContext, eventId: DocumentId): Promise<Resul
 
   // Payload's afterChange hook can fail after the publication commits.
   const observed = await Result.tryPromise({
-    try: () => readEvent(cms, eventId),
+    try: () => readEvent(cms, event.id),
     catch: toCmsError("re-read CMS event"),
   });
   return Result.isOk(observed) && observed.value.published ? Result.ok(undefined) : written;
@@ -938,7 +939,7 @@ export function createCmsClient(deps: CmsDeps) {
     getEventLumaUrl: (eventId: DocumentId) => getEventLumaUrl(cms, eventId),
     listEvents: (signal: AbortSignal) => listEvents(cms, signal),
     listUpcomingEvents: (after: Date) => listUpcomingEvents(cms, after),
-    publishEvent: (eventId: DocumentId) => publishEvent(cms, eventId),
+    publishEvent: (event: CmsSyncEvent) => publishEvent(cms, event),
     attachImages: (eventId: DocumentId, mediaIds: readonly DocumentId[]) =>
       attachImages(cms, eventId, mediaIds),
     detachImages: (eventId: DocumentId, removedIds: readonly DocumentId[]) =>
