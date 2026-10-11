@@ -692,7 +692,7 @@ function findEventBySlug(
 }
 
 /** Filter before paginating so archived events cannot crowd out upcoming ones. */
-function listUpcomingPublishedEvents(
+function listUpcomingEvents(
   cms: CmsContext,
   after: Date,
 ): Promise<Result<readonly CmsSyncEvent[], CmsError>> {
@@ -704,7 +704,6 @@ function listUpcomingPublishedEvents(
           const found = await payloadRequest(
             syncEventListSchema,
             collectionUrl(cms.baseUrl, EVENTS, {
-              "where[published][equals]": "true",
               "where[start][greater_than]": after.toISOString(),
               limit: String(LIST_PAGE_SIZE),
               page: String(page),
@@ -722,10 +721,37 @@ function listUpcomingPublishedEvents(
           detail: `upcoming events exceeded the ${EVENT_PAGE_CAP}-page limit`,
         });
       },
-      catch: toCmsError("list upcoming published CMS events"),
+      catch: toCmsError("list upcoming CMS events"),
     },
     upstreamRetry,
   );
+}
+
+async function publishEvent(cms: CmsContext, event: CmsSyncEvent): Promise<Result<void, CmsError>> {
+  const written = await Result.tryPromise({
+    try: async () => {
+      await payloadRequest(
+        eventMutationSchema,
+        documentUrl(cms.baseUrl, EVENTS, event.id),
+        cms.apiKey,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          // Supplying the current slug prevents the CMS from regenerating it.
+          body: JSON.stringify({ published: true, slug: event.slug }),
+        },
+      );
+    },
+    catch: toCmsError("publish CMS event"),
+  });
+  if (Result.isOk(written)) return written;
+
+  // Payload's afterChange hook can fail after the publication commits.
+  const observed = await Result.tryPromise({
+    try: () => readEvent(cms, event.id),
+    catch: toCmsError("re-read CMS event"),
+  });
+  return Result.isOk(observed) && observed.value.published ? Result.ok(undefined) : written;
 }
 
 function readEvent(cms: CmsContext, eventId: DocumentId): Promise<EventDoc> {
@@ -912,7 +938,8 @@ export function createCmsClient(deps: CmsDeps) {
     findEventBySlug: (slug: string) => findEventBySlug(cms, slug),
     getEventLumaUrl: (eventId: DocumentId) => getEventLumaUrl(cms, eventId),
     listEvents: (signal: AbortSignal) => listEvents(cms, signal),
-    listUpcomingPublishedEvents: (after: Date) => listUpcomingPublishedEvents(cms, after),
+    listUpcomingEvents: (after: Date) => listUpcomingEvents(cms, after),
+    publishEvent: (event: CmsSyncEvent) => publishEvent(cms, event),
     attachImages: (eventId: DocumentId, mediaIds: readonly DocumentId[]) =>
       attachImages(cms, eventId, mediaIds),
     detachImages: (eventId: DocumentId, removedIds: readonly DocumentId[]) =>

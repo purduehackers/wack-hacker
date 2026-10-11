@@ -1,4 +1,4 @@
-/** Daily creation of Discord events for published events on the website. */
+/** Publish the next Hack Night, then create Discord events from the website. */
 
 import { REST } from "@discordjs/rest";
 import { DISCORD_GUILD_ID } from "@repo/shared/discord";
@@ -13,6 +13,8 @@ import type { CmsClient, CmsSyncEvent } from "../integrations/cms.ts";
 
 const DESCRIPTION_LIMIT = 1_000;
 const EVENTS_ORIGIN = "https://events.purduehackers.com";
+const HACK_NIGHT_NAME = /^hack night\s+\d+\.\d+(?:\.\d+)?(?=$|[\s:])/iu;
+const PUBLICATION_LOOKAHEAD_MS = 7 * 24 * 60 * 60 * 1_000;
 
 const lexicalNodeSchema = z.object({
   type: z.string().optional(),
@@ -146,7 +148,7 @@ function alreadyExists(
 }
 
 export interface WebsiteEventSyncDeps {
-  readonly cms: Pick<CmsClient, "listUpcomingPublishedEvents">;
+  readonly cms: Pick<CmsClient, "listUpcomingEvents" | "publishEvent">;
   readonly events: {
     readonly list: () => Promise<readonly ExistingEvent[]>;
     readonly create: (options: GuildScheduledEventCreateOptions) => Promise<ExistingEvent>;
@@ -155,8 +157,21 @@ export interface WebsiteEventSyncDeps {
 
 /** Re-reading Discord each day also recovers a create whose response was lost. */
 export async function syncWebsiteEvents(deps: WebsiteEventSyncDeps, now = new Date()) {
-  const listed = await deps.cms.listUpcomingPublishedEvents(now);
+  const listed = await deps.cms.listUpcomingEvents(now);
   if (Result.isError(listed)) return listed;
+
+  // CMS returns future events in start-time order. An already-published next
+  // Hack Night must still block publication of later drafts.
+  const next = listed.value.find(
+    (event) =>
+      HACK_NIGHT_NAME.test(event.name?.trim() ?? "") &&
+      Date.parse(event.start ?? "") <= now.getTime() + PUBLICATION_LOOKAHEAD_MS,
+  );
+  if (next && !next.published) {
+    const published = await deps.cms.publishEvent(next);
+    if (Result.isError(published)) return published;
+    next.published = true;
+  }
 
   return Result.tryPromise({
     try: async () => {
@@ -165,6 +180,7 @@ export async function syncWebsiteEvents(deps: WebsiteEventSyncDeps, now = new Da
       const attemptedIds = new Set<string>();
       const failures: string[] = [];
       for (const source of listed.value) {
+        if (!source.published) continue;
         const event = websiteEvent(source, now);
         if (event === undefined) {
           console.warn(`website-event-sync: skipped ineligible CMS event ${source.id}`);
