@@ -102,22 +102,6 @@ Instagram needs `INSTAGRAM_USER_ID` and a long-lived `INSTAGRAM_ACCESS_TOKEN`;
 YouTube and the blog need no credentials. Preserve the Redis state and refreshed
 token across deployments. See [setup and recovery](../../docs/plans/socials.md).
 
-## Hack Night publication
-
-The existing `website-event-sync` job runs daily at 9 AM in
-`America/Indiana/Indianapolis`. First it publishes the earliest upcoming event
-within seven days whose name starts with `Hack Night` and a version number, such
-as `Hack Night 7.6`, `Hack Night 7.25.1`, or `Hack Night 7.6: Halloween`. Matching
-is case-insensitive and also accepts `Hacknight`. It then re-reads published CMS
-events and syncs them to Discord in the same run.
-
-An already-published next Hack Night prevents later drafts from being published
-early. Dates come from the CMS; there is no hardcoded semester calendar or extra
-cron. Hack Lite has no version number and needs manual publication. The writer
-rechecks the selected CMS revision, changes only `published`, and verifies the
-saved state even after a failed response. The existing Redis occurrence guard
-prevents overlapping runs; tomorrow's sync can recover a missed run.
-
 ## Container
 
 Host-agnostic. Build from the **repository root** so the shared workspace is in context:

@@ -486,8 +486,11 @@ for account IDs, credentials, baseline commands, feed-window limits, and repair.
 
 ### Daily 09:00 — website event sync
 
-`website-event-sync` queries the CMS for published events whose start time is
-still in the future, paging in start-time order. It creates missing external
+`website-event-sync` queries upcoming CMS events in start-time order. It first
+publishes the next event within seven days whose name starts with `Hack Night`
+and a version number (including patch versions). Matching is case-insensitive and
+accepts `Hacknight`. An already-published next Hack Night blocks later drafts;
+Hack Lite needs manual publication. It then uses published events to create missing external
 Discord events with their title, times, location, plain-text description, and
 website link. The bot needs the guild's Create Events permission.
 

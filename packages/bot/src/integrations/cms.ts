@@ -183,7 +183,6 @@ const syncEventSchema = z.object({
   // Legacy records may lack the now-required end time; the sync skips those rows.
   end: z.string().nullish(),
   location_name: z.string().nullish(),
-  updatedAt: z.string().nullish(),
   description: z.unknown().optional(),
 });
 const syncEventListSchema = z.object({
@@ -696,7 +695,6 @@ function findEventBySlug(
 function listUpcomingEvents(
   cms: CmsContext,
   after: Date,
-  publishedOnly = false,
 ): Promise<Result<readonly CmsSyncEvent[], CmsError>> {
   return Result.tryPromise(
     {
@@ -706,7 +704,6 @@ function listUpcomingEvents(
           const found = await payloadRequest(
             syncEventListSchema,
             collectionUrl(cms.baseUrl, EVENTS, {
-              ...(publishedOnly ? { "where[published][equals]": "true" } : {}),
               "where[start][greater_than]": after.toISOString(),
               limit: String(LIST_PAGE_SIZE),
               page: String(page),
@@ -730,65 +727,30 @@ function listUpcomingEvents(
   );
 }
 
-const PUBLICATION_FIELDS = [
-  "name",
-  "slug",
-  "eventType",
-  "start",
-  "end",
-  "location_name",
-] satisfies (keyof CmsSyncEvent)[];
-
-function samePublicationDetails(left: CmsSyncEvent, right: CmsSyncEvent): boolean {
-  return (
-    sameId(left.id, right.id) && PUBLICATION_FIELDS.every((field) => left[field] === right[field])
-  );
-}
-
-/** Recheck a selected snapshot, PATCH only visibility, and read back even on HTTP failure. */
-function publishEventIfUnchanged(
-  cms: CmsContext,
-  expected: CmsSyncEvent,
-): Promise<Result<boolean, CmsError>> {
-  return Result.tryPromise({
+async function publishEvent(cms: CmsContext, eventId: DocumentId): Promise<Result<void, CmsError>> {
+  const written = await Result.tryPromise({
     try: async () => {
-      const url = documentUrl(cms.baseUrl, EVENTS, expected.id);
-      const current = await payloadRequest(syncEventSchema, url, cms.apiKey);
-      if (!samePublicationDetails(current, expected)) {
-        throw new UpstreamError({
-          service: "payload-cms",
-          status: 409,
-          detail: `event ${expected.id} changed after its schedule was checked`,
-        });
-      }
-      if (current.published) return false;
-      if (!expected.updatedAt || current.updatedAt !== expected.updatedAt) {
-        throw new UpstreamError({
-          service: "payload-cms",
-          status: 409,
-          detail: `event ${expected.id} was edited after selection; publication skipped`,
-        });
-      }
-      const written = await Result.tryPromise({
-        try: () =>
-          payloadRequest(z.unknown(), url, cms.apiKey, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ published: true }),
-          }),
-        catch: toCmsError("publish CMS event"),
-      });
-      const observed = await payloadRequest(syncEventSchema, url, cms.apiKey);
-      if (observed.published && samePublicationDetails(observed, expected)) return true;
-      if (Result.isError(written)) throw written.error;
-      throw new UpstreamError({
-        service: "payload-cms",
-        status: 409,
-        detail: `event ${expected.id} publication could not be verified`,
-      });
+      await payloadRequest(
+        eventMutationSchema,
+        documentUrl(cms.baseUrl, EVENTS, eventId),
+        cms.apiKey,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ published: true }),
+        },
+      );
     },
     catch: toCmsError("publish CMS event"),
   });
+  if (Result.isOk(written)) return written;
+
+  // Payload's afterChange hook can fail after the publication commits.
+  const observed = await Result.tryPromise({
+    try: () => readEvent(cms, eventId),
+    catch: toCmsError("re-read CMS event"),
+  });
+  return Result.isOk(observed) && observed.value.published ? Result.ok(undefined) : written;
 }
 
 function readEvent(cms: CmsContext, eventId: DocumentId): Promise<EventDoc> {
@@ -975,9 +937,8 @@ export function createCmsClient(deps: CmsDeps) {
     findEventBySlug: (slug: string) => findEventBySlug(cms, slug),
     getEventLumaUrl: (eventId: DocumentId) => getEventLumaUrl(cms, eventId),
     listEvents: (signal: AbortSignal) => listEvents(cms, signal),
-    listUpcomingPublishedEvents: (after: Date) => listUpcomingEvents(cms, after, true),
     listUpcomingEvents: (after: Date) => listUpcomingEvents(cms, after),
-    publishEventIfUnchanged: (event: CmsSyncEvent) => publishEventIfUnchanged(cms, event),
+    publishEvent: (eventId: DocumentId) => publishEvent(cms, eventId),
     attachImages: (eventId: DocumentId, mediaIds: readonly DocumentId[]) =>
       attachImages(cms, eventId, mediaIds),
     detachImages: (eventId: DocumentId, removedIds: readonly DocumentId[]) =>
