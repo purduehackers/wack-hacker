@@ -13,7 +13,7 @@ import type { CmsClient, CmsSyncEvent } from "../integrations/cms.ts";
 
 const DESCRIPTION_LIMIT = 1_000;
 const EVENTS_ORIGIN = "https://events.purduehackers.com";
-const HACK_NIGHT_NAME = /^hack\s*night\s+\d+\.\d+(?:\.\d+)?(?=$|[\s:])/iu;
+const HACK_NIGHT_NAME = /^hack night\s+\d+\.\d+(?:\.\d+)?(?=$|[\s:])/iu;
 const PUBLICATION_LOOKAHEAD_MS = 7 * 24 * 60 * 60 * 1_000;
 
 const lexicalNodeSchema = z.object({
