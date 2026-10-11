@@ -337,8 +337,8 @@ Croner nominal Indiana instant                           packages/bot/src/framew
 └─ instrument(schedule.<name>)
    ├─ SET bot:schedule:<name>:<IndianaMinute> NX EX 14d
    └─ schedule.run()
-      ├─ Monday Hack Night publication                  packages/bot/src/schedules/hack-night-publication.ts
-      │  └─ approved calendar slot + CMS recheck + visibility PATCH + readback
+      ├─ Daily website event sync                       packages/bot/src/schedules/website-event-sync.ts
+      │  └─ publish next matching Hack Night within seven days + re-read CMS + Discord event sync
       ├─ Friday photography thread                      packages/bot/src/schedules/hack-night-photography-thread.ts
       │  └─ message + pin + thread + role ping + Redis drop record
       ├─ Friday Lightning Time countdown                packages/bot/src/schedules/hack-night-countdown.ts

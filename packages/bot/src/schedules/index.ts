@@ -15,7 +15,6 @@ import type { InstagramConfig } from "../integrations/socials/credentials.ts";
 import { hackNightCleanup } from "./hack-night-cleanup.ts";
 import { hackNightCountdown } from "./hack-night-countdown.ts";
 import { hackNightPhotographyThread } from "./hack-night-photography-thread.ts";
-import { hackNightPublication } from "./hack-night-publication.ts";
 import { socialsSchedules } from "./socials.ts";
 import { websiteEventSync } from "./website-event-sync.ts";
 
@@ -30,7 +29,6 @@ export function buildSchedules(deps: ScheduleDeps): readonly Schedule[] {
   const cms = createCmsClient({ apiKey: deps.cmsApiKey });
 
   return [
-    hackNightPublication({ cms }),
     websiteEventSync({ cms }),
     hackNightCountdown(),
     hackNightPhotographyThread({ drops }),

@@ -1,4 +1,4 @@
-/** Daily creation of Discord events for published events on the website. */
+/** Publish the next Hack Night, then create Discord events from the website. */
 
 import { REST } from "@discordjs/rest";
 import { DISCORD_GUILD_ID } from "@repo/shared/discord";
@@ -9,10 +9,12 @@ import type { GuildScheduledEvent, GuildScheduledEventCreateOptions } from "disc
 import { z } from "zod";
 
 import type { Schedule } from "../framework/schedules.ts";
-import type { CmsClient, CmsSyncEvent } from "../integrations/cms.ts";
+import type { CmsClient, CmsError, CmsSyncEvent } from "../integrations/cms.ts";
 
 const DESCRIPTION_LIMIT = 1_000;
 const EVENTS_ORIGIN = "https://events.purduehackers.com";
+const HACK_NIGHT_NAME = /^hack\s*night\s+\d+\.\d+(?:\.\d+)?(?=$|[\s:])/iu;
+const PUBLICATION_LOOKAHEAD_MS = 7 * 24 * 60 * 60 * 1_000;
 
 const lexicalNodeSchema = z.object({
   type: z.string().optional(),
@@ -146,17 +148,58 @@ function alreadyExists(
 }
 
 export interface WebsiteEventSyncDeps {
-  readonly cms: Pick<CmsClient, "listUpcomingPublishedEvents">;
+  readonly cms: Pick<
+    CmsClient,
+    "listUpcomingEvents" | "publishEventIfUnchanged" | "listUpcomingPublishedEvents"
+  >;
   readonly events: {
     readonly list: () => Promise<readonly ExistingEvent[]>;
     readonly create: (options: GuildScheduledEventCreateOptions) => Promise<ExistingEvent>;
   };
 }
 
+/** Select before checking publication so an already-visible next event blocks later drafts. */
+export function nextHackNightToPublish(
+  records: readonly CmsSyncEvent[],
+  now: Date,
+): CmsSyncEvent | undefined {
+  const next = records
+    .filter((source) => {
+      const start = Date.parse(source.start ?? "");
+      return (
+        HACK_NIGHT_NAME.test(source.name?.trim() ?? "") &&
+        start > now.getTime() &&
+        start <= now.getTime() + PUBLICATION_LOOKAHEAD_MS
+      );
+    })
+    .toSorted((left, right) => Date.parse(left.start ?? "") - Date.parse(right.start ?? ""))[0];
+  return next?.published ? undefined : next;
+}
+
+async function publishNextHackNight(
+  cms: WebsiteEventSyncDeps["cms"],
+  now: Date,
+): Promise<Result<void, CmsError>> {
+  const upcoming = await cms.listUpcomingEvents(now);
+  if (Result.isError(upcoming)) return Result.err(upcoming.error);
+  const next = nextHackNightToPublish(upcoming.value, now);
+  if (next === undefined) return Result.ok(undefined);
+  const published = await cms.publishEventIfUnchanged(next);
+  if (Result.isError(published)) return Result.err(published.error);
+  console.info(`website-event-sync: published ${next.name}`);
+  return Result.ok(undefined);
+}
+
 /** Re-reading Discord each day also recovers a create whose response was lost. */
-export async function syncWebsiteEvents(deps: WebsiteEventSyncDeps, now = new Date()) {
+export async function syncWebsiteEvents(
+  deps: WebsiteEventSyncDeps,
+  now = new Date(),
+): Promise<Result<void, CmsError>> {
+  const published = await publishNextHackNight(deps.cms, now);
+  if (Result.isError(published)) return Result.err(published.error);
+  // Re-read after publication so the newly visible event joins this same sync.
   const listed = await deps.cms.listUpcomingPublishedEvents(now);
-  if (Result.isError(listed)) return listed;
+  if (Result.isError(listed)) return Result.err(listed.error);
 
   return Result.tryPromise({
     try: async () => {
