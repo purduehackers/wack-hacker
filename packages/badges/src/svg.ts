@@ -322,6 +322,20 @@ export function renderSvg(source: string): Uint8Array {
     .asPng();
 }
 
+/** Combine the rendered close-ups without reducing their resolution. */
+export function cropSheet(images: readonly string[]): Uint8Array {
+  const tiles = images.slice(0, 4).map((data, index) => {
+    const x = (index % 2) * 1048,
+      y = Math.floor(index / 2) * 1048;
+    return `<image x="${x + 12}" y="${y + 12}" width="1024" height="1024" href="data:image/png;base64,${data}"/>`;
+  });
+  return new Resvg(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="2096" height="2096"><rect width="2096" height="2096" fill="#e5e5e5"/>${tiles.join("")}</svg>`,
+  )
+    .render()
+    .asPng();
+}
+
 /** Overlapping quadrants preserve context instead of guessing where text should be. */
 export function crops(source: string): string[] {
   const { root } = parseSvg(source);

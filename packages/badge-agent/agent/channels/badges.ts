@@ -1,7 +1,7 @@
 import { env } from "@repo/agents/env";
 import type { Review } from "@repo/badges/contracts";
 import { currentDecisions, reviewStep } from "@repo/badges/presentation";
-import { renderSvg } from "@repo/badges/svg";
+import { cropSheet, renderSvg } from "@repo/badges/svg";
 import { actionRequest, componentId } from "@repo/badges/wire";
 import { bearerMatches } from "@repo/shared/bearer";
 import { messageOf } from "@repo/shared/errors";
@@ -82,6 +82,14 @@ async function previewFiles(review: Review) {
         name: asset.name,
         data: (await runtime().store.asset(asset.hash)).bytes.toString("base64"),
       });
+  if (["version", "date", "physical"].includes(step) && files.length > 1)
+    return [
+      ...files.slice(0, 1),
+      {
+        name: "badge-details.png",
+        data: Buffer.from(cropSheet(files.slice(1).map(({ data }) => data))).toString("base64"),
+      },
+    ];
   return files;
 }
 export default defineChannel({

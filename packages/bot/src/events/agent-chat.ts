@@ -21,6 +21,7 @@ import { z } from "zod";
 import { fetchLeadIn } from "../agent/lead-in.ts";
 import type { TurnMessageReader } from "../agent/turn-messages.ts";
 import type { BadgeClient } from "../badges/client.ts";
+import { badgeEmbed } from "../badges/messages.ts";
 import type { ReactorLike } from "../framework/events.ts";
 import { defineEvent } from "../framework/events.ts";
 import { activeTraceparent } from "../framework/observability.ts";
@@ -137,6 +138,21 @@ function badgeContext(messages: readonly string[]): string[] {
     : [];
 }
 
+async function badgeNotice(target: Message["channel"], text: string) {
+  if (target.isSendable())
+    await target
+      .send({ embeds: [badgeEmbed(text)], allowedMentions: { parse: [] } })
+      .catch(() => undefined);
+}
+
+async function routeBadge(api: BadgeClient, payload: MessagePayload, messages: readonly string[]) {
+  const result = z
+    .object({ route: z.enum(["badge", "general"]) })
+    .parse(await api.post("route", payload));
+  payload.agentTarget = result.route;
+  if (result.route === "badge") payload.recentMessages = badgeContext(messages);
+}
+
 /**
  * A mention, or a reply to the bot inside a thread.
  *
@@ -151,12 +167,19 @@ export function agentChat(deps: AgentChatDeps) {
     dedupKey: (message) => message.id,
     handle: async (message, context) => {
       const prompt = stripBotMention(message.content, context.botUserId);
+      const badgePing = deps.badges !== undefined && isBadgePing(message, context.botUserId);
 
       // A bare mention is a greeting, not a request. Answering directly costs
       // nothing and avoids spinning up a session to say hello.
       const attachments = attachmentsOf(message);
       if (prompt === "" && attachments.length === 0) {
-        await message.reply(EMPTY_MENTION_REPLY).catch(() => undefined);
+        await message
+          .reply(
+            badgePing
+              ? { embeds: [badgeEmbed(EMPTY_MENTION_REPLY)], allowedMentions: { parse: [] } }
+              : EMPTY_MENTION_REPLY,
+          )
+          .catch(() => undefined);
         return Result.ok(undefined);
       }
 
@@ -177,7 +200,7 @@ export function agentChat(deps: AgentChatDeps) {
       // Posted before the agent is even reachable, because the whole point is to
       // acknowledge instantly. The bot renderer claims it as the anchor; its stable nonce also makes a
       // fallback create converge if this response was lost.
-      const placeholder = await postPlaceholder(target, message.id);
+      const placeholder = await postPlaceholder(target, message.id, badgePing);
 
       const payload: MessagePayload = {
         kind: inThread ? "followup" : "mention",
@@ -201,25 +224,22 @@ export function agentChat(deps: AgentChatDeps) {
         ...(traceparent === undefined ? {} : { traceparent }),
       };
 
-      if (deps.badges && isBadgePing(message, context.botUserId)) {
+      if (deps.badges && badgePing) {
         try {
-          const result = z
-            .object({ route: z.enum(["badge", "general"]) })
-            .parse(await deps.badges.post("route", payload));
-          payload.agentTarget = result.route;
           // Review status comes from the service. Do not seed a new badge
           // session with the bot's own superseded status reports.
-          if (result.route === "badge")
-            payload.recentMessages = badgeContext(leadIn.badgeRecentMessages);
+          await routeBadge(deps.badges, payload, leadIn.badgeRecentMessages);
         } catch {
-          if (placeholder)
-            await placeholder.edit(
-              "Badge routing is temporarily unavailable. Please ping me again to retry.",
-            );
+          await badgeNotice(
+            target,
+            "I couldn’t start that conversation. Mention me again to retry.",
+          );
           return Result.ok(undefined);
         }
       }
       const submitted = await deps.agent.submit(payload);
+      if (Result.isError(submitted) && badgePing)
+        await badgeNotice(target, "I couldn’t start that reply. Mention me again to retry.");
       if (Result.isError(submitted) && placeholder !== undefined) {
         await placeholder.edit(DELIVERY_FAILURE_NOTICE).catch(() => undefined);
       }
@@ -231,9 +251,14 @@ export function agentChat(deps: AgentChatDeps) {
 async function postPlaceholder(
   target: Message["channel"],
   sourceMessageId: string,
+  badgePing = false,
 ): Promise<Message | undefined> {
   if (!target.isSendable()) return undefined;
   try {
+    if (badgePing) {
+      await target.sendTyping();
+      return undefined;
+    }
     const posted = await target.send({
       content: PLACEHOLDER,
       nonce: `${sourceMessageId}:0`,

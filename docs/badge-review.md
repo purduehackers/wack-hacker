@@ -28,20 +28,21 @@ flowchart LR
   I --> DB
   J --> R[GitHub draft PR / verified merge / phack.rs]
   R --> DB
-  DB --> V[New message for the next step]
+  DB --> V[Fresh visual embed for the next step]
   V --> D
   E --> P[Existing bot reply renderer]
-  B --> P
+  B --> U[Completed reply as a short badge embed]
+  U --> D
 ```
 
 ## Responsibilities
 
-| Component                 | Responsibility                                                                                                                                                  |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/bot/src/badges` | Native Discord controls, fresh membership reads, short progress messages, and worker delivery after actions and on the minute. The bot keeps the Discord token. |
-| `packages/badge-agent`    | Separate Eve root application, Luna routing endpoint, authenticated workflow API, CMS and GitHub adapters. Reuses the existing Discord channel transport.       |
-| `packages/badges`         | Schemas, immutable evidence, deterministic workflow gates, SVG inspection, packing, physical exports, and worker dispatch.                                      |
-| `packages/shared`         | Shared transport target and migration for review/evidence/job storage.                                                                                          |
+| Component                 | Responsibility                                                                                                                                            |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/bot/src/badges` | Native Discord controls, fresh membership reads, visual embeds, and worker delivery after actions and on the minute. The bot keeps the Discord token.     |
+| `packages/badge-agent`    | Separate Eve root application, Luna routing endpoint, authenticated workflow API, CMS and GitHub adapters. Reuses the existing Discord channel transport. |
+| `packages/badges`         | Schemas, immutable evidence, deterministic workflow gates, SVG inspection, packing, physical exports, and worker dispatch.                                |
+| `packages/shared`         | Shared transport target and migration for review/evidence/job storage.                                                                                    |
 
 The badge app exposes only `review_status` and `submit_files`. File/HTTP/shell tools, generic delegation, and Eve's question tool are disabled. It has no declared subagents or model-executed publishing capability. The conversational model matches the existing Eve app; `openai/gpt-6-luna-decisions` is used only for routing. Visual review uses the human/crop path because the previous visual experiments did not justify automatic approvals.
 
@@ -56,11 +57,15 @@ Redis retains the thread's initial agent choice without a TTL, so a bot restart,
 3. Static failures name the affected file and a concrete fix. The conversation omits rule IDs and internal classifications. Unsupported SVG features still block progress internally. New exports must clear those findings.
 4. After the SVG checks pass, the author chooses a CMS event and confirms badge material, badge size range, stamp size, mirroring, and cut spacing. The event ID is stable identity; version is a string extracted from `Hack Night X.XX`, and expected date is the event's Indianapolis local date. Event refresh reopens affected review work.
 5. The worker offers up to three audited layouts. Defaults: one 12×12-inch sheet plus one 12×18-inch sheet, 0.2-inch edge margins, 0.5 mm cut spacing, 80–100 badges, and a 2–2.7-inch longest-side range. Both cut dimensions are displayed. The longer side must be at least 2 inches and the shorter side at least 1.7 inches, including unusual shapes. The author can enlarge the range; the worker will report failure rather than shrink below the standards to meet the batch target. Selecting a layout prepares dimensioned badge and stamp SVGs, including the requested stamp mirroring.
-6. The bot asks an organizer to check **version**, **date**, **physical readability**, and **stamp**, one at a time. Each new message contains only that question and the relevant full images/close-ups. A change request pauses progression and posts the reviewer's fix. The modal provides the inspection details; the chat does not repeat the full standards. Decisions still record approve / changes / unclear with a note; changes or unclear requires guidance.
+6. The bot asks an organizer to check **version**, **date**, **physical readability**, and **stamp**, one at a time. Each fresh embed contains that question and labeled previews. Badge reviews show the full image and a single sheet of four close-ups, preserving the resolution of each crop. The feedback form offers **Looks good**, **Needs a change**, and **Hard to tell**, with no preselected answer. The latter two require a short note. A change request pauses progression and posts the reviewer's fix. Inspection instructions stay in the form. These labels map to the existing approve / changes / unclear decisions; the underlying evidence and gates are unchanged.
 7. Once all criteria pass, the worker creates or updates a draft PR in `purduehackers/badge-designs`. The organizer who completed the last criterion gives the separate **Publish** confirmation beside the repository link. This preserves a single final reviewer in the requested public metadata.
 8. The worker rereads the CMS, verifies every expected repository file at the approved head, checks the PR's changed paths, and merges that exact head. It creates `phack.rs/badge-<version>` and verifies the live redirect before reporting completion.
 
-Each meaningful step is a fresh message at the bottom of the thread; previous status messages are never rewritten. Successful button actions are acknowledged without extra “recorded” replies and trigger delivery immediately. Remaining background work runs on the minute. Delivery receipts coalesce queued updates for an already-posted version, and retries use a stable nonce for that review/version. Older controls are rejected. The assistant usually replies in one or two short sentences and reads the durable record first; its own narrative cannot satisfy a gate. New badge sessions receive maker comments as lead-in, excluding old bot status reports; explicit reply context is still retained. The status tool omits internal evidence IDs, hashes and rubric metadata, and badge replies omit the shared diagnostic footer.
+Each meaningful step is a fresh embed at the bottom of the thread; previous messages are never rewritten. Successful button actions are acknowledged without extra “recorded” replies and trigger delivery immediately. Remaining background work runs on the minute. Delivery receipts coalesce queued updates for an already-posted version, and retries use a stable nonce for that review/version. Older controls are rejected.
+
+All bot-authored badge replies, notices and form errors use embeds. Candidate badge pings show the native typing indicator while routing. The badge renderer sends only the completed reply, never streamed prose, tool activity or the shared diagnostic footer. It uses a lease, nonce and checkpoint receipt so retries converge on the same message. The assistant usually replies in one or two short sentences and reads the durable record first; its own narrative cannot satisfy a gate. New badge sessions receive maker comments as lead-in, excluding old bot status reports; explicit reply context is still retained.
+
+Guidance describes actions in a design app: outline lettering, change artwork to grayscale, simplify effects or repair the cutting outline. Internal errors are mapped to a next action instead of printed. The final display boundary filters code, diagnostics and status glyphs from model prose and reviewer notes. Dates use everyday wording, dimensions use rounded inches, stamp direction is a labeled choice, and finished files have view/download buttons. SVGs uploaded by people may still receive Discord's native attachment preview; the bot's own previews are rendered PNGs.
 
 ```mermaid
 sequenceDiagram

@@ -1,12 +1,14 @@
 import { criterionSchema, settingsSchema } from "@repo/badges/contracts";
+import { failureGuidance } from "@repo/badges/presentation";
 import type { Action } from "@repo/badges/wire";
 import { DISCORD_GUILD_ID } from "@repo/shared/discord";
 import { messageOf } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import {
-  ActionRowBuilder,
+  LabelBuilder,
   MessageFlags,
   ModalBuilder,
+  StringSelectMenuBuilder,
   TextDisplayBuilder,
   TextInputBuilder,
   TextInputStyle,
@@ -15,6 +17,7 @@ import type { Interaction, ModalSubmitInteraction } from "discord.js";
 import { z } from "zod";
 
 import type { BadgeClient } from "./client.ts";
+import { badgeEmbed } from "./messages.ts";
 import { badgeWork } from "./schedule.ts";
 
 const controlSchema = z.tuple([
@@ -28,71 +31,142 @@ const decimal = z
   .string()
   .regex(/^\d+(?:\.\d+)?$/u)
   .transform(Number);
+class FormError extends Error {}
+
+function formFailure(cause: unknown) {
+  return badgeEmbed(
+    cause instanceof FormError ? cause.message : failureGuidance(messageOf(cause)),
+    "Let’s try that again",
+  );
+}
+
 function input(name: string, label: string, value?: string, required = true) {
   const field = new TextInputBuilder()
     .setCustomId(name)
-    .setLabel(label)
-    .setStyle(TextInputStyle.Short)
+    .setStyle(name === "note" ? TextInputStyle.Paragraph : TextInputStyle.Short)
     .setRequired(required)
     .setMaxLength(name === "note" ? 1500 : 100);
   if (value) field.setValue(value);
-  return new ActionRowBuilder<TextInputBuilder>().addComponents(field);
+  return new LabelBuilder().setLabel(label).setTextInputComponent(field);
 }
 function settingsModal(control: string) {
   return new ModalBuilder()
     .setCustomId(control)
-    .setTitle("Badge manufacturing settings")
-    .addComponents(
-      input("material", "Badge material (e.g. acrylic)"),
-      input("sizes", "Badge longest side, inches: min,max", "2,2.7"),
-      input("stamp", "Stamp largest dimension, inches", "1.5"),
-      input("mirror", "Mirror the stamp output? yes/no", "yes"),
-      input("gap", "Gap between cut outlines, mm", "0.5"),
+    .setTitle("Material and sizes")
+    .addLabelComponents(
+      input("material", "Badge material", "Acrylic"),
+      input("sizes", "Badge size range (inches)", "2 to 2.7").setDescription(
+        "Size of the longest side. I’ll find options within this range.",
+      ),
+      input("stamp", "Stamp size (inches)", "1.5").setDescription(
+        "Size of the longest side, up to 1.5 inches.",
+      ),
+      new LabelBuilder().setLabel("Stamp direction").setStringSelectMenuComponent(
+        new StringSelectMenuBuilder()
+          .setCustomId("mirror")
+          .setPlaceholder("Choose how to prepare the stamp")
+          .addOptions(
+            {
+              label: "Mirror for stamping",
+              value: "yes",
+              description: "Flip the artwork so the stamped impression reads correctly.",
+            },
+            {
+              label: "Keep as drawn",
+              value: "no",
+              description: "Use this if your artwork is already mirrored.",
+            },
+          ),
+      ),
+      input("gap", "Space between badges (mm)", "0.5").setDescription(
+        "The cutting team can help if you’re unsure.",
+      ),
     );
 }
 const reviewInstructions = {
   version:
-    "Check the full badge and close-ups for the version in the message, including any trailing zeros. If you can’t read it clearly, choose unclear.",
-  date: "Check the full badge and close-ups against the event date in the message. If you can’t read it clearly, choose unclear.",
+    "Read the version on the full badge and close-ups. It should match the version above exactly, including any zeros at the end.",
+  date: "Read the date on the full badge and close-ups. It should match the Hack Night date above.",
   physical:
-    "Inspect at the chosen physical dimensions and material. Engraving lines must be at least 3% of badge size. Check connected geometry, fragile bridges and small details. Essential details should be near black; lighter than #666666 may disappear. Use strong contrast and at most 2–3 grayscale colors (black/white only for a first badge). Compare artwork against the red cut contour: nothing intended to remain may sit outside it.",
+    "Check the design at its chosen size. Engraved lines should be at least 3% of the badge’s size. Look for fragile connections and tiny details. Use strong contrast and two or three gray tones at most; use only black and white for a first badge. Pale details may disappear. Keep all artwork inside the red cutting outline.",
   stamp:
-    "Inspect both the source and manufacturing preview. The center must be a simplified motif without text or complex items; border text alone is allowed. Engraving is black/white only, largest dimension ≤1.5 inches. Confirm legibility and the requested mirroring. Date/version are not required on a stamp.",
+    "Compare the original and cutting preview. The center should be a simple symbol without lettering or intricate details; lettering around the border is fine. Use black and white, no larger than 1.5 inches. Check that the stamped impression will face the right way.",
 };
 function decisionModal(control: string, criterion: keyof typeof reviewInstructions) {
   return new ModalBuilder()
     .setCustomId(control)
     .setTitle(`Check ${criterion === "physical" ? "physical design" : criterion}`)
     .addTextDisplayComponents(new TextDisplayBuilder().setContent(reviewInstructions[criterion]))
-    .addComponents(
-      input("verdict", "Verdict: approve, changes, or unclear"),
-      input("note", "What needs fixing / what did you inspect?", undefined, false),
+    .addLabelComponents(
+      new LabelBuilder().setLabel("What do you think?").setStringSelectMenuComponent(
+        new StringSelectMenuBuilder()
+          .setCustomId("verdict")
+          .setPlaceholder("Choose your feedback")
+          .addOptions(
+            {
+              label: "Looks good",
+              value: "approve",
+              description: "I checked the full design and close-ups.",
+            },
+            {
+              label: "Needs a change",
+              value: "changes",
+              description: "I’ll explain what to adjust.",
+            },
+            {
+              label: "Hard to tell",
+              value: "unclear",
+              description: "I need a clearer view or another look.",
+            },
+          ),
+      ),
+      input("note", "Feedback for the designer", undefined, false).setDescription(
+        "If something needs changing or is hard to see, leave a short note.",
+      ),
     );
 }
 function modalAction(interaction: ModalSubmitInteraction, action: string): Action {
   const field = (name: string) => interaction.fields.getTextInputValue(name).trim();
   if (action === "settings") {
-    const [minSizeIn, maxSizeIn] = z.tuple([decimal, decimal]).parse(
-      field("sizes")
-        .split(",")
-        .map((part) => part.trim()),
-    );
+    const sizes = field("sizes").split(/\s*(?:to|[–—,-])\s*/iu);
+    const parsedSizes = z.tuple([decimal, decimal]).safeParse(sizes);
+    if (!parsedSizes.success)
+      throw new FormError(
+        "Enter a size range such as 2 to 2.7 inches, using just the two numbers.",
+      );
+    const [minSizeIn, maxSizeIn] = parsedSizes.data;
+    const stampSize = decimal.safeParse(field("stamp"));
+    const spacing = decimal.safeParse(field("gap"));
+    if (!stampSize.success || !spacing.success)
+      throw new FormError("Use numbers for the stamp size and spacing, such as 1.5 and 0.5.");
+    const direction = z
+      .enum(["yes", "no"])
+      .safeParse(interaction.fields.getStringSelectValues("mirror")[0]);
+    if (!direction.success)
+      throw new FormError("Choose whether to mirror the stamp or keep it as drawn.");
+    const settings = settingsSchema.safeParse({
+      material: field("material"),
+      minSizeIn,
+      maxSizeIn,
+      stampSizeIn: stampSize.data,
+      mirrorStamp: direction.data === "yes",
+      gapMm: spacing.data,
+    });
+    if (!settings.success)
+      throw new FormError(
+        "Use a badge range from 2 to 10 inches, a stamp no larger than 1.5 inches, and spacing from 0.2 to 5 mm. The larger badge size must come second.",
+      );
     return {
       kind: "settings",
-      value: settingsSchema.parse({
-        material: field("material"),
-        minSizeIn,
-        maxSizeIn,
-        stampSizeIn: decimal.parse(field("stamp")),
-        mirrorStamp: z.enum(["yes", "no"]).parse(field("mirror").toLowerCase()) === "yes",
-        gapMm: decimal.parse(field("gap")),
-      }),
+      value: settings.data,
     };
   }
   const verdict = z
     .enum(["approve", "changes", "unclear"])
-    .safeParse(field("verdict").toLowerCase());
-  if (!verdict.success) throw new Error("Enter approve, changes, or unclear, then try again.");
+    .safeParse(interaction.fields.getStringSelectValues("verdict")[0]);
+  if (!verdict.success) throw new FormError("Choose the feedback that best matches what you see.");
+  if (verdict.data !== "approve" && !field("note"))
+    throw new FormError("Leave a short note about what to change or what is hard to see.");
   return {
     kind: "decision",
     criterion: criterionSchema.parse(action),
@@ -163,12 +237,21 @@ export function createBadgeInteractionHandler(client: BadgeClient, secret: strin
       });
       const delivered = await badgeWork(client, secret).run({ client: interaction.client });
       if (Result.isError(delivered))
-        throw new Error("Saved. I couldn’t post the next step yet; I’ll retry shortly.");
+        throw new FormError("Saved. I couldn’t post the next step yet; I’ll retry shortly.");
     } catch (cause) {
-      const content = messageOf(cause).slice(0, 1900);
+      const embeds = [formFailure(cause)];
       if (interaction.deferred || interaction.replied)
-        await interaction.followUp({ content, flags: MessageFlags.Ephemeral });
-      else await interaction.reply({ content, flags: MessageFlags.Ephemeral });
+        await interaction.followUp({
+          embeds,
+          flags: MessageFlags.Ephemeral,
+          allowedMentions: { parse: [] },
+        });
+      else
+        await interaction.reply({
+          embeds,
+          flags: MessageFlags.Ephemeral,
+          allowedMentions: { parse: [] },
+        });
     }
     return true;
   };

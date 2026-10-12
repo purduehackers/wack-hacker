@@ -8,7 +8,7 @@ import { Result } from "@repo/shared/result";
 import { AttachmentBuilder } from "discord.js";
 
 import type { Schedule } from "../framework/schedules.ts";
-import { cardText, controls } from "./card.ts";
+import { cardEmbeds, controls } from "./card.ts";
 import type { BadgeClient } from "./client.ts";
 
 export function badgeWork(api: BadgeClient, secret: string): Schedule {
@@ -27,8 +27,7 @@ export function badgeWork(api: BadgeClient, secret: string): Schedule {
             channel.guildId !== DISCORD_GUILD_ID
           )
             throw new Error("Badge review thread is unavailable.");
-          const content = cardText(card.review),
-            components = controls(card, secret);
+          const components = controls(card, secret);
           const attachments = card.files.map(
             (file) => new AttachmentBuilder(Buffer.from(file.data, "base64"), { name: file.name }),
           );
@@ -38,7 +37,7 @@ export function badgeWork(api: BadgeClient, secret: string): Schedule {
             .digest("hex")
             .slice(0, 24);
           const message = await channel.send({
-            content,
+            embeds: cardEmbeds(card),
             components,
             files: attachments,
             nonce,

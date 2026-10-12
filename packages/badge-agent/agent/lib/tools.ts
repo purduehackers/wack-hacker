@@ -1,5 +1,12 @@
 import { BADGES_CHANNEL_ID, remainingCriteria, ready, staticPassed } from "@repo/badges";
-import { currentDecisions, reviewLabels, reviewPrompt } from "@repo/badges/presentation";
+import {
+  currentDecisions,
+  designerText,
+  failureGuidance,
+  findingGuidance,
+  reviewLabels,
+  reviewPrompt,
+} from "@repo/badges/presentation";
 import { DISCORD_GUILD_ID } from "@repo/shared/discord";
 import { messageOf } from "@repo/shared/errors";
 import type { ToolContext } from "eve/tools";
@@ -44,11 +51,11 @@ export async function reviewStatus(ctx: ToolContext): Promise<string> {
       remainingReviews: remainingCriteria(review).map((criterion) => reviewLabels[criterion]),
       findings: review.checks
         .filter((finding) => finding.status !== "pass")
-        .map(({ role, detail }) => ({ role, detail })),
+        .map((finding) => ({ role: finding.role, guidance: findingGuidance(finding) })),
       decisions: currentDecisions(review).map(({ criterion, verdict, note }) => ({
         item: reviewLabels[criterion],
         verdict,
-        note,
+        note: designerText(note, "The reviewer left no additional note."),
       })),
       publication: review.publication?.shortlink
         ? "Published."
@@ -59,7 +66,7 @@ export async function reviewStatus(ctx: ToolContext): Promise<string> {
       published: review.publication?.shortlink,
     });
   } catch (cause) {
-    return JSON.stringify({ error: messageOf(cause) });
+    return JSON.stringify({ error: failureGuidance(messageOf(cause)) });
   }
 }
 export async function submitFiles(ctx: ToolContext): Promise<string> {
@@ -76,6 +83,6 @@ export async function submitFiles(ctx: ToolContext): Promise<string> {
         "The bot posts the next step in this thread. Acknowledge receipt without repeating that prompt.",
     });
   } catch (cause) {
-    return JSON.stringify({ error: messageOf(cause) });
+    return JSON.stringify({ error: failureGuidance(messageOf(cause)) });
   }
 }
