@@ -35,6 +35,7 @@ import { rsvpReminder } from "./rsvp-reminder.ts";
 import { createTranscriber, transcribeVoiceMessage } from "./transcribe-voice-message.ts";
 
 export interface EventDeps {
+  readonly badges?: import("../badges/client.ts").BadgeClient;
   readonly redis: RedisClient;
   readonly agent: ConversationFlow;
   readonly reporter: Reporter;
@@ -52,7 +53,7 @@ export function buildEventHandlers(deps: EventDeps): readonly AnyEventHandler[] 
   const turnMessages = createTurnMessageStore(deps.redis);
 
   return [
-    agentChat({ agent: deps.agent }),
+    agentChat({ agent: deps.agent, ...(deps.badges === undefined ? {} : { badges: deps.badges }) }),
     conversationDone({ agent: deps.agent, turnMessages }),
     chatFeedback({ turnMessages, reporter: deps.reporter }),
     praise,

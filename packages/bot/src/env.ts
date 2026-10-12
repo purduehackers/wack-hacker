@@ -52,6 +52,8 @@ export const env = createEnv({
 
     /** Base URL of the eve deployment. No trailing slash. */
     AGENT_URL: z.url({ protocol: /^https?$/u }),
+    /** Opt in only after the badge service and database migration are deployed. */
+    BADGE_AGENT_URL: z.url({ protocol: /^https?$/u }).optional(),
     /** Bearer the bot presents to the agent. */
     AGENT_INGRESS_SECRET: secret,
     /** Bearer the agent must present on the parked callback. */

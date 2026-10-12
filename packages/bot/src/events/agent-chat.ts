@@ -16,14 +16,16 @@ import { continuationKeyFor } from "@repo/shared/wire";
 import type { MessagePayload, Principal } from "@repo/shared/wire";
 import { ChannelType } from "discord.js";
 import type { AnyThreadChannel, Message } from "discord.js";
+import { z } from "zod";
 
 import { fetchLeadIn } from "../agent/lead-in.ts";
 import type { TurnMessageReader } from "../agent/turn-messages.ts";
+import type { BadgeClient } from "../badges/client.ts";
 import type { ReactorLike } from "../framework/events.ts";
 import { defineEvent } from "../framework/events.ts";
 import { activeTraceparent } from "../framework/observability.ts";
 import type { ConversationFlow } from "../utils/conversation/index.ts";
-import { stripBotMention } from "../utils/mention.ts";
+import { isBadgePing, stripBotMention } from "../utils/mention.ts";
 
 /** Shown until the agent's first tokens replace it. */
 const PLACEHOLDER = "> Thinking...";
@@ -120,6 +122,7 @@ function attachmentsOf(message: Message): NonNullable<MessagePayload["attachment
 
 export interface AgentChatDeps {
   readonly agent: ConversationFlow;
+  readonly badges?: BadgeClient;
 }
 
 export interface ConversationDoneDeps extends AgentChatDeps {
@@ -190,6 +193,20 @@ export function agentChat(deps: AgentChatDeps) {
         ...(traceparent === undefined ? {} : { traceparent }),
       };
 
+      if (deps.badges && isBadgePing(message, context.botUserId)) {
+        try {
+          const result = z
+            .object({ route: z.enum(["badge", "general"]) })
+            .parse(await deps.badges.post("route", payload));
+          payload.agentTarget = result.route;
+        } catch {
+          if (placeholder)
+            await placeholder.edit(
+              "Badge routing is temporarily unavailable. Please ping me again to retry.",
+            );
+          return Result.ok(undefined);
+        }
+      }
       const submitted = await deps.agent.submit(payload);
       if (Result.isError(submitted) && placeholder !== undefined) {
         await placeholder.edit(DELIVERY_FAILURE_NOTICE).catch(() => undefined);
@@ -279,6 +296,7 @@ function threadRefOf(
 }
 
 interface ConversationResetInput {
+  readonly agentTarget?: "badge" | "general";
   readonly continuationKey: string;
   readonly requesterUserId: string;
   readonly principal: Principal;
@@ -296,6 +314,7 @@ async function resetConversationForPrincipal(
     return Result.ok(undefined);
   }
   return agent.reset({
+    ...(input.agentTarget === undefined ? {} : { agentTarget: input.agentTarget }),
     continuationKey: input.continuationKey,
     reason: `ended by ${input.principal.username} with ✅`,
     principal: input.principal,
@@ -335,6 +354,7 @@ export function conversationDone(deps: ConversationDoneDeps) {
       return resetConversationForPrincipal(deps.agent, {
         continuationKey: reaction.message.channelId,
         requesterUserId: turn.requesterUserId,
+        ...(turn.agentTarget === undefined ? {} : { agentTarget: turn.agentTarget }),
         principal,
       });
     },

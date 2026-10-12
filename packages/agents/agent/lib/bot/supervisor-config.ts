@@ -71,6 +71,7 @@ function botEnvironment(source: AgentEnv): BotProcessEnvironment {
     DISCORD_BOT_TOKEN: required(source.DISCORD_BOT_TOKEN, "DISCORD_BOT_TOKEN"),
     DISCORD_BOT_CLIENT_ID: required(source.DISCORD_BOT_CLIENT_ID, "DISCORD_BOT_CLIENT_ID"),
     AGENT_URL: required(source.AGENT_URL, "AGENT_URL"),
+    ...(source.BADGE_AGENT_URL === undefined ? {} : { BADGE_AGENT_URL: source.BADGE_AGENT_URL }),
     AGENT_INGRESS_SECRET: required(source.AGENT_INGRESS_SECRET, "AGENT_INGRESS_SECRET"),
     BOT_INGRESS_SECRET: required(source.BOT_INGRESS_SECRET, "BOT_INGRESS_SECRET"),
     UPSTASH_REDIS_REST_URL: source.UPSTASH_REDIS_REST_URL,

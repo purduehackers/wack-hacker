@@ -1,0 +1,25 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "outputs": [".output/**", ".vercel/output/**"],
+      "env": [
+        "AGENT_INGRESS_SECRET",
+        "BOT_INGRESS_SECRET",
+        "BOT_URL",
+        "TURSO_DATABASE_URL",
+        "TURSO_AUTH_TOKEN",
+        "UPSTASH_REDIS_REST_URL",
+        "UPSTASH_REDIS_REST_TOKEN",
+        "GITHUB_APP_ID",
+        "GITHUB_APP_PRIVATE_KEY",
+        "GITHUB_APP_INSTALLATION_ID",
+        "PAYLOAD_CMS_API_KEY",
+        "VERCEL_API_TOKEN",
+        "AI_GATEWAY_API_KEY",
+        "SKIP_ENV_VALIDATION"
+      ]
+    }
+  }
+}

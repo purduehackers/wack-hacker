@@ -126,6 +126,7 @@ async function indexTurn(
   for (const id of ids) {
     if (id === undefined) continue;
     const indexed = await deps.turnMessages.record(id, {
+      ...(work.target.agentTarget === undefined ? {} : { agentTarget: work.target.agentTarget }),
       sessionId: work.intent.sessionId,
       eveTurnId: work.intent.eveTurnId,
       requesterUserId: work.target.requesterUserId,

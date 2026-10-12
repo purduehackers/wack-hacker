@@ -87,6 +87,7 @@ const attachmentSchema = z.strictObject({
 const messagePayloadSchema = z
   .strictObject({
     kind: z.enum(["mention", "followup", "scheduled"]),
+    agentTarget: z.enum(["general", "badge"]).optional(),
     scheduleId: z.uuid().optional(),
     occurrenceId: shortId.optional(),
     continuationKey: snowflake,
@@ -266,6 +267,7 @@ const interactionPayloadSchema = z
 
 /** Retires the session so the next message starts fresh. */
 const resetPayloadSchema = z.strictObject({
+  agentTarget: z.enum(["general", "badge"]).optional(),
   continuationKey: snowflake,
   reason: z.string().trim().min(1).max(256),
   principal: principalSchema,
@@ -283,6 +285,7 @@ const resetPayloadSchema = z.strictObject({
  * for.
  */
 const steerRequestPayloadSchema = z.strictObject({
+  agentTarget: z.enum(["general", "badge"]).optional(),
   continuationKey: snowflake,
 });
 
@@ -313,6 +316,7 @@ const parkedPayloadSchema = z.strictObject({
 
 /** Immutable bot-authored Discord target for a queued delivery. */
 const renderTargetSchema = z.strictObject({
+  agentTarget: z.enum(["general", "badge"]).optional(),
   dispatchId: z.uuid(),
   continuationKey: snowflake,
   messageId: snowflake,
@@ -477,6 +481,10 @@ function decode<S extends z.ZodType>(
     return path === "" ? failure.message : `${path}: ${failure.message}`;
   });
   return Result.err(new InvalidInput({ subject, issues }));
+}
+
+export function decodeMessagePayload(input: unknown): Result<MessagePayload, InvalidInput> {
+  return decode(messagePayloadSchema, "message payload", input);
 }
 
 export function decodeDeliveryPayload(input: unknown): Result<DeliveryPayload, InvalidInput> {

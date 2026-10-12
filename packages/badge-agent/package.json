@@ -1,0 +1,24 @@
+{
+  "name": "@repo/badge-agent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "eve dev",
+    "build": "eve build",
+    "start": "eve start"
+  },
+  "dependencies": {
+    "@octokit/auth-app": "8.2.0",
+    "@repo/agents": "workspace:*",
+    "@repo/badges": "workspace:*",
+    "@repo/shared": "workspace:*",
+    "ai": "7.0.137",
+    "eve": "0.31.3",
+    "octokit": "5.0.5",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2"
+  }
+}
