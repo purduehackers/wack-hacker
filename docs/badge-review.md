@@ -1,6 +1,6 @@
 # Badge review architecture
 
-Ping `@wack hacker` in `#p-badges` (or one of its threads) with the badge and stamp SVGs. A Luna decision routes that **message** to either the badge Eve app or the existing general Eve app. An existing review is context for the decision; it never permanently assigns the thread to an agent. Other messages in this channel do not wake either agent. Other channels retain their existing behavior.
+Ping `@wack hacker` in `#p-badges` (or one of its threads) with the badge and stamp SVGs. A Luna decision chooses the badge or general Eve app for a new bot conversation. The thread keeps that agent: later pings skip classification, including design discussion before files are submitted. A thread with an existing badge review also goes directly to the badge agent. Other messages in this channel do not wake either agent. Other channels retain their existing behavior.
 
 This feature is opt-in through `BADGE_AGENT_URL`. It does not change the Hack Night publishing/sync job.
 
@@ -9,9 +9,12 @@ The [current Badge and Stamp Standards](https://app.notion.com/p/purduehackers/S
 ```mermaid
 flowchart LR
   D[Discord message] --> G{Explicit bot ping in p-badges?}
-  G -->|Yes| C[Luna decision classifier]
-  C -->|General| Q[Existing Redis delivery queue]
-  C -->|Badge| Q
+  G -->|Yes| K{Thread already assigned?}
+  K -->|Yes| Q[Existing Redis delivery queue]
+  K -->|No existing route or review| C[Luna decision classifier]
+  K -->|Existing badge review| Q
+  C --> M[Remember first agent for the thread]
+  M --> Q
   Q -->|Persisted general target| E[General Eve app]
   Q -->|Persisted badge target| B[Badge Eve app]
   B --> T[Thread-scoped status and submission tools]
@@ -44,6 +47,8 @@ The badge app exposes only `review_status` and `submit_files`. File/HTTP/shell t
 
 Separate roots make routing a bot decision rather than a request for the general model to delegate. Both roots share the existing delivery queue, but have separate Eve session namespaces. `agentTarget` travels with the durable delivery, holder, rendered reply, steer, and reset. Cross-agent messages wait in the queue rather than being folded into or cancelling another agent's request. A reset cannot cut through another agent's active turn.
 
+Redis retains the thread's initial agent choice without a TTL, so a bot restart, quiet period or Eve session reset does not trigger another classifier call. Concurrent first pings converge on the first stored choice. Badge follow-ups still register each bot-observed attachment message for submission; skipping classification does not skip evidence collection. Start a separate conversation to choose another agent.
+
 ## What people see
 
 1. The author submits two SVGs. The bot creates or uses the Discord thread. The badge agent registers only that message's bot-observed attachments.
@@ -67,7 +72,7 @@ sequenceDiagram
   participant Human as Organizer
   participant Git as GitHub / phack.rs
   Maker->>Bot: Ping with SVGs
-  Bot->>Bot: Classify this ping
+  Bot->>Bot: Reuse thread agent or classify first ping
   Bot->>Badge: Persist and deliver badge-target message
   Badge->>Review: Submit current authenticated attachments
   Review-->>Bot: A/B role controls
