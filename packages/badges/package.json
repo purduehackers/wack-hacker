@@ -5,6 +5,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./contracts": "./src/contracts.ts",
+    "./presentation": "./src/presentation.ts",
     "./store": "./src/store.ts",
     "./wire": "./src/wire.ts",
     "./svg": "./src/svg.ts"

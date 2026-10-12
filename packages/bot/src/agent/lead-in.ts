@@ -120,6 +120,7 @@ async function fetchReferencedContext(
 
 interface LeadIn {
   readonly recentMessages: readonly string[];
+  readonly badgeRecentMessages: readonly string[];
   readonly referencedContext: readonly string[];
 }
 
@@ -135,7 +136,15 @@ interface LeadIn {
 export async function fetchLeadIn(message: Message): Promise<LeadIn> {
   const recent = await fetchRecentMessages(message);
   const recentMessages = recent.map(renderLeadInLine);
-  const none: LeadIn = { recentMessages, referencedContext: [] };
+  const replyId = message.reference?.messageId;
+  const badgeRecentMessages = recent
+    .filter((candidate) => !candidate.author.bot || candidate.id === replyId)
+    .map((candidate) =>
+      candidate.id === replyId
+        ? `Message being replied to: ${renderLeadInLine(candidate)}`
+        : renderLeadInLine(candidate),
+    );
+  const none: LeadIn = { recentMessages, badgeRecentMessages, referencedContext: [] };
 
   const replyReference = message.reference;
   if (replyReference?.messageId === undefined) return none;
@@ -148,5 +157,9 @@ export async function fetchLeadIn(message: Message): Promise<LeadIn> {
   if (recent.some((candidate) => candidate.id === referencedId)) return none;
 
   const replyContext = await fetchReferencedContext(message, referencedId);
-  return { recentMessages, referencedContext: replyContext.map(renderLeadInLine) };
+  return {
+    recentMessages,
+    badgeRecentMessages,
+    referencedContext: replyContext.map(renderLeadInLine),
+  };
 }

@@ -1,10 +1,10 @@
+import { env } from "@repo/agents/env";
 import { assertScope } from "@repo/badges";
 import { getRedis } from "@repo/shared/redis";
 import type { MessagePayload } from "@repo/shared/wire";
 import { experimental_decide as decide } from "ai";
 import { z } from "zod";
 
-import { env } from "../../../agents/agent/env.ts";
 import { runtime } from "./runtime.ts";
 
 const routeSchema = z.enum(["badge", "general"]);

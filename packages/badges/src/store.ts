@@ -9,7 +9,7 @@ import type { JobKind, Review, StoredReview } from "./contracts.ts";
 
 export class StaleReview extends Error {
   constructor() {
-    super("This review changed. Use the latest review card.");
+    super("There’s a newer step in this thread. Use the buttons on the latest message.");
   }
 }
 interface Save {
@@ -101,7 +101,15 @@ class BadgeRepository {
       } else {
         const rows = await tx
           .update(badgeReviews)
-          .set({ version, document, updatedAt: Date.now() })
+          .set({
+            version,
+            // Delivery receipts may advance without changing the workflow version.
+            document: sql`json_patch(${document}, json_object(
+              'cardId', json_extract(${badgeReviews.document}, '$.cardId'),
+              'cardVersion', json_extract(${badgeReviews.document}, '$.cardVersion')
+            ))`,
+            updatedAt: Date.now(),
+          })
           .where(
             and(eq(badgeReviews.id, input.review.id), eq(badgeReviews.version, input.expected)),
           )
@@ -197,13 +205,20 @@ class BadgeRepository {
         ),
       );
   }
-  async card(id: string, cardId: string) {
-    const found = await this.get(id);
-    if (!found || found.review.cardId === cardId) return;
+  async card(id: string, cardId: string, version: number) {
+    // Preserve concurrent workflow changes and never regress a newer delivery receipt.
     await this.db
       .update(badgeReviews)
-      .set({ document: JSON.stringify({ ...found.review, cardId }) })
-      .where(and(eq(badgeReviews.id, id), eq(badgeReviews.version, found.version)));
+      .set({
+        document: sql`json_set(${badgeReviews.document}, '$.cardId', ${cardId}, '$.cardVersion', ${version})`,
+      })
+      .where(
+        and(
+          eq(badgeReviews.id, id),
+          sql`${badgeReviews.version} >= ${version}`,
+          sql`COALESCE(json_extract(${badgeReviews.document}, '$.cardVersion'), -1) < ${version}`,
+        ),
+      );
   }
 }
 export function createBadgeStore(db: Db) {

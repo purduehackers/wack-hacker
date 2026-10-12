@@ -32,31 +32,24 @@ export function badgeWork(api: BadgeClient, secret: string): Schedule {
           const attachments = card.files.map(
             (file) => new AttachmentBuilder(Buffer.from(file.data, "base64"), { name: file.name }),
           );
-          const previous = card.review.cardId
-            ? await channel.messages.fetch(card.review.cardId).catch(() => undefined)
-            : undefined;
-          // A stable nonce covers a lost create response without conflating revisions.
-          const nonce = createHash("sha256").update(card.review.id).digest("hex").slice(0, 24);
-          const message = previous
-            ? await previous.edit({
-                content,
-                components,
-                files: attachments,
-                attachments: [],
-                allowedMentions: { parse: [] },
-              })
-            : await channel.send({
-                content,
-                components,
-                files: attachments,
-                nonce,
-                enforceNonce: true,
-                allowedMentions: { parse: [] },
-              });
+          // Each step arrives at the bottom of the thread. Retries reuse its nonce.
+          const nonce = createHash("sha256")
+            .update(`${card.review.id}:${card.version}`)
+            .digest("hex")
+            .slice(0, 24);
+          const message = await channel.send({
+            content,
+            components,
+            files: attachments,
+            nonce,
+            enforceNonce: true,
+            allowedMentions: { parse: [] },
+          });
           await api.post("ack", {
             id: card.jobId,
             lease: card.lease,
             reviewId: card.review.id,
+            version: card.version,
             messageId: message.id,
           });
         },

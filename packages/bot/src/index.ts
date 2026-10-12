@@ -98,7 +98,9 @@ function createConversationSeam(
     reporter: consoleReporter,
     guildId: DISCORD_GUILD_ID,
   });
-  const badgeInteraction = badges ? createBadgeInteractionHandler(badges) : undefined;
+  const badgeInteraction = badges
+    ? createBadgeInteractionHandler(badges, env.AGENT_INGRESS_SECRET)
+    : undefined;
   attachInteractionDispatcher(
     client,
     commands,

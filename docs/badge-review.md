@@ -28,7 +28,7 @@ flowchart LR
   I --> DB
   J --> R[GitHub draft PR / verified merge / phack.rs]
   R --> DB
-  DB --> V[Versioned review card]
+  DB --> V[New message for the next step]
   V --> D
   E --> P[Existing bot reply renderer]
   B --> P
@@ -36,12 +36,12 @@ flowchart LR
 
 ## Responsibilities
 
-| Component                 | Responsibility                                                                                                                                            |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/bot/src/badges` | Native Discord controls, fresh membership reads, review-card delivery, once-per-minute worker tick. The bot keeps the Discord token.                      |
-| `packages/badge-agent`    | Separate Eve root application, Luna routing endpoint, authenticated workflow API, CMS and GitHub adapters. Reuses the existing Discord channel transport. |
-| `packages/badges`         | Schemas, immutable evidence, deterministic workflow gates, SVG inspection, packing, physical exports, and worker dispatch.                                |
-| `packages/shared`         | Shared transport target and migration for review/evidence/job storage.                                                                                    |
+| Component                 | Responsibility                                                                                                                                                  |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/bot/src/badges` | Native Discord controls, fresh membership reads, short progress messages, and worker delivery after actions and on the minute. The bot keeps the Discord token. |
+| `packages/badge-agent`    | Separate Eve root application, Luna routing endpoint, authenticated workflow API, CMS and GitHub adapters. Reuses the existing Discord channel transport.       |
+| `packages/badges`         | Schemas, immutable evidence, deterministic workflow gates, SVG inspection, packing, physical exports, and worker dispatch.                                      |
+| `packages/shared`         | Shared transport target and migration for review/evidence/job storage.                                                                                          |
 
 The badge app exposes only `review_status` and `submit_files`. File/HTTP/shell tools, generic delegation, and Eve's question tool are disabled. It has no declared subagents or model-executed publishing capability. The conversational model matches the existing Eve app; `openai/gpt-6-luna-decisions` is used only for routing. Visual review uses the human/crop path because the previous visual experiments did not justify automatic approvals.
 
@@ -52,15 +52,15 @@ Redis retains the thread's initial agent choice without a TTL, so a bot restart,
 ## What people see
 
 1. The author submits two SVGs. The bot creates or uses the Discord thread. The badge agent registers only that message's bot-observed attachments.
-2. The review card shows **A** and **B** previews. The author identifies which is the badge; the other becomes the stamp. Filenames are never evidence of roles. A one-file revision explicitly replaces either the badge or stamp.
-3. The author chooses a CMS event and confirms badge material, badge size range, stamp size, mirroring, and cut spacing. The event ID is stable identity; version is a string extracted from `Hack Night X.XX`, and expected date is the event's Indianapolis local date. Event refresh reopens affected review work.
-4. Static findings name the file, rule, result, and fix. Unsupported SVG features are **unknown**, not passes. New exports must clear those findings.
+2. A new message asks “Which one is the badge?” with **A** and **B** previews. A one-file revision asks “Which file should this replace?” with badge/stamp buttons. The role policy stays internal.
+3. Static failures name the affected file and a concrete fix. The conversation omits rule IDs and internal classifications. Unsupported SVG features still block progress internally. New exports must clear those findings.
+4. After the SVG checks pass, the author chooses a CMS event and confirms badge material, badge size range, stamp size, mirroring, and cut spacing. The event ID is stable identity; version is a string extracted from `Hack Night X.XX`, and expected date is the event's Indianapolis local date. Event refresh reopens affected review work.
 5. The worker offers up to three audited layouts. Defaults: one 12×12-inch sheet plus one 12×18-inch sheet, 0.2-inch edge margins, 0.5 mm cut spacing, 80–100 badges, and a 2–2.7-inch longest-side range. Both cut dimensions are displayed. The longer side must be at least 2 inches and the shorter side at least 1.7 inches, including unusual shapes. The author can enlarge the range; the worker will report failure rather than shrink below the standards to meet the batch target. Selecting a layout prepares dimensioned badge and stamp SVGs, including the requested stamp mirroring.
-6. An organizer reviews **version**, **date**, **physical readability**, and **stamp** using the full previews and overlapping badge crops. Each modal states its criteria. Each decision records approve / changes / unclear and a note; changes or unclear requires guidance. The physical review covers the 3% engraving-line minimum, contrast, pale grayscale, fragile geometry and artwork containment. The badge's exact expected version/date are shown; stamps are not required to contain them. The stamp center must be a simplified motif without text or complex items. Border text alone does not fail a stamp.
-7. Once all criteria pass, the worker creates or updates a draft PR in `purduehackers/badge-designs`. The organizer who completed the last criterion gives the separate **Approve & publish this revision** confirmation. This preserves a single final reviewer in the requested public metadata.
+6. The bot asks an organizer to check **version**, **date**, **physical readability**, and **stamp**, one at a time. Each new message contains only that question and the relevant full images/close-ups. A change request pauses progression and posts the reviewer's fix. The modal provides the inspection details; the chat does not repeat the full standards. Decisions still record approve / changes / unclear with a note; changes or unclear requires guidance.
+7. Once all criteria pass, the worker creates or updates a draft PR in `purduehackers/badge-designs`. The organizer who completed the last criterion gives the separate **Publish** confirmation beside the repository link. This preserves a single final reviewer in the requested public metadata.
 8. The worker rereads the CMS, verifies every expected repository file at the approved head, checks the PR's changed paths, and merges that exact head. It creates `phack.rs/badge-<version>` and verifies the live redirect before reporting completion.
 
-Card updates and background jobs run on the minute. An old card is rejected with an instruction to use its latest version. The agent explains status from the durable record; its own narrative cannot satisfy a gate.
+Each meaningful step is a fresh message at the bottom of the thread; previous status messages are never rewritten. Successful button actions are acknowledged without extra “recorded” replies and trigger delivery immediately. Remaining background work runs on the minute. Delivery receipts coalesce queued updates for an already-posted version, and retries use a stable nonce for that review/version. Older controls are rejected. The assistant usually replies in one or two short sentences and reads the durable record first; its own narrative cannot satisfy a gate. New badge sessions receive maker comments as lead-in, excluding old bot status reports; explicit reply context is still retained. The status tool omits internal evidence IDs, hashes and rubric metadata, and badge replies omit the shared diagnostic footer.
 
 ```mermaid
 sequenceDiagram
@@ -90,7 +90,7 @@ sequenceDiagram
   Worker->>Git: Verify files and merge exact head
   Worker->>Git: Create and verify shortlink
   Worker->>Review: Persist publication receipts
-  Review-->>Bot: Completed card with shortlink
+  Review-->>Bot: New completion message with shortlink
 ```
 
 ## Evidence and failure handling

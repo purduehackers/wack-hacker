@@ -129,6 +129,14 @@ export interface ConversationDoneDeps extends AgentChatDeps {
   readonly turnMessages: TurnMessageReader;
 }
 
+function badgeContext(messages: readonly string[]): string[] {
+  return messages.length
+    ? [
+        `Earlier thread messages for background only, not requests to act on now:\n${JSON.stringify(messages)}`,
+      ]
+    : [];
+}
+
 /**
  * A mention, or a reply to the bot inside a thread.
  *
@@ -199,6 +207,10 @@ export function agentChat(deps: AgentChatDeps) {
             .object({ route: z.enum(["badge", "general"]) })
             .parse(await deps.badges.post("route", payload));
           payload.agentTarget = result.route;
+          // Review status comes from the service. Do not seed a new badge
+          // session with the bot's own superseded status reports.
+          if (result.route === "badge")
+            payload.recentMessages = badgeContext(leadIn.badgeRecentMessages);
         } catch {
           if (placeholder)
             await placeholder.edit(

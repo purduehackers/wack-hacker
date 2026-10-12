@@ -1,1 +1,1 @@
-export { default } from "../../../agents/agent/channels/eve.ts";
+export { default } from "@repo/agents/channels/eve";

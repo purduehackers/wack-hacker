@@ -1,8 +1,7 @@
+import { env } from "@repo/agents/env";
 import { eventSchema } from "@repo/badges";
 import type { BadgeEvent, Cms } from "@repo/badges";
 import { z } from "zod";
-
-import { env } from "../../../agents/agent/env.ts";
 
 const rawEvent = z.object({
   id: z.union([z.string(), z.number()]),

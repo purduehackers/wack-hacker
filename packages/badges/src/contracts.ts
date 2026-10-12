@@ -97,6 +97,7 @@ export const reviewSchema = z.strictObject({
     .optional(),
   failure: z.string().max(1500).optional(),
   cardId: id.optional(),
+  cardVersion: z.int().nonnegative().optional(),
 });
 export type Review = z.output<typeof reviewSchema>;
 export type Person = z.output<typeof personSchema>;

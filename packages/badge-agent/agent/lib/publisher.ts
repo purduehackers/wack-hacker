@@ -1,6 +1,7 @@
 import { createHmac } from "node:crypto";
 
 import { createAppAuth } from "@octokit/auth-app";
+import { env } from "@repo/agents/env";
 import { contextHash, hash } from "@repo/badges";
 import type { BadgeStore, Publisher, Review } from "@repo/badges";
 import { bearerMatches } from "@repo/shared/bearer";
@@ -8,8 +9,6 @@ import { DISCORD_GUILD_ID } from "@repo/shared/discord";
 import { writePhackLink } from "@repo/shared/phack";
 import { Octokit } from "octokit";
 import { z } from "zod";
-
-import { env } from "../../../agents/agent/env.ts";
 
 const repository = { owner: "purduehackers", repo: "badge-designs" };
 function client(): Octokit {

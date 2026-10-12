@@ -2,6 +2,7 @@ import { criterionSchema, settingsSchema } from "@repo/badges/contracts";
 import type { Action } from "@repo/badges/wire";
 import { DISCORD_GUILD_ID } from "@repo/shared/discord";
 import { messageOf } from "@repo/shared/errors";
+import { Result } from "@repo/shared/result";
 import {
   ActionRowBuilder,
   MessageFlags,
@@ -14,6 +15,7 @@ import type { Interaction, ModalSubmitInteraction } from "discord.js";
 import { z } from "zod";
 
 import type { BadgeClient } from "./client.ts";
+import { badgeWork } from "./schedule.ts";
 
 const controlSchema = z.tuple([
   z.literal("badge"),
@@ -50,8 +52,8 @@ function settingsModal(control: string) {
 }
 const reviewInstructions = {
   version:
-    "Inspect the full badge and crops. Read the exact version string shown on the review card, including trailing zeros. Unreadable is unclear, not absent or incorrect.",
-  date: "Compare the badge's date against the CMS event date shown on the card (Indianapolis local time). Inspect the whole badge as well as the crops. Do not guess from a partial crop.",
+    "Check the full badge and close-ups for the version in the message, including any trailing zeros. If you can’t read it clearly, choose unclear.",
+  date: "Check the full badge and close-ups against the event date in the message. If you can’t read it clearly, choose unclear.",
   physical:
     "Inspect at the chosen physical dimensions and material. Engraving lines must be at least 3% of badge size. Check connected geometry, fragile bridges and small details. Essential details should be near black; lighter than #666666 may disappear. Use strong contrast and at most 2–3 grayscale colors (black/white only for a first badge). Compare artwork against the red cut contour: nothing intended to remain may sit outside it.",
   stamp:
@@ -60,7 +62,7 @@ const reviewInstructions = {
 function decisionModal(control: string, criterion: keyof typeof reviewInstructions) {
   return new ModalBuilder()
     .setCustomId(control)
-    .setTitle(`Human review: ${criterion}`)
+    .setTitle(`Check ${criterion === "physical" ? "physical design" : criterion}`)
     .addTextDisplayComponents(new TextDisplayBuilder().setContent(reviewInstructions[criterion]))
     .addComponents(
       input("verdict", "Verdict: approve, changes, or unclear"),
@@ -87,15 +89,19 @@ function modalAction(interaction: ModalSubmitInteraction, action: string): Actio
       }),
     };
   }
+  const verdict = z
+    .enum(["approve", "changes", "unclear"])
+    .safeParse(field("verdict").toLowerCase());
+  if (!verdict.success) throw new Error("Enter approve, changes, or unclear, then try again.");
   return {
     kind: "decision",
     criterion: criterionSchema.parse(action),
-    verdict: z.enum(["approve", "changes", "unclear"]).parse(field("verdict").toLowerCase()),
+    verdict: verdict.data,
     note: field("note"),
   };
 }
 
-export function createBadgeInteractionHandler(client: BadgeClient) {
+export function createBadgeInteractionHandler(client: BadgeClient, secret: string) {
   return async (interaction: Interaction): Promise<boolean> => {
     if (
       !(
@@ -119,7 +125,7 @@ export function createBadgeInteractionHandler(client: BadgeClient) {
         );
         return true;
       }
-      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      await interaction.deferUpdate();
       if (
         !interaction.guild ||
         interaction.guildId !== DISCORD_GUILD_ID ||
@@ -155,10 +161,13 @@ export function createBadgeInteractionHandler(client: BadgeClient) {
           threadId: interaction.channelId,
         },
       });
-      await interaction.editReply("Recorded. The review card will update within a minute.");
+      const delivered = await badgeWork(client, secret).run({ client: interaction.client });
+      if (Result.isError(delivered))
+        throw new Error("Saved. I couldn’t post the next step yet; I’ll retry shortly.");
     } catch (cause) {
       const content = messageOf(cause).slice(0, 1900);
-      if (interaction.deferred || interaction.replied) await interaction.editReply(content);
+      if (interaction.deferred || interaction.replied)
+        await interaction.followUp({ content, flags: MessageFlags.Ephemeral });
       else await interaction.reply({ content, flags: MessageFlags.Ephemeral });
     }
     return true;

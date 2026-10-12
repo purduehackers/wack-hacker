@@ -175,7 +175,9 @@ async function paint(
   const painted = await renderer.write({
     text: work.intent.text,
     activity: work.intent.activity,
-    ...(work.intent.footer === undefined ? {} : { footer: work.intent.footer }),
+    ...(work.target.agentTarget === "badge" || work.intent.footer === undefined
+      ? {}
+      : { footer: work.intent.footer }),
     ...(hitl?.notice === undefined ? {} : { notice: hitl.notice }),
     ...(hitl === undefined ? {} : { components: hitl.components }),
     ...(hitl === undefined ? {} : { mentionUserIds: hitl.mentionUserIds }),

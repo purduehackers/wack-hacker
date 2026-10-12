@@ -1,3 +1,6 @@
+import { env } from "@repo/agents/env";
+import type { Review } from "@repo/badges/contracts";
+import { currentDecisions, reviewStep } from "@repo/badges/presentation";
 import { renderSvg } from "@repo/badges/svg";
 import { actionRequest, componentId } from "@repo/badges/wire";
 import { bearerMatches } from "@repo/shared/bearer";
@@ -7,7 +10,6 @@ import { decodeMessagePayload } from "@repo/shared/wire";
 import { defineChannel, POST } from "eve/channels";
 import { z } from "zod";
 
-import { env } from "../../../agents/agent/env.ts";
 import { cms } from "../lib/cms.ts";
 import { routeMessage } from "../lib/routing.ts";
 import { runtime } from "../lib/runtime.ts";
@@ -30,7 +32,58 @@ const acknowledgement = z.strictObject({
   lease: z.uuid(),
   reviewId: z.uuid(),
   messageId: z.string(),
+  version: z.int().nonnegative(),
 });
+
+async function previewFiles(review: Review) {
+  const files: { name: string; data: string }[] = [];
+  const step = reviewStep(review);
+  if (
+    currentDecisions(review).some((item) => item.criterion === step && item.verdict !== "approve")
+  )
+    return files;
+  if (step === "files") {
+    for (const [i, upload] of review.uploads.entries())
+      files.push({
+        name: `${i === 0 ? "A" : "B"}.png`,
+        data: Buffer.from(
+          renderSvg((await runtime().store.asset(upload.hash)).bytes.toString("utf8")),
+        ).toString("base64"),
+      });
+    return files;
+  }
+  const images: { name: string; hash: string | undefined }[] = [];
+  if (step === "layout")
+    images.push(
+      ...review.layouts.map((layout, i) => ({
+        name: `option-${i + 1}-${layout.count}-badges.png`,
+        hash: layout.preview,
+      })),
+    );
+  if (["version", "date", "physical"].includes(step))
+    images.push(
+      { name: "badge.png", hash: review.previews[0] },
+      ...review.previews
+        .slice(2)
+        .map((digest, i) => ({ name: `close-up-${i + 1}.png`, hash: digest })),
+    );
+  if (step === "stamp")
+    images.push(
+      { name: "stamp-source.png", hash: review.previews[1] },
+      { name: "stamp-output.png", hash: review.manufacturing?.stampPreview },
+    );
+  if (step === "fix")
+    for (const [i, role] of ["badge", "stamp"].entries())
+      if (review.checks.some((finding) => finding.role === role && finding.status !== "pass"))
+        images.push({ name: `${role}.png`, hash: review.previews[i] });
+  for (const asset of images)
+    if (asset.hash)
+      files.push({
+        name: asset.name,
+        data: (await runtime().store.asset(asset.hash)).bytes.toString("base64"),
+      });
+  return files;
+}
 export default defineChannel({
   routes: [
     POST("/badges/route", (request) =>
@@ -76,53 +129,24 @@ export default defineChannel({
     POST("/badges/work", (request) =>
       protectedRoute(request, async () => {
         await runtime().worker.process();
-        const job = await runtime().store.claim(true);
-        if (!job) return Response.json({});
-        const stored = await runtime().store.get(job.reviewId);
-        if (!stored) {
+        // Several jobs may describe the same latest state. Deliver it only once.
+        for (let skipped = 0; skipped < 20; skipped += 1) {
+          const job = await runtime().store.claim(true);
+          if (!job) return Response.json({});
+          const stored = await runtime().store.get(job.reviewId);
+          if (stored && (stored.review.cardVersion ?? -1) < stored.version)
+            return Response.json({
+              card: {
+                ...stored,
+                events: stored.review.rolesConfirmed ? await cms.events() : [],
+                files: await previewFiles(stored.review),
+                jobId: job.id,
+                lease: job.lease,
+              },
+            });
           await runtime().store.finish(job.id, job.lease);
-          return Response.json({});
         }
-        const { review, version } = stored;
-        const files: { name: string; data: string }[] = [];
-        if (!review.rolesConfirmed) {
-          for (const [i, upload] of review.uploads.entries())
-            files.push({
-              name: `${i === 0 ? "A" : "B"}.png`,
-              data: Buffer.from(
-                renderSvg((await runtime().store.asset(upload.hash)).bytes.toString("utf8")),
-              ).toString("base64"),
-            });
-        } else
-          for (const [i, digest] of review.previews.entries())
-            files.push({
-              name: ["badge.png", "stamp.png"][i] ?? `badge-crop-${i - 1}.png`,
-              data: (await runtime().store.asset(digest)).bytes.toString("base64"),
-            });
-        if (review.manufacturing)
-          files.push({
-            name: "stamp-manufacturing.png",
-            data: (await runtime().store.asset(review.manufacturing.stampPreview)).bytes.toString(
-              "base64",
-            ),
-          });
-        const selected =
-          review.layouts.find((layout) => layout.id === review.selectedLayout) ?? review.layouts[0];
-        if (selected)
-          files.push({
-            name: "both-sheets.png",
-            data: (await runtime().store.asset(selected.preview)).bytes.toString("base64"),
-          });
-        return Response.json({
-          card: {
-            review,
-            version,
-            events: await cms.events(),
-            files,
-            jobId: job.id,
-            lease: job.lease,
-          },
-        });
+        return Response.json({});
       }),
     ),
     POST("/badges/ack", (request) =>
@@ -130,7 +154,7 @@ export default defineChannel({
         const input = acknowledgement.parse(await request.json());
         if (!input.id.startsWith(`${input.reviewId}:render:`))
           throw new Error("Invalid render receipt.");
-        await runtime().store.card(input.reviewId, input.messageId);
+        await runtime().store.card(input.reviewId, input.messageId, input.version);
         await runtime().store.finish(input.id, input.lease);
         return Response.json({ ok: true });
       }),

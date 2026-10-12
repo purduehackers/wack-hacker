@@ -1,10 +1,5 @@
-import {
-  BADGES_CHANNEL_ID,
-  remainingCriteria,
-  ready,
-  reviewable,
-  staticPassed,
-} from "@repo/badges";
+import { BADGES_CHANNEL_ID, remainingCriteria, ready, staticPassed } from "@repo/badges";
+import { currentDecisions, reviewLabels, reviewPrompt } from "@repo/badges/presentation";
 import { DISCORD_GUILD_ID } from "@repo/shared/discord";
 import { messageOf } from "@repo/shared/errors";
 import type { ToolContext } from "eve/tools";
@@ -35,14 +30,33 @@ export async function reviewStatus(ctx: ToolContext): Promise<string> {
         next: "Attach badge and stamp SVGs, ping wack hacker, and ask to submit them.",
       });
     const { review } = stored;
+    const layout = review.layouts.find((item) => item.id === review.selectedLayout);
     return JSON.stringify({
-      ...stored,
-      staticPassed: staticPassed(review),
-      reviewable: reviewable(review),
-      remainingCriteria: remainingCriteria(review),
-      readyToPublish: ready(review),
-      evidencePolicy:
-        "Static checks are evidence-scoped. A human must inspect images; the assistant must not infer pixel content or record approvals.",
+      next: reviewPrompt(review),
+      event: review.event
+        ? { name: review.event.name, version: review.event.version, date: review.event.date }
+        : undefined,
+      settings: review.settings,
+      layout: layout
+        ? { count: layout.count, widthIn: layout.widthIn, heightIn: layout.heightIn }
+        : undefined,
+      checks: staticPassed(review) ? "SVG checks passed." : "SVG checks are not complete.",
+      remainingReviews: remainingCriteria(review).map((criterion) => reviewLabels[criterion]),
+      findings: review.checks
+        .filter((finding) => finding.status !== "pass")
+        .map(({ role, detail }) => ({ role, detail })),
+      decisions: currentDecisions(review).map(({ criterion, verdict, note }) => ({
+        item: reviewLabels[criterion],
+        verdict,
+        note,
+      })),
+      publication: review.publication?.shortlink
+        ? "Published."
+        : ready(review)
+          ? "Ready for final approval."
+          : "Not ready to publish.",
+      pullRequest: review.pr?.url,
+      published: review.publication?.shortlink,
     });
   } catch (cause) {
     return JSON.stringify({ error: messageOf(cause) });
@@ -55,8 +69,11 @@ export async function submitFiles(ctx: ToolContext): Promise<string> {
     if (saved.review.author.id !== scoped.userId)
       throw new Error("Only the author can submit these files.");
     return JSON.stringify({
-      reviewId: saved.review.id,
-      next: "Identify badge and stamp using the A/B preview buttons. The review card updates on the next worker tick (within one minute).",
+      received: saved.review.uploads.length,
+      next: reviewPrompt(saved.review),
+      reply: saved.review.uploads.length === 1 ? "Got the revised SVG." : "Got both SVGs.",
+      delivery:
+        "The bot posts the next step in this thread. Acknowledge receipt without repeating that prompt.",
     });
   } catch (cause) {
     return JSON.stringify({ error: messageOf(cause) });

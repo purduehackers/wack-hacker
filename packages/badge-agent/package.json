@@ -13,6 +13,7 @@
     "@repo/agents": "workspace:*",
     "@repo/badges": "workspace:*",
     "@repo/shared": "workspace:*",
+    "@resvg/resvg-js": "2.6.2",
     "ai": "7.0.137",
     "eve": "0.31.3",
     "octokit": "5.0.5",
