@@ -358,7 +358,8 @@ async function downloadSvg(value: string): Promise<string> {
   if (
     url.protocol !== "https:" ||
     !["cdn.discordapp.com", "media.discordapp.net"].includes(url.hostname) ||
-    !url.pathname.startsWith("/attachments/") ||
+    // Modal uploads use Discord's ephemeral attachment path.
+    !/^\/(?:ephemeral-)?attachments\//u.test(url.pathname) ||
     url.username ||
     url.password
   )

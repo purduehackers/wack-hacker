@@ -31,14 +31,20 @@ The walkthrough verifies these outcomes:
 - **Concurrency**: Competing decisions produce one accepted mutation. Repacking preserves design decisions.
 - **Recovery**: A failed shortlink retains the merge receipt. Retry finishes the link without merging again. A published review accepts a new revision while preserving the previous link.
 
+## Completed live checks
+
+On October 13, 2026, a focused local runner exercised the production handlers in Vesktop, scoped to #p-wack-hacker. CMS reads, Luna routing, Discord membership checks, controls, file downloads, rendering, and packing used real services. Review storage and saved routes were local; conversational Eve and publication were disabled.
+
+- **Design review**: Approved the badge, requested a stamp change through the feedback modal, uploaded the revised SVG through the native file modal, and approved the stamp. Badge approval survived the stamp revision.
+- **Arrangement**: Packing ran only after both approvals. The first layout held 100 badges; **Try another layout** produced 91 at the same 2.2-inch size. Both arrangements passed the contour audit and used both sheets.
+- **Delivery**: Every public bot response had exactly one embed, no message text, and no edit timestamp. Repacking preserved both design approvals.
+- **Stale controls**: An old approval produced one private embed with a working jump to the latest review.
+- **Upload repair**: The native modal exposed a rejected `/ephemeral-attachments/` URL. The downloader now accepts that Discord path alongside ordinary attachments. Retrying the same upload succeeded. Focused checks retained the host, HTTPS, credentials, redirect, and size restrictions.
+
+The first submission hit an expired local model token. After refreshing it, the runner replayed the original bot-observed Discord message through the routing endpoint. This was not an uninterrupted fresh-submission run.
+
 ## Remaining live checks
 
-The previous Discord demos used an earlier flow. They do not validate this revision. Keep the local bot stopped until a new live demonstration is requested.
-
-Before release, exercise these cases in a fresh testing thread:
-
-- **Native client behavior**: Open file uploads and feedback modals in Discord, including a denied and stale interaction.
-- **Delivery**: Follow the four-turn path and upload a requested revision without another mention.
-- **Providers**: Verify production credentials, bot permissions, repository protection, and live shortlink propagation in the intended environment.
+Before release, exercise a fresh submission through the deployed badge app, conversational Eve replies, a denied interaction from another account, and a requested revision attached as a message. Complete the fourth turn with intended assets to verify repository protection, publication permissions, and live shortlink propagation. None of the disposable sample files were published.
 
 The implementation and pull request remain open for review. Do not treat offline SVG or layout checks as a physical laser test.
