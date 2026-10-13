@@ -5,7 +5,7 @@ import { reviewAction } from "../lib/tools.ts";
 
 export default defineTool({
   description:
-    "Choose the acrylic the designer requested from review_status.materials. Omit id to show the material menu. Ask if their description matches several materials.",
+    "After the Hack Night is selected, choose the acrylic the designer requested from review_status.materials. Omit id to show the material menu. Ask if their description matches several materials.",
   inputSchema: z.strictObject({ version: z.int().nonnegative(), id: z.string().optional() }),
   execute: (input, ctx) =>
     reviewAction(

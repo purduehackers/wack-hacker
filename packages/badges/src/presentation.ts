@@ -69,6 +69,7 @@ export function verifiedChecks(review: Review, role: Criterion): string[] {
 }
 
 export function failureGuidance(detail: string): string {
+  if (detail === "Choose a Hack Night before choosing acrylic.") return detail;
   if (
     /^Ask an organizer to add matching|^The selected sheets are no longer available|^The selected acrylic is unavailable|^That acrylic is no longer available/iu.test(
       detail,
@@ -163,6 +164,7 @@ export function reviewStep(review: Review): ReviewStep {
     review.rolesConfirmed &&
     review.badge &&
     review.stamp &&
+    review.event &&
     review.material &&
     review.checks.length &&
     !staticPassed(review)
@@ -173,18 +175,17 @@ export function reviewStep(review: Review): ReviewStep {
   if (review.approval) return "publishing";
   if (!review.rolesConfirmed) return "files";
   if (!review.badge || !review.stamp) return "missing";
+  if (!review.event) return "event";
   if (!review.material) return "material";
   if (!review.checks.length) return "checking";
   if (!staticPassed(review)) return "fix";
-  if (!review.event) return "event";
   if (!review.manufacturing) return "preparing";
   const remaining = remainingCriteria(review)[0];
   if (remaining) return remaining;
-  return review.selectedLayout
-    ? "layout"
-    : review.layouts.length && (!review.targetCount || review.quantityShortfall)
-      ? "quantity"
-      : "packing";
+  if (review.selectedLayout) return "layout";
+  return review.layouts.length && (!review.targetCount || review.quantityShortfall)
+    ? "quantity"
+    : "packing";
 }
 export function actionable(review: Review): boolean {
   return !["checking", "preparing", "packing", "publishing"].includes(reviewStep(review));

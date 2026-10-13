@@ -3,6 +3,7 @@ import { materialDescription } from "@repo/badges/materials";
 import {
   correctionFor,
   currentDecisions,
+  displayDate,
   reviewLabels,
   reviewStep,
 } from "@repo/badges/presentation";
@@ -46,7 +47,7 @@ export function actionResult(action: Action, review: Review): StepResult {
     case "material":
       return materialResult(review);
     case "event":
-      return { status: "success", label: "Hack Night selected" };
+      return eventResult(review);
     case "roles":
     case "replace":
       return filesResult(review);
@@ -71,6 +72,15 @@ export function actionResult(action: Action, review: Review): StepResult {
   }
 }
 
+function eventResult(review: Review): StepResult {
+  return {
+    status: "success",
+    label: "Hack Night selected",
+    ...(review.event
+      ? { description: `${escapeMarkdown(review.event.name)}\n${displayDate(review.event.date)}` }
+      : {}),
+  };
+}
 function materialResult(review: Review): StepResult {
   return {
     status: "success",
@@ -159,8 +169,7 @@ export function deliveredResult(message: CardMessage, review: Review): StepResul
   }
   if (commands.some((action) => action.startsWith("material.")) && review.material)
     return materialResult(review);
-  if (commands.includes("event") && review.event)
-    return { status: "success", label: "Hack Night selected" };
+  if (commands.includes("event") && review.event) return eventResult(review);
   if (commands.some((action) => /^(?:roles|replace)\./u.test(action)) && review.rolesConfirmed)
     return filesResult(review);
   if (commands.includes("publish") && review.approval) return pendingResult("publish", review);

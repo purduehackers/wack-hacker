@@ -280,7 +280,7 @@ export function createBadgeService(
 }
 
 function inspectionJobs(review: Review): JobKind[] {
-  return review.rolesConfirmed && review.badge && review.stamp && review.material
+  return review.rolesConfirmed && review.badge && review.stamp && review.event && review.material
     ? ["inspect"]
     : [];
 }
@@ -331,6 +331,8 @@ export function assertControl(review: Review, actor: Actor, action: Action) {
     return;
   }
   assertUnlocked(review);
+  if ((action.kind === "material" || action.kind === "choose-material") && !review.event)
+    throw new Error("Choose a Hack Night before choosing acrylic.");
   const step = reviewStep(review);
   switch (action.kind) {
     case "material":

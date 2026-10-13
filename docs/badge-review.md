@@ -5,26 +5,28 @@ meta:
 
 # What happens after you submit a badge?
 
-Mention wack hacker in #p-badges with your badge and stamp as Scalable Vector Graphics (SVG) files. Choose acrylic from stock, check your designs, then arrange your badges. Each step uses one message with native Discord controls. Questions receive short, plain replies.
+Mention wack hacker in #p-badges with your badge and stamp as Scalable Vector Graphics (SVG) files. Choose the Hack Night and acrylic, check your designs, then arrange your badges. Each step uses one message with native Discord controls. Questions receive short, plain replies.
 
 **Automatic verification** lists file checks with ✅ or ❌. If a check fails, that same embed shows the repair guidance and design preview. Missing or uncertain evidence says “Not verified.”
 
 Once the file checks pass, **Manual verification** appears beside the automatic results with your preview and expected details. Confirming your design changes only the manual result. Uploading a revision preserves the previous file’s findings and removes its button.
 
-If the Hack Night is unknown, the event selector shows your current badge preview and its passed file checks. After a revision, the old failed card says **Previous verification**. Its findings describe the earlier file.
+If the Hack Night is unknown, choose it before selecting acrylic. This card contains only the event question and menu. File checks run after both selections. A revision keeps the selected event and acrylic, then shows updated results in the verification card. The old failed card says **Previous verification**; its findings describe the earlier file.
 
-Completed steps remove every button and update the title to record the result. **✅ Badge Selected** labels the preview with filenames and Badge or Stamp. **✅ Acrylic Selected** names the chosen acrylic and thickness. Yellow means a step needs input or is running, green means it completed, and red means something needs fixing. Opening an upload dialog leaves the card active until you submit a file.
+Completed steps remove every button and update the title to record the result. **✅ Badge Selected** labels the preview with filenames and Badge or Stamp. **✅ Hack Night selected** shows the event and date. **✅ Acrylic Selected** names the chosen acrylic and thickness. Yellow means a step needs input or is running, green means it completed, and red means something needs fixing. Opening an upload dialog leaves the card active until you submit a file.
 
-## The six workflow steps
+## The workflow steps
 
-When the files and event are clear, you see six messages:
+The bot asks for missing details before checking your files:
 
-1. **Choose your acrylic**: Select available material from the Discord menu. The preview and cutting sheets use this choice.
-2. **Verify your badge**: Read the automatic checks, then double-check the version, date, readability, and strength. Select **Confirm badge**.
-3. **Verify your stamp**: Read the automatic checks, then check the finished impression and dimensions. Select **Confirm stamp**.
-4. **How many badges?**: Choose a calculated count or enter a custom target. Each choice shows the count on each sheet.
-5. **Ready to publish**: Check the exact quantity on the cutting sheets. Select **Publish files** or **Change quantity**.
-6. **Get the files**: Download your saved designs and sheets through `phack.rs/badge-{version}`.
+1. **Which one is the badge?**: Identify the badge and stamp if your message leaves their roles unclear.
+2. **Choose a Hack Night**: Select the event if your message or saved selection does not identify it.
+3. **Choose your acrylic**: Select available material from the Discord menu. The preview and cutting sheets use this choice.
+4. **Verify your badge**: Read the automatic checks, then double-check the version, date, readability, and strength. Select **Confirm badge**.
+5. **Verify your stamp**: Read the automatic checks, then check the finished impression and dimensions. Select **Confirm stamp**.
+6. **How many badges?**: Choose a calculated count or enter a custom target. Each choice shows the count on each sheet.
+7. **Ready to publish**: Check the exact quantity on the cutting sheets. Select **Publish files** or **Change quantity**.
+8. **Get the files**: Download your saved designs and sheets through `phack.rs/badge-{version}`.
 
 If you need to change a design, select **Upload revised badge** or **Upload revised stamp**. Each button opens Discord’s native file upload modal directly. You don’t write feedback to yourself or wait for a separate reviewer.
 
@@ -34,7 +36,7 @@ A stamp revision preserves your badge confirmation. If you cannot read an image,
 
 You only answer questions the submission leaves unresolved. The bot uses these sources:
 
-- **Event**: An explicit Hack Night version or event link, then the saved thread selection. A native event selector resolves ambiguity. The content management system (CMS) supplies the exact version string and Indianapolis date.
+- **Event**: An explicit Hack Night version or event link, then the saved thread selection. A native event selector resolves ambiguity before acrylic selection. The content management system (CMS) supplies the exact version string and Indianapolis date.
 - **File roles**: An explicit order such as “badge first, stamp second,” a requested replacement slot, or a role-specific upload button. Otherwise, one A/B image asks which design is the badge. Filenames do not assign roles.
 - **Missing file**: One upload button asks for the missing badge or stamp. A requested revision from the original designer works without another mention.
 - **Material**: You select available acrylic before the preview. The bot checks that matching sheets exist and uses the same material throughout.
@@ -127,14 +129,24 @@ sequenceDiagram
   participant G as GitHub and phack.rs
   D->>B: Mention with badge and stamp
   B->>S: Submit observed attachments and event context
+  opt File roles are unclear
+    S-->>B: Badge and stamp selection
+    D->>B: Identify the badge
+    B->>S: Save file roles
+  end
+  opt Hack Night is unknown
+    S-->>B: Hack Night selection
+    D->>B: Select the event
+    B->>S: Save event, version, and date
+  end
   S-->>B: One acrylic selection embed
   D->>B: Select available acrylic
   B->>S: Validate stock and save selected material
   S->>S: Inspect files and render selected acrylic
-  S-->>B: One badge check embed
+  S-->>B: Badge verification message
   D->>B: Confirm badge
   B->>S: Record badge confirmation
-  S-->>B: One stamp check embed
+  S-->>B: Stamp verification message
   D->>B: Confirm stamp
   B->>S: Record stamp confirmation
   S->>S: Pack and audit at the confirmed size

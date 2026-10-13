@@ -13,6 +13,7 @@ The goal is to help you confirm your work without handing it to a separate revie
 
 Apply these decisions to the implementation, agent instructions, and architecture documentation:
 
+- **Setup order**: Identify the files, resolve the Hack Night, then choose acrylic. Keep event selection separate from verification. Revisions preserve the selected event and material.
 - **Badge**: After file checks pass, show **Automatic verification** and **Manual verification** together, with **Confirm badge** and **Upload revised badge** below.
 - **Stamp**: Show the same verification pair, with **Confirm stamp** and **Upload revised stamp**, after badge confirmation.
 - **Revisions**: Open the native file upload directly. Do not ask you to write feedback to yourself.
@@ -33,9 +34,10 @@ Apply the supplied Vercel writing guidelines within Discord’s supported featur
 - **Previews**: Show a full design. Label uploads with filenames and add Badge or Stamp after identification. Keep the image inside its embed when editing the card. Do not generate close-ups.
 - **Controls**: Put native buttons and selects below the embed. **Upload revised badge** and **Upload revised stamp** open a Label and File Upload directly.
 - **Progress**: Use typing while work runs. Do not post separate checking, preparing, packing, or publishing cards.
-- **Completed steps**: Remove all buttons after an accepted action. Use **✅ Badge Selected** with the file assignments and **✅ Acrylic Selected** with the chosen material. Use yellow for input or ongoing work, green for completion, and red for failures. Opening an upload dialog does not complete the step.
+- **Completed steps**: Remove all buttons after an accepted action. Use **✅ Badge Selected** with the file assignments, **✅ Hack Night selected** with the event and date, and **✅ Acrylic Selected** with the chosen material. Use yellow for input or ongoing work, green for completion, and red for failures. Opening an upload dialog does not complete the step.
 - **Failed checks**: Put the checklist, repair guidance, and design preview in one **Automatic verification** embed with an upload button. File failures block confirmation. A pending upload never hides failed checks. Label the completed card **Previous verification** and preserve its findings when a revision arrives.
-- **Revised files**: Show the new preview and current check results before asking for more input. If the Hack Night is unknown, include both in the event selection card.
+- **Event selection**: Ask for the Hack Night before acrylic selection and file checks. Show only the event question and native menu. Chat tools follow the same order.
+- **Revised files**: Keep the selected event and material. Rerun checks and show the new preview in the verification card.
 - **Language**: Explain a concrete action in the design app. Use status emoji in the automatic checklist and completed titles. Keep code, diagnostic details, and internal policies out of copy.
 
 ## Designer confirmation checks
@@ -63,7 +65,9 @@ Eleven focused checks now cover filename labels, selected roles, attachment repl
 
 Additional checks cover a single automatic embed for badge and stamp failures, uncertain results, and preserved findings after replacement. Passing designs still show both verification embeds. Confirming a design changes only its manual result.
 
-Ten focused checks exercise the revision button through the real interaction handler, controller, worker, and delivery loop. Discord transport and event data use fixtures. The corrected upload passes inspection, keeps the stamp, and displays its new preview beside event selection. Selecting an event prepares that same design for confirmation. Repeated edits keep previews inside embeds even when Discord omits their attachment metadata.
+The earlier revision checks exercised the upload button through the real interaction handler, controller, worker, and delivery loop. They exposed the confusing combination of event selection and file results. The current flow asks for the event first and keeps verification separate. Repeated edits keep previews inside embeds even when Discord omits their attachment metadata.
+
+Ten focused checks exercise the setup order through the real controller, worker, SVG renderer, native interaction handler, and delivery loop. Discord transport and event data use fixtures. File identification leads to event selection, then acrylic. Premature acrylic actions fail without changing state. The event card contains only its question and menu, then records the selected event and date without controls. A failed design receives its own automatic verification card. A corrected upload preserves both selections and the stamp, then shows fresh passing results and the updated preview. Explicit event context skips the event question; stale uploads and delivery retries cannot duplicate or advance the flow.
 
 The existing Discord cards now show **✅ Badge Selected**, **✅ Acrylic Selected**, and the failed automatic check with grayscale guidance. Completed cards contain no controls, and previews stay inside their embeds. The unrelated production reply was removed from this thread. Both bot instances still share an account; local testing does not prevent the production listener from answering a leading mention.
 
