@@ -8,6 +8,8 @@ export const BADGES_CHANNEL_ID = z
   .parse(process.env.BADGES_CHANNEL_ID || "1418162647005790342");
 export const RUBRIC_VERSION = "2026-10-12.1";
 export const MAX_SVG_BYTES = 1_000_000;
+export const MAX_BADGE_COUNT = 500;
+export const targetCountSchema = z.int().min(1).max(MAX_BADGE_COUNT);
 const id = z.string().trim().min(1).max(128);
 export const digestSchema = z.string().regex(/^[a-f0-9]{64}$/u);
 export const personSchema = z.strictObject({ id, username: z.string().trim().min(1).max(64) });
@@ -48,11 +50,11 @@ export const placementSchema = z.strictObject({
 });
 export const layoutSchema = z.strictObject({
   id: digestSchema,
-  count: z.int().min(80).max(100),
+  count: targetCountSchema,
   sizeIn: z.number().positive(),
   widthIn: z.number().positive(),
   heightIn: z.number().positive(),
-  placements: z.array(placementSchema).max(100),
+  placements: z.array(placementSchema).min(1).max(MAX_BADGE_COUNT),
   sheets: z.array(digestSchema).length(2),
   preview: digestSchema,
   audited: z.literal(true),
@@ -102,6 +104,11 @@ export const reviewSchema = z.strictObject({
   selectedLayout: digestSchema.optional(),
   stockPlan: stockPlanSchema.optional(),
   layoutAttempt: z.int().nonnegative().default(0),
+  targetCount: targetCountSchema.optional(),
+  fittedSizeIn: z.number().min(1.8).max(10).optional(),
+  quantityShortfall: z
+    .strictObject({ count: targetCountSchema, sizeIn: z.number().positive() })
+    .optional(),
   manufacturing: z
     .strictObject({
       badge: digestSchema,
@@ -169,6 +176,8 @@ export function contextHash(review: Review): string {
       stamp: review.stamp?.hash,
       event: review.event,
       settings: review.settings,
+      fittedSizeIn: review.fittedSizeIn,
+      targetCount: review.targetCount,
       material: review.material,
       layout: review.selectedLayout,
       stockPlan: review.stockPlan,
@@ -187,7 +196,7 @@ export function designHash(review: Review, role: Criterion): string {
       ...(role === "badge"
         ? {
             event: review.event,
-            size: review.settings?.badgeSizeIn,
+            size: badgeSize(review),
             material: review.material,
           }
         : { shortSide: review.settings?.stampSizeIn, impression: "unmirrored" }),
@@ -247,9 +256,14 @@ export function ready(review: Review): boolean {
       (layout) =>
         layout.id === review.selectedLayout &&
         layout.audited &&
-        layout.sizeIn === review.settings?.badgeSizeIn,
+        layout.sizeIn === badgeSize(review) &&
+        layout.count === review.targetCount,
     )
   );
+}
+
+export function badgeSize(review: Review): number | undefined {
+  return review.fittedSizeIn ?? review.settings?.badgeSizeIn;
 }
 
 export function invalidate(review: Review, role?: Criterion): Review {
@@ -263,6 +277,7 @@ export function invalidate(review: Review, role?: Criterion): Review {
     manufacturing: _manufacturing,
     contextChanged: _contextChanged,
     pendingRole: _pendingRole,
+    quantityShortfall: _quantityShortfall,
     ...rest
   } = review;
   return {

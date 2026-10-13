@@ -4,6 +4,8 @@ import type { BadgeEvent, Settings } from "./contracts.ts";
 // Key exceptions by exact CMS version, including trailing zeros (for example a long sword).
 const sizeByVersion: Readonly<Record<string, number>> = {};
 export const ACRYLIC_THICKNESS_MM = 3.175;
+export const MIN_BADGE_SIZE_IN = 1.8;
+export const BADGE_SIZE_STEP_IN = 0.05;
 export function productionSettings(event?: BadgeEvent): Settings {
   return {
     material: "Acrylic",

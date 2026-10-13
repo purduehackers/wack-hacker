@@ -9,7 +9,7 @@ import type { JobKind, Review, StoredReview } from "./contracts.ts";
 
 export class StaleReview extends Error {
   constructor() {
-    super("There’s a newer step in this thread. Use the buttons on the latest message.");
+    super("There’s a newer step in this thread. Use the latest message to continue.");
   }
 }
 interface Save {
@@ -79,6 +79,14 @@ class BadgeRepository {
       .where(and(eq(badgeInbox.id, id), eq(badgeInbox.threadId, threadId)))
       .limit(1);
     return row?.document;
+  }
+  async hasEvent(id: string) {
+    const rows = await this.db
+      .select({ id: badgeEvents.id })
+      .from(badgeEvents)
+      .where(eq(badgeEvents.id, id))
+      .limit(1);
+    return rows.length > 0;
   }
   async save(input: Save) {
     const document = JSON.stringify(reviewSchema.parse(input.review));

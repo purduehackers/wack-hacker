@@ -13,11 +13,13 @@ The goal is to help you confirm your work without handing it to a separate revie
 
 Apply these decisions to the implementation, agent instructions, and architecture documentation:
 
-- **Badge**: Show **Check your badge**, **Confirm badge**, and **Upload revised badge**.
-- **Stamp**: Show **Check your stamp**, **Confirm stamp**, and **Upload revised stamp** after badge confirmation.
+- **Badge**: Show **Automatic verification** and **Manual verification** together, with **Confirm badge** and **Upload revised badge** below.
+- **Stamp**: Show the same verification pair, with **Confirm stamp** and **Upload revised stamp**, after badge confirmation.
 - **Revisions**: Open the native file upload directly. Do not ask you to write feedback to yourself.
 - **Publication**: Show **Publish files** after both confirmations and arrangement. Only the original designer can confirm or publish their work.
-- **Conversation**: Send one completed plain reply. Keep workflow images and controls in one embed per step.
+- **Conversation**: Answer questions in plain text. Expose each button action as an agent tool using the same controller. Keep each workflow step in one message.
+- **Quantity**: Replace layout retries with calculated defaults and a native custom-quantity modal. Accept the same targets through chat.
+- **Sizing**: Search within configured limits for larger targets. Generate a new preview and reopen only badge confirmation when size changes.
 
 Keep existing revision checks, static checks, and publication safeguards. Preserve the agreed metadata shape; its existing `reviewer` field records the designer who confirms publication. No product decisions remain open for this change.
 
@@ -25,12 +27,14 @@ Keep existing revision checks, static checks, and publication safeguards. Preser
 
 Apply the supplied Vercel writing guidelines within Discord’s supported features:
 
-- **Messages**: Send one embed per workflow step. Answer questions in plain messages. Keep copy short and specific. Preserve earlier card text and previews when updating their status.
+- **Messages**: Send two embeds for design verification and one for other workflow steps. Answer questions in plain messages. Preserve earlier card text and previews when updating their status.
+- **Automatic verification**: List all six file checks with ✅ or ❌. Mark missing or uncertain evidence as “Not verified.” Use only evidence from the current file. Keep this embed’s result unchanged when the designer confirms.
+- **Manual verification**: Show the expected details, design preview, and next action. Keep this embed yellow until confirmation. File failures block confirmation and show repair guidance.
 - **Previews**: Show a full design. Combine A/B files or both cutting sheets into one image when needed. Do not generate close-ups.
 - **Controls**: Put native buttons and selects below the embed. **Upload revised badge** and **Upload revised stamp** open a Label and File Upload directly.
 - **Progress**: Use typing while work runs. Do not post separate checking, preparing, packing, or publishing cards.
 - **Completed steps**: Replace action controls with a disabled result button after an accepted action. Use yellow for input or ongoing work, green for completion, and red for failures. Add **Next step** when the next card arrives. Keep preview and download links usable; opening an upload dialog does not complete the step.
-- **Language**: Explain a concrete action in the design app. Keep code, status symbols, diagnostic details, and internal policies out of copy.
+- **Language**: Explain a concrete action in the design app. Use status emoji only in the automatic checklist. Keep code, diagnostic details, and internal policies out of copy.
 
 ## Designer confirmation checks
 
@@ -45,9 +49,43 @@ The walkthrough and focused interaction checks verify:
 - **Controls**: Stale submissions receive a private link to the latest step. Signed roles, fresh membership, and file limits remain enforced.
 - **Order**: Static failures block confirmation. A stamp revision preserves badge confirmation; arrangement starts after both confirmations.
 
-Lint, formatting, the badge app build, and all 7 existing tests pass. No new test files are committed. Native Vesktop control timed out during this change, so these updated interactions have not been verified live.
+Lint, formatting, the bot bundle, and all 7 existing tests pass. No new test files are committed.
 
-The completed-step update passes 8 focused checks using the production Discord builders, interaction handler, and delivery loop. They cover status colors, preserved previews, cancelled uploads, replacements, publication receipts, edit retries, duplicate deliveries, and deleted cards. These checks use local fixtures without sending Discord messages.
+The verification update passes 10 focused checks using the production Discord builders, interaction handler, and delivery loop. They cover independent embed colors, current-file evidence, preserved previews, cancelled uploads, replacements, publication receipts, edit retries, duplicate deliveries, and deleted cards.
+
+### Quantity and chat actions
+
+A focused walkthrough uses the real controller, database, packing search, contour audit, and Discord builders. Publication uses a fixture; this check does not publish real designs:
+
+- **Defaults**: The sample offers 80 as 37 + 43 and 100 as 37 + 63 at 2.2 inches
+- **Custom target**: 120 badges fit at 2.05 inches, split 47 + 73. The size change reopens badge confirmation and preserves stamp confirmation
+- **Exact exports**: After reconfirmation, both sheet files contain exactly 120 cutting outlines
+- **Unmet target**: A target of 500 reports the found 158 at 1.8 inches. Publication remains blocked
+- **Guards**: Unauthorized actors, stale revisions, out-of-range quantities, and premature publication fail
+- **Inventory**: Fixture publication reserves and consumes the sheets once
+
+Seven tool checks verify staged-message identity, designer ownership, stale revisions, one action per message, revision uploads, and cancellation. The agent uses the controller without accepting identity or attachment URLs from the model.
+
+The same [Discord test thread](https://discord.com/channels/772576325897945119/1559651097570840680) verifies the live agent and controls:
+
+- **Chat target**: “I want to have 120 badges” calls the quantity tool and produces a new 2-inch preview. The saved orientation search differs from the fresh offline run
+- **Question**: Asking what to check returns plain text and records no confirmation
+- **Chat confirmation**: “Confirm the badge” records the current design and prepares exactly 120 badges
+- **Native quantity**: **Change quantity** shows 80 as 45 + 35, 100 as 45 + 55, and 127 as 45 + 82. The custom dialog prepares exactly 110 at the same confirmed size
+- **Publication**: This run stops before publication and deducts no stock
+
+The local listener now handles only this test thread. A concurrently running production bot still creates some plain placeholders; those are not local workflow cards.
+
+### Split verification and completed steps
+
+A [new thread in #p-wack-hacker](https://discord.com/channels/772576325897945119/1559651097570840680) exercises the updated local bot through native Discord controls:
+
+- **File failure**: Blue artwork produces one ❌ in a red automatic embed. The manual embed shows repair guidance without a confirmation button
+- **Revision**: The native upload modal accepts the corrected SVG. The automatic embed shows six ✅ checks in green; manual verification remains yellow
+- **Confirmation**: Badge and stamp confirmations turn their manual embeds green. Both embeds retain their original evidence and previews. Old actions become disabled confirmation buttons and **Next step** links
+- **Arrangement**: The bot arranges badges after both confirmations. This run stops before publication and leaves inventory unchanged
+
+The production bot won the initial thread creation race and posted its own question. The test passed the original observed submission to the local route endpoint in that same new thread. The subsequent material selection, failed check, upload, confirmations, and arrangement used the running local bot.
 
 ## Earlier offline checks
 

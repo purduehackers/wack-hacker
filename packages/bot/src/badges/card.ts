@@ -6,7 +6,8 @@ import {
   fixRole,
   reviewPrompt,
   reviewStep,
-  verifiedChecks,
+  verificationChecks,
+  quantityOptions,
 } from "@repo/badges/presentation";
 import type { ReviewStep } from "@repo/badges/presentation";
 import { cardSchema, componentId } from "@repo/badges/wire";
@@ -14,7 +15,7 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder }
 import type { APIEmbed } from "discord.js";
 import type { z } from "zod";
 
-import { badgeEmbed } from "./messages.ts";
+import { badgeColors, badgeEmbed } from "./messages.ts";
 import { reviewStatus } from "./status.ts";
 
 export type BadgeCard = z.output<typeof cardSchema>;
@@ -75,7 +76,7 @@ function failureControls(
       ),
     ];
   if (!review.approval && /layout search|time budget/iu.test(review.failure ?? ""))
-    return [row(button("Try another layout", "repack"), button("Check again", "refresh"))];
+    return [row(button("Try again", "retry"), button("Set quantity", "quantity.custom"))];
   if (
     !review.approval &&
     review.material &&
@@ -104,6 +105,10 @@ export function controls(card: BadgeCard, secret: string): Row[] {
       ];
     case "missing":
       return [row(upload(review.badge ? "stamp" : "badge"))];
+    case "upload":
+      return [
+        row(upload(review.pendingRole ?? "badge"), button("Keep current design", "keep-design")),
+      ];
     case "material":
       return [...selectionMenus(card, secret, "material"), row(button("Check stock", "refresh"))];
     case "fix":
@@ -135,8 +140,17 @@ export function controls(card: BadgeCard, secret: string): Row[] {
       return [
         row(
           button("Publish files", "publish", ButtonStyle.Success),
-          button("Try another layout", "repack"),
+          button("Change quantity", "quantity"),
           button("Change material", "choose-material"),
+        ),
+      ];
+    case "quantity":
+      return [
+        row(
+          ...quantityOptions(review).map((option) =>
+            button(`${option.count} badges`, `quantity.${option.count}`, ButtonStyle.Primary),
+          ),
+          button("Custom quantity", "quantity.custom"),
         ),
       ];
     case "error":
@@ -161,6 +175,7 @@ export function controls(card: BadgeCard, secret: string): Row[] {
 const titles: Record<ReviewStep, string> = {
   files: "Which one is the badge?",
   missing: "One more file",
+  upload: "Upload your revision",
   material: "Choose your acrylic",
   checking: "Checking your files…",
   fix: "Update the design",
@@ -170,11 +185,32 @@ const titles: Record<ReviewStep, string> = {
   stamp: "Check your stamp",
   packing: "Arranging your badges…",
   layout: "Ready to publish",
+  quantity: "How many badges?",
   publishing: "Saving your files…",
   done: "Your files are ready",
   error: "Continue with your designs",
 };
-export function cardEmbeds(card: BadgeCard): [APIEmbed] {
+function automaticVerification(review: BadgeCard["review"], role: "badge" | "stamp"): APIEmbed {
+  const results = verificationChecks(review, role);
+  const status = results.some((check) => check.status === "fail")
+    ? "error"
+    : results.every((check) => check.status === "pass")
+      ? "success"
+      : "warning";
+  return {
+    title: "Automatic verification",
+    color: badgeColors[status],
+    description: results
+      .map((check) =>
+        check.status === "pass"
+          ? `✅ ${check.label}`
+          : `❌ ${check.status === "unknown" ? "Not verified: " : ""}${check.label}`,
+      )
+      .join("\n"),
+  };
+}
+
+export function cardEmbeds(card: BadgeCard): APIEmbed[] {
   const { review } = card,
     step = reviewStep(review);
   const title = cardTitle(card);
@@ -195,12 +231,6 @@ export function cardEmbeds(card: BadgeCard): [APIEmbed] {
       ...(review.material
         ? [{ name: "Material", value: materialDescription(review.material) }]
         : []),
-      {
-        name: "Verified by Wack Hacker",
-        value: verifiedChecks(review, "badge")
-          .map((check) => `- ${check}`)
-          .join("\n"),
-      },
     ];
     if (review.manufacturing.badge3d)
       embed.footer = {
@@ -243,11 +273,48 @@ export function cardEmbeds(card: BadgeCard): [APIEmbed] {
       });
     embed.footer = { text: "Publishing saves the files and deducts the acrylic sheets used" };
   }
+  if (step === "quantity") {
+    embed.fields = quantityFields(review);
+    embed.footer = {
+      text: "Or tell me “I want 120 badges.” A smaller size needs your confirmation again.",
+    };
+  }
   if (step === "done")
     embed.footer = {
       text: `Designed by ${review.author.username}`,
     };
+  return verificationEmbeds(review, step, embed);
+}
+
+function verificationEmbeds(
+  review: BadgeCard["review"],
+  step: ReviewStep,
+  embed: APIEmbed,
+): APIEmbed[] {
+  if (step === "badge" || step === "stamp" || step === "fix") {
+    const role = step === "fix" ? fixRole(review) : step;
+    embed.title = "Manual verification";
+    if (step === "fix") {
+      embed.description = `Update your ${role} before confirming it.\n\n${reviewPrompt(review)}`;
+      embed.color = badgeColors.warning;
+    }
+    return [automaticVerification(review, role), embed];
+  }
   return [embed];
+}
+
+function quantityFields(review: BadgeCard["review"]): NonNullable<APIEmbed["fields"]> {
+  if (!review.manufacturing) return [];
+  return [
+    {
+      name: "Badge size",
+      value: dimensions(review.manufacturing.badgeWidthIn, review.manufacturing.badgeHeightIn),
+    },
+    ...quantityOptions(review).map((option) => ({
+      name: `${option.count} badges`,
+      value: `${option.small} on 12 × 12 in + ${option.large} on 12 × 18 in = ${option.count}`,
+    })),
+  ];
 }
 
 function cardTitle(card: BadgeCard) {

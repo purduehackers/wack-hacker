@@ -100,10 +100,9 @@ export default defineChannel({
         if (Result.isError(decoded)) throw new Error("Invalid Discord payload.");
         const payload = decoded.value,
           route = await routeMessage(payload);
-        let handled = route === "badge" && Boolean(payload.attachments?.length);
+        const handled = route === "badge" && Boolean(payload.attachments?.length);
         if (handled && payload.thread)
           await runtime().service.submit(payload.messageId, payload.thread.id);
-        if (!handled && route === "badge") handled = await runtime().service.resolveEvent(payload);
         return Response.json({ route, handled });
       }),
     ),

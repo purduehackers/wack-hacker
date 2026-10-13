@@ -5,19 +5,22 @@ meta:
 
 # What happens after you submit a badge?
 
-Mention wack hacker in #p-badges with your badge and stamp as Scalable Vector Graphics (SVG) files. Choose acrylic from stock, check your designs, then arrange your badges. Each workflow step contains one embed and native Discord controls. Questions receive short, plain replies.
+Mention wack hacker in #p-badges with your badge and stamp as Scalable Vector Graphics (SVG) files. Choose acrylic from stock, check your designs, then arrange your badges. Each step uses one message with native Discord controls. Questions receive short, plain replies.
+
+Design checks show two embeds: **Automatic verification** lists file checks with ✅ or ❌, and **Manual verification** shows the preview and expected details. Missing or uncertain evidence says “Not verified.” Each embed keeps its own status color; confirming your design changes only the manual result.
 
 Completed steps keep their previews and replace action buttons with a disabled result, such as **Badge confirmed**. The next message adds **Next step** to the previous card. Yellow means a step needs input or is running, green means it completed, and red means something needs fixing. Opening an upload dialog leaves the card active until you submit a file.
 
-## The five workflow steps
+## The six workflow steps
 
-When the files and event are clear, you see five messages:
+When the files and event are clear, you see six messages:
 
 1. **Choose your acrylic**: Select available material from the Discord menu. The preview and cutting sheets use this choice.
-2. **Check your badge**: Read the verified file checks. Double-check the version, date, readability, and strength at the displayed size. Select **Confirm badge**.
-3. **Check your stamp**: Check the finished impression and dimensions. Select **Confirm stamp**.
-4. **Ready to publish**: Check both cutting sheets in one image. Select **Publish files**, or **Try another layout** at the same size.
-5. **Get the files**: Download your saved designs and sheets through `phack.rs/badge-{version}`.
+2. **Verify your badge**: Read the automatic checks, then double-check the version, date, readability, and strength. Select **Confirm badge**.
+3. **Verify your stamp**: Read the automatic checks, then check the finished impression and dimensions. Select **Confirm stamp**.
+4. **How many badges?**: Choose a calculated count or enter a custom target. Each choice shows the count on each sheet.
+5. **Ready to publish**: Check the exact quantity on the cutting sheets. Select **Publish files** or **Change quantity**.
+6. **Get the files**: Download your saved designs and sheets through `phack.rs/badge-{version}`.
 
 If you need to change a design, select **Upload revised badge** or **Upload revised stamp**. Each button opens Discord’s native file upload modal directly. You don’t write feedback to yourself or wait for a separate reviewer.
 
@@ -39,7 +42,9 @@ A mention replying to your own submission can use its attachments. A later expli
 
 The first mention in an unassigned #p-badges conversation calls `openai/gpt-6-luna-decisions` to choose the badge or general assistant. Redis stores the choice. Established threads and existing badge reviews bypass classification, including after restarts or Eve session resets.
 
-The [Eve agent framework](./system/eve-policy-and-integrations.md) hosts the badge assistant separately. The controller handles uploads before starting an agent turn. Eve has one read-only workflow tool, `review_status`, for answering questions from current evidence. It cannot submit files, confirm designs, change settings, or publish assets.
+The [Eve agent framework](./system/eve-policy-and-integrations.md) hosts the badge assistant separately. The controller handles uploads before starting an agent turn. Eve reads `review_status` before acting. Its tools identify files, select material and events, confirm designs, request revised uploads, set quantities, retry steps, and publish files. Every action calls the same controller as Discord controls. Preview and download requests return current links.
+
+Chat actions require the bot-observed message, authenticated sender, thread, and current revision. Each message can change the workflow once. Questions do not authorize actions. Publication requires an explicit request after both confirmations and a selected quantity. A completed agent turn wakes the workflow worker; the scheduled sweep recovers missed delivery.
 
 The architecture separates conversation, decisions, and delivery:
 
@@ -51,8 +56,10 @@ flowchart LR
   Luna --> Saved
   Saved --> General[General Eve]
   Saved --> Intake[Badge controller]
-  Intake -->|Question| Eve[Badge Eve: read status and explain]
-  Intake -->|Observed files or event| Service[Review service]
+  Intake -->|Chat| Eve[Badge Eve: read status, answer or act]
+  Intake -->|Observed files| Service[Review service]
+  Eve --> Tools[Workflow tools: current message and revision]
+  Tools --> Service
   Native[Discord buttons, selects, modals] --> Auth[Signed revision and fresh membership]
   Auth --> Service
   Service <--> DB[(Turso: reviews, assets, audit, jobs)]
@@ -66,7 +73,7 @@ flowchart LR
   Inventory[Native badge inventory commands] --> StockAuth[Fresh organizer membership for writes]
   StockAuth --> Stock[(Turso: sheet counts and change history)]
   Worker -->|Reserve before saving; deduct after verified merge| Stock
-  DB --> Delivery[One actionable embed and native controls]
+  DB --> Delivery[Verification embeds and native controls]
   Eve --> Reply[One completed plain reply]
   General --> Reply
 ```
@@ -138,11 +145,13 @@ sequenceDiagram
   S-->>B: One download embed
 ```
 
-Production settings live in [`policy.ts`](../packages/badges/src/policy.ts). The current defaults are a 2.2-inch badge long side, acrylic, and 0.2 mm between cuts. Exact event versions can override the badge size for unusual geometry. Sheets remain one 12 × 12-inch sheet and one 12 × 18-inch sheet, with 0.2-inch edges and a target of 80–100 badges.
+Production settings live in [`policy.ts`](../packages/badges/src/policy.ts). The current defaults are a 2.2-inch badge long side, acrylic, and 0.2 mm between cuts. Exact event versions can override the badge size for unusual geometry. Sheets remain one 12 × 12-inch sheet and one 12 × 18-inch sheet, with 0.2-inch edges. The quantity step offers 80, 100, and the found capacity when those counts fit, removing duplicates. Smaller capacities offer a single-sheet count and the found total. Custom targets accept 1–500 badges.
 
 The stamp always measures 1.5 inches on its shortest side and keeps its aspect ratio. A 3:1 stamp therefore measures 4.5 × 1.5 inches. The designer supplies unmirrored artwork. The review shows its unmirrored impression; the manufacturing export mirrors it once. Stamp material is separate from the badge sheets.
 
-Packing uses a bounded rotation search and a separate contour audit for overlap, spacing, and edges. **Try another layout** varies orientations at the same size. If the search finds fewer than 80 badges, the bot reports that result without shrinking the design.
+Packing uses a bounded rotation search and a separate contour audit for overlap, spacing, and edges. Each default shows a per-sheet calculation from actual placements. Selecting a count creates exactly that many cutting outlines; publishing deducts only the sheets used.
+
+A larger target searches smaller sizes in 0.05-inch steps, down to the configured 1.8-inch minimum. Long-design size exceptions stay fixed. When size changes, the bot generates a new material preview and requires badge confirmation again. Stamp confirmation survives. If the search falls short, it reports the found count and keeps publication blocked until you choose a feasible quantity. The search does not prove a mathematical maximum.
 
 An organizer can adjust configuration and select **Check again**. A changed size requires you to check and confirm the badge again. The search does not prove optimality or impossibility.
 
@@ -150,7 +159,7 @@ An organizer can adjust configuration and select **Check again**. A changed size
 
 Current [Badge and Stamp Standards](https://app.notion.com/p/purduehackers/Standards-30b181f3b6ed81af8465cebbf43f1b2e) govern artwork. The stamp sizing and workflow rules above apply the approved production policy. Historical badges do not establish correctness, and this integration has no historical import mode.
 
-**Check your badge** lists passing checks tied to the current SVG: supported features, vector artwork, outlined lettering, engraving fills, grayscale, and one closed red cutting outline. The version, date, readability, and strength remain your checks. Red cutting strokes are the exception to filled artwork. Inputs are limited to 1 MB and 5,000 elements. Scripts, external resources, raster images, entities, linked reusable objects, and stylesheets are rejected.
+**Automatic verification** lists six results tied to the current SVG: supported features, vector artwork, outlined lettering, engraving fills, palette, and one closed red cutting outline. The version, date, readability, and strength remain your checks in **Manual verification**. Red cutting strokes are the exception to filled artwork. Inputs are limited to 1 MB and 5,000 elements. Scripts, external resources, raster images, entities, linked reusable objects, and stylesheets are rejected.
 
 The cutter supports an exterior path with lines, quadratic curves, or cubic curves. Arcs and compound cuts require a plain-path export. You check visual details, contrast, thin connections, artwork containment, and stamp clarity in the full previews. The model cannot confirm a design for you; passing checks does not prove material strength or laser performance.
 
@@ -181,3 +190,5 @@ For local macOS development, set `BADGE_CHROMIUM_EXECUTABLE_PATH` to a Chromium 
 Offline validation covers designer confirmations without organizer roles, plain question replies, direct revision uploads, and the five-message workflow. It also covers material selection, current-file evidence, ownership, stale controls, competing decisions, stamp dimensions, packing limits, and partial publication. Changing acrylic requires badge confirmation again; unavailable stock never causes a material substitution.
 
 A local run in #p-wack-hacker completed designer confirmations, a plain question reply, the interactive viewer, GitHub publication, the live shortlink, and inventory deduction. It used an unpublished Hack Night 0.0 event with local Redis and libSQL. A subsequent revision verified material selection, the six passing checks, and red acrylic in the preview and viewer. This revision has not been deployed.
+
+A [new verification thread](https://discord.com/channels/772576325897945119/1559651097570840680) exercises a failed palette check, corrected upload, both confirmations, and arrangement. Discord retains both embeds, updates only the manual status, and replaces completed controls. Production won the initial thread creation race; the local test continued with the original submission. This run stops before publication without deducting inventory.

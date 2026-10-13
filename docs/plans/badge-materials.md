@@ -5,7 +5,7 @@ meta:
 
 # Review material previews and inventory before release
 
-Start the designer’s workflow with an acrylic selection from available stock. Use that selection in the rendered image, interactive viewer, and cutting-sheet allocation. Show the file checks that passed inside **Check your badge**.
+Start the designer’s workflow with an acrylic selection from available stock. Use that selection in the rendered image, interactive viewer, and cutting-sheet allocation. Show file results in **Automatic verification** and the preview in **Manual verification**.
 
 ## Implementation plan
 

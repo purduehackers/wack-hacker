@@ -38,8 +38,8 @@ export function findingGuidance(finding: Pick<Check, "id" | "role">): string {
   }
 }
 
-/** Display a pass only when its evidence belongs to the current uploaded design. */
-export function verifiedChecks(review: Review, role: Criterion): string[] {
+/** Only evidence from the current uploaded design can establish a check's result. */
+export function verificationChecks(review: Review, role: Criterion) {
   const labels: Record<Check["id"], string> = {
     supported: "No unsupported effects or linked artwork",
     palette:
@@ -51,17 +51,21 @@ export function verifiedChecks(review: Review, role: Criterion): string[] {
     fills: "Engraving uses filled shapes",
     cut: "One closed, unfilled red cutting outline without crossings",
   };
-  return checkIds
-    .filter((id) =>
-      review.checks.some(
-        (check) =>
-          check.role === role &&
-          check.id === id &&
-          check.status === "pass" &&
-          check.evidenceId === review[role]?.hash,
-      ),
-    )
-    .map((id) => labels[id]);
+  return checkIds.map((id) => {
+    const check = review[role]
+      ? review.checks.find(
+          (check) =>
+            check.role === role && check.id === id && check.evidenceId === review[role]?.hash,
+        )
+      : undefined;
+    return { label: labels[id], status: check?.status ?? "unknown" };
+  });
+}
+
+export function verifiedChecks(review: Review, role: Criterion): string[] {
+  return verificationChecks(review, role)
+    .filter((check) => check.status === "pass")
+    .map((check) => check.label);
 }
 
 export function failureGuidance(detail: string): string {
@@ -80,6 +84,7 @@ export function failureGuidance(detail: string): string {
   if (/Only.*author/iu.test(detail))
     return "Only the designer who uploaded these files can confirm, replace, or publish them.";
   if (/Explain what needs/iu.test(detail)) return "Add a short note about what needs changing.";
+  if (/^Enter a whole number/iu.test(detail)) return detail;
   if (/different review thread|p-badges thread/iu.test(detail))
     return "Open the original thread and use its latest message.";
   if (/event.*changed|production settings changed/iu.test(detail))
@@ -94,8 +99,7 @@ export function failureGuidance(detail: string): string {
   if (/SVG|XML|DOCTYPE/iu.test(detail))
     return "I couldn’t read that design. Export a plain SVG from your design app and upload it again.";
   if (/layout search found/iu.test(detail)) return detail;
-  if (/time budget/iu.test(detail))
-    return "The layout search timed out. Select Try another layout to keep the same badge size.";
+  if (/time budget/iu.test(detail)) return "The layout search timed out. Try again.";
   if (/cut outline|geometry|clearance|overlap/iu.test(detail))
     return "I couldn’t prepare the cutting layout. Ask an organizer to check the outside outline.";
   if (/Publication is locked|approval does not match/iu.test(detail))
@@ -120,12 +124,14 @@ export function dimensions(width: number, height: number): string {
 export type ReviewStep =
   | "files"
   | "missing"
+  | "upload"
   | "material"
   | "checking"
   | "fix"
   | "event"
   | "packing"
   | "layout"
+  | "quantity"
   | "preparing"
   | Criterion
   | "publishing"
@@ -144,10 +150,15 @@ export function correctionFor(review: Review) {
   );
 }
 export function fixRole(review: Review): Criterion {
-  return review.checks.find((check) => check.status !== "pass")?.role ?? "badge";
+  return (
+    (["badge", "stamp"] as const).find((role) =>
+      verificationChecks(review, role).some((check) => check.status !== "pass"),
+    ) ?? "badge"
+  );
 }
 export function reviewStep(review: Review): ReviewStep {
   if (review.contextChanged || review.failure) return "error";
+  if (review.pendingRole) return "upload";
   if (review.publication?.shortlink) return "done";
   if (review.approval) return "publishing";
   if (!review.rolesConfirmed) return "files";
@@ -159,7 +170,11 @@ export function reviewStep(review: Review): ReviewStep {
   if (!review.manufacturing) return "preparing";
   const remaining = remainingCriteria(review)[0];
   if (remaining) return remaining;
-  return review.selectedLayout ? "layout" : "packing";
+  return review.selectedLayout
+    ? "layout"
+    : review.layouts.length && (!review.targetCount || review.quantityShortfall)
+      ? "quantity"
+      : "packing";
 }
 export function actionable(review: Review): boolean {
   return !["checking", "preparing", "packing", "publishing"].includes(reviewStep(review));
@@ -182,6 +197,8 @@ export function reviewPrompt(review: Review): string {
         : "Which design is the badge? I’ll use the other one as the stamp.";
     case "missing":
       return `Upload your ${review.badge ? "stamp" : "badge"} SVG to continue.`;
+    case "upload":
+      return `Attach your updated ${review.pendingRole} SVG in this thread.`;
     case "material":
       return "Choose acrylic for your badges. I’ll use it for the 3D preview and cutting sheets.";
     case "checking":
@@ -202,11 +219,17 @@ export function reviewPrompt(review: Review): string {
     case "preparing":
       return "Preparing the previews…";
     case "badge":
-      return "I checked your file. Double-check the version, date, readability, and thin connections at this size.";
+      return `${review.fittedSizeIn ? "The badge size changed. " : ""}Double-check your badge’s version, date, readability, and thin connections at this size.`;
     case "stamp":
       return "You confirmed your badge. Check that your stamp will leave a clear impression.";
     case "packing":
       return "Arranging your badges…";
+    case "quantity": {
+      const shortfall = review.quantityShortfall;
+      return shortfall
+        ? `I found room for ${shortfall.count} badges at ${shortfall.sizeIn} inches, short of your target of ${review.targetCount}. Choose a quantity below at your confirmed size, or enter another target.`
+        : "Choose how many badges to make, or enter your own target. These counts use your confirmed badge size.";
+    }
     case "layout": {
       const layout = review.layouts.find((candidate) => candidate.id === review.selectedLayout);
       const sheets = new Set(layout?.placements.map((placement) => placement.sheet)).size;
@@ -221,4 +244,18 @@ export function reviewPrompt(review: Review): string {
         ? "Your files are saved. I couldn’t create the short link. Retry to finish."
         : failureGuidance(review.failure ?? "");
   }
+}
+
+export function quantityOptions(review: Review) {
+  const capacity = [...review.layouts].sort((a, b) => b.count - a.count)[0];
+  if (!capacity) return [];
+  const firstSheet = capacity.placements.filter((placement) => placement.sheet === 0).length;
+  return [...new Set([...(capacity.count < 80 ? [firstSheet] : [80, 100]), capacity.count])]
+    .filter((count) => count > 0 && count <= capacity.count)
+    .sort((a, b) => a - b)
+    .map((count) => ({
+      count,
+      small: Math.min(firstSheet, count),
+      large: Math.max(0, count - firstSheet),
+    }));
 }

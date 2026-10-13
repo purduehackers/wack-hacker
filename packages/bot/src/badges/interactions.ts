@@ -1,4 +1,4 @@
-import { BADGES_CHANNEL_ID, reviewSchema } from "@repo/badges/contracts";
+import { BADGES_CHANNEL_ID, MAX_BADGE_COUNT, reviewSchema } from "@repo/badges/contracts";
 import { failureGuidance } from "@repo/badges/presentation";
 import { actionSchema, componentId } from "@repo/badges/wire";
 import type { Action } from "@repo/badges/wire";
@@ -13,6 +13,8 @@ import {
   LabelBuilder,
   MessageFlags,
   ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
 } from "discord.js";
 import type {
   ButtonInteraction,
@@ -57,6 +59,21 @@ export function uploadModal(control: string, role: "badge" | "stamp") {
 }
 function commandFor(interaction: BadgeInteraction, name: string): Action {
   const [kind, role, verdict] = name.split(".");
+  if (kind === "quantity") {
+    const value = interaction.isModalSubmit()
+      ? interaction.fields.getTextInputValue("count").trim()
+      : role;
+    if (
+      value &&
+      value !== "custom" &&
+      (!/^\d+$/u.test(value) || Number(value) < 1 || Number(value) > MAX_BADGE_COUNT)
+    )
+      throw new Error(`Enter a whole number from 1 to ${MAX_BADGE_COUNT}.`);
+    return actionSchema.parse({
+      kind,
+      ...(value && value !== "custom" ? { count: Number(value) } : {}),
+    });
+  }
   if (kind === "review")
     return actionSchema.parse({
       kind: "decision",
@@ -99,14 +116,14 @@ async function requestFor(interaction: BadgeInteraction, secret: string) {
   // Older change buttons open the same upload as the current revision buttons.
   const actionName = name.endsWith(".changes")
     ? `upload.${name.split(".")[1]}`
-    : name.startsWith("material.")
-      ? "material"
+    : name.startsWith("material.") || name.startsWith("quantity.")
+      ? (name.split(".")[0] ?? name)
       : name;
   return {
     id,
     version: Number(version),
     control: componentId(id, Number(version), actionName, secret),
-    action: commandFor(interaction, actionName),
+    action: commandFor(interaction, name.startsWith("quantity.") ? name : actionName),
     eventId: interaction.id,
     actor: {
       person: { id: interaction.user.id, username: interaction.user.username },
@@ -173,11 +190,31 @@ export function createBadgeInteractionHandler(api: BadgeClient, secret: string) 
     try {
       const name = controlSchema.parse(interaction.customId.split(":"))[3];
       const opensModal =
-        interaction.isButton() && (name.startsWith("upload.") || name.endsWith(".changes"));
+        interaction.isButton() &&
+        (name.startsWith("upload.") || name.endsWith(".changes") || name === "quantity.custom");
       if (opensModal && interaction.isButton()) {
         const input = await beforeModal(interaction, api, secret);
         if (input.action.kind === "upload")
           await interaction.showModal(uploadModal(input.control, input.action.role));
+        if (input.action.kind === "quantity")
+          await interaction.showModal(
+            new ModalBuilder()
+              .setCustomId(input.control)
+              .setTitle("How many badges?")
+              .addLabelComponents(
+                new LabelBuilder()
+                  .setLabel("Target quantity")
+                  .setDescription(`Enter a whole number from 1 to ${MAX_BADGE_COUNT}.`)
+                  .setTextInputComponent(
+                    new TextInputBuilder()
+                      .setCustomId("count")
+                      .setStyle(TextInputStyle.Short)
+                      .setRequired(true)
+                      .setMaxLength(3)
+                      .setPlaceholder("120"),
+                  ),
+              ),
+          );
         return true;
       }
       // Acknowledge first. Only accepted actions settle the card; opening a modal does not.

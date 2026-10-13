@@ -263,6 +263,10 @@ export async function applyLatest(
             );
             return "done";
           }
+          if (work.target.agentTarget === "badge" && work.intent.phase !== "streaming")
+            await deps
+              .onBadgeTurn?.(work.target.channelId)
+              .catch((cause) => reportFailure(deps, dispatchId, "badge.workflow.delivery", cause));
           deps.reporter.emit({
             op: "agent.render.apply",
             status: "ok",

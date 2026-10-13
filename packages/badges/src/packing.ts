@@ -2,7 +2,7 @@ import { Resvg } from "@resvg/resvg-js";
 import { XMLSerializer } from "@xmldom/xmldom";
 import type { Path } from "clipper-lib";
 
-import { hash } from "./contracts.ts";
+import { hash, MAX_BADGE_COUNT } from "./contracts.ts";
 import type { Layout, Settings } from "./contracts.ts";
 import {
   bounds,
@@ -21,6 +21,7 @@ import {
 } from "./geometry.ts";
 import type { Point } from "./geometry.ts";
 import { physicalDimensions } from "./manufacturing.ts";
+import { BADGE_SIZE_STEP_IN, MIN_BADGE_SIZE_IN } from "./policy.ts";
 import type { BadgeStore } from "./store.ts";
 import { parseSvg } from "./svg.ts";
 
@@ -88,9 +89,8 @@ function nest(points: Point[], gap: number, deadline: number, attempt: number): 
   );
   const placements: Placement[] = [];
   for (const [sheet, dimensions] of SHEETS.entries()) {
-    while (placements.length < 100) {
-      if (Date.now() > deadline)
-        throw new Error("Packing reached its time budget. Try another layout.");
+    while (placements.length < MAX_BADGE_COUNT) {
+      if (Date.now() > deadline) throw new Error("Packing reached its time budget. Try again.");
       const choices = shapes.flatMap((orientation) =>
         placementChoices({ orientation, dimensions, sheet, placements, noFit }),
       );
@@ -203,17 +203,56 @@ export async function pack(
   cut: string,
   settings: Settings,
   store: Pick<BadgeStore, "putAsset">,
-  attempt = 0,
-): Promise<Layout[]> {
-  const sizeIn = settings.badgeSizeIn;
-  const shape = shapeAt(cut, sizeIn);
-  const placements = nest(shape.searchPoints, settings.gapMm, Date.now() + 45_000, attempt);
-  // Bounded heuristic, not a proof of optimality or infeasibility. Never resize here.
-  if (placements.length < 80)
-    throw new Error(
-      `The layout search found ${placements.length} badges. You need at least 80. Select Try another layout, or ask an organizer to adjust the size before you check your badge again.`,
-    );
-  audit(shape.points, placements, settings.gapMm);
+  options: { attempt?: number; target?: number; cached?: Layout[] } = {},
+): Promise<{ layouts: Layout[]; shortfall?: { count: number; sizeIn: number } }> {
+  const { attempt = 0, target, cached = [] } = options;
+  const deadline = Date.now() + 45_000;
+  const search = async (sizeIn: number) => {
+    const shape = shapeAt(cut, sizeIn);
+    const placements = nest(shape.searchPoints, settings.gapMm, deadline, attempt);
+    if (!placements.length) throw new Error("The cut outline does not fit on either sheet.");
+    return renderLayout(source, shape, placements, { sizeIn, gapMm: settings.gapMm }, store);
+  };
+  const capacity =
+    cached
+      .filter((layout) => layout.sizeIn === settings.badgeSizeIn)
+      .sort((a, b) => b.count - a.count)[0] ?? (await search(settings.badgeSizeIn));
+  let candidate = capacity;
+  // Long designs have an organizer-owned size exception. Do not shrink them to a normal badge.
+  const minimum = settings.badgeSizeIn > 2.2 ? settings.badgeSizeIn : MIN_BADGE_SIZE_IN;
+  for (
+    let sizeIn = Number((settings.badgeSizeIn - BADGE_SIZE_STEP_IN).toFixed(2));
+    target !== undefined && candidate.count < target && sizeIn >= minimum;
+    sizeIn = Number((sizeIn - BADGE_SIZE_STEP_IN).toFixed(2))
+  ) {
+    const found = await search(sizeIn);
+    if (found.count > candidate.count) candidate = found;
+  }
+  if (target === undefined) return { layouts: [capacity] };
+  if (candidate.count < target)
+    return { layouts: [capacity], shortfall: { count: candidate.count, sizeIn: candidate.sizeIn } };
+  const selected =
+    target === candidate.count
+      ? candidate
+      : await renderLayout(
+          source,
+          shapeAt(cut, candidate.sizeIn),
+          candidate.placements.slice(0, target),
+          { sizeIn: candidate.sizeIn, gapMm: settings.gapMm },
+          store,
+        );
+  return { layouts: candidate.id === selected.id ? [candidate] : [candidate, selected] };
+}
+
+async function renderLayout(
+  source: string,
+  shape: Shape,
+  placements: Placement[],
+  dimensions: { sizeIn: number; gapMm: number },
+  store: Pick<BadgeStore, "putAsset">,
+): Promise<Layout> {
+  const { sizeIn, gapMm } = dimensions;
+  audit(shape.points, placements, gapMm);
   const sheets = SHEETS.map((_, index) => sheetSvg(source, shape, placements, index));
   const previewSheets = sheets.map((svg, index) => {
     const dimensions = SHEETS[index];
@@ -238,19 +277,17 @@ export async function pack(
       .asPng(),
     "image/png",
   );
-  return [
-    {
-      id: hash(JSON.stringify({ sheetHashes, sizeIn, count: placements.length })),
-      sheets: sheetHashes,
-      preview,
-      sizeIn,
-      widthIn: shape.widthIn,
-      heightIn: shape.heightIn,
-      count: placements.length,
-      placements,
-      audited: true,
-    },
-  ];
+  return {
+    id: hash(JSON.stringify({ sheetHashes, sizeIn, count: placements.length })),
+    sheets: sheetHashes,
+    preview,
+    sizeIn,
+    widthIn: shape.widthIn,
+    heightIn: shape.heightIn,
+    count: placements.length,
+    placements,
+    audited: true,
+  };
 }
 
 function exclusionRegions(

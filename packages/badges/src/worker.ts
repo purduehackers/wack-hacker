@@ -1,6 +1,13 @@
 import { messageOf } from "@repo/shared/errors";
 
-import { contextHash, ready, remainingCriteria, reviewable, staticPassed } from "./contracts.ts";
+import {
+  badgeSize,
+  contextHash,
+  ready,
+  remainingCriteria,
+  reviewable,
+  staticPassed,
+} from "./contracts.ts";
 import type { BadgeMaterial, JobKind, Review } from "./contracts.ts";
 import type { createBadgeInventory } from "./inventory.ts";
 import { physicalDimensions, physicalSvg, renderManufacturing } from "./manufacturing.ts";
@@ -36,6 +43,7 @@ function nextJobs(review: Review, kind: string): JobKind[] {
     return ["prepare"];
   if (kind === "prepare" && reviewable(review) && remainingCriteria(review).length === 0)
     return ["pack"];
+  if (kind === "pack" && !review.manufacturing) return ["prepare"];
   if (kind === "archive") return ["publish"];
   if (kind === "publish") return ["link"];
   return [];
@@ -138,22 +146,42 @@ async function arrange(
     throw new Error("Confirm both designs before arranging them.");
   await assertCurrentEvent(review, cms);
   const source = (await store.asset(review.badge.hash)).bytes.toString("utf8");
-  const layouts = await pack(
+  const { layouts, shortfall } = await pack(
     source,
     inspectSvg(source, "badge").cut,
-    review.settings,
+    { ...review.settings, badgeSizeIn: badgeSize(review) ?? review.settings.badgeSizeIn },
     store,
-    review.layoutAttempt,
+    {
+      attempt: review.layoutAttempt,
+      ...(review.targetCount === undefined ? {} : { target: review.targetCount }),
+      cached: review.layouts,
+    },
   );
-  const stockPlan = await inventory?.plan(
-    review.material,
-    layouts[0]?.placements.map((placement) => placement.sheet),
-  );
+  const selected = shortfall
+    ? undefined
+    : layouts.find((layout) => layout.count === review.targetCount);
+  const {
+    selectedLayout: _selected,
+    stockPlan: _stock,
+    quantityShortfall: _shortfall,
+    ...base
+  } = review;
+  if (selected && selected.sizeIn !== badgeSize(review)) {
+    const { manufacturing: _manufacturing, ...resized } = base;
+    return { ...resized, fittedSizeIn: selected.sizeIn, layouts };
+  }
+  const stockPlan = selected
+    ? await inventory?.plan(
+        review.material,
+        selected.placements.map((placement) => placement.sheet),
+      )
+    : undefined;
   return {
-    ...review,
+    ...base,
     layouts,
-    selectedLayout: layouts[0]?.id,
+    ...(selected ? { selectedLayout: selected.id } : {}),
     ...(stockPlan ? { stockPlan } : {}),
+    ...(shortfall ? { quantityShortfall: shortfall } : {}),
   };
 }
 async function failJob(
@@ -206,14 +234,11 @@ async function prepare(
     throw new Error("Check the files before preparing them.");
   const badgeSource = (await store.asset(review.badge.hash)).bytes.toString("utf8");
   const stampSource = (await store.asset(review.stamp.hash)).bytes.toString("utf8");
-  const badge = physicalSvg(badgeSource, "badge", review.settings.badgeSizeIn, false);
+  const sizeIn = badgeSize(review) ?? review.settings.badgeSizeIn;
+  const badge = physicalSvg(badgeSource, "badge", sizeIn, false);
   const impression = physicalSvg(stampSource, "stamp", 1.5, false);
   const stamp = physicalSvg(stampSource, "stamp", 1.5, true);
-  const badgeSize = physicalDimensions(
-    inspectSvg(badgeSource, "badge").cut,
-    "badge",
-    review.settings.badgeSizeIn,
-  );
+  const badgeDimensions = physicalDimensions(inspectSvg(badgeSource, "badge").cut, "badge", sizeIn);
   const stampSize = physicalDimensions(inspectSvg(stampSource, "stamp").cut, "stamp", 1.5);
   const preview3d = await renderer?.(badge, review.material);
   return {
@@ -232,8 +257,8 @@ async function prepare(
           }
         : {}),
       stampPreview: await store.putAsset(renderManufacturing(impression), "image/png"),
-      badgeWidthIn: badgeSize.widthIn,
-      badgeHeightIn: badgeSize.heightIn,
+      badgeWidthIn: badgeDimensions.widthIn,
+      badgeHeightIn: badgeDimensions.heightIn,
       stampWidthIn: stampSize.widthIn,
       stampHeightIn: stampSize.heightIn,
     },

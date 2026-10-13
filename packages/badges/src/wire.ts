@@ -9,13 +9,27 @@ import {
   reviewSchema,
   criteria,
   MAX_SVG_BYTES,
+  targetCountSchema,
 } from "./contracts.ts";
 
-export const actionSchema = z.discriminatedUnion("kind", [
+const commonActions = [
   z.strictObject({ kind: z.literal("roles"), badge: z.int().min(0).max(1) }),
   z.strictObject({ kind: z.literal("replace"), role: z.enum(["badge", "stamp"]) }),
   z.strictObject({ kind: z.literal("event"), id: z.string().min(1).max(128) }),
   z.strictObject({ kind: z.literal("material"), id: z.string().min(1).max(100) }),
+  z.strictObject({ kind: z.literal("quantity"), count: targetCountSchema.optional() }),
+  z.strictObject({
+    kind: z.literal("decision"),
+    criterion: z.enum(criteria),
+    verdict: z.enum(["approve", "changes", "unclear"]),
+    note: z.string().trim().max(1500),
+  }),
+  z.strictObject({
+    kind: z.enum(["publish", "retry", "refresh", "repack", "choose-material", "keep-design"]),
+  }),
+] as const;
+export const actionSchema = z.discriminatedUnion("kind", [
+  ...commonActions,
   z.strictObject({
     kind: z.literal("upload"),
     role: z.enum(criteria),
@@ -27,13 +41,6 @@ export const actionSchema = z.discriminatedUnion("kind", [
       })
       .optional(),
   }),
-  z.strictObject({
-    kind: z.literal("decision"),
-    criterion: z.enum(criteria),
-    verdict: z.enum(["approve", "changes", "unclear"]),
-    note: z.string().trim().max(1500),
-  }),
-  z.strictObject({ kind: z.enum(["publish", "retry", "refresh", "repack", "choose-material"]) }),
 ]);
 export type Action = z.output<typeof actionSchema>;
 

@@ -35,7 +35,7 @@ import { createScheduledDiscordAdapter } from "./agent/scheduled.ts";
 import { createTurnMessageStore } from "./agent/turn-messages.ts";
 import { createBadgeClient } from "./badges/client.ts";
 import { createBadgeInteractionHandler } from "./badges/interactions.ts";
-import { badgeWork } from "./badges/schedule.ts";
+import { badgeWork, runBadgeWork } from "./badges/schedule.ts";
 import { buildCommands } from "./commands/index.ts";
 import { env } from "./env.ts";
 import { buildEventHandlers } from "./events/index.ts";
@@ -80,6 +80,12 @@ function createConversationSeam(
   commands: readonly SlashCommand[],
 ) {
   const flow = createConversationFlow({
+    ...(badges
+      ? {
+          onBadgeTurn: (threadId: string) =>
+            runBadgeWork(badges, env.AGENT_INGRESS_SECRET, client, threadId),
+        }
+      : {}),
     eve: createAgentClient({
       baseUrl: env.AGENT_URL,
       ...(env.BADGE_AGENT_URL === undefined ? {} : { badgeUrl: env.BADGE_AGENT_URL }),

@@ -54,11 +54,17 @@ export function actionResult(action: Action, review: Review): StepResult {
       return pendingResult("publish", review);
     case "repack":
       return { status: "warning", label: "Arranging badges…", pending: "repack" };
+    case "quantity":
+      return {
+        status: "warning",
+        label: action.count ? `Target: ${action.count} badges` : "Choosing quantity",
+      };
     case "retry":
       return { status: "warning", label: "Trying again…", pending: "retry" };
     case "choose-material":
       return { status: "warning", label: "Choosing another acrylic" };
     case "refresh":
+    case "keep-design":
       return continued;
   }
 }
@@ -88,7 +94,7 @@ export function deliveredResult(message: CardMessage, review: Review): StepResul
   if (result?.type === ComponentType.Button) {
     const kind = result.customId?.slice("badge-result:".length) ?? "complete";
     if (kind !== "complete") return pendingResult(kind, review);
-    const color = message.embeds[0]?.color;
+    const color = message.embeds.at(-1)?.color;
     return {
       status:
         color === badgeColors.success
@@ -123,7 +129,7 @@ export function deliveredResult(message: CardMessage, review: Review): StepResul
   return continued;
 }
 
-/** Preserve the card and its image; replace actions with a native, disabled result button. */
+/** Preserve verification evidence; update the final embed and replace its action controls. */
 export function settledCard(message: CardMessage, result: StepResult, nextUrl?: string) {
   const links = messageComponents(message).flatMap((component) =>
     component.type === ComponentType.Button &&
@@ -150,9 +156,11 @@ export function settledCard(message: CardMessage, result: StepResult, nextUrl?: 
       new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel("Next step").setURL(nextUrl),
     );
   return {
-    embeds: message.embeds
-      .slice(0, 1)
-      .map((embed) => ({ ...embed.toJSON(), color: badgeColors[result.status] })),
+    embeds: message.embeds.map((embed, index) =>
+      index === message.embeds.length - 1
+        ? { ...embed.toJSON(), color: badgeColors[result.status] }
+        : embed.toJSON(),
+    ),
     components: [row],
     allowedMentions: { parse: [] },
   };

@@ -142,33 +142,6 @@ class BadgeService {
     });
     return this.read(threadId);
   }
-  async resolveEvent(payload: MessagePayload): Promise<boolean> {
-    const threadId = assertScope(payload),
-      stored = await this.repository.forThread(threadId);
-    if (!stored || payload.attachments?.length) return false;
-    if (
-      stored.review.event &&
-      !/\b(?:actually|use|switch to|change to|these are for|this is for|it is for)\b/iu.test(
-        payload.content,
-      )
-    )
-      return false;
-    const event = inferEvent(payload, await this.cms.events(), stored.review.event);
-    if (!event || JSON.stringify(event) === JSON.stringify(stored.review.event)) return false;
-    await this.action(
-      stored.review.id,
-      stored.version,
-      {
-        person: personOf(payload.principal),
-        memberRoles: payload.principal.memberRoles,
-        guildId: DISCORD_GUILD_ID,
-        threadId,
-      },
-      { kind: "event", id: event.id },
-      `event:${payload.messageId}`,
-    );
-    return true;
-  }
   async asset(url: string, name: string): Promise<Asset> {
     const source = await downloadSvg(url);
     parseSvg(source);
@@ -192,13 +165,15 @@ class BadgeService {
       transition = { next: { ...rest, contextChanged: true, failure: cause.message }, jobs: [] };
     }
     const { next, jobs } = transition;
-    await this.repository.save({
+    const saved = await this.repository.save({
       review: next,
       expected: version,
       eventId,
       actorId: actor.person.id,
       jobs,
     });
+    if (!saved)
+      throw new Error("This message already changed the workflow. Wait for the next step.");
     return this.read(review.threadId);
   }
   private async advance(
@@ -207,6 +182,10 @@ class BadgeService {
     action: Action,
   ): Promise<{ next: Review; jobs: JobKind[] }> {
     switch (action.kind) {
+      case "keep-design": {
+        const { pendingRole: _role, ...next } = review;
+        return { next, jobs: [] };
+      }
       case "material": {
         const material = (await this.inventory.materials()).find(
           (option) => option.materialId === action.id,
@@ -251,8 +230,31 @@ class BadgeService {
           jobs: ["pack"],
         };
       }
+      case "quantity": {
+        const {
+          selectedLayout: _layout,
+          stockPlan: _stock,
+          failure: _failure,
+          quantityShortfall: _shortfall,
+          targetCount: _target,
+          ...rest
+        } = review;
+        const next = {
+          ...rest,
+          generation: review.generation + 1,
+          ...(action.count === undefined ? {} : { targetCount: action.count }),
+        };
+        return {
+          next,
+          jobs: reviewable(next)
+            ? remainingCriteria(next).length === 0
+              ? ["pack"]
+              : []
+            : inspectionJobs(next),
+        };
+      }
       case "upload": {
-        if (!action.file) throw new Error("Upload one SVG file.");
+        if (!action.file) return { next: { ...review, pendingRole: action.role }, jobs: [] };
         const asset = await this.asset(action.file.url, action.file.filename);
         const next = {
           ...invalidate(review, action.role),
@@ -312,6 +314,8 @@ function assertActor(review: Review, actor: Actor, action: Action) {
     action.kind === "replace" ||
     action.kind === "decision" ||
     action.kind === "material" ||
+    action.kind === "quantity" ||
+    action.kind === "keep-design" ||
     action.kind === "choose-material" ||
     action.kind === "publish"
   )
@@ -330,10 +334,13 @@ export function assertControl(review: Review, actor: Actor, action: Action) {
   const step = reviewStep(review);
   switch (action.kind) {
     case "material":
-      if (step !== "material") throw new Error("Use the latest review card.");
-      break;
+    case "quantity":
     case "choose-material":
-      if (!review.material) throw new Error("Use the latest review card.");
+      if (review.approval)
+        throw new Error("Upload a revised design before changing a published batch.");
+      break;
+    case "keep-design":
+      if (!review.pendingRole) throw new Error("Use the latest review card.");
       break;
     case "decision":
       if (!reviewable(review) || step !== action.criterion)
@@ -377,7 +384,8 @@ async function configure(review: Review, action: Action, cms: Cms): Promise<Revi
   }
   const id = action.kind === "event" ? action.id : review.event?.id;
   const event = id ? await cms.event(id) : undefined;
-  return { ...next, ...(event ? { event } : {}), settings: productionSettings(event) };
+  const { fittedSizeIn: _fitted, ...reset } = next;
+  return { ...reset, ...(event ? { event } : {}), settings: productionSettings(event) };
 }
 export class CmsEventChanged extends Error {
   constructor() {
