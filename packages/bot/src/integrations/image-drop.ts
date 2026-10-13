@@ -99,7 +99,7 @@ export interface ImageDropStore {
 /**
  * Decodes whatever the key held.
  *
- * Upstash parses stored JSON on the way out, so a current record arrives as an
+ * The Redis client parses stored JSON on the way out, so a current record arrives as an
  * object and a legacy bare slug arrives as the string it was written as.
  */
 export function decodeDrop(stored: unknown): ImageDrop | undefined {
@@ -138,9 +138,9 @@ export function createImageDropStore(redis: DropRedis): ImageDropStore {
     get: async (threadId) =>
       Result.tryPromise({
         try: async () => {
-          const stored = await redis.get<unknown>(dropKey(threadId));
+          const stored = await redis.get(dropKey(threadId));
           if (stored !== null && stored !== undefined) return decodeDrop(stored);
-          return decodeDrop((await redis.get<unknown>(legacyKey(threadId))) ?? undefined);
+          return decodeDrop((await redis.get(legacyKey(threadId))) ?? undefined);
         },
         catch: (cause) =>
           new Transient({

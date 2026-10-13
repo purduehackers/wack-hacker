@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
 
 import { createClient } from "@libsql/client";
-import { Redis } from "@upstash/redis";
 import { z } from "zod";
 
 import { BOT_ACTIVE_GENERATION_KEY, BOT_SUPERVISOR_MUTEX_KEY } from "../src/bot/generation.ts";
@@ -24,6 +23,7 @@ import {
 } from "../src/conversations/keys.ts";
 import { redisEnv, tursoEnv } from "../src/env/scripts.ts";
 import { jsonCodec } from "../src/json.ts";
+import { closeRedis, getRedis } from "../src/redis/client.ts";
 
 /**
  * JSON text to an unvalidated value — deliberately, and only here.
@@ -143,7 +143,7 @@ async function inspectRedis(arguments_: readonly string[]): Promise<void> {
   const continuation = check(continuationKeySchema, option(arguments_, "--continuation"));
   const dispatch = check(dispatchIdSchema, option(arguments_, "--dispatch"));
 
-  const redis = new Redis(redisEnv());
+  const redis = getRedis(redisEnv());
 
   const [active, mutexExists, mutexTtlMs, conversationCount, ready, renderReady] =
     await Promise.all([
@@ -270,7 +270,11 @@ async function inspectSchedules(): Promise<void> {
   }
 }
 
-const [command, ...arguments_] = process.argv.slice(2);
-if (command === "redis") await inspectRedis(arguments_);
-else if (command === "schedules" && arguments_.length === 0) await inspectSchedules();
-else usage();
+try {
+  const [command, ...arguments_] = process.argv.slice(2);
+  if (command === "redis") await inspectRedis(arguments_);
+  else if (command === "schedules" && arguments_.length === 0) await inspectSchedules();
+  else usage();
+} finally {
+  await closeRedis();
+}

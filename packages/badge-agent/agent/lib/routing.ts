@@ -11,10 +11,7 @@ const routeSchema = z.enum(["badge", "general"]);
 
 export async function routeMessage(payload: MessagePayload) {
   const threadId = assertScope(payload);
-  const redis = getRedis({
-    url: env.UPSTASH_REDIS_REST_URL,
-    token: env.UPSTASH_REDIS_REST_TOKEN,
-  });
+  const redis = getRedis({ url: env.REDIS_URL });
   const key = `badges:thread-agent:${threadId}`;
   let route = routeSchema.optional().parse((await redis.get(key)) ?? undefined);
   if (route === undefined) {

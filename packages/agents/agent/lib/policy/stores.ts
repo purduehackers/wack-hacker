@@ -65,8 +65,7 @@ let auditStore: Promise<AuditStore> | undefined;
 function stores() {
   if (redisStores !== undefined) return redisStores;
   const redis = getRedis({
-    url: env.UPSTASH_REDIS_REST_URL,
-    token: env.UPSTASH_REDIS_REST_TOKEN,
+    url: env.REDIS_URL,
   });
   redisStores = {
     approval: new ApprovalPolicyStore(redis),

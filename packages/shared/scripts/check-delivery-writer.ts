@@ -18,7 +18,7 @@
 import { DeliveryReader } from "../src/conversations/readers/delivery.ts";
 import { DeliveryWriter } from "../src/conversations/writers/delivery.ts";
 import { redisEnv } from "../src/env/scripts.ts";
-import { getRedis } from "../src/redis/client.ts";
+import { closeRedis, getRedis } from "../src/redis/client.ts";
 import { Result } from "../src/result/index.ts";
 import type { MessagePayload } from "../src/wire.ts";
 import { createProbe, probeMessage, scrubProbe } from "./probe.ts";
@@ -191,3 +191,5 @@ check("so it is claimed rather than lost", (await reader.read(KEY))?.phase, "cla
 
 await scrub();
 report("the delivery writer moves a record through every transition it owns");
+
+await closeRedis();

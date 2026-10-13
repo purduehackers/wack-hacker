@@ -79,7 +79,7 @@ export function createDeduplicator(redis: RedisClient): Deduplicator {
         return false;
       }
 
-      // Upstash answers "OK" on a successful NX set and null when the key existed.
+      // Redis answers "OK" on a successful NX set and null when the key existed.
       return claimed.value === "OK";
     },
   };

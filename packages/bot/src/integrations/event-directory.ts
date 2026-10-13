@@ -191,7 +191,7 @@ export function createEventDirectory(deps: {
 
   const fromCache = async (): Promise<readonly CmsEventSummary[] | undefined> => {
     const stored = await Result.tryPromise({
-      try: () => deps.redis.get<unknown>(CACHE_KEY),
+      try: () => deps.redis.get(CACHE_KEY),
       catch: (cause) => cause,
     });
     if (Result.isError(stored)) {

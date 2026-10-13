@@ -2,9 +2,9 @@
 
 Start with bot health, the supervisor/function logs, Sentry, and a read-only
 snapshot. Never use `KEYS *`, flush Redis, or delete a family of keys from the
-Upstash console during diagnosis.
+Redis CLI during diagnosis.
 Run the inspector from an operator shell populated with the named
-`UPSTASH_REDIS_REST_*` and, for schedules, `TURSO_*` variables; do not copy
+`REDIS_URL` and, for schedules, `TURSO_*` variables; do not copy
 production secrets into a root `.env.local` or an incident ticket.
 
 ```bash

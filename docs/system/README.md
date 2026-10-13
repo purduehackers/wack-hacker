@@ -66,7 +66,7 @@ flowchart LR
   end
 
   Shared[packages/shared — schemas, Redis transitions, DB schema]
-  Redis[(Upstash Redis)]
+  Redis[(Redis)]
   Turso[(Turso/libSQL)]
   Providers[External provider APIs]
 

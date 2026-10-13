@@ -20,7 +20,7 @@ import { RenderReader } from "../src/conversations/readers/render.ts";
 import { DeliveryWriter } from "../src/conversations/writers/delivery.ts";
 import { RenderWriter } from "../src/conversations/writers/render.ts";
 import { redisEnv } from "../src/env/scripts.ts";
-import { getRedis } from "../src/redis/client.ts";
+import { closeRedis, getRedis } from "../src/redis/client.ts";
 import { Result } from "../src/result/index.ts";
 import type { ParkedPayload, RenderIntent } from "../src/wire.ts";
 import { createProbe, probeMessage, scrubProbe, throws } from "./probe.ts";
@@ -310,3 +310,5 @@ check(
 
 await scrub();
 report("the render writer moves a paint through every transition it owns");
+
+await closeRedis();

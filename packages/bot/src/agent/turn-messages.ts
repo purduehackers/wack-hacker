@@ -51,7 +51,7 @@ function turnMessageKey(messageId: string): string {
 export function createTurnMessageStore(redis: RedisClient) {
   return {
     get: async (messageId: string): Promise<TurnMessage | undefined> => {
-      // Upstash reports a missing key as null and a decode failure as a throw;
+      // Redis reports a missing key as null and a connection failure as a throw;
       // the schema rejects both alongside a malformed entry.
       const raw = await redis.get(turnMessageKey(messageId)).catch(() => undefined);
       const parsed = turnMessageSchema.safeParse(raw);

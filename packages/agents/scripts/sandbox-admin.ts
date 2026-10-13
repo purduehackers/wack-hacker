@@ -5,7 +5,7 @@ import {
   readActiveBotGeneration,
   type ActiveBotGeneration,
 } from "@repo/shared/bot/generation";
-import { getRedis, type RedisClient } from "@repo/shared/redis";
+import { closeRedis, getRedis, type RedisClient } from "@repo/shared/redis";
 import { Sandbox } from "@vercel/sandbox";
 
 const MANAGED_TAGS = { managedBy: "wack-hacker", workload: "discord-bot" } as const;
@@ -37,8 +37,7 @@ async function coordination(): Promise<{
   active: ActiveBotGeneration | undefined;
 }> {
   const redis = getRedis({
-    url: requiredEnvironment("UPSTASH_REDIS_REST_URL"),
-    token: requiredEnvironment("UPSTASH_REDIS_REST_TOKEN"),
+    url: requiredEnvironment("REDIS_URL"),
   });
   return { redis, active: await readActiveBotGeneration(redis) };
 }
@@ -156,18 +155,22 @@ async function stopActive(confirm: string | undefined, apply: boolean): Promise<
   );
 }
 
-const arguments_ = process.argv.slice(2);
-const action = arguments_[0];
-const apply = arguments_.includes("--apply");
-const confirmIndex = arguments_.indexOf("--confirm");
-const confirm = confirmIndex === -1 ? undefined : arguments_[confirmIndex + 1];
-if (action === "list" && arguments_.length === 1) await list();
-else if (
-  action === "cleanup" &&
-  arguments_.every((value) => ["cleanup", "--apply"].includes(value))
-) {
-  await cleanup(apply);
-} else if (action === "stop-active") {
-  if (arguments_.length !== 4 || confirmIndex === -1 || confirm === undefined || !apply) usage();
-  await stopActive(confirm, apply);
-} else usage();
+try {
+  const arguments_ = process.argv.slice(2);
+  const action = arguments_[0];
+  const apply = arguments_.includes("--apply");
+  const confirmIndex = arguments_.indexOf("--confirm");
+  const confirm = confirmIndex === -1 ? undefined : arguments_[confirmIndex + 1];
+  if (action === "list" && arguments_.length === 1) await list();
+  else if (
+    action === "cleanup" &&
+    arguments_.every((value) => ["cleanup", "--apply"].includes(value))
+  ) {
+    await cleanup(apply);
+  } else if (action === "stop-active") {
+    if (arguments_.length !== 4 || confirmIndex === -1 || confirm === undefined || !apply) usage();
+    await stopActive(confirm, apply);
+  } else usage();
+} finally {
+  await closeRedis();
+}

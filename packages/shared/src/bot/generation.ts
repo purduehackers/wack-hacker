@@ -53,7 +53,7 @@ export const activeBotGenerationSchema = z.object({
 
 export type ActiveBotGeneration = z.output<typeof activeBotGenerationSchema>;
 
-/** Narrow read port projected directly from the Upstash owner. */
+/** Narrow read port projected directly from the shared Redis client. */
 export type ActiveBotGenerationReader = Pick<RedisClient, "get">;
 
 /** Decode either Upstash's already-deserialized JSON result or a raw JSON string. */
