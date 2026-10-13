@@ -6,7 +6,7 @@ import { DISCORD_GUILD_ID, roleAtLeast, roleFromMemberRoles, UserRole } from "@r
 import { and, asc, count, desc, eq, gt } from "drizzle-orm";
 
 import { stockPlanSchema } from "./contracts.ts";
-import type { Review, StockPlan } from "./contracts.ts";
+import type { BadgeMaterial, Review, StockPlan } from "./contracts.ts";
 import { stockChangeSchema, stockItemSchema, stockLabel } from "./inventory-contracts.ts";
 import type {
   InventoryRequest,
@@ -14,6 +14,7 @@ import type {
   StockItem,
   StockSpec,
 } from "./inventory-contracts.ts";
+import { ACRYLIC_MATERIALS, materialDescription } from "./materials.ts";
 import { ACRYLIC_THICKNESS_MM } from "./policy.ts";
 
 const PAGE_SIZE = 10;
@@ -75,7 +76,23 @@ class BadgeInventory {
     );
   }
 
-  async plan(usedSheets: number[] = [0, 1]): Promise<StockPlan> {
+  async materials(): Promise<BadgeMaterial[]> {
+    const stock = await this.available();
+    return ACRYLIC_MATERIALS.filter((material) =>
+      [12, 18].every((height) =>
+        stock.some(
+          (item) =>
+            item.materialId === material.id &&
+            item.widthIn === 12 &&
+            item.heightIn === height &&
+            item.thicknessMm === ACRYLIC_THICKNESS_MM &&
+            item.quantity > item.reserved,
+        ),
+      ),
+    ).map((material) => ({ materialId: material.id, thicknessMm: ACRYLIC_THICKNESS_MM }));
+  }
+
+  async plan(material: BadgeMaterial, usedSheets: number[] = [0, 1]): Promise<StockPlan> {
     if (!usedSheets.length || usedSheets.some((index) => index !== 0 && index !== 1))
       throw new InventoryError("Arrange the badges on the configured sheets first.");
     const lengths = [...new Set(usedSheets)]
@@ -83,38 +100,41 @@ class BadgeInventory {
       .map((index) => (index === 0 ? 12 : 18));
     const stock = (await this.available()).filter(
       (item) =>
+        item.materialId === material.materialId &&
         item.materialId !== "stamp-rubber" &&
-        Math.abs(item.thicknessMm - ACRYLIC_THICKNESS_MM) < 0.0001 &&
+        item.thicknessMm === material.thicknessMm &&
         item.quantity > item.reserved,
     );
-    for (const materialId of new Set(stock.map((item) => item.materialId))) {
-      const sheets = lengths.flatMap((height) => {
-        const sheet = stock.find(
-          (item) =>
-            item.widthIn === 12 && item.heightIn === height && item.materialId === materialId,
-        );
-        return sheet ? [sheet] : [];
-      });
-      if (sheets.length === lengths.length)
-        return stockPlanSchema.parse(
-          sheets.map((item) => ({
-            itemId: item.id,
-            materialId: item.materialId,
-            label: stockLabel(item),
-            widthIn: item.widthIn,
-            heightIn: item.heightIn,
-            thicknessMm: item.thicknessMm,
-            quantity: 1,
-          })),
-        );
-    }
+    const sheets = lengths.flatMap((height) => {
+      const sheet = stock.find((item) => item.widthIn === 12 && item.heightIn === height);
+      return sheet ? [sheet] : [];
+    });
+    if (sheets.length === lengths.length)
+      return stockPlanSchema.parse(
+        sheets.map((item) => ({
+          itemId: item.id,
+          materialId: item.materialId,
+          label: stockLabel(item),
+          widthIn: item.widthIn,
+          heightIn: item.heightIn,
+          thicknessMm: item.thicknessMm,
+          quantity: 1,
+        })),
+      );
     throw new InventoryError(
-      `Ask an organizer to add matching ${lengths.map((height) => `12 × ${height}-inch`).join(" and ")} sheets of ⅛-inch acrylic, then try again.`,
+      `The selected acrylic is unavailable: ${materialDescription(material)}. Choose another material, or ask an organizer to restock ${lengths.map((height) => `12 × ${height}-inch`).join(" and ")} sheets.`,
     );
   }
 
   async reserve(review: Review): Promise<void> {
-    if (!review.stockPlan)
+    if (
+      !review.material ||
+      !review.stockPlan?.every(
+        (sheet) =>
+          sheet.materialId === review.material?.materialId &&
+          sheet.thicknessMm === review.material.thicknessMm,
+      )
+    )
       throw new InventoryError("Check the material inventory and arrange the badges again.");
     const plan = stockPlanSchema.parse(review.stockPlan),
       id = publicationKey(review);

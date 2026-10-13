@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { personSchema } from "./contracts.ts";
-import { stockMaterial } from "./materials.ts";
+import { materialLabel, stockMaterial, thicknessLabel } from "./materials.ts";
 
 export const materialIdSchema = z.string().refine((id) => stockMaterial(id) !== undefined, {
   message: "Choose a material from the suggestions.",
@@ -66,8 +66,5 @@ export type InventoryResponse = z.output<typeof inventoryResponseSchema>;
 export type StockChange = z.output<typeof stockChangeSchema>;
 
 export function stockLabel(item: StockSpec): string {
-  const material = stockMaterial(item.materialId);
-  if (!material) return "Unknown material";
-  const name = material.id === "stamp-rubber" ? material.name : `${material.type} ${material.name}`;
-  return `${name} · ${item.widthIn} × ${item.heightIn} in · ${item.thicknessMm} mm`;
+  return `${materialLabel(item.materialId)} · ${item.widthIn} × ${item.heightIn} in · ${thicknessLabel(item.thicknessMm)}`;
 }

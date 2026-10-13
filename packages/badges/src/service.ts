@@ -18,6 +18,7 @@ import {
 } from "./contracts.ts";
 import type { Asset, BadgeEvent, JobKind, Person, Review, StoredReview } from "./contracts.ts";
 import { badgeIndex, inferEvent, singleRole } from "./intake.ts";
+import type { createBadgeInventory } from "./inventory.ts";
 import { productionSettings } from "./policy.ts";
 import { reviewStep } from "./presentation.ts";
 import { StaleReview } from "./store.ts";
@@ -65,9 +66,15 @@ function assertUnlocked(review: Review) {
 class BadgeService {
   private readonly repository: BadgeStore;
   private readonly cms: Cms;
-  constructor(repository: BadgeStore, cms: Cms) {
+  private readonly inventory: Pick<ReturnType<typeof createBadgeInventory>, "materials">;
+  constructor(
+    repository: BadgeStore,
+    cms: Cms,
+    inventory: Pick<ReturnType<typeof createBadgeInventory>, "materials">,
+  ) {
     this.repository = repository;
     this.cms = cms;
+    this.inventory = inventory;
   }
   async read(threadId: string): Promise<StoredReview> {
     const stored = await this.repository.forThread(threadId);
@@ -200,6 +207,21 @@ class BadgeService {
     action: Action,
   ): Promise<{ next: Review; jobs: JobKind[] }> {
     switch (action.kind) {
+      case "material": {
+        const material = (await this.inventory.materials()).find(
+          (option) => option.materialId === action.id,
+        );
+        if (!material)
+          throw new Error(
+            "That acrylic is no longer available. Select Check stock and choose another material.",
+          );
+        const next = { ...invalidate(review), material };
+        return { next, jobs: inspectionJobs(next) };
+      }
+      case "choose-material": {
+        const { material: _material, ...next } = invalidate(review);
+        return { next, jobs: [] };
+      }
       case "retry": {
         await this.repository.retry(review.id, review.generation);
         const { failure: _failure, ...next } = review;
@@ -247,12 +269,18 @@ class BadgeService {
     }
   }
 }
-export function createBadgeService(repository: BadgeStore, cms: Cms) {
-  return new BadgeService(repository, cms);
+export function createBadgeService(
+  repository: BadgeStore,
+  cms: Cms,
+  inventory: Pick<ReturnType<typeof createBadgeInventory>, "materials">,
+) {
+  return new BadgeService(repository, cms, inventory);
 }
 
 function inspectionJobs(review: Review): JobKind[] {
-  return review.rolesConfirmed && review.badge && review.stamp ? ["inspect"] : [];
+  return review.rolesConfirmed && review.badge && review.stamp && review.material
+    ? ["inspect"]
+    : [];
 }
 
 function assignUploads(review: Review, text: string, previous?: Review): Review {
@@ -283,6 +311,8 @@ function assertActor(review: Review, actor: Actor, action: Action) {
     action.kind === "roles" ||
     action.kind === "replace" ||
     action.kind === "decision" ||
+    action.kind === "material" ||
+    action.kind === "choose-material" ||
     action.kind === "publish"
   )
     assertAuthor(review, actor.person.id);
@@ -299,6 +329,12 @@ export function assertControl(review: Review, actor: Actor, action: Action) {
   assertUnlocked(review);
   const step = reviewStep(review);
   switch (action.kind) {
+    case "material":
+      if (step !== "material") throw new Error("Use the latest review card.");
+      break;
+    case "choose-material":
+      if (!review.material) throw new Error("Use the latest review card.");
+      break;
     case "decision":
       if (!reviewable(review) || step !== action.criterion)
         throw new Error("Use the latest review card.");

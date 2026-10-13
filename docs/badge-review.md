@@ -5,16 +5,17 @@ meta:
 
 # What happens after you submit a badge?
 
-Mention wack hacker in #p-badges with your badge and stamp as Scalable Vector Graphics (SVG) files. The bot checks the files, helps you confirm your designs, then arranges your badges. Each workflow step contains one embed and native Discord controls. Questions receive short, plain replies; earlier messages stay unchanged.
+Mention wack hacker in #p-badges with your badge and stamp as Scalable Vector Graphics (SVG) files. Choose acrylic from stock, check your designs, then arrange your badges. Each workflow step contains one embed and native Discord controls. Questions receive short, plain replies; earlier messages stay unchanged.
 
-## The four workflow steps
+## The five workflow steps
 
-When the files and event are clear, you see four messages:
+When the files and event are clear, you see five messages:
 
-1. **Check your badge**: Double-check the version, date, readability, and strength at the displayed size. Select **Confirm badge**.
-2. **Check your stamp**: Check the finished impression and dimensions. Select **Confirm stamp**.
-3. **Ready to publish**: Check both cutting sheets in one image. Select **Publish files**, or **Try another layout** at the same size.
-4. **Get the files**: Download your saved designs and sheets through `phack.rs/badge-{version}`.
+1. **Choose your acrylic**: Select available material from the Discord menu. The preview and cutting sheets use this choice.
+2. **Check your badge**: Read the verified file checks. Double-check the version, date, readability, and strength at the displayed size. Select **Confirm badge**.
+3. **Check your stamp**: Check the finished impression and dimensions. Select **Confirm stamp**.
+4. **Ready to publish**: Check both cutting sheets in one image. Select **Publish files**, or **Try another layout** at the same size.
+5. **Get the files**: Download your saved designs and sheets through `phack.rs/badge-{version}`.
 
 If you need to change a design, select **Upload revised badge** or **Upload revised stamp**. Each button opens Discord’s native file upload modal directly. You don’t write feedback to yourself or wait for a separate reviewer.
 
@@ -27,7 +28,8 @@ You only answer questions the submission leaves unresolved. The bot uses these s
 - **Event**: An explicit Hack Night version or event link, then the saved thread selection. A native event selector resolves ambiguity. The content management system (CMS) supplies the exact version string and Indianapolis date.
 - **File roles**: An explicit order such as “badge first, stamp second,” a requested replacement slot, or a role-specific upload button. Otherwise, one A/B image asks which design is the badge. Filenames do not assign roles.
 - **Missing file**: One upload button asks for the missing badge or stamp. A requested revision from the original designer works without another mention.
-- **Production settings**: Bot configuration supplies badge size, spacing, material, and sheets. Designers do not fill out a manufacturing questionnaire.
+- **Material**: You select available acrylic before the preview. The bot checks that matching sheets exist and uses the same material throughout.
+- **Production settings**: Bot configuration supplies badge size, thickness, spacing, and sheets. Designers do not fill out a manufacturing questionnaire.
 
 A mention replying to your own submission can use its attachments. A later explicit event reference can update the review’s event. Dates and versions apply to the badge, not the stamp.
 
@@ -54,7 +56,8 @@ flowchart LR
   Service <--> DB[(Turso: reviews, assets, audit, jobs)]
   DB --> Worker[Inspect, prepare, pack, archive, merge, link]
   Worker --> DB
-  Worker --> Render[Three.js and Chromium render a material preview]
+  Service -->|Validate selected acrylic| Stock
+  Worker --> Render[Three.js and Chromium render the selected acrylic]
   Render --> DB
   Delivery --> Viewer[Signed View in 3D link]
   Viewer --> DB
@@ -91,13 +94,13 @@ The service rejects stale controls privately and includes a jump to the latest m
 
 File inspection and physical preview preparation run before either confirmation. Packing starts only after you confirm both designs. It only rotates or translates your badge.
 
-The badge embed combines the full flat artwork and an angled 3D preview. The renderer adapts the extrusion, engraving overlay, and acrylic presets from [Purdue Hackers’ badge viewer](https://github.com/purduehackers/badges/tree/8598f7513f993f30389470c85b88427db46256f1). It uses the physical cut contour and a configured example of ⅛-inch light blue acrylic. The caption identifies the material as an example; use the flat artwork to check fine details.
+The badge embed combines the full flat artwork and an angled 3D preview. The renderer adapts the extrusion, engraving overlay, and acrylic presets from [Purdue Hackers’ badge viewer](https://github.com/purduehackers/badges/tree/8598f7513f993f30389470c85b88427db46256f1). It uses the physical cut contour and your selected acrylic and thickness. The card names the material; use the flat artwork to check fine details.
 
 The renderer runs after SVG checks pass, in a fresh Chromium process with network requests blocked. A bounded render produces a stored PNG before the badge card appears. A failed render offers the existing retry action. The preview does not simulate engraving depth, laser kerf, or material strength.
 
-**View in 3D** opens the same design and example material in an interactive viewer. You can rotate, zoom, and reset the view. The link signs the exact asset, material, and thickness; anyone with the link can view that asset. The page bundles its scripts, blocks external resources through its Content Security Policy, and sends no referrer. Rotating the ingress secret invalidates earlier viewer links.
+**View in 3D** opens the same design and selected material in an interactive viewer. You can rotate, zoom, and reset the view. The link signs the exact asset, material, and thickness; anyone with the link can view that asset. The page bundles its scripts, blocks external resources through its Content Security Policy, and sends no referrer. Rotating the ingress secret invalidates earlier viewer links.
 
-[Material inventory commands](./badge-inventory.md) track whole sheets. Guild members can read counts; organizers can add sheets, record other use, or correct a count. The arrangement selects matching ⅛-inch acrylic for its occupied sheets and shows the selection before publication. Publishing reserves those sheets, then deducts them after GitHub verifies the saved files.
+[Material inventory commands](./badge-inventory.md) track whole sheets. Guild members can read counts; organizers can add sheets, record other use, or correct a count. The material menu offers acrylic with available 12 × 12-inch and 12 × 18-inch sheets at the configured thickness. The arrangement allocates your selected material to its occupied sheets. If stock runs out, it stops rather than substituting another acrylic. Publishing reserves those sheets, then deducts them after GitHub verifies the saved files.
 
 Each transaction saves who changed the count and prevents duplicate deductions. Reserved sheets cannot serve another publication or manual use. Stamp rubber remains manual because the stamp export does not define whole-sheet consumption. Inventory does not change the configured badge size or sheet geometry.
 
@@ -111,7 +114,10 @@ sequenceDiagram
   participant G as GitHub and phack.rs
   D->>B: Mention with badge and stamp
   B->>S: Submit observed attachments and event context
-  S->>S: Inspect files and prepare physical previews
+  S-->>B: One acrylic selection embed
+  D->>B: Select available acrylic
+  B->>S: Validate stock and save selected material
+  S->>S: Inspect files and render selected acrylic
   S-->>B: One badge check embed
   D->>B: Confirm badge
   B->>S: Record badge confirmation
@@ -142,7 +148,7 @@ An organizer can adjust configuration and select **Check again**. A changed size
 
 Current [Badge and Stamp Standards](https://app.notion.com/p/purduehackers/Standards-30b181f3b6ed81af8465cebbf43f1b2e) govern artwork. The stamp sizing and workflow rules above apply the approved production policy. Historical badges do not establish correctness, and this integration has no historical import mode.
 
-Static checks cover vector artwork, outlined lettering, engraving fills, palettes, and one closed red cutting outline. Red cutting strokes are the exception to filled artwork. Inputs are limited to 1 MB and 5,000 elements. Scripts, external resources, raster images, entities, linked reusable objects, and stylesheets are rejected.
+**Check your badge** lists passing checks tied to the current SVG: supported features, vector artwork, outlined lettering, engraving fills, grayscale, and one closed red cutting outline. The version, date, readability, and strength remain your checks. Red cutting strokes are the exception to filled artwork. Inputs are limited to 1 MB and 5,000 elements. Scripts, external resources, raster images, entities, linked reusable objects, and stylesheets are rejected.
 
 The cutter supports an exterior path with lines, quadratic curves, or cubic curves. Arcs and compound cuts require a plain-path export. You check visual details, contrast, thin connections, artwork containment, and stamp clarity in the full previews. The model cannot confirm a design for you; passing checks does not prove material strength or laser performance.
 
@@ -170,6 +176,6 @@ The worker endpoint needs a 90s request timeout. The bot drains queued work afte
 
 For local macOS development, set `BADGE_CHROMIUM_EXECUTABLE_PATH` to a Chromium executable. Rendering launches a fresh headless profile. Linux deployments use the pinned Chromium package and its software rendering libraries. Apply both inventory migrations, register the slash commands, and enter actual stock before accepting new cutting layouts.
 
-Offline validation covers designer confirmations without organizer roles, plain question replies, direct revision uploads, and the four-message workflow. It also covers ownership, stale controls, competing decisions, stamp dimensions, packing limits, and partial publication.
+Offline validation covers designer confirmations without organizer roles, plain question replies, direct revision uploads, and the five-message workflow. It also covers material selection, current-file evidence, ownership, stale controls, competing decisions, stamp dimensions, packing limits, and partial publication. Changing acrylic requires badge confirmation again; unavailable stock never causes a material substitution.
 
-An earlier run in #p-wack-hacker completed the real Eve conversation pipeline, GitHub publication, and the live shortlink. That run used the previous approval labels, embedded answers, and an unpublished Hack Night 0.0 event with local Redis and libSQL. The [interaction review checklist](./plans/badge-review-copy.md) separates that evidence from current checks and remaining live validation. This revision has not been deployed.
+A local run in #p-wack-hacker completed designer confirmations, a plain question reply, the interactive viewer, GitHub publication, the live shortlink, and inventory deduction. It used an unpublished Hack Night 0.0 event with local Redis and libSQL. A subsequent revision verified material selection, the six passing checks, and red acrylic in the preview and viewer. This revision has not been deployed.

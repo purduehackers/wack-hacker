@@ -1,3 +1,4 @@
+import { materialDescription } from "@repo/badges/materials";
 import { inspectSvg } from "@repo/badges/svg";
 
 import type { RenderInput } from "./types.ts";
@@ -21,7 +22,7 @@ header,footer{padding:20px 24px;display:flex;align-items:center;justify-content:
 </style></head><body>
 <header><div><h1>Your badge in 3D</h1><p>Drag to rotate. Scroll or pinch to zoom.</p></div><button type="button">Reset view</button></header>
 <main><p role="status">Loading your badge…</p></main>
-<footer><p>Example acrylic. Check fine details in your original design.</p></footer>
+<footer><p>${materialDescription({ materialId: input.material.id, thicknessMm: input.thicknessMm })}. Check fine details in your original design.</p></footer>
 <script nonce="${nonce}">window.badgeInput=${data};${BADGE_VIEWER}</script>
 </body></html>`;
   return new Response(html, {

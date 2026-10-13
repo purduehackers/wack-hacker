@@ -2,12 +2,20 @@ import { createHmac } from "node:crypto";
 
 import { z } from "zod";
 
-import { eventSchema, personSchema, reviewSchema, criteria, MAX_SVG_BYTES } from "./contracts.ts";
+import {
+  badgeMaterialSchema,
+  eventSchema,
+  personSchema,
+  reviewSchema,
+  criteria,
+  MAX_SVG_BYTES,
+} from "./contracts.ts";
 
 export const actionSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("roles"), badge: z.int().min(0).max(1) }),
   z.strictObject({ kind: z.literal("replace"), role: z.enum(["badge", "stamp"]) }),
   z.strictObject({ kind: z.literal("event"), id: z.string().min(1).max(128) }),
+  z.strictObject({ kind: z.literal("material"), id: z.string().min(1).max(100) }),
   z.strictObject({
     kind: z.literal("upload"),
     role: z.enum(criteria),
@@ -25,7 +33,7 @@ export const actionSchema = z.discriminatedUnion("kind", [
     verdict: z.enum(["approve", "changes", "unclear"]),
     note: z.string().trim().max(1500),
   }),
-  z.strictObject({ kind: z.enum(["publish", "retry", "refresh", "repack"]) }),
+  z.strictObject({ kind: z.enum(["publish", "retry", "refresh", "repack", "choose-material"]) }),
 ]);
 export type Action = z.output<typeof actionSchema>;
 
@@ -66,6 +74,7 @@ export const cardSchema = z.strictObject({
   review: reviewSchema,
   version: z.int(),
   events: z.array(eventSchema),
+  materials: z.array(badgeMaterialSchema).default([]),
   files: z.array(z.strictObject({ name: z.string(), data: z.string() })).max(1),
   viewerUrl: z.url().optional(),
   jobId: z.string(),

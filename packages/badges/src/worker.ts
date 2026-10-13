@@ -1,9 +1,10 @@
 import { messageOf } from "@repo/shared/errors";
 
 import { contextHash, ready, remainingCriteria, reviewable, staticPassed } from "./contracts.ts";
-import type { JobKind, Review } from "./contracts.ts";
+import type { BadgeMaterial, JobKind, Review } from "./contracts.ts";
 import type { createBadgeInventory } from "./inventory.ts";
 import { physicalDimensions, physicalSvg, renderManufacturing } from "./manufacturing.ts";
+import { materialDescription } from "./materials.ts";
 import { pack } from "./packing.ts";
 import { assertCurrentEvent, CmsEventChanged } from "./service.ts";
 import type { Cms } from "./service.ts";
@@ -19,15 +20,19 @@ export interface Publisher {
   ): Promise<NonNullable<Review["publication"]>>;
   link(review: Review): Promise<string>;
 }
-export type BadgeRenderer = (
-  svg: string,
-) => Promise<{ image: Uint8Array; material: string; materialId?: string; thicknessMm?: number }>;
+export type BadgeRenderer = (svg: string, material: BadgeMaterial) => Promise<Uint8Array>;
 type Inventory = Pick<
   ReturnType<typeof createBadgeInventory>,
   "plan" | "reserve" | "consume" | "release"
 >;
 function nextJobs(review: Review, kind: string): JobKind[] {
-  if (kind === "inspect" && staticPassed(review) && review.event && review.settings)
+  if (
+    kind === "inspect" &&
+    staticPassed(review) &&
+    review.event &&
+    review.settings &&
+    review.material
+  )
     return ["prepare"];
   if (kind === "prepare" && reviewable(review) && remainingCriteria(review).length === 0)
     return ["pack"];
@@ -123,7 +128,13 @@ async function arrange(
   cms: Cms,
   inventory?: Inventory,
 ): Promise<Review> {
-  if (!reviewable(review) || remainingCriteria(review).length || !review.badge || !review.settings)
+  if (
+    !reviewable(review) ||
+    remainingCriteria(review).length ||
+    !review.badge ||
+    !review.settings ||
+    !review.material
+  )
     throw new Error("Confirm both designs before arranging them.");
   await assertCurrentEvent(review, cms);
   const source = (await store.asset(review.badge.hash)).bytes.toString("utf8");
@@ -135,6 +146,7 @@ async function arrange(
     review.layoutAttempt,
   );
   const stockPlan = await inventory?.plan(
+    review.material,
     layouts[0]?.placements.map((placement) => placement.sheet),
   );
   return {
@@ -184,7 +196,13 @@ async function prepare(
   store: BadgeStore,
   renderer?: BadgeRenderer,
 ): Promise<Review> {
-  if (!review.badge || !review.stamp || !review.settings || !staticPassed(review))
+  if (
+    !review.badge ||
+    !review.stamp ||
+    !review.settings ||
+    !review.material ||
+    !staticPassed(review)
+  )
     throw new Error("Check the files before preparing them.");
   const badgeSource = (await store.asset(review.badge.hash)).bytes.toString("utf8");
   const stampSource = (await store.asset(review.stamp.hash)).bytes.toString("utf8");
@@ -197,7 +215,7 @@ async function prepare(
     review.settings.badgeSizeIn,
   );
   const stampSize = physicalDimensions(inspectSvg(stampSource, "stamp").cut, "stamp", 1.5);
-  const preview3d = await renderer?.(badge);
+  const preview3d = await renderer?.(badge, review.material);
   return {
     ...review,
     manufacturing: {
@@ -207,10 +225,9 @@ async function prepare(
       ...(preview3d
         ? {
             badge3d: {
-              preview: await store.putAsset(preview3d.image, "image/png"),
-              material: preview3d.material,
-              ...(preview3d.materialId ? { materialId: preview3d.materialId } : {}),
-              ...(preview3d.thicknessMm ? { thicknessMm: preview3d.thicknessMm } : {}),
+              preview: await store.putAsset(preview3d, "image/png"),
+              material: materialDescription(review.material),
+              ...review.material,
             },
           }
         : {}),

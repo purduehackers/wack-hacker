@@ -1,4 +1,5 @@
 import { BADGES_CHANNEL_ID, remainingCriteria, ready, staticPassed } from "@repo/badges";
+import { materialDescription } from "@repo/badges/materials";
 import {
   currentDecisions,
   designerText,
@@ -6,6 +7,7 @@ import {
   findingGuidance,
   reviewLabels,
   reviewPrompt,
+  verifiedChecks,
 } from "@repo/badges/presentation";
 import { DISCORD_GUILD_ID } from "@repo/shared/discord";
 import { messageOf } from "@repo/shared/errors";
@@ -50,9 +52,9 @@ export async function reviewStatus(ctx: ToolContext): Promise<string> {
             stamp: [review.manufacturing.stampWidthIn, review.manufacturing.stampHeightIn],
           }
         : undefined,
-      materialPreview: review.manufacturing?.badge3d
-        ? { example: review.manufacturing.badge3d.material, stockAssigned: false }
-        : undefined,
+      material: review.material ? materialDescription(review.material) : undefined,
+      materialPreview: review.manufacturing?.badge3d?.material,
+      cuttingSheets: review.stockPlan?.map((sheet) => sheet.label),
       latestReview: review.cardId
         ? `https://discord.com/channels/${DISCORD_GUILD_ID}/${review.threadId}/${review.cardId}`
         : undefined,
@@ -60,6 +62,7 @@ export async function reviewStatus(ctx: ToolContext): Promise<string> {
         ? { count: layout.count, widthIn: layout.widthIn, heightIn: layout.heightIn }
         : undefined,
       checks: staticPassed(review) ? "SVG checks passed." : "SVG checks are not complete.",
+      verified: { badge: verifiedChecks(review, "badge"), stamp: verifiedChecks(review, "stamp") },
       remainingConfirmations: remainingCriteria(review).map((criterion) => reviewLabels[criterion]),
       findings: review.checks
         .filter((finding) => finding.status !== "pass")

@@ -69,7 +69,7 @@ async function control(request: Request, mutate: boolean) {
   }
 }
 async function deliverable(origin: string) {
-  const { store, worker } = runtime();
+  const { store, worker, inventory } = runtime();
   const worked = await worker.process();
   for (let skipped = 0; skipped < 20; skipped += 1) {
     const job = await store.claim(true);
@@ -81,6 +81,7 @@ async function deliverable(origin: string) {
         card: {
           ...stored,
           events: reviewStep(stored.review) === "event" ? await cms.events() : [],
+          materials: reviewStep(stored.review) === "material" ? await inventory.materials() : [],
           files: await previewFiles(stored.review, store),
           viewerUrl: viewerUrl(stored.review, origin),
           jobId: job.id,

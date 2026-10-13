@@ -1,4 +1,4 @@
-import { designHash, remainingCriteria, staticPassed } from "./contracts.ts";
+import { checkIds, designHash, remainingCriteria, staticPassed } from "./contracts.ts";
 import type { Check, Criterion, Review } from "./contracts.ts";
 
 const unclearReply = "Ask me again, or use the latest card to continue.";
@@ -38,9 +38,37 @@ export function findingGuidance(finding: Pick<Check, "id" | "role">): string {
   }
 }
 
+/** Display a pass only when its evidence belongs to the current uploaded design. */
+export function verifiedChecks(review: Review, role: Criterion): string[] {
+  const labels: Record<Check["id"], string> = {
+    supported: "No unsupported effects or linked artwork",
+    palette:
+      role === "badge"
+        ? "Grayscale artwork with red only for cutting"
+        : "Black-and-white artwork with red only for cutting",
+    vectors: "Vector artwork with no embedded images",
+    text: "No editable text",
+    fills: "Engraving uses filled shapes",
+    cut: "One closed, unfilled red cutting outline without crossings",
+  };
+  return checkIds
+    .filter((id) =>
+      review.checks.some(
+        (check) =>
+          check.role === role &&
+          check.id === id &&
+          check.status === "pass" &&
+          check.evidenceId === review[role]?.hash,
+      ),
+    )
+    .map((id) => labels[id]);
+}
+
 export function failureGuidance(detail: string): string {
   if (
-    /^Ask an organizer to add matching|^The selected sheets are no longer available/iu.test(detail)
+    /^Ask an organizer to add matching|^The selected sheets are no longer available|^The selected acrylic is unavailable|^That acrylic is no longer available/iu.test(
+      detail,
+    )
   )
     return detail;
   if (/material inventory|reserved sheet|material receipt|sheets reserved/iu.test(detail))
@@ -92,6 +120,7 @@ export function dimensions(width: number, height: number): string {
 export type ReviewStep =
   | "files"
   | "missing"
+  | "material"
   | "checking"
   | "fix"
   | "event"
@@ -123,6 +152,7 @@ export function reviewStep(review: Review): ReviewStep {
   if (review.approval) return "publishing";
   if (!review.rolesConfirmed) return "files";
   if (!review.badge || !review.stamp) return "missing";
+  if (!review.material) return "material";
   if (!review.checks.length) return "checking";
   if (!staticPassed(review)) return "fix";
   if (!review.event) return "event";
@@ -152,6 +182,8 @@ export function reviewPrompt(review: Review): string {
         : "Which design is the badge? I’ll use the other one as the stamp.";
     case "missing":
       return `Upload your ${review.badge ? "stamp" : "badge"} SVG to continue.`;
+    case "material":
+      return "Choose acrylic for your badges. I’ll use it for the 3D preview and cutting sheets.";
     case "checking":
       return "Checking your files…";
     case "fix": {
@@ -170,7 +202,7 @@ export function reviewPrompt(review: Review): string {
     case "preparing":
       return "Preparing the previews…";
     case "badge":
-      return "Your file checks passed. Double-check the version, date, and small details at this size.";
+      return "I checked your file. Double-check the version, date, readability, and thin connections at this size.";
     case "stamp":
       return "You confirmed your badge. Check that your stamp will leave a clear impression.";
     case "packing":

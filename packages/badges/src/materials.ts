@@ -379,3 +379,21 @@ export const STOCK_MATERIALS: readonly AcrylicMaterial[] = [...ACRYLIC_MATERIALS
 export function stockMaterial(id: string): AcrylicMaterial | undefined {
   return STOCK_MATERIALS.find((material) => material.id === id);
 }
+
+export function materialLabel(id: string): string {
+  const material = stockMaterial(id);
+  if (!material) return "Unknown material";
+  if (material.id === STAMP_RUBBER.id) return material.name;
+  return `${MATERIAL_TYPE_CONFIGS[material.type].label} ${material.name.toLowerCase()} acrylic`;
+}
+
+export function materialDescription(selection: {
+  materialId: string;
+  thicknessMm: number;
+}): string {
+  return `${materialLabel(selection.materialId)} · ${thicknessLabel(selection.thicknessMm)}`;
+}
+
+export function thicknessLabel(thicknessMm: number): string {
+  return Math.abs(thicknessMm - 3.175) < Number.EPSILON ? "⅛ in" : `${thicknessMm} mm`;
+}

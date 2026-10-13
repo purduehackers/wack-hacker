@@ -1,3 +1,4 @@
+import { materialDescription } from "@repo/badges/materials";
 import {
   correctionFor,
   dimensions,
@@ -5,6 +6,7 @@ import {
   fixRole,
   reviewPrompt,
   reviewStep,
+  verifiedChecks,
 } from "@repo/badges/presentation";
 import type { ReviewStep } from "@repo/badges/presentation";
 import { cardSchema, componentId } from "@repo/badges/wire";
@@ -16,6 +18,71 @@ import { badgeEmbed } from "./messages.ts";
 
 export type BadgeCard = z.output<typeof cardSchema>;
 type Row = ActionRowBuilder<ButtonBuilder> | ActionRowBuilder<StringSelectMenuBuilder>;
+function selectionMenus(card: BadgeCard, secret: string, kind: "material" | "event"): Row[] {
+  const options =
+    kind === "material"
+      ? card.materials.map((material) => ({
+          label: materialDescription(material),
+          value: material.materialId,
+        }))
+      : card.events.slice(0, 25).map((event) => ({
+          label: event.name,
+          value: event.id,
+          description: displayDate(event.date),
+        }));
+  const menus: Row[] = [];
+  for (let offset = 0; offset < options.length; offset += 25)
+    menus.push(
+      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(
+            componentId(
+              card.review.id,
+              card.version,
+              kind === "material" ? `material.${offset}` : kind,
+              secret,
+            ),
+          )
+          .setPlaceholder(
+            kind === "event"
+              ? "Choose a Hack Night"
+              : offset
+                ? "More acrylic choices"
+                : "Choose acrylic",
+          )
+          .addOptions(options.slice(offset, offset + 25)),
+      ),
+    );
+  return menus;
+}
+function row(...buttons: ButtonBuilder[]) {
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(buttons);
+}
+function failureControls(
+  review: BadgeCard["review"],
+  button: (label: string, action: string, style?: ButtonStyle) => ButtonBuilder,
+): Row[] {
+  if (review.contextChanged) return [row(button("Check again", "refresh", ButtonStyle.Primary))];
+  if (review.publication)
+    return [
+      row(
+        button("Retry link", "retry", ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setStyle(ButtonStyle.Link)
+          .setLabel("View saved files")
+          .setURL(review.publication.url),
+      ),
+    ];
+  if (!review.approval && /layout search|time budget/iu.test(review.failure ?? ""))
+    return [row(button("Try another layout", "repack"), button("Check again", "refresh"))];
+  if (
+    !review.approval &&
+    review.material &&
+    /acrylic|material|inventory|sheets/iu.test(review.failure ?? "")
+  )
+    return [row(button("Change material", "choose-material"), button("Try again", "retry"))];
+  return [row(button("Try again", "retry", ButtonStyle.Primary))];
+}
 export function controls(card: BadgeCard, secret: string): Row[] {
   const { review, version } = card;
   const step = reviewStep(review),
@@ -25,8 +92,6 @@ export function controls(card: BadgeCard, secret: string): Row[] {
       .setCustomId(componentId(review.id, version, action, secret))
       .setLabel(label)
       .setStyle(style);
-  const row = (...buttons: ButtonBuilder[]) =>
-    new ActionRowBuilder<ButtonBuilder>().addComponents(buttons);
   const upload = (role: "badge" | "stamp", style = ButtonStyle.Primary) =>
     button(`Upload ${review[role] ? "revised " : ""}${role}`, `upload.${role}`, style);
   switch (step) {
@@ -38,24 +103,13 @@ export function controls(card: BadgeCard, secret: string): Row[] {
       ];
     case "missing":
       return [row(upload(review.badge ? "stamp" : "badge"))];
+    case "material":
+      return [...selectionMenus(card, secret, "material"), row(button("Check stock", "refresh"))];
     case "fix":
       return [row(upload(fixRole(review)))];
     case "event":
       return card.events.length
-        ? [
-            new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
-              new StringSelectMenuBuilder()
-                .setCustomId(componentId(review.id, version, "event", secret))
-                .setPlaceholder("Choose a Hack Night")
-                .addOptions(
-                  card.events.slice(0, 25).map((event) => ({
-                    label: event.name,
-                    value: event.id,
-                    description: displayDate(event.date),
-                  })),
-                ),
-            ),
-          ]
+        ? selectionMenus(card, secret, "event")
         : [row(button("Check for events", "refresh"))];
     case "badge":
     case "stamp":
@@ -73,6 +127,7 @@ export function controls(card: BadgeCard, secret: string): Row[] {
                       .setURL(card.viewerUrl),
                   ]
                 : []),
+              ...(step === "badge" ? [button("Change material", "choose-material")] : []),
             ),
           ];
     case "layout":
@@ -80,24 +135,11 @@ export function controls(card: BadgeCard, secret: string): Row[] {
         row(
           button("Publish files", "publish", ButtonStyle.Success),
           button("Try another layout", "repack"),
+          button("Change material", "choose-material"),
         ),
       ];
     case "error":
-      if (review.contextChanged)
-        return [row(button("Check again", "refresh", ButtonStyle.Primary))];
-      if (review.publication)
-        return [
-          row(
-            button("Retry link", "retry", ButtonStyle.Primary),
-            new ButtonBuilder()
-              .setStyle(ButtonStyle.Link)
-              .setLabel("View saved files")
-              .setURL(review.publication.url),
-          ),
-        ];
-      if (!review.approval && /layout search|time budget/iu.test(review.failure ?? ""))
-        return [row(button("Try another layout", "repack"), button("Check again", "refresh"))];
-      return [row(button("Try again", "retry", ButtonStyle.Primary))];
+      return failureControls(review, button);
     case "done":
       return review.publication?.shortlink
         ? [
@@ -118,6 +160,7 @@ export function controls(card: BadgeCard, secret: string): Row[] {
 const titles: Record<ReviewStep, string> = {
   files: "Which one is the badge?",
   missing: "One more file",
+  material: "Choose your acrylic",
   checking: "Checking your files…",
   fix: "Update the design",
   event: "Choose a Hack Night",
@@ -135,6 +178,9 @@ export function cardEmbeds(card: BadgeCard): [APIEmbed] {
     step = reviewStep(review);
   const title = cardTitle(card);
   const embed = badgeEmbed(reviewPrompt(review), title);
+  if (step === "material" && !card.materials.length)
+    embed.description =
+      "No matching acrylic sheets are available. Ask an organizer to update inventory, then select Check stock.";
   if (card.files[0]) embed.image = { url: `attachment://${card.files[0].name}` };
   if (step === "badge" && review.event && review.manufacturing) {
     embed.fields = [
@@ -145,10 +191,19 @@ export function cardEmbeds(card: BadgeCard): [APIEmbed] {
         value: dimensions(review.manufacturing.badgeWidthIn, review.manufacturing.badgeHeightIn),
         inline: true,
       },
+      ...(review.material
+        ? [{ name: "Material", value: materialDescription(review.material) }]
+        : []),
+      {
+        name: "Verified by Wack Hacker",
+        value: verifiedChecks(review, "badge")
+          .map((check) => `- ${check}`)
+          .join("\n"),
+      },
     ];
     if (review.manufacturing.badge3d)
       embed.footer = {
-        text: `Example material: ${review.manufacturing.badge3d.material}. Check fine details in your design.`,
+        text: "Check fine details in the flat artwork",
       };
   }
   if (step === "stamp" && review.manufacturing) {

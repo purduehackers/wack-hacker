@@ -25,6 +25,11 @@ export const settingsSchema = z.strictObject({
   stampSizeIn: z.literal(1.5),
   gapMm: z.number().min(0).max(5),
 });
+export const badgeMaterialSchema = z.strictObject({
+  materialId: z.string().min(1).max(100),
+  thicknessMm: z.number().positive(),
+});
+export type BadgeMaterial = z.output<typeof badgeMaterialSchema>;
 export const criteria = ["badge", "stamp"] as const;
 export const criterionSchema = z.enum(criteria);
 export const checkIds = ["supported", "palette", "vectors", "text", "fills", "cut"] as const;
@@ -90,6 +95,7 @@ export const reviewSchema = z.strictObject({
   stamp: assetSchema.optional(),
   event: eventSchema.optional(),
   settings: settingsSchema.optional(),
+  material: badgeMaterialSchema.optional(),
   checks: z.array(checkSchema),
   previews: z.array(digestSchema),
   layouts: z.array(layoutSchema).max(3),
@@ -163,6 +169,7 @@ export function contextHash(review: Review): string {
       stamp: review.stamp?.hash,
       event: review.event,
       settings: review.settings,
+      material: review.material,
       layout: review.selectedLayout,
       stockPlan: review.stockPlan,
       manufacturing: review.manufacturing,
@@ -181,7 +188,7 @@ export function designHash(review: Review, role: Criterion): string {
         ? {
             event: review.event,
             size: review.settings?.badgeSizeIn,
-            material: review.settings?.material,
+            material: review.material,
           }
         : { shortSide: review.settings?.stampSizeIn, impression: "unmirrored" }),
     }),
@@ -220,6 +227,7 @@ export function reviewable(review: Review): boolean {
     staticPassed(review) &&
     review.event !== undefined &&
     review.settings !== undefined &&
+    review.material !== undefined &&
     review.manufacturing !== undefined
   );
 }
@@ -228,6 +236,13 @@ export function ready(review: Review): boolean {
   return (
     reviewable(review) &&
     remainingCriteria(review).length === 0 &&
+    Boolean(
+      review.stockPlan?.every(
+        (sheet) =>
+          sheet.materialId === review.material?.materialId &&
+          sheet.thicknessMm === review.material.thicknessMm,
+      ),
+    ) &&
     review.layouts.some(
       (layout) =>
         layout.id === review.selectedLayout &&

@@ -77,7 +77,7 @@ function commandFor(interaction: BadgeInteraction, name: string): Action {
   }
   if (kind === "roles") return actionSchema.parse({ kind, badge: Number(role) });
   if (kind === "replace") return actionSchema.parse({ kind, role });
-  if (kind === "event" && interaction.isStringSelectMenu())
+  if ((kind === "event" || kind === "material") && interaction.isStringSelectMenu())
     return actionSchema.parse({ kind, id: interaction.values[0] });
   return actionSchema.parse({ kind });
 }
@@ -96,7 +96,11 @@ async function requestFor(interaction: BadgeInteraction, secret: string) {
     throw new Error("This control belongs to a different review thread.");
   const member = await interaction.guild.members.fetch({ user: interaction.user.id, force: true });
   // Older change buttons open the same upload as the current revision buttons.
-  const actionName = name.endsWith(".changes") ? `upload.${name.split(".")[1]}` : name;
+  const actionName = name.endsWith(".changes")
+    ? `upload.${name.split(".")[1]}`
+    : name.startsWith("material.")
+      ? "material"
+      : name;
   return {
     id,
     version: Number(version),
