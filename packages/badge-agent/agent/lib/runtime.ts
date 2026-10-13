@@ -18,16 +18,19 @@ async function renderPreview(svg: string) {
   return {
     image: await renderBadge({ svg, material: previewMaterial, thicknessMm: 3.175 }),
     material: "Light blue acrylic · ⅛ in",
+    materialId: previewMaterial.id,
+    thicknessMm: 3.175,
   };
 }
 
 /** Eve evaluates tool definitions at build time; only executions may open storage. */
 export function runtime() {
   const store = (repository ??= createBadgeStore(getDb(tursoConfig())));
+  const inventory = createBadgeInventory(getDb(tursoConfig()));
   return {
     store,
-    inventory: createBadgeInventory(getDb(tursoConfig())),
+    inventory,
     service: createBadgeService(store, cms),
-    worker: createWorker(store, cms, createPublisher(store), renderPreview),
+    worker: createWorker(store, cms, createPublisher(store), renderPreview, inventory),
   };
 }

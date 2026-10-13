@@ -65,6 +65,14 @@ export function controls(card: BadgeCard, secret: string): Row[] {
             row(
               button(`Confirm ${step}`, `review.${step}.approve`, ButtonStyle.Success),
               upload(step, ButtonStyle.Secondary),
+              ...(step === "badge" && card.viewerUrl
+                ? [
+                    new ButtonBuilder()
+                      .setStyle(ButtonStyle.Link)
+                      .setLabel("View in 3D")
+                      .setURL(card.viewerUrl),
+                  ]
+                : []),
             ),
           ];
     case "layout":
@@ -163,9 +171,21 @@ export function cardEmbeds(card: BadgeCard): [APIEmbed] {
         value: dimensions(review.manufacturing.badgeWidthIn, review.manufacturing.badgeHeightIn),
         inline: true,
       },
-      { name: "Sheets", value: "One 12 × 12 in · One 12 × 18 in", inline: true },
+      {
+        name: "Sheets",
+        value:
+          review.stockPlan
+            ?.map((sheet) => `One ${sheet.widthIn} × ${sheet.heightIn} in`)
+            .join(" · ") ?? "One 12 × 12 in · One 12 × 18 in",
+        inline: true,
+      },
     ];
-    embed.footer = { text: "Publishing saves the designs and cutting sheets" };
+    if (review.stockPlan)
+      embed.fields.push({
+        name: "Material",
+        value: review.stockPlan.map((sheet) => sheet.label).join("\n"),
+      });
+    embed.footer = { text: "Publishing saves the files and deducts the acrylic sheets used" };
   }
   if (step === "done")
     embed.footer = {

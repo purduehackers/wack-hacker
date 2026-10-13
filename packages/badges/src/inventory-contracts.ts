@@ -17,6 +17,7 @@ export const stockSpecSchema = z.strictObject({
 export const stockItemSchema = stockSpecSchema.extend({
   id: z.string().regex(/^[a-f0-9]{24}$/u),
   quantity,
+  reserved: quantity.default(0),
   updatedAt: z.int().nonnegative(),
 });
 const note = z.string().trim().max(200).default("");
@@ -43,7 +44,7 @@ export const inventoryRequestSchema = z.strictObject({
 export const stockChangeSchema = z.strictObject({
   id: z.string(),
   itemId: stockItemSchema.shape.id,
-  operation: z.enum(["add", "use", "set"]),
+  operation: z.enum(["add", "use", "set", "publish"]),
   before: quantity,
   after: quantity,
   actorId: z.string(),

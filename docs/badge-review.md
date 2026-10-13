@@ -56,8 +56,11 @@ flowchart LR
   Worker --> DB
   Worker --> Render[Three.js and Chromium render a material preview]
   Render --> DB
+  Delivery --> Viewer[Signed View in 3D link]
+  Viewer --> DB
   Inventory[Native badge inventory commands] --> StockAuth[Fresh organizer membership for writes]
   StockAuth --> Stock[(Turso: sheet counts and change history)]
+  Worker -->|Reserve before saving; deduct after verified merge| Stock
   DB --> Delivery[One actionable embed and native controls]
   Eve --> Reply[One completed plain reply]
   General --> Reply
@@ -92,7 +95,11 @@ The badge embed combines the full flat artwork and an angled 3D preview. The ren
 
 The renderer runs after SVG checks pass, in a fresh Chromium process with network requests blocked. A bounded render produces a stored PNG before the badge card appears. A failed render offers the existing retry action. The preview does not simulate engraving depth, laser kerf, or material strength.
 
-[Material inventory commands](./badge-inventory.md) track whole sheets separately. Guild members can read counts; organizers can add sheets, record use, or correct a count. Each transaction saves who changed the count and deduplicates retries by Discord interaction. Publishing does not reserve or consume stock, and inventory does not change the two configured packing sheets.
+**View in 3D** opens the same design and example material in an interactive viewer. You can rotate, zoom, and reset the view. The link signs the exact asset, material, and thickness; anyone with the link can view that asset. The page bundles its scripts, blocks external resources through its Content Security Policy, and sends no referrer. Rotating the ingress secret invalidates earlier viewer links.
+
+[Material inventory commands](./badge-inventory.md) track whole sheets. Guild members can read counts; organizers can add sheets, record other use, or correct a count. The arrangement selects matching ⅛-inch acrylic for its occupied sheets and shows the selection before publication. Publishing reserves those sheets, then deducts them after GitHub verifies the saved files.
+
+Each transaction saves who changed the count and prevents duplicate deductions. Reserved sheets cannot serve another publication or manual use. Stamp rubber remains manual because the stamp export does not define whole-sheet consumption. Inventory does not change the configured badge size or sheet geometry.
 
 The sequence keeps intermediate jobs silent:
 
@@ -115,8 +122,10 @@ sequenceDiagram
   S-->>B: One arrangement embed
   D->>B: Publish files
   B->>S: Lock confirmed assets and arrangement
+  S->>S: Reserve the selected sheets
   S->>G: Create revision, verify bytes, merge exact head
   G-->>S: Save merge receipt
+  S->>S: Deduct reserved sheets once
   S->>G: Create and verify shortlink
   S-->>B: One download embed
 ```
@@ -145,7 +154,9 @@ A separate job creates and verifies the live shortlink. Badge URLs use Vercel pr
 
 If that job fails, the embed says the files are saved and offers **Retry link**. Retrying uses the stored receipt and does not merge again. Existing unrelated shortlinks are never overwritten.
 
-New revisions can start in the same thread after publication. The previous public files remain available while the new revision is reviewed. Each publication generation gets its own branch. The shortlink points to the version directory on the repository’s default branch; Git history retains earlier revisions.
+An event change before merging releases the selected sheets. An uncertain GitHub response keeps them reserved until a retry resolves it. If GitHub already merged the exact files, retry verifies that receipt and deducts stock once, even after an event change. The stock deduction and its audit receipts share one transaction.
+
+New revisions can start in the same thread after publication. The previous public files remain available while the new revision is reviewed. Each publication generation gets its own branch and consumes its selected sheets once. Use the manual inventory commands to return unused sheets from a replaced revision. The shortlink points to the version directory on the repository’s default branch; Git history retains earlier revisions.
 
 The directory includes original SVGs, physical SVGs, PNG previews, both sheet layouts, and metadata. Public metadata contains exactly `cms: { id, slug }`, `author: { id, username }`, and `reviewer: { id, username }`. The README contains the Hack Night title, badge image and download, then stamp image and download.
 
@@ -157,7 +168,7 @@ For local Discord testing, set `BADGES_CHANNEL_ID` to the test channel in both p
 
 The worker endpoint needs a 90s request timeout. The bot drains queued work after interactions and on its minute schedule. Typing indicators cover interactive work; only actionable states produce messages. The native SVG renderer and Chromium remain external build dependencies. The badge app’s build command builds the Three.js scene into the renderer bundle first.
 
-For local macOS development, set `BADGE_CHROMIUM_EXECUTABLE_PATH` to a Chromium executable. Rendering launches a fresh headless profile. Linux deployments use the pinned Chromium package and its software rendering libraries. Apply the inventory migration and run the existing command-registration script when deploying the new slash commands.
+For local macOS development, set `BADGE_CHROMIUM_EXECUTABLE_PATH` to a Chromium executable. Rendering launches a fresh headless profile. Linux deployments use the pinned Chromium package and its software rendering libraries. Apply both inventory migrations, register the slash commands, and enter actual stock before accepting new cutting layouts.
 
 Offline validation covers designer confirmations without organizer roles, plain question replies, direct revision uploads, and the four-message workflow. It also covers ownership, stale controls, competing decisions, stamp dimensions, packing limits, and partial publication.
 

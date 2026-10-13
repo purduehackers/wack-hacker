@@ -153,11 +153,11 @@ export function inventoryEmbed(response: InventoryResponse, action: InventoryAct
   const embed: APIEmbed = { color: 0x5865f2, title: "Material inventory" };
   if (action.kind === "list") {
     embed.description = response.items.length
-      ? "Whole sheets on hand. Record use after cutting."
+      ? "Publishing badge files deducts the selected acrylic sheets. Record other use here."
       : "No materials recorded. Add sheets with /badge inventory add.";
     embed.fields = response.items.map((item) => ({
       name: stockLabel(item),
-      value: `${item.quantity} sheets`,
+      value: `${item.quantity} sheets${item.reserved ? ` · ${item.reserved} reserved for publication` : ""}`,
     }));
     embed.footer = { text: `Page ${response.page ?? 1} of ${response.pages ?? 1}` };
   } else if (action.kind === "history") {
@@ -172,7 +172,7 @@ export function inventoryEmbed(response: InventoryResponse, action: InventoryAct
       : "This material is no longer available.";
     embed.fields = (response.changes ?? []).map((change) => ({
       name: `${dates.format(change.createdAt)} · ${change.username}`,
-      value: `${change.operation === "add" ? `Added ${change.after - change.before}` : change.operation === "use" ? `Used ${change.before - change.after}` : `Counted ${change.after}`} sheets. ${change.after} remain.${change.note ? `\n${designerText(change.note, "")}` : ""}`,
+      value: `${change.operation === "add" ? `Added ${change.after - change.before}` : ["use", "publish"].includes(change.operation) ? `Used ${change.before - change.after}` : `Counted ${change.after}`} sheets. ${change.after} remain.${change.note ? `\n${designerText(change.note, "")}` : ""}`,
     }));
   } else {
     embed.title =

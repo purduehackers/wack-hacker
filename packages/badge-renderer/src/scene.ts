@@ -38,7 +38,7 @@ async function engraving(root: SVGSVGElement, width: number, height: number) {
   return new THREE.CanvasTexture(canvas);
 }
 
-window.renderBadge = async (input: RenderInput) => {
+export async function createBadgeScene(input: RenderInput) {
   const parsed = new DOMParser().parseFromString(input.svg, "image/svg+xml");
   const root = document.importNode(parsed.documentElement, true);
   if (!(root instanceof SVGSVGElement)) throw new Error("Invalid SVG.");
@@ -113,11 +113,7 @@ window.renderBadge = async (input: RenderInput) => {
   const half = Math.max(extent.x, extent.y) * 0.62;
   const camera = new THREE.OrthographicCamera(-half, half, half, -half, 0.1, 1000);
   camera.position.z = 200;
-  try {
-    await renderer.compileAsync(scene, camera);
-    renderer.render(scene, camera);
-    return renderer.domElement.toDataURL("image/png");
-  } finally {
+  function dispose() {
     lighting.dispose();
     generator.dispose();
     environment.dispose();
@@ -128,4 +124,5 @@ window.renderBadge = async (input: RenderInput) => {
     texture.dispose();
     renderer.dispose();
   }
-};
+  return { renderer, scene, camera, half, dispose };
+}

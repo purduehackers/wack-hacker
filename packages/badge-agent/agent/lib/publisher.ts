@@ -160,7 +160,7 @@ class GithubPublisher implements Publisher {
       ).data;
     return { number: pr.number, head: commit, url: pr.html_url };
   }
-  async publish(review: Review) {
+  async publish(review: Review, beforeMerge: () => Promise<void>) {
     if (!review.pr || !review.approval) throw new Error("Publication approval is missing.");
     const github = client(),
       prefix = directory(review);
@@ -196,6 +196,7 @@ class GithubPublisher implements Publisher {
       throw new Error("The PR contains changes outside this badge version.");
     let commit = pr.merge_commit_sha ?? undefined;
     if (!pr.merged) {
+      await beforeMerge();
       if (pr.draft)
         await github.graphql(
           `mutation Ready($id: ID!) { markPullRequestReadyForReview(input: {pullRequestId: $id}) { pullRequest { id } } }`,

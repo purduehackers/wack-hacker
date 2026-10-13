@@ -13,6 +13,7 @@ import { cms } from "../lib/cms.ts";
 import { previewFiles } from "../lib/previews.ts";
 import { routeMessage } from "../lib/routing.ts";
 import { runtime } from "../lib/runtime.ts";
+import { viewerUrl } from "../lib/viewer.ts";
 
 async function protectedRoute(
   request: Request,
@@ -67,7 +68,7 @@ async function control(request: Request, mutate: boolean) {
     return Response.json({ error: messageOf(cause), url }, { status: 409 });
   }
 }
-async function deliverable() {
+async function deliverable(origin: string) {
   const { store, worker } = runtime();
   const worked = await worker.process();
   for (let skipped = 0; skipped < 20; skipped += 1) {
@@ -81,6 +82,7 @@ async function deliverable() {
           ...stored,
           events: reviewStep(stored.review) === "event" ? await cms.events() : [],
           files: await previewFiles(stored.review, store),
+          viewerUrl: viewerUrl(stored.review, origin),
           jobId: job.id,
           lease: job.lease,
         },
@@ -132,7 +134,7 @@ export default defineChannel({
     ),
     POST("/badges/control", (request) => protectedRoute(request, () => control(request, false))),
     POST("/badges/action", (request) => protectedRoute(request, () => control(request, true))),
-    POST("/badges/work", (request) => protectedRoute(request, deliverable)),
+    POST("/badges/work", (request) => protectedRoute(request, () => deliverable(request.url))),
     POST("/badges/ack", (request) =>
       protectedRoute(request, async () => {
         const input = acknowledgement.parse(await request.json());

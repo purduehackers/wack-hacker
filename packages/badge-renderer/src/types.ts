@@ -10,5 +10,6 @@ export interface RenderInput {
 declare global {
   interface Window {
     renderBadge(input: RenderInput): Promise<string>;
+    badgeInput: RenderInput;
   }
 }

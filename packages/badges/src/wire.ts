@@ -67,6 +67,7 @@ export const cardSchema = z.strictObject({
   version: z.int(),
   events: z.array(eventSchema),
   files: z.array(z.strictObject({ name: z.string(), data: z.string() })).max(1),
+  viewerUrl: z.url().optional(),
   jobId: z.string(),
   lease: z.uuid(),
 });

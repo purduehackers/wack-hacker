@@ -30,3 +30,11 @@ export const badgeStockChanges = sqliteTable(
   },
   (table) => [index("badge_stock_changes_item").on(table.itemId, table.createdAt)],
 );
+
+export const badgeStockPublications = sqliteTable("badge_stock_publications", {
+  id: text("id").primaryKey(),
+  plan: text("plan").notNull(),
+  state: text("state").notNull(),
+  commit: text("commit"),
+  createdAt: integer("created_at").notNull(),
+});

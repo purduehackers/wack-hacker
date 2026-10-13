@@ -18,12 +18,22 @@ The command adds to the existing count when material, dimensions, and thickness 
 Choose the action that matches the physical sheets:
 
 - **See stock**: Run `/badge inventory list`. Use its page option for more materials.
-- **Record cutting**: Run `/badge inventory use`, choose a material, and enter how many whole sheets you used.
+- **Record other use**: Run `/badge inventory use`, choose a material, and enter the sheets used outside an already published layout.
 - **Correct a count**: Run `/badge inventory set` after counting the sheets. Enter `0` when none remain.
 - **Check history**: Run `/badge inventory history` to see the last 10 changes, who recorded them, and their notes.
 
-Publishing badge files does not change inventory. Record use after cutting, including sheets you discard. A partly used sheet no longer counts as a whole sheet; this inventory does not track offcuts.
+Publishing badge files deducts the acrylic sheets used in the layout. Don’t record those sheets again after cutting. Use manual commands for stamp rubber, discarded sheets, and other projects. A partly used sheet no longer counts as a whole sheet; this inventory does not track offcuts.
+
+## Check the sheets before publication
+
+The arrangement shows the selected material and sheet sizes before you publish. The bot selects matching ⅛-inch acrylic for the occupied 12 × 12-inch and 12 × 18-inch sheets. Add stock if no matching sheets are available.
+
+During publication, inventory shows those sheets as reserved. After the bot verifies the saved files, it deducts the sheets and records the Hack Night in history. Retrying publication or the shortlink does not deduct them again.
+
+A newly published revision deducts another set of sheets. If you replace files before cutting the previous set, use **add** to return the unused sheets. Include a note identifying the replacement.
+
+If publication fails, retry it from the badge thread. The bot retains reservations while the outcome is uncertain. An event change before merging releases the sheets so you can confirm the updated event.
 
 ## Understand the badge preview
 
-The badge embed shows your flat design and a rendered acrylic example. The example does not reserve material or select stock. Inventory counts do not change badge size, spacing, or the two configured cutting sheets.
+The badge embed shows your flat design and a rendered acrylic example. Select **View in 3D** to rotate and zoom. The preview uses an example material; check the arrangement for the stock selected for publication. Inventory counts do not change badge size, spacing, or the configured cutting sheets.

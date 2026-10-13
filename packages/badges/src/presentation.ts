@@ -39,6 +39,12 @@ export function findingGuidance(finding: Pick<Check, "id" | "role">): string {
 }
 
 export function failureGuidance(detail: string): string {
+  if (
+    /^Ask an organizer to add matching|^The selected sheets are no longer available/iu.test(detail)
+  )
+    return detail;
+  if (/material inventory|reserved sheet|material receipt|sheets reserved/iu.test(detail))
+    return "Ask an organizer to check the material inventory, then try again.";
   if (/newer step|review changed|latest review|stale/iu.test(detail))
     return "Use the latest message to continue.";
   if (/Only the author or/iu.test(detail))
@@ -169,8 +175,11 @@ export function reviewPrompt(review: Review): string {
       return "You confirmed your badge. Check that your stamp will leave a clear impression.";
     case "packing":
       return "Arranging your badges…";
-    case "layout":
-      return `You confirmed both designs. This layout fits ${review.layouts.find((layout) => layout.id === review.selectedLayout)?.count} badges across your two sheets.`;
+    case "layout": {
+      const layout = review.layouts.find((candidate) => candidate.id === review.selectedLayout);
+      const sheets = new Set(layout?.placements.map((placement) => placement.sheet)).size;
+      return `You confirmed both designs. This layout fits ${layout?.count} badges on ${sheets === 1 ? "one sheet" : "two sheets"}.`;
+    }
     case "publishing":
       return "Saving your files…";
     case "done":

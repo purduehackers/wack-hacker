@@ -23,7 +23,11 @@ import * as shoppingCarts from "./schemas/shopping-carts.ts";
 
 export * from "./enums.ts";
 export { actionAudit } from "./schemas/action-audit.ts";
-export { badgeStock, badgeStockChanges } from "./schemas/badge-inventory.ts";
+export {
+  badgeStock,
+  badgeStockChanges,
+  badgeStockPublications,
+} from "./schemas/badge-inventory.ts";
 export {
   badgeReviews,
   badgeAssets,

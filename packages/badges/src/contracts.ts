@@ -60,6 +60,22 @@ export const decisionSchema = z.strictObject({
   note: z.string().max(1500),
   at: z.iso.datetime(),
 });
+export const stockPlanSchema = z
+  .array(
+    z.strictObject({
+      itemId: z.string().regex(/^[a-f0-9]{24}$/u),
+      materialId: z.string(),
+      label: z.string(),
+      widthIn: z.number().positive(),
+      heightIn: z.number().positive(),
+      thicknessMm: z.number().positive(),
+      quantity: z.literal(1),
+    }),
+  )
+  .min(1)
+  .max(2);
+export type StockPlan = z.output<typeof stockPlanSchema>;
+
 export const reviewSchema = z.strictObject({
   id,
   threadId: id,
@@ -78,13 +94,21 @@ export const reviewSchema = z.strictObject({
   previews: z.array(digestSchema),
   layouts: z.array(layoutSchema).max(3),
   selectedLayout: digestSchema.optional(),
+  stockPlan: stockPlanSchema.optional(),
   layoutAttempt: z.int().nonnegative().default(0),
   manufacturing: z
     .strictObject({
       badge: digestSchema,
       stamp: digestSchema,
       badgePreview: digestSchema,
-      badge3d: z.strictObject({ preview: digestSchema, material: z.string().max(100) }).optional(),
+      badge3d: z
+        .strictObject({
+          preview: digestSchema,
+          material: z.string().max(100),
+          materialId: z.string().optional(),
+          thicknessMm: z.number().positive().optional(),
+        })
+        .optional(),
       stampPreview: digestSchema,
       badgeWidthIn: z.number().positive(),
       badgeHeightIn: z.number().positive(),
@@ -140,6 +164,7 @@ export function contextHash(review: Review): string {
       event: review.event,
       settings: review.settings,
       layout: review.selectedLayout,
+      stockPlan: review.stockPlan,
       manufacturing: review.manufacturing,
       rubric: review.rubric,
     }),
@@ -219,6 +244,7 @@ export function invalidate(review: Review, role?: Criterion): Review {
     publication: _publication,
     failure: _failure,
     selectedLayout: _selectedLayout,
+    stockPlan: _stockPlan,
     manufacturing: _manufacturing,
     contextChanged: _contextChanged,
     pendingRole: _pendingRole,

@@ -1,10 +1,12 @@
 import { createHash } from "node:crypto";
 
-import { badgeStock, badgeStockChanges } from "@repo/shared/db";
+import { badgeStock, badgeStockChanges, badgeStockPublications } from "@repo/shared/db";
 import type { Db } from "@repo/shared/db";
 import { DISCORD_GUILD_ID, roleAtLeast, roleFromMemberRoles, UserRole } from "@repo/shared/discord";
 import { and, asc, count, desc, eq, gt } from "drizzle-orm";
 
+import { stockPlanSchema } from "./contracts.ts";
+import type { Review, StockPlan } from "./contracts.ts";
 import { stockChangeSchema, stockItemSchema, stockLabel } from "./inventory-contracts.ts";
 import type {
   InventoryRequest,
@@ -12,6 +14,7 @@ import type {
   StockItem,
   StockSpec,
 } from "./inventory-contracts.ts";
+import { ACRYLIC_THICKNESS_MM } from "./policy.ts";
 
 const PAGE_SIZE = 10;
 type Mutation = Extract<InventoryRequest["action"], { kind: "add" | "use" | "set" }>;
@@ -34,6 +37,22 @@ function itemId(spec: StockSpec): string {
     .slice(0, 24);
 }
 
+async function reservedCounts(db: Pick<Db, "select">): Promise<Map<string, number>> {
+  const pending = await db
+    .select()
+    .from(badgeStockPublications)
+    .where(eq(badgeStockPublications.state, "reserved"));
+  const counts = new Map<string, number>();
+  for (const publication of pending)
+    for (const sheet of stockPlanSchema.parse(JSON.parse(publication.plan)))
+      counts.set(sheet.itemId, (counts.get(sheet.itemId) ?? 0) + sheet.quantity);
+  return counts;
+}
+
+function publicationKey(review: Review): string {
+  return `${review.id}:${review.generation}`;
+}
+
 class BadgeInventory {
   private readonly db: Db;
   constructor(db: Db) {
@@ -46,7 +65,137 @@ class BadgeInventory {
       .from(badgeStock)
       .where(gt(badgeStock.quantity, 0))
       .orderBy(asc(badgeStock.materialId), asc(badgeStock.widthIn), asc(badgeStock.heightIn));
-    return records.map((entry) => stockItemSchema.parse(entry));
+    return this.withReservations(records);
+  }
+
+  private async withReservations(records: StockItem[] | (typeof badgeStock.$inferSelect)[]) {
+    const reserved = await reservedCounts(this.db);
+    return records.map((entry) =>
+      stockItemSchema.parse({ ...entry, reserved: reserved.get(entry.id) ?? 0 }),
+    );
+  }
+
+  async plan(usedSheets: number[] = [0, 1]): Promise<StockPlan> {
+    if (!usedSheets.length || usedSheets.some((index) => index !== 0 && index !== 1))
+      throw new InventoryError("Arrange the badges on the configured sheets first.");
+    const lengths = [...new Set(usedSheets)]
+      .sort((a, b) => a - b)
+      .map((index) => (index === 0 ? 12 : 18));
+    const stock = (await this.available()).filter(
+      (item) =>
+        item.materialId !== "stamp-rubber" &&
+        Math.abs(item.thicknessMm - ACRYLIC_THICKNESS_MM) < 0.0001 &&
+        item.quantity > item.reserved,
+    );
+    for (const materialId of new Set(stock.map((item) => item.materialId))) {
+      const sheets = lengths.flatMap((height) => {
+        const sheet = stock.find(
+          (item) =>
+            item.widthIn === 12 && item.heightIn === height && item.materialId === materialId,
+        );
+        return sheet ? [sheet] : [];
+      });
+      if (sheets.length === lengths.length)
+        return stockPlanSchema.parse(
+          sheets.map((item) => ({
+            itemId: item.id,
+            materialId: item.materialId,
+            label: stockLabel(item),
+            widthIn: item.widthIn,
+            heightIn: item.heightIn,
+            thicknessMm: item.thicknessMm,
+            quantity: 1,
+          })),
+        );
+    }
+    throw new InventoryError(
+      `Ask an organizer to add matching ${lengths.map((height) => `12 × ${height}-inch`).join(" and ")} sheets of ⅛-inch acrylic, then try again.`,
+    );
+  }
+
+  async reserve(review: Review): Promise<void> {
+    if (!review.stockPlan)
+      throw new InventoryError("Check the material inventory and arrange the badges again.");
+    const plan = stockPlanSchema.parse(review.stockPlan),
+      id = publicationKey(review);
+    await this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(badgeStockPublications)
+        .where(eq(badgeStockPublications.id, id));
+      if (existing) {
+        if (existing.plan !== JSON.stringify(plan))
+          throw new InventoryError("This publication already has different sheets reserved.");
+        return;
+      }
+      const held = await reservedCounts(tx);
+      for (const sheet of plan) {
+        const [item] = await tx.select().from(badgeStock).where(eq(badgeStock.id, sheet.itemId));
+        if (!item || item.quantity - (held.get(item.id) ?? 0) < sheet.quantity)
+          throw new InventoryError(
+            "The selected sheets are no longer available. Ask an organizer to update inventory, then try again.",
+          );
+      }
+      await tx
+        .insert(badgeStockPublications)
+        .values({ id, plan: JSON.stringify(plan), state: "reserved", createdAt: Date.now() });
+    });
+  }
+
+  async consume(review: Review): Promise<void> {
+    const publication = review.publication;
+    if (!publication) throw new InventoryError("Save the badge files before deducting material.");
+    const id = publicationKey(review);
+    await this.db.transaction(async (tx) => {
+      const [reservation] = await tx
+        .select()
+        .from(badgeStockPublications)
+        .where(eq(badgeStockPublications.id, id));
+      if (!reservation) throw new InventoryError("Reserve the cutting sheets before publishing.");
+      if (reservation.state === "consumed") {
+        if (reservation.commit !== publication.commit)
+          throw new InventoryError("The saved files do not match this material receipt.");
+        return;
+      }
+      const now = Date.now();
+      for (const sheet of stockPlanSchema.parse(JSON.parse(reservation.plan))) {
+        const [item] = await tx.select().from(badgeStock).where(eq(badgeStock.id, sheet.itemId));
+        if (!item || item.quantity < sheet.quantity)
+          throw new InventoryError("Check the reserved sheet count before continuing.");
+        const after = item.quantity - sheet.quantity;
+        await tx
+          .update(badgeStock)
+          .set({ quantity: after, updatedAt: now })
+          .where(eq(badgeStock.id, item.id));
+        await tx.insert(badgeStockChanges).values({
+          id: `publish:${id}:${item.id}`,
+          itemId: item.id,
+          operation: "publish",
+          before: item.quantity,
+          after,
+          actorId: review.author.id,
+          username: review.author.username,
+          note: `${review.event?.name ?? "Badge"}: published cutting sheets`,
+          createdAt: now,
+        });
+      }
+      await tx
+        .update(badgeStockPublications)
+        .set({ state: "consumed", commit: publication.commit })
+        .where(eq(badgeStockPublications.id, id));
+    });
+  }
+
+  /** Release only when the worker knows publication stopped before merging. */
+  async release(review: Review): Promise<void> {
+    await this.db
+      .delete(badgeStockPublications)
+      .where(
+        and(
+          eq(badgeStockPublications.id, publicationKey(review)),
+          eq(badgeStockPublications.state, "reserved"),
+        ),
+      );
   }
 
   async execute(request: InventoryRequest): Promise<InventoryResponse> {
@@ -57,8 +206,7 @@ class BadgeInventory {
     if (action.kind === "suggest") {
       const records = await this.db.select().from(badgeStock).orderBy(asc(badgeStock.materialId));
       return {
-        items: records
-          .map((entry) => stockItemSchema.parse(entry))
+        items: (await this.withReservations(records))
           .filter((item) => stockLabel(item).toLowerCase().includes(action.query.toLowerCase()))
           .slice(0, 25),
       };
@@ -75,7 +223,7 @@ class BadgeInventory {
         .orderBy(desc(badgeStockChanges.createdAt), desc(badgeStockChanges.id))
         .limit(10);
       return {
-        items: records.map((entry) => stockItemSchema.parse(entry)),
+        items: await this.withReservations(records),
         changes: changes.map((row) => stockChangeSchema.parse(row)),
       };
     }
@@ -100,7 +248,7 @@ class BadgeInventory {
       .limit(PAGE_SIZE)
       .offset((currentPage - 1) * PAGE_SIZE);
     return {
-      items: records.map((entry) => stockItemSchema.parse(entry)),
+      items: await this.withReservations(records),
       page: currentPage,
       pages: pageCount,
     };
@@ -143,6 +291,11 @@ class BadgeInventory {
         );
       if (after > 10_000)
         throw new InventoryError("The count cannot exceed 10,000 sheets. Check the quantity.");
+      const reserved = (await reservedCounts(tx)).get(id) ?? 0;
+      if (after < reserved)
+        throw new InventoryError(
+          "These sheets are reserved for files being published. Retry that publication before changing this count.",
+        );
       const [changed] = await tx
         .update(badgeStock)
         .set({ quantity: after, updatedAt: now })
@@ -163,7 +316,7 @@ class BadgeInventory {
       };
       await tx.insert(badgeStockChanges).values(change);
       return {
-        items: [stockItemSchema.parse(changed)],
+        items: [stockItemSchema.parse({ ...changed, reserved })],
         changes: [stockChangeSchema.parse(change)],
       };
     });

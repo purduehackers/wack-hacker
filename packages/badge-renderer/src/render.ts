@@ -6,6 +6,8 @@ import type { RenderInput } from "./types.ts";
 
 declare const BADGE_SCENE: string;
 
+export { viewerPage } from "./viewer-page.ts";
+
 /** Each job uses a fresh browser profile; it never accesses a signed-in browser. */
 export async function renderBadge(input: RenderInput): Promise<Uint8Array> {
   const inspected = inspectSvg(input.svg, "badge");

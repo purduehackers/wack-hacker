@@ -2,6 +2,7 @@ import { messageOf } from "@repo/shared/errors";
 
 import { contextHash, ready, remainingCriteria, reviewable, staticPassed } from "./contracts.ts";
 import type { JobKind, Review } from "./contracts.ts";
+import type { createBadgeInventory } from "./inventory.ts";
 import { physicalDimensions, physicalSvg, renderManufacturing } from "./manufacturing.ts";
 import { pack } from "./packing.ts";
 import { assertCurrentEvent, CmsEventChanged } from "./service.ts";
@@ -12,10 +13,19 @@ import { inspectSvg, renderSvg } from "./svg.ts";
 
 export interface Publisher {
   archive(review: Review): Promise<NonNullable<Review["pr"]>>;
-  publish(review: Review): Promise<NonNullable<Review["publication"]>>;
+  publish(
+    review: Review,
+    beforeMerge: () => Promise<void>,
+  ): Promise<NonNullable<Review["publication"]>>;
   link(review: Review): Promise<string>;
 }
-export type BadgeRenderer = (svg: string) => Promise<{ image: Uint8Array; material: string }>;
+export type BadgeRenderer = (
+  svg: string,
+) => Promise<{ image: Uint8Array; material: string; materialId?: string; thicknessMm?: number }>;
+type Inventory = Pick<
+  ReturnType<typeof createBadgeInventory>,
+  "plan" | "reserve" | "consume" | "release"
+>;
 function nextJobs(review: Review, kind: string): JobKind[] {
   if (kind === "inspect" && staticPassed(review) && review.event && review.settings)
     return ["prepare"];
@@ -30,6 +40,7 @@ export function createWorker(
   cms: Cms,
   publisher: Publisher,
   renderer?: BadgeRenderer,
+  inventory?: Inventory,
 ) {
   async function advance(review: Review, kind: string): Promise<Review> {
     switch (kind) {
@@ -37,28 +48,12 @@ export function createWorker(
         return inspect(review, store);
       case "prepare":
         return prepare(review, store, renderer);
-      case "pack": {
-        if (
-          !reviewable(review) ||
-          remainingCriteria(review).length ||
-          !review.badge ||
-          !review.settings
-        )
-          throw new Error("Confirm both designs before arranging them.");
-        await assertCurrentEvent(review, cms);
-        const source = (await store.asset(review.badge.hash)).bytes.toString("utf8");
-        const layouts = await pack(
-          source,
-          inspectSvg(source, "badge").cut,
-          review.settings,
-          store,
-          review.layoutAttempt,
-        );
-        return { ...review, layouts, selectedLayout: layouts[0]?.id };
-      }
+      case "pack":
+        return arrange(review, store, cms, inventory);
       case "archive": {
         assertApproval(review);
         await assertCurrentEvent(review, cms);
+        await inventory?.reserve(review);
         const pr = await publisher.archive(review);
         return {
           ...review,
@@ -76,8 +71,10 @@ export function createWorker(
         assertApproval(review);
         if (!review.pr || review.approval?.head !== review.pr.head)
           throw new Error("Publication approval does not match this revision.");
-        await assertCurrentEvent(review, cms);
-        return { ...review, publication: await publisher.publish(review) };
+        const publication = await publisher.publish(review, () => assertCurrentEvent(review, cms));
+        const published = { ...review, publication };
+        await inventory?.consume(published);
+        return published;
       }
       case "link": {
         if (!review.publication) throw new Error("Save the files before creating their link.");
@@ -111,11 +108,41 @@ export function createWorker(
       });
       await store.finish(job.id, job.lease);
     } catch (cause) {
+      // The publisher checks CMS immediately before merging. A merged retry instead
+      // verifies its receipt and consumes stock even if CMS has since changed.
+      if (cause instanceof CmsEventChanged) await inventory?.release(review);
       await failJob(store, job, cause);
     }
     return true;
   }
   return { process };
+}
+async function arrange(
+  review: Review,
+  store: BadgeStore,
+  cms: Cms,
+  inventory?: Inventory,
+): Promise<Review> {
+  if (!reviewable(review) || remainingCriteria(review).length || !review.badge || !review.settings)
+    throw new Error("Confirm both designs before arranging them.");
+  await assertCurrentEvent(review, cms);
+  const source = (await store.asset(review.badge.hash)).bytes.toString("utf8");
+  const layouts = await pack(
+    source,
+    inspectSvg(source, "badge").cut,
+    review.settings,
+    store,
+    review.layoutAttempt,
+  );
+  const stockPlan = await inventory?.plan(
+    layouts[0]?.placements.map((placement) => placement.sheet),
+  );
+  return {
+    ...review,
+    layouts,
+    selectedLayout: layouts[0]?.id,
+    ...(stockPlan ? { stockPlan } : {}),
+  };
 }
 async function failJob(
   store: BadgeStore,
@@ -182,6 +209,8 @@ async function prepare(
             badge3d: {
               preview: await store.putAsset(preview3d.image, "image/png"),
               material: preview3d.material,
+              ...(preview3d.materialId ? { materialId: preview3d.materialId } : {}),
+              ...(preview3d.thicknessMm ? { thicknessMm: preview3d.thicknessMm } : {}),
             },
           }
         : {}),
