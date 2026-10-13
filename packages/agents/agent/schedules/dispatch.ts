@@ -22,8 +22,7 @@ const CLAIM_LIMIT = 25;
 const LEASE_FOR_MS = 2 * 60_000;
 const REQUEST_TIMEOUT_MS = 20_000;
 const redis = getRedis({
-  url: env.UPSTASH_REDIS_REST_URL,
-  token: env.UPSTASH_REDIS_REST_TOKEN,
+  url: env.REDIS_URL,
 });
 
 function desiredFire(job: ClaimedSchedule): ScheduledFirePayload {

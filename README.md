@@ -103,8 +103,7 @@ In project settings:
 ```bash
 bunx vercel env add AGENT_INGRESS_SECRET production   # bot → agent bearer
 bunx vercel env add BOT_INGRESS_SECRET production     # agent → bot bearer
-bunx vercel env add UPSTASH_REDIS_REST_URL production
-bunx vercel env add UPSTASH_REDIS_REST_TOKEN production
+bunx vercel env add REDIS_URL production
 bunx vercel env add TURSO_DATABASE_URL production
 bunx vercel env add TURSO_AUTH_TOKEN production
 bunx vercel env add DISCORD_BOT_TOKEN production
@@ -163,3 +162,32 @@ That flow, its required GitHub variables and secrets, the smoke check, and rollb
 ## Contributing
 
 Read [`AGENTS.md`](AGENTS.md) first — it carries the project conventions, including the lint policy. In short: schemas are canonical zod 4, type erasures are not accepted, and a lint suppression must be inline, single-rule, and carry its reason. The zod rules are enforced by `@rayhanadev/ox`, not by a checklist.
+
+## Redis migration
+
+The bot and the Vercel agent use one native Redis connection per process. Set
+`REDIS_URL` to `rediss://wack:<password>@redis.server.purduehackers.com:6379` in
+both runtimes. Node Redis is shared because the Vercel agent runs on Node.js and
+the bot runs on Bun. Local development can use `redis://localhost:6379`.
+
+Before switching production:
+
+1. Set the GitHub `production` environment secret `REDIS_URL` for the bot release
+   workflow. The agent passes its own `REDIS_URL` into newly started bot containers.
+2. Build the new bot image and coordinate its promotion with the agent deployment.
+   An old bot image still expects the Upstash REST variables.
+3. Pause bot traffic, agent schedules, and supervision, then copy existing Redis
+   data with key names, types, values, and remaining TTLs intact. Keep privacy
+   opt-outs, social-post baselines and queues, refreshed Instagram credentials,
+   image-drop records, and conversation state. This is not a disposable cache.
+4. Switch both runtimes to the same destination and resume with the new image.
+   Verify delivery and supervision before disconnecting the old integration.
+
+The connection fails commands after five seconds instead of replaying queued
+writes after a network failure. A later operation can reconnect. Existing Lua
+transitions still run atomically. The apps do not use the root Redis account.
+
+Run `REDIS_TEST_URL=redis://localhost:6379 bun test` for the native-client checks.
+The test only writes uniquely named `migration-test:wack:*` keys. Existing
+`check:invariants`, `check:delivery`, and `check:render` scripts also accept
+`REDIS_URL`; they exercise synthetic conversations through the real Lua scripts.

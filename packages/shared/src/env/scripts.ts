@@ -5,7 +5,7 @@
  * than through a package env schema. What they should not do is re-derive
  * "required" by hand at every entry point: a truthiness check accepts a URL
  * that is one typo away from talking to the wrong Redis, and it reports the
- * same sentence no matter which of the two values is missing.
+ * same sentence no matter which value is missing.
  *
  * Each accessor parses on call, not at import, so a script that never touches
  * Redis never demands Redis credentials.
@@ -14,17 +14,16 @@
 import { z } from "zod";
 
 const redisEnvSchema = z.object({
-  UPSTASH_REDIS_REST_URL: z.url({ protocol: /^https?$/u }),
-  UPSTASH_REDIS_REST_TOKEN: z.string().min(1),
+  REDIS_URL: z.url({ protocol: /^rediss?$/u }),
 });
 
-/** Upstash REST credentials, as `@upstash/redis` wants them. */
-export function redisEnv(): { readonly url: string; readonly token: string } {
+/** Native Redis connection URL, including TLS and ACL credentials. */
+export function redisEnv(): { readonly url: string } {
   const parsed = redisEnvSchema.safeParse(process.env);
   if (!parsed.success) {
-    throw new Error(`invalid Upstash Redis environment:\n${z.prettifyError(parsed.error)}`);
+    throw new Error(`invalid Redis environment:\n${z.prettifyError(parsed.error)}`);
   }
-  return { url: parsed.data.UPSTASH_REDIS_REST_URL, token: parsed.data.UPSTASH_REDIS_REST_TOKEN };
+  return { url: parsed.data.REDIS_URL };
 }
 
 const tursoEnvSchema = z.object({

@@ -50,7 +50,7 @@ export function createInstagramCredentials(options: {
       request: options.request,
     });
   const load = async () => {
-    const raw = (await options.redis.get<unknown>(key)) ?? undefined;
+    const raw = (await options.redis.get(key)) ?? undefined;
     if (raw === undefined) return seed();
     const parsed = stored(credentialSchema).safeParse(raw);
     if (!parsed.success) {
