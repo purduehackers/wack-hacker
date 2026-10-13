@@ -280,7 +280,7 @@ export function cardEmbeds(card: BadgeCard): APIEmbed[] {
   if (step === "quantity") {
     embed.fields = quantityFields(review);
     embed.footer = {
-      text: "Or tell me “I want 120 badges.” A smaller size needs your confirmation again.",
+      text: "Or tell me “I want 120 badges.” I’ll show the final size with the arrangement.",
     };
   }
   if (step === "done")

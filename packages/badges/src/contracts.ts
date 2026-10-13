@@ -187,7 +187,7 @@ export function contextHash(review: Review): string {
   );
 }
 
-/** Approvals belong to one physical design, not its companion or arrangement. */
+/** Confirmations bind the design and configured size, independent of automatic layout fitting. */
 export function designHash(review: Review, role: Criterion): string {
   return hash(
     JSON.stringify({
@@ -196,7 +196,7 @@ export function designHash(review: Review, role: Criterion): string {
       ...(role === "badge"
         ? {
             event: review.event,
-            size: badgeSize(review),
+            size: review.settings?.badgeSizeIn,
             material: review.material,
           }
         : { shortSide: review.settings?.stampSizeIn, impression: "unmirrored" }),

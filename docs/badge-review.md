@@ -88,16 +88,17 @@ Both assistants use the existing [conversation delivery queue](./system/conversa
 
 ## What your confirmation covers
 
-A design confirmation identifies that design’s bytes, relevant event details, physical size, and current standards. It does not depend on the other design or sheet positions. **Publish files** confirms both designs, settings, manufacturing exports, and the selected arrangement.
+A design confirmation identifies that design’s bytes, relevant event details, configured size, material, and current standards. Automatic resizing during arrangement preserves that confirmation. **Publish files** confirms both designs, the final dimensions, manufacturing exports, and the selected arrangement.
 
 These changes reopen only the affected work:
 
-| Change                                                  | Step that must run again                                  |
-| ------------------------------------------------------- | --------------------------------------------------------- |
-| Badge SVG, event details, badge size, or badge material | File preparation and badge confirmation, then arrangement |
-| Stamp SVG                                               | File preparation and stamp confirmation, then arrangement |
-| Positions, rotations, or spacing                        | Arrangement audit and publication confirmation            |
-| Stamp source unchanged                                  | Existing stamp confirmation remains valid                 |
+| Change                                                             | Step that must run again                                          |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| Badge SVG, event details, configured badge size, or badge material | File preparation and badge confirmation, then arrangement         |
+| Stamp SVG                                                          | File preparation and stamp confirmation, then arrangement         |
+| Positions, rotations, or spacing                                   | Arrangement audit and publication confirmation                    |
+| Automatic resizing to fit the target quantity                      | File preparation and arrangement, preserving design confirmations |
+| Stamp source unchanged                                             | Existing stamp confirmation remains valid                         |
 
 Permissions and revision checks run before a modal opens and again when it submits. Only you, as the original designer, can identify, replace, confirm, or publish your files. You don’t need an organizer role. Organizers can still help with event selection, configuration, and retries.
 
@@ -107,7 +108,7 @@ The service rejects stale controls privately and includes a jump to the latest m
 
 ## Why arrangement comes after confirmation
 
-File inspection and physical preview preparation run before either confirmation. Packing starts only after you confirm both designs. It only rotates or translates your badge.
+File inspection and physical preview preparation run before either confirmation. Packing starts only after you confirm both designs. It rotates and positions your badge, and may scale it within configured limits to fit your target quantity. The arrangement card shows the final dimensions.
 
 The badge embed combines the full flat artwork and an angled 3D preview. The renderer adapts the extrusion, engraving overlay, and acrylic presets from [Purdue Hackers’ badge viewer](https://github.com/purduehackers/badges/tree/8598f7513f993f30389470c85b88427db46256f1). It uses the physical cut contour and your selected acrylic and thickness. The card names the material; use the flat artwork to check fine details.
 
@@ -167,7 +168,7 @@ The stamp always measures 1.5 inches on its shortest side and keeps its aspect r
 
 Packing uses a bounded rotation search and a separate contour audit for overlap, spacing, and edges. Each default shows a per-sheet calculation from actual placements. Selecting a count creates exactly that many cutting outlines; publishing deducts only the sheets used.
 
-A larger target searches smaller sizes in 0.05-inch steps, down to the configured 1.8-inch minimum. Long-design size exceptions stay fixed. When size changes, the bot generates a new material preview and requires badge confirmation again. Stamp confirmation survives. If the search falls short, it reports the found count and keeps publication blocked until you choose a feasible quantity. The search does not prove a mathematical maximum.
+A larger target searches smaller sizes in 0.05-inch steps, down to the configured 1.8-inch minimum. Long-design size exceptions stay fixed. Automatic resizing preserves both design confirmations, updates the cutting files, and shows the final dimensions on the arrangement card. It does not repeat verification. If the search falls short, it reports the found count and keeps publication blocked until you choose a feasible quantity. The search does not prove a mathematical maximum.
 
 An organizer can adjust configuration and select **Check again**. A changed size requires you to check and confirm the badge again. The search does not prove optimality or impossibility.
 

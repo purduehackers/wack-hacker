@@ -20,7 +20,7 @@ Apply these decisions to the implementation, agent instructions, and architectur
 - **Publication**: Show **Publish files** after both confirmations and arrangement. Only the original designer can confirm or publish their work.
 - **Conversation**: Answer questions in plain text. Expose each button action as an agent tool using the same controller. Keep each workflow step in one message.
 - **Quantity**: Replace layout retries with calculated defaults and a native custom-quantity modal. Accept the same targets through chat.
-- **Sizing**: Search within configured limits for larger targets. Generate a new preview and reopen only badge confirmation when size changes.
+- **Sizing**: Search within configured limits for larger targets. Preserve design confirmations during automatic resizing, update the cutting files, and show the final dimensions on the arrangement card. Do not repeat verification for a size adjustment alone.
 
 Keep existing revision checks, static checks, and publication safeguards. Preserve the agreed metadata shape; its existing `reviewer` field records the designer who confirms publication. No product decisions remain open for this change.
 
@@ -76,10 +76,10 @@ The existing Discord cards now show **✅ Badge Selected**, **✅ Acrylic Select
 A focused walkthrough uses the real controller, database, packing search, contour audit, and Discord builders. Publication uses a fixture; this check does not publish real designs:
 
 - **Defaults**: The sample offers 80 as 37 + 43 and 100 as 37 + 63 at 2.2 inches
-- **Custom target**: 120 badges fit at 2.05 inches, split 47 + 73. The size change reopens badge confirmation and preserves stamp confirmation
-- **Exact exports**: After reconfirmation, both sheet files contain exactly 120 cutting outlines
+- **Custom target**: 120 badges fit at 2.05 inches, split 47 + 73. Automatic resizing preserves both original confirmations and shows the arrangement with its final dimensions
+- **Exact exports**: Updated manufacturing files and both sheet files use the fitted size and contain exactly 120 cutting outlines
 - **Unmet target**: A target of 500 reports the found 158 at 1.8 inches. Publication remains blocked
-- **Guards**: Unauthorized actors, stale revisions, out-of-range quantities, and premature publication fail
+- **Guards**: Unauthorized actors, stale revisions, out-of-range quantities, and premature publication fail. Changed artwork, events, materials, or configured dimensions still require confirmation. A layout at the wrong size cannot publish
 - **Inventory**: Fixture publication reserves and consumes the sheets once
 
 Seven tool checks verify staged-message identity, designer ownership, stale revisions, one action per message, revision uploads, and cancellation. The agent uses the controller without accepting identity or attachment URLs from the model.

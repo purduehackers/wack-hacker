@@ -6,7 +6,7 @@ import { reviewAction } from "../lib/tools.ts";
 
 export default defineTool({
   description:
-    "Set the designer's requested badge count. Omit count to show calculated quantity choices. Read review_status first. A size change requires badge confirmation again.",
+    "Set the designer's requested badge count. Omit count to show calculated quantity choices. Read review_status first. Automatic resizing keeps both design confirmations and updates the arrangement.",
   inputSchema: z.strictObject({
     version: z.int().nonnegative(),
     count: targetCountSchema.optional(),

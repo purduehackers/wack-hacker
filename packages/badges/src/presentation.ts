@@ -230,7 +230,7 @@ export function reviewPrompt(review: Review): string {
     case "preparing":
       return "Preparing the previews…";
     case "badge":
-      return `${review.fittedSizeIn ? "The badge size changed. " : ""}Double-check your badge’s version, date, readability, and thin connections at this size.`;
+      return "Double-check your badge’s version, date, readability, and thin connections at this size.";
     case "stamp":
       return "You confirmed your badge. Check that your stamp will leave a clear impression.";
     case "packing":
