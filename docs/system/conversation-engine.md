@@ -157,7 +157,7 @@ order:
 
 1. constant-time bearer authentication;
 2. `decodeDeliveryPayload()` strict Zod validation;
-3. first-session-only lead-in context selection;
+3. resolve the active session and steer any superseded turn;
 4. `conversations.admission.start(payload)` as the final side effect before Eve;
 5. `send(..., { auth, continuationToken, state })`;
 6. `admission.confirm(payload, session.id)`;
@@ -171,9 +171,22 @@ Admission outcomes distinguish:
 - `recovery-required` — prior ambiguous delivery must be reset;
 - `resetting` or `stale` — current queue epoch may not enter.
 
-Attachments become AI SDK `UserContent` with URL/file metadata. Lead-in and
-referenced context are seeded only for a newly resolved session so follow-ups do
-not duplicate history.
+Attachments become AI SDK `UserContent` with URL/file metadata. Each delivery is
+one user turn: an optional `quoted_discord_context` block identifies the explicit
+reply target, followed by `current_request` with the actual request and source
+identifiers. Both blocks contain escaped JSON. Reply targets are carried on every
+turn, including follow-ups in existing sessions; failed lookups retain the target
+IDs without inventing content. Quoted attachments remain metadata rather than
+being staged as the current user's files.
+
+The bot does not fetch general backscroll. The agent can request a bounded window
+through its Discord specialist when the request needs surrounding discussion.
+Legacy `recentMessages` and `referencedContext` fields remain accepted to drain
+older queued deliveries but never enter model context. Deploy the agent before
+the bot because older strict schemas do not accept `replyTo`. Existing session
+history is preserved; this does not scrub or reset earlier contaminated sessions.
+The context rules also cover retrieved history, delegation, and summaries; model
+adherence after compaction still requires behavioral evaluation.
 
 ## Desired rendering
 

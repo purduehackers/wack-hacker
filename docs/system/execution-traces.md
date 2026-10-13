@@ -42,7 +42,7 @@ Discord gateway MESSAGE_CREATE
          ├─ dedup.claim(message.id)                    packages/bot/src/framework/dedup.ts
          └─ agentChat.handle()                         packages/bot/src/events/agent-chat.ts
             ├─ stripBotMention()
-            ├─ Promise.all(openThread, fetchLeadIn)
+            ├─ Promise.all(openThread, fetchReplyTo)
             ├─ postPlaceholder(nonce=<source>:0)
             └─ ConversationFlow.submit(payload)        packages/bot/src/utils/conversation/queue.ts
                ├─ store.delivery.enqueue(payload)      packages/shared/src/conversations/writers/delivery.ts

@@ -36,10 +36,9 @@ import {
   decodeSteerRequestPayload,
   WIRE_ROUTES,
 } from "@repo/shared/wire";
-import type { DeliveryPayload, ParkedPayload, RenderIntent, WireResponse } from "@repo/shared/wire";
+import type { ParkedPayload, RenderIntent, WireResponse } from "@repo/shared/wire";
 import * as Sentry from "@sentry/node";
 import { getVercelOidcToken } from "@vercel/oidc";
-import type { UserContent } from "ai";
 import { defineChannel, POST, type Session } from "eve/channels";
 import { createUnauthorizedResponse } from "eve/channels/auth";
 import type { SessionContext } from "eve/context";
@@ -49,6 +48,7 @@ import { env } from "../env.ts";
 import { resolveBotBaseUrl } from "../lib/bot/endpoint.ts";
 import { authFor } from "../lib/discord/auth.ts";
 import { applyInputRequests } from "../lib/discord/input-requests.ts";
+import { discordMessageContent } from "../lib/discord/message-input.ts";
 import { createRenderPublisher, renderFooter } from "../lib/discord/render-intent.ts";
 import {
   appendStreamingMessage,
@@ -335,13 +335,7 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
       if (Result.isError(decoded)) return failed(decoded.error);
       const payload = decoded.value;
 
-      // Context is durable history. Add the lead-in only when this delivery
-      // creates the session; resending it on every follow-up duplicates history.
       const active = await resolveSession(payload.continuationKey);
-      const context =
-        active === undefined
-          ? [...(payload.recentMessages ?? []), ...(payload.referencedContext ?? [])]
-          : [];
 
       await steerActiveTurn(active, payload.continuationKey);
       const renderChannelId = payload.thread?.id ?? payload.channel.id;
@@ -382,7 +376,7 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
       }
 
       try {
-        const session = await from(payload.continuationKey).send(messageContent(payload), {
+        const session = await from(payload.continuationKey).send(discordMessageContent(payload), {
           // Eve refreshes current auth on every delivery even though state seeds
           // are ignored for existing sessions. Transport targeting therefore
           // rides in this trusted assertion and is adopted at `turn.started`.
@@ -396,7 +390,6 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
             ...(payload.scheduleId === undefined ? {} : { scheduleId: payload.scheduleId }),
             ...(payload.occurrenceId === undefined ? {} : { occurrenceId: payload.occurrenceId }),
           }),
-          ...(context.length === 0 ? {} : { context }),
           state: stateForMessage(payload),
         });
 
@@ -887,16 +880,4 @@ async function settleAndNotifyParked(
       cause,
     );
   }
-}
-function messageContent(payload: DeliveryPayload): string | UserContent {
-  if (payload.attachments === undefined || payload.attachments.length === 0) return payload.content;
-  return [
-    { type: "text", text: payload.content },
-    ...payload.attachments.map((attachment) => ({
-      type: "file" as const,
-      data: new URL(attachment.url),
-      filename: attachment.filename,
-      mediaType: attachment.contentType ?? "application/octet-stream",
-    })),
-  ];
 }

@@ -43,7 +43,7 @@ import { Result } from "./result/index.ts";
 export const MAX_CONTENT_CHARS = 4_000;
 /** A scheduled prompt is application-owned and never came from a Discord message. */
 export const MAX_SCHEDULE_CONTENT_CHARS = 9_000;
-/** Lead-in context the agent pins on the first turn only. */
+/** Accepted only to drain deliveries queued by an older bot. Never shown to the model. */
 const MAX_LEADIN_MESSAGES = 20;
 const MAX_ATTACHMENTS = 10;
 
@@ -80,8 +80,29 @@ const attachmentSchema = z.strictObject({
   size: z.int().nonnegative(),
 });
 
+const messageReferenceSchema = z.strictObject({
+  messageId: snowflake,
+  channelId: snowflake,
+});
+
+const replyToSchema = messageReferenceSchema.extend({
+  /** A missing snapshot means the target could not be read; its identity still survives. */
+  snapshot: z
+    .strictObject({
+      authorId: snowflake,
+      authorName: z.string().trim().min(1).max(64),
+      isBot: z.boolean(),
+      createdAt: z.iso.datetime(),
+      content: z.string().max(MAX_CONTENT_CHARS),
+      truncated: z.boolean(),
+      attachments: z.array(attachmentSchema).max(MAX_ATTACHMENTS),
+      replyTo: messageReferenceSchema.optional(),
+    })
+    .optional(),
+});
+
 /**
- * A Discord turn. `mention` opens with user lead-in, `followup` continues a live
+ * A Discord turn. `mention` opens a conversation, `followup` continues a live
  * conversation, and `scheduled` is a bot-materialized proactive occurrence.
  */
 const messagePayloadSchema = z
@@ -97,13 +118,11 @@ const messagePayloadSchema = z
     channel: channelRefSchema,
     thread: threadRefSchema.optional(),
     attachments: z.array(attachmentSchema).max(MAX_ATTACHMENTS).optional(),
-    /**
-     * Recent channel or thread messages, first turn only. The agent pins these
-     * for the life of the session so the rendered prompt stays byte-stable and
-     * prompt caching keeps working.
-     */
+    /** Explicit reply target for this delivery, including follow-ups in an existing session. */
+    replyTo: replyToSchema.optional(),
+    /** Legacy backscroll is accepted for queued deliveries but never used as model context. */
     recentMessages: z.array(z.string()).max(MAX_LEADIN_MESSAGES).optional(),
-    /** Reply anchor plus its preceding messages, when the turn is a reply. */
+    /** Legacy reply backscroll has no reliable target identity and is likewise ignored. */
     referencedContext: z.array(z.string()).max(MAX_LEADIN_MESSAGES).optional(),
     /**
      * A placeholder message the bot already posted. The agent's paint layer
