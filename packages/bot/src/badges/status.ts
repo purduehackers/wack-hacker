@@ -196,15 +196,15 @@ export function settledCard(
   return {
     embeds: message.embeds.map((embed, index) => {
       const original = attachedImage(embed.toJSON(), message);
-      return index === message.embeds.length - 1
-        ? {
-            ...original,
-            title: `${result.status === "success" ? "✅ " : ""}${result.label}`,
-            color: badgeColors[result.status],
-            ...(result.description === undefined ? {} : { description: result.description }),
-            ...(file ? { image: { url: `attachment://${file.name}` } } : {}),
-          }
-        : original;
+      if (index !== message.embeds.length - 1 || original.title === "Automatic verification")
+        return original;
+      return {
+        ...original,
+        title: `${result.status === "success" ? "✅ " : ""}${result.label}`,
+        color: badgeColors[result.status],
+        ...(result.description === undefined ? {} : { description: result.description }),
+        ...(file ? { image: { url: `attachment://${file.name}` } } : {}),
+      };
     }),
     components: [],
     ...(file

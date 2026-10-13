@@ -7,7 +7,9 @@ meta:
 
 Mention wack hacker in #p-badges with your badge and stamp as Scalable Vector Graphics (SVG) files. Choose acrylic from stock, check your designs, then arrange your badges. Each step uses one message with native Discord controls. Questions receive short, plain replies.
 
-Design checks show two embeds: **Automatic verification** lists file checks with ✅ or ❌, and **Manual verification** shows the preview and expected details. Missing or uncertain evidence says “Not verified.” Each embed keeps its own status color; confirming your design changes only the manual result.
+**Automatic verification** lists file checks with ✅ or ❌. If a check fails, that same embed shows the repair guidance and design preview. Missing or uncertain evidence says “Not verified.”
+
+Once the file checks pass, **Manual verification** appears beside the automatic results with your preview and expected details. Confirming your design changes only the manual result. Uploading a revision preserves the previous file’s findings and removes its button.
 
 Completed steps remove every button and update the title to record the result. **✅ Badge Selected** labels the preview with filenames and Badge or Stamp. **✅ Acrylic Selected** names the chosen acrylic and thickness. Yellow means a step needs input or is running, green means it completed, and red means something needs fixing. Opening an upload dialog leaves the card active until you submit a file.
 

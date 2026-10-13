@@ -13,7 +13,7 @@ The goal is to help you confirm your work without handing it to a separate revie
 
 Apply these decisions to the implementation, agent instructions, and architecture documentation:
 
-- **Badge**: Show **Automatic verification** and **Manual verification** together, with **Confirm badge** and **Upload revised badge** below.
+- **Badge**: After file checks pass, show **Automatic verification** and **Manual verification** together, with **Confirm badge** and **Upload revised badge** below.
 - **Stamp**: Show the same verification pair, with **Confirm stamp** and **Upload revised stamp**, after badge confirmation.
 - **Revisions**: Open the native file upload directly. Do not ask you to write feedback to yourself.
 - **Publication**: Show **Publish files** after both confirmations and arrangement. Only the original designer can confirm or publish their work.
@@ -27,14 +27,14 @@ Keep existing revision checks, static checks, and publication safeguards. Preser
 
 Apply the supplied Vercel writing guidelines within Discord’s supported features:
 
-- **Messages**: Send two embeds for design verification and one for other workflow steps. Answer questions in plain messages. Update completed titles and selections while preserving verification evidence.
+- **Messages**: Send two embeds for design verification after file checks pass. Use one embed for failed checks and other workflow steps. Answer questions in plain messages. Update completed titles and selections while preserving verification evidence.
 - **Automatic verification**: List all six file checks with ✅ or ❌. Mark missing or uncertain evidence as “Not verified.” Use only evidence from the current file. Keep this embed’s result unchanged when the designer confirms.
-- **Manual verification**: Show the expected details, design preview, and next action. Keep this embed yellow until confirmation. File failures block confirmation and show repair guidance.
+- **Manual verification**: Show the expected details, design preview, and next action only after file checks pass. Keep this embed yellow until confirmation.
 - **Previews**: Show a full design. Label uploads with filenames and add Badge or Stamp after identification. Keep the image inside its embed when editing the card. Do not generate close-ups.
 - **Controls**: Put native buttons and selects below the embed. **Upload revised badge** and **Upload revised stamp** open a Label and File Upload directly.
 - **Progress**: Use typing while work runs. Do not post separate checking, preparing, packing, or publishing cards.
 - **Completed steps**: Remove all buttons after an accepted action. Use **✅ Badge Selected** with the file assignments and **✅ Acrylic Selected** with the chosen material. Use yellow for input or ongoing work, green for completion, and red for failures. Opening an upload dialog does not complete the step.
-- **Failed checks**: Show the automatic checklist and specific repair guidance before asking for a replacement. A pending upload never hides failed checks.
+- **Failed checks**: Put the checklist, repair guidance, and design preview in one **Automatic verification** embed with an upload button. File failures block confirmation. A pending upload never hides failed checks. Preserve these findings when a revision arrives.
 - **Language**: Explain a concrete action in the design app. Use status emoji in the automatic checklist and completed titles. Keep code, diagnostic details, and internal policies out of copy.
 
 ## Designer confirmation checks
@@ -59,6 +59,8 @@ The verification update passes 10 focused checks using the production Discord bu
 The designer’s [new thread](https://discord.com/channels/772576325897945119/1559663827551789056) exposed a hidden palette failure and a duplicated image after editing. The worker had set a pending upload before presenting its findings. Completed-card edits had reused a resolved image URL instead of its attachment reference.
 
 Eleven focused checks now cover filename labels, selected roles, attachment replacement, completed titles, material descriptions, all six check results, repair guidance, direct replacement uploads, removed controls, preserved evidence, and XML escaping. The real worker checks the submitted blue badge against an isolated database. A pending upload cannot hide its failed palette check.
+
+Additional checks cover a single automatic embed for badge and stamp failures, uncertain results, and preserved findings after replacement. Passing designs still show both verification embeds. Confirming a design changes only its manual result.
 
 The existing Discord cards now show **✅ Badge Selected**, **✅ Acrylic Selected**, and the failed automatic check with grayscale guidance. Completed cards contain no controls, and previews stay inside their embeds. The unrelated production reply was removed from this thread. Both bot instances still share an account; local testing does not prevent the production listener from answering a leading mention.
 
@@ -89,7 +91,7 @@ The local listener now accepts new threads in #p-wack-hacker. A concurrently run
 
 A [new thread in #p-wack-hacker](https://discord.com/channels/772576325897945119/1559651097570840680) exercises the updated local bot through native Discord controls:
 
-- **File failure**: Blue artwork produces one ❌ in a red automatic embed. The manual embed shows repair guidance without a confirmation button
+- **File failure**: Blue artwork produces one ❌ in a red automatic embed. The current presentation keeps its guidance and preview in that embed, with only an upload button
 - **Revision**: The native upload modal accepts the corrected SVG. The automatic embed shows six ✅ checks in green; manual verification remains yellow
 - **Confirmation**: Badge and stamp confirmations turn their manual embeds green. Both embeds retain their original evidence and previews. The current presentation removes all completed controls
 - **Arrangement**: The bot arranges badges after both confirmations. This run stops before publication and leaves inventory unchanged

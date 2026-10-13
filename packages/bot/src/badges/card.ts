@@ -295,15 +295,18 @@ function verificationEmbeds(
   step: ReviewStep,
   embed: APIEmbed,
 ): APIEmbed[] {
-  if (step === "badge" || step === "stamp" || step === "fix") {
-    const role = step === "fix" ? fixRole(review) : step;
-    embed.title = "Manual verification";
-    if (step === "fix") {
-      embed.description = `Update your ${role} before confirming it.\n\n${reviewPrompt(review)}`;
-      embed.color = badgeColors.warning;
-    }
-    return [automaticVerification(review, role), embed];
+  if (step === "fix") {
+    const automatic = automaticVerification(review, fixRole(review));
+    return [
+      {
+        ...embed,
+        ...automatic,
+        description: `${automatic.description}\n\n${embed.description}`,
+      },
+    ];
   }
+  if (step === "badge" || step === "stamp")
+    return [automaticVerification(review, step), { ...embed, title: "Manual verification" }];
   return [embed];
 }
 
