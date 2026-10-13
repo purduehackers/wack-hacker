@@ -42,6 +42,14 @@ export async function previewFiles(review: Review, store: BadgeStore) {
     );
     return [{ name: "designs.png", data: pair(images, ["Badge", "Stamp impression"]) }];
   }
+  if (step === "badge" && review.manufacturing?.badge3d) {
+    const images = await Promise.all(
+      [review.manufacturing.badgePreview, review.manufacturing.badge3d.preview].map(
+        async (digest) => (await store.asset(digest)).bytes.toString("base64"),
+      ),
+    );
+    return [{ name: "preview.png", data: pair(images, ["Your design", "Material preview"]) }];
+  }
   const digest =
     step === "badge"
       ? review.manufacturing?.badgePreview

@@ -211,7 +211,7 @@ export async function pack(
   // Bounded heuristic, not a proof of optimality or infeasibility. Never resize here.
   if (placements.length < 80)
     throw new Error(
-      `The layout search found ${placements.length} badges at the approved size. It needs at least 80. Try another layout, or ask an organizer to adjust the configured size and review the badge again.`,
+      `The layout search found ${placements.length} badges. You need at least 80. Select Try another layout, or ask an organizer to adjust the size before you check your badge again.`,
     );
   audit(shape.points, placements, settings.gapMm);
   const sheets = SHEETS.map((_, index) => sheetSvg(source, shape, placements, index));

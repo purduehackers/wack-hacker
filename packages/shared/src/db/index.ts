@@ -14,6 +14,7 @@ import { createClient } from "@libsql/client/web";
 import { drizzle } from "drizzle-orm/libsql/web";
 
 import * as actionAudit from "./schemas/action-audit.ts";
+import * as badgeInventory from "./schemas/badge-inventory.ts";
 import * as badges from "./schemas/badge-reviews.ts";
 import * as relations from "./schemas/relations.ts";
 import * as scheduledTasks from "./schemas/scheduled-tasks.ts";
@@ -22,6 +23,7 @@ import * as shoppingCarts from "./schemas/shopping-carts.ts";
 
 export * from "./enums.ts";
 export { actionAudit } from "./schemas/action-audit.ts";
+export { badgeStock, badgeStockChanges } from "./schemas/badge-inventory.ts";
 export {
   badgeReviews,
   badgeAssets,
@@ -34,6 +36,7 @@ export { shoppingCartItems } from "./schemas/shopping-cart-items.ts";
 export { shoppingCarts } from "./schemas/shopping-carts.ts";
 
 const schema = {
+  ...badgeInventory,
   ...badges,
   ...shoppingCarts,
   ...shoppingCartItems,

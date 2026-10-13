@@ -155,7 +155,7 @@ class GithubPublisher implements Publisher {
           base,
           title: review.event?.name ?? "Badge review",
           draft: true,
-          body: `Reviewed in Discord: https://discord.com/channels/${DISCORD_GUILD_ID}/${review.threadId}\n\nEvidence context: \`${contextHash(review)}\`. Do not edit or merge this PR directly: the bot verifies its exact content and requires final approval in Discord.`,
+          body: `The designer confirmed these files in [Discord](https://discord.com/channels/${DISCORD_GUILD_ID}/${review.threadId}).\n\nPublication context: \`${contextHash(review)}\`. Do not edit or merge this PR directly. The bot verifies its exact content before merging.`,
         })
       ).data;
     return { number: pr.number, head: commit, url: pr.html_url };

@@ -1,0 +1,23 @@
+{
+  "name": "@repo/badge-renderer",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/render.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "bun build.ts"
+  },
+  "dependencies": {
+    "@repo/badges": "workspace:*",
+    "@sparticuz/chromium": "153.0.0",
+    "puppeteer-core": "25.11.0",
+    "three": "0.183.2"
+  },
+  "devDependencies": {
+    "@types/three": "0.183.1"
+  }
+}

@@ -1,9 +1,9 @@
 import { designHash, remainingCriteria, staticPassed } from "./contracts.ts";
 import type { Check, Criterion, Review } from "./contracts.ts";
 
-const unclearReply = "Ask me again, or use the latest review card to continue.";
+const unclearReply = "Ask me again, or use the latest card to continue.";
 
-/** Final display boundary for model prose and reviewer notes, never SVG source or diagnostics. */
+/** Final display boundary for model prose and design notes, never SVG source or diagnostics. */
 export function designerText(text: string, fallback = unclearReply): string {
   if (
     /```|`[^`]*[{}();=][^`]*`|<\/?[a-z][^>]*>|(?:^|\n)\s*(?:[[{]\s*"|(?:import|export|const|let|function|class)\s)|\b(?:readyToPublish|staticPassed|evidenceId|contextHash|rubrics?|criteria|criterion|stack trace)\b/iu.test(
@@ -40,17 +40,16 @@ export function findingGuidance(finding: Pick<Check, "id" | "role">): string {
 
 export function failureGuidance(detail: string): string {
   if (/newer step|review changed|latest review|stale/iu.test(detail))
-    return "Use the latest review message to continue.";
-  if (/Only.*author/iu.test(detail))
-    return "Ask the designer who started this review to upload the revision.";
-  if (/organizer needs/iu.test(detail)) return "Ask an organizer to review this design.";
+    return "Use the latest message to continue.";
   if (/Only the author or/iu.test(detail))
     return "Ask the designer or an organizer to make this change.";
+  if (/Only.*author/iu.test(detail))
+    return "Only the designer who uploaded these files can confirm, replace, or publish them.";
   if (/Explain what needs/iu.test(detail)) return "Add a short note about what needs changing.";
   if (/different review thread|p-badges thread/iu.test(detail))
-    return "Open the original review thread and use its latest message.";
+    return "Open the original thread and use its latest message.";
   if (/event.*changed|production settings changed/iu.test(detail))
-    return "The Hack Night details or production size changed. Refresh the review to continue.";
+    return "The Hack Night details or design size changed. Select Check again to continue.";
   if (/Attachment is unavailable|Reattach|expired/iu.test(detail))
     return "I couldn’t open that upload. Upload the SVG again.";
   if (/1 MB|too large/iu.test(detail))
@@ -62,11 +61,11 @@ export function failureGuidance(detail: string): string {
     return "I couldn’t read that design. Export a plain SVG from your design app and upload it again.";
   if (/layout search found/iu.test(detail)) return detail;
   if (/time budget/iu.test(detail))
-    return "The layout search timed out. Try another layout at the approved size.";
+    return "The layout search timed out. Select Try another layout to keep the same badge size.";
   if (/cut outline|geometry|clearance|overlap/iu.test(detail))
     return "I couldn’t prepare the cutting layout. Ask an organizer to check the outside outline.";
   if (/Publication is locked|approval does not match/iu.test(detail))
-    return "I’m saving the approved files. Wait for the download link before uploading a revision.";
+    return "I’m saving your files. Wait for the download link before uploading a revision.";
   return "I couldn’t finish this step. Try again. If it fails again, ask an organizer for help.";
 }
 
@@ -132,9 +131,12 @@ export function actionable(review: Review): boolean {
 export function reviewPrompt(review: Review): string {
   const correction = correctionFor(review);
   if (correction) {
-    const note = designerText(correction.note, "Ask your reviewer what to change.").slice(0, 700);
+    const note = designerText(correction.note, "Check your design before continuing.").slice(
+      0,
+      700,
+    );
     return correction.verdict === "unclear"
-      ? `${note}\n\nOpen the full image, or ask another reviewer to take a look.`
+      ? `${note}\n\nOpen the full image to check the details.`
       : `${note}\n\nUpload your updated ${correction.criterion} when it’s ready.`;
   }
   switch (reviewStep(review)) {
@@ -162,17 +164,13 @@ export function reviewPrompt(review: Review): string {
     case "preparing":
       return "Preparing the previews…";
     case "badge":
-      return "The file checks passed. Check the version, date, and small details at this size.";
-    case "stamp": {
-      const reviewer = currentDecisions(review).find(
-        (decision) => decision.criterion === "badge" && decision.verdict === "approve",
-      )?.reviewer.username;
-      return `${reviewer ?? "Your reviewer"} approved the badge. Check that the stamp will leave a clear impression.`;
-    }
+      return "Your file checks passed. Double-check the version, date, and small details at this size.";
+    case "stamp":
+      return "You confirmed your badge. Check that your stamp will leave a clear impression.";
     case "packing":
-      return "Arranging your approved designs…";
+      return "Arranging your badges…";
     case "layout":
-      return `Both designs are approved. This layout fits ${review.layouts.find((layout) => layout.id === review.selectedLayout)?.count} badges across your two sheets.`;
+      return `You confirmed both designs. This layout fits ${review.layouts.find((layout) => layout.id === review.selectedLayout)?.count} badges across your two sheets.`;
     case "publishing":
       return "Saving your files…";
     case "done":

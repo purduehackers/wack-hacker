@@ -153,6 +153,7 @@ async function main(): Promise<void> {
   });
 
   const built = buildCommands({
+    ...(badges ? { badges } : {}),
     redis,
     vercelToken: env.VERCEL_API_TOKEN,
     dashboardGlobalConfig: env.DASHBOARD_GLOBAL_CONFIG,

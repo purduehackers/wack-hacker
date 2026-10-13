@@ -15,6 +15,13 @@
       "when": 1791830303823,
       "tag": "0001_dark_mother_askani",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1791909674275,
+      "tag": "0002_badge_inventory",
+      "breakpoints": true
     }
   ]
 }

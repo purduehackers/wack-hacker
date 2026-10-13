@@ -5,21 +5,50 @@ meta:
 
 # Review the badge interactions before release
 
-Use this checklist to compare the implementation with the approved Discord flow. Designers need one visible design and one logical next step. Organizers need the event details, physical size, and an explicit approval button.
+Use this checklist to verify the designer’s workflow before release. You double-check your own badge and stamp, confirm each design, then publish the cutting files.
+
+## Plan the designer’s next action
+
+The goal is to help you confirm your work without handing it to a separate reviewer. Workflow cards show the design and its next action. Questions receive short, plain messages.
+
+Apply these decisions to the implementation, agent instructions, and architecture documentation:
+
+- **Badge**: Show **Check your badge**, **Confirm badge**, and **Upload revised badge**.
+- **Stamp**: Show **Check your stamp**, **Confirm stamp**, and **Upload revised stamp** after badge confirmation.
+- **Revisions**: Open the native file upload directly. Do not ask you to write feedback to yourself.
+- **Publication**: Show **Publish files** after both confirmations and arrangement. Only the original designer can confirm or publish their work.
+- **Conversation**: Send one completed plain reply. Keep workflow images and controls in one embed per step.
+
+Keep existing revision checks, static checks, and publication safeguards. Preserve the agreed metadata shape; its existing `reviewer` field records the designer who confirms publication. No product decisions remain open for this change.
 
 ## Approved presentation
 
 Apply the supplied Vercel writing guidelines within Discord’s supported features:
 
-- **Messages**: Send one embed per turn. Keep copy short and specific. Never rewrite earlier messages.
+- **Messages**: Send one embed per workflow step. Answer questions in plain messages. Keep copy short and specific. Never rewrite earlier messages.
 - **Previews**: Show a full design. Combine A/B files or both cutting sheets into one image when needed. Do not generate close-ups.
-- **Controls**: Put native buttons and selects below the embed. Request changes uses a Label and required Text Input. Upload uses a Label and File Upload.
+- **Controls**: Put native buttons and selects below the embed. **Upload revised badge** and **Upload revised stamp** open a Label and File Upload directly.
 - **Progress**: Use typing while work runs. Do not post separate checking, preparing, packing, or publishing cards.
 - **Language**: Explain a concrete action in the design app. Keep code, status symbols, diagnostic details, and internal policies out of copy.
 
-## Completed offline checks
+## Designer confirmation checks
 
-Validation uses the actual service, worker, SVG renderer, packing audit, and Discord builders with a local database. External services are replaced with controlled responses; no new test files are committed.
+The current implementation passes a local walkthrough using the actual service, worker, database, SVG renderer, and Discord builders. The designer has no organizer roles. External publication responses use controlled fixtures.
+
+The walkthrough and focused interaction checks verify:
+
+- **Ownership**: The original designer confirms both designs and publishes. A different organizer cannot confirm or replace the designer’s files.
+- **Revisions**: Revision buttons open the native file upload directly. Older change buttons open that same upload instead of a feedback form.
+- **Copy**: All 14 generated cards use confirmation language. The normal path remains badge, stamp, arrangement, and download.
+- **Questions**: The renderer sends plain text and suppresses link previews. Durable checkpoints, retry nonces, and replay suppression still work.
+- **Controls**: Stale submissions receive a private link to the latest step. Signed roles, fresh membership, and file limits remain enforced.
+- **Order**: Static failures block confirmation. A stamp revision preserves badge confirmation; arrangement starts after both confirmations.
+
+Lint, formatting, the badge app build, and all 7 existing tests pass. No new test files are committed. Native Vesktop control timed out during this change, so these updated interactions have not been verified live.
+
+## Earlier offline checks
+
+The earlier workflow used organizer approvals and embedded question replies. The evidence below records that behavior before the designer confirmation change. Validation used the actual service, worker, SVG renderer, packing audit, and Discord builders with a local database.
 
 The walkthrough verifies these outcomes:
 
@@ -31,7 +60,7 @@ The walkthrough verifies these outcomes:
 - **Concurrency**: Competing decisions produce one accepted mutation. Repacking preserves design decisions.
 - **Recovery**: A failed shortlink retains the merge receipt. Retry finishes the link without merging again. A published review accepts a new revision while preserving the previous link.
 
-## Completed live checks
+## Earlier live checks
 
 On October 13, 2026, a focused local runner exercised the production handlers in Vesktop, scoped to #p-wack-hacker. CMS reads, Luna routing, Discord membership checks, controls, file downloads, rendering, and packing used real services. Review storage and saved routes were local; conversational Eve and publication were disabled.
 
@@ -59,6 +88,6 @@ Focused local checks additionally cover durable reply serialization, replay supp
 
 ## Remaining live checks
 
-Before release, exercise a fresh submission through the deployed badge app, a denied interaction from another account, and a requested revision attached as a message. General Eve routing and production infrastructure were not exercised by the full local runner. Publication permission and redirect propagation were verified with disposable assets; intended production designs and physical cutting still need review.
+Before release, exercise the updated designer confirmations and plain replies through the deployed badge app. Also check a denied interaction from another account and a revision attached as a message. General Eve routing and production infrastructure were not exercised by the full local runner. Publication permission and redirect propagation were verified with disposable assets; intended production designs and physical cutting still need review.
 
 The implementation and pull request remain open for review. Do not treat offline SVG or layout checks as a physical laser test.

@@ -16,12 +16,14 @@ import type { RedisClient } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
 import type { Reporter } from "@repo/shared/result/observe";
 
+import type { BadgeClient } from "../badges/client.ts";
 import type { SlashCommand } from "../framework/commands.ts";
 import { createCmsClient } from "../integrations/cms.ts";
 import { createDashboardWriter } from "../integrations/dashboard.ts";
 import { createEventDirectory } from "../integrations/event-directory.ts";
 import { createImageDropStore } from "../integrations/image-drop.ts";
 import { createPhackLinkWriter } from "../integrations/phack-links.ts";
+import { badgeCommand } from "./badge.ts";
 import { hackNightCommand } from "./hack-night.ts";
 import { imageDropCommand } from "./image-drop.ts";
 import { phackCommand } from "./phack.ts";
@@ -29,6 +31,7 @@ import { ping } from "./ping.ts";
 import { privacyCommand } from "./privacy.ts";
 
 export interface CommandDeps {
+  readonly badges?: BadgeClient;
   readonly redis: RedisClient;
   readonly vercelToken: string;
   readonly dashboardGlobalConfig: string;
@@ -57,6 +60,7 @@ export function buildCommands(deps: CommandDeps): Result<readonly SlashCommand[]
   const directory = createEventDirectory({ cms, redis: deps.redis, reporter: deps.reporter });
 
   return Result.ok([
+    badgeCommand(deps.badges),
     ping,
     privacyCommand(deps.redis),
     hackNightCommand({ dashboard: dashboard.value, cms, drops, directory }),

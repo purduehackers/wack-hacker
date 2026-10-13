@@ -5,18 +5,20 @@ meta:
 
 # What happens after you submit a badge?
 
-Mention wack hacker in #p-badges with your badge and stamp as Scalable Vector Graphics (SVG) files. The bot checks the files, presents each design for approval, then arranges the accepted badge. Each turn contains one embed and native Discord controls. Earlier messages stay unchanged.
+Mention wack hacker in #p-badges with your badge and stamp as Scalable Vector Graphics (SVG) files. The bot checks the files, helps you confirm your designs, then arranges your badges. Each workflow step contains one embed and native Discord controls. Questions receive short, plain replies; earlier messages stay unchanged.
 
-## The four review turns
+## The four workflow steps
 
 When the files and event are clear, you see four messages:
 
-1. **Review the badge**: See the full badge, expected event and date, and physical dimensions. An organizer approves the version, date, readability, and strength together.
-2. **Review the stamp**: See the finished impression and dimensions. An organizer approves the stamp or requests a specific change.
-3. **Ready to publish**: See both cutting sheets in one image. An organizer selects **Approve & publish**, or you select **Try another layout** at the same size.
-4. **Get the files**: Download the saved designs and sheets through `phack.rs/badge-<version>`.
+1. **Check your badge**: Double-check the version, date, readability, and strength at the displayed size. Select **Confirm badge**.
+2. **Check your stamp**: Check the finished impression and dimensions. Select **Confirm stamp**.
+3. **Ready to publish**: Check both cutting sheets in one image. Select **Publish files**, or **Try another layout** at the same size.
+4. **Get the files**: Download your saved designs and sheets through `phack.rs/badge-{version}`.
 
-**Request changes** opens a required feedback field. The next embed shows the feedback, full design, and an upload button. That button opens Discord’s native file upload modal. A stamp revision preserves badge approval. When a reviewer cannot read an image, the assistant suggests opening the full image or asking another reviewer; uncertainty alone does not require a revision.
+If you need to change a design, select **Upload revised badge** or **Upload revised stamp**. Each button opens Discord’s native file upload modal directly. You don’t write feedback to yourself or wait for a separate reviewer.
+
+A stamp revision preserves your badge confirmation. If you cannot read an image, open it at full size before deciding whether to revise it. Uncertainty alone does not require a revision.
 
 ## How the bot fills in the details
 
@@ -33,7 +35,7 @@ A mention replying to your own submission can use its attachments. A later expli
 
 The first mention in an unassigned #p-badges conversation calls `openai/gpt-6-luna-decisions` to choose the badge or general assistant. Redis stores the choice. Established threads and existing badge reviews bypass classification, including after restarts or Eve session resets.
 
-The [Eve agent framework](./system/eve-policy-and-integrations.md) hosts the badge assistant separately. The controller handles uploads before starting an agent turn. Eve has one read-only workflow tool, `review_status`, for answering questions from current evidence. It cannot submit files, approve designs, change settings, or publish assets.
+The [Eve agent framework](./system/eve-policy-and-integrations.md) hosts the badge assistant separately. The controller handles uploads before starting an agent turn. Eve has one read-only workflow tool, `review_status`, for answering questions from current evidence. It cannot submit files, confirm designs, change settings, or publish assets.
 
 The architecture separates conversation, decisions, and delivery:
 
@@ -52,33 +54,45 @@ flowchart LR
   Service <--> DB[(Turso: reviews, assets, audit, jobs)]
   DB --> Worker[Inspect, prepare, pack, archive, merge, link]
   Worker --> DB
+  Worker --> Render[Three.js and Chromium render a material preview]
+  Render --> DB
+  Inventory[Native badge inventory commands] --> StockAuth[Fresh organizer membership for writes]
+  StockAuth --> Stock[(Turso: sheet counts and change history)]
   DB --> Delivery[One actionable embed and native controls]
-  Eve --> Reply[One completed reply embed]
+  Eve --> Reply[One completed plain reply]
   General --> Reply
 ```
 
-Both assistants use the existing [conversation delivery queue](./system/conversation-engine.md). In #p-badges, replies appear after completion without streamed prose or tool activity. A general assistant’s request for human input still uses native controls in one embed. Workflow uploads produce no separate agent acknowledgement.
+Both assistants use the existing [conversation delivery queue](./system/conversation-engine.md). In #p-badges, replies appear after completion without streamed prose or tool activity. The bot suppresses link previews in these replies. Requests for human input retain native controls; workflow uploads produce no separate agent acknowledgement.
 
-## What approval covers
+## What your confirmation covers
 
-A design approval identifies that design’s bytes, relevant event details, physical size, and current standards. It does not depend on the other design or sheet positions. The final publication approval binds both designs, settings, manufacturing exports, and the selected arrangement.
+A design confirmation identifies that design’s bytes, relevant event details, physical size, and current standards. It does not depend on the other design or sheet positions. **Publish files** confirms both designs, settings, manufacturing exports, and the selected arrangement.
 
 These changes reopen only the affected work:
 
-| Change                                                  | Review that must run again                            |
-| ------------------------------------------------------- | ----------------------------------------------------- |
-| Badge SVG, event details, badge size, or badge material | File preparation and badge approval, then arrangement |
-| Stamp SVG                                               | File preparation and stamp approval, then arrangement |
-| Positions, rotations, or spacing                        | Arrangement audit and publication approval            |
-| Stamp source unchanged                                  | Existing stamp approval remains valid                 |
+| Change                                                  | Step that must run again                                  |
+| ------------------------------------------------------- | --------------------------------------------------------- |
+| Badge SVG, event details, badge size, or badge material | File preparation and badge confirmation, then arrangement |
+| Stamp SVG                                               | File preparation and stamp confirmation, then arrangement |
+| Positions, rotations, or spacing                        | Arrangement audit and publication confirmation            |
+| Stamp source unchanged                                  | Existing stamp confirmation remains valid                 |
 
-Permissions and revision checks run before a modal opens and again when it submits. Only the original designer uploads or identifies files. Organizers approve designs; any organizer can approve publication. Public metadata names the person who selects **Approve & publish**. Audit records retain the individual design decisions.
+Permissions and revision checks run before a modal opens and again when it submits. Only you, as the original designer, can identify, replace, confirm, or publish your files. You don’t need an organizer role. Organizers can still help with event selection, configuration, and retries.
+
+Public metadata keeps the agreed `reviewer` field, which records you when you select **Publish files**. This field does not require a separate reviewer. Internal approval fields and signed action names stay compatible with existing records; audit records retain each confirmation.
 
 The service rejects stale controls privately and includes a jump to the latest message. Optimistic row versions reject competing mutations. Immutable assets and queued jobs live in the [Turso database](./system/storage-supervision-and-operations.md). Expiring job leases allow recovery; delivery receipts and stable Discord nonces deduplicate normal retries. Discord does not guarantee deduplication after its nonce window expires.
 
-## Why arrangement comes after review
+## Why arrangement comes after confirmation
 
-File inspection and physical preview preparation run before either approval. Packing starts only after both designs are accepted, and only rotates or translates the accepted badge.
+File inspection and physical preview preparation run before either confirmation. Packing starts only after you confirm both designs. It only rotates or translates your badge.
+
+The badge embed combines the full flat artwork and an angled 3D preview. The renderer adapts the extrusion, engraving overlay, and acrylic presets from [Purdue Hackers’ badge viewer](https://github.com/purduehackers/badges/tree/8598f7513f993f30389470c85b88427db46256f1). It uses the physical cut contour and a configured example of ⅛-inch light blue acrylic. The caption identifies the material as an example; use the flat artwork to check fine details.
+
+The renderer runs after SVG checks pass, in a fresh Chromium process with network requests blocked. A bounded render produces a stored PNG before the badge card appears. A failed render offers the existing retry action. The preview does not simulate engraving depth, laser kerf, or material strength.
+
+[Material inventory commands](./badge-inventory.md) track whole sheets separately. Guild members can read counts; organizers can add sheets, record use, or correct a count. Each transaction saves who changed the count and deduplicates retries by Discord interaction. Publishing does not reserve or consume stock, and inventory does not change the two configured packing sheets.
 
 The sequence keeps intermediate jobs silent:
 
@@ -87,21 +101,20 @@ sequenceDiagram
   participant D as Designer
   participant B as Discord bot
   participant S as Review service and workers
-  participant O as Organizer
   participant G as GitHub and phack.rs
   D->>B: Mention with badge and stamp
   B->>S: Submit observed attachments and event context
   S->>S: Inspect files and prepare physical previews
-  S-->>B: One badge review embed
-  O->>B: Approve badge
-  B->>S: Record badge approval
-  S-->>B: One stamp review embed
-  O->>B: Approve stamp
-  B->>S: Record stamp approval
-  S->>S: Pack and audit at the approved size
+  S-->>B: One badge check embed
+  D->>B: Confirm badge
+  B->>S: Record badge confirmation
+  S-->>B: One stamp check embed
+  D->>B: Confirm stamp
+  B->>S: Record stamp confirmation
+  S->>S: Pack and audit at the confirmed size
   S-->>B: One arrangement embed
-  O->>B: Approve & publish
-  B->>S: Lock reviewed assets and arrangement
+  D->>B: Publish files
+  B->>S: Lock confirmed assets and arrangement
   S->>G: Create revision, verify bytes, merge exact head
   G-->>S: Save merge receipt
   S->>G: Create and verify shortlink
@@ -112,7 +125,9 @@ Production settings live in [`policy.ts`](../packages/badges/src/policy.ts). The
 
 The stamp always measures 1.5 inches on its shortest side and keeps its aspect ratio. A 3:1 stamp therefore measures 4.5 × 1.5 inches. The designer supplies unmirrored artwork. The review shows its unmirrored impression; the manufacturing export mirrors it once. Stamp material is separate from the badge sheets.
 
-Packing uses a bounded rotation search and a separate contour audit for overlap, spacing, and edges. **Try another layout** varies orientations at the same size. If the search finds fewer than 80 badges, the bot reports that result without shrinking the design. An organizer can adjust configuration and select **Refresh review**; a changed size requires badge approval again. The search does not prove optimality or impossibility.
+Packing uses a bounded rotation search and a separate contour audit for overlap, spacing, and edges. **Try another layout** varies orientations at the same size. If the search finds fewer than 80 badges, the bot reports that result without shrinking the design.
+
+An organizer can adjust configuration and select **Check again**. A changed size requires you to check and confirm the badge again. The search does not prove optimality or impossibility.
 
 ## What the checks establish
 
@@ -120,11 +135,11 @@ Current [Badge and Stamp Standards](https://app.notion.com/p/purduehackers/Stand
 
 Static checks cover vector artwork, outlined lettering, engraving fills, palettes, and one closed red cutting outline. Red cutting strokes are the exception to filled artwork. Inputs are limited to 1 MB and 5,000 elements. Scripts, external resources, raster images, entities, linked reusable objects, and stylesheets are rejected.
 
-The cutter supports a simple exterior path with lines, quadratic curves, or cubic curves. Arcs and compound cuts require a plain-path export. Human review covers visual details, contrast, thin connections, artwork containment, and stamp clarity. No automatic close-ups or model visual approvals replace that review. Passing checks does not prove material strength or laser performance.
+The cutter supports an exterior path with lines, quadratic curves, or cubic curves. Arcs and compound cuts require a plain-path export. You check visual details, contrast, thin connections, artwork containment, and stamp clarity in the full previews. The model cannot confirm a design for you; passing checks does not prove material strength or laser performance.
 
 ## How publication recovers
 
-**Approve & publish** locks the selected revision. The worker checks current event and production settings, creates a GitHub pull request, and records its exact head. It verifies file bytes and changed paths, merges that head, and reads back the saved files before recording the merge receipt.
+**Publish files** locks the selected revision. The worker checks current event and production settings, creates a GitHub pull request, and records its exact head. It verifies file bytes and changed paths, merges that head, and reads back the saved files before recording the merge receipt.
 
 A separate job creates and verifies the live shortlink. Badge URLs use Vercel project redirects because Global Config keys cannot contain the version's dot. The job stages one path, verifies that existing redirects are unchanged, checks the current version again, and promotes the verified content. It refuses unrelated staged changes or an occupied path. The ordinary `/phack` command continues to use Global Config.
 
@@ -140,6 +155,10 @@ The bot enables this integration only when `BADGE_AGENT_URL` is configured. Depl
 
 For local Discord testing, set `BADGES_CHANNEL_ID` to the test channel in both processes. The default remains #p-badges. The publication token needs access to project redirects on the existing phack.rs Vercel project.
 
-The worker endpoint needs a 90s request timeout. The bot drains queued work after interactions and on its minute schedule. Typing indicators cover interactive work; only actionable states produce messages. The native SVG renderer remains an external build dependency.
+The worker endpoint needs a 90s request timeout. The bot drains queued work after interactions and on its minute schedule. Typing indicators cover interactive work; only actionable states produce messages. The native SVG renderer and Chromium remain external build dependencies. The badge app’s build command builds the Three.js scene into the renderer bundle first.
 
-Offline validation covers the four-message path, revisions, permissions, stale controls, concurrent decisions, stamp dimensions, packing limits, and partial publication. Local runs in #p-wack-hacker exercised native revision uploads, repacking, the real Eve conversation pipeline, both design approvals, GitHub publication, and the live shortlink. The full run used an unpublished Hack Night 0.0 test event with local Redis and libSQL. It found and repaired reply delivery and shortlink failures before completing in the same conversation. The [interaction review checklist](./plans/badge-review-copy.md) records the evidence and remaining live validation. This revision has not been deployed.
+For local macOS development, set `BADGE_CHROMIUM_EXECUTABLE_PATH` to a Chromium executable. Rendering launches a fresh headless profile. Linux deployments use the pinned Chromium package and its software rendering libraries. Apply the inventory migration and run the existing command-registration script when deploying the new slash commands.
+
+Offline validation covers designer confirmations without organizer roles, plain question replies, direct revision uploads, and the four-message workflow. It also covers ownership, stale controls, competing decisions, stamp dimensions, packing limits, and partial publication.
+
+An earlier run in #p-wack-hacker completed the real Eve conversation pipeline, GitHub publication, and the live shortlink. That run used the previous approval labels, embedded answers, and an unpublished Hack Night 0.0 event with local Redis and libSQL. The [interaction review checklist](./plans/badge-review-copy.md) separates that evidence from current checks and remaining live validation. This revision has not been deployed.

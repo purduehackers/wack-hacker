@@ -55,7 +55,7 @@ export function organizer(actor: Actor): boolean {
 
 function assertAuthor(review: Review, actorId: string) {
   if (review.author.id !== actorId)
-    throw new Error("Only the original author can upload or identify designs.");
+    throw new Error("Only the original author can change these designs.");
 }
 function assertUnlocked(review: Review) {
   if (review.approval && !review.publication?.shortlink)
@@ -278,11 +278,15 @@ function assignUploads(review: Review, text: string, previous?: Review): Review 
 function assertActor(review: Review, actor: Actor, action: Action) {
   if (actor.guildId !== DISCORD_GUILD_ID || actor.threadId !== review.threadId)
     throw new Error("This control belongs to a different review thread.");
-  if (action.kind === "upload" || action.kind === "roles" || action.kind === "replace")
+  if (
+    action.kind === "upload" ||
+    action.kind === "roles" ||
+    action.kind === "replace" ||
+    action.kind === "decision" ||
+    action.kind === "publish"
+  )
     assertAuthor(review, actor.person.id);
-  else if (action.kind === "decision" || action.kind === "publish") {
-    if (!organizer(actor)) throw new Error("An organizer needs to approve this.");
-  } else if (actor.person.id !== review.author.id && !organizer(actor))
+  else if (actor.person.id !== review.author.id && !organizer(actor))
     throw new Error("Only the author or an organizer can update this review.");
 }
 
@@ -301,14 +305,14 @@ export function assertControl(review: Review, actor: Actor, action: Action) {
       break;
     case "publish":
       if (!ready(review) || step !== "layout")
-        throw new Error("Finish the design review and layout first.");
+        throw new Error("Confirm both designs and arrange the badges first.");
       break;
     case "repack":
       if (
         !ready(review) &&
         !(review.failure && reviewable(review) && remainingCriteria(review).length === 0)
       )
-        throw new Error("Approve both designs before arranging them.");
+        throw new Error("Confirm both designs before arranging them.");
       break;
     case "roles":
     case "replace":

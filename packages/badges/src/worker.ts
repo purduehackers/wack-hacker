@@ -15,6 +15,7 @@ export interface Publisher {
   publish(review: Review): Promise<NonNullable<Review["publication"]>>;
   link(review: Review): Promise<string>;
 }
+export type BadgeRenderer = (svg: string) => Promise<{ image: Uint8Array; material: string }>;
 function nextJobs(review: Review, kind: string): JobKind[] {
   if (kind === "inspect" && staticPassed(review) && review.event && review.settings)
     return ["prepare"];
@@ -24,13 +25,18 @@ function nextJobs(review: Review, kind: string): JobKind[] {
   if (kind === "publish") return ["link"];
   return [];
 }
-export function createWorker(store: BadgeStore, cms: Cms, publisher: Publisher) {
+export function createWorker(
+  store: BadgeStore,
+  cms: Cms,
+  publisher: Publisher,
+  renderer?: BadgeRenderer,
+) {
   async function advance(review: Review, kind: string): Promise<Review> {
     switch (kind) {
       case "inspect":
         return inspect(review, store);
       case "prepare":
-        return prepare(review, store);
+        return prepare(review, store, renderer);
       case "pack": {
         if (
           !reviewable(review) ||
@@ -38,7 +44,7 @@ export function createWorker(store: BadgeStore, cms: Cms, publisher: Publisher) 
           !review.badge ||
           !review.settings
         )
-          throw new Error("Approve both designs before arranging them.");
+          throw new Error("Confirm both designs before arranging them.");
         await assertCurrentEvent(review, cms);
         const source = (await store.asset(review.badge.hash)).bytes.toString("utf8");
         const layouts = await pack(
@@ -146,7 +152,11 @@ function assertApproval(review: Review) {
   if (!ready(review) || review.approval?.context !== contextHash(review))
     throw new Error("Publication approval does not match this revision.");
 }
-async function prepare(review: Review, store: BadgeStore): Promise<Review> {
+async function prepare(
+  review: Review,
+  store: BadgeStore,
+  renderer?: BadgeRenderer,
+): Promise<Review> {
   if (!review.badge || !review.stamp || !review.settings || !staticPassed(review))
     throw new Error("Check the files before preparing them.");
   const badgeSource = (await store.asset(review.badge.hash)).bytes.toString("utf8");
@@ -160,12 +170,21 @@ async function prepare(review: Review, store: BadgeStore): Promise<Review> {
     review.settings.badgeSizeIn,
   );
   const stampSize = physicalDimensions(inspectSvg(stampSource, "stamp").cut, "stamp", 1.5);
+  const preview3d = await renderer?.(badge);
   return {
     ...review,
     manufacturing: {
       badge: await store.putAsset(Buffer.from(badge), "image/svg+xml"),
       stamp: await store.putAsset(Buffer.from(stamp), "image/svg+xml"),
       badgePreview: await store.putAsset(renderManufacturing(badge), "image/png"),
+      ...(preview3d
+        ? {
+            badge3d: {
+              preview: await store.putAsset(preview3d.image, "image/png"),
+              material: preview3d.material,
+            },
+          }
+        : {}),
       stampPreview: await store.putAsset(renderManufacturing(impression), "image/png"),
       badgeWidthIn: badgeSize.widthIn,
       badgeHeightIn: badgeSize.heightIn,

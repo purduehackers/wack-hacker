@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
 
+import { designerText } from "@repo/badges/presentation";
 import { Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
+import { MessageFlags } from "discord.js";
 import type { RESTPostAPIChannelMessageJSONBody } from "discord.js";
 
 import type { RendererDeps, RendererProjection } from "../agent/render/renderer.ts";
-import { badgeEmbed } from "./messages.ts";
 
 interface ReplyControls {
   key: string;
@@ -21,9 +22,9 @@ export async function renderBadgeReply(
 ) {
   if (!text.trim() || (controls?.key && state.hitlRequestKey === controls.key))
     return Result.ok(undefined);
-  const embeds = [badgeEmbed(text)];
+  const content = designerText(text);
   const components = controls?.components ?? [];
-  const hash = createHash("sha256").update(JSON.stringify({ embeds, components }));
+  const hash = createHash("sha256").update(JSON.stringify({ content, components }));
   const digest = hash.copy().digest("base64url").slice(0, 16);
   if (state.anchorContentHash === digest) return Result.ok(undefined);
   if (!(await deps.verifyLease()))
@@ -35,8 +36,9 @@ export async function renderBadgeReply(
     .digest("hex")
     .slice(0, 24);
   const posted = await deps.rest.postMessage(deps.channelId, {
-    embeds,
+    content,
     components,
+    flags: MessageFlags.SuppressEmbeds,
     nonce,
     enforce_nonce: true,
     allowed_mentions: { parse: [] },

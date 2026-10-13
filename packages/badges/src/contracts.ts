@@ -84,6 +84,7 @@ export const reviewSchema = z.strictObject({
       badge: digestSchema,
       stamp: digestSchema,
       badgePreview: digestSchema,
+      badge3d: z.strictObject({ preview: digestSchema, material: z.string().max(100) }).optional(),
       stampPreview: digestSchema,
       badgeWidthIn: z.number().positive(),
       badgeHeightIn: z.number().positive(),

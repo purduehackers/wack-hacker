@@ -20,7 +20,7 @@ export interface DiscordChannelState {
   activeEveTurnId?: string;
   /** Completed assistant blocks from earlier tool-call steps in this turn. */
   completedText: string;
-  /** Embed conversations deliver the final answer without preliminary tool-step prose. */
+  /** Badge-channel conversations deliver the final answer without preliminary tool-step prose. */
   finalReplyOnly: boolean;
   /** Cumulative text for the model step currently streaming. */
   streamingText: string;

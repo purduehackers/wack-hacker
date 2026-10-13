@@ -4,13 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "eve dev",
-    "build": "eve build",
+    "dev": "bun run --cwd ../badge-renderer build && eve dev",
+    "build": "bun run --cwd ../badge-renderer build && eve build",
     "start": "eve start"
   },
   "dependencies": {
     "@octokit/auth-app": "8.2.0",
     "@repo/agents": "workspace:*",
+    "@repo/badge-renderer": "workspace:*",
     "@repo/badges": "workspace:*",
     "@repo/shared": "workspace:*",
     "@resvg/resvg-js": "2.6.2",

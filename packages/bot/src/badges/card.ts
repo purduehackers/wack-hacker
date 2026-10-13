@@ -1,5 +1,4 @@
 import {
-  currentDecisions,
   correctionFor,
   dimensions,
   displayDate,
@@ -28,12 +27,8 @@ export function controls(card: BadgeCard, secret: string): Row[] {
       .setStyle(style);
   const row = (...buttons: ButtonBuilder[]) =>
     new ActionRowBuilder<ButtonBuilder>().addComponents(buttons);
-  const upload = (role: "badge" | "stamp") =>
-    button(
-      `Upload ${review[role] ? "revised " : ""}${role}`,
-      `upload.${role}`,
-      ButtonStyle.Primary,
-    );
+  const upload = (role: "badge" | "stamp", style = ButtonStyle.Primary) =>
+    button(`Upload ${review[role] ? "revised " : ""}${role}`, `upload.${role}`, style);
   switch (step) {
     case "files":
       return [
@@ -68,20 +63,20 @@ export function controls(card: BadgeCard, secret: string): Row[] {
         ? [row(upload(step))]
         : [
             row(
-              button(`Approve ${step}`, `review.${step}.approve`, ButtonStyle.Success),
-              button("Request changes", `review.${step}.changes`),
+              button(`Confirm ${step}`, `review.${step}.approve`, ButtonStyle.Success),
+              upload(step, ButtonStyle.Secondary),
             ),
           ];
     case "layout":
       return [
         row(
-          button("Approve & publish", "publish", ButtonStyle.Success),
+          button("Publish files", "publish", ButtonStyle.Success),
           button("Try another layout", "repack"),
         ),
       ];
     case "error":
       if (review.contextChanged)
-        return [row(button("Refresh review", "refresh", ButtonStyle.Primary))];
+        return [row(button("Check again", "refresh", ButtonStyle.Primary))];
       if (review.publication)
         return [
           row(
@@ -93,7 +88,7 @@ export function controls(card: BadgeCard, secret: string): Row[] {
           ),
         ];
       if (!review.approval && /layout search|time budget/iu.test(review.failure ?? ""))
-        return [row(button("Try another layout", "repack"), button("Refresh review", "refresh"))];
+        return [row(button("Try another layout", "repack"), button("Check again", "refresh"))];
       return [row(button("Try again", "retry", ButtonStyle.Primary))];
     case "done":
       return review.publication?.shortlink
@@ -115,22 +110,21 @@ export function controls(card: BadgeCard, secret: string): Row[] {
 const titles: Record<ReviewStep, string> = {
   files: "Which one is the badge?",
   missing: "One more file",
-  checking: "Checking your files",
+  checking: "Checking your files…",
   fix: "Update the design",
   event: "Choose a Hack Night",
-  preparing: "Preparing your designs",
-  badge: "Review the badge",
-  stamp: "Review the stamp",
-  packing: "Arranging your badges",
+  preparing: "Preparing your designs…",
+  badge: "Check your badge",
+  stamp: "Check your stamp",
+  packing: "Arranging your badges…",
   layout: "Ready to publish",
-  publishing: "Saving your files",
+  publishing: "Saving your files…",
   done: "Your files are ready",
-  error: "Continue your review",
+  error: "Continue with your designs",
 };
 export function cardEmbeds(card: BadgeCard): [APIEmbed] {
   const { review } = card,
-    step = reviewStep(review),
-    correction = correctionFor(review);
+    step = reviewStep(review);
   const title = cardTitle(card);
   const embed = badgeEmbed(reviewPrompt(review), title);
   if (card.files[0]) embed.image = { url: `attachment://${card.files[0].name}` };
@@ -144,12 +138,10 @@ export function cardEmbeds(card: BadgeCard): [APIEmbed] {
         inline: true,
       },
     ];
-    embed.footer = {
-      text:
-        correction?.verdict === "changes"
-          ? "Waiting for an updated badge"
-          : "Waiting for a reviewer",
-    };
+    if (review.manufacturing.badge3d)
+      embed.footer = {
+        text: `Example material: ${review.manufacturing.badge3d.material}. Check fine details in your design.`,
+      };
   }
   if (step === "stamp" && review.manufacturing) {
     embed.fields = [
@@ -161,10 +153,7 @@ export function cardEmbeds(card: BadgeCard): [APIEmbed] {
       { name: "Preview", value: "Finished impression", inline: true },
     ];
     embed.footer = {
-      text:
-        correction?.verdict === "changes"
-          ? "Your badge is approved"
-          : "The cutting file will be mirrored automatically",
+      text: "I’ll mirror the cutting file for you",
     };
   }
   if (step === "layout" && review.manufacturing) {
@@ -180,7 +169,7 @@ export function cardEmbeds(card: BadgeCard): [APIEmbed] {
   }
   if (step === "done")
     embed.footer = {
-      text: `Designed by ${review.author.username} · Reviewed by ${review.approval?.reviewer.username ?? currentDecisions(review).at(-1)?.reviewer.username ?? "an organizer"}`,
+      text: `Designed by ${review.author.username}`,
     };
   return [embed];
 }

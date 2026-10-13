@@ -35,6 +35,7 @@ COPY packages/shared/package.json packages/shared/
 COPY packages/agents/package.json packages/agents/
 COPY packages/badges/package.json packages/badges/
 COPY packages/badge-agent/package.json packages/badge-agent/
+COPY packages/badge-renderer/package.json packages/badge-renderer/
 
 # The root manifest declares `patchedDependencies`, so bun resolves the patch
 # file even for a --filter that excludes the package it patches. Copying the

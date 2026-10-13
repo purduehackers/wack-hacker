@@ -13,8 +13,6 @@ import {
   LabelBuilder,
   MessageFlags,
   ModalBuilder,
-  TextInputBuilder,
-  TextInputStyle,
 } from "discord.js";
 import type {
   ButtonInteraction,
@@ -39,24 +37,6 @@ const controlSchema = z.tuple([
   z.string(),
 ]);
 
-export function reviewModal(control: string, role: "badge" | "stamp") {
-  return new ModalBuilder()
-    .setCustomId(control)
-    .setTitle(`Request ${role} changes`)
-    .addLabelComponents(
-      new LabelBuilder()
-        .setLabel("What needs changing?")
-        .setDescription("Give the designer a specific change to make.")
-        .setTextInputComponent(
-          new TextInputBuilder()
-            .setCustomId("note")
-            .setStyle(TextInputStyle.Paragraph)
-            .setRequired(true)
-            .setMinLength(1)
-            .setMaxLength(1500),
-        ),
-    );
-}
 export function uploadModal(control: string, role: "badge" | "stamp") {
   return new ModalBuilder()
     .setCustomId(control)
@@ -81,7 +61,7 @@ function commandFor(interaction: BadgeInteraction, name: string): Action {
       kind: "decision",
       criterion: role,
       verdict,
-      note: interaction.isModalSubmit() ? interaction.fields.getTextInputValue("note").trim() : "",
+      note: "",
     });
   if (kind === "upload") {
     const attachment = interaction.isModalSubmit()
@@ -115,11 +95,13 @@ async function requestFor(interaction: BadgeInteraction, secret: string) {
   )
     throw new Error("This control belongs to a different review thread.");
   const member = await interaction.guild.members.fetch({ user: interaction.user.id, force: true });
+  // Older change buttons open the same upload as the current revision buttons.
+  const actionName = name.endsWith(".changes") ? `upload.${name.split(".")[1]}` : name;
   return {
     id,
     version: Number(version),
-    control: interaction.customId,
-    action: commandFor(interaction, name),
+    control: componentId(id, Number(version), actionName, secret),
+    action: commandFor(interaction, actionName),
     eventId: interaction.id,
     actor: {
       person: { id: interaction.user.id, username: interaction.user.username },
@@ -158,18 +140,11 @@ async function privateFailure(interaction: BadgeInteraction, cause: unknown) {
     if (url)
       components.push(
         new ActionRowBuilder<ButtonBuilder>().addComponents(
-          new ButtonBuilder()
-            .setStyle(ButtonStyle.Link)
-            .setLabel("Go to latest review")
-            .setURL(url),
+          new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel("Go to latest step").setURL(url),
         ),
       );
   }
-  const title = stale
-    ? "There’s a newer review below"
-    : /organizer needs/iu.test(detail)
-      ? "A reviewer needs to approve this"
-      : "Continue your review";
+  const title = stale ? "There’s a newer step below" : "Continue with your designs";
   const options: InteractionReplyOptions = {
     embeds: [badgeEmbed(failureGuidance(detail), title)],
     components,
@@ -197,9 +172,7 @@ export function createBadgeInteractionHandler(api: BadgeClient, secret: string) 
       if (opensModal && interaction.isButton()) {
         const input = await beforeModal(interaction, api, secret);
         if (input.action.kind === "upload")
-          await interaction.showModal(uploadModal(interaction.customId, input.action.role));
-        else if (input.action.kind === "decision")
-          await interaction.showModal(reviewModal(interaction.customId, input.action.criterion));
+          await interaction.showModal(uploadModal(input.control, input.action.role));
         return true;
       }
       // Acknowledge without changing the old message. The worker sends the next turn.
