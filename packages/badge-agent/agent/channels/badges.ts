@@ -10,7 +10,7 @@ import { defineChannel, POST } from "eve/channels";
 import { z } from "zod";
 
 import { cms } from "../lib/cms.ts";
-import { previewFiles } from "../lib/previews.ts";
+import { identifiedPreview, previewFiles } from "../lib/previews.ts";
 import { routeMessage } from "../lib/routing.ts";
 import { runtime } from "../lib/runtime.ts";
 import { viewerUrl } from "../lib/viewer.ts";
@@ -83,6 +83,7 @@ async function deliverable(origin: string) {
           events: reviewStep(stored.review) === "event" ? await cms.events() : [],
           materials: reviewStep(stored.review) === "material" ? await inventory.materials() : [],
           files: await previewFiles(stored.review, store),
+          identifiedFile: await identifiedPreview(stored.review, store),
           viewerUrl: viewerUrl(stored.review, origin),
           jobId: job.id,
           lease: job.lease,

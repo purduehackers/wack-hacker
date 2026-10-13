@@ -57,7 +57,11 @@ export function badgeWork(api: BadgeClient, secret: string): Schedule {
                 const previous = await channel.messages.fetch({ message: previousId, force: true });
                 if (previous.author.id === client.user?.id)
                   await previous.edit(
-                    settledCard(previous, deliveredResult(previous, card.review), message.url),
+                    settledCard(
+                      previous,
+                      deliveredResult(previous, card.review),
+                      card.identifiedFile,
+                    ),
                   );
               } catch (cause) {
                 // Deleting an old card must not block delivery; other failures retry before ack.

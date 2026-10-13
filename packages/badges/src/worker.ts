@@ -272,13 +272,9 @@ async function inspect(review: Review, store: BadgeStore): Promise<Review> {
   const previews = await Promise.all(
     [badge.source, stamp.source].map((source) => store.putAsset(renderSvg(source), "image/png")),
   );
-  const fixes = [badge, stamp].flatMap((item) =>
-    item.checks.filter((check) => check.status !== "pass"),
-  );
   return {
     ...review,
     checks: [...badge.checks, ...stamp.checks],
     previews,
-    ...(fixes[0] ? { pendingRole: fixes[0].role } : {}),
   };
 }

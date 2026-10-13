@@ -77,12 +77,14 @@ export const actionRequest = z.strictObject({
   action: actionSchema,
   eventId: z.string().min(1),
 });
+const previewFileSchema = z.strictObject({ name: z.string(), data: z.string() });
 export const cardSchema = z.strictObject({
   review: reviewSchema,
   version: z.int(),
   events: z.array(eventSchema),
   materials: z.array(badgeMaterialSchema).default([]),
-  files: z.array(z.strictObject({ name: z.string(), data: z.string() })).max(1),
+  files: z.array(previewFileSchema).max(1),
+  identifiedFile: previewFileSchema.optional(),
   viewerUrl: z.url().optional(),
   jobId: z.string(),
   lease: z.uuid(),

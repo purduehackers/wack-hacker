@@ -158,6 +158,16 @@ export function fixRole(review: Review): Criterion {
 }
 export function reviewStep(review: Review): ReviewStep {
   if (review.contextChanged || review.failure) return "error";
+  // A requested upload must not hide the findings that explain the revision.
+  if (
+    review.rolesConfirmed &&
+    review.badge &&
+    review.stamp &&
+    review.material &&
+    review.checks.length &&
+    !staticPassed(review)
+  )
+    return "fix";
   if (review.pendingRole) return "upload";
   if (review.publication?.shortlink) return "done";
   if (review.approval) return "publishing";

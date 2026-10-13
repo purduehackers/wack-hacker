@@ -1,6 +1,7 @@
 import type { MessagePayload } from "@repo/shared/wire";
 
 import type { BadgeEvent, Criterion, Review } from "./contracts.ts";
+import { fixRole, reviewStep } from "./presentation.ts";
 
 /** Read explicit attachment order only. Filenames and SVG text are not instructions. */
 export function badgeIndex(text: string): number | undefined {
@@ -21,6 +22,7 @@ export function singleRole(text: string, previous?: Review): Criterion | undefin
   if (badge !== stamp) return badge ? "badge" : "stamp";
   if (!previous) return undefined;
   if (previous.pendingRole) return previous.pendingRole;
+  if (reviewStep(previous) === "fix") return fixRole(previous);
   if (previous.badge && !previous.stamp) return "stamp";
   if (previous.stamp && !previous.badge) return "badge";
   return undefined;

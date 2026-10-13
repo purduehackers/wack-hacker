@@ -100,7 +100,11 @@ export function controls(card: BadgeCard, secret: string): Row[] {
     case "files":
       return [
         review.uploads.length === 2
-          ? row(button("A is the badge", "roles.0"), button("B is the badge", "roles.1"))
+          ? row(
+              ...review.uploads.map((file, index) =>
+                button(`${file.name.slice(0, 60)} is the badge`, `roles.${index}`),
+              ),
+            )
           : row(button("Badge", "replace.badge"), button("Stamp", "replace.stamp")),
       ];
     case "missing":

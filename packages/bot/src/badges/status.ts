@@ -1,4 +1,5 @@
 import type { Review } from "@repo/badges/contracts";
+import { materialDescription } from "@repo/badges/materials";
 import {
   correctionFor,
   currentDecisions,
@@ -6,8 +7,8 @@ import {
   reviewStep,
 } from "@repo/badges/presentation";
 import type { Action } from "@repo/badges/wire";
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } from "discord.js";
-import type { Message } from "discord.js";
+import { AttachmentBuilder, ComponentType, escapeMarkdown } from "discord.js";
+import type { APIEmbed, Message } from "discord.js";
 
 import { badgeColors } from "./messages.ts";
 import type { BadgeStatus } from "./messages.ts";
@@ -15,9 +16,10 @@ import type { BadgeStatus } from "./messages.ts";
 interface StepResult {
   status: BadgeStatus;
   label: string;
-  pending?: "publish" | "retry" | "repack";
+  description?: string;
+  selectedFiles?: boolean;
 }
-type CardMessage = Pick<Message, "embeds" | "components">;
+type CardMessage = Pick<Message, "embeds" | "components"> & Partial<Pick<Message, "attachments">>;
 const continued: StepResult = { status: "warning", label: "Continued below" };
 
 export function reviewStatus(review: Review): BadgeStatus {
@@ -42,25 +44,25 @@ export function actionResult(action: Action, review: Review): StepResult {
             label: "Check your design",
           };
     case "material":
-      return { status: "success", label: "Acrylic selected" };
+      return materialResult(review);
     case "event":
       return { status: "success", label: "Hack Night selected" };
     case "roles":
     case "replace":
-      return { status: "success", label: "Files identified" };
+      return filesResult(review);
     case "upload":
       return { status: "warning", label: `New ${action.role} uploaded` };
     case "publish":
       return pendingResult("publish", review);
     case "repack":
-      return { status: "warning", label: "Arranging badges…", pending: "repack" };
+      return { status: "warning", label: "Arranging badges…" };
     case "quantity":
       return {
         status: "warning",
         label: action.count ? `Target: ${action.count} badges` : "Choosing quantity",
       };
     case "retry":
-      return { status: "warning", label: "Trying again…", pending: "retry" };
+      return { status: "warning", label: "Trying again…" };
     case "choose-material":
       return { status: "warning", label: "Choosing another acrylic" };
     case "refresh":
@@ -69,12 +71,32 @@ export function actionResult(action: Action, review: Review): StepResult {
   }
 }
 
+function materialResult(review: Review): StepResult {
+  return {
+    status: "success",
+    label: "Acrylic Selected",
+    ...(review.material ? { description: materialDescription(review.material) } : {}),
+  };
+}
+function filesResult(review: Review): StepResult {
+  return {
+    status: "success",
+    label: review.badge ? "Badge Selected" : "Stamp Selected",
+    description: (["badge", "stamp"] as const)
+      .flatMap((role) =>
+        review[role] ? [`${reviewLabels[role]}: **${escapeMarkdown(review[role].name)}**`] : [],
+      )
+      .join("\n"),
+    selectedFiles: true,
+  };
+}
+
 function pendingResult(kind: string, review: Review): StepResult {
   if (review.failure || review.contextChanged) return { status: "error", label: "Needs attention" };
   if (kind === "publish")
     return review.publication?.shortlink
       ? { status: "success", label: "Files published" }
-      : { status: "warning", label: "Saving files…", pending: "publish" };
+      : { status: "warning", label: "Saving files…" };
   return kind === "retry" ? { status: "success", label: "Resolved" } : continued;
 }
 
@@ -84,9 +106,21 @@ function messageComponents(message: CardMessage) {
   );
 }
 
-/** Recover completion after a restart or an upload sent directly in the thread. */
-export function deliveredResult(message: CardMessage, review: Review): StepResult {
+function completedResult(message: CardMessage, review: Review): StepResult | undefined {
   const items = messageComponents(message);
+  const embed = message.embeds.at(-1);
+  if (embed?.title === "✅ Badge Selected" || embed?.title === "✅ Stamp Selected")
+    return {
+      ...filesResult(review),
+      ...(embed.description ? { description: embed.description } : {}),
+    };
+  if (embed?.title === "Saving files…") return pendingResult("publish", review);
+  if (embed?.title === "Trying again…") return pendingResult("retry", review);
+  if (!items.length && embed?.title)
+    return {
+      status: statusOf(embed.color ?? undefined),
+      label: embed.title.replace(/^✅ /u, ""),
+    };
   const result = items.find(
     (component) =>
       component.type === ComponentType.Button && component.customId?.startsWith("badge-result:"),
@@ -94,17 +128,22 @@ export function deliveredResult(message: CardMessage, review: Review): StepResul
   if (result?.type === ComponentType.Button) {
     const kind = result.customId?.slice("badge-result:".length) ?? "complete";
     if (kind !== "complete") return pendingResult(kind, review);
+    if (result.label === "Files identified") return filesResult(review);
+    if (result.label === "Acrylic selected") return materialResult(review);
     const color = message.embeds.at(-1)?.color;
     return {
-      status:
-        color === badgeColors.success
-          ? "success"
-          : color === badgeColors.error
-            ? "error"
-            : "warning",
+      status: statusOf(color ?? undefined),
       label: result.label ?? continued.label,
     };
   }
+  return undefined;
+}
+
+/** Recover completion after a restart or an upload sent directly in the thread. */
+export function deliveredResult(message: CardMessage, review: Review): StepResult {
+  const completed = completedResult(message, review);
+  if (completed) return completed;
+  const items = messageComponents(message);
   const commands = items.flatMap((component) =>
     "customId" in component && component.customId?.startsWith(`badge:${review.id}:`)
       ? [component.customId.split(":")[3] ?? ""]
@@ -119,49 +158,61 @@ export function deliveredResult(message: CardMessage, review: Review): StepResul
         : continued;
   }
   if (commands.some((action) => action.startsWith("material.")) && review.material)
-    return { status: "success", label: "Acrylic selected" };
+    return materialResult(review);
   if (commands.includes("event") && review.event)
     return { status: "success", label: "Hack Night selected" };
   if (commands.some((action) => /^(?:roles|replace)\./u.test(action)) && review.rolesConfirmed)
-    return { status: "success", label: "Files identified" };
+    return filesResult(review);
   if (commands.includes("publish") && review.approval) return pendingResult("publish", review);
   if (commands.includes("retry")) return pendingResult("retry", review);
   return continued;
 }
 
-/** Preserve verification evidence; update the final embed and replace its action controls. */
-export function settledCard(message: CardMessage, result: StepResult, nextUrl?: string) {
-  const links = messageComponents(message).flatMap((component) =>
-    component.type === ComponentType.Button &&
-    component.style === ButtonStyle.Link &&
-    component.label !== "Next step"
-      ? [new ButtonBuilder(component.toJSON())]
-      : [],
+function statusOf(color: number | undefined): BadgeStatus {
+  return color === badgeColors.success
+    ? "success"
+    : color === badgeColors.error
+      ? "error"
+      : "warning";
+}
+
+function attachedImage(embed: APIEmbed, message: CardMessage): APIEmbed {
+  if (!embed.image) return embed;
+  const attachment = [...(message.attachments?.values() ?? [])].find(
+    (file) =>
+      file.url.split("?")[0] === embed.image?.url.split("?")[0] ||
+      file.proxyURL.split("?")[0] === embed.image?.url.split("?")[0],
   );
-  const styles = {
-    success: ButtonStyle.Success,
-    warning: ButtonStyle.Secondary,
-    error: ButtonStyle.Danger,
-  };
-  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`badge-result:${result.pending ?? "complete"}`)
-      .setLabel(result.label)
-      .setStyle(styles[result.status])
-      .setDisabled(true),
-    ...links.slice(0, 3),
-  );
-  if (nextUrl)
-    row.addComponents(
-      new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel("Next step").setURL(nextUrl),
-    );
+  return attachment ? { ...embed, image: { url: `attachment://${attachment.name}` } } : embed;
+}
+
+/** Completed cards record the selection and retain inline images without any buttons. */
+export function settledCard(
+  message: CardMessage,
+  result: StepResult,
+  identifiedFile?: { name: string; data: string },
+) {
+  const file = result.selectedFiles ? identifiedFile : undefined;
   return {
-    embeds: message.embeds.map((embed, index) =>
-      index === message.embeds.length - 1
-        ? { ...embed.toJSON(), color: badgeColors[result.status] }
-        : embed.toJSON(),
-    ),
-    components: [row],
+    embeds: message.embeds.map((embed, index) => {
+      const original = attachedImage(embed.toJSON(), message);
+      return index === message.embeds.length - 1
+        ? {
+            ...original,
+            title: `${result.status === "success" ? "✅ " : ""}${result.label}`,
+            color: badgeColors[result.status],
+            ...(result.description === undefined ? {} : { description: result.description }),
+            ...(file ? { image: { url: `attachment://${file.name}` } } : {}),
+          }
+        : original;
+    }),
+    components: [],
+    ...(file
+      ? {
+          attachments: [],
+          files: [new AttachmentBuilder(Buffer.from(file.data, "base64"), { name: file.name })],
+        }
+      : {}),
     allowedMentions: { parse: [] },
   };
 }

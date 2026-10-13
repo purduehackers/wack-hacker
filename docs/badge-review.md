@@ -9,7 +9,7 @@ Mention wack hacker in #p-badges with your badge and stamp as Scalable Vector Gr
 
 Design checks show two embeds: **Automatic verification** lists file checks with ✅ or ❌, and **Manual verification** shows the preview and expected details. Missing or uncertain evidence says “Not verified.” Each embed keeps its own status color; confirming your design changes only the manual result.
 
-Completed steps keep their previews and replace action buttons with a disabled result, such as **Badge confirmed**. The next message adds **Next step** to the previous card. Yellow means a step needs input or is running, green means it completed, and red means something needs fixing. Opening an upload dialog leaves the card active until you submit a file.
+Completed steps remove every button and update the title to record the result. **✅ Badge Selected** labels the preview with filenames and Badge or Stamp. **✅ Acrylic Selected** names the chosen acrylic and thickness. Yellow means a step needs input or is running, green means it completed, and red means something needs fixing. Opening an upload dialog leaves the card active until you submit a file.
 
 ## The six workflow steps
 

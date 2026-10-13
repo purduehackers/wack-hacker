@@ -27,14 +27,15 @@ Keep existing revision checks, static checks, and publication safeguards. Preser
 
 Apply the supplied Vercel writing guidelines within Discord’s supported features:
 
-- **Messages**: Send two embeds for design verification and one for other workflow steps. Answer questions in plain messages. Preserve earlier card text and previews when updating their status.
+- **Messages**: Send two embeds for design verification and one for other workflow steps. Answer questions in plain messages. Update completed titles and selections while preserving verification evidence.
 - **Automatic verification**: List all six file checks with ✅ or ❌. Mark missing or uncertain evidence as “Not verified.” Use only evidence from the current file. Keep this embed’s result unchanged when the designer confirms.
 - **Manual verification**: Show the expected details, design preview, and next action. Keep this embed yellow until confirmation. File failures block confirmation and show repair guidance.
-- **Previews**: Show a full design. Combine A/B files or both cutting sheets into one image when needed. Do not generate close-ups.
+- **Previews**: Show a full design. Label uploads with filenames and add Badge or Stamp after identification. Keep the image inside its embed when editing the card. Do not generate close-ups.
 - **Controls**: Put native buttons and selects below the embed. **Upload revised badge** and **Upload revised stamp** open a Label and File Upload directly.
 - **Progress**: Use typing while work runs. Do not post separate checking, preparing, packing, or publishing cards.
-- **Completed steps**: Replace action controls with a disabled result button after an accepted action. Use yellow for input or ongoing work, green for completion, and red for failures. Add **Next step** when the next card arrives. Keep preview and download links usable; opening an upload dialog does not complete the step.
-- **Language**: Explain a concrete action in the design app. Use status emoji only in the automatic checklist. Keep code, diagnostic details, and internal policies out of copy.
+- **Completed steps**: Remove all buttons after an accepted action. Use **✅ Badge Selected** with the file assignments and **✅ Acrylic Selected** with the chosen material. Use yellow for input or ongoing work, green for completion, and red for failures. Opening an upload dialog does not complete the step.
+- **Failed checks**: Show the automatic checklist and specific repair guidance before asking for a replacement. A pending upload never hides failed checks.
+- **Language**: Explain a concrete action in the design app. Use status emoji in the automatic checklist and completed titles. Keep code, diagnostic details, and internal policies out of copy.
 
 ## Designer confirmation checks
 
@@ -52,6 +53,14 @@ The walkthrough and focused interaction checks verify:
 Lint, formatting, the bot bundle, and all 7 existing tests pass. No new test files are committed.
 
 The verification update passes 10 focused checks using the production Discord builders, interaction handler, and delivery loop. They cover independent embed colors, current-file evidence, preserved previews, cancelled uploads, replacements, publication receipts, edit retries, duplicate deliveries, and deleted cards.
+
+### Selection cards and visible failures
+
+The designer’s [new thread](https://discord.com/channels/772576325897945119/1559663827551789056) exposed a hidden palette failure and a duplicated image after editing. The worker had set a pending upload before presenting its findings. Completed-card edits had reused a resolved image URL instead of its attachment reference.
+
+Eleven focused checks now cover filename labels, selected roles, attachment replacement, completed titles, material descriptions, all six check results, repair guidance, direct replacement uploads, removed controls, preserved evidence, and XML escaping. The real worker checks the submitted blue badge against an isolated database. A pending upload cannot hide its failed palette check.
+
+The existing Discord cards now show **✅ Badge Selected**, **✅ Acrylic Selected**, and the failed automatic check with grayscale guidance. Completed cards contain no controls, and previews stay inside their embeds. The unrelated production reply was removed from this thread. Both bot instances still share an account; local testing does not prevent the production listener from answering a leading mention.
 
 ### Quantity and chat actions
 
@@ -74,7 +83,7 @@ The same [Discord test thread](https://discord.com/channels/772576325897945119/1
 - **Native quantity**: **Change quantity** shows 80 as 45 + 35, 100 as 45 + 55, and 127 as 45 + 82. The custom dialog prepares exactly 110 at the same confirmed size
 - **Publication**: This run stops before publication and deducts no stock
 
-The local listener now handles only this test thread. A concurrently running production bot still creates some plain placeholders; those are not local workflow cards.
+The local listener now accepts new threads in #p-wack-hacker. A concurrently running production bot can still create plain placeholders when a message starts with its mention; those are not local workflow cards.
 
 ### Split verification and completed steps
 
@@ -82,7 +91,7 @@ A [new thread in #p-wack-hacker](https://discord.com/channels/772576325897945119
 
 - **File failure**: Blue artwork produces one ❌ in a red automatic embed. The manual embed shows repair guidance without a confirmation button
 - **Revision**: The native upload modal accepts the corrected SVG. The automatic embed shows six ✅ checks in green; manual verification remains yellow
-- **Confirmation**: Badge and stamp confirmations turn their manual embeds green. Both embeds retain their original evidence and previews. Old actions become disabled confirmation buttons and **Next step** links
+- **Confirmation**: Badge and stamp confirmations turn their manual embeds green. Both embeds retain their original evidence and previews. The current presentation removes all completed controls
 - **Arrangement**: The bot arranges badges after both confirmations. This run stops before publication and leaves inventory unchanged
 
 The production bot won the initial thread creation race and posted its own question. The test passed the original observed submission to the local route endpoint in that same new thread. The subsequent material selection, failed check, upload, confirmations, and arrangement used the running local bot.
