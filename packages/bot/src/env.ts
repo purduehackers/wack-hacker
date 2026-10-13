@@ -57,8 +57,7 @@ export const env = createEnv({
     /** Bearer the agent must present on the parked callback. */
     BOT_INGRESS_SECRET: secret,
 
-    UPSTASH_REDIS_REST_URL: z.url({ protocol: /^https?$/u }),
-    UPSTASH_REDIS_REST_TOKEN: secret,
+    REDIS_URL: z.url({ protocol: /^rediss?$/u }),
 
     /**
      * Health server port. The Vercel Sandbox supervisor polls it, and Fly or a

@@ -70,7 +70,7 @@ export function createSocialStore(redis: RedisClient, namespace: string): Social
       try {
         await action({
           load: async () => {
-            const raw = (await redis.get<unknown>(key)) ?? undefined;
+            const raw = (await redis.get(key)) ?? undefined;
             if (raw === undefined) return undefined;
             const parsed = stored(socialStateSchema).safeParse(raw);
             if (!parsed.success || parsed.data.account !== source.account) {

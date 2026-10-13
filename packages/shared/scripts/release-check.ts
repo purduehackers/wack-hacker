@@ -1,12 +1,12 @@
 #!/usr/bin/env bun
 
-import { Redis } from "@upstash/redis";
 import { z } from "zod";
 
 import { readActiveBotGeneration } from "../src/bot/generation.ts";
 import { readyHealthReportSchema } from "../src/bot/health.ts";
 import { redisEnv } from "../src/env/scripts.ts";
 import { vcrDigestImage } from "../src/formats.ts";
+import { closeRedis, getRedis } from "../src/redis/client.ts";
 
 function usage(): never {
   console.error(`usage:
@@ -49,7 +49,7 @@ async function checkImage(image: string): Promise<void> {
 }
 
 async function smoke(expectedImage: string): Promise<void> {
-  const redis = new Redis(redisEnv());
+  const redis = getRedis(redisEnv());
   const active = await readActiveBotGeneration(redis);
   if (active === undefined) throw new Error("active bot generation is missing");
   if (active.image !== expectedImage) {
@@ -92,19 +92,23 @@ async function smoke(expectedImage: string): Promise<void> {
  * an error.
  */
 async function printActiveImage(): Promise<void> {
-  const active = await readActiveBotGeneration(new Redis(redisEnv()));
+  const active = await readActiveBotGeneration(getRedis(redisEnv()));
   console.log(active?.image ?? "unknown");
 }
 
-const [command, imageArgument, ...extra] = process.argv.slice(2);
-if (extra.length > 0 || (command !== "image" && command !== "smoke" && command !== "active")) {
-  usage();
-}
-if (command === "active") {
-  if (imageArgument !== undefined) usage();
-  await printActiveImage();
-} else {
-  const image = requireImage(imageArgument);
-  if (command === "image") await checkImage(image);
-  else await smoke(image);
+try {
+  const [command, imageArgument, ...extra] = process.argv.slice(2);
+  if (extra.length > 0 || (command !== "image" && command !== "smoke" && command !== "active")) {
+    usage();
+  }
+  if (command === "active") {
+    if (imageArgument !== undefined) usage();
+    await printActiveImage();
+  } else {
+    const image = requireImage(imageArgument);
+    if (command === "image") await checkImage(image);
+    else await smoke(image);
+  }
+} finally {
+  await closeRedis();
 }

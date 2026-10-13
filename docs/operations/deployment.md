@@ -38,8 +38,7 @@ Configure these before using the release workflows:
 - Variables: `VCR_IMAGE` (repository only, for example
   `vcr.vercel.com/team/project/wack-hacker-bot`), `VCR_PROJECT`, `VERCEL_SCOPE`,
   and `AGENT_VERCEL_PROJECT`.
-- Secrets: `VERCEL_TOKEN`, `UPSTASH_REDIS_REST_URL`,
-  `UPSTASH_REDIS_REST_TOKEN`, `TURSO_API_TOKEN`, `TURSO_DATABASE_URL`, and
+- Secrets: `VERCEL_TOKEN`, `REDIS_URL`, `TURSO_API_TOKEN`, `TURSO_DATABASE_URL`, and
   `TURSO_AUTH_TOKEN`.
 - A protected GitHub environment named `production` with required reviewers.
 - Vercel project roots and root-level frozen-lockfile install commands as

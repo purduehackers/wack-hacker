@@ -12,8 +12,7 @@ import {
 } from "../lib/telemetry.ts";
 
 const redis = getRedis({
-  url: env.UPSTASH_REDIS_REST_URL,
-  token: env.UPSTASH_REDIS_REST_TOKEN,
+  url: env.REDIS_URL,
 });
 const TURN_TOKEN_TTL_SECONDS = 24 * 60 * 60;
 const ADD_TURN_TOKENS_SCRIPT = `

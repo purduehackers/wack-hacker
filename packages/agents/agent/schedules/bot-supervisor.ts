@@ -33,8 +33,7 @@ import { createBotSandboxSupervisor } from "../lib/bot/supervisor.ts";
 import { countAgentEvent, logAgentEvent } from "../lib/telemetry.ts";
 
 const redis = getRedis({
-  url: env.UPSTASH_REDIS_REST_URL,
-  token: env.UPSTASH_REDIS_REST_TOKEN,
+  url: env.REDIS_URL,
 });
 
 async function reconcileBotSandbox(): Promise<void> {

@@ -24,7 +24,7 @@ via `BOT_SANDBOX_ENABLED=false`.
 flowchart TD
   Bot[packages/bot] --> Shared[packages/shared]
   Agents[packages/agents] --> Shared
-  Shared --> Upstash[@upstash/redis]
+  Shared --> Redis[redis / TCP+TLS]
   Shared --> LibSQL[@libsql/client + Drizzle]
   Bot --> DiscordJS[discord.js + @discordjs/rest]
   Bot --> Bun[Bun.serve and Bun runtime]
@@ -55,7 +55,7 @@ all keys and Lua live in `packages/shared/src/conversations`.
 | Agent sandbox           | Eve `defaultBackend()` or pinned Vercel backend                | Per-session shell/filesystem for built-in tools; code subagent uses an explicit one-vCPU allowlisted Vercel Sandbox                                   |
 | Models                  | AI SDK through Vercel AI Gateway                               | Root agent and every subagent except `code` use `deepseek/deepseek-v4-flash-0731`; `code` uses `openai/gpt-5.6-luna`                                  |
 | Discord                 | discord.js and `@discordjs/rest`                               | Gateway objects in the bot; `@discordjs/rest` for the bot's renderer and, separately, the agent's Discord domain tools                                |
-| Coordination            | Upstash Redis                                                  | Conversation aggregate, leases, receipts, budgets, approval records, event dedup, active bot generation                                               |
+| Coordination            | Redis                                                          | Conversation aggregate, leases, receipts, budgets, approval records, event dedup, active bot generation                                               |
 | Relational data         | Turso/libSQL + Drizzle                                         | Schedules, application-append-only action audit, global shopping cart                                                                                 |
 | Policy                  | Verdex plus project adapters                                   | Fail-closed role/risk/confirmation decisions; surrounding code owns current authority, persistence, audit and execution                               |
 | Validation              | Zod plus narrow manual/derived decoders                        | Project-owned HTTP/Redis/libSQL/provider shapes; strictness is boundary-specific and outputs derive from owners                                       |
@@ -145,7 +145,7 @@ Required groups:
 
 - Discord: `DISCORD_BOT_TOKEN`, `DISCORD_BOT_CLIENT_ID`;
 - agent seam: `AGENT_URL`, `AGENT_INGRESS_SECRET`, `BOT_INGRESS_SECRET`;
-- Redis: `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`;
+- Redis: `REDIS_URL`;
 - community integrations: Vercel/Global Config dashboard, Payload CMS,
   ship mirror, dashboard API, and Groq credentials;
 - `PORT` (default `8080`), with optional `SENTRY_DSN`.

@@ -4,7 +4,7 @@
 
 Two durable services have deliberately different jobs:
 
-- **Upstash Redis** — coordination, leases, idempotency receipts, short-lived
+- **Redis** — coordination, leases, idempotency receipts, short-lived
   authorization/budget/telemetry state, bot generation fencing;
 - **Turso/libSQL** — relational schedules, application-append-only action
   audit, and the global shopping cart.

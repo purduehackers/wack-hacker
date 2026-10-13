@@ -51,8 +51,7 @@ jobs:
       VERCEL_SCOPE: ${{ vars.VERCEL_SCOPE }}
       VCR_PROJECT: ${{ vars.VCR_PROJECT }}
       AGENT_PROJECT: ${{ vars.AGENT_VERCEL_PROJECT }}
-      UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
-      UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+      REDIS_URL: ${{ secrets.REDIS_URL }}
       REQUESTED_IMAGE: ${{ inputs.image }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4

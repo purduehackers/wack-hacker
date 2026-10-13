@@ -31,8 +31,7 @@ import { env } from "../env.ts";
 
 const conversations = createConversationStore({
   redis: getRedis({
-    url: env.UPSTASH_REDIS_REST_URL,
-    token: env.UPSTASH_REDIS_REST_TOKEN,
+    url: env.REDIS_URL,
   }),
 });
 

@@ -44,8 +44,7 @@ export const env = createEnv({
     TURSO_AUTH_TOKEN: secret.optional(),
 
     /** Render coordination, token budgets, tools, and schedules. */
-    UPSTASH_REDIS_REST_URL: httpUrl,
-    UPSTASH_REDIS_REST_TOKEN: secret,
+    REDIS_URL: z.url({ protocol: /^rediss?$/u }),
 
     SENTRY_DSN: httpUrl.optional(),
     SENTRY_TRACES_SAMPLE_RATE: unitFraction.optional(),

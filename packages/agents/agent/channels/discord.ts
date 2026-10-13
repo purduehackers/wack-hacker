@@ -64,8 +64,7 @@ import { discordSnowflake, storedInt } from "../lib/schema.ts";
 import { currentTraceparent, traceHeaders, turnTokenKey } from "../lib/telemetry.ts";
 
 const redis = getRedis({
-  url: env.UPSTASH_REDIS_REST_URL,
-  token: env.UPSTASH_REDIS_REST_TOKEN,
+  url: env.REDIS_URL,
 });
 const conversations = createConversationStore({ redis });
 
@@ -808,7 +807,7 @@ const turnTokensSchema = storedInt.pipe(z.int().positive());
 async function readTurnTokens(sessionId: string, turnId: string): Promise<number | undefined> {
   const key = turnTokenKey(sessionId, turnId);
   try {
-    return turnTokensSchema.safeParse(await redis.get<number | string>(key)).data;
+    return turnTokensSchema.safeParse(await redis.get(key)).data;
   } catch {
     return undefined;
   }
