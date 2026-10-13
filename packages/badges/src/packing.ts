@@ -2,7 +2,7 @@ import { Resvg } from "@resvg/resvg-js";
 import { XMLSerializer } from "@xmldom/xmldom";
 import type { Path } from "clipper-lib";
 
-import { hash, MIN_BADGE_SHORT_SIDE_IN } from "./contracts.ts";
+import { hash } from "./contracts.ts";
 import type { Layout, Settings } from "./contracts.ts";
 import {
   bounds,
@@ -20,6 +20,7 @@ import {
   translate,
 } from "./geometry.ts";
 import type { Point } from "./geometry.ts";
+import { physicalDimensions } from "./manufacturing.ts";
 import type { BadgeStore } from "./store.ts";
 import { parseSvg } from "./svg.ts";
 
@@ -33,11 +34,9 @@ interface Shape {
   heightIn: number;
 }
 
-function shapeAt(cut: string, sizeIn: number): Shape | undefined {
-  const rough = bounds(flatten(cut, 0.05));
-  const scale = (sizeIn * 25.4) / Math.max(rough.maxX - rough.minX, rough.maxY - rough.minY);
-  if (!Number.isFinite(scale) || scale <= 0) throw new Error("Cut outline has no physical extent.");
-  const center = { x: (rough.minX + rough.maxX) / 2, y: (rough.minY + rough.maxY) / 2 };
+function shapeAt(cut: string, sizeIn: number): Shape {
+  const { box, scale, widthIn, heightIn } = physicalDimensions(cut, "badge", sizeIn);
+  const center = { x: (box.minX + box.maxX) / 2, y: (box.minY + box.maxY) / 2 };
   const points = flatten(cut, 0.01 / scale).map((p) => ({
     x: (p.x - center.x) * scale,
     y: (p.y - center.y) * scale,
@@ -47,10 +46,6 @@ function shapeAt(cut: string, sizeIn: number): Shape | undefined {
       "Cut outline exceeds the 384-vertex packing budget. Simplify the exterior path.",
     );
   assertSimple(points);
-  const exact = bounds(points);
-  const widthIn = (exact.maxX - exact.minX) / 25.4,
-    heightIn = (exact.maxY - exact.minY) / 25.4;
-  if (Math.min(widthIn, heightIn) + 1e-9 < MIN_BADGE_SHORT_SIDE_IN) return undefined;
   const simple = Clipper.Clipper.SimplifyPolygon(toPath(points), Clipper.PolyFillType.pftNonZero);
   if (
     simple.length !== 1 ||
@@ -69,11 +64,11 @@ function shapeAt(cut: string, sizeIn: number): Shape | undefined {
   return { points, searchPoints, center, scale, widthIn, heightIn };
 }
 
-function nest(points: Point[], gap: number, deadline: number): Placement[] {
+function nest(points: Point[], gap: number, deadline: number, attempt: number): Placement[] {
   const padded = offset(points, gap / 2 + 0.14);
   // Pick an orientation suited to long shapes, then allow quarter turns and flips.
   const baseAngle =
-    [0, 30, 60]
+    [(attempt % 3) * 10, 30 + (attempt % 3) * 10, 60 + (attempt % 3) * 10]
       .map((angle) => ({ angle, box: bounds(rotate(padded, angle)) }))
       .sort(
         (a, b) =>
@@ -95,7 +90,7 @@ function nest(points: Point[], gap: number, deadline: number): Placement[] {
   for (const [sheet, dimensions] of SHEETS.entries()) {
     while (placements.length < 100) {
       if (Date.now() > deadline)
-        throw new Error("Packing reached its time budget. Narrow the size range and retry.");
+        throw new Error("Packing reached its time budget. Try another layout.");
       const choices = shapes.flatMap((orientation) =>
         placementChoices({ orientation, dimensions, sheet, placements, noFit }),
       );
@@ -208,63 +203,54 @@ export async function pack(
   cut: string,
   settings: Settings,
   store: Pick<BadgeStore, "putAsset">,
+  attempt = 0,
 ): Promise<Layout[]> {
-  const deadline = Date.now() + 45_000;
-  const candidates: Layout[] = [];
-  // Largest first; smaller sizes remain options. Bounded heuristic, not an optimality certificate.
-  for (let step = 0; step <= 4 && candidates.length < 3; step += 1) {
-    const sizeIn =
-      Math.round(
-        (settings.maxSizeIn - ((settings.maxSizeIn - settings.minSizeIn) * step) / 4) * 1000,
-      ) / 1000;
-    if (candidates.some((c) => c.sizeIn === sizeIn)) continue;
-    const shape = shapeAt(cut, sizeIn);
-    if (!shape) continue;
-    const placements = nest(shape.searchPoints, settings.gapMm, deadline);
-    if (placements.length < 80) continue;
-    audit(shape.points, placements, settings.gapMm);
-    const sheets = SHEETS.map((_, index) => sheetSvg(source, shape, placements, index));
-    const previewSheets = sheets.map((svg, index) => {
-      const dimensions = SHEETS[index];
-      if (!dimensions) throw new Error("Unknown sheet.");
-      return svg
-        .replace(`width="${dimensions.width}mm"`, `width="${dimensions.width}"`)
-        .replace(`height="${dimensions.height}mm"`, `height="${dimensions.height}"`);
-    });
-    const sheetHashes = await Promise.all(
-      sheets.map((svg) => store.putAsset(Buffer.from(svg), "image/svg+xml")),
+  const sizeIn = settings.badgeSizeIn;
+  const shape = shapeAt(cut, sizeIn);
+  const placements = nest(shape.searchPoints, settings.gapMm, Date.now() + 45_000, attempt);
+  // Bounded heuristic, not a proof of optimality or infeasibility. Never resize here.
+  if (placements.length < 80)
+    throw new Error(
+      `The layout search found ${placements.length} badges at the approved size. It needs at least 80. Try another layout, or ask an organizer to adjust the configured size and review the badge again.`,
     );
-    const preview = await store.putAsset(
-      new Resvg(
-        `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 325"><rect x="0" y="0" width="304.8" height="304.8" fill="white" stroke="#888"/><rect x="330" y="0" width="457.2" height="304.8" fill="white" stroke="#888"/><g>${previewSheets[0] ?? ""}</g><g transform="translate(330 0)">${previewSheets[1] ?? ""}</g></svg>`,
-        {
-          background: "white",
-          fitTo: { mode: "width", value: 1200 },
-          font: { loadSystemFonts: false },
-        },
-      )
-        .render()
-        .asPng(),
-      "image/png",
-    );
-    const id = hash(JSON.stringify({ sheetHashes, sizeIn, count: placements.length }));
-    candidates.push({
-      id,
+  audit(shape.points, placements, settings.gapMm);
+  const sheets = SHEETS.map((_, index) => sheetSvg(source, shape, placements, index));
+  const previewSheets = sheets.map((svg, index) => {
+    const dimensions = SHEETS[index];
+    if (!dimensions) throw new Error("Unknown sheet.");
+    return svg
+      .replace(`width="${dimensions.width}mm"`, `width="${dimensions.width}"`)
+      .replace(`height="${dimensions.height}mm"`, `height="${dimensions.height}"`);
+  });
+  const sheetHashes = await Promise.all(
+    sheets.map((svg) => store.putAsset(Buffer.from(svg), "image/svg+xml")),
+  );
+  const preview = await store.putAsset(
+    new Resvg(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 325"><rect width="304.8" height="304.8" fill="white" stroke="#888"/><rect x="330" width="457.2" height="304.8" fill="white" stroke="#888"/><g>${previewSheets[0] ?? ""}</g><g transform="translate(330 0)">${previewSheets[1] ?? ""}</g></svg>`,
+      {
+        background: "white",
+        fitTo: { mode: "width", value: 1200 },
+        font: { loadSystemFonts: false },
+      },
+    )
+      .render()
+      .asPng(),
+    "image/png",
+  );
+  return [
+    {
+      id: hash(JSON.stringify({ sheetHashes, sizeIn, count: placements.length })),
       sheets: sheetHashes,
       preview,
       sizeIn,
-      widthIn: Math.round(shape.widthIn * 1000) / 1000,
-      heightIn: Math.round(shape.heightIn * 1000) / 1000,
+      widthIn: shape.widthIn,
+      heightIn: shape.heightIn,
       count: placements.length,
       placements,
       audited: true,
-    });
-  }
-  if (candidates.length === 0)
-    throw new Error(
-      "No audited 80–100 badge layout found within current standards (longer side ≥2 in, shorter side ≥1.7 in). Adjust the design or size range. The search cannot prove infeasibility; it will not shrink below the standards to hit the batch count.",
-    );
-  return candidates;
+    },
+  ];
 }
 
 function exclusionRegions(

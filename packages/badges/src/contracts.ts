@@ -5,8 +5,6 @@ import { z } from "zod";
 export const BADGES_CHANNEL_ID = "1418162647005790342";
 export const RUBRIC_VERSION = "2026-10-12.1";
 export const MAX_SVG_BYTES = 1_000_000;
-export const MIN_BADGE_LONG_SIDE_IN = 2;
-export const MIN_BADGE_SHORT_SIDE_IN = 1.7;
 const id = z.string().trim().min(1).max(128);
 export const digestSchema = z.string().regex(/^[a-f0-9]{64}$/u);
 export const personSchema = z.strictObject({ id, username: z.string().trim().min(1).max(64) });
@@ -18,20 +16,13 @@ export const eventSchema = z.strictObject({
   version: z.string().regex(/^\d+\.\d+$/u),
   date: z.iso.date(),
 });
-export const settingsSchema = z
-  .strictObject({
-    material: z.string().trim().min(1).max(100),
-    minSizeIn: z.number().min(MIN_BADGE_LONG_SIDE_IN).max(10),
-    maxSizeIn: z.number().min(MIN_BADGE_LONG_SIDE_IN).max(10),
-    stampSizeIn: z.number().positive().max(1.5),
-    mirrorStamp: z.boolean(),
-    gapMm: z.number().min(0.2).max(5),
-  })
-  .refine((s) => s.maxSizeIn >= s.minSizeIn, {
-    path: ["maxSizeIn"],
-    message: "Maximum size must be at least the minimum size.",
-  });
-export const criteria = ["version", "date", "physical", "stamp"] as const;
+export const settingsSchema = z.strictObject({
+  material: z.string().trim().min(1).max(100),
+  badgeSizeIn: z.number().min(1.8).max(10),
+  stampSizeIn: z.literal(1.5),
+  gapMm: z.number().min(0).max(5),
+});
+export const criteria = ["badge", "stamp"] as const;
 export const criterionSchema = z.enum(criteria);
 export const checkIds = ["supported", "palette", "vectors", "text", "fills", "cut"] as const;
 export const checkSchema = z.strictObject({
@@ -50,9 +41,9 @@ export const placementSchema = z.strictObject({
 export const layoutSchema = z.strictObject({
   id: digestSchema,
   count: z.int().min(80).max(100),
-  sizeIn: z.number().min(MIN_BADGE_LONG_SIDE_IN),
-  widthIn: z.number().min(MIN_BADGE_SHORT_SIDE_IN),
-  heightIn: z.number().min(MIN_BADGE_SHORT_SIDE_IN),
+  sizeIn: z.number().positive(),
+  widthIn: z.number().positive(),
+  heightIn: z.number().positive(),
   placements: z.array(placementSchema).max(100),
   sheets: z.array(digestSchema).length(2),
   preview: digestSchema,
@@ -75,6 +66,7 @@ export const reviewSchema = z.strictObject({
   rubric: z.literal(RUBRIC_VERSION),
   uploads: z.array(assetSchema).min(1).max(2),
   rolesConfirmed: z.boolean(),
+  pendingRole: criterionSchema.optional(),
   badge: assetSchema.optional(),
   stamp: assetSchema.optional(),
   event: eventSchema.optional(),
@@ -83,19 +75,31 @@ export const reviewSchema = z.strictObject({
   previews: z.array(digestSchema),
   layouts: z.array(layoutSchema).max(3),
   selectedLayout: digestSchema.optional(),
+  layoutAttempt: z.int().nonnegative().default(0),
   manufacturing: z
-    .strictObject({ badge: digestSchema, stamp: digestSchema, stampPreview: digestSchema })
+    .strictObject({
+      badge: digestSchema,
+      stamp: digestSchema,
+      badgePreview: digestSchema,
+      stampPreview: digestSchema,
+      badgeWidthIn: z.number().positive(),
+      badgeHeightIn: z.number().positive(),
+      stampWidthIn: z.number().positive(),
+      stampHeightIn: z.number().positive(),
+    })
     .optional(),
   decisions: z.array(decisionSchema),
   repositoryHead: z.string().optional(),
   pr: z.strictObject({ number: z.int().positive(), head: z.string(), url: z.url() }).optional(),
   approval: z
-    .strictObject({ context: digestSchema, head: z.string(), reviewer: personSchema })
+    .strictObject({ context: digestSchema, head: z.string().optional(), reviewer: personSchema })
     .optional(),
   publication: z
     .strictObject({ commit: z.string(), url: z.url(), shortlink: z.url().optional() })
     .optional(),
   failure: z.string().max(1500).optional(),
+  contextChanged: z.boolean().optional(),
+  previousShortlink: z.url().optional(),
   cardId: id.optional(),
   cardVersion: z.int().nonnegative().optional(),
 });
@@ -109,8 +113,16 @@ export type Layout = z.output<typeof layoutSchema>;
 export type Criterion = z.output<typeof criterionSchema>;
 export type Decision = z.output<typeof decisionSchema>;
 export type StoredReview = { review: Review; version: number };
-export type JobKind = "inspect" | "pack" | "prepare" | "archive" | "publish" | "render";
-export const jobKindSchema = z.enum(["inspect", "pack", "prepare", "archive", "publish", "render"]);
+export const jobKindSchema = z.enum([
+  "inspect",
+  "pack",
+  "prepare",
+  "archive",
+  "publish",
+  "link",
+  "render",
+]);
+export type JobKind = z.output<typeof jobKindSchema>;
 
 export function hash(value: string | Uint8Array): string {
   return createHash("sha256").update(value).digest("hex");
@@ -130,6 +142,23 @@ export function contextHash(review: Review): string {
   );
 }
 
+/** Approvals belong to one physical design, not its companion or arrangement. */
+export function designHash(review: Review, role: Criterion): string {
+  return hash(
+    JSON.stringify({
+      asset: review[role]?.hash,
+      rubric: review.rubric,
+      ...(role === "badge"
+        ? {
+            event: review.event,
+            size: review.settings?.badgeSizeIn,
+            material: review.settings?.material,
+          }
+        : { shortSide: review.settings?.stampSizeIn, impression: "unmirrored" }),
+    }),
+  );
+}
+
 export function staticPassed(review: Review): boolean {
   return ["badge", "stamp"].every((role) =>
     checkIds.every((id) =>
@@ -145,12 +174,11 @@ export function staticPassed(review: Review): boolean {
 }
 
 export function remainingCriteria(review: Review): Criterion[] {
-  const context = contextHash(review);
   return criteria.filter(
     (criterion) =>
       !review.decisions.some(
         (decision) =>
-          decision.context === context &&
+          decision.context === designHash(review, criterion) &&
           decision.criterion === criterion &&
           decision.verdict === "approve",
       ),
@@ -163,16 +191,24 @@ export function reviewable(review: Review): boolean {
     staticPassed(review) &&
     review.event !== undefined &&
     review.settings !== undefined &&
-    review.manufacturing !== undefined &&
-    review.layouts.some((layout) => layout.id === review.selectedLayout && layout.audited)
+    review.manufacturing !== undefined
   );
 }
 
 export function ready(review: Review): boolean {
-  return reviewable(review) && remainingCriteria(review).length === 0 && review.pr !== undefined;
+  return (
+    reviewable(review) &&
+    remainingCriteria(review).length === 0 &&
+    review.layouts.some(
+      (layout) =>
+        layout.id === review.selectedLayout &&
+        layout.audited &&
+        layout.sizeIn === review.settings?.badgeSizeIn,
+    )
+  );
 }
 
-export function invalidate(review: Review): Review {
+export function invalidate(review: Review, role?: Criterion): Review {
   const {
     approval: _approval,
     pr: _pr,
@@ -180,14 +216,18 @@ export function invalidate(review: Review): Review {
     failure: _failure,
     selectedLayout: _selectedLayout,
     manufacturing: _manufacturing,
+    contextChanged: _contextChanged,
+    pendingRole: _pendingRole,
     ...rest
   } = review;
   return {
     ...rest,
     generation: review.generation + 1,
-    checks: [],
+    checks: role ? review.checks.filter((check) => check.role !== role) : [],
     previews: [],
     layouts: [],
-    decisions: [],
+    layoutAttempt: 0,
+    decisions: review.decisions,
+    ...(review.publication?.shortlink ? { previousShortlink: review.publication.shortlink } : {}),
   };
 }

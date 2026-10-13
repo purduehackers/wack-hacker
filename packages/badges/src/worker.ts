@@ -1,20 +1,29 @@
 import { messageOf } from "@repo/shared/errors";
 
 import { contextHash, ready, remainingCriteria, reviewable, staticPassed } from "./contracts.ts";
-import type { Review } from "./contracts.ts";
-import { physicalSvg, renderManufacturing } from "./manufacturing.ts";
+import type { JobKind, Review } from "./contracts.ts";
+import { physicalDimensions, physicalSvg, renderManufacturing } from "./manufacturing.ts";
 import { pack } from "./packing.ts";
 import { assertCurrentEvent, CmsEventChanged } from "./service.ts";
 import type { Cms } from "./service.ts";
 import { StaleReview } from "./store.ts";
 import type { BadgeStore } from "./store.ts";
-import { crops, inspectSvg, renderSvg } from "./svg.ts";
+import { inspectSvg, renderSvg } from "./svg.ts";
 
 export interface Publisher {
   archive(review: Review): Promise<NonNullable<Review["pr"]>>;
   publish(review: Review): Promise<NonNullable<Review["publication"]>>;
+  link(review: Review): Promise<string>;
 }
-
+function nextJobs(review: Review, kind: string): JobKind[] {
+  if (kind === "inspect" && staticPassed(review) && review.event && review.settings)
+    return ["prepare"];
+  if (kind === "prepare" && reviewable(review) && remainingCriteria(review).length === 0)
+    return ["pack"];
+  if (kind === "archive") return ["publish"];
+  if (kind === "publish") return ["link"];
+  return [];
+}
 export function createWorker(store: BadgeStore, cms: Cms, publisher: Publisher) {
   async function advance(review: Review, kind: string): Promise<Review> {
     switch (kind) {
@@ -23,32 +32,53 @@ export function createWorker(store: BadgeStore, cms: Cms, publisher: Publisher) 
       case "prepare":
         return prepare(review, store);
       case "pack": {
-        if (!staticPassed(review) || !review.badge || !review.settings)
-          throw new Error(
-            "Static checks and manufacturing settings must be complete before packing.",
-          );
+        if (
+          !reviewable(review) ||
+          remainingCriteria(review).length ||
+          !review.badge ||
+          !review.settings
+        )
+          throw new Error("Approve both designs before arranging them.");
+        await assertCurrentEvent(review, cms);
         const source = (await store.asset(review.badge.hash)).bytes.toString("utf8");
-        return {
-          ...review,
-          layouts: await pack(source, inspectSvg(source, "badge").cut, review.settings, store),
-        };
+        const layouts = await pack(
+          source,
+          inspectSvg(source, "badge").cut,
+          review.settings,
+          store,
+          review.layoutAttempt,
+        );
+        return { ...review, layouts, selectedLayout: layouts[0]?.id };
       }
       case "archive": {
-        if (!reviewable(review) || remainingCriteria(review).length !== 0) return review;
+        assertApproval(review);
         await assertCurrentEvent(review, cms);
         const pr = await publisher.archive(review);
-        return { ...review, pr, repositoryHead: pr.head };
+        return {
+          ...review,
+          pr,
+          repositoryHead: pr.head,
+          approval: {
+            ...review.approval,
+            context: contextHash(review),
+            reviewer: approvalReviewer(review),
+            head: pr.head,
+          },
+        };
       }
       case "publish": {
-        if (
-          !ready(review) ||
-          !review.approval ||
-          review.approval.context !== contextHash(review) ||
-          review.approval.head !== review.pr?.head
-        )
+        assertApproval(review);
+        if (!review.pr || review.approval?.head !== review.pr.head)
           throw new Error("Publication approval does not match this revision.");
         await assertCurrentEvent(review, cms);
         return { ...review, publication: await publisher.publish(review) };
+      }
+      case "link": {
+        if (!review.publication) throw new Error("Save the files before creating their link.");
+        return {
+          ...review,
+          publication: { ...review.publication, shortlink: await publisher.link(review) },
+        };
       }
       default:
         throw new Error("Unsupported badge job.");
@@ -71,75 +101,94 @@ export function createWorker(store: BadgeStore, cms: Cms, publisher: Publisher) 
         expected: version,
         actorId: "worker",
         eventId: `job:${job.id}`,
-        jobs:
-          job.kind === "inspect" && staticPassed(clean) && clean.settings && clean.event
-            ? ["pack"]
-            : [],
+        jobs: nextJobs(clean, job.kind),
       });
       await store.finish(job.id, job.lease);
     } catch (cause) {
-      if (cause instanceof StaleReview) {
-        await store.finish(job.id, job.lease);
-        return true;
-      }
-      const failure = messageOf(cause).slice(0, 1500);
-      await store.finish(job.id, job.lease, failure);
-      const current = await store.get(review.id);
-      if (current && current.review.generation === job.generation) {
-        // CMS verification happens before any publishing effect. Reopen controls
-        // so the maker can refresh instead of trapping a stale approval in retries.
-        const { approval, ...withoutApproval } = current.review;
-        const failed =
-          cause instanceof CmsEventChanged ? withoutApproval : { ...withoutApproval, approval };
-        await store.save({
-          review: { ...failed, failure },
-          expected: current.version,
-          actorId: "worker",
-          eventId: `failure:${job.id}:${job.attempts}`,
-          jobs: [],
-        });
-      }
+      await failJob(store, job, cause);
     }
     return true;
   }
   return { process };
 }
-
+async function failJob(
+  store: BadgeStore,
+  job: NonNullable<Awaited<ReturnType<BadgeStore["claim"]>>>,
+  cause: unknown,
+) {
+  if (cause instanceof StaleReview) {
+    await store.finish(job.id, job.lease);
+    return;
+  }
+  const failure = messageOf(cause).slice(0, 1500);
+  await store.finish(job.id, job.lease, failure);
+  const current = await store.get(job.reviewId);
+  if (current && current.review.generation === job.generation) {
+    const { approval, ...withoutApproval } = current.review;
+    const failed =
+      cause instanceof CmsEventChanged
+        ? { ...withoutApproval, contextChanged: true }
+        : { ...withoutApproval, approval };
+    await store.save({
+      review: { ...failed, failure },
+      expected: current.version,
+      actorId: "worker",
+      eventId: `failure:${job.id}:${job.attempts}`,
+      jobs: [],
+    });
+  }
+}
+function approvalReviewer(review: Review) {
+  if (!review.approval) throw new Error("Publication needs approval.");
+  return review.approval.reviewer;
+}
+function assertApproval(review: Review) {
+  if (!ready(review) || review.approval?.context !== contextHash(review))
+    throw new Error("Publication approval does not match this revision.");
+}
 async function prepare(review: Review, store: BadgeStore): Promise<Review> {
-  const layout = review.layouts.find((item) => item.id === review.selectedLayout);
-  if (!layout || !review.badge || !review.stamp || !review.settings || !staticPassed(review))
-    throw new Error("Select a valid layout before preparing physical assets.");
-  const badge = physicalSvg(
-    (await store.asset(review.badge.hash)).bytes.toString("utf8"),
+  if (!review.badge || !review.stamp || !review.settings || !staticPassed(review))
+    throw new Error("Check the files before preparing them.");
+  const badgeSource = (await store.asset(review.badge.hash)).bytes.toString("utf8");
+  const stampSource = (await store.asset(review.stamp.hash)).bytes.toString("utf8");
+  const badge = physicalSvg(badgeSource, "badge", review.settings.badgeSizeIn, false);
+  const impression = physicalSvg(stampSource, "stamp", 1.5, false);
+  const stamp = physicalSvg(stampSource, "stamp", 1.5, true);
+  const badgeSize = physicalDimensions(
+    inspectSvg(badgeSource, "badge").cut,
     "badge",
-    layout.sizeIn,
-    false,
+    review.settings.badgeSizeIn,
   );
-  const stamp = physicalSvg(
-    (await store.asset(review.stamp.hash)).bytes.toString("utf8"),
-    "stamp",
-    review.settings.stampSizeIn,
-    review.settings.mirrorStamp,
-  );
+  const stampSize = physicalDimensions(inspectSvg(stampSource, "stamp").cut, "stamp", 1.5);
   return {
     ...review,
     manufacturing: {
       badge: await store.putAsset(Buffer.from(badge), "image/svg+xml"),
       stamp: await store.putAsset(Buffer.from(stamp), "image/svg+xml"),
-      stampPreview: await store.putAsset(renderManufacturing(stamp), "image/png"),
+      badgePreview: await store.putAsset(renderManufacturing(badge), "image/png"),
+      stampPreview: await store.putAsset(renderManufacturing(impression), "image/png"),
+      badgeWidthIn: badgeSize.widthIn,
+      badgeHeightIn: badgeSize.heightIn,
+      stampWidthIn: stampSize.widthIn,
+      stampHeightIn: stampSize.heightIn,
     },
   };
 }
-
 async function inspect(review: Review, store: BadgeStore): Promise<Review> {
   if (!review.badge || !review.stamp || !review.rolesConfirmed)
     throw new Error("Identify the badge and stamp first.");
   const badge = inspectSvg((await store.asset(review.badge.hash)).bytes.toString("utf8"), "badge");
   const stamp = inspectSvg((await store.asset(review.stamp.hash)).bytes.toString("utf8"), "stamp");
   const previews = await Promise.all(
-    [badge.source, stamp.source, ...crops(badge.source)].map((source) =>
-      store.putAsset(renderSvg(source), "image/png"),
-    ),
+    [badge.source, stamp.source].map((source) => store.putAsset(renderSvg(source), "image/png")),
   );
-  return { ...review, checks: [...badge.checks, ...stamp.checks], previews };
+  const fixes = [badge, stamp].flatMap((item) =>
+    item.checks.filter((check) => check.status !== "pass"),
+  );
+  return {
+    ...review,
+    checks: [...badge.checks, ...stamp.checks],
+    previews,
+    ...(fixes[0] ? { pendingRole: fixes[0].role } : {}),
+  };
 }

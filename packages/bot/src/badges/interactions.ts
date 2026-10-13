@@ -1,25 +1,36 @@
-import { criterionSchema, settingsSchema } from "@repo/badges/contracts";
+import { BADGES_CHANNEL_ID } from "@repo/badges/contracts";
 import { failureGuidance } from "@repo/badges/presentation";
+import { actionSchema, componentId } from "@repo/badges/wire";
 import type { Action } from "@repo/badges/wire";
+import { bearerMatches } from "@repo/shared/bearer";
 import { DISCORD_GUILD_ID } from "@repo/shared/discord";
 import { messageOf } from "@repo/shared/errors";
-import { Result } from "@repo/shared/result";
 import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  FileUploadBuilder,
   LabelBuilder,
   MessageFlags,
   ModalBuilder,
-  StringSelectMenuBuilder,
-  TextDisplayBuilder,
   TextInputBuilder,
   TextInputStyle,
 } from "discord.js";
-import type { Interaction, ModalSubmitInteraction } from "discord.js";
+import type {
+  ButtonInteraction,
+  Interaction,
+  ModalSubmitInteraction,
+  StringSelectMenuInteraction,
+  InteractionReplyOptions,
+} from "discord.js";
 import { z } from "zod";
 
+import { BadgeApiError } from "./client.ts";
 import type { BadgeClient } from "./client.ts";
 import { badgeEmbed } from "./messages.ts";
-import { badgeWork } from "./schedule.ts";
+import { runBadgeWork, withBadgeTyping } from "./schedule.ts";
 
+type BadgeInteraction = ButtonInteraction | StringSelectMenuInteraction | ModalSubmitInteraction;
 const controlSchema = z.tuple([
   z.literal("badge"),
   z.uuid(),
@@ -27,155 +38,148 @@ const controlSchema = z.tuple([
   z.string(),
   z.string(),
 ]);
-const decimal = z
-  .string()
-  .regex(/^\d+(?:\.\d+)?$/u)
-  .transform(Number);
-class FormError extends Error {}
 
-function formFailure(cause: unknown) {
-  return badgeEmbed(
-    cause instanceof FormError ? cause.message : failureGuidance(messageOf(cause)),
-    "Let’s try that again",
-  );
-}
-
-function input(name: string, label: string, value?: string, required = true) {
-  const field = new TextInputBuilder()
-    .setCustomId(name)
-    .setStyle(name === "note" ? TextInputStyle.Paragraph : TextInputStyle.Short)
-    .setRequired(required)
-    .setMaxLength(name === "note" ? 1500 : 100);
-  if (value) field.setValue(value);
-  return new LabelBuilder().setLabel(label).setTextInputComponent(field);
-}
-function settingsModal(control: string) {
+export function reviewModal(control: string, role: "badge" | "stamp") {
   return new ModalBuilder()
     .setCustomId(control)
-    .setTitle("Material and sizes")
+    .setTitle(`Request ${role} changes`)
     .addLabelComponents(
-      input("material", "Badge material", "Acrylic"),
-      input("sizes", "Badge size range (inches)", "2 to 2.7").setDescription(
-        "Size of the longest side. I’ll find options within this range.",
-      ),
-      input("stamp", "Stamp size (inches)", "1.5").setDescription(
-        "Size of the longest side, up to 1.5 inches.",
-      ),
-      new LabelBuilder().setLabel("Stamp direction").setStringSelectMenuComponent(
-        new StringSelectMenuBuilder()
-          .setCustomId("mirror")
-          .setPlaceholder("Choose how to prepare the stamp")
-          .addOptions(
-            {
-              label: "Mirror for stamping",
-              value: "yes",
-              description: "Flip the artwork so the stamped impression reads correctly.",
-            },
-            {
-              label: "Keep as drawn",
-              value: "no",
-              description: "Use this if your artwork is already mirrored.",
-            },
-          ),
-      ),
-      input("gap", "Space between badges (mm)", "0.5").setDescription(
-        "The cutting team can help if you’re unsure.",
-      ),
+      new LabelBuilder()
+        .setLabel("What needs changing?")
+        .setDescription("Give the designer a specific change to make.")
+        .setTextInputComponent(
+          new TextInputBuilder()
+            .setCustomId("note")
+            .setStyle(TextInputStyle.Paragraph)
+            .setRequired(true)
+            .setMinLength(1)
+            .setMaxLength(1500),
+        ),
     );
 }
-const reviewInstructions = {
-  version:
-    "Read the version on the full badge and close-ups. It should match the version above exactly, including any zeros at the end.",
-  date: "Read the date on the full badge and close-ups. It should match the Hack Night date above.",
-  physical:
-    "Check the design at its chosen size. Engraved lines should be at least 3% of the badge’s size. Look for fragile connections and tiny details. Use strong contrast and two or three gray tones at most; use only black and white for a first badge. Pale details may disappear. Keep all artwork inside the red cutting outline.",
-  stamp:
-    "Compare the original and cutting preview. The center should be a simple symbol without lettering or intricate details; lettering around the border is fine. Use black and white, no larger than 1.5 inches. Check that the stamped impression will face the right way.",
-};
-function decisionModal(control: string, criterion: keyof typeof reviewInstructions) {
+export function uploadModal(control: string, role: "badge" | "stamp") {
   return new ModalBuilder()
     .setCustomId(control)
-    .setTitle(`Check ${criterion === "physical" ? "physical design" : criterion}`)
-    .addTextDisplayComponents(new TextDisplayBuilder().setContent(reviewInstructions[criterion]))
+    .setTitle(`Upload your ${role}`)
     .addLabelComponents(
-      new LabelBuilder().setLabel("What do you think?").setStringSelectMenuComponent(
-        new StringSelectMenuBuilder()
-          .setCustomId("verdict")
-          .setPlaceholder("Choose your feedback")
-          .addOptions(
-            {
-              label: "Looks good",
-              value: "approve",
-              description: "I checked the full design and close-ups.",
-            },
-            {
-              label: "Needs a change",
-              value: "changes",
-              description: "I’ll explain what to adjust.",
-            },
-            {
-              label: "Hard to tell",
-              value: "unclear",
-              description: "I need a clearer view or another look.",
-            },
-          ),
-      ),
-      input("note", "Feedback for the designer", undefined, false).setDescription(
-        "If something needs changing or is hard to see, leave a short note.",
-      ),
+      new LabelBuilder()
+        .setLabel(`${role === "badge" ? "Badge" : "Stamp"} SVG`)
+        .setDescription("Upload one SVG, up to 1 MB.")
+        .setFileUploadComponent(
+          new FileUploadBuilder()
+            .setCustomId("design")
+            .setRequired(true)
+            .setMinValues(1)
+            .setMaxValues(1),
+        ),
     );
 }
-function modalAction(interaction: ModalSubmitInteraction, action: string): Action {
-  const field = (name: string) => interaction.fields.getTextInputValue(name).trim();
-  if (action === "settings") {
-    const sizes = field("sizes").split(/\s*(?:to|[–—,-])\s*/iu);
-    const parsedSizes = z.tuple([decimal, decimal]).safeParse(sizes);
-    if (!parsedSizes.success)
-      throw new FormError(
-        "Enter a size range such as 2 to 2.7 inches, using just the two numbers.",
-      );
-    const [minSizeIn, maxSizeIn] = parsedSizes.data;
-    const stampSize = decimal.safeParse(field("stamp"));
-    const spacing = decimal.safeParse(field("gap"));
-    if (!stampSize.success || !spacing.success)
-      throw new FormError("Use numbers for the stamp size and spacing, such as 1.5 and 0.5.");
-    const direction = z
-      .enum(["yes", "no"])
-      .safeParse(interaction.fields.getStringSelectValues("mirror")[0]);
-    if (!direction.success)
-      throw new FormError("Choose whether to mirror the stamp or keep it as drawn.");
-    const settings = settingsSchema.safeParse({
-      material: field("material"),
-      minSizeIn,
-      maxSizeIn,
-      stampSizeIn: stampSize.data,
-      mirrorStamp: direction.data === "yes",
-      gapMm: spacing.data,
+function commandFor(interaction: BadgeInteraction, name: string): Action {
+  const [kind, role, verdict] = name.split(".");
+  if (kind === "review")
+    return actionSchema.parse({
+      kind: "decision",
+      criterion: role,
+      verdict,
+      note: interaction.isModalSubmit() ? interaction.fields.getTextInputValue("note").trim() : "",
     });
-    if (!settings.success)
-      throw new FormError(
-        "Use a badge range from 2 to 10 inches, a stamp no larger than 1.5 inches, and spacing from 0.2 to 5 mm. The larger badge size must come second.",
-      );
-    return {
-      kind: "settings",
-      value: settings.data,
-    };
+  if (kind === "upload") {
+    const attachment = interaction.isModalSubmit()
+      ? interaction.fields.getUploadedFiles("design", true).first()
+      : undefined;
+    return actionSchema.parse({
+      kind: "upload",
+      role,
+      ...(attachment
+        ? { file: { url: attachment.url, filename: attachment.name, size: attachment.size } }
+        : {}),
+    });
   }
-  const verdict = z
-    .enum(["approve", "changes", "unclear"])
-    .safeParse(interaction.fields.getStringSelectValues("verdict")[0]);
-  if (!verdict.success) throw new FormError("Choose the feedback that best matches what you see.");
-  if (verdict.data !== "approve" && !field("note"))
-    throw new FormError("Leave a short note about what to change or what is hard to see.");
+  if (kind === "roles") return actionSchema.parse({ kind, badge: Number(role) });
+  if (kind === "replace") return actionSchema.parse({ kind, role });
+  if (kind === "event" && interaction.isStringSelectMenu())
+    return actionSchema.parse({ kind, id: interaction.values[0] });
+  return actionSchema.parse({ kind });
+}
+async function requestFor(interaction: BadgeInteraction, secret: string) {
+  const [, id, version, name] = controlSchema.parse(interaction.customId.split(":"));
+  if (
+    !bearerMatches(`Bearer ${interaction.customId}`, componentId(id, Number(version), name, secret))
+  )
+    throw new Error("Invalid review control.");
+  if (
+    !interaction.guild ||
+    interaction.guildId !== DISCORD_GUILD_ID ||
+    !interaction.channel?.isThread() ||
+    interaction.channel.parentId !== BADGES_CHANNEL_ID
+  )
+    throw new Error("This control belongs to a different review thread.");
+  const member = await interaction.guild.members.fetch({ user: interaction.user.id, force: true });
   return {
-    kind: "decision",
-    criterion: criterionSchema.parse(action),
-    verdict: verdict.data,
-    note: field("note"),
+    id,
+    version: Number(version),
+    control: interaction.customId,
+    action: commandFor(interaction, name),
+    eventId: interaction.id,
+    actor: {
+      person: { id: interaction.user.id, username: interaction.user.username },
+      memberRoles: [...member.roles.cache.keys()],
+      guildId: interaction.guildId,
+      threadId: interaction.channel.id,
+    },
   };
 }
-
-export function createBadgeInteractionHandler(client: BadgeClient, secret: string) {
+async function beforeModal(interaction: BadgeInteraction, api: BadgeClient, secret: string) {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      (async () => {
+        const input = await requestFor(interaction, secret);
+        await api.post("control", input, 1800);
+        return input;
+      })(),
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error("The review check timed out. Try again.")),
+          2300,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
+  }
+}
+async function privateFailure(interaction: BadgeInteraction, cause: unknown) {
+  const detail = messageOf(cause),
+    stale = /newer step|latest review|stale/iu.test(detail);
+  const components: ActionRowBuilder<ButtonBuilder>[] = [];
+  if (stale) {
+    const url = cause instanceof BadgeApiError ? cause.url : undefined;
+    if (url)
+      components.push(
+        new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder()
+            .setStyle(ButtonStyle.Link)
+            .setLabel("Go to latest review")
+            .setURL(url),
+        ),
+      );
+  }
+  const title = stale
+    ? "There’s a newer review below"
+    : /organizer needs/iu.test(detail)
+      ? "A reviewer needs to approve this"
+      : "Continue your review";
+  const options: InteractionReplyOptions = {
+    embeds: [badgeEmbed(failureGuidance(detail), title)],
+    components,
+    flags: MessageFlags.Ephemeral,
+    allowedMentions: { parse: [] },
+  };
+  if (interaction.deferred || interaction.replied) await interaction.followUp(options);
+  else await interaction.reply(options);
+}
+export function createBadgeInteractionHandler(api: BadgeClient, secret: string) {
   return async (interaction: Interaction): Promise<boolean> => {
     if (
       !(
@@ -187,71 +191,28 @@ export function createBadgeInteractionHandler(client: BadgeClient, secret: strin
     )
       return false;
     try {
-      const [, id, version, action] = controlSchema.parse(interaction.customId.split(":"));
-      if (
-        interaction.isButton() &&
-        (action === "settings" || criterionSchema.safeParse(action).success)
-      ) {
-        await interaction.showModal(
-          action === "settings"
-            ? settingsModal(interaction.customId)
-            : decisionModal(interaction.customId, criterionSchema.parse(action)),
-        );
+      const name = controlSchema.parse(interaction.customId.split(":"))[3];
+      const opensModal =
+        interaction.isButton() && (name.startsWith("upload.") || name.endsWith(".changes"));
+      if (opensModal && interaction.isButton()) {
+        const input = await beforeModal(interaction, api, secret);
+        if (input.action.kind === "upload")
+          await interaction.showModal(uploadModal(interaction.customId, input.action.role));
+        else if (input.action.kind === "decision")
+          await interaction.showModal(reviewModal(interaction.customId, input.action.criterion));
         return true;
       }
+      // Acknowledge without changing the old message. The worker sends the next turn.
+      if (interaction.isModalSubmit() && !interaction.isFromMessage())
+        throw new Error("Use the latest review card.");
       await interaction.deferUpdate();
-      if (
-        !interaction.guild ||
-        interaction.guildId !== DISCORD_GUILD_ID ||
-        !interaction.channel?.isThread()
-      )
-        throw new Error("Badge controls only work in their original server thread.");
-      const member = await interaction.guild.members.fetch({
-        user: interaction.user.id,
-        force: true,
-      });
-      let command: Action;
-      if (interaction.isModalSubmit()) command = modalAction(interaction, action);
-      else if (interaction.isStringSelectMenu())
-        command = {
-          kind: z.enum(["event", "layout"]).parse(action),
-          id: z.string().min(1).parse(interaction.values[0]),
-        };
-      else if (action === "roles0" || action === "roles1")
-        command = { kind: "roles", badge: Number(action !== "roles0") };
-      else if (action === "badge" || action === "stamp")
-        command = { kind: "replace", role: action };
-      else command = { kind: z.enum(["publish", "retry", "refresh"]).parse(action) };
-      await client.post("action", {
-        id,
-        version: Number(version),
-        control: interaction.customId,
-        action: command,
-        eventId: interaction.id,
-        actor: {
-          person: { id: interaction.user.id, username: interaction.user.username },
-          memberRoles: [...member.roles.cache.keys()],
-          guildId: interaction.guildId,
-          threadId: interaction.channelId,
-        },
-      });
-      const delivered = await badgeWork(client, secret).run({ client: interaction.client });
-      if (Result.isError(delivered))
-        throw new FormError("Saved. I couldn’t post the next step yet; I’ll retry shortly.");
+      const input = await requestFor(interaction, secret);
+      await withBadgeTyping(interaction.channel?.isThread() ? interaction.channel : undefined, () =>
+        api.post("action", input, 60_000),
+      );
+      await runBadgeWork(api, secret, interaction.client, interaction.channelId ?? undefined);
     } catch (cause) {
-      const embeds = [formFailure(cause)];
-      if (interaction.deferred || interaction.replied)
-        await interaction.followUp({
-          embeds,
-          flags: MessageFlags.Ephemeral,
-          allowedMentions: { parse: [] },
-        });
-      else
-        await interaction.reply({
-          embeds,
-          flags: MessageFlags.Ephemeral,
-          allowedMentions: { parse: [] },
-        });
+      await privateFailure(interaction, cause);
     }
     return true;
   };

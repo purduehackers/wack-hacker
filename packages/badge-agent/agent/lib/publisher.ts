@@ -31,7 +31,7 @@ const directory = (review: Review): string => {
 
 async function files(review: Review, store: BadgeStore): Promise<Map<string, Uint8Array>> {
   const { badge, stamp, event, settings } = review;
-  const reviewer = review.decisions.at(-1)?.reviewer;
+  const reviewer = review.approval?.reviewer;
   const layout = review.layouts.find((candidate) => candidate.id === review.selectedLayout);
   if (!badge || !stamp || !event || !settings || !reviewer || !layout)
     throw new Error("Review evidence is incomplete.");
@@ -41,7 +41,7 @@ async function files(review: Review, store: BadgeStore): Promise<Map<string, Uin
     ["stamp-source.svg", stamp.hash],
     ["badge.svg", review.manufacturing?.badge],
     ["stamp.svg", review.manufacturing?.stamp],
-    ["badge.png", review.previews[0]],
+    ["badge.png", review.manufacturing?.badgePreview],
     ["stamp.png", review.manufacturing?.stampPreview],
     ["12x12.svg", layout.sheets[0]],
     ["12x18.svg", layout.sheets[1]],
@@ -74,7 +74,7 @@ class GithubPublisher implements Publisher {
     const github = client(),
       prefix = directory(review),
       content = await files(review, this.repository);
-    const branch = `wack/badge-${review.id}`;
+    const branch = `wack/badge-${review.id}-${review.generation}`;
     const repo = (await github.rest.repos.get(repository)).data;
     const base = repo.default_branch;
     const baseRef = (await github.rest.git.getRef({ ...repository, ref: `heads/${base}` })).data
@@ -160,15 +160,14 @@ class GithubPublisher implements Publisher {
     return { number: pr.number, head: commit, url: pr.html_url };
   }
   async publish(review: Review) {
-    if (!review.pr || !review.approval || !env.VERCEL_API_TOKEN)
-      throw new Error("Publication approval or phack.rs configuration is missing.");
+    if (!review.pr || !review.approval) throw new Error("Publication approval is missing.");
     const github = client(),
       prefix = directory(review);
     const pr = (await github.rest.pulls.get({ ...repository, pull_number: review.pr.number })).data;
     const repo = (await github.rest.repos.get(repository)).data;
     if (
       pr.base.ref !== repo.default_branch ||
-      pr.head.ref !== `wack/badge-${review.id}` ||
+      pr.head.ref !== `wack/badge-${review.id}-${review.generation}` ||
       pr.head.repo?.full_name !== `${repository.owner}/${repository.repo}`
     )
       throw new Error("The GitHub PR no longer targets the reviewed repository and branches.");
@@ -212,6 +211,13 @@ class GithubPublisher implements Publisher {
     }
     if (!commit) throw new Error("GitHub has not supplied a publication receipt.");
     const url = `https://github.com/${repository.owner}/${repository.repo}/tree/${repoDefault(pr.base.ref)}/${prefix}`;
+    await verifyFiles(github, prefix, commit, expectedFiles);
+    return { commit, url };
+  }
+  async link(review: Review): Promise<string> {
+    if (!review.publication || !env.VERCEL_API_TOKEN)
+      throw new Error("Saved files or phack.rs configuration is missing.");
+    const { commit, url } = review.publication;
     const slug = `badge-${review.event?.version ?? ""}`;
     const linked = await writePhackLink({
       slug,
@@ -232,7 +238,7 @@ class GithubPublisher implements Publisher {
       throw new Error(
         `GitHub merged ${commit}; waiting for the live shortlink to point to the verified assets. Retry publication.`,
       );
-    return { commit, url, shortlink };
+    return shortlink;
   }
 }
 export function createPublisher(repository: BadgeStore): Publisher {

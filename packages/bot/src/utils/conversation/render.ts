@@ -147,7 +147,12 @@ async function paint(
   claimToken: string,
   work: RenderWork,
 ): Promise<boolean> {
-  if (work.target.agentTarget === "badge" && work.intent.phase === "streaming") return true;
+  if (
+    work.target.agentTarget !== undefined &&
+    work.intent.phase === "streaming" &&
+    !renderHitl(work.intent).key
+  )
+    return true;
   // Never on a terminal frame: the follower is stopped just below, and a finished
   // turn showing "code: reading files" is a line about work that is over.
   const progress = work.intent.phase === "streaming" ? subagentProgress(dispatchId) : undefined;
@@ -191,7 +196,15 @@ async function paint(
 }
 
 async function writeContent(rendering: RendererDeps, work: RenderWork, progress?: string) {
-  if (work.target.agentTarget === "badge")
+  const hitl = work.intent.phase === "streaming" ? renderHitl(work.intent) : undefined;
+  if (work.target.agentTarget !== undefined && hitl?.key)
+    return renderBadgeReply(
+      rendering,
+      work.projection,
+      work.intent.inputRequests?.[0]?.prompt ?? "Connect the requested account to continue.",
+      { key: `${hitl.key}:${work.intent.revision}`, components: hitl.components },
+    );
+  if (work.target.agentTarget !== undefined)
     return renderBadgeReply(
       rendering,
       work.projection,
@@ -199,7 +212,6 @@ async function writeContent(rendering: RendererDeps, work: RenderWork, progress?
         ? "I couldn’t finish that reply. Mention me again to retry."
         : work.intent.text,
     );
-  const hitl = work.intent.phase === "streaming" ? renderHitl(work.intent) : undefined;
   return createRenderer(rendering, work.projection).write({
     text: work.intent.text,
     activity: work.intent.activity,

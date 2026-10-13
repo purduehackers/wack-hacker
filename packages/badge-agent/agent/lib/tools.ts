@@ -34,7 +34,7 @@ export async function reviewStatus(ctx: ToolContext): Promise<string> {
       stored = await runtime().store.forThread(scoped.threadId);
     if (!stored)
       return JSON.stringify({
-        next: "Attach badge and stamp SVGs, ping wack hacker, and ask to submit them.",
+        next: "Attach your badge and stamp SVGs and mention wack hacker.",
       });
     const { review } = stored;
     const layout = review.layouts.find((item) => item.id === review.selectedLayout);
@@ -43,7 +43,15 @@ export async function reviewStatus(ctx: ToolContext): Promise<string> {
       event: review.event
         ? { name: review.event.name, version: review.event.version, date: review.event.date }
         : undefined,
-      settings: review.settings,
+      sizes: review.manufacturing
+        ? {
+            badge: [review.manufacturing.badgeWidthIn, review.manufacturing.badgeHeightIn],
+            stamp: [review.manufacturing.stampWidthIn, review.manufacturing.stampHeightIn],
+          }
+        : undefined,
+      latestReview: review.cardId
+        ? `https://discord.com/channels/${DISCORD_GUILD_ID}/${review.threadId}/${review.cardId}`
+        : undefined,
       layout: layout
         ? { count: layout.count, widthIn: layout.widthIn, heightIn: layout.heightIn }
         : undefined,
@@ -59,28 +67,15 @@ export async function reviewStatus(ctx: ToolContext): Promise<string> {
       })),
       publication: review.publication?.shortlink
         ? "Published."
-        : ready(review)
-          ? "Ready for final approval."
-          : "Not ready to publish.",
+        : review.publication
+          ? "Files are saved. Retry the download link."
+          : review.approval
+            ? "Saving the approved files."
+            : ready(review)
+              ? "Ready for final approval."
+              : "Not ready to publish.",
       pullRequest: review.pr?.url,
       published: review.publication?.shortlink,
-    });
-  } catch (cause) {
-    return JSON.stringify({ error: failureGuidance(messageOf(cause)) });
-  }
-}
-export async function submitFiles(ctx: ToolContext): Promise<string> {
-  try {
-    const scoped = principal(ctx);
-    const saved = await runtime().service.submit(scoped.discordMessageId, scoped.threadId);
-    if (saved.review.author.id !== scoped.userId)
-      throw new Error("Only the author can submit these files.");
-    return JSON.stringify({
-      received: saved.review.uploads.length,
-      next: reviewPrompt(saved.review),
-      reply: saved.review.uploads.length === 1 ? "Got the revised SVG." : "Got both SVGs.",
-      delivery:
-        "The bot posts the next step in this thread. Acknowledge receipt without repeating that prompt.",
     });
   } catch (cause) {
     return JSON.stringify({ error: failureGuidance(messageOf(cause)) });

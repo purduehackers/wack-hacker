@@ -205,7 +205,7 @@ async function main(): Promise<void> {
   const handlers = buildEventHandlers({
     redis,
     agent: flow,
-    ...(badges === undefined ? {} : { badges }),
+    ...(badges === undefined ? {} : { badges, badgeSecret: env.AGENT_INGRESS_SECRET }),
     reporter: consoleReporter,
     cmsApiKey: env.PAYLOAD_CMS_API_KEY,
     shipApiKey: env.SHIP_API_KEY,

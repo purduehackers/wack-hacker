@@ -1,166 +1,201 @@
-import { criterionSchema, staticPassed } from "@repo/badges/contracts";
 import {
+  currentDecisions,
+  correctionFor,
   dimensions,
   displayDate,
-  reviewLabels,
+  fixRole,
   reviewPrompt,
   reviewStep,
 } from "@repo/badges/presentation";
 import type { ReviewStep } from "@repo/badges/presentation";
 import { cardSchema, componentId } from "@repo/badges/wire";
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } from "discord.js";
+import type { APIEmbed } from "discord.js";
 import type { z } from "zod";
 
 import { badgeEmbed } from "./messages.ts";
 
 export type BadgeCard = z.output<typeof cardSchema>;
 type Row = ActionRowBuilder<ButtonBuilder> | ActionRowBuilder<StringSelectMenuBuilder>;
-
 export function controls(card: BadgeCard, secret: string): Row[] {
   const { review, version } = card;
-  const step = reviewStep(review);
-  const token = (action: string) => componentId(review.id, version, action, secret);
+  const step = reviewStep(review),
+    correction = correctionFor(review);
   const button = (label: string, action: string, style = ButtonStyle.Secondary) =>
-    new ButtonBuilder().setCustomId(token(action)).setLabel(label).setStyle(style);
+    new ButtonBuilder()
+      .setCustomId(componentId(review.id, version, action, secret))
+      .setLabel(label)
+      .setStyle(style);
   const row = (...buttons: ButtonBuilder[]) =>
     new ActionRowBuilder<ButtonBuilder>().addComponents(buttons);
-  if (review.publication?.shortlink)
-    return [
-      row(
-        new ButtonBuilder()
-          .setStyle(ButtonStyle.Link)
-          .setLabel("Download the designs")
-          .setURL(review.publication.shortlink),
-      ),
-    ];
-  if (step === "publishing") return [];
-  if (review.approval) return [row(button("Retry", "retry"))];
-  if (!review.rolesConfirmed) {
-    return [
-      review.uploads.length === 2
-        ? row(button("Design A is the badge", "roles0"), button("Design B is the badge", "roles1"))
-        : row(button("Replace badge", "badge"), button("Replace stamp", "stamp")),
-    ];
-  }
-  const components: Row[] = [];
-  const criterion = criterionSchema.safeParse(step).data;
-  if (criterion)
-    components.push(
-      row(
-        button(`Review ${reviewLabels[criterion].toLowerCase()}`, criterion, ButtonStyle.Primary),
-      ),
+  const upload = (role: "badge" | "stamp") =>
+    button(
+      `Upload ${review[role] ? "revised " : ""}${role}`,
+      `upload.${role}`,
+      ButtonStyle.Primary,
     );
-  if (step === "publish" && review.pr)
-    components.push(
-      row(
-        button("Publish designs", "publish", ButtonStyle.Primary),
-        new ButtonBuilder()
-          .setStyle(ButtonStyle.Link)
-          .setLabel("View finished files")
-          .setURL(
-            review.pr.url.replace(
-              /\/pull\/\d+$/u,
-              `/blob/${review.pr.head}/badges/${review.event?.version}/README.md`,
+  switch (step) {
+    case "files":
+      return [
+        review.uploads.length === 2
+          ? row(button("A is the badge", "roles.0"), button("B is the badge", "roles.1"))
+          : row(button("Badge", "replace.badge"), button("Stamp", "replace.stamp")),
+      ];
+    case "missing":
+      return [row(upload(review.badge ? "stamp" : "badge"))];
+    case "fix":
+      return [row(upload(fixRole(review)))];
+    case "event":
+      return card.events.length
+        ? [
+            new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+              new StringSelectMenuBuilder()
+                .setCustomId(componentId(review.id, version, "event", secret))
+                .setPlaceholder("Choose a Hack Night")
+                .addOptions(
+                  card.events.slice(0, 25).map((event) => ({
+                    label: event.name,
+                    value: event.id,
+                    description: displayDate(event.date),
+                  })),
+                ),
             ),
+          ]
+        : [row(button("Check for events", "refresh"))];
+    case "badge":
+    case "stamp":
+      return correction?.verdict === "changes"
+        ? [row(upload(step))]
+        : [
+            row(
+              button(`Approve ${step}`, `review.${step}.approve`, ButtonStyle.Success),
+              button("Request changes", `review.${step}.changes`),
+            ),
+          ];
+    case "layout":
+      return [
+        row(
+          button("Approve & publish", "publish", ButtonStyle.Success),
+          button("Try another layout", "repack"),
+        ),
+      ];
+    case "error":
+      if (review.contextChanged)
+        return [row(button("Refresh review", "refresh", ButtonStyle.Primary))];
+      if (review.publication)
+        return [
+          row(
+            button("Retry link", "retry", ButtonStyle.Primary),
+            new ButtonBuilder()
+              .setStyle(ButtonStyle.Link)
+              .setLabel("View saved files")
+              .setURL(review.publication.url),
           ),
-      ),
-    );
-  if (!staticPassed(review) && step !== "error") return components;
-  if (card.events.length)
-    components.push(
-      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
-        new StringSelectMenuBuilder()
-          .setCustomId(token("event"))
-          .setPlaceholder("Choose the Hack Night")
-          .addOptions(
-            card.events.map((event) => ({
-              label: event.name,
-              description: displayDate(event.date),
-              value: event.id,
-              default: review.event?.id === event.id,
-            })),
-          ),
-      ),
-    );
-  if (review.event)
-    components.push(
-      row(button(review.settings ? "Change setup" : "Set material & sizes", "settings")),
-    );
-  if (step === "error")
-    components.push(
-      row(button("Retry", "retry"), ...(review.event ? [button("Refresh event", "refresh")] : [])),
-    );
-  if (step === "layout" || step === "physical")
-    components.push(
-      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
-        new StringSelectMenuBuilder()
-          .setCustomId(token("layout"))
-          .setPlaceholder("Choose a size and count")
-          .addOptions(
-            review.layouts.map((layout) => ({
-              label: `${layout.count} badges, ${dimensions(layout.widthIn, layout.heightIn)}`,
-              value: layout.id,
-              default: review.selectedLayout === layout.id,
-            })),
-          ),
-      ),
-    );
-  return components;
-}
-
-const titles: Record<ReviewStep, string> = {
-  files: "Which design is the badge?",
-  checking: "Checking your designs",
-  fix: "A few design changes",
-  event: "Choose a Hack Night",
-  settings: "Choose your material and sizes",
-  packing: "Finding a good fit",
-  layout: "Choose a size and quantity",
-  preparing: "Preparing your previews",
-  version: "Check the version",
-  date: "Check the date",
-  physical: "Check the details",
-  stamp: "Check the stamp",
-  archiving: "Getting the files ready",
-  publish: "Ready to publish",
-  publishing: "Saving the finished designs",
-  done: "Your designs are ready",
-  error: "This step needs another look",
-};
-
-function previewTitle(card: BadgeCard, index: number): string {
-  const step = reviewStep(card.review);
-  if (step === "files") return `Design ${index === 0 ? "A" : "B"}`;
-  if (step === "layout") {
-    const layout = card.review.layouts[index];
-    return layout
-      ? `Option ${index + 1}: ${layout.count} badges, ${dimensions(layout.widthIn, layout.heightIn)}`
-      : "Sheet preview";
+        ];
+      if (!review.approval && /layout search|time budget/iu.test(review.failure ?? ""))
+        return [row(button("Try another layout", "repack"), button("Refresh review", "refresh"))];
+      return [row(button("Try again", "retry", ButtonStyle.Primary))];
+    case "done":
+      return review.publication?.shortlink
+        ? [
+            row(
+              new ButtonBuilder()
+                .setStyle(ButtonStyle.Link)
+                .setLabel("Get the files")
+                .setURL(review.publication.shortlink),
+              upload("badge"),
+              upload("stamp"),
+            ),
+          ]
+        : [];
+    default:
+      return [];
   }
-  if (step === "stamp") return index === 0 ? "Original stamp" : "Stamp as it will be cut";
-  if (step === "fix") return card.files[index]?.name === "stamp.png" ? "Your stamp" : "Your badge";
-  return index === 0 ? "Full badge" : "Close-up views";
+}
+const titles: Record<ReviewStep, string> = {
+  files: "Which one is the badge?",
+  missing: "One more file",
+  checking: "Checking your files",
+  fix: "Update the design",
+  event: "Choose a Hack Night",
+  preparing: "Preparing your designs",
+  badge: "Review the badge",
+  stamp: "Review the stamp",
+  packing: "Arranging your badges",
+  layout: "Ready to publish",
+  publishing: "Saving your files",
+  done: "Your files are ready",
+  error: "Continue your review",
+};
+export function cardEmbeds(card: BadgeCard): [APIEmbed] {
+  const { review } = card,
+    step = reviewStep(review),
+    correction = correctionFor(review);
+  const title = cardTitle(card);
+  const embed = badgeEmbed(reviewPrompt(review), title);
+  if (card.files[0]) embed.image = { url: `attachment://${card.files[0].name}` };
+  if (step === "badge" && review.event && review.manufacturing) {
+    embed.fields = [
+      { name: "Event", value: review.event.name, inline: true },
+      { name: "Date", value: displayDate(review.event.date), inline: true },
+      {
+        name: "Badge size",
+        value: dimensions(review.manufacturing.badgeWidthIn, review.manufacturing.badgeHeightIn),
+        inline: true,
+      },
+    ];
+    embed.footer = {
+      text:
+        correction?.verdict === "changes"
+          ? "Waiting for an updated badge"
+          : "Waiting for a reviewer",
+    };
+  }
+  if (step === "stamp" && review.manufacturing) {
+    embed.fields = [
+      {
+        name: "Stamp size",
+        value: dimensions(review.manufacturing.stampWidthIn, review.manufacturing.stampHeightIn),
+        inline: true,
+      },
+      { name: "Preview", value: "Finished impression", inline: true },
+    ];
+    embed.footer = {
+      text:
+        correction?.verdict === "changes"
+          ? "Your badge is approved"
+          : "The cutting file will be mirrored automatically",
+    };
+  }
+  if (step === "layout" && review.manufacturing) {
+    embed.fields = [
+      {
+        name: "Badge size",
+        value: dimensions(review.manufacturing.badgeWidthIn, review.manufacturing.badgeHeightIn),
+        inline: true,
+      },
+      { name: "Sheets", value: "One 12 × 12 in · One 12 × 18 in", inline: true },
+    ];
+    embed.footer = { text: "Publishing saves the designs and cutting sheets" };
+  }
+  if (step === "done")
+    embed.footer = {
+      text: `Designed by ${review.author.username} · Reviewed by ${review.approval?.reviewer.username ?? currentDecisions(review).at(-1)?.reviewer.username ?? "an organizer"}`,
+    };
+  return [embed];
 }
 
-export function cardEmbeds(card: BadgeCard) {
-  const { review } = card;
-  const step = reviewStep(review);
-  const title =
-    !review.rolesConfirmed && review.uploads.length === 1
-      ? "Which design are you updating?"
-      : titles[step];
-  const [first, ...rest] = card.files;
-  return [
-    {
-      ...badgeEmbed(reviewPrompt(review), title),
-      ...(first
-        ? { image: { url: `attachment://${first.name}` }, footer: { text: previewTitle(card, 0) } }
-        : {}),
-    },
-    ...rest.map((file, index) => ({
-      title: previewTitle(card, index + 1),
-      image: { url: `attachment://${file.name}` },
-      color: 0xffcc00,
-    })),
-  ];
+function cardTitle(card: BadgeCard) {
+  const { review } = card,
+    step = reviewStep(review),
+    correction = correctionFor(review);
+  return correction?.verdict === "changes"
+    ? `Update the ${correction.criterion}`
+    : step === "fix"
+      ? `Update the ${fixRole(review)}`
+      : step === "done"
+        ? `${review.event?.name ?? "Your badge"} is ready`
+        : step === "error" && review.publication
+          ? "Your files are saved"
+          : titles[step];
 }

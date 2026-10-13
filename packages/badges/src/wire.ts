@@ -2,23 +2,47 @@ import { createHmac } from "node:crypto";
 
 import { z } from "zod";
 
-import { eventSchema, personSchema, reviewSchema, criteria, settingsSchema } from "./contracts.ts";
+import { eventSchema, personSchema, reviewSchema, criteria, MAX_SVG_BYTES } from "./contracts.ts";
 
 export const actionSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("roles"), badge: z.int().min(0).max(1) }),
   z.strictObject({ kind: z.literal("replace"), role: z.enum(["badge", "stamp"]) }),
   z.strictObject({ kind: z.literal("event"), id: z.string().min(1).max(128) }),
-  z.strictObject({ kind: z.literal("settings"), value: settingsSchema }),
-  z.strictObject({ kind: z.literal("layout"), id: z.string().min(1).max(64) }),
+  z.strictObject({
+    kind: z.literal("upload"),
+    role: z.enum(criteria),
+    file: z
+      .strictObject({
+        url: z.url(),
+        filename: z.string().max(256),
+        size: z.int().positive().max(MAX_SVG_BYTES),
+      })
+      .optional(),
+  }),
   z.strictObject({
     kind: z.literal("decision"),
     criterion: z.enum(criteria),
     verdict: z.enum(["approve", "changes", "unclear"]),
     note: z.string().trim().max(1500),
   }),
-  z.strictObject({ kind: z.enum(["publish", "retry", "refresh"]) }),
+  z.strictObject({ kind: z.enum(["publish", "retry", "refresh", "repack"]) }),
 ]);
 export type Action = z.output<typeof actionSchema>;
+
+export function actionName(action: Action): string {
+  switch (action.kind) {
+    case "decision":
+      return `review.${action.criterion}.${action.verdict}`;
+    case "upload":
+      return `upload.${action.role}`;
+    case "replace":
+      return `replace.${action.role}`;
+    case "roles":
+      return `roles.${action.badge}`;
+    default:
+      return action.kind;
+  }
+}
 
 export function componentId(id: string, version: number, action: string, secret: string): string {
   const data = `badge:${id}:${version}:${action}`;
@@ -42,8 +66,11 @@ export const cardSchema = z.strictObject({
   review: reviewSchema,
   version: z.int(),
   events: z.array(eventSchema),
-  files: z.array(z.strictObject({ name: z.string(), data: z.string() })),
+  files: z.array(z.strictObject({ name: z.string(), data: z.string() })).max(1),
   jobId: z.string(),
   lease: z.uuid(),
 });
-export const workResponse = z.strictObject({ card: cardSchema.optional() });
+export const workResponse = z.strictObject({
+  card: cardSchema.optional(),
+  worked: z.boolean().optional(),
+});
