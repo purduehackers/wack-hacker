@@ -15,6 +15,7 @@ import type { APIEmbed } from "discord.js";
 import type { z } from "zod";
 
 import { badgeEmbed } from "./messages.ts";
+import { reviewStatus } from "./status.ts";
 
 export type BadgeCard = z.output<typeof cardSchema>;
 type Row = ActionRowBuilder<ButtonBuilder> | ActionRowBuilder<StringSelectMenuBuilder>;
@@ -177,7 +178,7 @@ export function cardEmbeds(card: BadgeCard): [APIEmbed] {
   const { review } = card,
     step = reviewStep(review);
   const title = cardTitle(card);
-  const embed = badgeEmbed(reviewPrompt(review), title);
+  const embed = badgeEmbed(reviewPrompt(review), title, reviewStatus(review));
   if (step === "material" && !card.materials.length)
     embed.description =
       "No matching acrylic sheets are available. Ask an organizer to update inventory, then select Check stock.";

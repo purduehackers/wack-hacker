@@ -5,12 +5,13 @@ import { workResponse } from "@repo/badges/wire";
 import { DISCORD_GUILD_ID } from "@repo/shared/discord";
 import { messageOf, Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
-import { AttachmentBuilder } from "discord.js";
+import { AttachmentBuilder, DiscordAPIError } from "discord.js";
 import type { Client } from "discord.js";
 
 import type { Schedule } from "../framework/schedules.ts";
 import { cardEmbeds, controls } from "./card.ts";
 import type { BadgeClient } from "./client.ts";
+import { deliveredResult, settledCard } from "./status.ts";
 
 export function badgeWork(api: BadgeClient, secret: string): Schedule {
   return {
@@ -50,6 +51,19 @@ export function badgeWork(api: BadgeClient, secret: string): Schedule {
               enforceNonce: true,
               allowedMentions: { parse: [] },
             });
+            const previousId = card.review.cardId;
+            if (previousId && previousId !== message.id) {
+              try {
+                const previous = await channel.messages.fetch({ message: previousId, force: true });
+                if (previous.author.id === client.user?.id)
+                  await previous.edit(
+                    settledCard(previous, deliveredResult(previous, card.review), message.url),
+                  );
+              } catch (cause) {
+                // Deleting an old card must not block delivery; other failures retry before ack.
+                if (!(cause instanceof DiscordAPIError) || cause.code !== 10_008) throw cause;
+              }
+            }
             await api.post("ack", {
               id: card.jobId,
               lease: card.lease,
@@ -64,7 +78,7 @@ export function badgeWork(api: BadgeClient, secret: string): Schedule {
   };
 }
 
-/** Typing is transient; cards use the durable delivery path and never edit history. */
+/** Typing is transient; durable delivery settles the previous card and sends the next step. */
 export async function runBadgeWork(
   api: BadgeClient,
   secret: string,

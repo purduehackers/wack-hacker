@@ -5,7 +5,9 @@ meta:
 
 # What happens after you submit a badge?
 
-Mention wack hacker in #p-badges with your badge and stamp as Scalable Vector Graphics (SVG) files. Choose acrylic from stock, check your designs, then arrange your badges. Each workflow step contains one embed and native Discord controls. Questions receive short, plain replies; earlier messages stay unchanged.
+Mention wack hacker in #p-badges with your badge and stamp as Scalable Vector Graphics (SVG) files. Choose acrylic from stock, check your designs, then arrange your badges. Each workflow step contains one embed and native Discord controls. Questions receive short, plain replies.
+
+Completed steps keep their previews and replace action buttons with a disabled result, such as **Badge confirmed**. The next message adds **Next step** to the previous card. Yellow means a step needs input or is running, green means it completed, and red means something needs fixing. Opening an upload dialog leaves the card active until you submit a file.
 
 ## The five workflow steps
 
@@ -88,7 +90,7 @@ Permissions and revision checks run before a modal opens and again when it submi
 
 Public metadata keeps the agreed `reviewer` field, which records you when you select **Publish files**. This field does not require a separate reviewer. Internal approval fields and signed action names stay compatible with existing records; audit records retain each confirmation.
 
-The service rejects stale controls privately and includes a jump to the latest message. Optimistic row versions reject competing mutations. Immutable assets and queued jobs live in the [Turso database](./system/storage-supervision-and-operations.md). Expiring job leases allow recovery; delivery receipts and stable Discord nonces deduplicate normal retries. Discord does not guarantee deduplication after its nonce window expires.
+The service rejects stale controls privately and includes a jump to the latest message. Delivery replaces the previous card’s controls before acknowledging the new message. Failed edits retry; deleted cards do not block the next step. Optimistic row versions reject competing mutations. Immutable assets and queued jobs live in the [Turso database](./system/storage-supervision-and-operations.md). Expiring job leases allow recovery; delivery receipts and stable Discord nonces deduplicate normal retries. Discord does not guarantee deduplication after its nonce window expires.
 
 ## Why arrangement comes after confirmation
 

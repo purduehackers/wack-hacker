@@ -25,10 +25,11 @@ Keep existing revision checks, static checks, and publication safeguards. Preser
 
 Apply the supplied Vercel writing guidelines within Discord’s supported features:
 
-- **Messages**: Send one embed per workflow step. Answer questions in plain messages. Keep copy short and specific. Never rewrite earlier messages.
+- **Messages**: Send one embed per workflow step. Answer questions in plain messages. Keep copy short and specific. Preserve earlier card text and previews when updating their status.
 - **Previews**: Show a full design. Combine A/B files or both cutting sheets into one image when needed. Do not generate close-ups.
 - **Controls**: Put native buttons and selects below the embed. **Upload revised badge** and **Upload revised stamp** open a Label and File Upload directly.
 - **Progress**: Use typing while work runs. Do not post separate checking, preparing, packing, or publishing cards.
+- **Completed steps**: Replace action controls with a disabled result button after an accepted action. Use yellow for input or ongoing work, green for completion, and red for failures. Add **Next step** when the next card arrives. Keep preview and download links usable; opening an upload dialog does not complete the step.
 - **Language**: Explain a concrete action in the design app. Keep code, status symbols, diagnostic details, and internal policies out of copy.
 
 ## Designer confirmation checks
@@ -45,6 +46,8 @@ The walkthrough and focused interaction checks verify:
 - **Order**: Static failures block confirmation. A stamp revision preserves badge confirmation; arrangement starts after both confirmations.
 
 Lint, formatting, the badge app build, and all 7 existing tests pass. No new test files are committed. Native Vesktop control timed out during this change, so these updated interactions have not been verified live.
+
+The completed-step update passes 8 focused checks using the production Discord builders, interaction handler, and delivery loop. They cover status colors, preserved previews, cancelled uploads, replacements, publication receipts, edit retries, duplicate deliveries, and deleted cards. These checks use local fixtures without sending Discord messages.
 
 ## Earlier offline checks
 

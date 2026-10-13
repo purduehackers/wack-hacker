@@ -1,4 +1,4 @@
-import { BADGES_CHANNEL_ID } from "@repo/badges/contracts";
+import { BADGES_CHANNEL_ID, reviewSchema } from "@repo/badges/contracts";
 import { failureGuidance } from "@repo/badges/presentation";
 import { actionSchema, componentId } from "@repo/badges/wire";
 import type { Action } from "@repo/badges/wire";
@@ -27,6 +27,7 @@ import { BadgeApiError } from "./client.ts";
 import type { BadgeClient } from "./client.ts";
 import { badgeEmbed } from "./messages.ts";
 import { runBadgeWork, withBadgeTyping } from "./schedule.ts";
+import { actionResult, settledCard } from "./status.ts";
 
 type BadgeInteraction = ButtonInteraction | StringSelectMenuInteraction | ModalSubmitInteraction;
 const controlSchema = z.tuple([
@@ -150,7 +151,7 @@ async function privateFailure(interaction: BadgeInteraction, cause: unknown) {
   }
   const title = stale ? "There’s a newer step below" : "Continue with your designs";
   const options: InteractionReplyOptions = {
-    embeds: [badgeEmbed(failureGuidance(detail), title)],
+    embeds: [badgeEmbed(failureGuidance(detail), title, stale ? "warning" : "error")],
     components,
     flags: MessageFlags.Ephemeral,
     allowedMentions: { parse: [] },
@@ -179,14 +180,22 @@ export function createBadgeInteractionHandler(api: BadgeClient, secret: string) 
           await interaction.showModal(uploadModal(input.control, input.action.role));
         return true;
       }
-      // Acknowledge without changing the old message. The worker sends the next turn.
+      // Acknowledge first. Only accepted actions settle the card; opening a modal does not.
       if (interaction.isModalSubmit() && !interaction.isFromMessage())
         throw new Error("Use the latest review card.");
       await interaction.deferUpdate();
       const input = await requestFor(interaction, secret);
-      await withBadgeTyping(interaction.channel?.isThread() ? interaction.channel : undefined, () =>
-        api.post("action", input, 60_000),
+      const response = await withBadgeTyping(
+        interaction.channel?.isThread() ? interaction.channel : undefined,
+        () => api.post("action", input, 60_000),
       );
+      const { review } = z.object({ review: reviewSchema }).parse(response);
+      if (interaction.message)
+        await interaction.message
+          .edit(settledCard(interaction.message, actionResult(input.action, review)))
+          .catch((cause) =>
+            console.error("Badge status will retry on delivery:", messageOf(cause)),
+          );
       await runBadgeWork(api, secret, interaction.client, interaction.channelId ?? undefined);
     } catch (cause) {
       await privateFailure(interaction, cause);
