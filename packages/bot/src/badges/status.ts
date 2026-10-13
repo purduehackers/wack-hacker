@@ -183,7 +183,13 @@ function attachedImage(embed: APIEmbed, message: CardMessage): APIEmbed {
       file.url.split("?")[0] === embed.image?.url.split("?")[0] ||
       file.proxyURL.split("?")[0] === embed.image?.url.split("?")[0],
   );
-  return attachment ? { ...embed, image: { url: `attachment://${attachment.name}` } } : embed;
+  // Discord omits embed-only files from attachments. These cards upload their own previews.
+  const hostedName =
+    /^https:\/\/(?:cdn\.discordapp\.com|media\.discordapp\.net)\/attachments\/\d+\/\d+\/([^/?#]+)/u.exec(
+      embed.image.url,
+    )?.[1];
+  const name = attachment?.name ?? (hostedName ? decodeURIComponent(hostedName) : undefined);
+  return name ? { ...embed, image: { url: `attachment://${name}` } } : embed;
 }
 
 /** Completed cards record the selection and retain inline images without any buttons. */
@@ -196,8 +202,13 @@ export function settledCard(
   return {
     embeds: message.embeds.map((embed, index) => {
       const original = attachedImage(embed.toJSON(), message);
-      if (index !== message.embeds.length - 1 || original.title === "Automatic verification")
-        return original;
+      if (index !== message.embeds.length - 1) return original;
+      if (original.title === "Automatic verification")
+        return {
+          ...original,
+          title: "Previous verification",
+          footer: { text: "See the latest result below." },
+        };
       return {
         ...original,
         title: `${result.status === "success" ? "✅ " : ""}${result.label}`,

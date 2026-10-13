@@ -11,6 +11,8 @@ Mention wack hacker in #p-badges with your badge and stamp as Scalable Vector Gr
 
 Once the file checks pass, **Manual verification** appears beside the automatic results with your preview and expected details. Confirming your design changes only the manual result. Uploading a revision preserves the previous file’s findings and removes its button.
 
+If the Hack Night is unknown, the event selector shows your current badge preview and its passed file checks. After a revision, the old failed card says **Previous verification**. Its findings describe the earlier file.
+
 Completed steps remove every button and update the title to record the result. **✅ Badge Selected** labels the preview with filenames and Badge or Stamp. **✅ Acrylic Selected** names the chosen acrylic and thickness. Yellow means a step needs input or is running, green means it completed, and red means something needs fixing. Opening an upload dialog leaves the card active until you submit a file.
 
 ## The six workflow steps

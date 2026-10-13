@@ -72,15 +72,17 @@ export async function previewFiles(review: Review, store: BadgeStore) {
     return [{ name: "preview.png", data: pair(images, ["Your design", "Material preview"]) }];
   }
   const digest =
-    step === "badge"
-      ? review.manufacturing?.badgePreview
-      : step === "stamp"
-        ? review.manufacturing?.stampPreview
-        : step === "layout"
-          ? review.layouts.find((layout) => layout.id === review.selectedLayout)?.preview
-          : step === "fix"
-            ? review.previews[Number(fixRole(review) !== "badge")]
-            : undefined;
+    step === "event"
+      ? review.previews[0]
+      : step === "badge"
+        ? review.manufacturing?.badgePreview
+        : step === "stamp"
+          ? review.manufacturing?.stampPreview
+          : step === "layout"
+            ? review.layouts.find((layout) => layout.id === review.selectedLayout)?.preview
+            : step === "fix"
+              ? review.previews[Number(fixRole(review) !== "badge")]
+              : undefined;
   return digest
     ? [{ name: "preview.png", data: (await store.asset(digest)).bytes.toString("base64") }]
     : [];

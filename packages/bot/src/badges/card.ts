@@ -194,7 +194,7 @@ const titles: Record<ReviewStep, string> = {
   done: "Your files are ready",
   error: "Continue with your designs",
 };
-function automaticVerification(review: BadgeCard["review"], role: "badge" | "stamp"): APIEmbed {
+function automaticVerification(review: BadgeCard["review"], role: "badge" | "stamp") {
   const results = verificationChecks(review, role);
   const status = results.some((check) => check.status === "fail")
     ? "error"
@@ -223,6 +223,14 @@ export function cardEmbeds(card: BadgeCard): APIEmbed[] {
     embed.description =
       "No matching acrylic sheets are available. Ask an organizer to update inventory, then select Check stock.";
   if (card.files[0]) embed.image = { url: `attachment://${card.files[0].name}` };
+  if (step === "event" && review.badge) {
+    embed.description =
+      "Your badge passed the file checks. Choose its Hack Night to check the date and version.";
+    embed.fields = [
+      { name: "Automatic verification", value: automaticVerification(review, "badge").description },
+    ];
+    embed.footer = { text: review.badge.name };
+  }
   if (step === "badge" && review.event && review.manufacturing) {
     embed.fields = [
       { name: "Event", value: review.event.name, inline: true },

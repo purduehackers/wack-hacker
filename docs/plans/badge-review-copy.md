@@ -34,7 +34,8 @@ Apply the supplied Vercel writing guidelines within Discord’s supported featur
 - **Controls**: Put native buttons and selects below the embed. **Upload revised badge** and **Upload revised stamp** open a Label and File Upload directly.
 - **Progress**: Use typing while work runs. Do not post separate checking, preparing, packing, or publishing cards.
 - **Completed steps**: Remove all buttons after an accepted action. Use **✅ Badge Selected** with the file assignments and **✅ Acrylic Selected** with the chosen material. Use yellow for input or ongoing work, green for completion, and red for failures. Opening an upload dialog does not complete the step.
-- **Failed checks**: Put the checklist, repair guidance, and design preview in one **Automatic verification** embed with an upload button. File failures block confirmation. A pending upload never hides failed checks. Preserve these findings when a revision arrives.
+- **Failed checks**: Put the checklist, repair guidance, and design preview in one **Automatic verification** embed with an upload button. File failures block confirmation. A pending upload never hides failed checks. Label the completed card **Previous verification** and preserve its findings when a revision arrives.
+- **Revised files**: Show the new preview and current check results before asking for more input. If the Hack Night is unknown, include both in the event selection card.
 - **Language**: Explain a concrete action in the design app. Use status emoji in the automatic checklist and completed titles. Keep code, diagnostic details, and internal policies out of copy.
 
 ## Designer confirmation checks
@@ -61,6 +62,8 @@ The designer’s [new thread](https://discord.com/channels/772576325897945119/15
 Eleven focused checks now cover filename labels, selected roles, attachment replacement, completed titles, material descriptions, all six check results, repair guidance, direct replacement uploads, removed controls, preserved evidence, and XML escaping. The real worker checks the submitted blue badge against an isolated database. A pending upload cannot hide its failed palette check.
 
 Additional checks cover a single automatic embed for badge and stamp failures, uncertain results, and preserved findings after replacement. Passing designs still show both verification embeds. Confirming a design changes only its manual result.
+
+Ten focused checks exercise the revision button through the real interaction handler, controller, worker, and delivery loop. Discord transport and event data use fixtures. The corrected upload passes inspection, keeps the stamp, and displays its new preview beside event selection. Selecting an event prepares that same design for confirmation. Repeated edits keep previews inside embeds even when Discord omits their attachment metadata.
 
 The existing Discord cards now show **✅ Badge Selected**, **✅ Acrylic Selected**, and the failed automatic check with grayscale guidance. Completed cards contain no controls, and previews stay inside their embeds. The unrelated production reply was removed from this thread. Both bot instances still share an account; local testing does not prevent the production listener from answering a leading mention.
 
