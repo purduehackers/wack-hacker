@@ -19,7 +19,7 @@ const slugSchema = z
   .min(2)
   .max(64)
   .regex(PHACK_SLUG_PATTERN, {
-    error: "Use letters, numbers, and interior hyphens or periods only.",
+    error: "Use letters, numbers, and interior hyphens only.",
   })
   .refine((slug) => !PHACK_RESERVED_SLUGS.has(slug.toLowerCase()), {
     error: "This path is reserved by the shortener.",

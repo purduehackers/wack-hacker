@@ -126,7 +126,9 @@ The cutter supports a simple exterior path with lines, quadratic curves, or cubi
 
 **Approve & publish** locks the selected revision. The worker checks current event and production settings, creates a GitHub pull request, and records its exact head. It verifies file bytes and changed paths, merges that head, and reads back the saved files before recording the merge receipt.
 
-A separate job creates and verifies the live shortlink. If that job fails, the embed says the files are saved and offers **Retry link**. Retrying uses the stored receipt and does not merge again. Existing unrelated shortlinks are never overwritten.
+A separate job creates and verifies the live shortlink. Badge URLs use Vercel project redirects because Global Config keys cannot contain the version's dot. The job stages one path, verifies that existing redirects are unchanged, checks the current version again, and promotes the verified content. It refuses unrelated staged changes or an occupied path. The ordinary `/phack` command continues to use Global Config.
+
+If that job fails, the embed says the files are saved and offers **Retry link**. Retrying uses the stored receipt and does not merge again. Existing unrelated shortlinks are never overwritten.
 
 New revisions can start in the same thread after publication. The previous public files remain available while the new revision is reviewed. Each publication generation gets its own branch. The shortlink points to the version directory on the repository’s default branch; Git history retains earlier revisions.
 
@@ -136,6 +138,8 @@ The directory includes original SVGs, physical SVGs, PNG previews, both sheet la
 
 The bot enables this integration only when `BADGE_AGENT_URL` is configured. Deployment requires the separate badge Eve app, its own session namespace, the additive database migration, and CMS, GitHub, phack.rs, and model credentials. The badge app shares the existing Redis and Turso infrastructure. It stores bounded assets in Turso without requiring Vercel Blob.
 
+For local Discord testing, set `BADGES_CHANNEL_ID` to the test channel in both processes. The default remains #p-badges. The publication token needs access to project redirects on the existing phack.rs Vercel project.
+
 The worker endpoint needs a 90s request timeout. The bot drains queued work after interactions and on its minute schedule. Typing indicators cover interactive work; only actionable states produce messages. The native SVG renderer remains an external build dependency.
 
-Offline validation covers the four-message path, revisions, permissions, stale controls, concurrent decisions, stamp dimensions, packing limits, and partial publication. A local run in #p-wack-hacker also exercised badge approval, stamp feedback and native uploads, arrangement, repacking, and stale controls in Discord. That run used live CMS data and Luna routing with local storage; conversational Eve and publication were disabled. The [interaction review checklist](./plans/badge-review-copy.md) records the evidence and remaining live validation. This revision has not been deployed.
+Offline validation covers the four-message path, revisions, permissions, stale controls, concurrent decisions, stamp dimensions, packing limits, and partial publication. Local runs in #p-wack-hacker exercised native revision uploads, repacking, the real Eve conversation pipeline, both design approvals, GitHub publication, and the live shortlink. The full run used an unpublished Hack Night 0.0 test event with local Redis and libSQL. It found and repaired reply delivery and shortlink failures before completing in the same conversation. The [interaction review checklist](./plans/badge-review-copy.md) records the evidence and remaining live validation. This revision has not been deployed.

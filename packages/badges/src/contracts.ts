@@ -2,7 +2,10 @@ import { createHash } from "node:crypto";
 
 import { z } from "zod";
 
-export const BADGES_CHANNEL_ID = "1418162647005790342";
+export const BADGES_CHANNEL_ID = z
+  .string()
+  .regex(/^\d{17,20}$/u)
+  .parse(process.env.BADGES_CHANNEL_ID || "1418162647005790342");
 export const RUBRIC_VERSION = "2026-10-12.1";
 export const MAX_SVG_BYTES = 1_000_000;
 const id = z.string().trim().min(1).max(128);

@@ -8,6 +8,7 @@
         "AGENT_INGRESS_SECRET",
         "BOT_INGRESS_SECRET",
         "BOT_URL",
+        "BADGES_CHANNEL_ID",
         "TURSO_DATABASE_URL",
         "TURSO_AUTH_TOKEN",
         "UPSTASH_REDIS_REST_URL",

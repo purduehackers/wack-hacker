@@ -6,9 +6,10 @@ import { contextHash, hash } from "@repo/badges";
 import type { BadgeStore, Publisher, Review } from "@repo/badges";
 import { bearerMatches } from "@repo/shared/bearer";
 import { DISCORD_GUILD_ID } from "@repo/shared/discord";
-import { writePhackLink } from "@repo/shared/phack";
 import { Octokit } from "octokit";
 import { z } from "zod";
+
+import { writeBadgeLink } from "./shortlink.ts";
 
 const repository = { owner: "purduehackers", repo: "badge-designs" };
 function client(): Octokit {
@@ -219,16 +220,7 @@ class GithubPublisher implements Publisher {
       throw new Error("Saved files or phack.rs configuration is missing.");
     const { commit, url } = review.publication;
     const slug = `badge-${review.event?.version ?? ""}`;
-    const linked = await writePhackLink({
-      slug,
-      destination: url,
-      token: env.VERCEL_API_TOKEN,
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (linked.kind !== "created" && linked.kind !== "same")
-      throw new Error(
-        `GitHub merged ${commit}, but phack.rs could not be verified (${linked.kind}). Retry to reconcile; the bot will not overwrite an existing unrelated link.`,
-      );
+    await writeBadgeLink(slug, url, env.VERCEL_API_TOKEN);
     const shortlink = `https://phack.rs/${slug}`;
     const redirect = await fetch(shortlink, {
       redirect: "manual",

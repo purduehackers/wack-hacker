@@ -1,7 +1,7 @@
 /** The authenticated assertion a Discord delivery carries into eve. */
 
 import { DISCORD_GUILD_ID, roleFromMemberRoles } from "@repo/shared/discord";
-import type { InteractionPayload, Principal } from "@repo/shared/wire";
+import type { DeliveryPayload, InteractionPayload, Principal } from "@repo/shared/wire";
 import type { SessionAuthContext } from "eve/context";
 
 export interface DiscordAuthTarget {
@@ -18,6 +18,7 @@ export interface DiscordAuthTarget {
   scheduleId?: string;
   occurrenceId?: string;
   approvalRequester?: InteractionPayload["approvalRequester"];
+  agentTarget?: DeliveryPayload["agentTarget"];
 }
 
 export function authFor(principal: Principal, target: DiscordAuthTarget): SessionAuthContext {
@@ -34,6 +35,7 @@ export function authFor(principal: Principal, target: DiscordAuthTarget): Sessio
       threadId: target.threadId ?? "",
       guildId: DISCORD_GUILD_ID,
       source: target.source ?? "chat",
+      ...(target.agentTarget === undefined ? {} : { agentTarget: target.agentTarget }),
       ...(target.approvalRequester === undefined
         ? {}
         : {

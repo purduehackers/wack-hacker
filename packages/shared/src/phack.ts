@@ -6,7 +6,7 @@ import { messageOf } from "./errors.ts";
 
 const CONFIG_URL = "https://api.vercel.com/v1/global-config/ecfg_k1ocmrcfwo57k9v2klgtljycqsqj";
 const TEAM_QUERY = "teamId=team_kOQWJUQYzGW4blWthdK71Y8A";
-export const PHACK_SLUG_PATTERN = /^[A-Za-z0-9][A-Za-z0-9.-]{0,62}[A-Za-z0-9]$/u;
+export const PHACK_SLUG_PATTERN = /^[A-Za-z0-9][A-Za-z0-9-]{0,62}[A-Za-z0-9]$/u;
 export const PHACK_RESERVED_SLUGS = new Set(["404", "api", "dashboard", "favicon", "login"]);
 
 const storedLink = z.looseObject({ value: z.looseObject({ d: z.string() }) });

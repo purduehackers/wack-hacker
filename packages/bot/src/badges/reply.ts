@@ -23,14 +23,15 @@ export async function renderBadgeReply(
     return Result.ok(undefined);
   const embeds = [badgeEmbed(text)];
   const components = controls?.components ?? [];
-  const digest = createHash("sha256").update(JSON.stringify({ embeds, components })).digest("hex");
+  const hash = createHash("sha256").update(JSON.stringify({ embeds, components }));
+  const digest = hash.copy().digest("base64url").slice(0, 16);
   if (state.anchorContentHash === digest) return Result.ok(undefined);
   if (!(await deps.verifyLease()))
     return Result.err(
       new Transient({ operation: "render badge reply", detail: "Render lease expired." }),
     );
   const nonce = createHash("sha256")
-    .update(`${deps.sourceMessageId}:${digest}`)
+    .update(`${deps.sourceMessageId}:${hash.digest("hex")}`)
     .digest("hex")
     .slice(0, 24);
   const posted = await deps.rest.postMessage(deps.channelId, {

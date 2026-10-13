@@ -43,8 +43,22 @@ On October 13, 2026, a focused local runner exercised the production handlers in
 
 The first submission hit an expired local model token. After refreshing it, the runner replayed the original bot-observed Discord message through the routing endpoint. This was not an uninterrupted fresh-submission run.
 
+### Full local flow
+
+A second [fresh submission in #p-wack-hacker](https://discord.com/channels/772576325897945119/1559532100120485929) used the real badge Eve app, production conversation queue, authenticated callbacks, local Redis, and a local libSQL server with both migrations applied. Only the channel and infrastructure configuration changed; workflow, model, Discord, CMS, GitHub, and Vercel responses were real. The gateway was scoped to the test channel to avoid unrelated bot jobs.
+
+- **Intake and conversation**: The user account uploaded both SVGs in a new channel message. The bot created the thread, classified it with Luna, resolved unpublished CMS event 240, and checked the files. A question exercised Eve and `review_status`; the next question reused the saved route.
+- **Approval and arrangement**: Native badge and stamp buttons advanced one logical step each. Packing began after both approvals and fit 100 badges at 2.2 inches. The stamp measured 1.5 inches on its shortest side.
+- **Publication**: **Approve & publish** created and merged [badge-designs #2](https://github.com/purduehackers/badge-designs/pull/2). All eight asset hashes matched the saved GitHub bytes. Metadata has exactly the agreed CMS, author, and reviewer objects, and the README has the agreed badge/stamp format.
+- **Recovery and completion**: A rejected dotted Global Config key exposed the shortlink integration error. Badge URLs now use Vercel project redirects with a verified change set. **Retry link** completed [phack.rs/badge-0.0](https://phack.rs/badge-0.0), which returns a 307 to the saved version directory. The GitHub merge receipt stayed unchanged across retries. Discord reached **Hack Night 0.0 is ready** with **Get the files**.
+- **Reply repairs**: The first Eve answer exposed a projection hash that the durable schema rejected, and preliminary assistant text repeated in the final embed. The corrected hash saves successfully; embed conversations retain the final answer while ordinary conversations preserve streaming. A subsequent real question completed with one concise reply and a durable receipt.
+
+This was a debugging run, not an uninterrupted four-card demonstration. The earlier duplicate reply and three failed-link cards remain in its history. Every workflow/reply card has one embed, empty message text, and no edit timestamp. The CMS test event remains unpublished; the disposable 0.0 assets and shortlink are public.
+
+Focused local checks additionally cover durable reply serialization, replay suppression, existing shortlinks, unrelated staged changes, altered existing redirects, a concurrent version change, and retrying the same staged content. No new test files are committed.
+
 ## Remaining live checks
 
-Before release, exercise a fresh submission through the deployed badge app, conversational Eve replies, a denied interaction from another account, and a requested revision attached as a message. Complete the fourth turn with intended assets to verify repository protection, publication permissions, and live shortlink propagation. None of the disposable sample files were published.
+Before release, exercise a fresh submission through the deployed badge app, a denied interaction from another account, and a requested revision attached as a message. General Eve routing and production infrastructure were not exercised by the full local runner. Publication permission and redirect propagation were verified with disposable assets; intended production designs and physical cutting still need review.
 
 The implementation and pull request remain open for review. Do not treat offline SVG or layout checks as a physical laser test.
