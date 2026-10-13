@@ -51,6 +51,12 @@ export const env = createEnv({
     SENTRY_TRACES_SAMPLE_RATE: unitFraction.optional(),
     SENTRY_RELEASE: identifier.optional(),
 
+    /**
+     * Signing secret for Purdue Hackers ID's webhook endpoint (`whsec_…`).
+     * Absent means the role-sync route refuses every delivery.
+     */
+    ID_WEBHOOK_SECRET: secret.optional(),
+
     /** Optional Phase-3/4 integration credentials; tools deny when absent. */
     GLOBAL_CONFIG: httpUrl.optional(),
     CLOUDFLARE_API_TOKEN: secret.optional(),

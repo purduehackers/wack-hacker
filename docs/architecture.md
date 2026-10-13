@@ -125,6 +125,7 @@ packages/bot/src
 
 packages/agents/agent
 ├── channels/discord.ts                   # thin Eve lifecycle adapter
+├── channels/id.ts                        # Purdue Hackers ID webhook → Discord role sync
 ├── lib/
 │   ├── policy/
 │   │   ├── domain-tools.ts               # shared DomainToolSpec and registry types
