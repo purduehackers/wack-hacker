@@ -44,8 +44,7 @@ async function classify(payload: MessagePayload) {
     state: JSON.stringify({
       message: payload.content,
       attachments: payload.attachments?.map((a) => ({ name: a.filename, type: a.contentType })),
-      recentMessages: payload.recentMessages,
-      referencedContext: payload.referencedContext,
+      replyTo: payload.replyTo,
     }),
     questions: {
       route: {

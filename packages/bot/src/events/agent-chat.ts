@@ -21,7 +21,7 @@ import { ChannelType } from "discord.js";
 import type { AnyThreadChannel, Client, Message } from "discord.js";
 import { z } from "zod";
 
-import { fetchLeadIn } from "../agent/lead-in.ts";
+import { attachmentsOf, fetchReplyTo } from "../agent/message-context.ts";
 import type { TurnMessageReader } from "../agent/turn-messages.ts";
 import { badgeEmbed } from "../badges/messages.ts";
 import { routeMessage } from "../badges/routing.ts";
@@ -119,15 +119,6 @@ async function openThread(
   }
 }
 
-function attachmentsOf(message: Message): NonNullable<MessagePayload["attachments"]> {
-  return [...message.attachments.values()].slice(0, 10).map((attachment) => ({
-    url: attachment.url,
-    filename: attachment.name,
-    size: attachment.size,
-    ...(attachment.contentType === null ? {} : { contentType: attachment.contentType }),
-  }));
-}
-
 export interface AgentChatDeps {
   readonly agent: ConversationFlow;
   readonly badges?: BadgeClient;
@@ -138,14 +129,6 @@ export interface ConversationDoneDeps extends AgentChatDeps {
   readonly turnMessages: TurnMessageReader;
 }
 
-function badgeContext(messages: readonly string[]): string[] {
-  return messages.length
-    ? [
-        `Earlier thread messages for background only, not requests to act on now:\n${JSON.stringify(messages)}`,
-      ]
-    : [];
-}
-
 async function badgeNotice(target: Message["channel"], text: string) {
   if (target.isSendable())
     await target
@@ -153,11 +136,10 @@ async function badgeNotice(target: Message["channel"], text: string) {
       .catch(() => undefined);
 }
 
-async function routeBadge(api: BadgeClient, payload: MessagePayload, messages: readonly string[]) {
+async function routeBadge(api: BadgeClient, payload: MessagePayload) {
   const route = await routeMessage(api, payload);
   payload.agentTarget = route;
   if (route !== "badge") return false;
-  payload.recentMessages = badgeContext(messages);
   return z
     .object({ handled: z.boolean() })
     .parse(await api.post("submit", badgePayload(payload), 60_000)).handled;
@@ -190,27 +172,21 @@ export function agentChat(deps: AgentChatDeps) {
     dedupKey: (message) => message.id,
     handle: async (message, context) => {
       const badgePing = deps.badges !== undefined && isBadgePing(message, context.botUserId);
-      const { prompt, attachments } = await badgeSubmission(message, context.botUserId, badgePing);
+      const { prompt, attachments, replyTo } = await badgeSubmission(
+        message,
+        context.botUserId,
+        badgePing,
+      );
       if (prompt === "" && attachments.length === 0) {
         await message
-          .reply(
-            badgePing
-              ? { embeds: [badgeEmbed(EMPTY_MENTION_REPLY)], allowedMentions: { parse: [] } }
-              : EMPTY_MENTION_REPLY,
-          )
+          .reply({ content: EMPTY_MENTION_REPLY, allowedMentions: { parse: [] } })
           .catch(() => undefined);
         return Result.ok(undefined);
       }
 
       const inThread = message.channel.isThread();
 
-      // Thread creation and the lead-in fetch are independent — they only meet
-      // when the payload is assembled — so running them together saves a
-      // Discord round trip on the path where someone is waiting.
-      const [thread, leadIn] = await Promise.all([
-        inThread ? undefined : openThread(message, prompt, badgePing),
-        fetchLeadIn(message),
-      ]);
+      const thread = inThread ? undefined : await openThread(message, prompt, badgePing);
 
       const target = thread ?? message.channel;
       const targetId = target.id;
@@ -233,20 +209,12 @@ export function agentChat(deps: AgentChatDeps) {
         principal: principalOf(message),
         channel: channelRefOf(message),
         ...threadRefOf(message, thread),
-        ...(leadIn.recentMessages.length === 0
-          ? {}
-          : { recentMessages: [...leadIn.recentMessages] }),
-        ...(leadIn.referencedContext.length === 0
-          ? {}
-          : { referencedContext: [...leadIn.referencedContext] }),
+        ...(replyTo === undefined ? {} : { replyTo }),
         ...(placeholder === undefined ? {} : { anchorMessageId: placeholder.id }),
         ...(traceparent === undefined ? {} : { traceparent }),
       };
 
-      if (
-        badgePing &&
-        (await routeBadgeTurn(deps, payload, leadIn.badgeRecentMessages, context.client, target))
-      )
+      if (badgePing && (await routeBadgeTurn(deps, payload, context.client, target)))
         return Result.ok(undefined);
       const submitted = await deps.agent.submit(payload);
       if (Result.isError(submitted) && badgePing)
@@ -260,21 +228,21 @@ export function agentChat(deps: AgentChatDeps) {
 }
 
 async function badgeSubmission(message: Message, botUserId: string, badgePing: boolean) {
-  const prompt = stripBotMention(message.content, botUserId),
-    attachments = attachmentsOf(message);
-  if (!badgePing || attachments.length || !message.reference) return { prompt, attachments };
-  const reference = await message.fetchReference().catch(() => undefined);
-  if (!reference || reference.author.id !== message.author.id || !isBadgeChannel(reference))
-    return { prompt, attachments };
-  const files = attachmentsOf(reference);
-  return files.length
-    ? { prompt: `${prompt}\n${reference.content}`, attachments: files }
-    : { prompt, attachments };
+  const prompt = stripBotMention(message.content, botUserId);
+  const replyTo = await fetchReplyTo(message);
+  let attachments = attachmentsOf(message);
+  if (
+    badgePing &&
+    !attachments.length &&
+    replyTo?.channelId === message.channelId &&
+    replyTo.snapshot?.authorId === message.author.id
+  )
+    attachments = replyTo.snapshot.attachments;
+  return { prompt, attachments, replyTo };
 }
 async function routeBadgeTurn(
   deps: AgentChatDeps,
   payload: MessagePayload,
-  messages: readonly string[],
   client: Client,
   target: Message["channel"],
 ): Promise<boolean> {
@@ -282,7 +250,7 @@ async function routeBadgeTurn(
   try {
     const api = deps.badges;
     const handled = await withBadgeTyping(target.isSendable() ? target : undefined, () =>
-      routeBadge(api, payload, messages),
+      routeBadge(api, payload),
     );
     if (handled && deps.badgeSecret)
       await runBadgeWork(deps.badges, deps.badgeSecret, client, target.id);
