@@ -91,7 +91,10 @@ export function actionResult(action: Action, review: Review): StepResult | undef
         ...(review.sheetBatch
           ? {
               description: review.sheetBatch
-                .map((sheet) => `${sheet.quantity} × ${sheetLabel(sheet)} in`)
+                .map(
+                  (sheet) =>
+                    `${sheetLabel(sheet)} in — ${sheet.quantity} ${sheet.quantity === 1 ? "sheet" : "sheets"}`,
+                )
                 .join("\n"),
             }
           : {}),

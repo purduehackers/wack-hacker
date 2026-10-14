@@ -1,6 +1,7 @@
 import { BadgeApiError } from "@purduehackers/badges/client";
 import type { BadgeClient } from "@purduehackers/badges/client";
 import { BADGES_CHANNEL_ID, MAX_BADGE_COUNT, reviewSchema } from "@purduehackers/badges/contracts";
+import { stockItemSchema } from "@purduehackers/badges/inventory-contracts";
 import { failureGuidance } from "@purduehackers/badges/presentation";
 import { actionSchema, componentId } from "@purduehackers/badges/wire";
 import type { Action } from "@purduehackers/badges/wire";
@@ -63,9 +64,7 @@ function commandFor(interaction: BadgeInteraction, name: string): Action {
   if (kind === "sheets")
     return {
       kind,
-      ...(interaction.isModalSubmit()
-        ? { sheets: parseSheets(interaction.fields.getTextInputValue("sheets")) }
-        : {}),
+      ...(interaction.isModalSubmit() ? { sheets: parseSheets(interaction.fields) } : {}),
     };
   if (kind === "quantity") {
     const value = interaction.isModalSubmit()
@@ -141,10 +140,10 @@ async function beforeModal(interaction: BadgeInteraction, api: BadgeClient, secr
     return await Promise.race([
       (async () => {
         const input = await requestFor(interaction, secret);
-        const { review } = z
-          .object({ review: reviewSchema })
+        const { review, availableSheets } = z
+          .object({ review: reviewSchema, availableSheets: z.array(stockItemSchema).default([]) })
           .parse(await api.post("control", input, 1800));
-        return { ...input, review };
+        return { ...input, review, availableSheets };
       })(),
       new Promise<never>((_resolve, reject) => {
         timeout = setTimeout(
@@ -201,7 +200,9 @@ export function createBadgeInteractionHandler(api: BadgeClient, secret: string) 
         if (input.action.kind === "upload")
           await interaction.showModal(uploadModal(input.control, input.action.role));
         if (input.action.kind === "sheets")
-          await interaction.showModal(sheetsModal(input.control, input.review));
+          await interaction.showModal(
+            sheetsModal(input.control, input.review, input.availableSheets),
+          );
         if (input.action.kind === "quantity")
           await interaction.showModal(
             new ModalBuilder()

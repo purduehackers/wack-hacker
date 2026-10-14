@@ -218,9 +218,12 @@ export function cardEmbeds(card: BadgeCard): APIEmbed[] {
   if (step === "quantity" && review.sheetBatch)
     embed.fields = [
       {
-        name: "Sheets",
+        name: "Sheets from stock",
         value: review.sheetBatch
-          .map((sheet) => `${sheet.quantity} × ${sheetLabel(sheet)} in`)
+          .map(
+            (sheet) =>
+              `${sheetLabel(sheet)} in — ${sheet.quantity} ${sheet.quantity === 1 ? "sheet" : "sheets"}`,
+          )
           .join("\n"),
       },
     ];
