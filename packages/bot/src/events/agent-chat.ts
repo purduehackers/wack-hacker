@@ -17,7 +17,7 @@ import type { MessagePayload, Principal } from "@repo/shared/wire";
 import { ChannelType } from "discord.js";
 import type { AnyThreadChannel, Message } from "discord.js";
 
-import { fetchLeadIn } from "../agent/lead-in.ts";
+import { attachmentsOf, fetchReplyTo } from "../agent/message-context.ts";
 import type { TurnMessageReader } from "../agent/turn-messages.ts";
 import type { ReactorLike } from "../framework/events.ts";
 import { defineEvent } from "../framework/events.ts";
@@ -109,15 +109,6 @@ async function openThread(
   }
 }
 
-function attachmentsOf(message: Message): NonNullable<MessagePayload["attachments"]> {
-  return [...message.attachments.values()].slice(0, 10).map((attachment) => ({
-    url: attachment.url,
-    filename: attachment.name,
-    size: attachment.size,
-    ...(attachment.contentType === null ? {} : { contentType: attachment.contentType }),
-  }));
-}
-
 export interface AgentChatDeps {
   readonly agent: ConversationFlow;
 }
@@ -151,12 +142,10 @@ export function agentChat(deps: AgentChatDeps) {
 
       const inThread = message.channel.isThread();
 
-      // Thread creation and the lead-in fetch are independent — they only meet
-      // when the payload is assembled — so running them together saves a
-      // Discord round trip on the path where someone is waiting.
-      const [thread, leadIn] = await Promise.all([
+      // Fetch the reply while opening the thread.
+      const [thread, replyTo] = await Promise.all([
         inThread ? undefined : openThread(message, prompt),
-        fetchLeadIn(message),
+        fetchReplyTo(message),
       ]);
 
       const target = thread ?? message.channel;
@@ -180,12 +169,7 @@ export function agentChat(deps: AgentChatDeps) {
         principal: principalOf(message),
         channel: channelRefOf(message),
         ...threadRefOf(message, thread),
-        ...(leadIn.recentMessages.length === 0
-          ? {}
-          : { recentMessages: [...leadIn.recentMessages] }),
-        ...(leadIn.referencedContext.length === 0
-          ? {}
-          : { referencedContext: [...leadIn.referencedContext] }),
+        ...(replyTo === undefined ? {} : { replyTo }),
         ...(placeholder === undefined ? {} : { anchorMessageId: placeholder.id }),
         ...(traceparent === undefined ? {} : { traceparent }),
       };
