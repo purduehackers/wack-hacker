@@ -1,4 +1,4 @@
-import { remainingCriteria, type Review } from "@purduehackers/badges/contracts";
+import { remainingCriteria, staticPassed, type Review } from "@purduehackers/badges/contracts";
 import { materialDescription } from "@purduehackers/badges/materials";
 import { displayDate } from "@purduehackers/badges/presentation";
 import type { Action } from "@purduehackers/badges/wire";
@@ -21,10 +21,18 @@ export function actionResult(action: Action, review: Review): StepResult {
   if (review.failure || review.contextChanged) return { status: "error", label: "Needs attention" };
   switch (action.kind) {
     case "confirm":
+      if (!staticPassed(review) || remainingCriteria(review).length)
+        return { status: "warning", label: "Design checks pending" };
       return {
         status: "success",
         label: "Designs confirmed",
-        keepPreview: true,
+        description: [
+          "✅ **Automatic QA passed**",
+          "-# Allowed colors · Vector artwork · Outlined text · Filled engraving · Closed cutting outlines · No unsupported effects or linked artwork",
+          "",
+          "✅ **Manual QA passed**",
+          "-# Correct version and date · Readable details · Strong connections · Clear stamp impression",
+        ].join("\n"),
       };
     case "material":
       return {
