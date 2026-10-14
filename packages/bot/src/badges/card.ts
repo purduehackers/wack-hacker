@@ -115,16 +115,16 @@ export function controls(
     case "fix":
       return [row(upload(fixRole(review)))];
     case "qa": {
-      const choices = [
-        button("Confirm designs", "confirm", ButtonStyle.Success),
-        upload("badge"),
-        upload("stamp"),
-      ];
+      const confirmation = row();
       if (viewerUrl)
-        choices.push(
+        confirmation.addComponents(
           new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel("View in 3D").setURL(viewerUrl),
         );
-      return [row(...choices), row(button("Change acrylic", "choose-material"))];
+      confirmation.addComponents(button("Confirm designs", "confirm", ButtonStyle.Success));
+      return [
+        row(upload("badge"), upload("stamp"), button("Change acrylic", "choose-material")),
+        confirmation,
+      ];
     }
     case "quantity":
       return [
