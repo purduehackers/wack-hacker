@@ -1,38 +1,28 @@
-/** Explicit references carried by a Discord turn. Ambient channel history stays out. */
-
 import { sliceText } from "@repo/shared/text";
-import { MAX_CONTENT_CHARS, type MessagePayload } from "@repo/shared/wire";
+import { MAX_ATTACHMENTS, MAX_CONTENT_CHARS, type MessagePayload } from "@repo/shared/wire";
 import type { Attachment, Message } from "discord.js";
 
 type ReplyTo = NonNullable<MessagePayload["replyTo"]>;
 
-interface WithAttachments {
-  readonly attachments: {
-    values(): IterableIterator<Pick<Attachment, "url" | "name" | "size" | "contentType">>;
-  };
-}
-
-interface ReferencedMessage extends WithAttachments {
-  readonly id: string;
-  readonly channelId: string;
-  readonly content: string;
-  readonly createdAt: Date;
+type ReplyMessage = Pick<Message, "id" | "channelId" | "content" | "createdAt"> & {
+  readonly attachments: ReadonlyMap<
+    string,
+    Pick<Attachment, "url" | "name" | "size" | "contentType">
+  >;
   readonly author: Pick<Message["author"], "id" | "globalName" | "username" | "bot">;
   readonly reference?: Message["reference"];
-}
+};
 
-interface ReplySource {
-  readonly channelId: string;
-  readonly reference?: Message["reference"];
+interface ReplySource extends Pick<ReplyMessage, "channelId" | "reference"> {
   readonly channel: {
-    readonly messages: { fetch(messageId: string): Promise<ReferencedMessage> };
+    readonly messages: { fetch(messageId: string): Promise<ReplyMessage> };
   };
 }
 
 export function attachmentsOf(
-  message: WithAttachments,
+  message: Pick<ReplyMessage, "attachments">,
 ): NonNullable<MessagePayload["attachments"]> {
-  return [...message.attachments.values()].slice(0, 10).map((attachment) => {
+  return [...message.attachments.values()].slice(0, MAX_ATTACHMENTS).map((attachment) => {
     const contentType = attachment.contentType ?? undefined;
     return {
       url: attachment.url,
@@ -52,11 +42,7 @@ function referenceOf(message: Pick<ReplySource, "reference" | "channelId">): Rep
   };
 }
 
-/**
- * Runs for each addressed message, never just session creation. Fetch exactly the
- * reply target, without nearby chatter or recursive reply expansion. A failed or
- * cross-channel lookup keeps the reference so the model can request it if needed.
- */
+/** Fetch only the reply target; retain its IDs when the snapshot is unavailable. */
 export async function fetchReplyTo(message: ReplySource): Promise<ReplyTo | undefined> {
   const reference = referenceOf(message);
   if (reference === undefined || reference.channelId !== message.channelId) return reference;

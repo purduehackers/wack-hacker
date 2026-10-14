@@ -142,9 +142,7 @@ export function agentChat(deps: AgentChatDeps) {
 
       const inThread = message.channel.isThread();
 
-      // Thread creation and the reply-target fetch are independent — they only meet
-      // when the payload is assembled — so running them together saves a
-      // Discord round trip on the path where someone is waiting.
+      // Fetch the reply while opening the thread.
       const [thread, replyTo] = await Promise.all([
         inThread ? undefined : openThread(message, prompt),
         fetchReplyTo(message),

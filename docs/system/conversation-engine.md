@@ -171,22 +171,17 @@ Admission outcomes distinguish:
 - `recovery-required` — prior ambiguous delivery must be reset;
 - `resetting` or `stale` — current queue epoch may not enter.
 
-Attachments become AI SDK `UserContent` with URL/file metadata. Each delivery is
-one user turn: an optional `quoted_discord_context` block identifies the explicit
-reply target, followed by `current_request` with the actual request and source
-identifiers. Both blocks contain escaped JSON. Reply targets are carried on every
-turn, including follow-ups in existing sessions; failed lookups retain the target
-IDs without inventing content. Quoted attachments remain metadata rather than
-being staged as the current user's files.
+Each delivery is one user turn: optional `quoted_discord_context` followed by
+`current_request`, both as escaped JSON. Reply targets accompany every turn,
+including follow-ups; unread targets retain their IDs. Current attachments become
+AI SDK file parts; quoted attachments stay metadata. The Discord specialist reads
+history on demand; the bot never adds ambient backscroll. Legacy `recentMessages`
+and `referencedContext` remain accepted for queued deliveries but are ignored.
 
-The bot does not fetch general backscroll. The agent can request a bounded window
-through its Discord specialist when the request needs surrounding discussion.
-Legacy `recentMessages` and `referencedContext` fields remain accepted to drain
-older queued deliveries but never enter model context. Deploy the agent before
-the bot because older strict schemas do not accept `replyTo`. Existing session
-history is preserved; this does not scrub or reset earlier contaminated sessions.
-The context rules also cover retrieved history, delegation, and summaries; model
-adherence after compaction still requires behavioral evaluation.
+Deploy the agent before the bot: older receivers reject `replyTo`. Existing
+contaminated sessions may need resetting. Context rules apply to retrieved history,
+delegation, and summaries; model adherence, including after compaction, still needs
+behavioral evaluation.
 
 ## Desired rendering
 

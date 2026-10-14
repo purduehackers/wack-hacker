@@ -45,7 +45,7 @@ export const MAX_CONTENT_CHARS = 4_000;
 export const MAX_SCHEDULE_CONTENT_CHARS = 9_000;
 /** Accepted only to drain deliveries queued by an older bot. Never shown to the model. */
 const MAX_LEADIN_MESSAGES = 20;
-const MAX_ATTACHMENTS = 10;
+export const MAX_ATTACHMENTS = 10;
 
 const principalSchema = z.strictObject({
   userId: snowflake,
@@ -86,7 +86,7 @@ const messageReferenceSchema = z.strictObject({
 });
 
 const replyToSchema = messageReferenceSchema.extend({
-  /** A missing snapshot means the target could not be read; its identity still survives. */
+  /** Omitted when the target could not be read. */
   snapshot: z
     .strictObject({
       authorId: snowflake,
@@ -120,9 +120,8 @@ const messagePayloadSchema = z
     attachments: z.array(attachmentSchema).max(MAX_ATTACHMENTS).optional(),
     /** Explicit reply target for this delivery, including follow-ups in an existing session. */
     replyTo: replyToSchema.optional(),
-    /** Legacy backscroll is accepted for queued deliveries but never used as model context. */
+    /** Legacy fields accepted for queued deliveries but excluded from model context. */
     recentMessages: z.array(z.string()).max(MAX_LEADIN_MESSAGES).optional(),
-    /** Legacy reply backscroll has no reliable target identity and is likewise ignored. */
     referencedContext: z.array(z.string()).max(MAX_LEADIN_MESSAGES).optional(),
     /**
      * A placeholder message the bot already posted. The agent's paint layer
