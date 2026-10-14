@@ -184,17 +184,18 @@ export function cardEmbeds(card: BadgeCard): APIEmbed[] {
     embed.description = `${findings}\n\n${embed.description}`;
   }
   if (step === "qa" && review.event && review.manufacturing) {
+    const [year, month, day] = review.event.date.split("-");
     embed.description =
       "Check the version, date, readability, and thin connections. Make sure the stamp impression looks right.";
     embed.fields = [
       {
-        name: "Expected text",
-        value: `${review.event.name}\n${displayDate(review.event.date)}`,
+        name: "Version",
+        value: review.event.version,
         inline: true,
       },
       {
-        name: "Badge size",
-        value: dimensions(review.manufacturing.badgeWidthIn, review.manufacturing.badgeHeightIn),
+        name: "Date",
+        value: `${month}/${day}/${year}`,
         inline: true,
       },
     ];
