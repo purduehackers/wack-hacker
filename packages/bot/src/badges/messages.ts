@@ -1,4 +1,4 @@
-import { designerText } from "@repo/badges/presentation";
+import { designerText } from "@purduehackers/badges/presentation";
 import type { APIEmbed } from "discord.js";
 
 export const badgeColors = { success: 0x57f287, warning: 0xfee75c, error: 0xed4245 };

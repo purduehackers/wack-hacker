@@ -36,7 +36,7 @@ import { createTranscriber, transcribeVoiceMessage } from "./transcribe-voice-me
 
 export interface EventDeps {
   readonly badgeSecret?: string;
-  readonly badges?: import("../badges/client.ts").BadgeClient;
+  readonly badges?: import("@purduehackers/badges/client").BadgeClient;
   readonly redis: RedisClient;
   readonly agent: ConversationFlow;
   readonly reporter: Reporter;

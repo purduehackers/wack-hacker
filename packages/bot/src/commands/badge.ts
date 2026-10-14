@@ -1,12 +1,14 @@
+import { BadgeApiError } from "@purduehackers/badges/client";
+import type { BadgeClient } from "@purduehackers/badges/client";
 import {
   inventoryActionSchema,
   inventoryResponseSchema,
   stockLabel,
-} from "@repo/badges/inventory-contracts";
-import type { InventoryAction, InventoryResponse } from "@repo/badges/inventory-contracts";
-import { STOCK_MATERIALS } from "@repo/badges/materials";
-import { designerText } from "@repo/badges/presentation";
-import { DISCORD_GUILD_ID } from "@repo/shared/discord";
+} from "@purduehackers/badges/inventory-contracts";
+import type { InventoryAction, InventoryResponse } from "@purduehackers/badges/inventory-contracts";
+import { STOCK_MATERIALS } from "@purduehackers/badges/materials";
+import { designerText } from "@purduehackers/badges/presentation";
+import { DISCORD_GUILD_ID, roleAtLeast, roleFromMemberRoles, UserRole } from "@repo/shared/discord";
 import { messageOf, Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { InteractionContextType, MessageFlags, SlashCommandBuilder } from "discord.js";
@@ -17,8 +19,6 @@ import type {
   SlashCommandSubcommandBuilder,
 } from "discord.js";
 
-import { BadgeApiError } from "../badges/client.ts";
-import type { BadgeClient } from "../badges/client.ts";
 import type { SlashCommand } from "../framework/commands.ts";
 
 function itemOption(sub: SlashCommandSubcommandBuilder) {
@@ -196,7 +196,7 @@ function requestFor(
   return {
     guildId: interaction.guildId,
     actor: { id: interaction.user.id, username: interaction.user.username },
-    memberRoles,
+    canManufacture: roleAtLeast(roleFromMemberRoles(memberRoles), UserRole.Organizer),
     interactionId: interaction.id,
     action,
   };

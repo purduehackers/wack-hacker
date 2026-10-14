@@ -4,20 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun run --cwd ../badge-renderer build && eve dev",
-    "build": "bun run --cwd ../badge-renderer build && eve build",
+    "dev": "eve dev",
+    "build": "eve build",
     "start": "eve start"
   },
   "dependencies": {
-    "@octokit/auth-app": "8.2.0",
+    "@purduehackers/badges": "github:purduehackers/badges#9731222764b487f57886f5e5f01d38d3ef7c7e54",
     "@repo/agents": "workspace:*",
-    "@repo/badge-renderer": "workspace:*",
-    "@repo/badges": "workspace:*",
     "@repo/shared": "workspace:*",
-    "@resvg/resvg-js": "2.6.2",
-    "ai": "7.0.137",
     "eve": "0.31.3",
-    "octokit": "5.0.5",
     "zod": "4.4.3"
   },
   "devDependencies": {

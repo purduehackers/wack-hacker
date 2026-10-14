@@ -11,12 +11,12 @@
  * first time someone runs the command.
  */
 
+import type { BadgeClient } from "@purduehackers/badges/client";
 import type { UpstreamError } from "@repo/shared/errors";
 import type { RedisClient } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
 import type { Reporter } from "@repo/shared/result/observe";
 
-import type { BadgeClient } from "../badges/client.ts";
 import type { SlashCommand } from "../framework/commands.ts";
 import { createCmsClient } from "../integrations/cms.ts";
 import { createDashboardWriter } from "../integrations/dashboard.ts";

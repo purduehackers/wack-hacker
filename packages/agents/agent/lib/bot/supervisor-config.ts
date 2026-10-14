@@ -71,7 +71,14 @@ function botEnvironment(source: AgentEnv): BotProcessEnvironment {
     DISCORD_BOT_TOKEN: required(source.DISCORD_BOT_TOKEN, "DISCORD_BOT_TOKEN"),
     DISCORD_BOT_CLIENT_ID: required(source.DISCORD_BOT_CLIENT_ID, "DISCORD_BOT_CLIENT_ID"),
     AGENT_URL: required(source.AGENT_URL, "AGENT_URL"),
+    ...(source.BADGES_API_URL === undefined ? {} : { BADGES_API_URL: source.BADGES_API_URL }),
+    ...(source.BADGES_API_SECRET === undefined
+      ? {}
+      : { BADGES_API_SECRET: source.BADGES_API_SECRET }),
     ...(source.BADGE_AGENT_URL === undefined ? {} : { BADGE_AGENT_URL: source.BADGE_AGENT_URL }),
+    ...(source.BADGES_API_URL === undefined
+      ? {}
+      : { AI_GATEWAY_API_KEY: required(source.AI_GATEWAY_API_KEY, "AI_GATEWAY_API_KEY") }),
     AGENT_INGRESS_SECRET: required(source.AGENT_INGRESS_SECRET, "AGENT_INGRESS_SECRET"),
     BOT_INGRESS_SECRET: required(source.BOT_INGRESS_SECRET, "BOT_INGRESS_SECRET"),
     REDIS_URL: source.REDIS_URL,

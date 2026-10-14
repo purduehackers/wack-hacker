@@ -1,4 +1,4 @@
-import { BADGES_CHANNEL_ID } from "@repo/badges/contracts";
+import { BADGES_CHANNEL_ID } from "@purduehackers/badges/contracts";
 import type { ConversationStore } from "@repo/shared/conversations";
 import { roleAtLeast, roleFromMemberRoles, UserRole } from "@repo/shared/discord";
 import { messageOf, tagOf } from "@repo/shared/errors";

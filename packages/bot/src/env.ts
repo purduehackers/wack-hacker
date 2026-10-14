@@ -53,7 +53,11 @@ export const env = createEnv({
     /** Base URL of the eve deployment. No trailing slash. */
     AGENT_URL: z.url({ protocol: /^https?$/u }),
     /** Opt in only after the badge service and database migration are deployed. */
+    BADGES_API_URL: z.url({ protocol: /^https?$/u }).optional(),
+    BADGES_API_SECRET: z.string().min(32).optional(),
     BADGE_AGENT_URL: z.url({ protocol: /^https?$/u }).optional(),
+    /** Luna classifies the first mention in an unassigned badge thread. */
+    AI_GATEWAY_API_KEY: secret.optional(),
     /** Bearer the bot presents to the agent. */
     AGENT_INGRESS_SECRET: secret,
     /** Bearer the agent must present on the parked callback. */

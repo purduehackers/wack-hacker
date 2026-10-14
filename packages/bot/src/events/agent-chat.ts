@@ -9,7 +9,8 @@
  * feedback that something is happening.
  */
 
-import { failureGuidance } from "@repo/badges/presentation";
+import type { BadgeClient } from "@purduehackers/badges/client";
+import { failureGuidance } from "@purduehackers/badges/presentation";
 import { RECOVERY_FOOTER, RECOVERY_TEXT } from "@repo/shared/conversations";
 import { DISCORD_GUILD_ID, roleAtLeast, roleFromMemberRoles, UserRole } from "@repo/shared/discord";
 import { messageOf } from "@repo/shared/errors";
@@ -22,8 +23,8 @@ import { z } from "zod";
 
 import { fetchLeadIn } from "../agent/lead-in.ts";
 import type { TurnMessageReader } from "../agent/turn-messages.ts";
-import type { BadgeClient } from "../badges/client.ts";
 import { badgeEmbed } from "../badges/messages.ts";
+import { routeMessage } from "../badges/routing.ts";
 import { runBadgeWork, withBadgeTyping } from "../badges/schedule.ts";
 import type { ReactorLike } from "../framework/events.ts";
 import { defineEvent } from "../framework/events.ts";
@@ -153,12 +154,26 @@ async function badgeNotice(target: Message["channel"], text: string) {
 }
 
 async function routeBadge(api: BadgeClient, payload: MessagePayload, messages: readonly string[]) {
-  const result = z
-    .object({ route: z.enum(["badge", "general"]), handled: z.boolean() })
-    .parse(await api.post("route", payload, 60_000));
-  payload.agentTarget = result.route;
-  if (result.route === "badge") payload.recentMessages = badgeContext(messages);
-  return result.handled;
+  const route = await routeMessage(api, payload);
+  payload.agentTarget = route;
+  if (route !== "badge") return false;
+  payload.recentMessages = badgeContext(messages);
+  return z
+    .object({ handled: z.boolean() })
+    .parse(await api.post("submit", badgePayload(payload), 60_000)).handled;
+}
+
+function badgePayload(payload: MessagePayload) {
+  return {
+    ...payload,
+    principal: {
+      ...payload.principal,
+      canManufacture: roleAtLeast(
+        roleFromMemberRoles(payload.principal.memberRoles),
+        UserRole.Organizer,
+      ),
+    },
+  };
 }
 
 /**
@@ -459,7 +474,9 @@ export function badgeUploads(api: BadgeClient, secret: string) {
         const result = z
           .object({ handled: z.boolean() })
           .parse(
-            await withBadgeTyping(message.channel, () => api.post("continue", payload, 60_000)),
+            await withBadgeTyping(message.channel, () =>
+              api.post("continue", badgePayload(payload), 60_000),
+            ),
           );
         if (result.handled) await runBadgeWork(api, secret, context.client, message.channelId);
       } catch (cause) {

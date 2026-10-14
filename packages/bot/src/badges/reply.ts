@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { designerText } from "@repo/badges/presentation";
+import { designerText } from "@purduehackers/badges/presentation";
 import { Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { MessageFlags } from "discord.js";

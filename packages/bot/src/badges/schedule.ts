@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 
-import { BADGES_CHANNEL_ID } from "@repo/badges/contracts";
-import { workResponse } from "@repo/badges/wire";
+import type { BadgeClient } from "@purduehackers/badges/client";
+import { BADGES_CHANNEL_ID } from "@purduehackers/badges/contracts";
+import { workResponse } from "@purduehackers/badges/wire";
 import { DISCORD_GUILD_ID } from "@repo/shared/discord";
 import { messageOf, Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
@@ -10,7 +11,6 @@ import type { Client } from "discord.js";
 
 import type { Schedule } from "../framework/schedules.ts";
 import { cardEmbeds, controls } from "./card.ts";
-import type { BadgeClient } from "./client.ts";
 import { deliveredResult, settledCard } from "./status.ts";
 
 export function badgeWork(api: BadgeClient, secret: string): Schedule {

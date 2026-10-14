@@ -6,7 +6,7 @@
  * busy channel.
  */
 
-import { BADGES_CHANNEL_ID } from "@repo/badges/contracts";
+import { BADGES_CHANNEL_ID } from "@purduehackers/badges/contracts";
 import type { Message } from "discord.js";
 
 export function isBadgeChannel(message: Message): boolean {

@@ -9,15 +9,8 @@
         "BOT_INGRESS_SECRET",
         "BOT_URL",
         "BADGES_CHANNEL_ID",
-        "TURSO_DATABASE_URL",
-        "TURSO_AUTH_TOKEN",
-        "UPSTASH_REDIS_REST_URL",
-        "UPSTASH_REDIS_REST_TOKEN",
-        "GITHUB_APP_ID",
-        "GITHUB_APP_PRIVATE_KEY",
-        "GITHUB_APP_INSTALLATION_ID",
-        "PAYLOAD_CMS_API_KEY",
-        "VERCEL_API_TOKEN",
+        "BADGES_API_URL",
+        "BADGES_API_SECRET",
         "AI_GATEWAY_API_KEY",
         "SKIP_ENV_VALIDATION"
       ]

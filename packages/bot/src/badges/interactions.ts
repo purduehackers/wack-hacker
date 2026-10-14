@@ -1,9 +1,11 @@
-import { BADGES_CHANNEL_ID, MAX_BADGE_COUNT, reviewSchema } from "@repo/badges/contracts";
-import { failureGuidance } from "@repo/badges/presentation";
-import { actionSchema, componentId } from "@repo/badges/wire";
-import type { Action } from "@repo/badges/wire";
+import { BadgeApiError } from "@purduehackers/badges/client";
+import type { BadgeClient } from "@purduehackers/badges/client";
+import { BADGES_CHANNEL_ID, MAX_BADGE_COUNT, reviewSchema } from "@purduehackers/badges/contracts";
+import { failureGuidance } from "@purduehackers/badges/presentation";
+import { actionSchema, componentId } from "@purduehackers/badges/wire";
+import type { Action } from "@purduehackers/badges/wire";
 import { bearerMatches } from "@repo/shared/bearer";
-import { DISCORD_GUILD_ID } from "@repo/shared/discord";
+import { DISCORD_GUILD_ID, roleAtLeast, roleFromMemberRoles, UserRole } from "@repo/shared/discord";
 import { messageOf } from "@repo/shared/errors";
 import {
   ActionRowBuilder,
@@ -25,8 +27,6 @@ import type {
 } from "discord.js";
 import { z } from "zod";
 
-import { BadgeApiError } from "./client.ts";
-import type { BadgeClient } from "./client.ts";
 import { badgeEmbed } from "./messages.ts";
 import { runBadgeWork, withBadgeTyping } from "./schedule.ts";
 import { actionResult, settledCard } from "./status.ts";
@@ -58,7 +58,7 @@ export function uploadModal(control: string, role: "badge" | "stamp") {
     );
 }
 function commandFor(interaction: BadgeInteraction, name: string): Action {
-  const [kind, role, verdict] = name.split(".");
+  const [kind, role] = name.split(".");
   if (kind === "quantity") {
     const value = interaction.isModalSubmit()
       ? interaction.fields.getTextInputValue("count").trim()
@@ -74,13 +74,6 @@ function commandFor(interaction: BadgeInteraction, name: string): Action {
       ...(value && value !== "custom" ? { count: Number(value) } : {}),
     });
   }
-  if (kind === "review")
-    return actionSchema.parse({
-      kind: "decision",
-      criterion: role,
-      verdict,
-      note: "",
-    });
   if (kind === "upload") {
     const attachment = interaction.isModalSubmit()
       ? interaction.fields.getUploadedFiles("design", true).first()
@@ -113,10 +106,8 @@ async function requestFor(interaction: BadgeInteraction, secret: string) {
   )
     throw new Error("This control belongs to a different review thread.");
   const member = await interaction.guild.members.fetch({ user: interaction.user.id, force: true });
-  // Older change buttons open the same upload as the current revision buttons.
-  const actionName = name.endsWith(".changes")
-    ? `upload.${name.split(".")[1]}`
-    : name.startsWith("material.") || name.startsWith("quantity.")
+  const actionName =
+    name.startsWith("material.") || name.startsWith("quantity.")
       ? (name.split(".")[0] ?? name)
       : name;
   return {
@@ -127,7 +118,10 @@ async function requestFor(interaction: BadgeInteraction, secret: string) {
     eventId: interaction.id,
     actor: {
       person: { id: interaction.user.id, username: interaction.user.username },
-      memberRoles: [...member.roles.cache.keys()],
+      canManufacture: roleAtLeast(
+        roleFromMemberRoles([...member.roles.cache.keys()]),
+        UserRole.Organizer,
+      ),
       guildId: interaction.guildId,
       threadId: interaction.channel.id,
     },
@@ -190,8 +184,7 @@ export function createBadgeInteractionHandler(api: BadgeClient, secret: string) 
     try {
       const name = controlSchema.parse(interaction.customId.split(":"))[3];
       const opensModal =
-        interaction.isButton() &&
-        (name.startsWith("upload.") || name.endsWith(".changes") || name === "quantity.custom");
+        interaction.isButton() && (name.startsWith("upload.") || name === "quantity.custom");
       if (opensModal && interaction.isButton()) {
         const input = await beforeModal(interaction, api, secret);
         if (input.action.kind === "upload")

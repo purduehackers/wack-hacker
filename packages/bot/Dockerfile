@@ -33,9 +33,7 @@ COPY package.json bun.lock ./
 COPY packages/bot/package.json packages/bot/
 COPY packages/shared/package.json packages/shared/
 COPY packages/agents/package.json packages/agents/
-COPY packages/badges/package.json packages/badges/
 COPY packages/badge-agent/package.json packages/badge-agent/
-COPY packages/badge-renderer/package.json packages/badge-renderer/
 
 # The root manifest declares `patchedDependencies`, so bun resolves the patch
 # file even for a --filter that excludes the package it patches. Copying the
@@ -46,7 +44,7 @@ COPY patches/ patches/
 # image, which would otherwise be installed just by being in the workspace.
 # --frozen-lockfile fails the build when the lockfile and manifests disagree,
 # rather than silently resolving something the repo never tested.
-RUN bun install --frozen-lockfile --production --filter='@repo/bot' --filter='@repo/shared' --filter='@repo/badges'
+RUN bun install --frozen-lockfile --production --filter='@repo/bot' --filter='@repo/shared'
 
 # Drop build tooling the runtime never loads.
 #
@@ -86,11 +84,9 @@ ENV PORT=8080
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/packages/bot/node_modules ./packages/bot/node_modules
 COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
-COPY --from=deps /app/packages/badges/node_modules ./packages/badges/node_modules
 
 COPY package.json bun.lock ./
 COPY packages/shared ./packages/shared
-COPY packages/badges ./packages/badges
 COPY packages/bot ./packages/bot
 
 # Unprivileged. The base image ships a `bun` user; nothing here needs root.
