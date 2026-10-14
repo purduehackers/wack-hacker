@@ -1,6 +1,11 @@
 import { BadgeApiError } from "@purduehackers/badges/client";
 import type { BadgeClient } from "@purduehackers/badges/client";
-import { BADGES_CHANNEL_ID, MAX_BADGE_COUNT, reviewSchema } from "@purduehackers/badges/contracts";
+import {
+  BADGES_CHANNEL_ID,
+  MAX_BADGE_COUNT,
+  badgeMaterialSchema,
+  reviewSchema,
+} from "@purduehackers/badges/contracts";
 import { stockItemSchema } from "@purduehackers/badges/inventory-contracts";
 import { failureGuidance } from "@purduehackers/badges/presentation";
 import { actionSchema, componentId } from "@purduehackers/badges/wire";
@@ -28,9 +33,10 @@ import type {
 } from "discord.js";
 import { z } from "zod";
 
+import { materialsModal, parseMaterials } from "./materials.ts";
 import { badgeEmbed } from "./messages.ts";
 import { runBadgeWork, withBadgeTyping } from "./schedule.ts";
-import { parseSheets, sheetsModal } from "./sheets.ts";
+import { parseSheets, SHEETS_PER_MODAL, sheetsModal } from "./sheets.ts";
 import { actionResult, settledCard } from "./status.ts";
 
 type BadgeInteraction = ButtonInteraction | StringSelectMenuInteraction | ModalSubmitInteraction;
@@ -59,13 +65,20 @@ export function uploadModal(control: string, role: "badge" | "stamp") {
         ),
     );
 }
+function materialAction(interaction: BadgeInteraction): Action {
+  return {
+    kind: "material",
+    ...(interaction.isModalSubmit()
+      ? { ids: parseMaterials(interaction.fields) }
+      : interaction.isStringSelectMenu()
+        ? { ids: interaction.values }
+        : {}),
+  };
+}
 function commandFor(interaction: BadgeInteraction, name: string): Action {
   const [kind, role] = name.split(".");
-  if (kind === "sheets")
-    return {
-      kind,
-      ...(interaction.isModalSubmit() ? { sheets: parseSheets(interaction.fields) } : {}),
-    };
+  if (kind === "sheets") return { kind };
+  if (kind === "material") return materialAction(interaction);
   if (kind === "quantity") {
     const value = interaction.isModalSubmit()
       ? interaction.fields.getTextInputValue("count").trim()
@@ -95,7 +108,7 @@ function commandFor(interaction: BadgeInteraction, name: string): Action {
   }
   if (kind === "roles") return actionSchema.parse({ kind, badge: Number(role) });
   if (kind === "replace") return actionSchema.parse({ kind, role });
-  if ((kind === "event" || kind === "material") && interaction.isStringSelectMenu())
+  if (kind === "event" && interaction.isStringSelectMenu())
     return actionSchema.parse({ kind, id: interaction.values[0] });
   return actionSchema.parse({ kind });
 }
@@ -114,7 +127,7 @@ async function requestFor(interaction: BadgeInteraction, secret: string) {
     throw new Error("This control belongs to a different review thread.");
   const member = await interaction.guild.members.fetch({ user: interaction.user.id, force: true });
   const actionName =
-    name.startsWith("material.") || name.startsWith("quantity.")
+    name.startsWith("material.") || name.startsWith("quantity.") || name.startsWith("sheets.")
       ? (name.split(".")[0] ?? name)
       : name;
   return {
@@ -140,10 +153,14 @@ async function beforeModal(interaction: BadgeInteraction, api: BadgeClient, secr
     return await Promise.race([
       (async () => {
         const input = await requestFor(interaction, secret);
-        const { review, availableSheets } = z
-          .object({ review: reviewSchema, availableSheets: z.array(stockItemSchema).default([]) })
+        const { review, availableSheets, materials } = z
+          .object({
+            review: reviewSchema,
+            availableSheets: z.array(stockItemSchema).default([]),
+            materials: z.array(badgeMaterialSchema).default([]),
+          })
           .parse(await api.post("control", input, 1800));
-        return { ...input, review, availableSheets };
+        return { ...input, review, availableSheets, materials };
       })(),
       new Promise<never>((_resolve, reject) => {
         timeout = setTimeout(
@@ -179,6 +196,85 @@ async function privateFailure(interaction: BadgeInteraction, cause: unknown) {
   if (interaction.deferred || interaction.replied) await interaction.followUp(options);
   else await interaction.reply(options);
 }
+function sheetPages(
+  id: string,
+  version: number,
+  stockCount: number,
+  secret: string,
+): InteractionReplyOptions {
+  const buttons = Array.from({ length: Math.ceil(stockCount / SHEETS_PER_MODAL) }, (_, page) =>
+    new ButtonBuilder()
+      .setStyle(ButtonStyle.Secondary)
+      .setCustomId(componentId(id, version, `sheets.${page}`, secret))
+      .setLabel(
+        `Sheets ${page * SHEETS_PER_MODAL + 1}–${Math.min((page + 1) * SHEETS_PER_MODAL, stockCount)}`,
+      ),
+  );
+  if (buttons.length > 25)
+    throw new Error("Tell me the sheet colors, sizes, and quantities you want in this thread.");
+  const rows: ActionRowBuilder<ButtonBuilder>[] = [];
+  for (let index = 0; index < buttons.length; index += 5)
+    rows.push(new ActionRowBuilder<ButtonBuilder>().addComponents(buttons.slice(index, index + 5)));
+  return {
+    embeds: [
+      badgeEmbed(
+        "Choose a group to edit its quantities. Your other sheets stay selected.",
+        "Choose cutting sheets",
+        "warning",
+      ),
+    ],
+    components: rows,
+    flags: MessageFlags.Ephemeral,
+  };
+}
+async function openBadgeModal(
+  interaction: ButtonInteraction,
+  api: BadgeClient,
+  secret: string,
+  name: string,
+): Promise<void> {
+  const input = await beforeModal(interaction, api, secret);
+  if (input.action.kind === "upload")
+    await interaction.showModal(uploadModal(input.control, input.action.role));
+  if (input.action.kind === "material")
+    await interaction.showModal(materialsModal(input.control, input.materials));
+  if (input.action.kind === "sheets") {
+    if (name === "sheets" && input.availableSheets.length > SHEETS_PER_MODAL) {
+      await interaction.reply(
+        sheetPages(input.id, input.version, input.availableSheets.length, secret),
+      );
+      return;
+    }
+    const page = Number(name.split(".")[1] ?? 0);
+    await interaction.showModal(
+      sheetsModal(
+        input.control,
+        input.review,
+        input.availableSheets.slice(page * SHEETS_PER_MODAL, (page + 1) * SHEETS_PER_MODAL),
+      ),
+    );
+  }
+  if (input.action.kind === "quantity")
+    await interaction.showModal(
+      new ModalBuilder()
+        .setCustomId(input.control)
+        .setTitle("How many badges?")
+        .addLabelComponents(
+          new LabelBuilder()
+            .setLabel("Target quantity")
+            .setDescription(`Enter a whole number from 1 to ${MAX_BADGE_COUNT}.`)
+            .setTextInputComponent(
+              new TextInputBuilder()
+                .setCustomId("count")
+                .setStyle(TextInputStyle.Short)
+                .setRequired(true)
+                .setMaxLength(3)
+                .setPlaceholder("120"),
+            ),
+        ),
+    );
+}
+
 export function createBadgeInteractionHandler(api: BadgeClient, secret: string) {
   return async (interaction: Interaction): Promise<boolean> => {
     if (
@@ -194,34 +290,13 @@ export function createBadgeInteractionHandler(api: BadgeClient, secret: string) 
       const name = controlSchema.parse(interaction.customId.split(":"))[3];
       const opensModal =
         interaction.isButton() &&
-        (name.startsWith("upload.") || name === "quantity.custom" || name === "sheets");
+        (name.startsWith("upload.") ||
+          name === "quantity.custom" ||
+          name === "material" ||
+          name === "sheets" ||
+          name.startsWith("sheets."));
       if (opensModal && interaction.isButton()) {
-        const input = await beforeModal(interaction, api, secret);
-        if (input.action.kind === "upload")
-          await interaction.showModal(uploadModal(input.control, input.action.role));
-        if (input.action.kind === "sheets")
-          await interaction.showModal(
-            sheetsModal(input.control, input.review, input.availableSheets),
-          );
-        if (input.action.kind === "quantity")
-          await interaction.showModal(
-            new ModalBuilder()
-              .setCustomId(input.control)
-              .setTitle("How many badges?")
-              .addLabelComponents(
-                new LabelBuilder()
-                  .setLabel("Target quantity")
-                  .setDescription(`Enter a whole number from 1 to ${MAX_BADGE_COUNT}.`)
-                  .setTextInputComponent(
-                    new TextInputBuilder()
-                      .setCustomId("count")
-                      .setStyle(TextInputStyle.Short)
-                      .setRequired(true)
-                      .setMaxLength(3)
-                      .setPlaceholder("120"),
-                  ),
-              ),
-          );
+        await openBadgeModal(interaction, api, secret, name);
         return true;
       }
       // Acknowledge first. Only accepted actions settle the card; opening a modal does not.
@@ -229,6 +304,15 @@ export function createBadgeInteractionHandler(api: BadgeClient, secret: string) 
         throw new Error("Use the latest review card.");
       await interaction.deferUpdate();
       const input = await requestFor(interaction, secret);
+      if (input.action.kind === "sheets" && interaction.isModalSubmit()) {
+        const current = z
+          .object({ review: reviewSchema, availableSheets: z.array(stockItemSchema) })
+          .parse(await api.post("control", input));
+        input.action = {
+          kind: "sheets",
+          sheets: parseSheets(interaction.fields, current.review, current.availableSheets),
+        };
+      }
       const response = await withBadgeTyping(
         interaction.channel?.isThread() ? interaction.channel : undefined,
         () => api.post("action", input, 60_000),

@@ -37,41 +37,22 @@ const titles: Record<ReviewStep, string> = {
   error: "Needs attention",
 };
 
-function selectionMenus(
-  {
-    review,
-    version,
-    events,
-    materials,
-  }: Pick<BadgeCard, "review" | "version" | "events" | "materials">,
-  step: "event" | "material",
+function eventMenus(
+  { review, version, events }: Pick<BadgeCard, "review" | "version" | "events">,
   secret: string,
 ): Row[] {
-  const options =
-    step === "event"
-      ? events.map((event) => ({
-          label: event.name,
-          value: event.id,
-          description: displayDate(event.date),
-        }))
-      : materials.map((material) => ({
-          label: materialDescription(material),
-          value: material.materialId,
-        }));
+  const options = events.map((event) => ({
+    label: event.name,
+    value: event.id,
+    description: displayDate(event.date),
+  }));
   const menus: Row[] = [];
   for (let offset = 0; offset < options.length; offset += 25)
     menus.push(
       new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
         new StringSelectMenuBuilder()
-          .setCustomId(
-            componentId(
-              review.id,
-              version,
-              step === "material" ? `material.${offset}` : step,
-              secret,
-            ),
-          )
-          .setPlaceholder(step === "event" ? "Choose a Hack Night" : "Choose acrylic")
+          .setCustomId(componentId(review.id, version, "event", secret))
+          .setPlaceholder("Choose a Hack Night")
           .addOptions(options.slice(offset, offset + 25)),
       ),
     );
@@ -109,9 +90,14 @@ export function controls(
       return [
         row(upload(review.pendingRole ?? "badge"), button("Keep current design", "keep-design")),
       ];
-    case "event":
-    case "material": {
-      const menus = selectionMenus({ review, version, events, materials }, step, secret);
+    case "material":
+    case "event": {
+      const menus =
+        step === "event"
+          ? eventMenus({ review, version, events }, secret)
+          : materials.length
+            ? [row(button("Choose acrylic colors", "material"))]
+            : [];
       return menus.length ? menus : [row(button("Check again", "refresh"))];
     }
     case "fix":
@@ -222,7 +208,7 @@ export function cardEmbeds(card: BadgeCard): APIEmbed[] {
         value: review.sheetBatch
           .map(
             (sheet) =>
-              `${sheetLabel(sheet)} in — ${sheet.quantity} ${sheet.quantity === 1 ? "sheet" : "sheets"}`,
+              `${sheet.material ? `${materialDescription(sheet.material)} · ` : ""}${sheetLabel(sheet)} in — ${sheet.quantity} ${sheet.quantity === 1 ? "sheet" : "sheets"}`,
           )
           .join("\n"),
       },
@@ -238,11 +224,10 @@ export function cardEmbeds(card: BadgeCard): APIEmbed[] {
           value: layout.sheetSizes
             .map(
               (size, sheet) =>
-                `Sheet ${sheet + 1}: ${layout.placements.filter((p) => p.sheet === sheet).length} on ${sheetLabel(size)} in`,
+                `Sheet ${sheet + 1}: ${layout.placements.filter((p) => p.sheet === sheet).length} on ${sheetLabel(size)} in${size.material ? ` · ${materialDescription(size.material)}` : ""}`,
             )
             .join("\n"),
         },
-        { name: "Acrylic", value: review.material ? materialDescription(review.material) : "" },
       ];
     embed.footer = { text: "Publishing saves the files and deducts the sheets used." };
   }

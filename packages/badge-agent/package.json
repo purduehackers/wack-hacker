@@ -9,7 +9,7 @@
     "start": "eve start"
   },
   "dependencies": {
-    "@purduehackers/badges": "github:purduehackers/badges#8ba4df20e3b0816c4fdd3ece9f3626c5a6a8f598",
+    "@purduehackers/badges": "github:purduehackers/badges#c14425efb277f77080be61798d49a19c3f29260e",
     "@repo/agents": "workspace:*",
     "@repo/shared": "workspace:*",
     "eve": "0.31.3",

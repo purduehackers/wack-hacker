@@ -1,4 +1,9 @@
-import { remainingCriteria, staticPassed, type Review } from "@purduehackers/badges/contracts";
+import {
+  remainingCriteria,
+  staticPassed,
+  reviewMaterials,
+  type Review,
+} from "@purduehackers/badges/contracts";
 import { materialDescription } from "@purduehackers/badges/materials";
 import { displayDate, sheetLabel } from "@purduehackers/badges/presentation";
 import type { Action } from "@purduehackers/badges/wire";
@@ -45,7 +50,7 @@ export function actionResult(action: Action, review: Review): StepResult | undef
       return {
         status: "success",
         label: "Acrylic Selected",
-        ...(review.material ? { description: materialDescription(review.material) } : {}),
+        description: reviewMaterials(review).map(materialDescription).join("\n"),
       };
     case "event":
       return {
@@ -93,7 +98,7 @@ export function actionResult(action: Action, review: Review): StepResult | undef
               description: review.sheetBatch
                 .map(
                   (sheet) =>
-                    `${sheetLabel(sheet)} in — ${sheet.quantity} ${sheet.quantity === 1 ? "sheet" : "sheets"}`,
+                    `${sheet.material ? `${materialDescription(sheet.material)} · ` : ""}${sheetLabel(sheet)} in — ${sheet.quantity} ${sheet.quantity === 1 ? "sheet" : "sheets"}`,
                 )
                 .join("\n"),
             }
@@ -119,7 +124,7 @@ function revisionResult(commands: string[], review: Review): StepResult | undefi
     return { status: "success", label: "Retry complete" };
   if (commands.includes("refresh") && !review.contextChanged)
     return { status: "success", label: "Details updated" };
-  if (commands.includes("confirm") && !review.material)
+  if (commands.includes("confirm") && !reviewMaterials(review).length)
     return actionResult({ kind: "choose-material" }, review);
   const upload = commands.find((name) => name.startsWith("upload."));
   if (!upload) return undefined;
@@ -153,8 +158,14 @@ export function deliveredResult(message: CardMessage, review: Review): StepResul
     );
   if (commands.includes("confirm") && !remainingCriteria(review).length)
     return actionResult({ kind: "confirm" }, review);
-  if (commands.some((name) => name.startsWith("material.")) && review.material)
-    return actionResult({ kind: "material", id: review.material.materialId }, review);
+  if (
+    commands.some((name) => name === "material" || name.startsWith("material.")) &&
+    reviewMaterials(review).length
+  )
+    return actionResult(
+      { kind: "material", ids: reviewMaterials(review).map((material) => material.materialId) },
+      review,
+    );
   if (commands.includes("event") && review.event)
     return actionResult({ kind: "event", id: review.event.id }, review);
   if (commands.some((name) => /^(?:roles|replace)\./u.test(name)) && review.rolesConfirmed)
