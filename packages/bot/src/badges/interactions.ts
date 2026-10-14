@@ -220,9 +220,10 @@ export function createBadgeInteractionHandler(api: BadgeClient, secret: string) 
         () => api.post("action", input, 60_000),
       );
       const { review } = z.object({ review: reviewSchema }).parse(response);
-      if (interaction.message)
+      const result = actionResult(input.action, review);
+      if (interaction.message && result)
         await interaction.message
-          .edit(settledCard(interaction.message, actionResult(input.action, review)))
+          .edit(settledCard(interaction.message, result))
           .catch((cause) =>
             console.error("Badge status will retry on delivery:", messageOf(cause)),
           );

@@ -2,16 +2,69 @@ import { createHash } from "node:crypto";
 
 import type { BadgeClient } from "@purduehackers/badges/client";
 import { BADGES_CHANNEL_ID } from "@purduehackers/badges/contracts";
+import { reviewStep } from "@purduehackers/badges/presentation";
 import { workResponse } from "@purduehackers/badges/wire";
 import { DISCORD_GUILD_ID } from "@repo/shared/discord";
 import { messageOf, Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { AttachmentBuilder, DiscordAPIError } from "discord.js";
-import type { Client } from "discord.js";
+import type { Client, Message, ThreadChannel } from "discord.js";
 
 import type { Schedule } from "../framework/schedules.ts";
 import { cardEmbeds, controls } from "./card.ts";
+import type { BadgeCard } from "./card.ts";
 import { deliveredResult, settledCard } from "./status.ts";
+
+async function clearAcrylicCards(channel: ThreadChannel, before: string, botId: string) {
+  const cards: Message[] = [];
+  while (true) {
+    const page = await channel.messages.fetch({ limit: 100, before, cache: false });
+    cards.push(
+      ...page
+        .filter((message) => message.author.id === botId && message.embeds.length > 0)
+        .values(),
+    );
+    const oldest = page.last();
+    if (!oldest || page.size < 100) break;
+    before = oldest.id;
+  }
+  const firstAcrylic = cards.findLastIndex((message) =>
+    message.embeds.some((embed) =>
+      ["✅ Acrylic Selected", "Choose your acrylic", "Acrylic is out of stock"].includes(
+        embed.title ?? "",
+      ),
+    ),
+  );
+  // Delete newest first so the acrylic card remains a retry boundary until cleanup finishes.
+  for (const message of cards.slice(0, firstAcrylic + 1)) {
+    try {
+      await message.delete();
+    } catch (cause) {
+      if (!(cause instanceof DiscordAPIError) || cause.code !== 10_008) throw cause;
+    }
+  }
+}
+
+async function settlePreviousCard(
+  channel: ThreadChannel,
+  message: Message,
+  card: BadgeCard,
+  botId: string | undefined,
+) {
+  if (!botId) return;
+  if (reviewStep(card.review) === "material") await clearAcrylicCards(channel, message.id, botId);
+  const previousId = card.review.cardId;
+  if (!previousId || previousId === message.id) return;
+  try {
+    const previous = await channel.messages.fetch({ message: previousId, force: true });
+    const result = deliveredResult(previous, card.review);
+    if (previous.author.id === botId && result)
+      await previous.edit(settledCard(previous, result, card.identifiedFile));
+  } catch (cause) {
+    // Deleting an old card must not block delivery; other failures retry before ack.
+    if (!(cause instanceof DiscordAPIError) || cause.code !== 10_008) throw cause;
+  }
+}
 
 export function badgeWork(api: BadgeClient, secret: string): Schedule {
   return {
@@ -51,18 +104,7 @@ export function badgeWork(api: BadgeClient, secret: string): Schedule {
               enforceNonce: true,
               allowedMentions: { parse: [] },
             });
-            const previousId = card.review.cardId;
-            if (previousId && previousId !== message.id) {
-              try {
-                const previous = await channel.messages.fetch({ message: previousId, force: true });
-                const result = deliveredResult(previous, card.review);
-                if (previous.author.id === client.user?.id && result)
-                  await previous.edit(settledCard(previous, result, card.identifiedFile));
-              } catch (cause) {
-                // Deleting an old card must not block delivery; other failures retry before ack.
-                if (!(cause instanceof DiscordAPIError) || cause.code !== 10_008) throw cause;
-              }
-            }
+            await settlePreviousCard(channel, message, card, client.user?.id);
             await api.post("ack", {
               id: card.jobId,
               lease: card.lease,

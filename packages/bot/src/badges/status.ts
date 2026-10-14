@@ -17,7 +17,7 @@ interface StepResult {
 }
 type CardMessage = Pick<Message, "embeds" | "components"> & Partial<Pick<Message, "attachments">>;
 
-export function actionResult(action: Action, review: Review): StepResult {
+export function actionResult(action: Action, review: Review): StepResult | undefined {
   if (review.failure || review.contextChanged) return { status: "error", label: "Needs attention" };
   switch (action.kind) {
     case "confirm":
@@ -87,7 +87,7 @@ export function actionResult(action: Action, review: Review): StepResult {
     case "layout":
       return { status: "success", label: "Layout selected" };
     case "choose-material":
-      return { status: "warning", label: "Changing acrylic" };
+      return undefined;
     case "keep-design":
       return { status: "success", label: "Current design kept" };
     case "retry":
