@@ -7,7 +7,7 @@ import { workResponse } from "@purduehackers/badges/wire";
 import { DISCORD_GUILD_ID } from "@repo/shared/discord";
 import { messageOf, Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
-import { AttachmentBuilder, DiscordAPIError } from "discord.js";
+import { AttachmentBuilder, ComponentType, DiscordAPIError } from "discord.js";
 import type { Client, Message, ThreadChannel } from "discord.js";
 
 import type { Schedule } from "../framework/schedules.ts";
@@ -15,20 +15,37 @@ import { cardEmbeds, controls } from "./card.ts";
 import type { BadgeCard } from "./card.ts";
 import { deliveredResult, settledCard } from "./status.ts";
 
-async function clearAcrylicCards(channel: ThreadChannel, before: string, botId: string) {
-  const cards: Message[] = [];
+async function clearAcrylicCards(channel: ThreadChannel, card: BadgeCard, botId: string) {
+  const history: Message[] = [];
+  const prefix = `badge:${card.review.id}:${card.version}:`;
+  let before: string | undefined;
   while (true) {
-    const page = await channel.messages.fetch({ limit: 100, before, cache: false });
-    cards.push(
+    const page = await channel.messages.fetch({
+      limit: 100,
+      ...(before ? { before } : {}),
+      cache: false,
+    });
+    history.push(
       ...page
-        .filter((message) => message.author.id === botId && message.embeds.length > 0)
+        .filter(
+          (message) =>
+            message.author.id === botId &&
+            message.embeds.length > 0 &&
+            !message.components.some(
+              (row) =>
+                row.type === ComponentType.ActionRow &&
+                row.components.some(
+                  (component) => "customId" in component && component.customId?.startsWith(prefix),
+                ),
+            ),
+        )
         .values(),
     );
     const oldest = page.last();
     if (!oldest || page.size < 100) break;
     before = oldest.id;
   }
-  const firstAcrylic = cards.findLastIndex((message) =>
+  const firstAcrylic = history.findLastIndex((message) =>
     message.embeds.some((embed) =>
       ["✅ Acrylic Selected", "Choose your acrylic", "Acrylic is out of stock"].includes(
         embed.title ?? "",
@@ -36,7 +53,7 @@ async function clearAcrylicCards(channel: ThreadChannel, before: string, botId: 
     ),
   );
   // Delete newest first so the acrylic card remains a retry boundary until cleanup finishes.
-  for (const message of cards.slice(0, firstAcrylic + 1)) {
+  for (const message of history.slice(0, firstAcrylic + 1)) {
     try {
       await message.delete();
     } catch (cause) {
@@ -52,7 +69,6 @@ async function settlePreviousCard(
   botId: string | undefined,
 ) {
   if (!botId) return;
-  if (reviewStep(card.review) === "material") await clearAcrylicCards(channel, message.id, botId);
   const previousId = card.review.cardId;
   if (!previousId || previousId === message.id) return;
   try {
@@ -91,6 +107,8 @@ export function badgeWork(api: BadgeClient, secret: string): Schedule {
               (file) =>
                 new AttachmentBuilder(Buffer.from(file.data, "base64"), { name: file.name }),
             );
+            if (reviewStep(card.review) === "material" && client.user)
+              await clearAcrylicCards(channel, card, client.user.id);
             // Each step arrives at the bottom of the thread. Retries reuse its nonce.
             const nonce = createHash("sha256")
               .update(`${card.review.id}:${card.version}`)
