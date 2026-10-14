@@ -10,7 +10,7 @@ import type { BadgeStatus } from "./messages.ts";
 
 interface StepResult {
   status: BadgeStatus;
-  label: string;
+  label?: string;
   description?: string;
   selectedFiles?: boolean;
   keepPreview?: boolean;
@@ -25,13 +25,20 @@ export function actionResult(action: Action, review: Review): StepResult {
         return { status: "warning", label: "Design checks pending" };
       return {
         status: "success",
-        label: "Designs confirmed",
         description: [
           "✅ **Automatic QA passed**",
-          "-# Allowed colors · Vector artwork · Outlined text · Filled engraving · Closed cutting outlines · No unsupported effects or linked artwork",
+          "-# - Allowed colors",
+          "-# - Vector artwork",
+          "-# - Outlined text",
+          "-# - Filled engraving",
+          "-# - Closed cutting outlines",
+          "-# - No unsupported effects or linked artwork",
           "",
           "✅ **Manual QA passed**",
-          "-# Correct version and date · Readable details · Strong connections · Clear stamp impression",
+          "-# - Correct version and date",
+          "-# - Readable details",
+          "-# - Strong connections",
+          "-# - Clear stamp impression",
         ].join("\n"),
       };
     case "material":
@@ -171,7 +178,9 @@ export function settledCard(
   const file = result.selectedFiles ? identifiedFile : undefined;
   return {
     embeds: message.embeds.map((embed) => ({
-      title: `${result.status === "success" ? "✅ " : ""}${result.label}`,
+      ...(result.label
+        ? { title: `${result.status === "success" ? "✅ " : ""}${result.label}` }
+        : {}),
       color: badgeColors[result.status],
       ...(result.description === undefined ? {} : { description: result.description }),
       ...(result.keepPreview ? { image: attachedImage(embed.toJSON(), message).image } : {}),
