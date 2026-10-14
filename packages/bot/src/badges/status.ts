@@ -13,9 +13,9 @@ interface StepResult {
   label: string;
   description?: string;
   selectedFiles?: boolean;
+  keepPreview?: boolean;
 }
 type CardMessage = Pick<Message, "embeds" | "components"> & Partial<Pick<Message, "attachments">>;
-const continued: StepResult = { status: "warning", label: "Continued below" };
 
 export function actionResult(action: Action, review: Review): StepResult {
   if (review.failure || review.contextChanged) return { status: "error", label: "Needs attention" };
@@ -24,7 +24,7 @@ export function actionResult(action: Action, review: Review): StepResult {
       return {
         status: "success",
         label: "Designs confirmed",
-        description: "Ready for production. Your design checks are complete.",
+        keepPreview: true,
       };
     case "material":
       return {
@@ -48,6 +48,7 @@ export function actionResult(action: Action, review: Review): StepResult {
         status: "success",
         label: review.badge ? "Badge Selected" : "Stamp Selected",
         selectedFiles: true,
+        keepPreview: true,
         description: (["badge", "stamp"] as const)
           .flatMap((role) =>
             review[role]
@@ -59,7 +60,9 @@ export function actionResult(action: Action, review: Review): StepResult {
           .join("\n"),
       };
     case "upload":
-      return { status: "warning", label: `New ${action.role} uploaded` };
+      return action.file
+        ? { status: "success", label: `New ${action.role} uploaded` }
+        : { status: "warning", label: `Replacing ${action.role}` };
     case "publish":
       return review.publication?.shortlink
         ? { status: "success", label: "Files published" }
@@ -68,12 +71,49 @@ export function actionResult(action: Action, review: Review): StepResult {
       return { status: "success", label: `Target: ${action.count ?? review.targetCount} badges` };
     case "layout":
       return { status: "success", label: "Layout selected" };
-    default:
-      return continued;
+    case "choose-material":
+      return { status: "warning", label: "Changing acrylic" };
+    case "keep-design":
+      return { status: "success", label: "Current design kept" };
+    case "retry":
+      return { status: "warning", label: "Retrying" };
+    case "refresh":
+      return { status: "warning", label: "Checking again" };
   }
 }
 
-export function deliveredResult(message: CardMessage, review: Review): StepResult {
+function revisionResult(commands: string[], review: Review): StepResult | undefined {
+  if (commands.includes("keep-design") && !review.pendingRole)
+    return actionResult({ kind: "keep-design" }, review);
+  if (commands.includes("retry") && !review.failure)
+    return { status: "success", label: "Retry complete" };
+  if (commands.includes("refresh") && !review.contextChanged)
+    return { status: "success", label: "Details updated" };
+  if (commands.includes("confirm") && !review.material)
+    return actionResult({ kind: "choose-material" }, review);
+  const upload = commands.find((name) => name.startsWith("upload."));
+  if (!upload) return undefined;
+  const role = upload.endsWith("stamp") ? "stamp" : "badge";
+  return review.pendingRole
+    ? actionResult({ kind: "upload", role: review.pendingRole }, review)
+    : { status: "success", label: `${role === "badge" ? "Badge" : "Stamp"} updated` };
+}
+
+function progressResult(title: string | undefined, review: Review): StepResult | undefined {
+  switch (title) {
+    case "Checking again":
+    case "Retrying":
+      return review.failure || review.contextChanged
+        ? { status: "error", label: "Needs attention" }
+        : { status: "success", label: "Check complete" };
+    case "Saving files":
+      return actionResult({ kind: "publish" }, review);
+    default:
+      return undefined;
+  }
+}
+
+export function deliveredResult(message: CardMessage, review: Review): StepResult | undefined {
   const commands = message.components
     .flatMap((row) => (row.type === ComponentType.ActionRow ? row.components : []))
     .flatMap((component) =>
@@ -91,15 +131,15 @@ export function deliveredResult(message: CardMessage, review: Review): StepResul
     return actionResult({ kind: "roles", badge: 0 }, review);
   if (commands.includes("publish") && review.approval)
     return actionResult({ kind: "publish" }, review);
+  if (commands.some((name) => name.startsWith("quantity.")) && review.targetCount)
+    return actionResult({ kind: "quantity", count: review.targetCount }, review);
   const last = message.embeds.at(-1);
   if (
     review.rolesConfirmed &&
     ["✅ Badge Selected", "✅ Stamp Selected"].includes(last?.title ?? "")
   )
     return actionResult({ kind: "roles", badge: 0 }, review);
-  if (!commands.length && last?.title?.startsWith("✅ "))
-    return { status: "success", label: last.title.slice(2).trim() };
-  return continued;
+  return revisionResult(commands, review) ?? progressResult(last?.title ?? undefined, review);
 }
 
 function attachedImage(embed: APIEmbed, message: CardMessage): APIEmbed {
@@ -123,10 +163,10 @@ export function settledCard(
   const file = result.selectedFiles ? identifiedFile : undefined;
   return {
     embeds: message.embeds.map((embed) => ({
-      ...attachedImage(embed.toJSON(), message),
       title: `${result.status === "success" ? "✅ " : ""}${result.label}`,
       color: badgeColors[result.status],
       ...(result.description === undefined ? {} : { description: result.description }),
+      ...(result.keepPreview ? { image: attachedImage(embed.toJSON(), message).image } : {}),
       ...(file ? { image: { url: `attachment://${file.name}` } } : {}),
     })),
     components: [],
@@ -135,7 +175,9 @@ export function settledCard(
           attachments: [],
           files: [new AttachmentBuilder(Buffer.from(file.data, "base64"), { name: file.name })],
         }
-      : {}),
+      : result.keepPreview
+        ? {}
+        : { attachments: [] }),
     allowedMentions: { parse: [] },
   };
 }

@@ -173,6 +173,10 @@ export function cardEmbeds(card: BadgeCard): APIEmbed[] {
     color,
   };
   if (card.files[0]) embed.image = { url: `attachment://${card.files[0].name}` };
+  if (step === "material" && !card.materials.length) {
+    embed.title = "Acrylic is out of stock";
+    embed.description = "Ask an organizer to add acrylic sheets, then select Check again.";
+  }
   if (step === "fix") {
     const findings = verificationChecks(review, fixRole(review))
       .map((check) => `${check.status === "pass" ? "✅" : "❌"} ${check.label}`)
@@ -180,30 +184,23 @@ export function cardEmbeds(card: BadgeCard): APIEmbed[] {
     embed.description = `${findings}\n\n${embed.description}`;
   }
   if (step === "qa" && review.event && review.manufacturing) {
+    embed.description =
+      "Check the version, date, readability, and thin connections. Make sure the stamp impression looks right.";
     embed.fields = [
-      { name: "Hack Night", value: review.event.name, inline: true },
-      { name: "Date", value: displayDate(review.event.date), inline: true },
+      {
+        name: "Expected text",
+        value: `${review.event.name}\n${displayDate(review.event.date)}`,
+        inline: true,
+      },
       {
         name: "Badge size",
         value: dimensions(review.manufacturing.badgeWidthIn, review.manufacturing.badgeHeightIn),
         inline: true,
       },
-      {
-        name: "Acrylic",
-        value: review.material ? materialDescription(review.material) : "",
-        inline: true,
-      },
-      {
-        name: "Stamp",
-        value: "1.5 inches on its shortest side · finished impression",
-        inline: true,
-      },
     ];
   }
-  if (step === "quantity")
-    embed.footer = {
-      text: "80 and 100 are planning defaults. Enter your own estimate, or ask how many fit at a different size.",
-    };
+  if (step === "quantity" && !review.quantityShortfall)
+    embed.description = "How many badges do you want to make? Choose a target or enter your own.";
   if (step === "layout") {
     const layout = review.layouts.find((item) => item.id === review.selectedLayout);
     if (layout)

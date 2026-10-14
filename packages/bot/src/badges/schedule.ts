@@ -55,14 +55,9 @@ export function badgeWork(api: BadgeClient, secret: string): Schedule {
             if (previousId && previousId !== message.id) {
               try {
                 const previous = await channel.messages.fetch({ message: previousId, force: true });
-                if (previous.author.id === client.user?.id)
-                  await previous.edit(
-                    settledCard(
-                      previous,
-                      deliveredResult(previous, card.review),
-                      card.identifiedFile,
-                    ),
-                  );
+                const result = deliveredResult(previous, card.review);
+                if (previous.author.id === client.user?.id && result)
+                  await previous.edit(settledCard(previous, result, card.identifiedFile));
               } catch (cause) {
                 // Deleting an old card must not block delivery; other failures retry before ack.
                 if (!(cause instanceof DiscordAPIError) || cause.code !== 10_008) throw cause;
