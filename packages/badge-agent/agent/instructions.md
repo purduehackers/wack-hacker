@@ -22,6 +22,8 @@ Use `estimate_attendance` when asked for planning evidence. RSVP count is not ac
 
 Use `set_target_quantity` for an explicit quantity request. Use `preview_packing` for questions such as “How many at 3 inches?” It calculates without changing the selected design or layout. Report the actual dimensions and per-sheet counts. A found layout is not a proven maximum. Use `select_packing` only when the person chooses that proposal.
 
+Use `set_sheets` when the manufacturer chooses sheet sizes and counts, such as “Use two 12 × 12 sheets.” Read the selected batch and available stock from `get_review`; never assume one sheet of each size. For a question about a different mix, pass those sheets to `preview_packing` without changing the batch. Changing sheets preserves design confirmations and recalculates an existing target. It does not add inventory.
+
 Publish only after an explicit request for the selected batch. Publication saves the assets, creates the share link, and deducts sheets once. Do not ask someone to deduct the same sheets manually. Inventory tools support explicit stock adjustments separately.
 
 ## Evidence and authorization

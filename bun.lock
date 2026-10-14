@@ -55,7 +55,7 @@
       "name": "@repo/badge-agent",
       "version": "0.0.0",
       "dependencies": {
-        "@purduehackers/badges": "github:purduehackers/badges#9731222764b487f57886f5e5f01d38d3ef7c7e54",
+        "@purduehackers/badges": "github:purduehackers/badges#c362566a9f4e9269fa1a6e7f8d6359787911b09f",
         "@repo/agents": "workspace:*",
         "@repo/shared": "workspace:*",
         "eve": "0.31.3",
@@ -71,7 +71,7 @@
         "@ai-sdk/groq": "^4.0.24",
         "@discordjs/rest": "^2.6.2",
         "@opentelemetry/api": "1.9.0",
-        "@purduehackers/badges": "github:purduehackers/badges#9731222764b487f57886f5e5f01d38d3ef7c7e54",
+        "@purduehackers/badges": "github:purduehackers/badges#c362566a9f4e9269fa1a6e7f8d6359787911b09f",
         "@purduehackers/discord-markdown-utils": "^0.0.4",
         "@purduehackers/time": "^0.7.0",
         "@repo/shared": "workspace:*",
@@ -534,7 +534,7 @@
 
     "@puppeteer/browsers": ["@puppeteer/browsers@3.2.2", "", { "dependencies": { "modern-tar": "^0.8.4", "yargs": "^18.0.0" }, "peerDependencies": { "proxy-agent": ">=8.0.1", "yauzl": "^2.10.0 || ^3.4.0" }, "optionalPeers": ["proxy-agent", "yauzl"], "bin": { "browsers": "lib/main-cli.js" } }, "sha512-q2BU4YfO9h/Wt7IcWPcggpOOqLk2Tbs1hDwolvKZrweRjy751OJBKMN9zO5bfD0pzU7X/tvKw/exQds4pM/LOg=="],
 
-    "@purduehackers/badges": ["@purduehackers/badges@github:purduehackers/badges#9731222", { "dependencies": { "@libsql/client": "0.17.4", "@octokit/auth-app": "8.2.0", "@resvg/resvg-js": "2.6.2", "@sparticuz/chromium": "153.0.0", "@xmldom/xmldom": "0.9.12", "clipper-lib": "6.4.2", "drizzle-orm": "0.45.2", "next": "16.1.6", "octokit": "5.0.5", "puppeteer-core": "25.11.0", "react": "19.2.3", "react-dom": "19.2.3", "svgpath": "2.6.0", "three": "^0.183.2", "zod": "4.4.3" } }, "purduehackers-badges-9731222", "sha512-jkBWsBNrKC/wAH+SwmZ66ZMFmu+5rifD9Nb8LstKkUC/miNxeSvelkO/dGvvKGIhNIA09nNIeVGVd5eTDKdNXA=="],
+    "@purduehackers/badges": ["@purduehackers/badges@github:purduehackers/badges#c362566", { "dependencies": { "@libsql/client": "0.17.4", "@octokit/auth-app": "8.2.0", "@resvg/resvg-js": "2.6.2", "@sparticuz/chromium": "153.0.0", "@xmldom/xmldom": "0.9.12", "clipper-lib": "6.4.2", "drizzle-orm": "0.45.2", "next": "16.1.6", "octokit": "5.0.5", "puppeteer-core": "25.11.0", "react": "19.2.3", "react-dom": "19.2.3", "svgpath": "2.6.0", "three": "^0.183.2", "zod": "4.4.3" } }, "purduehackers-badges-c362566", "sha512-DczlTLdYCKm83ihsHXfrFNhmPv7ZhqWHGCOay6E1hvn/NRPWw59BpNWxjlWk8Ulcf0mJHzl8BDyWGlMApaCbFg=="],
 
     "@purduehackers/discord-markdown-utils": ["@purduehackers/discord-markdown-utils@0.0.4", "", { "dependencies": { "mdast-util-gfm-autolink-literal": "^2.0.1", "micromark-extension-gfm-autolink-literal": "^2.1.0", "unist-util-visit": "^5.1.0" }, "peerDependencies": { "remark-parse": "^11.0.0", "typescript": "^5", "unified": "^11.0.0" } }, "sha512-f/yWwsx+QYeHr131GaossW/K6o0d/g2d/gJrujEgxdVpprvQmompwaNyMM4dEjzIaa/MmvAXD9iLDy9fdgy7Og=="],
 

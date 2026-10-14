@@ -1,3 +1,4 @@
+import { remainingCriteria, reviewable } from "@purduehackers/badges/contracts";
 import { materialDescription } from "@purduehackers/badges/materials";
 import {
   dimensions,
@@ -6,6 +7,7 @@ import {
   reviewPrompt,
   reviewStep,
   verificationChecks,
+  sheetLabel,
 } from "@purduehackers/badges/presentation";
 import type { ReviewStep } from "@purduehackers/badges/presentation";
 import { cardSchema, componentId } from "@purduehackers/badges/wire";
@@ -132,6 +134,7 @@ export function controls(
           button("80 badges", "quantity.80", ButtonStyle.Primary),
           button("100 badges", "quantity.100", ButtonStyle.Primary),
           button("Enter quantity", "quantity.custom"),
+          button("Change sheets", "sheets"),
         ),
       ];
     case "layout":
@@ -139,12 +142,22 @@ export function controls(
         row(
           button("Publish cutting files", "publish", ButtonStyle.Success),
           button("Change quantity", "quantity.custom"),
+          button("Change sheets", "sheets"),
         ),
       ];
-    case "error":
-      return [
-        row(button("Try again", review.contextChanged ? "refresh" : "retry", ButtonStyle.Primary)),
-      ];
+    case "error": {
+      const retry = row(
+        button("Try again", review.contextChanged ? "refresh" : "retry", ButtonStyle.Primary),
+      );
+      if (
+        !review.contextChanged &&
+        !review.approval &&
+        reviewable(review) &&
+        !remainingCriteria(review).length
+      )
+        retry.addComponents(button("Change sheets", "sheets"));
+      return [retry];
+    }
     case "done":
       return review.publication?.shortlink
         ? [
@@ -202,6 +215,15 @@ export function cardEmbeds(card: BadgeCard): APIEmbed[] {
   }
   if (step === "quantity" && !review.quantityShortfall)
     embed.description = "How many badges do you want to make? Choose a target or enter your own.";
+  if (step === "quantity" && review.sheetBatch)
+    embed.fields = [
+      {
+        name: "Sheets",
+        value: review.sheetBatch
+          .map((sheet) => `${sheet.quantity} × ${sheetLabel(sheet)} in`)
+          .join("\n"),
+      },
+    ];
   if (step === "layout") {
     const layout = review.layouts.find((item) => item.id === review.selectedLayout);
     if (layout)
@@ -210,12 +232,12 @@ export function cardEmbeds(card: BadgeCard): APIEmbed[] {
         { name: "Count", value: String(layout.count), inline: true },
         {
           name: "Sheets",
-          value: [0, 1]
+          value: layout.sheetSizes
             .map(
-              (sheet) =>
-                `${layout.placements.filter((p) => p.sheet === sheet).length} on 12 × ${sheet ? 18 : 12} in`,
+              (size, sheet) =>
+                `Sheet ${sheet + 1}: ${layout.placements.filter((p) => p.sheet === sheet).length} on ${sheetLabel(size)} in`,
             )
-            .join(" + "),
+            .join("\n"),
         },
         { name: "Acrylic", value: review.material ? materialDescription(review.material) : "" },
       ];

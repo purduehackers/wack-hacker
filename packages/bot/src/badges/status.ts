@@ -1,6 +1,6 @@
 import { remainingCriteria, staticPassed, type Review } from "@purduehackers/badges/contracts";
 import { materialDescription } from "@purduehackers/badges/materials";
-import { displayDate } from "@purduehackers/badges/presentation";
+import { displayDate, sheetLabel } from "@purduehackers/badges/presentation";
 import type { Action } from "@purduehackers/badges/wire";
 import { AttachmentBuilder, ComponentType, escapeMarkdown } from "discord.js";
 import type { APIEmbed, Message } from "discord.js";
@@ -84,6 +84,18 @@ export function actionResult(action: Action, review: Review): StepResult | undef
         : { status: "warning", label: "Saving files" };
     case "quantity":
       return { status: "success", label: `Target: ${action.count ?? review.targetCount} badges` };
+    case "sheets":
+      return {
+        status: "success",
+        label: "Sheets updated",
+        ...(review.sheetBatch
+          ? {
+              description: review.sheetBatch
+                .map((sheet) => `${sheet.quantity} × ${sheetLabel(sheet)} in`)
+                .join("\n"),
+            }
+          : {}),
+      };
     case "layout":
       return { status: "success", label: "Layout selected" };
     case "choose-material":
@@ -146,6 +158,7 @@ export function deliveredResult(message: CardMessage, review: Review): StepResul
     return actionResult({ kind: "roles", badge: 0 }, review);
   if (commands.includes("publish") && review.approval)
     return actionResult({ kind: "publish" }, review);
+  if (commands.includes("sheets")) return { status: "success", label: "Production updated" };
   if (commands.some((name) => name.startsWith("quantity.")) && review.targetCount)
     return actionResult({ kind: "quantity", count: review.targetCount }, review);
   const last = message.embeds.at(-1);

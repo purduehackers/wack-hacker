@@ -29,6 +29,7 @@ import { z } from "zod";
 
 import { badgeEmbed } from "./messages.ts";
 import { runBadgeWork, withBadgeTyping } from "./schedule.ts";
+import { parseSheets, sheetsModal } from "./sheets.ts";
 import { actionResult, settledCard } from "./status.ts";
 
 type BadgeInteraction = ButtonInteraction | StringSelectMenuInteraction | ModalSubmitInteraction;
@@ -59,6 +60,13 @@ export function uploadModal(control: string, role: "badge" | "stamp") {
 }
 function commandFor(interaction: BadgeInteraction, name: string): Action {
   const [kind, role] = name.split(".");
+  if (kind === "sheets")
+    return {
+      kind,
+      ...(interaction.isModalSubmit()
+        ? { sheets: parseSheets(interaction.fields.getTextInputValue("sheets")) }
+        : {}),
+    };
   if (kind === "quantity") {
     const value = interaction.isModalSubmit()
       ? interaction.fields.getTextInputValue("count").trim()
@@ -133,8 +141,10 @@ async function beforeModal(interaction: BadgeInteraction, api: BadgeClient, secr
     return await Promise.race([
       (async () => {
         const input = await requestFor(interaction, secret);
-        await api.post("control", input, 1800);
-        return input;
+        const { review } = z
+          .object({ review: reviewSchema })
+          .parse(await api.post("control", input, 1800));
+        return { ...input, review };
       })(),
       new Promise<never>((_resolve, reject) => {
         timeout = setTimeout(
@@ -184,11 +194,14 @@ export function createBadgeInteractionHandler(api: BadgeClient, secret: string) 
     try {
       const name = controlSchema.parse(interaction.customId.split(":"))[3];
       const opensModal =
-        interaction.isButton() && (name.startsWith("upload.") || name === "quantity.custom");
+        interaction.isButton() &&
+        (name.startsWith("upload.") || name === "quantity.custom" || name === "sheets");
       if (opensModal && interaction.isButton()) {
         const input = await beforeModal(interaction, api, secret);
         if (input.action.kind === "upload")
           await interaction.showModal(uploadModal(input.control, input.action.role));
+        if (input.action.kind === "sheets")
+          await interaction.showModal(sheetsModal(input.control, input.review));
         if (input.action.kind === "quantity")
           await interaction.showModal(
             new ModalBuilder()
