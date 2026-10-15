@@ -28,7 +28,7 @@ import type {
 } from "discord.js";
 import { z } from "zod";
 
-import { materialsModal, parseMaterials } from "./materials.ts";
+import { materialOptions, materialsModal, materialsPicker, parseMaterials } from "./materials.ts";
 import { badgeEmbed } from "./messages.ts";
 import { runBadgeWork, withBadgeTyping } from "./schedule.ts";
 import { parseSheets, SHEETS_PER_MODAL, sheetsModal } from "./sheets.ts";
@@ -60,16 +60,9 @@ export function uploadModal(control: string, role: "badge" | "stamp") {
         ),
     );
 }
-function materialAction(interaction: BadgeInteraction): Action {
-  return {
-    kind: "material",
-    ...(interaction.isModalSubmit() ? { items: parseMaterials(interaction.fields) } : {}),
-  };
-}
 function commandFor(interaction: BadgeInteraction, name: string): Action {
   const [kind, role] = name.split(".");
-  if (kind === "sheets") return { kind };
-  if (kind === "material") return materialAction(interaction);
+  if (kind === "sheets" || kind === "material") return { kind };
   if (kind === "quantity") {
     const value = interaction.isModalSubmit()
       ? interaction.fields.getTextInputValue("count").trim()
@@ -177,13 +170,20 @@ async function privateFailure(interaction: BadgeInteraction, cause: unknown) {
       );
   }
   const title = stale ? "There’s a newer step below" : "Continue with your designs";
+  const embeds = [badgeEmbed(failureGuidance(detail), title, stale ? "warning" : "error")];
   const options: InteractionReplyOptions = {
-    embeds: [badgeEmbed(failureGuidance(detail), title, stale ? "warning" : "error")],
+    embeds,
     components,
     flags: MessageFlags.Ephemeral,
     allowedMentions: { parse: [] },
   };
-  if (interaction.deferred || interaction.replied) await interaction.followUp(options);
+  if (interaction.deferred && !interaction.replied && interaction.ephemeral)
+    await interaction.editReply({
+      embeds,
+      components,
+      allowedMentions: { parse: [] },
+    });
+  else if (interaction.deferred || interaction.replied) await interaction.followUp(options);
   else await interaction.reply(options);
 }
 function sheetPages(
@@ -227,7 +227,9 @@ async function openBadgeModal(
   if (input.action.kind === "upload")
     await interaction.showModal(uploadModal(input.control, input.action.role));
   if (input.action.kind === "material")
-    await interaction.showModal(materialsModal(input.control, input.availableSheets));
+    await interaction.showModal(
+      materialsModal(componentId(input.id, input.version, "material.search", secret)),
+    );
   if (input.action.kind === "sheets") {
     if (name === "sheets" && input.availableSheets.length > SHEETS_PER_MODAL) {
       await interaction.reply(
@@ -265,6 +267,84 @@ async function openBadgeModal(
     );
 }
 
+async function showMaterialResults(
+  interaction: ModalSubmitInteraction | StringSelectMenuInteraction,
+  api: BadgeClient,
+  secret: string,
+) {
+  if (interaction.isModalSubmit() && !interaction.isFromMessage())
+    throw new Error("Use the latest review card.");
+  const listed = materialOptions(interaction.message ?? undefined);
+  if (interaction.isStringSelectMenu() || interaction.message?.flags.has(MessageFlags.Ephemeral))
+    await interaction.deferUpdate();
+  else await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const input = await requestFor(interaction, secret);
+  const { availableSheets } = z
+    .object({ availableSheets: z.array(stockItemSchema) })
+    .parse(await api.post("control", input));
+  const selected = interaction.isStringSelectMenu()
+    ? interaction.values
+    : listed.filter((option) => option.default).map((option) => option.value);
+  if (selected.some((value) => !listed.some((option) => option.value === value)))
+    throw new Error("Choose sheets from the dropdown.");
+  await interaction.editReply(
+    materialsPicker({
+      stock: availableSheets,
+      selected,
+      search: interaction.isModalSubmit()
+        ? interaction.fields.getTextInputValue("search").trim()
+        : listed.map((choice) => choice.value),
+      control: (action) => componentId(input.id, input.version, action, secret),
+    }),
+  );
+}
+
+async function applyBadgeAction(
+  interaction: BadgeInteraction,
+  api: BadgeClient,
+  secret: string,
+  name: string,
+) {
+  // Acknowledge first. Only accepted actions settle the card; opening a modal does not.
+  if (interaction.isModalSubmit() && !interaction.isFromMessage())
+    throw new Error("Use the latest review card.");
+  await interaction.deferUpdate();
+  const input = await requestFor(interaction, secret);
+  if (name === "material.use" && interaction.isButton())
+    input.action = {
+      kind: "material",
+      items: parseMaterials(
+        materialOptions(interaction.message)
+          .filter((option) => option.default)
+          .map((option) => option.value),
+      ),
+    };
+  if (input.action.kind === "sheets" && interaction.isModalSubmit()) {
+    const current = z
+      .object({ review: reviewSchema, availableSheets: z.array(stockItemSchema) })
+      .parse(await api.post("control", input));
+    input.action = {
+      kind: "sheets",
+      sheets: parseSheets(interaction.fields, current.review, current.availableSheets),
+    };
+  }
+  const response = await withBadgeTyping(
+    interaction.channel?.isThread() ? interaction.channel : undefined,
+    () => api.post("action", input, 60_000),
+  );
+  const { review } = z.object({ review: reviewSchema }).parse(response);
+  const result = actionResult(input.action, review);
+  if (name === "material.use")
+    await interaction
+      .deleteReply()
+      .catch((cause) => console.error("Could not dismiss acrylic picker:", messageOf(cause)));
+  else if (interaction.message && result)
+    await interaction.message
+      .edit(settledCard(interaction.message, result))
+      .catch((cause) => console.error("Badge status will retry on delivery:", messageOf(cause)));
+  await runBadgeWork(api, secret, interaction.client, interaction.channelId ?? undefined);
+}
+
 export function createBadgeInteractionHandler(api: BadgeClient, secret: string) {
   return async (interaction: Interaction): Promise<boolean> => {
     if (
@@ -283,39 +363,21 @@ export function createBadgeInteractionHandler(api: BadgeClient, secret: string) 
         (name.startsWith("upload.") ||
           name === "quantity.custom" ||
           name === "material" ||
+          name === "material.search" ||
           name === "sheets" ||
           name.startsWith("sheets."));
       if (opensModal && interaction.isButton()) {
         await openBadgeModal(interaction, api, secret, name);
         return true;
       }
-      // Acknowledge first. Only accepted actions settle the card; opening a modal does not.
-      if (interaction.isModalSubmit() && !interaction.isFromMessage())
-        throw new Error("Use the latest review card.");
-      await interaction.deferUpdate();
-      const input = await requestFor(interaction, secret);
-      if (input.action.kind === "sheets" && interaction.isModalSubmit()) {
-        const current = z
-          .object({ review: reviewSchema, availableSheets: z.array(stockItemSchema) })
-          .parse(await api.post("control", input));
-        input.action = {
-          kind: "sheets",
-          sheets: parseSheets(interaction.fields, current.review, current.availableSheets),
-        };
+      if (
+        (name === "material.search" && interaction.isModalSubmit()) ||
+        (name === "material.select" && interaction.isStringSelectMenu())
+      ) {
+        await showMaterialResults(interaction, api, secret);
+        return true;
       }
-      const response = await withBadgeTyping(
-        interaction.channel?.isThread() ? interaction.channel : undefined,
-        () => api.post("action", input, 60_000),
-      );
-      const { review } = z.object({ review: reviewSchema }).parse(response);
-      const result = actionResult(input.action, review);
-      if (interaction.message && result)
-        await interaction.message
-          .edit(settledCard(interaction.message, result))
-          .catch((cause) =>
-            console.error("Badge status will retry on delivery:", messageOf(cause)),
-          );
-      await runBadgeWork(api, secret, interaction.client, interaction.channelId ?? undefined);
+      await applyBadgeAction(interaction, api, secret, name);
     } catch (cause) {
       await privateFailure(interaction, cause);
     }
