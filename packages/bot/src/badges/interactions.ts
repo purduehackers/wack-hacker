@@ -50,7 +50,7 @@ export function uploadModal(control: string, role: "badge" | "stamp") {
     .addLabelComponents(
       new LabelBuilder()
         .setLabel(`${role === "badge" ? "Badge" : "Stamp"} SVG`)
-        .setDescription("Upload one SVG, up to 1 MB.")
+        .setDescription("Upload one SVG.")
         .setFileUploadComponent(
           new FileUploadBuilder()
             .setCustomId("design")

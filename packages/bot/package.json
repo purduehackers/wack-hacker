@@ -12,7 +12,7 @@
     "@ai-sdk/groq": "^4.0.24",
     "@discordjs/rest": "^2.6.2",
     "@opentelemetry/api": "1.9.0",
-    "@purduehackers/badges": "github:purduehackers/badges#3688b77e71ef4211f7a5586bb1941749973494ca",
+    "@purduehackers/badges": "github:purduehackers/badges#3f9366a3c0df78d41076a18a64a1b963044780f2",
     "@purduehackers/discord-markdown-utils": "^0.0.4",
     "@purduehackers/time": "^0.7.0",
     "@repo/shared": "workspace:*",
