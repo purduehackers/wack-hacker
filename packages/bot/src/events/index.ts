@@ -26,6 +26,7 @@ import { agentChat, conversationDone } from "./agent-chat.ts";
 import { antiSpam } from "./anti-spam.ts";
 import { autoThread } from "./auto-thread.ts";
 import { chatFeedback } from "./chat-indexer.ts";
+import { embedPreview } from "./embed-preview.ts";
 import { emitDashboardMessage } from "./emit-dashboard-message.ts";
 import { deleteShipMessage, emitShipMessage } from "./emit-ship-message.ts";
 import { githubCodePreview } from "./github-code-preview.ts";
@@ -59,6 +60,7 @@ export function buildEventHandlers(deps: EventDeps): readonly AnyEventHandler[] 
     autoThread,
     rsvpReminder({ cms, reporter: deps.reporter }),
     githubCodePreview(createGitHubCodeClient(), createDeduplicator(deps.redis)),
+    embedPreview,
     emitShipMessage(ships, deps.redis),
     deleteShipMessage(ships),
     imageDropUploads({ cms, drops, redis: deps.redis, reporter: deps.reporter }),
