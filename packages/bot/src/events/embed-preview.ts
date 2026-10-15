@@ -34,6 +34,15 @@ function discordFailure(operation: string, cause: unknown) {
     : new Transient({ operation, detail });
 }
 
+function updateContent(reply: PreviewReply, content: string) {
+  return Result.tryPromise({
+    try: async () => {
+      await reply.edit({ content, allowedMentions: { parse: [], repliedUser: false } });
+    },
+    catch: (cause) => discordFailure("edit Embedfix preview", cause),
+  });
+}
+
 export async function replyWithEmbedPreview(
   message: {
     readonly id: string;
@@ -65,15 +74,21 @@ export async function replyWithEmbedPreview(
   if (Result.isError(unfurled) || !unfurled.value) {
     // Unfurling is asynchronous and Embedfix can be unavailable. A blank-label
     // reply without an embed is invisible, so reveal the URLs on failure.
-    return Result.tryPromise({
-      try: async () => {
-        await sent.value.edit({
-          content: preview.links.join("\n"),
-          allowedMentions: { parse: [], repliedUser: false },
-        });
-      },
-      catch: (cause) => discordFailure("show Embedfix preview fallback", cause),
+    const visible = preview.links.join("\n");
+    const fallback = await updateContent(sent.value, visible);
+    if (Result.isError(fallback) || Result.isError(unfurled)) return fallback;
+
+    // A failed first crawl can leave the message empty even when the same URL
+    // later unfurls. Changing the existing reply back to masked links triggers
+    // another attempt without another message or a cache-busting URL.
+    await sleep(5_000);
+    const refreshed = await updateContent(sent.value, hiddenEmbedLinks(preview.links));
+    if (Result.isError(refreshed)) return updateContent(sent.value, visible);
+    const retried = await Result.tryPromise({
+      try: () => hasPreviews(sent.value, preview.links, sleep),
+      catch: (cause) => discordFailure("recheck Embedfix previews", cause),
     });
+    if (Result.isError(retried) || !retried.value) return updateContent(sent.value, visible);
   }
 
   // Failed sends and unfurls leave the original intact. Setting the flag also
