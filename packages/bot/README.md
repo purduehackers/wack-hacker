@@ -103,7 +103,10 @@ leaving the Embedfix preview visible without repeating the URL. NBSP and
 zero-width-space labels were tested in Discord and
 rendered as literal Markdown; the Braille blank masked and unfurled correctly.
 
-The bot suppresses the original embed once every replacement has unfurled. If
+The bot watches Discord message updates and suppresses the original embed as
+soon as every replacement has unfurled, without polling on successful updates.
+One shared listener covers all pending replies and is removed when idle. A
+single REST check at the seven-second deadline covers missed updates. If
 Discord has not produced the embeds after seven seconds, the reply shows the
 Embedfix URLs and the original previews stay visible. After another five seconds,
 the bot restores the masked links on that same reply to trigger one more unfurl
@@ -113,8 +116,10 @@ Discord suppression applies to the entire message. Messages with unrelated URLs
 or replacements beyond Discord's limits (ten embeds or 2,000 content characters)
 keep their original embeds. Code, spoilers, `<URL>` links, already-suppressed
 messages, bot posts, DMs, and agent mentions are
-left alone. The handler checks channel permissions and uses the event router's
-Redis deduplication plus a stable Discord nonce to prevent duplicate replies.
+left alone. The handler checks links and channel permissions before claiming a
+Redis deduplication key, so unrelated messages require no Redis work for this
+feature. The existing per-message key and stable Discord nonce prevent duplicate
+replies across reconnects and overlapping deployments.
 
 ## Social announcements
 

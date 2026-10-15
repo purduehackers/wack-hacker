@@ -4,26 +4,15 @@ import { MessageFlags, PermissionFlagsBits } from "discord.js";
 import type { Embed, MessageEditOptions, MessageReplyOptions } from "discord.js";
 
 import { defineEvent } from "../framework/events.ts";
+import type { Deduplicator } from "../framework/events.ts";
 import { hiddenEmbedLinks, embedPreviewFor } from "../integrations/embed-links.ts";
+import { createEmbedWaiter } from "../integrations/embed-unfurl.ts";
 
 interface PreviewReply {
+  readonly id: string;
   readonly embeds: readonly Pick<Embed, "url">[];
   readonly fetch: () => Promise<{ readonly embeds: PreviewReply["embeds"] }>;
   readonly edit: (options: MessageEditOptions) => Promise<unknown>;
-}
-
-async function hasPreviews(
-  reply: PreviewReply,
-  expectedUrls: readonly string[],
-  sleep: (milliseconds: number) => Promise<void>,
-) {
-  let embeds = reply.embeds;
-  for (const delay of [1_000, 2_000, 4_000]) {
-    if (expectedUrls.every((url) => embeds.some((candidate) => candidate.url === url))) return true;
-    await sleep(delay);
-    embeds = (await reply.fetch()).embeds;
-  }
-  return expectedUrls.every((url) => embeds.some((candidate) => candidate.url === url));
 }
 
 function discordFailure(operation: string, cause: unknown) {
@@ -50,9 +39,18 @@ export async function replyWithEmbedPreview(
     readonly suppressEmbeds: (suppress: boolean) => Promise<unknown>;
   },
   preview: ReturnType<typeof embedPreviewFor>,
-  sleep: (milliseconds: number) => Promise<void> = Bun.sleep,
+  deps: {
+    readonly dedup: Deduplicator;
+    readonly waitForPreviews: (
+      reply: PreviewReply,
+      expectedUrls: readonly string[],
+    ) => Promise<boolean>;
+    readonly sleep?: (milliseconds: number) => Promise<void>;
+  },
 ) {
   if (preview.links.length === 0) return Result.ok(undefined);
+  const claimed = await deps.dedup.claim(`embed-preview:${message.id}`);
+  if (!claimed) return Result.ok(undefined);
 
   const sent = await Result.tryPromise({
     try: () =>
@@ -68,7 +66,7 @@ export async function replyWithEmbedPreview(
   if (Result.isError(sent)) return sent;
 
   const unfurled = await Result.tryPromise({
-    try: () => hasPreviews(sent.value, preview.links, sleep),
+    try: () => deps.waitForPreviews(sent.value, preview.links),
     catch: (cause) => discordFailure("check Embedfix previews", cause),
   });
   if (Result.isError(unfurled) || !unfurled.value) {
@@ -81,11 +79,11 @@ export async function replyWithEmbedPreview(
     // A failed first crawl can leave the message empty even when the same URL
     // later unfurls. Changing the existing reply back to masked links triggers
     // another attempt without another message or a cache-busting URL.
-    await sleep(5_000);
+    await (deps.sleep ?? Bun.sleep)(5_000);
     const refreshed = await updateContent(sent.value, hiddenEmbedLinks(preview.links));
     if (Result.isError(refreshed)) return updateContent(sent.value, visible);
     const retried = await Result.tryPromise({
-      try: () => hasPreviews(sent.value, preview.links, sleep),
+      try: () => deps.waitForPreviews(sent.value, preview.links),
       catch: (cause) => discordFailure("recheck Embedfix previews", cause),
     });
     if (Result.isError(retried) || !retried.value) return updateContent(sent.value, visible);
@@ -104,36 +102,44 @@ export async function replyWithEmbedPreview(
   return Result.ok(undefined);
 }
 
-export const embedPreview = defineEvent({
-  name: "embed-preview",
-  kind: "message",
-  dedupKey: (message) => message.id,
-  handle: async (message, context) => {
-    if (
-      context.isBotMention ||
-      !message.inGuild() ||
-      message.flags.has(MessageFlags.SuppressEmbeds)
-    )
-      return Result.ok(undefined);
+export function embedPreview(dedup: Deduplicator) {
+  let waitForPreviews: ReturnType<typeof createEmbedWaiter> | undefined;
+  return defineEvent({
+    name: "embed-preview",
+    kind: "message",
+    handle: async (message, context) => {
+      if (
+        context.isBotMention ||
+        !message.inGuild() ||
+        message.flags.has(MessageFlags.SuppressEmbeds)
+      )
+        return Result.ok(undefined);
 
-    const preview = embedPreviewFor(message.content);
-    if (preview.links.length === 0) return Result.ok(undefined);
+      const preview = embedPreviewFor(message.content);
+      if (preview.links.length === 0) return Result.ok(undefined);
 
-    const permissions = message.channel.permissionsFor(context.client.user);
-    const sendPermission = message.channel.isThread()
-      ? PermissionFlagsBits.SendMessagesInThreads
-      : PermissionFlagsBits.SendMessages;
-    if (
-      !permissions?.has([
-        PermissionFlagsBits.ViewChannel,
-        sendPermission,
-        PermissionFlagsBits.EmbedLinks,
-        PermissionFlagsBits.ReadMessageHistory,
-      ]) ||
-      (preview.suppressOriginal && !permissions.has(PermissionFlagsBits.ManageMessages))
-    )
-      return Result.ok(undefined);
+      const permissions = message.channel.permissionsFor(context.client.user);
+      const sendPermission = message.channel.isThread()
+        ? PermissionFlagsBits.SendMessagesInThreads
+        : PermissionFlagsBits.SendMessages;
+      if (
+        !permissions?.has([
+          PermissionFlagsBits.ViewChannel,
+          sendPermission,
+          PermissionFlagsBits.EmbedLinks,
+          PermissionFlagsBits.ReadMessageHistory,
+        ]) ||
+        (preview.suppressOriginal && !permissions.has(PermissionFlagsBits.ManageMessages))
+      )
+        return Result.ok(undefined);
 
-    return replyWithEmbedPreview(message, preview);
-  },
-});
+      waitForPreviews ??= createEmbedWaiter(context.client);
+      const wait = waitForPreviews;
+      return replyWithEmbedPreview(message, preview, {
+        dedup,
+        waitForPreviews: (reply, urls) =>
+          wait(reply, urls, () => message.channel.messages.cache.get(reply.id)?.embeds),
+      });
+    },
+  });
+}

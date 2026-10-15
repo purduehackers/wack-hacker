@@ -60,7 +60,7 @@ export function buildEventHandlers(deps: EventDeps): readonly AnyEventHandler[] 
     autoThread,
     rsvpReminder({ cms, reporter: deps.reporter }),
     githubCodePreview(createGitHubCodeClient(), createDeduplicator(deps.redis)),
-    embedPreview,
+    embedPreview(createDeduplicator(deps.redis)),
     emitShipMessage(ships, deps.redis),
     deleteShipMessage(ships),
     imageDropUploads({ cms, drops, redis: deps.redis, reporter: deps.reporter }),
