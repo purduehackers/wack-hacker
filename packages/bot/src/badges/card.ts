@@ -60,7 +60,7 @@ function eventMenus(
 }
 
 export function controls(
-  { review, version, events, materials, viewerUrl }: BadgeCard,
+  { review, version, events, availableSheets, viewerUrl }: BadgeCard,
   secret: string,
 ): Row[] {
   const button = (label: string, action: string, style = ButtonStyle.Secondary) =>
@@ -95,8 +95,8 @@ export function controls(
       const menus =
         step === "event"
           ? eventMenus({ review, version, events }, secret)
-          : materials.length
-            ? [row(button("Choose acrylic colors", "material"))]
+          : availableSheets.length
+            ? [row(button("Choose acrylic", "material"))]
             : [];
       return menus.length ? menus : [row(button("Check again", "refresh"))];
     }
@@ -172,7 +172,7 @@ export function cardEmbeds(card: BadgeCard): APIEmbed[] {
     color,
   };
   if (card.files[0]) embed.image = { url: `attachment://${card.files[0].name}` };
-  if (step === "material" && !card.materials.length) {
+  if (step === "material" && !card.availableSheets.length) {
     embed.title = "Acrylic is out of stock";
     embed.description = "Ask an organizer to add acrylic sheets, then select Check again.";
   }

@@ -50,7 +50,13 @@ export function actionResult(action: Action, review: Review): StepResult | undef
       return {
         status: "success",
         label: "Acrylic Selected",
-        description: reviewMaterials(review).map(materialDescription).join("\n"),
+        description:
+          review.sheetBatch
+            ?.map(
+              (sheet) =>
+                `${sheet.quantity} × ${sheet.material ? materialDescription(sheet.material) : "Acrylic"} · ${sheetLabel(sheet)} in`,
+            )
+            .join("\n") ?? reviewMaterials(review).map(materialDescription).join("\n"),
       };
     case "event":
       return {
@@ -162,10 +168,7 @@ export function deliveredResult(message: CardMessage, review: Review): StepResul
     commands.some((name) => name === "material" || name.startsWith("material.")) &&
     reviewMaterials(review).length
   )
-    return actionResult(
-      { kind: "material", ids: reviewMaterials(review).map((material) => material.materialId) },
-      review,
-    );
+    return actionResult({ kind: "material" }, review);
   if (commands.includes("event") && review.event)
     return actionResult({ kind: "event", id: review.event.id }, review);
   if (commands.some((name) => /^(?:roles|replace)\./u.test(name)) && review.rolesConfirmed)

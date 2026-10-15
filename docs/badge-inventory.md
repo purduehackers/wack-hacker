@@ -26,9 +26,11 @@ Publishing badge files deducts the acrylic sheets used in the layout. Don’t re
 
 ## Check the sheets before publication
 
-Choose acrylic before checking your badge. The menu offers materials with available 12 × 12-inch and 12 × 18-inch sheets at the configured thickness. Add stock if no matching sheets are available.
+Choose acrylic before checking your designs. One dropdown lists the available sheets by acrylic and size. Each option is one sheet; identical sheets have separate entries. Select all the sheets you want to use, including different colors or sizes. Reserved and out-of-stock sheets are excluded.
 
-The arrangement uses your selected material for the occupied sheets. The bot never substitutes another acrylic. If stock runs out, choose **Change material** or ask an organizer to replenish it. A material change requires you to confirm the badge again.
+You can also tell Wack Hacker the acrylic, sizes, and quantities in chat. Discord limits a dropdown to 25 options; if inventory exceeds that, use chat to choose from the full stock. Each batch can use up to 10 sheets.
+
+The arrangement starts with exactly those sheets. The manufacturer can change their sizes and quantities after design confirmation. The bot never substitutes another acrylic. If stock runs out, update the selection or ask an organizer to replenish it.
 
 During publication, inventory shows those sheets as reserved. After the bot verifies the saved files, it deducts the sheets and records the Hack Night in history. Retrying publication or the shortlink does not deduct them again.
 
@@ -38,4 +40,4 @@ If publication fails, retry it from the badge thread. The bot retains reservatio
 
 ## Understand the badge preview
 
-The badge embed shows your flat design and a rendered preview of your selected acrylic. Select **View in 3D** to rotate and zoom. Both previews use the selected material and thickness. Inventory counts do not change badge size, spacing, or the configured cutting sheets.
+The design check shows a rendered badge and stamp impression. The badge preview uses one of your selected acrylics at its stock thickness. Select **View in 3D** to rotate and zoom. Packing uses the colors, sizes, and quantities you selected.
