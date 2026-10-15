@@ -105,7 +105,10 @@ rendered as literal Markdown; the Braille blank masked and unfurled correctly.
 
 The bot suppresses the original embed once every replacement has unfurled. If
 Discord has not produced the embeds after seven seconds, the reply shows the
-Embedfix URLs and the original previews stay visible.
+Embedfix URLs and the original previews stay visible. After another five seconds,
+the bot restores the masked links on that same reply to trigger one more unfurl
+attempt. Success hides the URLs and suppresses the original; another failure
+leaves the visible fallback. No second reply is sent.
 Discord suppression applies to the entire message. Messages with unrelated URLs
 or replacements beyond Discord's limits (ten embeds or 2,000 content characters)
 keep their original embeds. Code, spoilers, `<URL>` links, already-suppressed

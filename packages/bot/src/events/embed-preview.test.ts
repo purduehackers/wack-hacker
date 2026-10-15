@@ -15,7 +15,7 @@ function source(embeds: { url: string }[] = [{ url: FX_URL }]) {
   const effects: string[] = [];
   const fetch = mock(async () => ({ embeds }));
   const edit = mock(async (options: MessageEditOptions) => {
-    effects.push("fallback");
+    effects.push(options.content?.startsWith("[\u2800]") ? "refresh" : "fallback");
     return options;
   });
   const reply = mock(async (options: MessageReplyOptions) => {
@@ -116,14 +116,18 @@ describe("Embedfix preview unfurl recovery", () => {
     expect(edit).not.toHaveBeenCalled();
   });
 
-  test("reveals the URL and preserves the original when unfurling times out", async () => {
+  test("keeps a visible fallback and the original when both unfurl attempts time out", async () => {
     const { message, edit, effects } = source([]);
     const sleep = mock(async () => {});
     const outcome = await replyWithEmbedPreview(message, embedPreviewFor(URL), sleep);
     expect(Result.isOk(outcome)).toBe(true);
-    expect(effects).toEqual(["reply", "fallback"]);
-    expect(sleep).toHaveBeenCalledTimes(3);
+    expect(effects).toEqual(["reply", "fallback", "refresh", "fallback"]);
+    expect(sleep).toHaveBeenCalledTimes(7);
+    expect(message.reply).toHaveBeenCalledTimes(1);
+    expect(message.suppressEmbeds).not.toHaveBeenCalled();
     expect(edit.mock.calls).toEqual([
+      [{ content: FX_URL, allowedMentions: { parse: [], repliedUser: false } }],
+      [{ content: `[\u2800](${FX_URL})`, allowedMentions: { parse: [], repliedUser: false } }],
       [{ content: FX_URL, allowedMentions: { parse: [], repliedUser: false } }],
     ]);
   });
@@ -157,5 +161,38 @@ describe("Embedfix preview unfurl recovery", () => {
     const outcome = await replyWithEmbedPreview(message, embedPreviewFor(URL), async () => {});
     expect(Result.isError(outcome)).toBe(true);
     expect(message.suppressEmbeds).not.toHaveBeenCalled();
+  });
+});
+
+describe("Embedfix preview retry", () => {
+  test("recovers from the initial timeout by refreshing the same reply once", async () => {
+    const { message, fetch, edit, effects } = source([]);
+    fetch
+      .mockResolvedValueOnce({ embeds: [] })
+      .mockResolvedValueOnce({ embeds: [] })
+      .mockResolvedValueOnce({ embeds: [] })
+      .mockResolvedValueOnce({ embeds: [{ url: FX_URL }] });
+    const sleep = mock<(milliseconds: number) => Promise<void>>(async () => {});
+    const outcome = await replyWithEmbedPreview(message, embedPreviewFor(URL), sleep);
+    expect(Result.isOk(outcome)).toBe(true);
+    expect(effects).toEqual(["reply", "fallback", "refresh", "suppress"]);
+    expect(message.reply).toHaveBeenCalledTimes(1);
+    expect(sleep.mock.calls).toEqual([[1_000], [2_000], [4_000], [5_000], [1_000]]);
+    expect(edit.mock.calls[1]?.[0]).toEqual({
+      content: `[\u2800](${FX_URL})`,
+      allowedMentions: { parse: [], repliedUser: false },
+    });
+  });
+
+  test("restores visible links if the retry edit fails", async () => {
+    const { message, edit } = source([]);
+    edit
+      .mockResolvedValueOnce({ content: FX_URL })
+      .mockRejectedValueOnce(new Error("network unavailable"));
+    const outcome = await replyWithEmbedPreview(message, embedPreviewFor(URL), async () => {});
+    expect(Result.isOk(outcome)).toBe(true);
+    expect(message.reply).toHaveBeenCalledTimes(1);
+    expect(message.suppressEmbeds).not.toHaveBeenCalled();
+    expect(edit.mock.calls.at(-1)?.[0].content).toBe(FX_URL);
   });
 });
