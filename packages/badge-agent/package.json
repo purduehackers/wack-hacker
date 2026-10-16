@@ -1,0 +1,21 @@
+{
+  "name": "@repo/badge-agent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "eve dev",
+    "build": "eve build",
+    "start": "eve start"
+  },
+  "dependencies": {
+    "@purduehackers/badges": "github:purduehackers/badges#b6fede549b3612c1dd8e1ff8dd6ff7de33f37594",
+    "@repo/agents": "workspace:*",
+    "@repo/shared": "workspace:*",
+    "eve": "0.31.3",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2"
+  }
+}

@@ -18,6 +18,7 @@
  * gateway that cannot yet send anything.
  */
 
+import { createBadgeClient } from "@purduehackers/badges/client";
 import { createConversationStore, type ConversationStore } from "@repo/shared/conversations";
 import { DISCORD_GUILD_ID } from "@repo/shared/discord";
 import { messageOf } from "@repo/shared/errors";
@@ -33,6 +34,8 @@ import type { HitlInteractionHandler } from "./agent/hitl/interaction.ts";
 import { createDiscordRest } from "./agent/render/discord-rest.ts";
 import { createScheduledDiscordAdapter } from "./agent/scheduled.ts";
 import { createTurnMessageStore } from "./agent/turn-messages.ts";
+import { createBadgeInteractionHandler } from "./badges/interactions.ts";
+import { badgeWork, runBadgeWork } from "./badges/schedule.ts";
 import { buildCommands } from "./commands/index.ts";
 import { env } from "./env.ts";
 import { buildEventHandlers } from "./events/index.ts";
@@ -47,6 +50,13 @@ import { startScheduler } from "./framework/schedules.ts";
 import { startServer } from "./framework/server.ts";
 import { buildSchedules } from "./schedules/index.ts";
 import { createConversationFlow } from "./utils/conversation/index.ts";
+
+if (Boolean(env.BADGES_API_URL) !== Boolean(env.BADGE_AGENT_URL))
+  throw new Error("Configure BADGES_API_URL and BADGE_AGENT_URL together to enable badges.");
+if (env.BADGES_API_URL && !env.AI_GATEWAY_API_KEY)
+  throw new Error("AI_GATEWAY_API_KEY is required for badge routing.");
+const badgeSecret = env.BADGES_API_SECRET ?? env.AGENT_INGRESS_SECRET;
+const badges = env.BADGES_API_URL ? createBadgeClient(env.BADGES_API_URL, badgeSecret) : undefined;
 
 function attachInteractionDispatcher(
   client: ReturnType<typeof createClient>,
@@ -73,8 +83,14 @@ function createConversationSeam(
   commands: readonly SlashCommand[],
 ) {
   const flow = createConversationFlow({
+    ...(badges
+      ? {
+          onBadgeTurn: (threadId: string) => runBadgeWork(badges, badgeSecret, client, threadId),
+        }
+      : {}),
     eve: createAgentClient({
       baseUrl: env.AGENT_URL,
+      ...(env.BADGE_AGENT_URL === undefined ? {} : { badgeUrl: env.BADGE_AGENT_URL }),
       secret: env.AGENT_INGRESS_SECRET,
     }),
     store: conversations,
@@ -90,7 +106,13 @@ function createConversationSeam(
     reporter: consoleReporter,
     guildId: DISCORD_GUILD_ID,
   });
-  attachInteractionDispatcher(client, commands, hitl, redis);
+  const badgeInteraction = badges ? createBadgeInteractionHandler(badges, badgeSecret) : undefined;
+  attachInteractionDispatcher(
+    client,
+    commands,
+    async (interaction) => (await badgeInteraction?.(interaction)) || hitl(interaction),
+    redis,
+  );
   return flow;
 }
 
@@ -111,11 +133,14 @@ function logStartupSummary(input: {
 }
 
 function configuredSchedules(redis: RedisClient) {
-  return buildSchedules({
-    redis,
-    cmsApiKey: env.PAYLOAD_CMS_API_KEY,
-    socials: { accountId: env.INSTAGRAM_USER_ID, token: env.INSTAGRAM_ACCESS_TOKEN },
-  });
+  return [
+    ...buildSchedules({
+      redis,
+      cmsApiKey: env.PAYLOAD_CMS_API_KEY,
+      socials: { accountId: env.INSTAGRAM_USER_ID, token: env.INSTAGRAM_ACCESS_TOKEN },
+    }),
+    ...(badges ? [badgeWork(badges, badgeSecret)] : []),
+  ];
 }
 
 async function main(): Promise<void> {
@@ -133,6 +158,7 @@ async function main(): Promise<void> {
   });
 
   const built = buildCommands({
+    ...(badges ? { badges } : {}),
     redis,
     vercelToken: env.VERCEL_API_TOKEN,
     dashboardGlobalConfig: env.DASHBOARD_GLOBAL_CONFIG,
@@ -185,6 +211,7 @@ async function main(): Promise<void> {
   const handlers = buildEventHandlers({
     redis,
     agent: flow,
+    ...(badges === undefined ? {} : { badges, badgeSecret }),
     reporter: consoleReporter,
     cmsApiKey: env.PAYLOAD_CMS_API_KEY,
     shipApiKey: env.SHIP_API_KEY,
@@ -196,6 +223,7 @@ async function main(): Promise<void> {
     handlers,
     reporter: consoleReporter,
     dedup: createDeduplicator(redis),
+    badgesEnabled: badges !== undefined,
   });
 
   const scheduler = startScheduler({

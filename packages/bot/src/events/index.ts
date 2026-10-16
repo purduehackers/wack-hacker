@@ -22,7 +22,7 @@ import { createGitHubCodeClient } from "../integrations/github-code.ts";
 import { createImageDropStore } from "../integrations/image-drop.ts";
 import { createShipsClient } from "../integrations/ships.ts";
 import type { ConversationFlow } from "../utils/conversation/index.ts";
-import { agentChat, conversationDone } from "./agent-chat.ts";
+import { agentChat, badgeUploads, conversationDone } from "./agent-chat.ts";
 import { antiSpam } from "./anti-spam.ts";
 import { autoThread } from "./auto-thread.ts";
 import { chatFeedback } from "./chat-indexer.ts";
@@ -36,6 +36,8 @@ import { rsvpReminder } from "./rsvp-reminder.ts";
 import { createTranscriber, transcribeVoiceMessage } from "./transcribe-voice-message.ts";
 
 export interface EventDeps {
+  readonly badgeSecret?: string;
+  readonly badges?: import("@purduehackers/badges/client").BadgeClient;
   readonly redis: RedisClient;
   readonly agent: ConversationFlow;
   readonly reporter: Reporter;
@@ -53,7 +55,12 @@ export function buildEventHandlers(deps: EventDeps): readonly AnyEventHandler[] 
   const turnMessages = createTurnMessageStore(deps.redis);
 
   return [
-    agentChat({ agent: deps.agent }),
+    agentChat({
+      agent: deps.agent,
+      ...(deps.badges === undefined ? {} : { badges: deps.badges }),
+      ...(deps.badgeSecret ? { badgeSecret: deps.badgeSecret } : {}),
+    }),
+    ...(deps.badges && deps.badgeSecret ? [badgeUploads(deps.badges, deps.badgeSecret)] : []),
     conversationDone({ agent: deps.agent, turnMessages }),
     chatFeedback({ turnMessages, reporter: deps.reporter }),
     praise,

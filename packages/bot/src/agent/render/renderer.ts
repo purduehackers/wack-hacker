@@ -132,7 +132,7 @@ function requestNonce(messageId: string, key: string): string {
 
 type RenderWriteError = DiscordError | Transient;
 
-interface RendererDeps {
+export interface RendererDeps {
   readonly rest: DiscordRest;
   readonly channelId: string;
   readonly sourceMessageId: string;

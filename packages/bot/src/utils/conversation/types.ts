@@ -26,6 +26,7 @@ export interface ConversationFlowDeps {
   readonly turnMessages: TurnMessageWriter;
   readonly schedules: ScheduledDiscordAdapter;
   readonly reporter: Reporter;
+  readonly onBadgeTurn?: (threadId: string) => Promise<void>;
 }
 
 export interface ConversationAnswer {

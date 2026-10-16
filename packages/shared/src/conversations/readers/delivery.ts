@@ -34,10 +34,13 @@ const storedRecord = stored(deliveryRecordSchema);
  * tightening it here would mirror every wire change into a place that only ever
  * wanted one string.
  */
-const storedContent = stored(z.looseObject({ content: z.string() }));
+const storedContent = stored(
+  z.looseObject({ content: z.string(), agentTarget: z.enum(["badge", "general"]).optional() }),
+);
 
 /** What a live turn is holding a conversation for. */
 export interface Holder {
+  readonly agentTarget?: "badge" | "general";
   readonly sessionId: string;
   readonly dispatchId: string;
   /** The request being worked on, so a steer can carry it forward. */
@@ -69,8 +72,10 @@ export class DeliveryReader {
     if (record === undefined || record.phase !== "live" || record.sessionId === "") {
       return undefined;
     }
-    const content = storedContent.safeParse(record.deliveryRaw).data?.content;
+    const payload = storedContent.safeParse(record.deliveryRaw).data;
+    const content = payload?.content;
     return {
+      ...(payload?.agentTarget === undefined ? {} : { agentTarget: payload.agentTarget }),
       sessionId: record.sessionId,
       dispatchId: record.dispatchId,
       ...(content === undefined || content === "" ? {} : { content }),

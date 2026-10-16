@@ -21,6 +21,7 @@ import { z } from "zod";
 const TTL_SECONDS = 7 * 24 * 60 * 60;
 
 interface TurnMessage {
+  readonly agentTarget?: "badge" | "general" | undefined;
   /** The durable session the reply belongs to. */
   readonly sessionId: string;
   /** Joins feedback to the exact Eve turn. */
@@ -31,6 +32,7 @@ interface TurnMessage {
 
 /** The stored entry, field for field. Anything else reads as a miss. */
 const turnMessageSchema = z.object({
+  agentTarget: z.enum(["badge", "general"]).optional(),
   sessionId: z.string(),
   eveTurnId: z.string(),
   requesterUserId: z.string(),

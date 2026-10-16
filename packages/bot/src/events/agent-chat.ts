@@ -9,21 +9,28 @@
  * feedback that something is happening.
  */
 
+import type { BadgeClient } from "@purduehackers/badges/client";
+import { failureGuidance } from "@purduehackers/badges/presentation";
 import { RECOVERY_FOOTER, RECOVERY_TEXT } from "@repo/shared/conversations";
 import { DISCORD_GUILD_ID, roleAtLeast, roleFromMemberRoles, UserRole } from "@repo/shared/discord";
+import { messageOf } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { continuationKeyFor } from "@repo/shared/wire";
 import type { MessagePayload, Principal } from "@repo/shared/wire";
 import { ChannelType } from "discord.js";
-import type { AnyThreadChannel, Message } from "discord.js";
+import type { AnyThreadChannel, Client, Message } from "discord.js";
+import { z } from "zod";
 
 import { attachmentsOf, fetchReplyTo } from "../agent/message-context.ts";
 import type { TurnMessageReader } from "../agent/turn-messages.ts";
+import { badgeEmbed } from "../badges/messages.ts";
+import { routeMessage } from "../badges/routing.ts";
+import { runBadgeWork, withBadgeTyping } from "../badges/schedule.ts";
 import type { ReactorLike } from "../framework/events.ts";
 import { defineEvent } from "../framework/events.ts";
 import { activeTraceparent } from "../framework/observability.ts";
 import type { ConversationFlow } from "../utils/conversation/index.ts";
-import { stripBotMention } from "../utils/mention.ts";
+import { isBadgeChannel, isBadgePing, stripBotMention } from "../utils/mention.ts";
 
 /** Shown until the agent's first tokens replace it. */
 const PLACEHOLDER = "> Thinking...";
@@ -98,9 +105,12 @@ async function principalOfReactor(
 async function openThread(
   message: Message,
   content: string,
+  badgePing = false,
 ): Promise<Message["channel"] | undefined> {
+  const topic = badgePing ? content.replace(/<@!?\d+>/gu, "").trim() || "Badge review" : content;
+  const separator = badgePing ? ": " : " — ";
   const name =
-    `${message.member?.displayName ?? message.author.username} — ${content.slice(0, MAX_THREAD_NAME_CHARS)}`.trim();
+    `${message.member?.displayName ?? message.author.username}${separator}${topic.slice(0, MAX_THREAD_NAME_CHARS)}`.trim();
 
   try {
     return await message.startThread({ name, autoArchiveDuration: THREAD_ARCHIVE_MINUTES });
@@ -111,10 +121,41 @@ async function openThread(
 
 export interface AgentChatDeps {
   readonly agent: ConversationFlow;
+  readonly badges?: BadgeClient;
+  readonly badgeSecret?: string;
 }
 
 export interface ConversationDoneDeps extends AgentChatDeps {
   readonly turnMessages: TurnMessageReader;
+}
+
+async function badgeNotice(target: Message["channel"], text: string) {
+  if (target.isSendable())
+    await target
+      .send({ embeds: [badgeEmbed(text)], allowedMentions: { parse: [] } })
+      .catch(() => undefined);
+}
+
+async function routeBadge(api: BadgeClient, payload: MessagePayload) {
+  const route = await routeMessage(api, payload);
+  payload.agentTarget = route;
+  if (route !== "badge") return false;
+  return z
+    .object({ handled: z.boolean() })
+    .parse(await api.post("submit", badgePayload(payload), 60_000)).handled;
+}
+
+function badgePayload(payload: MessagePayload) {
+  return {
+    ...payload,
+    principal: {
+      ...payload.principal,
+      canManufacture: roleAtLeast(
+        roleFromMemberRoles(payload.principal.memberRoles),
+        UserRole.Organizer,
+      ),
+    },
+  };
 }
 
 /**
@@ -130,23 +171,22 @@ export function agentChat(deps: AgentChatDeps) {
     kind: "mention",
     dedupKey: (message) => message.id,
     handle: async (message, context) => {
-      const prompt = stripBotMention(message.content, context.botUserId);
-
-      // A bare mention is a greeting, not a request. Answering directly costs
-      // nothing and avoids spinning up a session to say hello.
-      const attachments = attachmentsOf(message);
+      const badgePing = deps.badges !== undefined && isBadgePing(message, context.botUserId);
+      const { prompt, attachments, replyTo } = await badgeSubmission(
+        message,
+        context.botUserId,
+        badgePing,
+      );
       if (prompt === "" && attachments.length === 0) {
-        await message.reply(EMPTY_MENTION_REPLY).catch(() => undefined);
+        await message
+          .reply({ content: EMPTY_MENTION_REPLY, allowedMentions: { parse: [] } })
+          .catch(() => undefined);
         return Result.ok(undefined);
       }
 
       const inThread = message.channel.isThread();
 
-      // Fetch the reply while opening the thread.
-      const [thread, replyTo] = await Promise.all([
-        inThread ? undefined : openThread(message, prompt),
-        fetchReplyTo(message),
-      ]);
+      const thread = inThread ? undefined : await openThread(message, prompt, badgePing);
 
       const target = thread ?? message.channel;
       const targetId = target.id;
@@ -155,7 +195,7 @@ export function agentChat(deps: AgentChatDeps) {
       // Posted before the agent is even reachable, because the whole point is to
       // acknowledge instantly. The bot renderer claims it as the anchor; its stable nonce also makes a
       // fallback create converge if this response was lost.
-      const placeholder = await postPlaceholder(target, message.id);
+      const placeholder = await postPlaceholder(target, message.id, badgePing);
 
       const payload: MessagePayload = {
         kind: inThread ? "followup" : "mention",
@@ -174,7 +214,11 @@ export function agentChat(deps: AgentChatDeps) {
         ...(traceparent === undefined ? {} : { traceparent }),
       };
 
+      if (badgePing && (await routeBadgeTurn(deps, payload, context.client, target)))
+        return Result.ok(undefined);
       const submitted = await deps.agent.submit(payload);
+      if (Result.isError(submitted) && badgePing)
+        await badgeNotice(target, "I couldn’t start that reply. Mention me again to retry.");
       if (Result.isError(submitted) && placeholder !== undefined) {
         await placeholder.edit(DELIVERY_FAILURE_NOTICE).catch(() => undefined);
       }
@@ -183,12 +227,51 @@ export function agentChat(deps: AgentChatDeps) {
   });
 }
 
+async function badgeSubmission(message: Message, botUserId: string, badgePing: boolean) {
+  const prompt = stripBotMention(message.content, botUserId);
+  const replyTo = await fetchReplyTo(message);
+  let attachments = attachmentsOf(message);
+  if (
+    badgePing &&
+    !attachments.length &&
+    replyTo?.channelId === message.channelId &&
+    replyTo.snapshot?.authorId === message.author.id
+  )
+    attachments = replyTo.snapshot.attachments;
+  return { prompt, attachments, replyTo };
+}
+async function routeBadgeTurn(
+  deps: AgentChatDeps,
+  payload: MessagePayload,
+  client: Client,
+  target: Message["channel"],
+): Promise<boolean> {
+  if (!deps.badges) return false;
+  try {
+    const api = deps.badges;
+    const handled = await withBadgeTyping(target.isSendable() ? target : undefined, () =>
+      routeBadge(api, payload),
+    );
+    if (handled && deps.badgeSecret)
+      await runBadgeWork(deps.badges, deps.badgeSecret, client, target.id);
+    return handled;
+  } catch (cause) {
+    await badgeNotice(target, failureGuidance(messageOf(cause)));
+    return true;
+  }
+}
+
 async function postPlaceholder(
   target: Message["channel"],
   sourceMessageId: string,
+  badgePing = false,
 ): Promise<Message | undefined> {
   if (!target.isSendable()) return undefined;
   try {
+    if (badgePing) {
+      await target.sendTyping();
+      return undefined;
+    }
     const posted = await target.send({
       content: PLACEHOLDER,
       nonce: `${sourceMessageId}:0`,
@@ -263,6 +346,7 @@ function threadRefOf(
 }
 
 interface ConversationResetInput {
+  readonly agentTarget?: "badge" | "general";
   readonly continuationKey: string;
   readonly requesterUserId: string;
   readonly principal: Principal;
@@ -280,6 +364,7 @@ async function resetConversationForPrincipal(
     return Result.ok(undefined);
   }
   return agent.reset({
+    ...(input.agentTarget === undefined ? {} : { agentTarget: input.agentTarget }),
     continuationKey: input.continuationKey,
     reason: `ended by ${input.principal.username} with ✅`,
     principal: input.principal,
@@ -319,8 +404,53 @@ export function conversationDone(deps: ConversationDoneDeps) {
       return resetConversationForPrincipal(deps.agent, {
         continuationKey: reaction.message.channelId,
         requesterUserId: turn.requesterUserId,
+        ...(turn.agentTarget === undefined ? {} : { agentTarget: turn.agentTarget }),
         principal,
       });
+    },
+  });
+}
+
+/** Accept a requested revision without turning every thread message into an agent turn. */
+export function badgeUploads(api: BadgeClient, secret: string) {
+  return defineEvent({
+    name: "badge-uploads",
+    kind: "message",
+    dedupKey: (message) => message.id,
+    handle: async (message, context) => {
+      if (
+        context.isBotMention ||
+        !message.channel.isThread() ||
+        !isBadgeChannel(message) ||
+        !message.attachments.size
+      )
+        return Result.ok(undefined);
+      const payload: MessagePayload = {
+        kind: "followup",
+        continuationKey: continuationKeyFor({
+          channelId: message.channelId,
+          threadId: message.channelId,
+        }),
+        content: message.content,
+        messageId: message.id,
+        attachments: attachmentsOf(message),
+        principal: principalOf(message),
+        channel: channelRefOf(message),
+        ...threadRefOf(message, undefined),
+      };
+      try {
+        const result = z
+          .object({ handled: z.boolean() })
+          .parse(
+            await withBadgeTyping(message.channel, () =>
+              api.post("continue", badgePayload(payload), 60_000),
+            ),
+          );
+        if (result.handled) await runBadgeWork(api, secret, context.client, message.channelId);
+      } catch (cause) {
+        await badgeNotice(message.channel, failureGuidance(messageOf(cause)));
+      }
+      return Result.ok(undefined);
     },
   });
 }
