@@ -177,8 +177,13 @@ export function cardEmbeds(card: BadgeCard): APIEmbed[] {
     embed.description = "Ask an organizer to add acrylic sheets, then select Check again.";
   }
   if (step === "fix") {
-    const findings = verificationChecks(review, fixRole(review))
-      .map((check) => `${check.status === "pass" ? "✅" : "❌"} ${check.label}`)
+    const results = verificationChecks(review, fixRole(review));
+    if (!results.some((check) => check.status === "fail")) {
+      embed.title = "Couldn’t verify this design";
+      embed.color = badgeColors.warning;
+    }
+    const findings = results
+      .map((check) => `${{ pass: "✅", fail: "❌", unknown: "❔" }[check.status]} ${check.label}`)
       .join("\n");
     embed.description = `${findings}\n\n${embed.description}`;
   }

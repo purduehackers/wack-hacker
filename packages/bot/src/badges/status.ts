@@ -35,7 +35,7 @@ export function actionResult(action: Action, review: Review): StepResult | undef
           "-# - Allowed colors",
           "-# - Vector artwork",
           "-# - Outlined text",
-          "-# - Filled engraving",
+          "-# - No red fills or red borders on filled artwork",
           "-# - Closed cutting outlines",
           "-# - No unsupported effects or linked artwork",
           "",
