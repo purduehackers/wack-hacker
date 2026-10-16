@@ -11,9 +11,8 @@ const MESSAGE_ID = "100000000000000001";
 const URL = "https://x.com/NASAWebb/status/1572558249307639809";
 const FX_URL = "https://fx.purduehackers.com/t/NASAWebb/status/1572558249307639809";
 
-function source(embeds: { url: string }[] = [{ url: FX_URL }]) {
+function source() {
   const effects: string[] = [];
-  const fetch = mock(async () => ({ embeds }));
   const edit = mock(async (options: MessageEditOptions) => {
     effects.push(options.content?.startsWith("[\u2800]") ? "refresh" : "fallback");
     return options;
@@ -21,25 +20,30 @@ function source(embeds: { url: string }[] = [{ url: FX_URL }]) {
   const reply = mock(async (options: MessageReplyOptions) => {
     effects.push("reply");
     expect(options.content).toContain("fx.purduehackers.com");
-    return { embeds, fetch, edit };
+    return { id: "reply-id", embeds: [], fetch: mock(async () => ({ embeds: [] })), edit };
   });
   const suppressEmbeds = mock(async (suppress: boolean) => {
     effects.push("suppress");
     return suppress;
   });
-  return { message: { id: MESSAGE_ID, reply, suppressEmbeds }, effects, fetch, edit };
+  const deps = {
+    dedup: { claim: mock(async (_key: string) => true) },
+    waitForPreviews: mock(async (_message: { id: string }, _urls: readonly string[]) => true),
+    sleep: mock(async (_milliseconds: number) => {}),
+  };
+  return { message: { id: MESSAGE_ID, reply, suppressEmbeds }, effects, edit, deps };
 }
 
 describe("Embedfix preview delivery", () => {
   test("replies silently and only then suppresses the original", async () => {
-    const { message, effects } = source();
-    const outcome = await replyWithEmbedPreview(message, embedPreviewFor(URL));
+    const { message, effects, deps } = source();
+    const outcome = await replyWithEmbedPreview(message, embedPreviewFor(URL), deps);
     expect(Result.isOk(outcome)).toBe(true);
     expect(effects).toEqual(["reply", "suppress"]);
     expect(message.reply.mock.calls).toEqual([
       [
         {
-          content: "[\u2800](https://fx.purduehackers.com/t/NASAWebb/status/1572558249307639809)",
+          content: `[\u2800](${FX_URL})`,
           allowedMentions: { parse: [], repliedUser: false },
           flags: MessageFlags.SuppressNotifications,
           nonce: `${MESSAGE_ID}:fx`,
@@ -47,98 +51,109 @@ describe("Embedfix preview delivery", () => {
         },
       ],
     ]);
+    expect(deps.dedup.claim.mock.calls).toEqual([[`embed-preview:${MESSAGE_ID}`]]);
     expect(message.suppressEmbeds.mock.calls).toEqual([[true]]);
+    expect(deps.sleep).not.toHaveBeenCalled();
+  });
+
+  test("does not touch Redis or Discord for messages without supported links", async () => {
+    const { message, deps } = source();
+    for (const content of [
+      "hello",
+      "https://github.com/purduehackers/wack-hacker",
+      `<${URL}>`,
+      `\`${URL}\``,
+    ]) {
+      expect(
+        Result.isOk(await replyWithEmbedPreview(message, embedPreviewFor(content), deps)),
+      ).toBe(true);
+    }
+    expect(deps.dedup.claim).not.toHaveBeenCalled();
+    expect(deps.waitForPreviews).not.toHaveBeenCalled();
+    expect(message.reply).not.toHaveBeenCalled();
+  });
+
+  test("waits for the Redis claim before replying and skips duplicate delivery", async () => {
+    const { message, deps } = source();
+    const claim = Promise.withResolvers<boolean>();
+    deps.dedup.claim.mockReturnValueOnce(claim.promise);
+    const sending = replyWithEmbedPreview(message, embedPreviewFor(URL), deps);
+    expect(message.reply).not.toHaveBeenCalled();
+    claim.resolve(false);
+    expect(Result.isOk(await sending)).toBe(true);
+    expect(message.reply).not.toHaveBeenCalled();
+    expect(deps.waitForPreviews).not.toHaveBeenCalled();
   });
 
   test("leaves the original untouched if the send fails", async () => {
-    const { message } = source();
+    const { message, deps } = source();
     message.reply.mockRejectedValueOnce(new Error("network unavailable"));
-    const outcome = await replyWithEmbedPreview(message, embedPreviewFor(URL));
+    const outcome = await replyWithEmbedPreview(message, embedPreviewFor(URL), deps);
     expect(Result.isError(outcome)).toBe(true);
     expect(message.suppressEmbeds).not.toHaveBeenCalled();
   });
 
   test("reports a suppression failure without repeating the successful reply", async () => {
-    const { message } = source();
+    const { message, deps } = source();
     message.suppressEmbeds.mockRejectedValueOnce(new Error("missing permission"));
-    const outcome = await replyWithEmbedPreview(message, embedPreviewFor(URL));
+    const outcome = await replyWithEmbedPreview(message, embedPreviewFor(URL), deps);
     expect(Result.isError(outcome)).toBe(true);
     expect(message.reply).toHaveBeenCalledTimes(1);
   });
 
   test("preserves unrelated embeds while sending the replacement", async () => {
-    const { message, effects } = source();
+    const { message, effects, deps } = source();
     const outcome = await replyWithEmbedPreview(
       message,
       embedPreviewFor(`${URL} https://example.com`),
+      deps,
     );
     expect(Result.isOk(outcome)).toBe(true);
     expect(effects).toEqual(["reply"]);
   });
 
-  test("does nothing without a supported post link", async () => {
-    const { message, effects } = source();
-    const outcome = await replyWithEmbedPreview(message, embedPreviewFor("hello"));
-    expect(Result.isOk(outcome)).toBe(true);
-    expect(effects).toEqual([]);
-  });
-
-  test("waits for all platforms before suppressing a message with multiple posts", async () => {
-    const instagram = "https://fx.purduehackers.com/i/p/BQ0eAlwhDrw";
-    const soundcloud = "https://fx.purduehackers.com/s/artist/track";
-    const { message, effects, fetch, edit } = source();
-    fetch.mockResolvedValueOnce({
-      embeds: [{ url: FX_URL }, { url: instagram }, { url: soundcloud }],
-    });
-    const outcome = await replyWithEmbedPreview(
-      message,
-      embedPreviewFor(
-        `${URL} https://instagram.com/p/BQ0eAlwhDrw https://soundcloud.com/artist/track`,
-      ),
-      async () => {},
+  test("waits for all platforms before suppressing the original", async () => {
+    const { message, effects, deps } = source();
+    const ready = Promise.withResolvers<boolean>();
+    deps.waitForPreviews.mockReturnValueOnce(ready.promise);
+    const preview = embedPreviewFor(
+      `${URL} https://instagram.com/p/BQ0eAlwhDrw https://soundcloud.com/artist/track`,
     );
-    expect(Result.isOk(outcome)).toBe(true);
+    const sending = replyWithEmbedPreview(message, preview, deps);
+    await Bun.sleep(0);
+    expect(message.suppressEmbeds).not.toHaveBeenCalled();
+    ready.resolve(true);
+    expect(Result.isOk(await sending)).toBe(true);
+    expect(deps.waitForPreviews.mock.calls[0]?.[1]).toEqual(preview.links);
     expect(effects).toEqual(["reply", "suppress"]);
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(edit).not.toHaveBeenCalled();
   });
 });
 
 describe("Embedfix preview unfurl recovery", () => {
-  test("waits for a delayed embed before suppressing the original", async () => {
-    const { message, fetch, edit, effects } = source([]);
-    const sleep = mock(async () => {});
-    fetch.mockResolvedValueOnce({ embeds: [{ url: FX_URL }] });
-    const outcome = await replyWithEmbedPreview(message, embedPreviewFor(URL), sleep);
-    expect(Result.isOk(outcome)).toBe(true);
-    expect(effects).toEqual(["reply", "suppress"]);
-    expect(sleep).toHaveBeenCalledTimes(1);
-    expect(edit).not.toHaveBeenCalled();
-  });
-
-  test("keeps a visible fallback and the original when both unfurl attempts time out", async () => {
-    const { message, edit, effects } = source([]);
-    const sleep = mock(async () => {});
-    const outcome = await replyWithEmbedPreview(message, embedPreviewFor(URL), sleep);
+  test("keeps visible links and the original when both attempts time out", async () => {
+    const { message, edit, effects, deps } = source();
+    deps.waitForPreviews.mockResolvedValue(false);
+    const outcome = await replyWithEmbedPreview(message, embedPreviewFor(URL), deps);
     expect(Result.isOk(outcome)).toBe(true);
     expect(effects).toEqual(["reply", "fallback", "refresh", "fallback"]);
-    expect(sleep).toHaveBeenCalledTimes(7);
+    expect(deps.waitForPreviews).toHaveBeenCalledTimes(2);
+    expect(deps.sleep.mock.calls).toEqual([[5_000]]);
     expect(message.reply).toHaveBeenCalledTimes(1);
     expect(message.suppressEmbeds).not.toHaveBeenCalled();
-    expect(edit.mock.calls).toEqual([
-      [{ content: FX_URL, allowedMentions: { parse: [], repliedUser: false } }],
-      [{ content: `[\u2800](${FX_URL})`, allowedMentions: { parse: [], repliedUser: false } }],
-      [{ content: FX_URL, allowedMentions: { parse: [], repliedUser: false } }],
+    expect(edit.mock.calls.map(([options]) => options.content)).toEqual([
+      FX_URL,
+      `[\u2800](${FX_URL})`,
+      FX_URL,
     ]);
   });
 
   test("reveals all links if only some posts unfurl", async () => {
-    const { message, edit } = source();
-    const otherPost = "https://x.com/example/status/123";
+    const { message, edit, deps } = source();
+    deps.waitForPreviews.mockResolvedValue(false);
     const outcome = await replyWithEmbedPreview(
       message,
-      embedPreviewFor(`${URL} ${otherPost}`),
-      async () => {},
+      embedPreviewFor(`${URL} https://x.com/example/status/123`),
+      deps,
     );
     expect(Result.isOk(outcome)).toBe(true);
     expect(message.suppressEmbeds).not.toHaveBeenCalled();
@@ -147,49 +162,40 @@ describe("Embedfix preview unfurl recovery", () => {
     );
   });
 
-  test("falls back safely if fetching the generated embeds fails", async () => {
-    const { message, fetch, effects } = source([]);
-    fetch.mockRejectedValueOnce(new Error("network unavailable"));
-    const outcome = await replyWithEmbedPreview(message, embedPreviewFor(URL), async () => {});
+  test("falls back safely if checking the generated embeds fails", async () => {
+    const { message, effects, deps } = source();
+    deps.waitForPreviews.mockRejectedValueOnce(new Error("network unavailable"));
+    const outcome = await replyWithEmbedPreview(message, embedPreviewFor(URL), deps);
     expect(Result.isOk(outcome)).toBe(true);
     expect(effects).toEqual(["reply", "fallback"]);
   });
 
   test("reports a failed fallback edit without hiding the original", async () => {
-    const { message, edit } = source([]);
+    const { message, edit, deps } = source();
+    deps.waitForPreviews.mockResolvedValue(false);
     edit.mockRejectedValueOnce(new Error("message deleted"));
-    const outcome = await replyWithEmbedPreview(message, embedPreviewFor(URL), async () => {});
+    const outcome = await replyWithEmbedPreview(message, embedPreviewFor(URL), deps);
     expect(Result.isError(outcome)).toBe(true);
     expect(message.suppressEmbeds).not.toHaveBeenCalled();
   });
-});
 
-describe("Embedfix preview retry", () => {
   test("recovers from the initial timeout by refreshing the same reply once", async () => {
-    const { message, fetch, edit, effects } = source([]);
-    fetch
-      .mockResolvedValueOnce({ embeds: [] })
-      .mockResolvedValueOnce({ embeds: [] })
-      .mockResolvedValueOnce({ embeds: [] })
-      .mockResolvedValueOnce({ embeds: [{ url: FX_URL }] });
-    const sleep = mock<(milliseconds: number) => Promise<void>>(async () => {});
-    const outcome = await replyWithEmbedPreview(message, embedPreviewFor(URL), sleep);
+    const { message, effects, deps } = source();
+    deps.waitForPreviews.mockResolvedValueOnce(false);
+    const outcome = await replyWithEmbedPreview(message, embedPreviewFor(URL), deps);
     expect(Result.isOk(outcome)).toBe(true);
     expect(effects).toEqual(["reply", "fallback", "refresh", "suppress"]);
     expect(message.reply).toHaveBeenCalledTimes(1);
-    expect(sleep.mock.calls).toEqual([[1_000], [2_000], [4_000], [5_000], [1_000]]);
-    expect(edit.mock.calls[1]?.[0]).toEqual({
-      content: `[\u2800](${FX_URL})`,
-      allowedMentions: { parse: [], repliedUser: false },
-    });
+    expect(deps.sleep.mock.calls).toEqual([[5_000]]);
   });
 
   test("restores visible links if the retry edit fails", async () => {
-    const { message, edit } = source([]);
+    const { message, edit, deps } = source();
+    deps.waitForPreviews.mockResolvedValue(false);
     edit
       .mockResolvedValueOnce({ content: FX_URL })
       .mockRejectedValueOnce(new Error("network unavailable"));
-    const outcome = await replyWithEmbedPreview(message, embedPreviewFor(URL), async () => {});
+    const outcome = await replyWithEmbedPreview(message, embedPreviewFor(URL), deps);
     expect(Result.isOk(outcome)).toBe(true);
     expect(message.reply).toHaveBeenCalledTimes(1);
     expect(message.suppressEmbeds).not.toHaveBeenCalled();
