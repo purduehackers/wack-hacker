@@ -25,6 +25,7 @@ import type { ConversationFlow } from "../utils/conversation/index.ts";
 import { agentChat, conversationDone } from "./agent-chat.ts";
 import { antiSpam } from "./anti-spam.ts";
 import { autoThread } from "./auto-thread.ts";
+import { bheePing, createBheeClassifier } from "./bhee-ping.ts";
 import { chatFeedback } from "./chat-indexer.ts";
 import { embedPreview } from "./embed-preview.ts";
 import { emitDashboardMessage } from "./emit-dashboard-message.ts";
@@ -71,6 +72,7 @@ export function buildEventHandlers(deps: EventDeps): readonly AnyEventHandler[] 
       redis: deps.redis,
     }),
     transcribeVoiceMessage(createTranscriber({ apiKey: deps.groqApiKey })),
+    bheePing(createBheeClassifier({ apiKey: deps.groqApiKey })),
     antiSpam(),
   ];
 }
