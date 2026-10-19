@@ -13,8 +13,8 @@
 
 import type { RedisClient } from "@repo/shared/redis";
 import type { Reporter } from "@repo/shared/result/observe";
+import { createGateway } from "ai";
 
-import type { AgentClient } from "../agent/client.ts";
 import { createTurnMessageStore } from "../agent/turn-messages.ts";
 import { createDeduplicator } from "../framework/dedup.ts";
 import type { AnyEventHandler } from "../framework/events.ts";
@@ -46,7 +46,7 @@ export interface EventDeps {
   readonly dashboardApiUrl: string;
   readonly dashboardApiToken: string;
   readonly groqApiKey: string;
-  readonly eve: Pick<AgentClient, "streamToken">;
+  readonly vercelToken: string;
 }
 
 export function buildEventHandlers(deps: EventDeps): readonly AnyEventHandler[] {
@@ -54,6 +54,7 @@ export function buildEventHandlers(deps: EventDeps): readonly AnyEventHandler[] 
   const drops = createImageDropStore(deps.redis);
   const ships = createShipsClient({ apiKey: deps.shipApiKey });
   const turnMessages = createTurnMessageStore(deps.redis);
+  const gateway = createGateway({ apiKey: deps.vercelToken, teamIdOrSlug: "purdue-hackers" });
 
   return [
     agentChat({ agent: deps.agent }),
@@ -74,7 +75,7 @@ export function buildEventHandlers(deps: EventDeps): readonly AnyEventHandler[] 
       redis: deps.redis,
     }),
     transcribeVoiceMessage(createTranscriber({ apiKey: deps.groqApiKey })),
-    bheePing(deps.eve),
+    bheePing(gateway.decisionModel("typesafe-ai/jev-1.14.0")),
     antiSpam(),
   ];
 }

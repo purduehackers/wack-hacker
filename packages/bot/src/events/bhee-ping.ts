@@ -1,10 +1,10 @@
 import { DISCORD_IDS, UserRole, roleAtLeast } from "@repo/shared/discord";
 import { messageOf, Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
-import { createGateway, experimental_decide as decide } from "ai";
+import { experimental_decide as decide } from "ai";
+import type { Experimental_DecisionModel } from "ai";
 import { ChannelType } from "discord.js";
 
-import type { AgentClient } from "../agent/client.ts";
 import { defineEvent } from "../framework/events.ts";
 import { wallClockDate } from "../utils/dates.ts";
 import { roleOf } from "../utils/roles.ts";
@@ -12,7 +12,7 @@ import { roleOf } from "../utils/roles.ts";
 const ENTRY_CUE_PATTERN =
   /\b(?:bhee|ee|brown\s+family|doors?|lock(?:ed)?|let\s+(?:(?:me|us)\s+)?in(?:to)?|open\s+up|outside|entrance|get\s+in(?:to)?|come\s+open)\b/iu;
 
-export function bheePing(eve: Pick<AgentClient, "streamToken">) {
+export function bheePing(model: Experimental_DecisionModel) {
   return defineEvent({
     name: "bhee-ping",
     kind: "message",
@@ -37,15 +37,8 @@ export function bheePing(eve: Pick<AgentClient, "streamToken">) {
 
       return Result.tryPromise({
         try: async () => {
-          const token = await eve.streamToken();
-          if (Result.isError(token)) throw token.error;
-          const gateway = createGateway({
-            // The SDK's bearer field is named apiKey, but this credential is OIDC.
-            apiKey: token.value,
-            headers: { "ai-gateway-auth-method": "oidc" },
-          });
           const { answers } = await decide({
-            model: gateway.decisionModel("typesafe-ai/jev-1.14.0"),
+            model,
             state: message.content.trim(),
             questions: {
               needsLetIn: {
