@@ -463,7 +463,7 @@ export const WIRE_ROUTES = {
   reset: "/discord/reset",
   steer: "/discord/steer",
   /**
-   * A freshly minted credential for reading a session's event stream.
+   * A fresh OIDC credential for session streams and AI Gateway.
    *
    * The bot has no Vercel identity of its own, so it cannot mint one; the agent
    * runs inside a function and can. Asked for on demand rather than stored,

@@ -97,7 +97,6 @@ export const env = createEnv({
     SHIP_API_KEY: secret.optional(),
     PHACK_API_KEY: secret.optional(),
     GROQ_API_KEY: secret.optional(),
-    BOT_AI_GATEWAY_API_KEY: secret.optional(),
     INSTAGRAM_USER_ID: identifier.optional(),
     INSTAGRAM_ACCESS_TOKEN: secret.optional(),
     /**

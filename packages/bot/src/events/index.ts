@@ -13,8 +13,8 @@
 
 import type { RedisClient } from "@repo/shared/redis";
 import type { Reporter } from "@repo/shared/result/observe";
-import { createGateway } from "ai";
 
+import type { AgentClient } from "../agent/client.ts";
 import { createTurnMessageStore } from "../agent/turn-messages.ts";
 import { createDeduplicator } from "../framework/dedup.ts";
 import type { AnyEventHandler } from "../framework/events.ts";
@@ -26,7 +26,7 @@ import type { ConversationFlow } from "../utils/conversation/index.ts";
 import { agentChat, conversationDone } from "./agent-chat.ts";
 import { antiSpam } from "./anti-spam.ts";
 import { autoThread } from "./auto-thread.ts";
-import { bheePing } from "./bhee-ping.ts";
+import { bheePing, createBheeDecisionModel } from "./bhee-ping.ts";
 import { chatFeedback } from "./chat-indexer.ts";
 import { embedPreview } from "./embed-preview.ts";
 import { emitDashboardMessage } from "./emit-dashboard-message.ts";
@@ -46,7 +46,7 @@ export interface EventDeps {
   readonly dashboardApiUrl: string;
   readonly dashboardApiToken: string;
   readonly groqApiKey: string;
-  readonly aiGatewayApiKey: string;
+  readonly eve: Pick<AgentClient, "streamToken">;
 }
 
 export function buildEventHandlers(deps: EventDeps): readonly AnyEventHandler[] {
@@ -54,7 +54,6 @@ export function buildEventHandlers(deps: EventDeps): readonly AnyEventHandler[] 
   const drops = createImageDropStore(deps.redis);
   const ships = createShipsClient({ apiKey: deps.shipApiKey });
   const turnMessages = createTurnMessageStore(deps.redis);
-  const gateway = createGateway({ apiKey: deps.aiGatewayApiKey });
 
   return [
     agentChat({ agent: deps.agent }),
@@ -75,7 +74,7 @@ export function buildEventHandlers(deps: EventDeps): readonly AnyEventHandler[] 
       redis: deps.redis,
     }),
     transcribeVoiceMessage(createTranscriber({ apiKey: deps.groqApiKey })),
-    bheePing(gateway.decisionModel("typesafe-ai/jev-1.14.0")),
+    bheePing(() => createBheeDecisionModel(deps.eve)),
     antiSpam(),
   ];
 }

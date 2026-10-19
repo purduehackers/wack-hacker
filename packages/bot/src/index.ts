@@ -72,11 +72,12 @@ function createConversationSeam(
   conversations: ConversationStore,
   commands: readonly SlashCommand[],
 ) {
+  const eve = createAgentClient({
+    baseUrl: env.AGENT_URL,
+    secret: env.AGENT_INGRESS_SECRET,
+  });
   const flow = createConversationFlow({
-    eve: createAgentClient({
-      baseUrl: env.AGENT_URL,
-      secret: env.AGENT_INGRESS_SECRET,
-    }),
+    eve,
     store: conversations,
     rest: createDiscordRest(client.rest),
     turnMessages: createTurnMessageStore(redis),
@@ -91,7 +92,7 @@ function createConversationSeam(
     guildId: DISCORD_GUILD_ID,
   });
   attachInteractionDispatcher(client, commands, hitl, redis);
-  return flow;
+  return { flow, eve };
 }
 
 function logStartupSummary(input: {
@@ -147,7 +148,7 @@ async function main(): Promise<void> {
 
   let operationalReady = false;
   const conversations = createConversationStore({ redis });
-  const flow = createConversationSeam(client, redis, conversations, commands);
+  const { flow, eve } = createConversationSeam(client, redis, conversations, commands);
 
   // Reports ready: false until the gateway connects.
   startServer({
@@ -191,7 +192,7 @@ async function main(): Promise<void> {
     dashboardApiUrl: env.PHACK_API_URL,
     dashboardApiToken: env.PHACK_API_KEY,
     groqApiKey: env.GROQ_API_KEY,
-    aiGatewayApiKey: env.AI_GATEWAY_API_KEY,
+    eve,
   });
   attachEventRouter(ready, {
     handlers,

@@ -1,11 +1,12 @@
 import { DISCORD_IDS, UserRole, roleAtLeast } from "@repo/shared/discord";
 import { messageOf, Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
-import { experimental_decide as decide } from "ai";
+import { createGateway, experimental_decide as decide } from "ai";
 import type { Experimental_DecisionModel } from "ai";
 import { ChannelType } from "discord.js";
 import type { GuildBasedChannel, Message, MessageReplyOptions } from "discord.js";
 
+import type { AgentClient } from "../agent/client.ts";
 import { defineEvent } from "../framework/events.ts";
 import { wallClockDate } from "../utils/dates.ts";
 import { roleOf } from "../utils/roles.ts";
@@ -13,6 +14,18 @@ import { roleOf } from "../utils/roles.ts";
 // Broad local filter; Jev decides whether the author actually needs entry now.
 const ENTRY_CUE_PATTERN =
   /\b(?:bhee|ee|brown\s+family|doors?|lock(?:ed)?|let\s+(?:(?:me|us)\s+)?in(?:to)?|open\s+up|outside|entrance|get\s+in(?:to)?|come\s+open)\b/iu;
+
+export async function createBheeDecisionModel(agent: Pick<AgentClient, "streamToken">) {
+  // The bot has no ambient OIDC token. Reuse the authenticated token route on
+  // every classification so a long-running container never keeps an expired copy.
+  const token = await agent.streamToken();
+  if (Result.isError(token)) throw token.error;
+  return createGateway({
+    // The SDK accepts bearer credentials through apiKey; identify this as OIDC.
+    apiKey: token.value,
+    headers: { "ai-gateway-auth-method": "oidc" },
+  }).decisionModel("typesafe-ai/jev-1.14.0");
+}
 
 export function hasBheeEntryCue(content: string): boolean {
   return ENTRY_CUE_PATTERN.test(content);
@@ -42,7 +55,7 @@ interface BheePingMessage extends Pick<Message, "content" | "createdAt"> {
 export async function pingOrganizersIfNeeded(
   message: BheePingMessage,
   senderRole: UserRole,
-  model: Experimental_DecisionModel,
+  getModel: () => Promise<Experimental_DecisionModel>,
 ): Promise<Result<undefined, Transient>> {
   const { channel } = message;
   const isPublicThread = channel.type === ChannelType.PublicThread;
@@ -57,9 +70,9 @@ export async function pingOrganizersIfNeeded(
   if (!isHackNightActive(channelName, message.createdAt)) return Result.ok(undefined);
 
   const classification = await Result.tryPromise({
-    try: () =>
+    try: async () =>
       decide({
-        model,
+        model: await getModel(),
         state: content,
         questions: {
           needsLetIn: {
@@ -98,14 +111,14 @@ export async function pingOrganizersIfNeeded(
   });
 }
 
-export function bheePing(model: Experimental_DecisionModel) {
+export function bheePing(getModel: () => Promise<Experimental_DecisionModel>) {
   return defineEvent({
     name: "bhee-ping",
     kind: "message",
     dedupKey: (message) => message.id,
     handle: async (message, context) => {
       if (context.isBotMention || !message.inGuild()) return Result.ok(undefined);
-      return pingOrganizersIfNeeded(message, roleOf(message), model);
+      return pingOrganizersIfNeeded(message, roleOf(message), getModel);
     },
   });
 }

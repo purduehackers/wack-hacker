@@ -1,12 +1,18 @@
-import { describe, expect, mock, test } from "bun:test";
+import { describe, expect, mock, spyOn, test } from "bun:test";
 
 import { DISCORD_IDS, UserRole } from "@repo/shared/discord";
+import { Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { Experimental_DecisionMockModelV4 as DecisionModel } from "ai/test";
 import { ChannelType } from "discord.js";
 import type { MessageReplyOptions } from "discord.js";
 
-import { hasBheeEntryCue, isHackNightActive, pingOrganizersIfNeeded } from "./bhee-ping.ts";
+import {
+  createBheeDecisionModel,
+  hasBheeEntryCue,
+  isHackNightActive,
+  pingOrganizersIfNeeded,
+} from "./bhee-ping.ts";
 
 type PingMessage = Parameters<typeof pingOrganizersIfNeeded>[0];
 const FRIDAY_NIGHT = new Date("2026-10-17T01:30:00Z");
@@ -33,6 +39,7 @@ function source(overrides: Partial<PingMessage> = {}, senderRole: UserRole = Use
     warnings: [],
   }));
   const model = new DecisionModel({ doDecide });
+  const getModel = mock<Parameters<typeof pingOrganizersIfNeeded>[2]>(async () => model);
   const message = {
     content: "can someone let me into bhee",
     createdAt: FRIDAY_NIGHT,
@@ -44,7 +51,8 @@ function source(overrides: Partial<PingMessage> = {}, senderRole: UserRole = Use
   return {
     reply,
     doDecide,
-    run: () => pingOrganizersIfNeeded(message, senderRole, model),
+    getModel,
+    run: () => pingOrganizersIfNeeded(message, senderRole, getModel),
   };
 }
 
@@ -89,6 +97,52 @@ describe("Hack Night activity", () => {
   ])("uses Indiana time at %s", (instant, active) => {
     expect(isHackNightActive("🌙hack-night", new Date(instant))).toBe(active);
     expect(isHackNightActive(undefined, new Date(instant))).toBe(active);
+  });
+});
+
+describe("Gateway OIDC", () => {
+  test("fetches fresh OIDC credentials for each Gateway classification", async () => {
+    const streamToken = mock(async () => Result.ok("first-oidc-token"));
+    const decision = {
+      answers: { needsLetIn: { type: "boolean", probability: 0.99 } },
+    };
+    const fetchSpy = spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(Response.json(decision))
+      .mockResolvedValueOnce(Response.json(decision));
+    try {
+      const { run, reply, getModel } = source();
+      getModel.mockImplementation(() => createBheeDecisionModel({ streamToken }));
+      expect(Result.isOk(await run())).toBe(true);
+      streamToken.mockResolvedValueOnce(Result.ok("second-oidc-token"));
+      expect(Result.isOk(await run())).toBe(true);
+
+      expect(streamToken).toHaveBeenCalledTimes(2);
+      expect(reply).toHaveBeenCalledTimes(2);
+      expect(
+        fetchSpy.mock.calls.map(([, init]) => new Headers(init?.headers).get("authorization")),
+      ).toEqual(["Bearer first-oidc-token", "Bearer second-oidc-token"]);
+      for (const [url, init] of fetchSpy.mock.calls) {
+        expect(url).toBe("https://ai-gateway.vercel.sh/v4/ai/decision-model");
+        const headers = new Headers(init?.headers);
+        expect(headers.get("ai-gateway-auth-method")).toBe("oidc");
+        expect(headers.get("ai-model-id")).toBe("typesafe-ai/jev-1.14.0");
+      }
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  test("does not classify or reply when the OIDC token is unavailable", async () => {
+    const { run, reply, doDecide, getModel } = source();
+    const streamToken = mock(async () =>
+      Result.err(new Transient({ operation: "agent.stream-token", detail: "unavailable" })),
+    );
+    getModel.mockImplementation(() => createBheeDecisionModel({ streamToken }));
+    const result = await run();
+    expect(Result.isError(result)).toBe(true);
+    expect(streamToken).toHaveBeenCalledTimes(1);
+    expect(doDecide).not.toHaveBeenCalled();
+    expect(reply).not.toHaveBeenCalled();
   });
 });
 
@@ -172,15 +226,17 @@ describe("local filters", () => {
     },
     { mentions: { roles: new Set<string>([DISCORD_IDS.roles.ORGANIZER]) } },
   ])("skips classification and replies for %j", async (overrides) => {
-    const { run, reply, doDecide } = source(overrides);
+    const { run, reply, doDecide, getModel } = source(overrides);
     expect(Result.isOk(await run())).toBe(true);
+    expect(getModel).not.toHaveBeenCalled();
     expect(doDecide).not.toHaveBeenCalled();
     expect(reply).not.toHaveBeenCalled();
   });
 
   test.each([UserRole.Organizer, UserRole.Admin])("ignores %s messages", async (role) => {
-    const { run, reply, doDecide } = source({}, role);
+    const { run, reply, doDecide, getModel } = source({}, role);
     expect(Result.isOk(await run())).toBe(true);
+    expect(getModel).not.toHaveBeenCalled();
     expect(doDecide).not.toHaveBeenCalled();
     expect(reply).not.toHaveBeenCalled();
   });

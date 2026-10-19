@@ -289,7 +289,6 @@ export type BotProcessEnvironment = Readonly<Record<string, string>> & {
   readonly SHIP_API_KEY: string;
   readonly PHACK_API_KEY: string;
   readonly GROQ_API_KEY: string;
-  readonly AI_GATEWAY_API_KEY: string;
   readonly INSTAGRAM_USER_ID: string;
   readonly INSTAGRAM_ACCESS_TOKEN: string;
 };
@@ -307,7 +306,6 @@ const REQUIRED_BOT_ENV_KEYS = [
   "SHIP_API_KEY",
   "PHACK_API_KEY",
   "GROQ_API_KEY",
-  "AI_GATEWAY_API_KEY",
   "INSTAGRAM_USER_ID",
   "INSTAGRAM_ACCESS_TOKEN",
 ] as const satisfies readonly (keyof BotProcessEnvironment)[];

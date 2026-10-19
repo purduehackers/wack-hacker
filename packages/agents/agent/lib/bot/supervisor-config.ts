@@ -80,7 +80,6 @@ function botEnvironment(source: AgentEnv): BotProcessEnvironment {
     SHIP_API_KEY: required(source.SHIP_API_KEY, "SHIP_API_KEY"),
     PHACK_API_KEY: required(source.PHACK_API_KEY, "PHACK_API_KEY"),
     GROQ_API_KEY: required(source.GROQ_API_KEY, "GROQ_API_KEY"),
-    AI_GATEWAY_API_KEY: required(source.BOT_AI_GATEWAY_API_KEY, "BOT_AI_GATEWAY_API_KEY"),
     INSTAGRAM_USER_ID: required(source.INSTAGRAM_USER_ID, "INSTAGRAM_USER_ID"),
     INSTAGRAM_ACCESS_TOKEN: required(source.INSTAGRAM_ACCESS_TOKEN, "INSTAGRAM_ACCESS_TOKEN"),
     PORT: String(BOT_PORT_DEFAULT),
