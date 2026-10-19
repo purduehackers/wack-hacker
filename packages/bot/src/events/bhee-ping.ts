@@ -6,6 +6,7 @@ import type { Experimental_DecisionModel } from "ai";
 import { ChannelType } from "discord.js";
 
 import { defineEvent } from "../framework/events.ts";
+import { wallClockDate } from "../utils/dates.ts";
 
 export function bheePing(model: Experimental_DecisionModel) {
   return defineEvent({
@@ -23,6 +24,12 @@ export function bheePing(model: Experimental_DecisionModel) {
         !text
       )
         return Result.ok(undefined);
+
+      const local = wallClockDate(message.createdAt);
+      const isHackNight =
+        (local.getDay() === 5 && local.getHours() >= 20) ||
+        (local.getDay() === 6 && local.getHours() < 6);
+      if (!isHackNight) return Result.ok(undefined);
 
       return Result.tryPromise({
         try: async () => {
