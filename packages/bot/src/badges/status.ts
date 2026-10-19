@@ -1,230 +1,118 @@
-import {
-  remainingCriteria,
-  staticPassed,
-  reviewMaterials,
-  type Review,
-} from "@purduehackers/badges/contracts";
+import { remainingCriteria, staticPassed, reviewMaterials } from "@purduehackers/badges/contracts";
+import type { Review } from "@purduehackers/badges/contracts";
 import { materialDescription } from "@purduehackers/badges/materials";
 import { displayDate, sheetLabel } from "@purduehackers/badges/presentation";
-import type { Action } from "@purduehackers/badges/wire";
-import { AttachmentBuilder, ComponentType, escapeMarkdown } from "discord.js";
+import { AttachmentBuilder, escapeMarkdown } from "discord.js";
 import type { APIEmbed, Message } from "discord.js";
 
+import type { BadgeCard } from "./card.ts";
+import { messageControls } from "./components.ts";
 import { badgeColors } from "./messages.ts";
-import type { BadgeStatus } from "./messages.ts";
 
-interface StepResult {
-  status: BadgeStatus;
-  label?: string;
-  description?: string;
-  selectedFiles?: boolean;
-  keepPreview?: boolean;
-}
-type CardMessage = Pick<Message, "embeds" | "components"> & Partial<Pick<Message, "attachments">>;
+type CardMessage = Pick<Message, "embeds" | "components">;
 
-export function actionResult(action: Action, review: Review): StepResult | undefined {
-  if (review.failure || review.contextChanged) return { status: "error", label: "Needs attention" };
-  switch (action.kind) {
-    case "confirm":
-      if (!staticPassed(review) || remainingCriteria(review).length)
-        return { status: "warning", label: "Design checks pending" };
-      return {
-        status: "success",
-        description: [
-          "✅ **Automatic QA passed**",
-          "-# - Allowed colors",
-          "-# - Vector artwork",
-          "-# - Outlined text",
-          "-# - No red fills or red borders on filled artwork",
-          "-# - Closed cutting outlines",
-          "-# - No unsupported effects or linked artwork",
-          "",
-          "✅ **Manual QA passed**",
-          "-# - Correct version and date",
-          "-# - Readable details",
-          "-# - Strong connections",
-          "-# - Clear stamp impression",
-        ].join("\n"),
-      };
-    case "material":
-      return {
-        status: "success",
-        label: "Acrylic Selected",
-        description:
-          review.sheetBatch
-            ?.map(
-              (sheet) =>
-                `${sheet.quantity} × ${sheet.material ? materialDescription(sheet.material) : "Acrylic"} · ${sheetLabel(sheet)} in`,
-            )
-            .join("\n") ?? reviewMaterials(review).map(materialDescription).join("\n"),
-      };
-    case "event":
-      return {
-        status: "success",
-        label: "Hack Night selected",
-        ...(review.event
-          ? {
-              description: `${escapeMarkdown(review.event.name)}\n${displayDate(review.event.date)}`,
-            }
-          : {}),
-      };
-    case "roles":
-    case "replace":
-      return {
-        status: "success",
-        label: review.badge ? "Badge Selected" : "Stamp Selected",
-        selectedFiles: true,
-        keepPreview: true,
-        description: (["badge", "stamp"] as const)
-          .flatMap((role) =>
-            review[role]
-              ? [
-                  `${role === "badge" ? "Badge" : "Stamp"}: **${escapeMarkdown(review[role].name)}**`,
-                ]
-              : [],
-          )
-          .join("\n"),
-      };
-    case "upload":
-      return action.file
-        ? { status: "success", label: `New ${action.role} uploaded` }
-        : { status: "warning", label: `Replacing ${action.role}` };
-    case "publish":
-      return review.publication?.shortlink
-        ? { status: "success", label: "Files published" }
-        : { status: "warning", label: "Saving files" };
-    case "quantity":
-      return { status: "success", label: `Target: ${action.count ?? review.targetCount} badges` };
-    case "sheets":
-      return {
-        status: "success",
-        label: "Sheets updated",
-        ...(review.sheetBatch
-          ? {
-              description: review.sheetBatch
-                .map(
-                  (sheet) =>
-                    `${sheet.material ? `${materialDescription(sheet.material)} · ` : ""}${sheetLabel(sheet)} in — ${sheet.quantity} ${sheet.quantity === 1 ? "sheet" : "sheets"}`,
-                )
-                .join("\n"),
-            }
-          : {}),
-      };
-    case "layout":
-      return { status: "success", label: "Layout selected" };
-    case "choose-material":
-      return undefined;
-    case "keep-design":
-      return { status: "success", label: "Current design kept" };
-    case "retry":
-      return { status: "warning", label: "Retrying" };
-    case "refresh":
-      return { status: "warning", label: "Checking again" };
-  }
-}
+const confirmed = `✅ **Automatic QA passed**
+-# - Allowed colors
+-# - Vector artwork
+-# - Outlined text
+-# - No red fills or red borders on filled artwork
+-# - Closed cutting outlines
+-# - No unsupported effects or linked artwork
 
-function revisionResult(commands: string[], review: Review): StepResult | undefined {
-  if (commands.includes("keep-design") && !review.pendingRole)
-    return actionResult({ kind: "keep-design" }, review);
-  if (commands.includes("retry") && !review.failure)
-    return { status: "success", label: "Retry complete" };
-  if (commands.includes("refresh") && !review.contextChanged)
-    return { status: "success", label: "Details updated" };
-  if (commands.includes("confirm") && !reviewMaterials(review).length)
-    return actionResult({ kind: "choose-material" }, review);
-  const upload = commands.find((name) => name.startsWith("upload."));
-  if (!upload) return undefined;
-  const role = upload.endsWith("stamp") ? "stamp" : "badge";
-  return review.pendingRole
-    ? actionResult({ kind: "upload", role: review.pendingRole }, review)
-    : { status: "success", label: `${role === "badge" ? "Badge" : "Stamp"} updated` };
-}
+✅ **Manual QA passed**
+-# - Correct version and date
+-# - Readable details
+-# - Strong connections
+-# - Clear stamp impression`;
 
-function progressResult(title: string | undefined, review: Review): StepResult | undefined {
-  switch (title) {
-    case "Checking again":
-    case "Retrying":
-      return review.failure || review.contextChanged
-        ? { status: "error", label: "Needs attention" }
-        : { status: "success", label: "Check complete" };
-    case "Saving files":
-      return actionResult({ kind: "publish" }, review);
-    default:
-      return undefined;
-  }
-}
-
-export function deliveredResult(message: CardMessage, review: Review): StepResult | undefined {
-  const commands = message.components
-    .flatMap((row) => (row.type === ComponentType.ActionRow ? row.components : []))
-    .flatMap((component) =>
-      "customId" in component && component.customId?.startsWith(`badge:${review.id}:`)
-        ? [component.customId.split(":")[3] ?? ""]
-        : [],
-    );
+function completedDesign(commands: string[], review: Review, title: string): APIEmbed | undefined {
   if (commands.includes("confirm") && !remainingCriteria(review).length)
-    return actionResult({ kind: "confirm" }, review);
-  if (
-    commands.some((name) => name === "material" || name.startsWith("material.")) &&
-    reviewMaterials(review).length
-  )
-    return actionResult({ kind: "material" }, review);
+    return staticPassed(review)
+      ? { description: confirmed }
+      : { title: "Design checks pending", color: badgeColors.warning };
+  if (commands.some((name) => /^material(?:\.|$)/u.test(name)) && reviewMaterials(review).length)
+    return {
+      title: "Acrylic Selected",
+      description:
+        review.sheetBatch
+          ?.map(
+            (sheet) =>
+              `${sheet.quantity} × ${sheet.material ? materialDescription(sheet.material) : "Acrylic"} · ${sheetLabel(sheet)} in`,
+          )
+          .join("\n") ?? reviewMaterials(review).map(materialDescription).join("\n"),
+    };
   if (commands.includes("event") && review.event)
-    return actionResult({ kind: "event", id: review.event.id }, review);
-  if (commands.some((name) => /^(?:roles|replace)\./u.test(name)) && review.rolesConfirmed)
-    return actionResult({ kind: "roles", badge: 0 }, review);
-  if (commands.includes("publish") && review.approval)
-    return actionResult({ kind: "publish" }, review);
-  if (commands.includes("sheets")) return { status: "success", label: "Production updated" };
-  if (commands.some((name) => name.startsWith("quantity.")) && review.targetCount)
-    return actionResult({ kind: "quantity", count: review.targetCount }, review);
-  const last = message.embeds.at(-1);
+    return {
+      title: "Hack Night selected",
+      description: `${escapeMarkdown(review.event.name)}\n${displayDate(review.event.date)}`,
+    };
   if (
     review.rolesConfirmed &&
-    ["✅ Badge Selected", "✅ Stamp Selected"].includes(last?.title ?? "")
+    (commands.some((name) => /^(?:roles|replace)\./u.test(name)) ||
+      ["✅ Badge Selected", "✅ Stamp Selected"].includes(title))
   )
-    return actionResult({ kind: "roles", badge: 0 }, review);
-  return revisionResult(commands, review) ?? progressResult(last?.title ?? undefined, review);
+    return {
+      title: review.badge ? "Badge Selected" : "Stamp Selected",
+      description: (["badge", "stamp"] as const)
+        .flatMap((role) =>
+          review[role]
+            ? [`${role === "badge" ? "Badge" : "Stamp"}: **${escapeMarkdown(review[role].name)}**`]
+            : [],
+        )
+        .join("\n"),
+    };
+  return undefined;
 }
 
-function attachedImage(embed: APIEmbed, message: CardMessage): APIEmbed {
-  if (!embed.image) return embed;
-  const attachment = [...(message.attachments?.values() ?? [])].find(
-    (file) => file.url.split("?")[0] === embed.image?.url.split("?")[0],
+function completedDetails(message: CardMessage, { review }: BadgeCard): APIEmbed | undefined {
+  const commands = messageControls(message).flatMap((component) =>
+    "customId" in component && component.customId?.startsWith(`badge:${review.id}:`)
+      ? [component.customId.split(":")[3] ?? ""]
+      : [],
   );
-  const hosted =
-    /^https:\/\/(?:cdn\.discordapp\.com|media\.discordapp\.net)\/attachments\/\d+\/\d+\/([^/?#]+)/u.exec(
-      embed.image.url,
-    )?.[1];
-  const name = attachment?.name ?? (hosted ? decodeURIComponent(hosted) : undefined);
-  return name ? { ...embed, image: { url: `attachment://${name}` } } : embed;
+  const title = message.embeds.at(-1)?.title ?? "";
+  const design = completedDesign(commands, review, title);
+  if (design) return design;
+  if ((commands.includes("publish") && review.approval) || title === "Saving files")
+    return review.publication?.shortlink
+      ? { title: "Files published" }
+      : { title: "Saving files", color: badgeColors.warning };
+  if (commands.includes("sheets")) return { title: "Production updated" };
+  if (commands.some((name) => name.startsWith("quantity.")) && review.targetCount)
+    return { title: `Target: ${review.targetCount} badges` };
+  if (commands.includes("keep-design") && !review.pendingRole)
+    return { title: "Current design kept" };
+  if (commands.includes("retry") && !review.failure) return { title: "Retry complete" };
+  if (commands.includes("refresh") && !review.contextChanged) return { title: "Details updated" };
+  if (commands.includes("confirm") && !reviewMaterials(review).length) return undefined;
+  const upload = commands.find((name) => name.startsWith("upload."));
+  if (upload) {
+    if (review.pendingRole)
+      return { title: `Replacing ${review.pendingRole}`, color: badgeColors.warning };
+    return { title: `${upload.endsWith("stamp") ? "Stamp" : "Badge"} updated` };
+  }
+  if (["Checking again", "Retrying"].includes(title)) return { title: "Check complete" };
+  return undefined;
 }
 
-export function settledCard(
-  message: CardMessage,
-  result: StepResult,
-  identifiedFile?: { name: string; data: string },
-) {
-  const file = result.selectedFiles ? identifiedFile : undefined;
+/** Both button and chat actions settle here, immediately before the next card is acknowledged. */
+export function settledCard(message: CardMessage, card: BadgeCard) {
+  let embed = completedDetails(message, card);
+  if (!embed) return undefined;
+  if (card.review.failure || card.review.contextChanged)
+    embed = { title: "Needs attention", color: badgeColors.error };
+  const keepPreview = ["Badge Selected", "Stamp Selected"].includes(embed.title ?? "");
+  const file = keepPreview ? card.identifiedFile : undefined;
+  if (file) embed.image = { url: `attachment://${file.name}` };
+  const color = embed.color ?? badgeColors.success;
+  if (embed.title && color === badgeColors.success) embed.title = `✅ ${embed.title}`;
   return {
-    embeds: message.embeds.map((embed) => ({
-      ...(result.label
-        ? { title: `${result.status === "success" ? "✅ " : ""}${result.label}` }
-        : {}),
-      color: badgeColors[result.status],
-      ...(result.description === undefined ? {} : { description: result.description }),
-      ...(result.keepPreview ? { image: attachedImage(embed.toJSON(), message).image } : {}),
-      ...(file ? { image: { url: `attachment://${file.name}` } } : {}),
-    })),
+    embeds: [{ ...embed, color }],
     components: [],
+    attachments: [],
     ...(file
-      ? {
-          attachments: [],
-          files: [new AttachmentBuilder(Buffer.from(file.data, "base64"), { name: file.name })],
-        }
-      : result.keepPreview
-        ? {}
-        : { attachments: [] }),
+      ? { files: [new AttachmentBuilder(Buffer.from(file.data, "base64"), { name: file.name })] }
+      : {}),
     allowedMentions: { parse: [] },
   };
 }

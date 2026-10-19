@@ -11,50 +11,42 @@ import {
   thicknessLabel,
 } from "@purduehackers/badges/materials";
 import { sheetKey, sheetLabel } from "@purduehackers/badges/presentation";
-import {
-  ComponentType,
-  LabelBuilder,
-  ModalBuilder,
-  TextInputBuilder,
-  TextInputStyle,
-} from "discord.js";
+import { ComponentType } from "discord.js";
 import type { ModalSubmitFields } from "discord.js";
 
+import { textModal } from "./components.ts";
+
 export const SHEETS_PER_MODAL = 5;
-export function sheetsModal(control: string, review: Review, stock: StockItem[]): ModalBuilder {
+export function sheetsModal(control: string, review: Review, stock: StockItem[]) {
   if (!stock.length)
     throw new Error("This acrylic is out of stock. Ask an organizer to update inventory.");
   if (stock.length > SHEETS_PER_MODAL) throw new Error("Choose a group of sheets first.");
-  return new ModalBuilder()
-    .setCustomId(control)
-    .setTitle("Choose cutting sheets")
-    .addLabelComponents(
-      stock.map((sheet) => {
-        const label = sheetLabel(sheet);
-        const material = getMaterial(sheet.materialId);
-        const remaining = Math.max(0, sheet.quantity - sheet.reserved);
-        const available = Math.min(remaining, MAX_CUTTING_SHEETS);
-        const selected =
-          review.sheetBatch?.find(
-            (item) =>
-              sheetKey({ ...item, material: item.material ?? reviewMaterials(review)[0] }) ===
-              sheetKey({ ...sheet, material: sheet }),
-          )?.quantity ?? 0;
-        return new LabelBuilder()
-          .setLabel(`${material.name} · ${label} in`)
-          .setDescription(
-            `${MATERIAL_TYPE_CONFIGS[material.type].label} · ${thicknessLabel(sheet.thicknessMm)} · ${Math.max(0, sheet.quantity - sheet.reserved)} available. Enter 0 to skip.`,
-          )
-          .setTextInputComponent(
-            new TextInputBuilder()
-              .setCustomId(`sheet:${sheet.id}`)
-              .setStyle(TextInputStyle.Short)
-              .setRequired(true)
-              .setMaxLength(2)
-              .setValue(String(Math.min(selected, available))),
-          );
-      }),
-    );
+  return textModal(
+    control,
+    "Choose cutting sheets",
+    stock.map((sheet) => {
+      const label = sheetLabel(sheet);
+      const material = getMaterial(sheet.materialId);
+      const remaining = Math.max(0, sheet.quantity - sheet.reserved);
+      const available = Math.min(remaining, MAX_CUTTING_SHEETS);
+      const selected =
+        review.sheetBatch?.find(
+          (item) =>
+            sheetKey({ ...item, material: item.material ?? reviewMaterials(review)[0] }) ===
+            sheetKey({ ...sheet, material: sheet }),
+        )?.quantity ?? 0;
+      return {
+        label: `${material.name} · ${label} in`,
+        description: `${MATERIAL_TYPE_CONFIGS[material.type].label} · ${thicknessLabel(sheet.thicknessMm)} · ${remaining} available. Enter 0 to skip.`,
+        input: {
+          custom_id: `sheet:${sheet.id}`,
+          required: true,
+          max_length: 2,
+          value: String(Math.min(selected, available)),
+        },
+      };
+    }),
+  );
 }
 
 export function parseSheets(submission: ModalSubmitFields, review: Review, stock: StockItem[]) {

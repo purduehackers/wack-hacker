@@ -3,36 +3,27 @@ import type { BadgeClient } from "@purduehackers/badges/client";
 import { BADGES_CHANNEL_ID, MAX_BADGE_COUNT, reviewSchema } from "@purduehackers/badges/contracts";
 import { stockItemSchema } from "@purduehackers/badges/inventory-contracts";
 import { failureGuidance } from "@purduehackers/badges/presentation";
-import { actionSchema, componentId } from "@purduehackers/badges/wire";
+import { actionName, actionSchema, componentId } from "@purduehackers/badges/wire";
 import type { Action } from "@purduehackers/badges/wire";
 import { bearerMatches } from "@repo/shared/bearer";
 import { DISCORD_GUILD_ID, roleAtLeast, roleFromMemberRoles, UserRole } from "@repo/shared/discord";
 import { messageOf } from "@repo/shared/errors";
-import {
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-  FileUploadBuilder,
-  LabelBuilder,
-  MessageFlags,
-  ModalBuilder,
-  TextInputBuilder,
-  TextInputStyle,
-} from "discord.js";
+import { ComponentType, MessageFlags } from "discord.js";
 import type {
   ButtonInteraction,
   Interaction,
   ModalSubmitInteraction,
   StringSelectMenuInteraction,
   InteractionReplyOptions,
+  APIModalInteractionResponseCallbackData,
 } from "discord.js";
 import { z } from "zod";
 
+import { button, link, row, textModal } from "./components.ts";
 import { materialOptions, materialsModal, materialsPicker, parseMaterials } from "./materials.ts";
 import { badgeEmbed } from "./messages.ts";
 import { runBadgeWork, withBadgeTyping } from "./schedule.ts";
 import { parseSheets, SHEETS_PER_MODAL, sheetsModal } from "./sheets.ts";
-import { actionResult, settledCard } from "./status.ts";
 
 type BadgeInteraction = ButtonInteraction | StringSelectMenuInteraction | ModalSubmitInteraction;
 const controlSchema = z.tuple([
@@ -43,23 +34,33 @@ const controlSchema = z.tuple([
   z.string(),
 ]);
 
-export function uploadModal(control: string, role: "badge" | "stamp") {
-  return new ModalBuilder()
-    .setCustomId(control)
-    .setTitle(`Upload your ${role}`)
-    .addLabelComponents(
-      new LabelBuilder()
-        .setLabel(`${role === "badge" ? "Badge" : "Stamp"} SVG`)
-        .setDescription("Upload one SVG.")
-        .setFileUploadComponent(
-          new FileUploadBuilder()
-            .setCustomId("design")
-            .setRequired(true)
-            .setMinValues(1)
-            .setMaxValues(1),
-        ),
-    );
+function uploadModal(
+  control: string,
+  role: "badge" | "stamp",
+): APIModalInteractionResponseCallbackData {
+  return {
+    custom_id: control,
+    title: `Upload your ${role}`,
+    components: [
+      {
+        type: ComponentType.Label,
+        label: `${role === "badge" ? "Badge" : "Stamp"} SVG`,
+        description: "Upload one SVG.",
+        component: {
+          type: ComponentType.FileUpload,
+          custom_id: "design",
+          required: true,
+          min_values: 1,
+          max_values: 1,
+        },
+      },
+    ],
+  };
 }
+const controlResponse = z.object({
+  review: reviewSchema,
+  availableSheets: z.array(stockItemSchema).default([]),
+});
 function commandFor(interaction: BadgeInteraction, name: string): Action {
   const [kind, role] = name.split(".");
   if (kind === "sheets" || kind === "material") return { kind };
@@ -110,15 +111,12 @@ async function requestFor(interaction: BadgeInteraction, secret: string) {
   )
     throw new Error("This control belongs to a different review thread.");
   const member = await interaction.guild.members.fetch({ user: interaction.user.id, force: true });
-  const actionName =
-    name.startsWith("material.") || name.startsWith("quantity.") || name.startsWith("sheets.")
-      ? (name.split(".")[0] ?? name)
-      : name;
+  const action = commandFor(interaction, name);
   return {
     id,
     version: Number(version),
-    control: componentId(id, Number(version), actionName, secret),
-    action: commandFor(interaction, name.startsWith("quantity.") ? name : actionName),
+    control: componentId(id, Number(version), actionName(action), secret),
+    action,
     eventId: interaction.id,
     actor: {
       person: { id: interaction.user.id, username: interaction.user.username },
@@ -137,13 +135,7 @@ async function beforeModal(interaction: BadgeInteraction, api: BadgeClient, secr
     return await Promise.race([
       (async () => {
         const input = await requestFor(interaction, secret);
-        const { review, availableSheets } = z
-          .object({
-            review: reviewSchema,
-            availableSheets: z.array(stockItemSchema).default([]),
-          })
-          .parse(await api.post("control", input, 1800));
-        return { ...input, review, availableSheets };
+        return { ...input, ...controlResponse.parse(await api.post("control", input, 1800)) };
       })(),
       new Promise<never>((_resolve, reject) => {
         timeout = setTimeout(
@@ -157,34 +149,20 @@ async function beforeModal(interaction: BadgeInteraction, api: BadgeClient, secr
   }
 }
 async function privateFailure(interaction: BadgeInteraction, cause: unknown) {
-  const detail = messageOf(cause),
-    stale = /newer step|latest review|stale/iu.test(detail);
-  const components: ActionRowBuilder<ButtonBuilder>[] = [];
-  if (stale) {
-    const url = cause instanceof BadgeApiError ? cause.url : undefined;
-    if (url)
-      components.push(
-        new ActionRowBuilder<ButtonBuilder>().addComponents(
-          new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel("Go to latest step").setURL(url),
-        ),
-      );
-  }
+  const detail = messageOf(cause);
+  const stale = /newer step|latest review|stale/iu.test(detail);
+  const url = stale && cause instanceof BadgeApiError ? cause.url : undefined;
   const title = stale ? "There’s a newer step below" : "Continue with your designs";
-  const embeds = [badgeEmbed(failureGuidance(detail), title, stale ? "warning" : "error")];
-  const options: InteractionReplyOptions = {
-    embeds,
-    components,
-    flags: MessageFlags.Ephemeral,
+  const options = {
+    embeds: [badgeEmbed(failureGuidance(detail), title, stale ? "warning" : "error")],
+    components: url ? [row(link("Go to latest step", url))] : [],
     allowedMentions: { parse: [] },
   };
   if (interaction.deferred && !interaction.replied && interaction.ephemeral)
-    await interaction.editReply({
-      embeds,
-      components,
-      allowedMentions: { parse: [] },
-    });
-  else if (interaction.deferred || interaction.replied) await interaction.followUp(options);
-  else await interaction.reply(options);
+    await interaction.editReply(options);
+  else if (interaction.deferred || interaction.replied)
+    await interaction.followUp({ ...options, flags: MessageFlags.Ephemeral });
+  else await interaction.reply({ ...options, flags: MessageFlags.Ephemeral });
 }
 function sheetPages(
   id: string,
@@ -193,18 +171,13 @@ function sheetPages(
   secret: string,
 ): InteractionReplyOptions {
   const buttons = Array.from({ length: Math.ceil(stockCount / SHEETS_PER_MODAL) }, (_, page) =>
-    new ButtonBuilder()
-      .setStyle(ButtonStyle.Secondary)
-      .setCustomId(componentId(id, version, `sheets.${page}`, secret))
-      .setLabel(
-        `Sheets ${page * SHEETS_PER_MODAL + 1}–${Math.min((page + 1) * SHEETS_PER_MODAL, stockCount)}`,
-      ),
+    button(
+      `Sheets ${page * SHEETS_PER_MODAL + 1}–${Math.min((page + 1) * SHEETS_PER_MODAL, stockCount)}`,
+      componentId(id, version, `sheets.${page}`, secret),
+    ),
   );
   if (buttons.length > 25)
     throw new Error("Tell me the sheet colors, sizes, and quantities you want in this thread.");
-  const rows: ActionRowBuilder<ButtonBuilder>[] = [];
-  for (let index = 0; index < buttons.length; index += 5)
-    rows.push(new ActionRowBuilder<ButtonBuilder>().addComponents(buttons.slice(index, index + 5)));
   return {
     embeds: [
       badgeEmbed(
@@ -213,7 +186,9 @@ function sheetPages(
         "warning",
       ),
     ],
-    components: rows,
+    components: Array.from({ length: Math.ceil(buttons.length / 5) }, (_, page) =>
+      row(...buttons.slice(page * 5, (page + 1) * 5)),
+    ),
     flags: MessageFlags.Ephemeral,
   };
 }
@@ -248,22 +223,13 @@ async function openBadgeModal(
   }
   if (input.action.kind === "quantity")
     await interaction.showModal(
-      new ModalBuilder()
-        .setCustomId(input.control)
-        .setTitle("How many badges?")
-        .addLabelComponents(
-          new LabelBuilder()
-            .setLabel("Target quantity")
-            .setDescription(`Enter a whole number from 1 to ${MAX_BADGE_COUNT}.`)
-            .setTextInputComponent(
-              new TextInputBuilder()
-                .setCustomId("count")
-                .setStyle(TextInputStyle.Short)
-                .setRequired(true)
-                .setMaxLength(3)
-                .setPlaceholder("120"),
-            ),
-        ),
+      textModal(input.control, "How many badges?", [
+        {
+          label: "Target quantity",
+          description: `Enter a whole number from 1 to ${MAX_BADGE_COUNT}.`,
+          input: { custom_id: "count", required: true, max_length: 3, placeholder: "120" },
+        },
+      ]),
     );
 }
 
@@ -320,28 +286,19 @@ async function applyBadgeAction(
       ),
     };
   if (input.action.kind === "sheets" && interaction.isModalSubmit()) {
-    const current = z
-      .object({ review: reviewSchema, availableSheets: z.array(stockItemSchema) })
-      .parse(await api.post("control", input));
+    const current = controlResponse.parse(await api.post("control", input));
     input.action = {
       kind: "sheets",
       sheets: parseSheets(interaction.fields, current.review, current.availableSheets),
     };
   }
-  const response = await withBadgeTyping(
-    interaction.channel?.isThread() ? interaction.channel : undefined,
-    () => api.post("action", input, 60_000),
+  await withBadgeTyping(interaction.channel?.isThread() ? interaction.channel : undefined, () =>
+    api.post("action", input, 60_000),
   );
-  const { review } = z.object({ review: reviewSchema }).parse(response);
-  const result = actionResult(input.action, review);
   if (name === "material.use")
     await interaction
       .deleteReply()
       .catch((cause) => console.error("Could not dismiss acrylic picker:", messageOf(cause)));
-  else if (interaction.message && result)
-    await interaction.message
-      .edit(settledCard(interaction.message, result))
-      .catch((cause) => console.error("Badge status will retry on delivery:", messageOf(cause)));
   await runBadgeWork(api, secret, interaction.client, interaction.channelId ?? undefined);
 }
 
@@ -358,15 +315,15 @@ export function createBadgeInteractionHandler(api: BadgeClient, secret: string) 
       return false;
     try {
       const name = controlSchema.parse(interaction.customId.split(":"))[3];
-      const opensModal =
+      if (
         interaction.isButton() &&
         (name.startsWith("upload.") ||
           name === "quantity.custom" ||
           name === "material" ||
           name === "material.search" ||
           name === "sheets" ||
-          name.startsWith("sheets."));
-      if (opensModal && interaction.isButton()) {
+          name.startsWith("sheets."))
+      ) {
         await openBadgeModal(interaction, api, secret, name);
         return true;
       }

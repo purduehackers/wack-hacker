@@ -1,4 +1,3 @@
-import { BADGES_CHANNEL_ID } from "@purduehackers/badges/contracts";
 import type { ConversationStore } from "@repo/shared/conversations";
 import { roleAtLeast, roleFromMemberRoles, UserRole } from "@repo/shared/discord";
 import { messageOf, tagOf } from "@repo/shared/errors";
@@ -27,6 +26,7 @@ import type { GuildMember, Interaction } from "discord.js";
 import { badgeEmbed } from "../../badges/messages.ts";
 import { activeTraceparent } from "../../framework/observability.ts";
 import type { ConversationFlow } from "../../utils/conversation/index.ts";
+import { isBadgeChannel } from "../../utils/mention.ts";
 import { modalCustomId, parseLocator } from "./components.ts";
 import type { HitlLocator } from "./components.ts";
 
@@ -63,14 +63,10 @@ async function principalOf(interaction: Interaction, guildId: string): Promise<P
   };
 }
 
-function inBadges(interaction: Interaction): boolean {
-  return (
-    (interaction.channel?.isThread() ? interaction.channel.parentId : interaction.channelId) ===
-    BADGES_CHANNEL_ID
-  );
-}
 function replyBody(interaction: Interaction, content: string) {
-  return inBadges(interaction) ? { embeds: [badgeEmbed(content, "wack hacker")] } : { content };
+  return isBadgeChannel(interaction)
+    ? { embeds: [badgeEmbed(content, "wack hacker")] }
+    : { content };
 }
 
 async function ephemeral(interaction: Interaction, content: string): Promise<void> {
@@ -423,7 +419,7 @@ async function settleRequestMessage(
   freeform: string | undefined,
 ): Promise<void> {
   if (!interaction.isRepliable()) return;
-  if (inBadges(interaction)) {
+  if (isBadgeChannel(interaction)) {
     await interaction.deleteReply();
     return;
   }

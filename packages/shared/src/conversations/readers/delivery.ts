@@ -10,8 +10,8 @@ import { z } from "zod";
 import { stored } from "../../json.ts";
 import type { RedisClient } from "../../redis/client.ts";
 import { Result } from "../../result/index.ts";
-import type { ParkedPayload } from "../../wire.ts";
-import { decodeParkedPayload } from "../../wire.ts";
+import type { ParkedPayload, AgentTarget } from "../../wire.ts";
+import { decodeParkedPayload, agentTargetSchema } from "../../wire.ts";
 import { redisValue } from "../io.ts";
 import {
   activeKey,
@@ -35,12 +35,12 @@ const storedRecord = stored(deliveryRecordSchema);
  * wanted one string.
  */
 const storedContent = stored(
-  z.looseObject({ content: z.string(), agentTarget: z.enum(["badge", "general"]).optional() }),
+  z.looseObject({ content: z.string(), agentTarget: agentTargetSchema.optional() }),
 );
 
 /** What a live turn is holding a conversation for. */
 export interface Holder {
-  readonly agentTarget?: "badge" | "general";
+  readonly agentTarget?: AgentTarget;
   readonly sessionId: string;
   readonly dispatchId: string;
   /** The request being worked on, so a steer can carry it forward. */

@@ -6,45 +6,31 @@ import {
   MATERIAL_TYPE_CONFIGS,
   thicknessLabel,
 } from "@purduehackers/badges/materials";
-import {
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-  ComponentType,
-  LabelBuilder,
-  ModalBuilder,
-  StringSelectMenuBuilder,
-  TextInputBuilder,
-  TextInputStyle,
+import { ButtonStyle, ComponentType } from "discord.js";
+import type {
+  APISelectMenuOption,
+  Message,
+  APIActionRowComponent,
+  APIComponentInMessageActionRow,
 } from "discord.js";
-import type { APISelectMenuOption, Message } from "discord.js";
 
+import { button, row, textModal, messageControls } from "./components.ts";
 import { badgeEmbed } from "./messages.ts";
 
-export function materialsModal(control: string): ModalBuilder {
-  return new ModalBuilder()
-    .setCustomId(control)
-    .setTitle("Find acrylic")
-    .addLabelComponents(
-      new LabelBuilder()
-        .setLabel("Search inventory")
-        .setDescription("Search by color or sheet size. Leave blank to browse.")
-        .setTextInputComponent(
-          new TextInputBuilder()
-            .setCustomId("search")
-            .setStyle(TextInputStyle.Short)
-            .setRequired(false)
-            .setMaxLength(100)
-            .setPlaceholder("Blue 12x18"),
-        ),
-    );
+export function materialsModal(control: string) {
+  return textModal(control, "Find acrylic", [
+    {
+      label: "Search inventory",
+      description: "Search by color or sheet size. Leave blank to browse.",
+      input: { custom_id: "search", required: false, max_length: 100, placeholder: "Blue 12x18" },
+    },
+  ]);
 }
 
 // The ephemeral message holds the draft selection. Searching does not change the review.
 export function materialOptions(message?: Pick<Message, "components">): APISelectMenuOption[] {
   return (
-    message?.components
-      .flatMap((row) => (row.type === ComponentType.ActionRow ? row.components : []))
+    messageControls(message ?? { components: [] })
       .filter((component) => component.type === ComponentType.StringSelect)
       .find((component) => component.customId.split(":")[3] === "material.select")?.options ?? []
   );
@@ -105,13 +91,12 @@ export function materialsPicker({
   const selection = selected.length ? parseMaterials(selected) : [];
   if (selected.some((value) => !available.some((option) => option.value === value)))
     throw new Error("Some selected sheets are no longer available. Reopen Choose acrylic.");
+  const terms = Array.isArray(search) ? [] : searchable(search).split(/\s+/u);
   const matches = Array.isArray(search)
     ? available.filter((option) => search.includes(option.value))
     : available.filter((option) => {
         const text = searchable(`${option.label} ${option.description}`);
-        return searchable(search)
-          .split(/\s+/u)
-          .every((term) => text.includes(term));
+        return terms.every((term) => text.includes(term));
       });
   const choices = [
     ...available.filter((option) => selected.includes(option.value)),
@@ -143,41 +128,27 @@ export function materialsPicker({
         ? "Showing the first 25 sheets. Search by color and size to narrow the list."
         : `Each option is one sheet. Choose up to ${MAX_CUTTING_SHEETS}.`,
   };
-  const components: (
-    | ActionRowBuilder<StringSelectMenuBuilder>
-    | ActionRowBuilder<ButtonBuilder>
-  )[] = [];
+  const components: APIActionRowComponent<APIComponentInMessageActionRow>[] = [];
   if (choices.length)
     components.push(
-      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
-        new StringSelectMenuBuilder()
-          .setCustomId(control("material.select"))
-          .setPlaceholder("Choose your sheets")
-          .setMinValues(0)
-          .setMaxValues(Math.min(choices.length, MAX_CUTTING_SHEETS))
-          .addOptions(
-            choices
-              .slice(0, 25)
-              .map((entry) => ({ ...entry, default: selected.includes(entry.value) })),
-          ),
-      ),
+      row({
+        type: ComponentType.StringSelect,
+        custom_id: control("material.select"),
+        placeholder: "Choose your sheets",
+        min_values: 0,
+        max_values: Math.min(choices.length, MAX_CUTTING_SHEETS),
+        options: choices
+          .slice(0, 25)
+          .map((entry) => ({ ...entry, default: selected.includes(entry.value) })),
+      }),
     );
+  const unit = selected.length === 1 ? "sheet" : "sheets";
+  const label = selected.length ? `Use ${selected.length} ${unit}` : "Use selected sheets";
   components.push(
-    new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId(control("material.search"))
-        .setLabel("Search again")
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId(control("material.use"))
-        .setLabel(
-          selected.length
-            ? `Use ${selected.length} ${selected.length === 1 ? "sheet" : "sheets"}`
-            : "Use selected sheets",
-        )
-        .setDisabled(!selected.length)
-        .setStyle(ButtonStyle.Primary),
-    ),
+    row(button("Search again", control("material.search")), {
+      ...button(label, control("material.use"), ButtonStyle.Primary),
+      disabled: !selected.length,
+    }),
   );
   return { embeds: [embed], components, allowedMentions: { parse: [] } };
 }

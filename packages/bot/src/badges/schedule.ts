@@ -7,13 +7,14 @@ import { workResponse } from "@purduehackers/badges/wire";
 import { DISCORD_GUILD_ID } from "@repo/shared/discord";
 import { messageOf, Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
-import { AttachmentBuilder, ComponentType, DiscordAPIError } from "discord.js";
+import { AttachmentBuilder, DiscordAPIError } from "discord.js";
 import type { Client, Message, ThreadChannel } from "discord.js";
 
 import type { Schedule } from "../framework/schedules.ts";
 import { cardEmbeds, controls } from "./card.ts";
 import type { BadgeCard } from "./card.ts";
-import { deliveredResult, settledCard } from "./status.ts";
+import { messageControls } from "./components.ts";
+import { settledCard } from "./status.ts";
 
 async function clearAcrylicCards(channel: ThreadChannel, card: BadgeCard, botId: string) {
   const history: Message[] = [];
@@ -31,12 +32,8 @@ async function clearAcrylicCards(channel: ThreadChannel, card: BadgeCard, botId:
           (message) =>
             message.author.id === botId &&
             message.embeds.length > 0 &&
-            !message.components.some(
-              (row) =>
-                row.type === ComponentType.ActionRow &&
-                row.components.some(
-                  (component) => "customId" in component && component.customId?.startsWith(prefix),
-                ),
+            !messageControls(message).some(
+              (component) => "customId" in component && component.customId?.startsWith(prefix),
             ),
         )
         .values(),
@@ -73,9 +70,8 @@ async function settlePreviousCard(
   if (!previousId || previousId === message.id) return;
   try {
     const previous = await channel.messages.fetch({ message: previousId, force: true });
-    const result = deliveredResult(previous, card.review);
-    if (previous.author.id === botId && result)
-      await previous.edit(settledCard(previous, result, card.identifiedFile));
+    const update = settledCard(previous, card);
+    if (previous.author.id === botId && update) await previous.edit(update);
   } catch (cause) {
     // Deleting an old card must not block delivery; other failures retry before ack.
     if (!(cause instanceof DiscordAPIError) || cause.code !== 10_008) throw cause;

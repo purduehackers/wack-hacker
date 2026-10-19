@@ -136,15 +136,6 @@ async function badgeNotice(target: Message["channel"], text: string) {
       .catch(() => undefined);
 }
 
-async function routeBadge(api: BadgeClient, payload: MessagePayload) {
-  const route = await routeMessage(api, payload);
-  payload.agentTarget = route;
-  if (route !== "badge") return false;
-  return z
-    .object({ handled: z.boolean() })
-    .parse(await api.post("submit", badgePayload(payload), 60_000)).handled;
-}
-
 function badgePayload(payload: MessagePayload) {
   return {
     ...payload,
@@ -172,11 +163,16 @@ export function agentChat(deps: AgentChatDeps) {
     dedupKey: (message) => message.id,
     handle: async (message, context) => {
       const badgePing = deps.badges !== undefined && isBadgePing(message, context.botUserId);
-      const { prompt, attachments, replyTo } = await badgeSubmission(
-        message,
-        context.botUserId,
-        badgePing,
-      );
+      const prompt = stripBotMention(message.content, context.botUserId);
+      const replyTo = await fetchReplyTo(message);
+      let attachments = attachmentsOf(message);
+      if (
+        badgePing &&
+        !attachments.length &&
+        replyTo?.channelId === message.channelId &&
+        replyTo.snapshot?.authorId === message.author.id
+      )
+        attachments = replyTo.snapshot.attachments;
       if (prompt === "" && attachments.length === 0) {
         await message
           .reply({ content: EMPTY_MENTION_REPLY, allowedMentions: { parse: [] } })
@@ -227,19 +223,6 @@ export function agentChat(deps: AgentChatDeps) {
   });
 }
 
-async function badgeSubmission(message: Message, botUserId: string, badgePing: boolean) {
-  const prompt = stripBotMention(message.content, botUserId);
-  const replyTo = await fetchReplyTo(message);
-  let attachments = attachmentsOf(message);
-  if (
-    badgePing &&
-    !attachments.length &&
-    replyTo?.channelId === message.channelId &&
-    replyTo.snapshot?.authorId === message.author.id
-  )
-    attachments = replyTo.snapshot.attachments;
-  return { prompt, attachments, replyTo };
-}
 async function routeBadgeTurn(
   deps: AgentChatDeps,
   payload: MessagePayload,
@@ -249,9 +232,14 @@ async function routeBadgeTurn(
   if (!deps.badges) return false;
   try {
     const api = deps.badges;
-    const handled = await withBadgeTyping(target.isSendable() ? target : undefined, () =>
-      routeBadge(api, payload),
-    );
+    const handled = await withBadgeTyping(target.isSendable() ? target : undefined, async () => {
+      const route = await routeMessage(api, payload);
+      payload.agentTarget = route;
+      if (route !== "badge") return false;
+      return z
+        .object({ handled: z.boolean() })
+        .parse(await api.post("submit", badgePayload(payload), 60_000)).handled;
+    });
     if (handled && deps.badgeSecret)
       await runBadgeWork(deps.badges, deps.badgeSecret, client, target.id);
     return handled;
@@ -346,7 +334,7 @@ function threadRefOf(
 }
 
 interface ConversationResetInput {
-  readonly agentTarget?: "badge" | "general";
+  readonly agentTarget?: MessagePayload["agentTarget"];
   readonly continuationKey: string;
   readonly requesterUserId: string;
   readonly principal: Principal;

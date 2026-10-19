@@ -21,26 +21,66 @@ import type {
 
 import type { SlashCommand } from "../framework/commands.ts";
 
-function itemOption(sub: SlashCommandSubcommandBuilder) {
-  return sub.addStringOption((option) =>
+const inventoryCommands = {
+  list: "See material and sheet counts",
+  add: "Add sheets to inventory (organizers only)",
+  use: "Record sheets you used (organizers only)",
+  set: "Correct the number of sheets on hand (organizers only)",
+  history: "See recent changes to a material count",
+};
+
+export const builder = new SlashCommandBuilder();
+builder
+  .setName("badge")
+  .setDescription("Manage badge materials")
+  .setContexts(InteractionContextType.Guild)
+  .addSubcommandGroup((group) => {
+    group.setName("inventory").setDescription("Track material on hand");
+    for (const [name, description] of Object.entries(inventoryCommands))
+      group.addSubcommand((sub) =>
+        inventoryOptions(sub.setName(name).setDescription(description), name),
+      );
+    return group;
+  });
+
+function inventoryOptions(sub: SlashCommandSubcommandBuilder, name: string) {
+  if (name === "list")
+    return sub.addIntegerOption((option) =>
+      option.setName("page").setDescription("Page to show").setMinValue(1),
+    );
+  const adding = name === "add";
+  sub.addStringOption((option) =>
     option
-      .setName("item")
-      .setDescription("Material and sheet size")
+      .setName(adding ? "material" : "item")
+      .setDescription(
+        adding ? "Acrylic color and finish, or stamp rubber" : "Material and sheet size",
+      )
       .setAutocomplete(true)
       .setRequired(true),
   );
-}
-function quantityOption(sub: SlashCommandSubcommandBuilder, minimum: number) {
-  return sub.addIntegerOption((option) =>
+  if (name === "history") return sub;
+  sub.addIntegerOption((option) =>
     option
       .setName("quantity")
       .setDescription("Number of whole sheets")
-      .setMinValue(minimum)
+      .setMinValue(Number(name !== "set"))
       .setMaxValue(10_000)
       .setRequired(true),
   );
-}
-function noteOption(sub: SlashCommandSubcommandBuilder) {
+  if (adding)
+    for (const dimension of ["width", "height", "thickness"]) {
+      const thickness = dimension === "thickness";
+      sub.addNumberOption((option) =>
+        option
+          .setName(dimension)
+          .setDescription(
+            thickness ? "Material thickness in millimeters" : `Sheet ${dimension} in inches`,
+          )
+          .setMinValue(thickness ? 0.1 : 0.25)
+          .setMaxValue(thickness ? 100 : 120)
+          .setRequired(true),
+      );
+    }
   return sub.addStringOption((option) =>
     option
       .setName("note")
@@ -48,81 +88,6 @@ function noteOption(sub: SlashCommandSubcommandBuilder) {
       .setMaxLength(200),
   );
 }
-
-export const builder = new SlashCommandBuilder();
-builder
-  .setName("badge")
-  .setDescription("Manage badge materials")
-  .setContexts(InteractionContextType.Guild)
-  .addSubcommandGroup((group) =>
-    group
-      .setName("inventory")
-      .setDescription("Track material on hand")
-      .addSubcommand((sub) =>
-        sub
-          .setName("list")
-          .setDescription("See material and sheet counts")
-          .addIntegerOption((option) =>
-            option.setName("page").setDescription("Page to show").setMinValue(1),
-          ),
-      )
-      .addSubcommand((sub) => {
-        sub
-          .setName("add")
-          .setDescription("Add sheets to inventory (organizers only)")
-          .addStringOption((option) =>
-            option
-              .setName("material")
-              .setDescription("Acrylic color and finish, or stamp rubber")
-              .setAutocomplete(true)
-              .setRequired(true),
-          );
-        quantityOption(sub, 1);
-        for (const name of ["width", "height"])
-          sub.addNumberOption((option) =>
-            option
-              .setName(name)
-              .setDescription(`Sheet ${name} in inches`)
-              .setMinValue(0.25)
-              .setMaxValue(120)
-              .setRequired(true),
-          );
-        sub.addNumberOption((option) =>
-          option
-            .setName("thickness")
-            .setDescription("Material thickness in millimeters")
-            .setMinValue(0.1)
-            .setMaxValue(100)
-            .setRequired(true),
-        );
-        return noteOption(sub);
-      })
-      .addSubcommand((sub) =>
-        noteOption(
-          quantityOption(
-            itemOption(
-              sub.setName("use").setDescription("Record sheets you used (organizers only)"),
-            ),
-            1,
-          ),
-        ),
-      )
-      .addSubcommand((sub) =>
-        noteOption(
-          quantityOption(
-            itemOption(
-              sub
-                .setName("set")
-                .setDescription("Correct the number of sheets on hand (organizers only)"),
-            ),
-            0,
-          ),
-        ),
-      )
-      .addSubcommand((sub) =>
-        itemOption(sub.setName("history").setDescription("See recent changes to a material count")),
-      ),
-  );
 
 function actionFor(interaction: ChatInputCommandInteraction): InventoryAction {
   const kind = interaction.options.getSubcommand();
@@ -170,17 +135,20 @@ export function inventoryEmbed(response: InventoryResponse, action: InventoryAct
     embed.description = response.items[0]
       ? stockLabel(response.items[0])
       : "This material is no longer available.";
-    embed.fields = (response.changes ?? []).map((change) => ({
-      name: `${dates.format(change.createdAt)} · ${change.username}`,
-      value: `${change.operation === "add" ? `Added ${change.after - change.before}` : ["use", "publish"].includes(change.operation) ? `Used ${change.before - change.after}` : `Counted ${change.after}`} sheets. ${change.after} remain.${change.note ? `\n${designerText(change.note, "")}` : ""}`,
-    }));
+    embed.fields = (response.changes ?? []).map((change) => {
+      let summary = `Counted ${change.after}`;
+      if (change.operation === "add") summary = `Added ${change.after - change.before}`;
+      if (["use", "publish"].includes(change.operation))
+        summary = `Used ${change.before - change.after}`;
+      return {
+        name: `${dates.format(change.createdAt)} · ${change.username}`,
+        value: `${summary} sheets. ${change.after} remain.${change.note ? `\n${designerText(change.note, "")}` : ""}`,
+      };
+    });
   } else {
-    embed.title =
-      action.kind === "add"
-        ? "Material added"
-        : action.kind === "use"
-          ? "Material use recorded"
-          : "Count updated";
+    embed.title = "Count updated";
+    if (action.kind === "add") embed.title = "Material added";
+    if (action.kind === "use") embed.title = "Material use recorded";
     const item = response.items[0];
     embed.description = item ? stockLabel(item) : "Run /badge inventory list to check the count.";
     if (item) embed.fields = [{ name: "Sheets on hand", value: String(item.quantity) }];
@@ -229,6 +197,37 @@ async function suggestions(interaction: AutocompleteInteraction, api?: BadgeClie
   }));
 }
 
+async function inventoryReply(
+  interaction: ChatInputCommandInteraction,
+  api?: BadgeClient,
+): Promise<APIEmbed> {
+  if (!api)
+    return { title: "Material inventory", description: "Material inventory isn’t available yet." };
+  if (interaction.guildId !== DISCORD_GUILD_ID || !interaction.guild)
+    return {
+      title: "Material inventory",
+      description: "Use this command in the Purdue Hackers server.",
+    };
+  const parsed = Result.try({
+    try: () => actionFor(interaction),
+    catch: () => "Check the material, dimensions, and quantity.",
+  });
+  if (Result.isError(parsed)) return { title: "Check your entry", description: parsed.error };
+  const member = await interaction.guild.members.fetch({ user: interaction.user.id, force: true });
+  try {
+    const response = inventoryResponseSchema.parse(
+      await api.post(
+        "inventory",
+        requestFor(interaction, parsed.value, [...member.roles.cache.keys()]),
+      ),
+    );
+    return inventoryEmbed(response, parsed.value);
+  } catch (cause) {
+    if (!(cause instanceof BadgeApiError)) throw cause;
+    return { title: "Material inventory", description: designerText(cause.message) };
+  }
+}
+
 export function badgeCommand(api?: BadgeClient): SlashCommand {
   return {
     builder,
@@ -236,43 +235,7 @@ export function badgeCommand(api?: BadgeClient): SlashCommand {
       Result.tryPromise({
         try: async () => {
           await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-          let embed: APIEmbed;
-          if (!api)
-            embed = {
-              title: "Material inventory",
-              description: "Material inventory isn’t available yet.",
-            };
-          else if (interaction.guildId !== DISCORD_GUILD_ID || !interaction.guild)
-            embed = {
-              title: "Material inventory",
-              description: "Use this command in the Purdue Hackers server.",
-            };
-          else {
-            const parsed = Result.try({
-              try: () => actionFor(interaction),
-              catch: () => "Check the material, dimensions, and quantity.",
-            });
-            if (Result.isError(parsed))
-              embed = { title: "Check your entry", description: parsed.error };
-            else {
-              const member = await interaction.guild.members.fetch({
-                user: interaction.user.id,
-                force: true,
-              });
-              try {
-                const response = inventoryResponseSchema.parse(
-                  await api.post(
-                    "inventory",
-                    requestFor(interaction, parsed.value, [...member.roles.cache.keys()]),
-                  ),
-                );
-                embed = inventoryEmbed(response, parsed.value);
-              } catch (cause) {
-                if (!(cause instanceof BadgeApiError)) throw cause;
-                embed = { title: "Material inventory", description: designerText(cause.message) };
-              }
-            }
-          }
+          const embed = await inventoryReply(interaction, api);
           await interaction.editReply({ embeds: [embed], allowedMentions: { parse: [] } });
         },
         catch: (cause) => new Transient({ operation: "badge inventory", detail: messageOf(cause) }),

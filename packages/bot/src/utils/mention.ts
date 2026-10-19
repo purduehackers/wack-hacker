@@ -7,11 +7,13 @@
  */
 
 import { BADGES_CHANNEL_ID } from "@purduehackers/badges/contracts";
-import type { Message } from "discord.js";
+import type { Interaction, Message } from "discord.js";
 
-export function isBadgeChannel(message: Message): boolean {
+export function isBadgeChannel(
+  message: Pick<Interaction | Message, "channel" | "channelId">,
+): boolean {
   return (
-    (message.channel.isThread() ? message.channel.parentId : message.channelId) ===
+    (message.channel?.isThread() ? message.channel.parentId : message.channelId) ===
     BADGES_CHANNEL_ID
   );
 }

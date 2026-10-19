@@ -11,14 +11,19 @@ import {
 } from "@purduehackers/badges/presentation";
 import type { ReviewStep } from "@purduehackers/badges/presentation";
 import { cardSchema, componentId } from "@purduehackers/badges/wire";
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } from "discord.js";
-import type { APIEmbed } from "discord.js";
+import { ButtonStyle, ComponentType } from "discord.js";
+import type {
+  APIEmbed,
+  APIActionRowComponent,
+  APIComponentInMessageActionRow,
+  APIButtonComponentWithCustomId,
+} from "discord.js";
 import type { z } from "zod";
 
+import { button, link, row } from "./components.ts";
 import { badgeColors } from "./messages.ts";
 
 export type BadgeCard = z.output<typeof cardSchema>;
-type Row = ActionRowBuilder<ButtonBuilder> | ActionRowBuilder<StringSelectMenuBuilder>;
 const titles: Record<ReviewStep, string> = {
   files: "Which one is the badge?",
   missing: "Add your other design",
@@ -37,41 +42,17 @@ const titles: Record<ReviewStep, string> = {
   error: "Needs attention",
 };
 
-function eventMenus(
-  { review, version, events }: Pick<BadgeCard, "review" | "version" | "events">,
-  secret: string,
-): Row[] {
-  const options = events.map((event) => ({
-    label: event.name,
-    value: event.id,
-    description: displayDate(event.date),
-  }));
-  const menus: Row[] = [];
-  for (let offset = 0; offset < options.length; offset += 25)
-    menus.push(
-      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
-        new StringSelectMenuBuilder()
-          .setCustomId(componentId(review.id, version, "event", secret))
-          .setPlaceholder("Choose a Hack Night")
-          .addOptions(options.slice(offset, offset + 25)),
-      ),
-    );
-  return menus;
-}
-
 export function controls(
   { review, version, events, availableSheets, viewerUrl }: BadgeCard,
   secret: string,
-): Row[] {
-  const button = (label: string, action: string, style = ButtonStyle.Secondary) =>
-    new ButtonBuilder()
-      .setCustomId(componentId(review.id, version, action, secret))
-      .setLabel(label)
-      .setStyle(style);
-  const row = (...buttons: ButtonBuilder[]) =>
-    new ActionRowBuilder<ButtonBuilder>().addComponents(buttons);
+): APIActionRowComponent<APIComponentInMessageActionRow>[] {
+  const action = (
+    label: string,
+    name: string,
+    style: APIButtonComponentWithCustomId["style"] = ButtonStyle.Secondary,
+  ) => button(label, componentId(review.id, version, name, secret), style);
   const upload = (role: "badge" | "stamp") =>
-    button(`Upload ${review[role] ? "revised " : ""}${role}`, `upload.${role}`);
+    action(`Upload ${review[role] ? "revised " : ""}${role}`, `upload.${role}`);
   const step = reviewStep(review);
   switch (step) {
     case "files":
@@ -79,61 +60,70 @@ export function controls(
         review.uploads.length === 2
           ? row(
               ...review.uploads.map((asset, index) =>
-                button(`${asset.name.slice(0, 60)} is the badge`, `roles.${index}`),
+                action(`${asset.name.slice(0, 60)} is the badge`, `roles.${index}`),
               ),
             )
-          : row(button("Badge", "replace.badge"), button("Stamp", "replace.stamp")),
+          : row(action("Badge", "replace.badge"), action("Stamp", "replace.stamp")),
       ];
     case "missing":
       return [row(upload(review.badge ? "stamp" : "badge"))];
     case "upload":
       return [
-        row(upload(review.pendingRole ?? "badge"), button("Keep current design", "keep-design")),
+        row(upload(review.pendingRole ?? "badge"), action("Keep current design", "keep-design")),
       ];
-    case "material":
     case "event": {
-      const menus =
-        step === "event"
-          ? eventMenus({ review, version, events }, secret)
-          : availableSheets.length
-            ? [row(button("Choose acrylic", "material"))]
-            : [];
-      return menus.length ? menus : [row(button("Check again", "refresh"))];
+      if (!events.length) return [row(action("Check again", "refresh"))];
+      return Array.from({ length: Math.ceil(events.length / 25) }, (_, page) =>
+        row({
+          type: ComponentType.StringSelect,
+          custom_id: componentId(review.id, version, "event", secret),
+          placeholder: "Choose a Hack Night",
+          options: events.slice(page * 25, (page + 1) * 25).map((event) => ({
+            label: event.name,
+            value: event.id,
+            description: displayDate(event.date),
+          })),
+        }),
+      );
     }
+    case "material":
+      return [
+        row(
+          availableSheets.length
+            ? action("Choose acrylic", "material")
+            : action("Check again", "refresh"),
+        ),
+      ];
     case "fix":
       return [row(upload(fixRole(review)))];
-    case "qa": {
-      const confirmation = row();
-      if (viewerUrl)
-        confirmation.addComponents(
-          new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel("View in 3D").setURL(viewerUrl),
-        );
-      confirmation.addComponents(button("Confirm designs", "confirm", ButtonStyle.Success));
+    case "qa":
       return [
-        row(upload("badge"), upload("stamp"), button("Change acrylic", "choose-material")),
-        confirmation,
+        row(upload("badge"), upload("stamp"), action("Change acrylic", "choose-material")),
+        row(
+          ...(viewerUrl ? [link("View in 3D", viewerUrl)] : []),
+          action("Confirm designs", "confirm", ButtonStyle.Success),
+        ),
       ];
-    }
     case "quantity":
       return [
         row(
-          button("80 badges", "quantity.80", ButtonStyle.Primary),
-          button("100 badges", "quantity.100", ButtonStyle.Primary),
-          button("Enter quantity", "quantity.custom"),
-          button("Change sheets", "sheets"),
+          action("80 badges", "quantity.80", ButtonStyle.Primary),
+          action("100 badges", "quantity.100", ButtonStyle.Primary),
+          action("Enter quantity", "quantity.custom"),
+          action("Change sheets", "sheets"),
         ),
       ];
     case "layout":
       return [
         row(
-          button("Publish cutting files", "publish", ButtonStyle.Success),
-          button("Change quantity", "quantity.custom"),
-          button("Change sheets", "sheets"),
+          action("Publish cutting files", "publish", ButtonStyle.Success),
+          action("Change quantity", "quantity.custom"),
+          action("Change sheets", "sheets"),
         ),
       ];
     case "error": {
       const retry = row(
-        button("Try again", review.contextChanged ? "refresh" : "retry", ButtonStyle.Primary),
+        action("Try again", review.contextChanged ? "refresh" : "retry", ButtonStyle.Primary),
       );
       if (
         !review.contextChanged &&
@@ -141,19 +131,12 @@ export function controls(
         reviewable(review) &&
         !remainingCriteria(review).length
       )
-        retry.addComponents(button("Change sheets", "sheets"));
+        retry.components.push(action("Change sheets", "sheets"));
       return [retry];
     }
     case "done":
       return review.publication?.shortlink
-        ? [
-            row(
-              new ButtonBuilder()
-                .setStyle(ButtonStyle.Link)
-                .setLabel("Download files")
-                .setURL(review.publication.shortlink),
-            ),
-          ]
+        ? [row(link("Download files", review.publication.shortlink))]
         : [];
     default:
       return [];
