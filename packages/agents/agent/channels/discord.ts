@@ -474,7 +474,7 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
     }),
 
     /**
-     * A fresh OIDC credential for session streams and AI Gateway.
+     * A fresh credential for reading a session's event stream.
      *
      * Minted per request, never stored. These are issued with a *fixed* expiry
      * shared across every mint rather than a lifetime measured from issuance, so

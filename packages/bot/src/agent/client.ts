@@ -143,7 +143,7 @@ export function createAgentClient(deps: AgentClientDeps) {
       post(WIRE_ROUTES.interaction, payload, "agent.interaction", quickRetry, decodeSessionAck),
 
     /**
-     * The deployment's OIDC credential for session streams and AI Gateway.
+     * A credential for reading a session's event stream.
      *
      * Asked for per connection rather than stored: these carry a fixed expiry
      * shared across every mint, so a copy taken when a delegation started can be
