@@ -191,6 +191,7 @@ async function main(): Promise<void> {
     dashboardApiUrl: env.PHACK_API_URL,
     dashboardApiToken: env.PHACK_API_KEY,
     groqApiKey: env.GROQ_API_KEY,
+    aiGatewayApiKey: env.AI_GATEWAY_API_KEY,
   });
   attachEventRouter(ready, {
     handlers,

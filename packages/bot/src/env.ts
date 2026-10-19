@@ -90,6 +90,9 @@ export const env = createEnv({
     /** Voice-message transcription via Groq whisper-large-v3-turbo. */
     GROQ_API_KEY: secret,
 
+    /** BHEE entry classification via Jev; the bot container has no project OIDC. */
+    AI_GATEWAY_API_KEY: secret,
+
     INSTAGRAM_USER_ID: z.string().regex(/^\d+$/u),
     INSTAGRAM_ACCESS_TOKEN: secret,
 
