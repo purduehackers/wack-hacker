@@ -1,4 +1,4 @@
-/** Run the language engines using only dependencies present in the built output. */
+/** Check runtime dependencies using only files present in the built output. */
 import { cp, lstat, mkdtemp, readdir, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { sandboxWorkflowArtifact } from "./lib/sandbox-artifact.ts";
 import { verifyCompiledWorkspaceReplay } from "./lib/sandbox-replay-probe.ts";
 
-const source = new URL("../.output/server", import.meta.url).pathname;
+const source = process.argv[3] ?? new URL("../.output/server", import.meta.url).pathname;
 const temporary = await mkdtemp(join(tmpdir(), "wack-bash-bundle-"));
 const target = join(temporary, "server");
 const maximumBytes = 200 * 1024 * 1024;
@@ -34,7 +34,12 @@ try {
     throw new Error(`Server artifact exceeds the 200 MiB candidate budget (${bytes} bytes)`);
   // Tracing a second copy is insufficient if authored provider code still uses
   // an inlined engine whose import.meta.url now points at the server chunk.
-  const authored = await Bun.file(join(target, "_chunks/node-server.mjs")).text();
+  const chunkNames = await readdir(join(target, "_chunks"));
+  const authoredName = chunkNames.find(
+    (name) => name === "node-server.mjs" || name === "vercel.web.mjs",
+  );
+  if (!authoredName) throw new Error("Built server has no supported authored runtime chunk");
+  const authored = await Bun.file(join(target, "_chunks", authoredName)).text();
   const workspace = sandboxWorkflowArtifact(authored);
   if (workspace.mode === "durable") await verifyCompiledWorkspaceReplay(workspace);
   if (
@@ -53,6 +58,7 @@ import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { Bash, InMemoryFs } from 'just-bash';
 const root = realpathSync(fileURLToPath(new URL('.', import.meta.url)));
+globalThis.fetch = () => { throw new Error('The build probe must not access the network'); };
 const resolved = realpathSync(fileURLToPath(import.meta.resolve('just-bash')));
 if (!resolved.startsWith(root + '/')) throw new Error('just-bash resolved outside the built artifact');
 const fs = new InMemoryFs();

@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "eve build",
+    "build": "node --max-old-space-size=3072 node_modules/eve/bin/eve.js build",
     "check:capabilities": "bun scripts/check-capabilities.ts",
     "check:serialization": "bun scripts/check-serialization-boundaries.ts",
     "check:sandbox-bundle": "bun scripts/check-sandbox-bundle.ts",

@@ -18,6 +18,16 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SKIP_ENV_VALIDATION: "1"
+    services:
+      redis:
+        image: redis:8.10.2-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0
+        ports:
+          - 127.0.0.1:6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
@@ -34,7 +44,10 @@ jobs:
           esac
       # oxlint is type-aware (tsgolint), so it reports TS errors too — there is no separate tsc pass.
       - run: bun run lint
-      - run: bun test
+      - name: Test with isolated Redis
+        run: bun test
+        env:
+          REDIS_TEST_URL: redis://127.0.0.1:6379
       # Cross-file invariants a code review cannot see: a skill referencing a tool the registry
       # does not define, a tool no role can reach, a half-wired subagent. Each package script does
       # one thing, so CI composes them here rather than one script invoking another.
@@ -50,6 +63,9 @@ jobs:
           TURSO_DATABASE_URL="file:$database" bunx drizzle-kit check
           TURSO_DATABASE_URL="file:$database" bun run db:migrate
       - run: bun run build
+      - name: Check isolated agent runtime dependencies
+        run: bun run check:sandbox-bundle "$(command -v node)"
+        working-directory: packages/agents
       - run: docker build --platform linux/amd64 -f packages/bot/Dockerfile -t wack-hacker-bot:ci .
 
   # A schema change is the one thing CI cannot undo after the fact, so it is
