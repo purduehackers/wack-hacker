@@ -386,6 +386,7 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
             messageId: payload.messageId,
             dispatchId: payload.dispatchId,
             renderChannelId,
+            ...(payload.agentTarget === undefined ? {} : { agentTarget: payload.agentTarget }),
             source: payload.kind === "scheduled" ? "scheduled" : "chat",
             ...(payload.scheduleId === undefined ? {} : { scheduleId: payload.scheduleId }),
             ...(payload.occurrenceId === undefined ? {} : { occurrenceId: payload.occurrenceId }),

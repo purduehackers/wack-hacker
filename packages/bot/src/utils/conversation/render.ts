@@ -13,6 +13,8 @@ import type { ParkedPayload } from "@repo/shared/wire";
 
 import { renderHitl } from "../../agent/hitl/components.ts";
 import { createRenderer, toRendererProjection } from "../../agent/render/renderer.ts";
+import type { RendererDeps } from "../../agent/render/renderer.ts";
+import { renderBadgeReply } from "../../badges/reply.ts";
 import { continueTrace, traceOperation } from "../../framework/observability.ts";
 import { stopFollowing, subagentProgress } from "./subagent-follower.ts";
 import type { ConversationFlowDeps, RenderWork } from "./types.ts";
@@ -126,6 +128,7 @@ async function indexTurn(
   for (const id of ids) {
     if (id === undefined) continue;
     const indexed = await deps.turnMessages.record(id, {
+      ...(work.target.agentTarget === undefined ? {} : { agentTarget: work.target.agentTarget }),
       sessionId: work.intent.sessionId,
       eveTurnId: work.intent.eveTurnId,
       requesterUserId: work.target.requesterUserId,
@@ -144,6 +147,12 @@ async function paint(
   claimToken: string,
   work: RenderWork,
 ): Promise<boolean> {
+  if (
+    work.target.agentTarget !== undefined &&
+    work.intent.phase === "streaming" &&
+    !renderHitl(work.intent).key
+  )
+    return true;
   // Never on a terminal frame: the follower is stopped just below, and a finished
   // turn showing "code: reading files" is a line about work that is over.
   const progress = work.intent.phase === "streaming" ? subagentProgress(dispatchId) : undefined;
@@ -156,32 +165,18 @@ async function paint(
   const narrated = (progress ?? "") === (work.projection.subagentActivity ?? "");
   if (current && narrated) return true;
 
-  const renderer = createRenderer(
-    {
-      rest: deps.rest,
-      channelId: work.target.channelId,
-      sourceMessageId: work.target.messageId,
-      ...(work.target.replyToMessageId === undefined
-        ? {}
-        : { replyToMessageId: work.target.replyToMessageId }),
-      checkpoint: (state) =>
-        deps.store.render.checkpoint(dispatchId, claimToken, state, work.appliedRevision),
-      verifyLease: () => deps.store.render.renew(dispatchId, claimToken),
-    },
-    work.projection,
-  );
-  const hitl = work.intent.phase === "streaming" ? renderHitl(work.intent) : undefined;
-  const painted = await renderer.write({
-    text: work.intent.text,
-    activity: work.intent.activity,
-    ...(work.intent.footer === undefined ? {} : { footer: work.intent.footer }),
-    ...(hitl?.notice === undefined ? {} : { notice: hitl.notice }),
-    ...(hitl === undefined ? {} : { components: hitl.components }),
-    ...(hitl === undefined ? {} : { mentionUserIds: hitl.mentionUserIds }),
-    ...(hitl?.key === undefined ? {} : { hitlKey: hitl.key }),
-    ...(progress === undefined ? {} : { subagentActivity: progress }),
-    terminal: work.intent.phase !== "streaming",
-  });
+  const rendering: RendererDeps = {
+    rest: deps.rest,
+    channelId: work.target.channelId,
+    sourceMessageId: work.target.messageId,
+    ...(work.target.replyToMessageId === undefined
+      ? {}
+      : { replyToMessageId: work.target.replyToMessageId }),
+    checkpoint: (state) =>
+      deps.store.render.checkpoint(dispatchId, claimToken, state, work.appliedRevision),
+    verifyLease: () => deps.store.render.renew(dispatchId, claimToken),
+  };
+  const painted = await writeContent(rendering, work, progress);
   // A turn that has stopped streaming has nothing left to narrate.
   if (work.intent.phase !== "streaming") stopFollowing(dispatchId);
 
@@ -198,6 +193,23 @@ async function paint(
     return false;
   }
   return work.intent.phase === "streaming" || indexTurn(deps, dispatchId, work);
+}
+
+async function writeContent(rendering: RendererDeps, work: RenderWork, progress?: string) {
+  if (work.target.agentTarget !== undefined)
+    return renderBadgeReply(rendering, work.projection, work.intent);
+  const hitl = work.intent.phase === "streaming" ? renderHitl(work.intent) : undefined;
+  return createRenderer(rendering, work.projection).write({
+    text: work.intent.text,
+    activity: work.intent.activity,
+    ...(work.intent.footer === undefined ? {} : { footer: work.intent.footer }),
+    ...(hitl?.notice === undefined ? {} : { notice: hitl.notice }),
+    ...(hitl === undefined ? {} : { components: hitl.components }),
+    ...(hitl === undefined ? {} : { mentionUserIds: hitl.mentionUserIds }),
+    ...(hitl?.key === undefined ? {} : { hitlKey: hitl.key }),
+    ...(progress === undefined ? {} : { subagentActivity: progress }),
+    terminal: work.intent.phase !== "streaming",
+  });
 }
 
 export async function applyLatest(
@@ -238,6 +250,10 @@ export async function applyLatest(
             );
             return "done";
           }
+          if (work.target.agentTarget === "badge" && work.intent.phase !== "streaming")
+            await deps
+              .onBadgeTurn?.(work.target.channelId)
+              .catch((cause) => reportFailure(deps, dispatchId, "badge.workflow.delivery", cause));
           deps.reporter.emit({
             op: "agent.render.apply",
             status: "ok",

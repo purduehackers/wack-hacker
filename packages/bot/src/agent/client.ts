@@ -46,6 +46,7 @@ type AgentAck = Omit<Extract<WireResponse, { readonly ok: true }>, "ok">;
 interface AgentClientDeps {
   /** Base URL of the eve deployment, without a trailing slash. */
   readonly baseUrl: string;
+  readonly badgeUrl?: string;
   /** Bearer presented on every request. */
   readonly secret: string;
 }
@@ -102,7 +103,17 @@ export function createAgentClient(deps: AgentClientDeps) {
   ): Promise<Result<T, AgentError>> =>
     Result.tryPromise({
       try: async () => {
-        const request = new Request(new URL(route, deps.baseUrl).toString(), {
+        const baseUrl =
+          "agentTarget" in payload && payload.agentTarget === "badge"
+            ? deps.badgeUrl
+            : deps.baseUrl;
+        if (baseUrl === undefined)
+          throw new UpstreamError({
+            service: "badge agent",
+            status: 503,
+            detail: "Badge agent is not configured",
+          });
+        const request = new Request(new URL(route, baseUrl).toString(), {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
