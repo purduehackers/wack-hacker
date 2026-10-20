@@ -7,6 +7,10 @@ import { durableBashImplementation, type Artifact, type State } from "./provider
 import { WorkspaceStore } from "./store.ts";
 
 let database: WorkspaceStore | undefined;
+export function workspaceStore(): WorkspaceStore {
+  database ??= new WorkspaceStore(createClient(tursoConfig()));
+  return database;
+}
 export const DurableBashSandbox = defineSandboxProvider<
   undefined,
   undefined,
@@ -15,10 +19,6 @@ export const DurableBashSandbox = defineSandboxProvider<
   SandboxSession
 >({
   name: "wack-durable-bash",
-  stateProtocolVersion: 1,
-  environment: () =>
-    durableBashImplementation(() => {
-      database ??= new WorkspaceStore(createClient(tursoConfig()));
-      return database;
-    }),
+  stateProtocolVersion: 2,
+  environment: () => durableBashImplementation(workspaceStore),
 });

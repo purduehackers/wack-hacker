@@ -3,6 +3,9 @@ import { cp, lstat, mkdtemp, readdir, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { sandboxWorkflowArtifact } from "./lib/sandbox-artifact.ts";
+import { verifyCompiledWorkspaceReplay } from "./lib/sandbox-replay-probe.ts";
+
 const source = new URL("../.output/server", import.meta.url).pathname;
 const temporary = await mkdtemp(join(tmpdir(), "wack-bash-bundle-"));
 const target = join(temporary, "server");
@@ -32,6 +35,8 @@ try {
   // Tracing a second copy is insufficient if authored provider code still uses
   // an inlined engine whose import.meta.url now points at the server chunk.
   const authored = await Bun.file(join(target, "_chunks/node-server.mjs")).text();
+  const workspace = sandboxWorkflowArtifact(authored);
+  if (workspace.mode === "durable") await verifyCompiledWorkspaceReplay(workspace);
   if (
     !authored.includes('from "just-bash"') ||
     authored.includes('new URL("./worker.js", import.meta.url)')
@@ -61,7 +66,7 @@ for (const entry of commands) {
   const result = await shell.exec(entry.command);
   if (result.exitCode !== 0 || result.stdout !== entry.expected) throw new Error(JSON.stringify(result));
 }
-console.log(JSON.stringify({ runtime: process.version, engines: ['CPython/WASM', 'QuickJS'], artifactBytes: ${bytes} }));
+console.log(JSON.stringify({ runtime: process.version, engines: ['CPython/WASM', 'QuickJS'], workspaceMode: ${JSON.stringify(workspace.mode)}, agents: ${workspace.agents}, artifactBytes: ${bytes} }));
 `,
   );
   const processHandle = Bun.spawn([process.argv[2] ?? process.execPath, probe], {
