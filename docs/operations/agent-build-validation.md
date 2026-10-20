@@ -49,6 +49,13 @@ durable-mode build and emitted replay probe on Node 24.19.0: all 13 agents and a
 51,556,437-byte artifact. These checks establish preview build and packaging
 success, not production rollout, a Discord canary, or runtime performance gains.
 
+The validation job now starts a digest-pinned Redis 8.10.2 service, waits for
+`redis-cli ping` health checks, and sets `REDIS_TEST_URL` only for `bun test`.
+This supplies the previously skipped tests with an isolated Redis instance.
+Local validation of this change passed all 259 tests and 8,975 assertions using
+Bun 1.4.0 and a separate Redis 8.10.2 host process on macOS. That run verifies the
+full test suite against Redis; it does not exercise the pinned Linux container.
+
 ## Local investigation
 
 Runs used the PR 192 base (`74c57d5`), before the routing, replay, and task-control
@@ -142,6 +149,6 @@ bun run check:sandbox-bundle "$(command -v node)" \
 ```
 
 The verified preview passed with sandbox prewarming enabled, the actual
-deployment environment, both hosted functions packaged, and no builder upgrade.
+deployment environment, a complete hosted build, and no builder upgrade.
 Future changes must preserve those checks. The runtime migration, Discord canary,
 and latency release gates remain separate and are not cleared by this build.
