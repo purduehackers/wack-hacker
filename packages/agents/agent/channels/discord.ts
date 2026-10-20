@@ -81,7 +81,7 @@ const executionBridge = createExecutionBridge({
       localId: env.AGENT_EXECUTION_ID,
       projectId: env.VERCEL_PROJECT_ID,
       runtime: "eve-0.81.1",
-      sandbox: env.DURABLE_BASH_ENABLED ? "durable-bash-v1" : "vercel-sandbox-v1",
+      sandbox: env.DURABLE_BASH_ENABLED ? "durable-bash-v2" : "vercel-sandbox-v1",
     }),
 });
 

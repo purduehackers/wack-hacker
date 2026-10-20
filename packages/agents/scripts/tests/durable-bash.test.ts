@@ -9,6 +9,7 @@ import { durableBashImplementation } from "../../agent/lib/sandbox/provider.ts";
 import { DurableSession } from "../../agent/lib/sandbox/session.ts";
 import { capture, limits, restore, snapshotSchema } from "../../agent/lib/sandbox/snapshot.ts";
 import { StaleWorkspaceError, WorkspaceStore } from "../../agent/lib/sandbox/store.ts";
+import { trackedSandbox, testOperation } from "./sandbox-fixtures.ts";
 import { prepareContext, sessionContext } from "./sandbox-fixtures.ts";
 
 const cleanup: (() => void | Promise<void>)[] = [];
@@ -36,6 +37,11 @@ async function database(url = "file::memory:") {
       new URL("../../../shared/migrations/0001_agent_workspaces.sql", import.meta.url),
     ).text(),
   );
+  await client.executeMultiple(
+    await Bun.file(
+      new URL("../../../shared/migrations/0002_workspace_operations.sql", import.meta.url),
+    ).text(),
+  );
   return client;
 }
 
@@ -46,7 +52,7 @@ async function fixture(client?: Client) {
   const ctx = sessionContext();
   const opened = await provider.start(ctx, undefined, artifact);
   cleanup.push(() => opened.handle.onRuntimeShutdown());
-  return { store, provider, artifact, ctx, opened, sandbox: opened.handle.sandbox };
+  return { store, provider, artifact, ctx, opened, sandbox: trackedSandbox(opened.handle.sandbox) };
 }
 
 test("cold process restores committed bytes without a host cache", async () => {
@@ -90,7 +96,7 @@ test("binary, directories, symlinks, modes and removal survive new handles", asy
   expect((await resumed.sandbox.run({ command: "stat -c %a dir/data.bin" })).stdout.trim()).toBe(
     "600",
   );
-  await resumed.sandbox.removePath({ path: "dir", recursive: true });
+  await resumed.sandbox.removePath({ path: "dir", recursive: true }, testOperation());
   const again = await provider.resume(ctx, artifact, opened.state);
   expect(await again.sandbox.readBinaryFile({ path: "dir/data.bin" })).toBeNull();
 });
@@ -100,7 +106,9 @@ test("stale writers cannot overwrite another handle", async () => {
   const other = await provider.resume(ctx, artifact, opened.state);
   await sandbox.writeTextFile({ path: "winner", content: "first" });
   expect(
-    await failure(other.sandbox.writeTextFile({ path: "winner", content: "second" })),
+    await failure(
+      other.sandbox.writeTextFile({ path: "winner", content: "second" }, testOperation()),
+    ),
   ).toBeInstanceOf(StaleWorkspaceError);
   const latest = await provider.resume(ctx, artifact, opened.state);
   expect(await latest.sandbox.readTextFile({ path: "winner" })).toBe("first");
@@ -260,6 +268,7 @@ test("limits, cancellation, immutable virtual system paths and hard links", asyn
 async function faultStore(client: Client, afterCommit: boolean) {
   let armed = false;
   const store = new WorkspaceStore({
+    batch: (...args) => client.batch(...args),
     execute: async (statement) => {
       if (!armed) return await client.execute(statement);
       armed = false;
@@ -426,6 +435,7 @@ test("a later receipt makes a lost response ambiguous, never a false success", a
   const client = await database();
   let armed = false;
   const store = new WorkspaceStore({
+    batch: (...args) => client.batch(...args),
     execute: async (statement) => {
       const result = await client.execute(statement);
       if (armed) {
@@ -446,11 +456,11 @@ test("a later receipt makes a lost response ambiguous, never a false success", a
   expect((await store.read(prior.scope, prior.generation)).revision).toBe(2);
 });
 
-test("known deployment gate: replaying an append repeats its local effect", async () => {
+test("unscoped replay of an append is refused without any file mutation", async () => {
   const { provider, artifact, ctx, sandbox, opened } = await fixture();
   await sandbox.run({ command: "printf event >> replay.log" });
   // A Workflow step may replay after its file commit but before its checkpoint.
   const replay = await provider.resume(ctx, artifact, opened.state);
-  await replay.sandbox.run({ command: "printf event >> replay.log" });
-  expect(await replay.sandbox.readTextFile({ path: "replay.log" })).toBe("eventevent");
+  await failure(replay.sandbox.run({ command: "printf event >> replay.log" }), "Unscoped");
+  expect(await replay.sandbox.readTextFile({ path: "replay.log" })).toBe("event");
 });

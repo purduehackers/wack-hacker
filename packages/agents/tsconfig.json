@@ -2,7 +2,7 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     // Eve builds on Nitro/Node; Bun types cover the package's compiler and tests.
-    "types": ["node", "bun"],
+    "types": ["node", "bun", "eve/workflow-modules"],
     "module": "esnext",
     "esModuleInterop": true
   },

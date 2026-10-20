@@ -91,7 +91,7 @@ Vercel deployment and project IDs:
         "id": "dpl_candidate081",
         "projectId": "prj_candidate",
         "runtime": "eve-0.81.1",
-        "sandbox": "durable-bash-v1"
+        "sandbox": "durable-bash-v2"
       },
       "origin": "https://wack-candidate-987654abc-purdue-hackers.vercel.app",
       "enabled": true,
@@ -113,9 +113,9 @@ redirects are never followed with the ingress bearer. Both deployments need the
 existing organization-managed ingress secret and Redis; no personal accounts or
 MCP configuration are introduced.
 
-The schema accepts `durable-bash-v1` and `durable-bash-v2` as distinct protocols so
-a subsequent replay-safe provider can retain v1 destinations. This slice reports
-v1 when its existing provider is enabled. Never relabel old saved state as v2.
+The schema accepts `durable-bash-v1` and `durable-bash-v2` as distinct protocols.
+The current candidate reports v2 when its provider is enabled. Retain any v1
+destinations with their original identity; never relabel old saved state as v2.
 `exact-turn-cancel-v1` is reserved for a separately validated capability. It is
 not advertised by this change. A route selection alone cannot establish that
 an installed runtime implements cancellation correctly.

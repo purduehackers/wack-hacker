@@ -3,6 +3,9 @@ import { cp, lstat, mkdtemp, readdir, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { sandboxWorkflowArtifact } from "./lib/sandbox-artifact.ts";
+import { verifyCompiledWorkspaceReplay } from "./lib/sandbox-replay-probe.ts";
+
 const source = new URL("../.output/server", import.meta.url).pathname;
 const temporary = await mkdtemp(join(tmpdir(), "wack-bash-bundle-"));
 const target = join(temporary, "server");
@@ -32,6 +35,8 @@ try {
   // Tracing a second copy is insufficient if authored provider code still uses
   // an inlined engine whose import.meta.url now points at the server chunk.
   const authored = await Bun.file(join(target, "_chunks/node-server.mjs")).text();
+  const workspace = sandboxWorkflowArtifact(authored);
+  if (workspace.mode === "durable") await verifyCompiledWorkspaceReplay(workspace);
   if (
     !authored.includes('from "just-bash"') ||
     authored.includes('new URL("./worker.js", import.meta.url)')

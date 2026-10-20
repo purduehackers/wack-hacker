@@ -1,24 +1,24 @@
 import { createHash } from "node:crypto";
 import { posix } from "node:path";
 
-import type { SandboxSession } from "eve/sandbox";
 import type {
   SandboxProviderImplementation,
   SandboxProviderPrepareContext,
 } from "eve/sandbox/provider";
 import { z } from "zod";
 
-import { handle } from "./session.ts";
+import { workspaceScope } from "./operation.ts";
+import { DurableSession, handle } from "./session.ts";
 import { capture, restore, snapshotSchema } from "./snapshot.ts";
 import { WorkspaceStore } from "./store.ts";
 
 const artifactSchema = z.strictObject({
-  version: z.literal(1),
+  version: z.literal(2),
   key: z.string().length(64),
   snapshot: snapshotSchema,
 });
 const stateSchema = z.strictObject({
-  version: z.literal(1),
+  version: z.literal(2),
   scope: z.string().length(64),
   generation: z.uuid(),
 });
@@ -27,9 +27,6 @@ export type State = z.output<typeof stateSchema>;
 
 function hash(input: string): string {
   return createHash("sha256").update(input).digest("hex");
-}
-function scope(sessionId: string): string {
-  return hash(JSON.stringify(["wack-durable-bash-v1", sessionId]));
 }
 
 async function prepare(ctx: SandboxProviderPrepareContext): Promise<Artifact> {
@@ -50,18 +47,18 @@ async function prepare(ctx: SandboxProviderPrepareContext): Promise<Artifact> {
   // across compatible artifacts; the artifact itself carries all seed bytes.
   const key = hash(
     JSON.stringify([
-      "wack-durable-bash-v1",
+      "wack-durable-bash-v2",
       ctx.sourceRevision,
       snapshot.entries.map((entry) => (entry.kind === "symlink" ? entry : { ...entry, mtime: 0 })),
     ]),
   );
-  return { version: 1, key, snapshot };
+  return { version: 2, key, snapshot };
 }
 
 function validateState(sessionId: string, input: Artifact, state: State): State {
   artifactSchema.parse(input);
   const parsed = stateSchema.parse(state);
-  if (parsed.scope !== scope(sessionId))
+  if (parsed.scope !== workspaceScope(sessionId))
     throw new Error("Workspace state does not belong to this session and provider protocol");
   return parsed;
 }
@@ -69,16 +66,16 @@ function validateState(sessionId: string, input: Artifact, state: State): State 
 /** Export the implementation factory for lifecycle tests with a local database. */
 export function durableBashImplementation(
   store: () => WorkspaceStore,
-): SandboxProviderImplementation<undefined, Artifact, State, SandboxSession> {
+): SandboxProviderImplementation<undefined, Artifact, State, DurableSession> {
   return {
     prepare,
     async start(ctx, _options, input) {
       const artifact = artifactSchema.parse(input);
       const database = store();
-      const record = await database.open(scope(ctx.session.id), artifact.snapshot);
+      const record = await database.open(workspaceScope(ctx.session.id), artifact.snapshot);
       return {
         handle: handle(database, record),
-        state: { version: 1, scope: record.scope, generation: record.generation },
+        state: { version: 2, scope: record.scope, generation: record.generation },
       };
     },
     async resume(ctx, artifact, input) {
