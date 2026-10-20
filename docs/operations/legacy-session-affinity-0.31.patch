@@ -1,0 +1,684 @@
+diff --git a/packages/agents/agent/channels/discord.ts b/packages/agents/agent/channels/discord.ts
+index 8a099f6..a83c8d3 100644
+--- a/packages/agents/agent/channels/discord.ts
++++ b/packages/agents/agent/channels/discord.ts
+@@ -23,7 +23,7 @@
+ import { createHash } from "node:crypto";
+
+ import { bearerMatches } from "@repo/shared/bearer";
+-import { createConversationStore } from "@repo/shared/conversations";
++import { createConversationStore, EXECUTION_PROBE_ROUTE } from "@repo/shared/conversations";
+ import { RecoveryRequired, serializeError, Transient } from "@repo/shared/errors";
+ import { getRedis } from "@repo/shared/redis";
+ import { Result } from "@repo/shared/result";
+@@ -36,7 +36,7 @@ import {
+   decodeSteerRequestPayload,
+   WIRE_ROUTES,
+ } from "@repo/shared/wire";
+-import type { ParkedPayload, RenderIntent, WireResponse } from "@repo/shared/wire";
++import type { DeliveryPayload, ParkedPayload, RenderIntent, WireResponse } from "@repo/shared/wire";
+ import * as Sentry from "@sentry/node";
+ import { getVercelOidcToken } from "@vercel/oidc";
+ import { defineChannel, POST, type Session } from "eve/channels";
+@@ -47,6 +47,11 @@ import { z } from "zod";
+ import { env } from "../env.ts";
+ import { resolveBotBaseUrl } from "../lib/bot/endpoint.ts";
+ import { authFor } from "../lib/discord/auth.ts";
++import {
++  acceptedSessionId,
++  createExecutionBridge,
++  executionIdentity,
++} from "../lib/discord/execution-bridge.ts";
+ import { applyInputRequests } from "../lib/discord/input-requests.ts";
+ import { discordMessageContent } from "../lib/discord/message-input.ts";
+ import { createRenderPublisher, renderFooter } from "../lib/discord/render-intent.ts";
+@@ -68,6 +73,17 @@ const redis = getRedis({
+   url: env.REDIS_URL,
+ });
+ const conversations = createConversationStore({ redis });
++const executionBridge = createExecutionBridge({
++  store: conversations,
++  identity: () =>
++    executionIdentity({
++      deploymentId: env.VERCEL_DEPLOYMENT_ID,
++      localId: env.AGENT_EXECUTION_ID,
++      projectId: env.VERCEL_PROJECT_ID,
++      runtime: "eve-0.31.3",
++      sandbox: "vercel-sandbox-v1",
++    }),
++});
+
+ /**
+  * Cancels a turn that a newly arrived message supersedes.
+@@ -103,6 +119,20 @@ const renderPublisher = createRenderPublisher({
+ });
+ const approvalPolicyStore = new ApprovalPolicyStore(redis);
+
++/** Current caller and transport target are reasserted for every delivery. */
++function messageAuth(payload: DeliveryPayload) {
++  return authFor(payload.principal, {
++    channelId: payload.channel.id,
++    ...(payload.thread === undefined ? {} : { threadId: payload.thread.id }),
++    messageId: payload.messageId,
++    dispatchId: payload.dispatchId,
++    renderChannelId: payload.thread?.id ?? payload.channel.id,
++    source: payload.kind === "scheduled" ? "scheduled" : "chat",
++    ...(payload.scheduleId === undefined ? {} : { scheduleId: payload.scheduleId }),
++    ...(payload.occurrenceId === undefined ? {} : { occurrenceId: payload.occurrenceId }),
++  });
++}
++
+ const RESET_DRAIN_TIMEOUT_MS = 8_000;
+
+ async function waitForResetCutover(
+@@ -326,8 +356,14 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
+   }),
+
+   routes: [
++    POST(EXECUTION_PROBE_ROUTE, async (request, { resolveSession }) => {
++      if (!botAuthenticated(request))
++        return createUnauthorizedResponse({ status: 401, message: "bad bearer" });
++      return executionBridge.probe(request, resolveSession);
++    }),
++
+     /** A user turn: a mention that opens a conversation, or a follow-up. */
+-    POST(WIRE_ROUTES.message, async (request, { from, resolveSession }) => {
++    POST(WIRE_ROUTES.message, async (request, { from, resolveSession, attachSession }) => {
+       if (!botAuthenticated(request)) {
+         return createUnauthorizedResponse({ status: 401, message: "bad bearer" });
+       }
+@@ -336,10 +372,13 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
+       if (Result.isError(decoded)) return failed(decoded.error);
+       const payload = decoded.value;
+
++      const binding = await executionBridge.guard(request, payload.continuationKey);
++      if (binding instanceof Response) return binding;
+       const active = await resolveSession(payload.continuationKey);
++      if (active?.id !== binding.sessionId)
++        return failed(new Error("execution session ownership changed"), 409);
+
+       await steerActiveTurn(active, payload.continuationKey);
+-      const renderChannelId = payload.thread?.id ?? payload.channel.id;
+
+       // Last side effect before Eve: after this fence becomes live, a crash must
+       // wedge safely rather than risk starting this dispatch twice.
+@@ -377,28 +416,37 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
+       }
+
+       try {
+-        const session = await from(payload.continuationKey).send(discordMessageContent(payload), {
+-          // Eve refreshes current auth on every delivery even though state seeds
+-          // are ignored for existing sessions. Transport targeting therefore
+-          // rides in this trusted assertion and is adopted at `turn.started`.
+-          auth: authFor(payload.principal, {
+-            channelId: payload.channel.id,
+-            ...(payload.thread === undefined ? {} : { threadId: payload.thread.id }),
+-            messageId: payload.messageId,
+-            dispatchId: payload.dispatchId,
+-            renderChannelId,
+-            source: payload.kind === "scheduled" ? "scheduled" : "chat",
+-            ...(payload.scheduleId === undefined ? {} : { scheduleId: payload.scheduleId }),
+-            ...(payload.occurrenceId === undefined ? {} : { occurrenceId: payload.occurrenceId }),
+-          }),
+-          state: stateForMessage(payload),
+-        });
++        const options = { auth: messageAuth(payload) };
++        // Fixed IDs refuse stranded sessions; address.send would silently replace them.
++        const sessionId =
++          binding.sessionId === undefined
++            ? (
++                await from(payload.continuationKey).send(discordMessageContent(payload), {
++                  ...options,
++                  state: stateForMessage(payload),
++                })
++              ).id
++            : acceptedSessionId(
++                await attachSession(binding.sessionId).send(
++                  discordMessageContent(payload),
++                  options,
++                ),
++              );
++        if (
++          !(await conversations.execution.confirmSession(
++            payload.continuationKey,
++            payload.dispatchId,
++            binding.generation,
++            sessionId,
++          ))
++        )
++          return failed(new Error("execution session binding changed during admission"), 409);
+
+         const confirmed = await conversations.delivery.confirmSession(
+           payload.continuationKey,
+           payload.dispatchId,
+           payload.messageId,
+-          session.id,
++          sessionId,
+         );
+         if (!confirmed) {
+           return failed(
+@@ -410,14 +458,14 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
+             409,
+           );
+         }
+-        return ok(session.id, payload.continuationKey);
++        return ok(sessionId, payload.continuationKey);
+       } finally {
+         await conversations.delivery.releaseIngress(payload.continuationKey, admission.attempt);
+       }
+     }),
+
+     /** A component click answering a pending approval or question. */
+-    POST(WIRE_ROUTES.interaction, async (request, { from }) => {
++    POST(WIRE_ROUTES.interaction, async (request, { attachSession }) => {
+       if (!botAuthenticated(request)) {
+         return createUnauthorizedResponse({ status: 401, message: "bad bearer" });
+       }
+@@ -425,6 +473,10 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
+       const decoded = decodeInteractionPayload(await request.json());
+       if (Result.isError(decoded)) return failed(decoded.error);
+       const payload = decoded.value;
++      const binding = await executionBridge.guard(request, payload.continuationKey);
++      if (binding instanceof Response) return binding;
++      if (binding.sessionId === undefined)
++        return failed(new Error("input has no bound session"), 409);
+       const { claim, identity } = await conversations.interaction.claim(payload);
+       if (claim === "accepted") {
+         await conversations.delivery.releaseIngress(payload.continuationKey, payload.interactionId);
+@@ -442,7 +494,7 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
+       }
+
+       try {
+-        const session = await from(payload.continuationKey).respond(
++        const session = await attachSession(binding.sessionId).respond(
+           [
+             {
+               requestId: payload.requestId,
+@@ -462,13 +514,14 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
+           },
+         );
+
++        const sessionId = acceptedSessionId(session);
+         await conversations.interaction.accept(
+           payload.interactionId,
+           identity,
+-          session.id,
++          sessionId,
+           payload.continuationKey,
+         );
+-        return ok(session.id, payload.continuationKey);
++        return ok(sessionId, payload.continuationKey);
+       } finally {
+         await conversations.delivery.releaseIngress(payload.continuationKey, payload.interactionId);
+       }
+@@ -487,6 +540,10 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
+       if (!botAuthenticated(request)) {
+         return createUnauthorizedResponse({ status: 401, message: "bad bearer" });
+       }
++      const decoded = decodeSteerRequestPayload(await request.json());
++      if (Result.isError(decoded)) return failed(decoded.error);
++      const binding = await executionBridge.guard(request, decoded.value.continuationKey);
++      if (binding instanceof Response) return binding;
+       const token = await getVercelOidcToken().catch((cause: unknown) => {
+         warnFailure("mint a stream token", cause);
+         return undefined;
+@@ -501,7 +558,7 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
+     }),
+
+     /** Explicit `/new`-style retirement. */
+-    POST(WIRE_ROUTES.reset, async (request, { from }) => {
++    POST(WIRE_ROUTES.reset, async (request, { attachSession }) => {
+       if (!botAuthenticated(request)) {
+         return createUnauthorizedResponse({ status: 401, message: "bad bearer" });
+       }
+@@ -509,6 +566,8 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
+       const decoded = decodeResetRequestPayload(await request.json());
+       if (Result.isError(decoded)) return failed(decoded.error);
+
++      const binding = await executionBridge.guard(request, decoded.value.continuationKey);
++      if (binding instanceof Response) return binding;
+       const cutover = await waitForResetCutover(
+         decoded.value.continuationKey,
+         decoded.value.resetId,
+@@ -526,9 +585,10 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
+         );
+       }
+
+-      const outcome = await from(decoded.value.continuationKey).reset({
+-        reason: decoded.value.reason,
+-      });
++      const outcome =
++        binding.sessionId === undefined
++          ? { status: "no_active_session" }
++          : await attachSession(binding.sessionId).reset({ reason: decoded.value.reason });
+       return Response.json({ ok: true, status: outcome.status });
+     }),
+
+@@ -539,14 +599,19 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
+      * only cancels, and the cancellation is what releases `agent:active` — the
+      * fence that otherwise refuses every later delivery on this conversation.
+      */
+-    POST(WIRE_ROUTES.steer, async (request, { resolveSession }) => {
++    POST(WIRE_ROUTES.steer, async (request, { attachSession }) => {
+       if (!botAuthenticated(request)) {
+         return createUnauthorizedResponse({ status: 401, message: "bad bearer" });
+       }
+       const decoded = decodeSteerRequestPayload(await request.json());
+       if (Result.isError(decoded)) return failed(decoded.error);
+       const { continuationKey } = decoded.value;
+-      await steerActiveTurn(await resolveSession(continuationKey), continuationKey);
++      const binding = await executionBridge.guard(request, continuationKey);
++      if (binding instanceof Response) return binding;
++      await steerActiveTurn(
++        binding.sessionId === undefined ? undefined : attachSession(binding.sessionId),
++        continuationKey,
++      );
+       return Response.json({ ok: true, status: "accepted" });
+     }),
+   ],
+diff --git a/packages/agents/agent/env.ts b/packages/agents/agent/env.ts
+index f6e8c79..fe29a06 100644
+--- a/packages/agents/agent/env.ts
++++ b/packages/agents/agent/env.ts
+@@ -103,6 +103,9 @@ export const env = createEnv({
+     DISCORD_BOT_TOKEN: secret.optional(),
+     DISCORD_BOT_CLIENT_ID: secret.optional(),
+     AGENT_URL: httpUrl.optional(),
++    AGENT_EXECUTION_TARGETS: z.string().min(1).optional(),
++    AGENT_EXECUTION_ID: identifier.optional(),
++    VERCEL_DEPLOYMENT_ID: identifier.optional(),
+     DASHBOARD_GLOBAL_CONFIG: secret.optional(),
+     SHIP_API_KEY: secret.optional(),
+     PHACK_API_KEY: secret.optional(),
+diff --git a/packages/agents/turbo.json b/packages/agents/turbo.json
+index 07ebe03..04a793d 100644
+--- a/packages/agents/turbo.json
++++ b/packages/agents/turbo.json
+@@ -7,6 +7,9 @@
+       "env": [
+         "AGENT_INGRESS_SECRET",
+         "AGENT_URL",
++        "AGENT_EXECUTION_ID",
++        "AGENT_EXECUTION_TARGETS",
++        "VERCEL_DEPLOYMENT_ID",
+         "BOT_IMAGE",
+         "BOT_INGRESS_SECRET",
+         "BOT_SANDBOX_ENABLED",
+diff --git a/packages/shared/src/conversations/index.ts b/packages/shared/src/conversations/index.ts
+index cc84eee..b402eaf 100644
+--- a/packages/shared/src/conversations/index.ts
++++ b/packages/shared/src/conversations/index.ts
+@@ -10,3 +10,13 @@ export { RECOVERY_FOOTER, RECOVERY_TEXT } from "./writers/delivery.ts";
+ export type { HitlClaim, HitlClaimInput } from "./writers/hitl.ts";
+ export type { ClaimedInteraction, InteractionClaim } from "./writers/interaction.ts";
+ export type { ScheduleClaim } from "./writers/schedule.ts";
++
++export {
++  executionIdentitySchema,
++  executionBindingSchema,
++  executionProbeSchema,
++  EXECUTION_PROBE_ROUTE,
++  EXECUTION_GENERATION_HEADER,
++  type ExecutionIdentity,
++  type ExecutionBinding,
++} from "./records/execution.ts";
+diff --git a/packages/shared/src/conversations/keys.ts b/packages/shared/src/conversations/keys.ts
+index c4c16a3..ec251ce 100644
+--- a/packages/shared/src/conversations/keys.ts
++++ b/packages/shared/src/conversations/keys.ts
+@@ -105,3 +105,12 @@ export function authorizationIndexKey(dispatchId: string): string {
+ export function scheduledFireReceiptKey(occurrenceId: string): string {
+   return `agent:scheduled-fire:${occurrenceId}`;
+ }
++
++/** Kept beyond turn TTLs so an idle session never inherits a new deployment. */
++export function executionKey(continuationKey: string): string {
++  return `agent:execution:${continuationKey}`;
++}
++
++export function dispatchExecutionKey(dispatchId: string): string {
++  return `agent:dispatch-execution:${dispatchId}`;
++}
+diff --git a/packages/shared/src/conversations/readers/delivery.ts b/packages/shared/src/conversations/readers/delivery.ts
+index 41fa091..dbd1423 100644
+--- a/packages/shared/src/conversations/readers/delivery.ts
++++ b/packages/shared/src/conversations/readers/delivery.ts
+@@ -12,7 +12,7 @@ import type { RedisClient } from "../../redis/client.ts";
+ import { Result } from "../../result/index.ts";
+ import type { ParkedPayload } from "../../wire.ts";
+ import { decodeParkedPayload } from "../../wire.ts";
+-import { redisValue } from "../io.ts";
++import { decodeStored, redisValue } from "../io.ts";
+ import {
+   activeKey,
+   AGENT_READY_SET_KEY,
+@@ -58,6 +58,15 @@ export class DeliveryReader {
+     return storedRecord.safeParse(raw).data;
+   }
+
++  /** Ownership decisions must distinguish an absent record from unreadable work. */
++  async readStrict(continuationKey: string) {
++    return decodeStored(
++      deliveryRecordSchema,
++      "conversation delivery",
++      await this.redis.get(activeKey(continuationKey)),
++    );
++  }
++
+   /**
+    * The turn currently holding this conversation, if one is.
+    *
+diff --git a/packages/shared/src/conversations/store.ts b/packages/shared/src/conversations/store.ts
+index c523c71..126a3d3 100644
+--- a/packages/shared/src/conversations/store.ts
++++ b/packages/shared/src/conversations/store.ts
+@@ -11,11 +11,13 @@ import { resetKey } from "./keys.ts";
+ import { AuthorizationReader } from "./readers/authorization.ts";
+ import { DelegationReader } from "./readers/delegation.ts";
+ import { DeliveryReader } from "./readers/delivery.ts";
++import { ExecutionReader } from "./readers/execution.ts";
+ import { InteractionReader } from "./readers/interaction.ts";
+ import { RenderReader } from "./readers/render.ts";
+ import { AuthorizationWriter } from "./writers/authorization.ts";
+ import { DelegationWriter } from "./writers/delegation.ts";
+ import { DeliveryWriter } from "./writers/delivery.ts";
++import { ExecutionWriter } from "./writers/execution.ts";
+ import { HitlWriter } from "./writers/hitl.ts";
+ import { InteractionWriter } from "./writers/interaction.ts";
+ import { RenderWriter } from "./writers/render.ts";
+@@ -25,6 +27,8 @@ export function createConversationStore(deps: { readonly redis: RedisClient }) {
+   const { redis } = deps;
+   const deliveries = new DeliveryReader(redis);
+   return {
++    executions: new ExecutionReader(redis),
++    execution: new ExecutionWriter(redis),
+     /** A turn's hold on one conversation: queue, admission, park, release. */
+     deliveries,
+     delivery: new DeliveryWriter(redis),
+diff --git a/packages/shared/src/conversations/records/execution.ts b/packages/shared/src/conversations/records/execution.ts
+new file mode 100644
+index 0000000..34faa40
+--- /dev/null
++++ b/packages/shared/src/conversations/records/execution.ts
+@@ -0,0 +1,30 @@
++/** Deployment affinity is durable conversation metadata, independent of turn leases. */
++import { z } from "zod";
++
++export const executionIdentitySchema = z.strictObject({
++  id: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/u),
++  projectId: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/u),
++  runtime: z.string().regex(/^eve-\d+\.\d+\.\d+$/u),
++  sandbox: z.enum(["vercel-sandbox-v1", "durable-bash-v1", "durable-bash-v2"]),
++});
++
++export const executionBindingSchema = z.strictObject({
++  version: z.literal(1),
++  generation: z.uuid(),
++  identity: executionIdentitySchema,
++  originHash: z.string().regex(/^[a-f0-9]{64}$/u),
++  sessionId: z.string().min(1).max(128).optional(),
++});
++
++export type ExecutionIdentity = z.output<typeof executionIdentitySchema>;
++export type ExecutionBinding = z.output<typeof executionBindingSchema>;
++
++export const EXECUTION_PROBE_ROUTE = "/discord/execution";
++export const EXECUTION_GENERATION_HEADER = "x-wack-execution-generation";
++
++export const executionProbeSchema = z.strictObject({
++  ok: z.literal(true),
++  protocol: z.literal("session-affinity-v1"),
++  identity: executionIdentitySchema,
++  sessionId: z.string().min(1).max(128).optional(),
++});
+diff --git a/packages/shared/src/conversations/readers/execution.ts b/packages/shared/src/conversations/readers/execution.ts
+new file mode 100644
+index 0000000..b708c89
+--- /dev/null
++++ b/packages/shared/src/conversations/readers/execution.ts
+@@ -0,0 +1,28 @@
++import type { RedisClient } from "../../redis/client.ts";
++import { decodeStored } from "../io.ts";
++import { executionKey, dispatchExecutionKey } from "../keys.ts";
++import { executionBindingSchema } from "../records/execution.ts";
++
++export class ExecutionReader {
++  private readonly redis: Pick<RedisClient, "get">;
++
++  constructor(redis: Pick<RedisClient, "get">) {
++    this.redis = redis;
++  }
++
++  async read(continuationKey: string) {
++    return decodeStored(
++      executionBindingSchema,
++      "conversation execution binding",
++      await this.redis.get(executionKey(continuationKey)),
++    );
++  }
++
++  async dispatch(dispatchId: string) {
++    return decodeStored(
++      executionBindingSchema,
++      "dispatch execution binding",
++      await this.redis.get(dispatchExecutionKey(dispatchId)),
++    );
++  }
++}
+diff --git a/packages/shared/src/conversations/writers/execution.ts b/packages/shared/src/conversations/writers/execution.ts
+new file mode 100644
+index 0000000..88b6d0e
+--- /dev/null
++++ b/packages/shared/src/conversations/writers/execution.ts
+@@ -0,0 +1,109 @@
++import type { RedisClient } from "../../redis/client.ts";
++import { decodeStored, evalFlag } from "../io.ts";
++import { dispatchExecutionKey, executionKey, resetKey } from "../keys.ts";
++import { executionBindingSchema, type ExecutionBinding } from "../records/execution.ts";
++
++const BIND = `
++-- execution:bind
++local existing = redis.call("GET", KEYS[1])
++if existing then return existing end
++redis.call("SET", KEYS[1], ARGV[1])
++return ARGV[1]
++`;
++
++const DISPATCH = `
++-- execution:dispatch
++local existing = redis.call("GET", KEYS[2])
++if existing then return existing end
++local binding = redis.call("GET", KEYS[1])
++if not binding then return nil end
++redis.call("SET", KEYS[2], binding, "EX", 604800)
++return binding
++`;
++
++const CONFIRM = `
++-- execution:confirm
++local raw = redis.call("GET", KEYS[1])
++if not raw then return 0 end
++local binding = cjson.decode(raw)
++if binding.generation ~= ARGV[1] then return 0 end
++if binding.sessionId and binding.sessionId ~= ARGV[2] then return 0 end
++binding.sessionId = ARGV[2]
++local dispatch = redis.call("GET", KEYS[2])
++if dispatch then
++  local pinned = cjson.decode(dispatch)
++  if pinned.generation ~= binding.generation then return 0 end
++  if pinned.sessionId and pinned.sessionId ~= ARGV[2] then return 0 end
++  pinned.sessionId = ARGV[2]
++  redis.call("SET", KEYS[2], cjson.encode(pinned), "KEEPTTL")
++end
++redis.call("SET", KEYS[1], cjson.encode(binding))
++return 1
++`;
++
++const RETIRE = `
++-- execution:retire
++if redis.call("GET", KEYS[2]) ~= ARGV[1] then return 0 end
++local raw = redis.call("GET", KEYS[1])
++if not raw then return 0 end
++local binding = cjson.decode(raw)
++if binding.generation == ARGV[1] then return 1 end
++if binding.generation ~= ARGV[2] then return 0 end
++binding.generation = ARGV[1]
++binding.sessionId = nil
++redis.call("SET", KEYS[1], cjson.encode(binding))
++return 1
++`;
++
++export class ExecutionWriter {
++  private readonly redis: Pick<RedisClient, "eval">;
++
++  constructor(redis: Pick<RedisClient, "eval">) {
++    this.redis = redis;
++  }
++
++  /** No TTL: an idle session can outlive all delivery and render records. */
++  async bind(continuationKey: string, binding: ExecutionBinding) {
++    return decodeStored(
++      executionBindingSchema,
++      "conversation execution binding",
++      await this.redis.eval(BIND, [executionKey(continuationKey)], [JSON.stringify(binding)]),
++    );
++  }
++
++  async pinDispatch(continuationKey: string, dispatchId: string) {
++    return decodeStored(
++      executionBindingSchema,
++      "dispatch execution binding",
++      await this.redis.eval(
++        DISPATCH,
++        [executionKey(continuationKey), dispatchExecutionKey(dispatchId)],
++        [],
++      ),
++    );
++  }
++
++  async confirmSession(
++    continuationKey: string,
++    dispatchId: string,
++    generation: string,
++    sessionId: string,
++  ): Promise<boolean> {
++    return evalFlag(
++      this.redis,
++      CONFIRM,
++      [executionKey(continuationKey), dispatchExecutionKey(dispatchId)],
++      [generation, sessionId],
++    );
++  }
++
++  /** An explicit, successful reset retires this session but never changes its deployment. */
++  async retireSession(continuationKey: string, resetId: string, generation: string) {
++    return evalFlag(
++      this.redis,
++      RETIRE,
++      [executionKey(continuationKey), resetKey(continuationKey)],
++      [resetId, generation],
++    );
++  }
++}
+diff --git a/packages/agents/agent/lib/discord/execution-bridge.ts b/packages/agents/agent/lib/discord/execution-bridge.ts
+new file mode 100644
+index 0000000..5627dbf
+--- /dev/null
++++ b/packages/agents/agent/lib/discord/execution-bridge.ts
+@@ -0,0 +1,96 @@
++/**
++ * This bridge deliberately uses no Eve internals or version-specific API.
++ * It is backportable to 0.31: only resolveSession(address), fixed Session handles,
++ * and the existing Redis conversation aggregate are required.
++ */
++import {
++  EXECUTION_GENERATION_HEADER,
++  executionIdentitySchema,
++  type ConversationStore,
++  type ExecutionIdentity,
++} from "@repo/shared/conversations";
++import { Result } from "@repo/shared/result";
++import { z } from "zod";
++
++const addressSchema = z.strictObject({ continuationKey: z.string().regex(/^\d{17,20}$/u) });
++
++function denied(message: string, status = 409): Response {
++  return Response.json({ ok: false, tag: "ExecutionUnavailable", message }, { status });
++}
++
++export function createExecutionBridge(deps: {
++  readonly store: Pick<ConversationStore, "executions" | "execution" | "deliveries">;
++  readonly identity: () => ExecutionIdentity | undefined;
++}) {
++  return {
++    async probe(
++      request: Request,
++      resolveSession: (address: string) => Promise<{ readonly id: string } | undefined>,
++    ) {
++      const identity = deps.identity();
++      if (identity === undefined) return denied("execution identity is not configured", 503);
++      const address = addressSchema.safeParse(await request.json());
++      if (!address.success) return denied("invalid continuation address", 400);
++      const session = await resolveSession(address.data.continuationKey);
++      const held = await deps.store.deliveries.readStrict(address.data.continuationKey);
++      if (Result.isError(held)) return denied("existing delivery is unreadable", 503);
++      if (session === undefined && held.value !== undefined && held.value.sessionId !== "") {
++        return denied(
++          "a recorded session lost its continuation ownership; operator recovery is required",
++          503,
++        );
++      }
++      return Response.json({
++        ok: true,
++        protocol: "session-affinity-v1",
++        identity,
++        ...(session === undefined ? {} : { sessionId: session.id }),
++      });
++    },
++
++    async guard(request: Request, continuationKey: string) {
++      const identity = deps.identity();
++      if (identity === undefined) return denied("execution identity is not configured", 503);
++      const stored = await deps.store.executions.read(continuationKey);
++      if (Result.isError(stored)) return denied("execution binding is unreadable", 503);
++      const binding = stored.value;
++      if (
++        binding === undefined ||
++        request.headers.get(EXECUTION_GENERATION_HEADER) !== binding.generation ||
++        binding.identity.id !== identity.id ||
++        binding.identity.projectId !== identity.projectId ||
++        binding.identity.runtime !== identity.runtime ||
++        binding.identity.sandbox !== identity.sandbox
++      )
++        return denied("this continuation is not bound to this execution deployment");
++      return binding;
++    },
++  };
++}
++
++/** Vercel supplies the actual deployment ID; local tests may provide an explicit ID. */
++export function executionIdentity(input: {
++  readonly deploymentId: string | undefined;
++  readonly localId: string | undefined;
++  readonly projectId: string | undefined;
++  readonly runtime: string;
++  readonly sandbox: ExecutionIdentity["sandbox"];
++}): ExecutionIdentity | undefined {
++  return executionIdentitySchema.safeParse({
++    id: input.deploymentId ?? input.localId,
++    projectId: input.projectId,
++    runtime: input.runtime,
++    sandbox: input.sandbox,
++  }).data;
++}
++
++/** Fixed-session APIs can refuse without creating a replacement. */
++export function acceptedSessionId(result: {
++  readonly status: string;
++  readonly sessionId?: string;
++}): string {
++  if (result.status !== "accepted" || result.sessionId === undefined) {
++    throw new Error("bound execution session is not active; no replacement was created");
++  }
++  return result.sessionId;
++}

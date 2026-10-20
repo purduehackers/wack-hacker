@@ -10,3 +10,13 @@ export { RECOVERY_FOOTER, RECOVERY_TEXT } from "./writers/delivery.ts";
 export type { HitlClaim, HitlClaimInput } from "./writers/hitl.ts";
 export type { ClaimedInteraction, InteractionClaim } from "./writers/interaction.ts";
 export type { ScheduleClaim } from "./writers/schedule.ts";
+
+export {
+  executionIdentitySchema,
+  executionBindingSchema,
+  executionProbeSchema,
+  EXECUTION_PROBE_ROUTE,
+  EXECUTION_GENERATION_HEADER,
+  type ExecutionIdentity,
+  type ExecutionBinding,
+} from "./records/execution.ts";

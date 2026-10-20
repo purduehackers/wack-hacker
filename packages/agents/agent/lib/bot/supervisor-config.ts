@@ -70,7 +70,7 @@ function botEnvironment(source: AgentEnv): BotProcessEnvironment {
   return {
     DISCORD_BOT_TOKEN: required(source.DISCORD_BOT_TOKEN, "DISCORD_BOT_TOKEN"),
     DISCORD_BOT_CLIENT_ID: required(source.DISCORD_BOT_CLIENT_ID, "DISCORD_BOT_CLIENT_ID"),
-    AGENT_URL: required(source.AGENT_URL, "AGENT_URL"),
+    AGENT_EXECUTION_TARGETS: required(source.AGENT_EXECUTION_TARGETS, "AGENT_EXECUTION_TARGETS"),
     AGENT_INGRESS_SECRET: required(source.AGENT_INGRESS_SECRET, "AGENT_INGRESS_SECRET"),
     BOT_INGRESS_SECRET: required(source.BOT_INGRESS_SECRET, "BOT_INGRESS_SECRET"),
     REDIS_URL: source.REDIS_URL,

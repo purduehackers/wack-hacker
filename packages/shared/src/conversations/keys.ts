@@ -105,3 +105,12 @@ export function authorizationIndexKey(dispatchId: string): string {
 export function scheduledFireReceiptKey(occurrenceId: string): string {
   return `agent:scheduled-fire:${occurrenceId}`;
 }
+
+/** Kept beyond turn TTLs so an idle session never inherits a new deployment. */
+export function executionKey(continuationKey: string): string {
+  return `agent:execution:${continuationKey}`;
+}
+
+export function dispatchExecutionKey(dispatchId: string): string {
+  return `agent:dispatch-execution:${dispatchId}`;
+}

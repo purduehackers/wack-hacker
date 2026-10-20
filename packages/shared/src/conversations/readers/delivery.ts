@@ -12,7 +12,7 @@ import type { RedisClient } from "../../redis/client.ts";
 import { Result } from "../../result/index.ts";
 import type { ParkedPayload } from "../../wire.ts";
 import { decodeParkedPayload } from "../../wire.ts";
-import { redisValue } from "../io.ts";
+import { decodeStored, redisValue } from "../io.ts";
 import {
   activeKey,
   AGENT_READY_SET_KEY,
@@ -56,6 +56,15 @@ export class DeliveryReader {
     const raw: unknown = await this.redis.get(activeKey(continuationKey));
     if (raw === null || raw === undefined) return undefined;
     return storedRecord.safeParse(raw).data;
+  }
+
+  /** Ownership decisions must distinguish an absent record from unreadable work. */
+  async readStrict(continuationKey: string) {
+    return decodeStored(
+      deliveryRecordSchema,
+      "conversation delivery",
+      await this.redis.get(activeKey(continuationKey)),
+    );
   }
 
   /**

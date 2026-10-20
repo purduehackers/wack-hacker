@@ -23,7 +23,7 @@
 import { createHash } from "node:crypto";
 
 import { bearerMatches } from "@repo/shared/bearer";
-import { createConversationStore } from "@repo/shared/conversations";
+import { createConversationStore, EXECUTION_PROBE_ROUTE } from "@repo/shared/conversations";
 import { RecoveryRequired, serializeError, Transient } from "@repo/shared/errors";
 import { getRedis } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
@@ -36,7 +36,7 @@ import {
   decodeSteerRequestPayload,
   WIRE_ROUTES,
 } from "@repo/shared/wire";
-import type { ParkedPayload, RenderIntent, WireResponse } from "@repo/shared/wire";
+import type { DeliveryPayload, ParkedPayload, RenderIntent, WireResponse } from "@repo/shared/wire";
 import * as Sentry from "@sentry/node";
 import { getVercelOidcToken } from "@vercel/oidc";
 import { defineChannel, POST, type Session } from "eve/channels";
@@ -47,6 +47,11 @@ import { z } from "zod";
 import { env } from "../env.ts";
 import { resolveBotBaseUrl } from "../lib/bot/endpoint.ts";
 import { authFor } from "../lib/discord/auth.ts";
+import {
+  acceptedSessionId,
+  createExecutionBridge,
+  executionIdentity,
+} from "../lib/discord/execution-bridge.ts";
 import { applyInputRequests } from "../lib/discord/input-requests.ts";
 import { discordMessageContent } from "../lib/discord/message-input.ts";
 import { createRenderPublisher, renderFooter } from "../lib/discord/render-intent.ts";
@@ -68,6 +73,17 @@ const redis = getRedis({
   url: env.REDIS_URL,
 });
 const conversations = createConversationStore({ redis });
+const executionBridge = createExecutionBridge({
+  store: conversations,
+  identity: () =>
+    executionIdentity({
+      deploymentId: env.VERCEL_DEPLOYMENT_ID,
+      localId: env.AGENT_EXECUTION_ID,
+      projectId: env.VERCEL_PROJECT_ID,
+      runtime: "eve-0.81.1",
+      sandbox: env.DURABLE_BASH_ENABLED ? "durable-bash-v1" : "vercel-sandbox-v1",
+    }),
+});
 
 /**
  * Cancels a turn that a newly arrived message supersedes.
@@ -102,6 +118,20 @@ const renderPublisher = createRenderPublisher({
   botSecret: env.BOT_INGRESS_SECRET,
 });
 const approvalPolicyStore = new ApprovalPolicyStore(redis);
+
+/** Current caller and transport target are reasserted for every delivery. */
+function messageAuth(payload: DeliveryPayload) {
+  return authFor(payload.principal, {
+    channelId: payload.channel.id,
+    ...(payload.thread === undefined ? {} : { threadId: payload.thread.id }),
+    messageId: payload.messageId,
+    dispatchId: payload.dispatchId,
+    renderChannelId: payload.thread?.id ?? payload.channel.id,
+    source: payload.kind === "scheduled" ? "scheduled" : "chat",
+    ...(payload.scheduleId === undefined ? {} : { scheduleId: payload.scheduleId }),
+    ...(payload.occurrenceId === undefined ? {} : { occurrenceId: payload.occurrenceId }),
+  });
+}
 
 const RESET_DRAIN_TIMEOUT_MS = 8_000;
 
@@ -326,8 +356,14 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
   }),
 
   routes: [
+    POST(EXECUTION_PROBE_ROUTE, async (request, { resolveSession }) => {
+      if (!botAuthenticated(request))
+        return createUnauthorizedResponse({ status: 401, message: "bad bearer" });
+      return executionBridge.probe(request, resolveSession);
+    }),
+
     /** A user turn: a mention that opens a conversation, or a follow-up. */
-    POST(WIRE_ROUTES.message, async (request, { from, resolveSession }) => {
+    POST(WIRE_ROUTES.message, async (request, { from, resolveSession, attachSession }) => {
       if (!botAuthenticated(request)) {
         return createUnauthorizedResponse({ status: 401, message: "bad bearer" });
       }
@@ -336,10 +372,13 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
       if (Result.isError(decoded)) return failed(decoded.error);
       const payload = decoded.value;
 
+      const binding = await executionBridge.guard(request, payload.continuationKey);
+      if (binding instanceof Response) return binding;
       const active = await resolveSession(payload.continuationKey);
+      if (active?.id !== binding.sessionId)
+        return failed(new Error("execution session ownership changed"), 409);
 
       await steerActiveTurn(active, payload.continuationKey);
-      const renderChannelId = payload.thread?.id ?? payload.channel.id;
 
       // Last side effect before Eve: after this fence becomes live, a crash must
       // wedge safely rather than risk starting this dispatch twice.
@@ -377,28 +416,37 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
       }
 
       try {
-        const session = await from(payload.continuationKey).send(discordMessageContent(payload), {
-          // Eve refreshes current auth on every delivery even though state seeds
-          // are ignored for existing sessions. Transport targeting therefore
-          // rides in this trusted assertion and is adopted at `turn.started`.
-          auth: authFor(payload.principal, {
-            channelId: payload.channel.id,
-            ...(payload.thread === undefined ? {} : { threadId: payload.thread.id }),
-            messageId: payload.messageId,
-            dispatchId: payload.dispatchId,
-            renderChannelId,
-            source: payload.kind === "scheduled" ? "scheduled" : "chat",
-            ...(payload.scheduleId === undefined ? {} : { scheduleId: payload.scheduleId }),
-            ...(payload.occurrenceId === undefined ? {} : { occurrenceId: payload.occurrenceId }),
-          }),
-          state: stateForMessage(payload),
-        });
+        const options = { auth: messageAuth(payload) };
+        // Fixed IDs refuse stranded sessions; address.send would silently replace them.
+        const sessionId =
+          binding.sessionId === undefined
+            ? (
+                await from(payload.continuationKey).send(discordMessageContent(payload), {
+                  ...options,
+                  state: stateForMessage(payload),
+                })
+              ).id
+            : acceptedSessionId(
+                await attachSession(binding.sessionId).send(
+                  discordMessageContent(payload),
+                  options,
+                ),
+              );
+        if (
+          !(await conversations.execution.confirmSession(
+            payload.continuationKey,
+            payload.dispatchId,
+            binding.generation,
+            sessionId,
+          ))
+        )
+          return failed(new Error("execution session binding changed during admission"), 409);
 
         const confirmed = await conversations.delivery.confirmSession(
           payload.continuationKey,
           payload.dispatchId,
           payload.messageId,
-          session.id,
+          sessionId,
         );
         if (!confirmed) {
           return failed(
@@ -410,14 +458,14 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
             409,
           );
         }
-        return ok(session.id, payload.continuationKey);
+        return ok(sessionId, payload.continuationKey);
       } finally {
         await conversations.delivery.releaseIngress(payload.continuationKey, admission.attempt);
       }
     }),
 
     /** A component click answering a pending approval or question. */
-    POST(WIRE_ROUTES.interaction, async (request, { from }) => {
+    POST(WIRE_ROUTES.interaction, async (request, { attachSession }) => {
       if (!botAuthenticated(request)) {
         return createUnauthorizedResponse({ status: 401, message: "bad bearer" });
       }
@@ -425,6 +473,10 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
       const decoded = decodeInteractionPayload(await request.json());
       if (Result.isError(decoded)) return failed(decoded.error);
       const payload = decoded.value;
+      const binding = await executionBridge.guard(request, payload.continuationKey);
+      if (binding instanceof Response) return binding;
+      if (binding.sessionId === undefined)
+        return failed(new Error("input has no bound session"), 409);
       const { claim, identity } = await conversations.interaction.claim(payload);
       if (claim === "accepted") {
         await conversations.delivery.releaseIngress(payload.continuationKey, payload.interactionId);
@@ -442,7 +494,7 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
       }
 
       try {
-        const session = await from(payload.continuationKey).respond(
+        const session = await attachSession(binding.sessionId).respond(
           [
             {
               requestId: payload.requestId,
@@ -462,13 +514,14 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
           },
         );
 
+        const sessionId = acceptedSessionId(session);
         await conversations.interaction.accept(
           payload.interactionId,
           identity,
-          session.id,
+          sessionId,
           payload.continuationKey,
         );
-        return ok(session.id, payload.continuationKey);
+        return ok(sessionId, payload.continuationKey);
       } finally {
         await conversations.delivery.releaseIngress(payload.continuationKey, payload.interactionId);
       }
@@ -487,6 +540,10 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
       if (!botAuthenticated(request)) {
         return createUnauthorizedResponse({ status: 401, message: "bad bearer" });
       }
+      const decoded = decodeSteerRequestPayload(await request.json());
+      if (Result.isError(decoded)) return failed(decoded.error);
+      const binding = await executionBridge.guard(request, decoded.value.continuationKey);
+      if (binding instanceof Response) return binding;
       const token = await getVercelOidcToken().catch((cause: unknown) => {
         warnFailure("mint a stream token", cause);
         return undefined;
@@ -501,7 +558,7 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
     }),
 
     /** Explicit `/new`-style retirement. */
-    POST(WIRE_ROUTES.reset, async (request, { from }) => {
+    POST(WIRE_ROUTES.reset, async (request, { attachSession }) => {
       if (!botAuthenticated(request)) {
         return createUnauthorizedResponse({ status: 401, message: "bad bearer" });
       }
@@ -509,6 +566,8 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
       const decoded = decodeResetRequestPayload(await request.json());
       if (Result.isError(decoded)) return failed(decoded.error);
 
+      const binding = await executionBridge.guard(request, decoded.value.continuationKey);
+      if (binding instanceof Response) return binding;
       const cutover = await waitForResetCutover(
         decoded.value.continuationKey,
         decoded.value.resetId,
@@ -526,9 +585,10 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
         );
       }
 
-      const outcome = await from(decoded.value.continuationKey).reset({
-        reason: decoded.value.reason,
-      });
+      const outcome =
+        binding.sessionId === undefined
+          ? { status: "no_active_session" }
+          : await attachSession(binding.sessionId).reset({ reason: decoded.value.reason });
       return Response.json({ ok: true, status: outcome.status });
     }),
 
@@ -539,14 +599,19 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
      * only cancels, and the cancellation is what releases `agent:active` — the
      * fence that otherwise refuses every later delivery on this conversation.
      */
-    POST(WIRE_ROUTES.steer, async (request, { resolveSession }) => {
+    POST(WIRE_ROUTES.steer, async (request, { attachSession }) => {
       if (!botAuthenticated(request)) {
         return createUnauthorizedResponse({ status: 401, message: "bad bearer" });
       }
       const decoded = decodeSteerRequestPayload(await request.json());
       if (Result.isError(decoded)) return failed(decoded.error);
       const { continuationKey } = decoded.value;
-      await steerActiveTurn(await resolveSession(continuationKey), continuationKey);
+      const binding = await executionBridge.guard(request, continuationKey);
+      if (binding instanceof Response) return binding;
+      await steerActiveTurn(
+        binding.sessionId === undefined ? undefined : attachSession(binding.sessionId),
+        continuationKey,
+      );
       return Response.json({ ok: true, status: "accepted" });
     }),
   ],

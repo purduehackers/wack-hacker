@@ -29,8 +29,11 @@ import type {
   FlowRuntime,
 } from "./types.ts";
 
+type AdmissionDeps = Pick<ConversationFlowDeps, "eve" | "store" | "reporter">;
+type AdmissionRuntime = Pick<FlowRuntime, "isStopped"> & { readonly deps: AdmissionDeps };
+
 export async function kick(
-  deps: ConversationFlowDeps,
+  deps: AdmissionDeps,
   continuationKey: string,
 ): Promise<AgentError | undefined> {
   const next = await deps.store.delivery.claim(continuationKey);
@@ -116,7 +119,7 @@ function coalesce(payload: MessagePayload, superseded: string | undefined): Mess
  * eventually releases the conversation even if the agent is unreachable.
  */
 async function steerHolder(
-  deps: ConversationFlowDeps,
+  deps: AdmissionDeps,
   holder: Holder,
   continuationKey: string,
 ): Promise<void> {
@@ -132,10 +135,14 @@ async function steerHolder(
 }
 
 export async function submitMessage(
-  runtime: FlowRuntime,
+  runtime: AdmissionRuntime,
   payload: MessagePayload,
 ): Promise<Result<void, AgentError>> {
   const { deps } = runtime;
+  // Persist affinity before accepting the message into the durable queue. A bot
+  // restart or rollback between enqueue and claim must not choose a new target.
+  const prepared = await deps.eve.prepareContinuation({ continuationKey: payload.continuationKey });
+  if (Result.isError(prepared)) return prepared;
   const submitted = await Result.tryPromise({
     try: async () => {
       // Asked before anything is enqueued or claimed. A turn holding the

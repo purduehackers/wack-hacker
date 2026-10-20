@@ -103,8 +103,10 @@ Before promotion, the deployment owner must provide and verify all of:
    that cohort, with measured time to first useful output, total completion time,
    child/model call count, tool failures, approvals, and sandbox allocations.
 
-That routing/retention implementation and live replay are outside this PR and
-remain blocking. Do not use automatic incompatible-session replacement as a
+The stacked [session-affinity candidate](session-affinity.md) supplies routing
+and a deployable 0.31 bridge patch. It also requires separate Workflow projects:
+0.31 child turns follow that project's production/latest deployment. Retention,
+bridge deployment, supervisor cutover and live replay remain blocking. Do not use automatic incompatible-session replacement as a
 migration strategy. A rollback must also retain the 0.81 deployment for sessions
 already created there; changing a flag cannot downgrade their checkpoints.
 
