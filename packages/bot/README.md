@@ -93,10 +93,9 @@ Organizers can run `/phack destination:https://example.com` to create a phack.rs
 
 ## Social link previews
 
-Human messages containing public Twitter/X, Instagram, or SoundCloud links get a
+Human messages containing public Twitter/X or Instagram links get a
 silent reply using `https://fx.purduehackers.com`. Twitter/X posts use `/t/`,
-Instagram posts and reels use `/i/`, and SoundCloud tracks, playlists, and
-`on.soundcloud.com` short links use `/s/`, followed by the original path. Media
+and Instagram posts and reels use `/i/`, followed by the original path. Media
 selection is preserved, including Instagram's `img_index`; sharing trackers are
 removed. Each link uses `U+2800 BRAILLE PATTERN BLANK` as its Markdown label,
 leaving the Embedfix preview visible without repeating the URL. NBSP and
