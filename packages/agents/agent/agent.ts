@@ -3,6 +3,8 @@ import { defineAgent } from "eve";
 const TWO_HOURS_MS = 2 * 60 * 60_000;
 
 export default defineAgent({
+  // Preserve package-relative Python workers/WASM and the QuickJS runtime.
+  build: { externalDependencies: ["just-bash"] },
   model: "deepseek/deepseek-v4-flash-0731",
   modelOptions: {
     providerOptions: {

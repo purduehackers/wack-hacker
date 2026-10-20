@@ -7,6 +7,7 @@
     "build": "eve build",
     "check:capabilities": "bun scripts/check-capabilities.ts",
     "check:serialization": "bun scripts/check-serialization-boundaries.ts",
+    "check:sandbox-bundle": "bun scripts/check-sandbox-bundle.ts",
     "dev": "eve dev",
     "info": "eve info",
     "report:capabilities": "bun scripts/report-capabilities.ts",
@@ -40,6 +41,7 @@
     "discord-api-types": "^0.38.49",
     "drizzle-orm": "0.45.2",
     "eve": "0.81.1",
+    "just-bash": "3.6.0",
     "octokit": "5.0.5",
     "zod": "4.4.3"
   },

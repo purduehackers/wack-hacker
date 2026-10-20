@@ -12,4 +12,9 @@
  * file the build stops at the first `.md` import instead of shipping something
  * subtly wrong.
  */
-export default { rolldownConfig: { moduleTypes: { ".md": "text" } } };
+export default {
+  rolldownConfig: { moduleTypes: { ".md": "text" } },
+  // Python workers locate their vendored standard library and WASM dynamically.
+  // Keep the pinned package intact after Eve externalizes the authored import.
+  traceDeps: ["just-bash*"],
+};
