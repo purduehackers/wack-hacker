@@ -31,7 +31,7 @@ src/
     dates.ts          wall-clock helpers for one timezone
   commands/         /ping /privacy /hack-night /image-drop /phack
   events/           agent chat, auto-thread, praise, ship + dashboard mirrors,
-                    voice transcription, GitHub code previews, image drops, chat indexer
+                    voice transcription, GitHub + social previews, image drops, chat indexer
   schedules/        social announcements, website event sync, hack-night countdown, photography thread, cleanup
   integrations/     ships, dashboard, CMS, GitHub public code, image drops
 scripts/
@@ -90,6 +90,36 @@ CONFIRM_COMMAND_GUILD=772576325897945119 bun run register-commands
 The script refuses to run unless that variable matches the guild id compiled into `@repo/shared/discord`, so a misconfigured environment cannot register somewhere else. The PUT replaces the whole command set, so repeating it is safe.
 
 Organizers can run `/phack destination:https://example.com` to create a phack.rs link with a random eight-character slug. The optional `slug` argument sets a custom path, such as `hack-night`. Existing paths are preserved.
+
+## Social link previews
+
+Human messages containing public Twitter/X, Instagram, or SoundCloud links get a
+silent reply using `https://fx.purduehackers.com`. Twitter/X posts use `/t/`,
+Instagram posts and reels use `/i/`, and SoundCloud tracks, playlists, and
+`on.soundcloud.com` short links use `/s/`, followed by the original path. Media
+selection is preserved, including Instagram's `img_index`; sharing trackers are
+removed. Each link uses `U+2800 BRAILLE PATTERN BLANK` as its Markdown label,
+leaving the Embedfix preview visible without repeating the URL. NBSP and
+zero-width-space labels were tested in Discord and
+rendered as literal Markdown; the Braille blank masked and unfurled correctly.
+
+The bot watches Discord message updates and suppresses the original embed as
+soon as every replacement has unfurled, without polling on successful updates.
+One shared listener covers all pending replies and is removed when idle. A
+single REST check at the seven-second deadline covers missed updates. If
+Discord has not produced the embeds after seven seconds, the reply shows the
+Embedfix URLs and the original previews stay visible. After another five seconds,
+the bot restores the masked links on that same reply to trigger one more unfurl
+attempt. Success hides the URLs and suppresses the original; another failure
+leaves the visible fallback. No second reply is sent.
+Discord suppression applies to the entire message. Messages with unrelated URLs
+or replacements beyond Discord's limits (ten embeds or 2,000 content characters)
+keep their original embeds. Code, spoilers, `<URL>` links, already-suppressed
+messages, bot posts, DMs, and agent mentions are
+left alone. The handler checks links and channel permissions before claiming a
+Redis deduplication key, so unrelated messages require no Redis work for this
+feature. The existing per-message key and stable Discord nonce prevent duplicate
+replies across reconnects and overlapping deployments.
 
 ## Social announcements
 

@@ -218,6 +218,7 @@ async function main(): Promise<void> {
     dashboardApiUrl: env.PHACK_API_URL,
     dashboardApiToken: env.PHACK_API_KEY,
     groqApiKey: env.GROQ_API_KEY,
+    vercelToken: env.VERCEL_API_TOKEN,
   });
   attachEventRouter(ready, {
     handlers,
