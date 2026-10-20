@@ -19,6 +19,17 @@ import { z } from "zod";
 export type DiscordError = RateLimited | Transient | UpstreamError;
 type RestClient = Pick<Client["rest"], "delete" | "patch" | "post">;
 
+export interface DiscordTextFile {
+  readonly filename: string;
+  readonly text: string;
+}
+
+function upload(file: DiscordTextFile | undefined) {
+  return file === undefined
+    ? {}
+    : { files: [{ name: file.filename, data: Buffer.from(file.text, "utf8") }] };
+}
+
 function toDiscordError(operation: string) {
   return (cause: unknown): DiscordError => {
     const status = httpStatusOf(cause);
@@ -54,11 +65,18 @@ export function createDiscordRest(rest: RestClient) {
     postMessage: async (
       channelId: string,
       body: RESTPostAPIChannelMessageJSONBody,
+      file?: DiscordTextFile,
     ): Promise<Result<PostedMessage, DiscordError>> => {
       const created = await Result.tryPromise({
         try: () =>
           rest.post(`/channels/${channelId}/messages`, {
-            body,
+            body: {
+              ...body,
+              ...(file === undefined
+                ? {}
+                : { attachments: [{ id: "0", filename: file.filename }] }),
+            },
+            ...upload(file),
             signal: AbortSignal.timeout(30_000),
           }),
         catch: toDiscordError("post discord message"),
@@ -71,11 +89,18 @@ export function createDiscordRest(rest: RestClient) {
       messageId: string,
       content: string,
       components: NonNullable<RESTPatchAPIChannelMessageJSONBody["components"]> = [],
+      file?: DiscordTextFile,
     ): Promise<Result<undefined, DiscordError>> =>
       Result.tryPromise({
         try: async () => {
           await rest.patch(`/channels/${channelId}/messages/${messageId}`, {
-            body: { content, components, allowed_mentions: { parse: [] } },
+            body: {
+              content,
+              components,
+              allowed_mentions: { parse: [] },
+              attachments: file === undefined ? [] : [{ id: "0", filename: file.filename }],
+            },
+            ...upload(file),
             signal: AbortSignal.timeout(30_000),
           });
           return undefined;
@@ -122,30 +147,6 @@ export function createDiscordRest(rest: RestClient) {
         },
         catch: toDiscordError("delete discord message"),
       }),
-
-    reply: async (
-      channelId: string,
-      messageId: string,
-      content: string,
-      nonce?: string,
-      components: NonNullable<RESTPostAPIChannelMessageJSONBody["components"]> = [],
-    ): Promise<Result<PostedMessage, DiscordError>> => {
-      const created = await Result.tryPromise({
-        try: () =>
-          rest.post(`/channels/${channelId}/messages`, {
-            body: {
-              content,
-              components,
-              message_reference: { message_id: messageId, fail_if_not_exists: false },
-              allowed_mentions: { parse: [] },
-              ...(nonce === undefined ? {} : { nonce, enforce_nonce: true as const }),
-            },
-            signal: AbortSignal.timeout(30_000),
-          }),
-        catch: toDiscordError("reply to discord message"),
-      });
-      return created.andThen((raw) => readPostedMessage(raw));
-    },
   };
 }
 

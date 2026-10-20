@@ -13,6 +13,12 @@ import type { ParkedPayload } from "@repo/shared/wire";
 
 import { renderHitl } from "../../agent/hitl/components.ts";
 import { createRenderer, toRendererProjection } from "../../agent/render/renderer.ts";
+import {
+  needsWorkCard,
+  publicFooter,
+  renderWorkCard,
+  workCardTitle,
+} from "../../agent/render/work-card.ts";
 import { continueTrace, traceOperation } from "../../framework/observability.ts";
 import { stopFollowing, subagentProgress } from "./subagent-follower.ts";
 import type { ConversationFlowDeps, RenderWork } from "./types.ts";
@@ -156,6 +162,8 @@ async function paint(
   const narrated = (progress ?? "") === (work.projection.subagentActivity ?? "");
   if (current && narrated) return true;
 
+  const card = await prepareCard(deps, work, progress);
+
   const renderer = createRenderer(
     {
       rest: deps.rest,
@@ -170,18 +178,7 @@ async function paint(
     },
     work.projection,
   );
-  const hitl = work.intent.phase === "streaming" ? renderHitl(work.intent) : undefined;
-  const painted = await renderer.write({
-    text: work.intent.text,
-    activity: work.intent.activity,
-    ...(work.intent.footer === undefined ? {} : { footer: work.intent.footer }),
-    ...(hitl?.notice === undefined ? {} : { notice: hitl.notice }),
-    ...(hitl === undefined ? {} : { components: hitl.components }),
-    ...(hitl === undefined ? {} : { mentionUserIds: hitl.mentionUserIds }),
-    ...(hitl?.key === undefined ? {} : { hitlKey: hitl.key }),
-    ...(progress === undefined ? {} : { subagentActivity: progress }),
-    terminal: work.intent.phase !== "streaming",
-  });
+  const painted = await renderer.write(renderFrame(work, progress, card));
   // A turn that has stopped streaming has nothing left to narrate.
   if (work.intent.phase !== "streaming") stopFollowing(dispatchId);
 
@@ -198,6 +195,29 @@ async function paint(
     return false;
   }
   return work.intent.phase === "streaming" || indexTurn(deps, dispatchId, work);
+}
+
+/** Promotion is projection metadata: it changes neither admission nor execution state. */
+async function prepareCard(
+  deps: ConversationFlowDeps,
+  work: RenderWork,
+  progress: string | undefined,
+) {
+  if (work.projection.workCard === undefined && needsWorkCard(work.intent, progress)) {
+    const delivery = await deps.store.deliveries.read(work.target.continuationKey);
+    work.projection.workCard = {
+      title: workCardTitle(
+        delivery?.dispatchId === work.intent.dispatchId ? delivery.deliveryRaw : undefined,
+      ),
+    };
+  }
+  if (work.projection.workCard === undefined) return undefined;
+  return renderWorkCard({
+    intent: work.intent,
+    target: work.target,
+    title: work.projection.workCard.title,
+    ...(progress === undefined ? {} : { progress }),
+  });
 }
 
 export async function applyLatest(
@@ -272,4 +292,28 @@ export function reportPendingRender(deps: ConversationFlowDeps, payload: ParkedP
       dispatchId: payload.dispatchId,
     },
   });
+}
+
+function renderFrame(
+  work: RenderWork,
+  progress: string | undefined,
+  card: ReturnType<typeof renderWorkCard> | undefined,
+) {
+  const footer = card === undefined ? publicFooter(work.intent.footer) : undefined;
+  const hitl = work.intent.phase === "streaming" ? renderHitl(work.intent) : undefined;
+  return {
+    text: card?.text ?? (work.intent.text || (work.intent.phase === "streaming" ? "Working…" : "")),
+    activity: "",
+    ...(footer === undefined ? {} : { footer }),
+    ...(card === undefined ? {} : { anchorComponents: card.components }),
+    ...(work.intent.phase === "streaming" || card?.fullResult === undefined
+      ? {}
+      : { resultFile: card.fullResult, unclippedText: card.fullText }),
+    ...(hitl?.notice === undefined ? {} : { notice: hitl.notice }),
+    ...(hitl === undefined ? {} : { components: hitl.components }),
+    ...(hitl === undefined ? {} : { mentionUserIds: hitl.mentionUserIds }),
+    ...(hitl?.key === undefined ? {} : { hitlKey: hitl.key }),
+    ...(progress === undefined ? {} : { subagentActivity: progress }),
+    terminal: work.intent.phase !== "streaming",
+  };
 }

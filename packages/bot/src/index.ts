@@ -31,6 +31,10 @@ import { createAgentClient } from "./agent/client.ts";
 import { createHitlInteractionHandler } from "./agent/hitl/interaction.ts";
 import type { HitlInteractionHandler } from "./agent/hitl/interaction.ts";
 import { createDiscordRest } from "./agent/render/discord-rest.ts";
+import {
+  createWorkCardInteractionHandler,
+  type WorkCardInteractionHandler,
+} from "./agent/render/work-card-interaction.ts";
 import { createScheduledDiscordAdapter } from "./agent/scheduled.ts";
 import { createTurnMessageStore } from "./agent/turn-messages.ts";
 import { buildCommands } from "./commands/index.ts";
@@ -52,6 +56,7 @@ function attachInteractionDispatcher(
   client: ReturnType<typeof createClient>,
   commands: readonly SlashCommand[],
   hitl: HitlInteractionHandler,
+  workCard: WorkCardInteractionHandler,
   redis: RedisClient,
 ): void {
   client.on(Events.InteractionCreate, (interaction) => {
@@ -59,6 +64,7 @@ function attachInteractionDispatcher(
       commands,
       reporter: consoleReporter,
       hitl,
+      workCard,
       redis,
     }).catch((cause: unknown) =>
       consoleReporter.captureDefect(cause, { op: "interaction.dispatch" }),
@@ -90,7 +96,12 @@ function createConversationSeam(
     reporter: consoleReporter,
     guildId: DISCORD_GUILD_ID,
   });
-  attachInteractionDispatcher(client, commands, hitl, redis);
+  const workCard = createWorkCardInteractionHandler({
+    renders: conversations.renders,
+    reporter: consoleReporter,
+    guildId: DISCORD_GUILD_ID,
+  });
+  attachInteractionDispatcher(client, commands, hitl, workCard, redis);
   return flow;
 }
 

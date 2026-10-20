@@ -8,17 +8,17 @@ import { Result } from "@repo/shared/result";
 import { sliceText, splitText } from "@repo/shared/text";
 import type { RESTPostAPIChannelMessageJSONBody } from "discord.js";
 
-import type { DiscordError, DiscordRest } from "./discord-rest.ts";
+import type { DiscordError, DiscordRest, DiscordTextFile } from "./discord-rest.ts";
 
 const MAX_MESSAGE_CHARS = 1_900;
-const MAX_MESSAGES = 5;
+const MAX_MESSAGES = 8;
 /**
  * Nonce slot for the input-request message.
  *
- * The anchor takes 0 and overflow takes 1..MAX_MESSAGES, so this sits past the
- * end of that range and cannot collide with a chunk.
+ * Kept at its original slot for queued legacy requests. New overflow slots
+ * beyond the original four use hashed nonces rather than colliding with it.
  */
-const HITL_NONCE_INDEX = MAX_MESSAGES + 1;
+const HITL_NONCE_INDEX = 6;
 const LIVE_CONTINUES = "-# response continues…";
 const TRUNCATED = "-# response truncated";
 
@@ -46,12 +46,18 @@ export function toRendererProjection({
   return { ...projection, overflow: [...projection.overflow] };
 }
 
-interface RenderInput {
+export interface RenderInput {
   readonly text: string;
   readonly activity: string;
   readonly footer?: string;
   readonly notice?: string;
   readonly components?: NonNullable<RESTPostAPIChannelMessageJSONBody["components"]>;
+  /** Read-only task controls belong on the anchor; input controls still notify separately. */
+  readonly anchorComponents?: NonNullable<RESTPostAPIChannelMessageJSONBody["components"]>;
+  /** The durable Discord copy of a long final answer. Never uploaded during streaming. */
+  readonly resultFile?: string;
+  /** Full card text if Discord accepts text but rejects the attachment. */
+  readonly unclippedText?: string;
   readonly mentionUserIds?: readonly string[];
   readonly hitlKey?: string;
   readonly subagentActivity?: string;
@@ -61,11 +67,8 @@ interface RenderInput {
 function renderBody(input: Omit<RenderInput, "terminal">): string {
   const sections: string[] = [];
   if (input.activity !== "") sections.push(`-# ${input.activity}`);
-  // Sits under the agent's own status line: it is a child's report of what it
-  // is doing, which is narrower than what this turn is doing.
-  if (input.subagentActivity !== undefined && input.subagentActivity !== "") {
-    sections.push(`-# ↳ ${input.subagentActivity}`);
-  }
+  // Child narration is tracked for convergence below. The work-card presenter
+  // decides which narration is useful, rather than printing raw tool status here.
   if (input.text !== "") sections.push(input.text);
   if (input.footer !== undefined && input.footer !== "") sections.push(`-# ${input.footer}`);
   if (input.notice !== undefined && input.notice !== "") sections.push(input.notice);
@@ -84,9 +87,19 @@ function liveChunk(input: RenderInput): string {
 }
 
 function finalChunks(input: RenderInput): readonly string[] {
-  const chunks = splitText(renderBody(input), MAX_MESSAGE_CHARS);
+  const body = renderBody(input);
+  const chunks = splitText(body, MAX_MESSAGE_CHARS);
   if (chunks.length <= MAX_MESSAGES) return chunks;
-  const visible = chunks.slice(0, MAX_MESSAGES);
+  // Readable paragraph breaks can waste most of a chunk. Repack before applying
+  // the cap so the full bounded wire answer always fits the text-only fallback.
+  const visible: string[] = [];
+  let remaining = body;
+  while (remaining !== "" && visible.length < MAX_MESSAGES) {
+    const fragment = sliceText(remaining, MAX_MESSAGE_CHARS);
+    visible.push(fragment);
+    remaining = remaining.slice(fragment.length);
+  }
+  if (remaining === "") return visible;
   const last = visible.at(-1) ?? "";
   visible[visible.length - 1] =
     `${sliceText(last, MAX_MESSAGE_CHARS - TRUNCATED.length - 2)}\n\n${TRUNCATED}`;
@@ -100,8 +113,11 @@ function hash(content: string): string {
 function anchorHash(
   content: string,
   components: NonNullable<RESTPostAPIChannelMessageJSONBody["components"]>,
+  file?: DiscordTextFile,
 ): string {
-  return hash(JSON.stringify([content, components]));
+  return hash(
+    JSON.stringify(file === undefined ? [content, components] : [content, components, file]),
+  );
 }
 
 /** A message someone deleted underneath us is not an error worth failing on. */
@@ -112,6 +128,22 @@ function isMissingMessage(error: RenderWriteError): boolean {
 function nonce(messageId: string, index: number): string {
   // A Discord snowflake plus ':4' is at most 22 characters (limit: 25).
   return `${messageId}:${index}`;
+}
+
+function anchorNonce(sourceMessageId: string, generation = 0): string {
+  if (generation === 0) return nonce(sourceMessageId, 0);
+  return createHash("sha256")
+    .update(`${sourceMessageId}:anchor:${generation}`)
+    .digest("base64url")
+    .slice(0, 25);
+}
+
+function overflowNonce(sourceMessageId: string, index: number): string {
+  if (index < 4) return nonce(sourceMessageId, index + 1);
+  return createHash("sha256")
+    .update(`${sourceMessageId}:overflow:${index}`)
+    .digest("base64url")
+    .slice(0, 25);
 }
 
 /**
@@ -172,35 +204,35 @@ async function createAnchor(
   rendering: RenderContext,
   content: string,
   components: NonNullable<RESTPostAPIChannelMessageJSONBody["components"]>,
+  file?: DiscordTextFile,
 ): Promise<Result<undefined, RenderWriteError>> {
   const { deps, state } = rendering;
   const owned = await verifyLease(rendering);
   if (Result.isError(owned)) return owned;
-  const created =
-    deps.replyToMessageId === undefined
-      ? await deps.rest.postMessage(deps.channelId, {
-          content,
-          components,
-          allowed_mentions: { parse: [] },
-          nonce: nonce(deps.sourceMessageId, 0),
-          enforce_nonce: true,
-        })
-      : await deps.rest.reply(
-          deps.channelId,
-          deps.replyToMessageId,
-          content,
-          nonce(deps.sourceMessageId, 0),
-          components,
-        );
+  const created = await deps.rest.postMessage(
+    deps.channelId,
+    {
+      content,
+      components,
+      allowed_mentions: { parse: [] },
+      nonce: anchorNonce(deps.sourceMessageId, state.anchorGeneration),
+      enforce_nonce: true,
+      ...(deps.replyToMessageId === undefined
+        ? {}
+        : { message_reference: { message_id: deps.replyToMessageId, fail_if_not_exists: false } }),
+    },
+    file,
+  );
   if (Result.isError(created)) return created;
   state.anchorMessageId = created.value.id;
-  const responseMatches = created.value.content === content && components.length === 0;
-  if (responseMatches) state.anchorContentHash = anchorHash(content, components);
+  const responseMatches =
+    created.value.content === content && components.length === 0 && file === undefined;
+  if (responseMatches) state.anchorContentHash = anchorHash(content, components, file);
   else delete state.anchorContentHash;
   const saved = await checkpoint(rendering);
   return Result.isError(saved) || responseMatches
     ? saved
-    : writeAnchor(rendering, content, components, false);
+    : writeAnchor(rendering, content, components, false, file);
 }
 
 async function writeAnchor(
@@ -208,11 +240,13 @@ async function writeAnchor(
   content: string,
   components: NonNullable<RESTPostAPIChannelMessageJSONBody["components"]>,
   allowRecreate: boolean,
+  file?: DiscordTextFile,
 ): Promise<Result<undefined, RenderWriteError>> {
   const { deps, state } = rendering;
-  const contentHash = anchorHash(content, components);
+  const contentHash = anchorHash(content, components, file);
   if (state.anchorContentHash === contentHash) return Result.ok(undefined);
-  if (state.anchorMessageId === undefined) return createAnchor(rendering, content, components);
+  if (state.anchorMessageId === undefined)
+    return createAnchor(rendering, content, components, file);
 
   const owned = await verifyLease(rendering);
   if (Result.isError(owned)) return owned;
@@ -221,6 +255,7 @@ async function writeAnchor(
     state.anchorMessageId,
     content,
     components,
+    file,
   );
   if (Result.isOk(edited)) {
     state.anchorContentHash = contentHash;
@@ -232,8 +267,9 @@ async function writeAnchor(
 
   delete state.anchorMessageId;
   delete state.anchorContentHash;
+  state.anchorGeneration = (state.anchorGeneration ?? 0) + 1;
   const saved = await checkpoint(rendering);
-  return Result.isError(saved) ? saved : createAnchor(rendering, content, components);
+  return Result.isError(saved) ? saved : createAnchor(rendering, content, components, file);
 }
 
 async function createOverflow(
@@ -248,7 +284,7 @@ async function createOverflow(
   const created = await deps.rest.postMessage(deps.channelId, {
     content,
     allowed_mentions: { parse: [] },
-    nonce: nonce(deps.sourceMessageId, index + 1),
+    nonce: overflowNonce(deps.sourceMessageId, index),
     enforce_nonce: true,
   });
   if (Result.isError(created)) return created;
@@ -260,6 +296,8 @@ async function createOverflow(
   const saved = await checkpoint(rendering);
   if (Result.isError(saved) || created.value.content === content) return saved;
 
+  const stillOwned = await verifyLease(rendering);
+  if (Result.isError(stillOwned)) return stillOwned;
   const edited = await deps.rest.editMessage(deps.channelId, created.value.id, content);
   if (Result.isError(edited)) return edited;
   createdProjection.contentHash = contentHash;
@@ -443,6 +481,59 @@ async function removeStaleOverflow(
   return Result.ok(undefined);
 }
 
+function textOnlyInput(input: RenderInput): RenderInput {
+  const { resultFile, unclippedText, ...rest } = input;
+  return { ...rest, text: unclippedText ?? resultFile ?? input.text };
+}
+
+async function writeFinal(
+  rendering: RenderContext,
+  input: RenderInput,
+): Promise<Result<undefined, RenderWriteError>> {
+  if (rendering.state.textOnlyResult && input.resultFile !== undefined) {
+    return writeFinal(rendering, textOnlyInput(input));
+  }
+  const [head = "", ...tail] = finalChunks(input);
+  // A turn that was steered away before it said anything settles with no
+  // body, and the footer alone is a message showing a bare reference id and
+  // nothing else. There is nothing to report, so the anchor goes.
+  if (head === "" && tail.length === 0) {
+    const cleared = await removeAnchor(rendering);
+    if (Result.isError(cleared)) return cleared;
+    const hitl = await writeHitl(rendering, undefined, [], [], undefined);
+    if (Result.isError(hitl)) return hitl;
+    return removeStaleOverflow(rendering, 0);
+  }
+  const anchor = await writeAnchor(
+    rendering,
+    head,
+    input.anchorComponents ?? [],
+    true,
+    input.resultFile === undefined
+      ? undefined
+      : { filename: "wack-response.md", text: input.resultFile },
+  );
+  if (Result.isError(anchor)) {
+    const error = anchor.error;
+    if (
+      input.resultFile !== undefined &&
+      error instanceof UpstreamError &&
+      [400, 403, 413, 415].includes(error.status)
+    ) {
+      const fallback = await writeFinal(rendering, textOnlyInput(input));
+      if (Result.isError(fallback)) return fallback;
+      rendering.state.textOnlyResult = true;
+      return checkpoint(rendering);
+    }
+    return anchor;
+  }
+  // A finished turn has nothing left to answer.
+  const hitl = await writeHitl(rendering, undefined, [], [], undefined);
+  if (Result.isError(hitl)) return hitl;
+  const overflow = await writeOverflow(rendering, tail);
+  return Result.isError(overflow) ? overflow : removeStaleOverflow(rendering, tail.length);
+}
+
 export function createRenderer(deps: RendererDeps, state: RendererProjection) {
   const rendering: RenderContext = { deps, state };
   return {
@@ -459,7 +550,12 @@ export function createRenderer(deps: RendererDeps, state: RendererProjection) {
       if (!input.terminal) {
         // The anchor keeps only the streamed body; the request gets its own
         // message so its mention is delivered as a notification.
-        const anchor = await writeAnchor(rendering, liveChunk(input), [], false);
+        const anchor = await writeAnchor(
+          rendering,
+          liveChunk(input),
+          input.anchorComponents ?? [],
+          true,
+        );
         if (Result.isError(anchor)) return anchor;
         return writeHitl(
           rendering,
@@ -469,24 +565,7 @@ export function createRenderer(deps: RendererDeps, state: RendererProjection) {
           input.hitlKey,
         );
       }
-      const [head = "", ...tail] = finalChunks(input);
-      // A turn that was steered away before it said anything settles with no
-      // body, and the footer alone is a message showing a bare reference id and
-      // nothing else. There is nothing to report, so the anchor goes.
-      if (head === "" && tail.length === 0) {
-        const cleared = await removeAnchor(rendering);
-        if (Result.isError(cleared)) return cleared;
-        const hitl = await writeHitl(rendering, undefined, [], [], undefined);
-        if (Result.isError(hitl)) return hitl;
-        return removeStaleOverflow(rendering, 0);
-      }
-      const anchor = await writeAnchor(rendering, head, [], true);
-      if (Result.isError(anchor)) return anchor;
-      // A finished turn has nothing left to answer.
-      const hitl = await writeHitl(rendering, undefined, [], [], undefined);
-      if (Result.isError(hitl)) return hitl;
-      const overflow = await writeOverflow(rendering, tail);
-      return Result.isError(overflow) ? overflow : removeStaleOverflow(rendering, tail.length);
+      return writeFinal(rendering, input);
     },
   };
 }

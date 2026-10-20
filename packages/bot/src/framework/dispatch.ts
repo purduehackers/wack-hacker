@@ -21,6 +21,7 @@ import { MessageFlags } from "discord.js";
 import type { AutocompleteInteraction, ChatInputCommandInteraction, Interaction } from "discord.js";
 
 import type { HitlInteractionHandler } from "../agent/hitl/interaction.ts";
+import type { WorkCardInteractionHandler } from "../agent/render/work-card-interaction.ts";
 import type { SlashCommand } from "./commands.ts";
 import { traceOperation } from "./observability.ts";
 
@@ -55,6 +56,7 @@ interface DispatchDeps {
   readonly commands: readonly SlashCommand[];
   readonly reporter: Reporter;
   readonly hitl: HitlInteractionHandler;
+  readonly workCard: WorkCardInteractionHandler;
   readonly redis: RedisClient;
 }
 
@@ -98,6 +100,7 @@ async function dispatchInteractionInSpan(
   deps: DispatchDeps,
 ): Promise<void> {
   if (await deps.hitl(interaction)) return;
+  if (await deps.workCard(interaction)) return;
   if (interaction.isAutocomplete()) return dispatchAutocomplete(interaction, deps);
   if (!interaction.isChatInputCommand()) return;
 
