@@ -185,6 +185,10 @@ behavioral evaluation.
 
 ## Desired rendering
 
+The bot projects substantial turns as [work cards](work-cards.md), while short
+answers remain normal streamed replies. That document describes the presentation
+states, read-only controls, durable long-response attachment, and rollout limits.
+
 Eve channel state tracks current text, activity, pending input/authorization
 projections, dispatch identity, render revision, final phase/footer, token/tool
 counts, and whether terminal state settled. Channel lifecycle events mutate that

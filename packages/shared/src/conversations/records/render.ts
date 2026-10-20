@@ -16,6 +16,12 @@ import type { DeliveryPayload, RenderTarget } from "../../wire.ts";
 export const renderProjectionSchema = z.object({
   anchorMessageId: discordSnowflake.optional(),
   anchorContentHash: contentHash.optional(),
+  /** A deleted anchor needs a different nonce; retries of its replacement share this generation. */
+  anchorGeneration: z.int().nonnegative().optional(),
+  /** A promoted work card keeps its request title through retries and completion. */
+  workCard: z.object({ title: z.string().min(1).max(120) }).optional(),
+  /** This turn's attachment was rejected but ordinary messages remain writable. */
+  textOnlyResult: z.boolean().optional(),
   /**
    * The message carrying an input request's prose and buttons.
    *
