@@ -55,6 +55,8 @@ export interface DiscordChannelState {
   renderSettled: boolean;
   finalRenderPhase?: "completed" | "failed";
   finalRenderFooter?: string;
+  /** Authoritative engine outcome; HTTP command acknowledgement never sets it. */
+  cancelled?: boolean;
 }
 
 export function initialDiscordState(): DiscordChannelState {
@@ -147,6 +149,7 @@ export function beginDiscordTurn(
     state.renderSettled = false;
     delete state.finalRenderPhase;
     delete state.finalRenderFooter;
+    delete state.cancelled;
     return;
   }
 
@@ -176,6 +179,7 @@ export function beginDiscordTurn(
   state.renderSettled = false;
   delete state.finalRenderPhase;
   delete state.finalRenderFooter;
+  delete state.cancelled;
 }
 
 export function isWaitingForHuman(state: DiscordChannelState): boolean {

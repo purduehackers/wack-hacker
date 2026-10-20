@@ -6,6 +6,7 @@
 import {
   EXECUTION_GENERATION_HEADER,
   executionIdentitySchema,
+  sameExecutionBinding,
   type ConversationStore,
   type ExecutionIdentity,
 } from "@repo/shared/conversations";
@@ -22,7 +23,7 @@ export function createExecutionBridge(deps: {
   readonly store: Pick<ConversationStore, "executions" | "execution" | "deliveries">;
   readonly identity: () => ExecutionIdentity | undefined;
 }) {
-  return {
+  const bridge = {
     async probe(
       request: Request,
       resolveSession: (address: string) => Promise<{ readonly id: string } | undefined>,
@@ -63,6 +64,29 @@ export function createExecutionBridge(deps: {
         binding.identity.sandbox !== identity.sandbox
       )
         return denied("this continuation is not bound to this execution deployment");
+      return binding;
+    },
+  };
+  return {
+    ...bridge,
+    async guardTask(
+      request: Request,
+      address: {
+        readonly continuationKey: string;
+        readonly dispatchId: string;
+        readonly sessionId: string;
+      },
+    ) {
+      const binding = await bridge.guard(request, address.continuationKey);
+      if (binding instanceof Response) return binding;
+      const pinned = await deps.store.executions.dispatch(address.dispatchId);
+      if (Result.isError(pinned)) return denied("task execution binding is unreadable", 503);
+      if (
+        pinned.value === undefined ||
+        !sameExecutionBinding(pinned.value, binding) ||
+        binding.sessionId !== address.sessionId
+      )
+        return denied("this task is no longer owned by the bound execution session");
       return binding;
     },
   };

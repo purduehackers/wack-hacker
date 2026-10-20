@@ -36,26 +36,27 @@ can view public state and the result, without those diagnostics.
 
 ## State mapping and gaps
 
-| Product state               | Authoritative source                                    | Current presentation                                                                                                                             |
-| --------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Queued                      | Existing admission queue, before an agent render intent | Existing immediate placeholder; no synthetic running state is stored. A richer queue card and typing-only acknowledgement remain follow-up work. |
-| Working                     | Streaming intent with no human request                  | Working, with useful response text and narration.                                                                                                |
-| Waiting for input           | Streaming `inputRequests[0]` question or session limit  | Your input is needed; separate notifying request keeps its existing answer controls.                                                             |
-| Waiting for approval        | Streaming tool approval request                         | Approval is needed; exact-revision approval controls remain on the separate request.                                                             |
-| Connection needed           | A legacy authorization challenge                        | Connection is needed; existing legacy callbacks remain supported. This adds no connection requirement or new account integration.                |
-| Blocked / failed            | Failed terminal intent                                  | Stopped — needs attention, with recovery text. No unsupported Resume button.                                                                     |
-| Complete                    | Completed transport boundary                            | Response ready. This means the turn ended, not that every requested external effect succeeded.                                                   |
-| Cancelled                   | Currently encoded by the agent as completed             | Existing cancellation prose remains visible. There is no reliable structured cancellation outcome, so this renderer does not invent one.         |
-| Paused / partially complete | No distinct authoritative wire outcome today            | No new synthetic state or controls. Existing response text can explain the situation.                                                            |
+| Product state               | Authoritative source                                            | Current presentation                                                                                                                             |
+| --------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Queued                      | Existing admission queue, before an agent render intent         | Existing immediate placeholder; no synthetic running state is stored. A richer queue card and typing-only acknowledgement remain follow-up work. |
+| Working                     | Streaming intent with no human request                          | Working, with useful response text and narration.                                                                                                |
+| Waiting for input           | Streaming `inputRequests[0]` question or session limit          | Your input is needed; separate notifying request keeps its existing answer controls.                                                             |
+| Waiting for approval        | Streaming tool approval request                                 | Approval is needed; exact-revision approval controls remain on the separate request.                                                             |
+| Connection needed           | A legacy authorization challenge                                | Connection is needed; existing legacy callbacks remain supported. This adds no connection requirement or new account integration.                |
+| Blocked / failed            | Failed terminal intent                                          | Stopped — needs attention, with recovery text. No unsupported Resume button.                                                                     |
+| Complete                    | Completed transport boundary                                    | Response ready. This means the turn ended, not that every requested external effect succeeded.                                                   |
+| Cancelled                   | Matching `turn.cancelled` in separate optional control metadata | Cancelled, with partial output retained and a note that completed actions remain completed.                                                      |
+| Paused / partially complete | No distinct authoritative wire outcome today                    | No new synthetic state or controls. Existing response text can explain the situation.                                                            |
 
-Adding explicit cancellation, paused, and partial outcomes requires a separate
-wire rollout. The current intent schema is strict: deploy compatible readers
-before enabling new fields in writers. Old stored intents must retain a meaningful
-default. Merely adding an enum label in the renderer is not sufficient.
+Cancellation now uses separate optional metadata, preserving the strict legacy
+intent schema. Paused and partial outcomes still require an authoritative source
+and compatible rollout. Old stored intents retain their meaningful default.
 
-Stop, edit, retry, task switching, and review controls are not decorative buttons
-in this slice. The current flow lacks a safe exact-task stop/retry contract; the
-existing conversational steering and HITL controls continue to own those actions.
+The [exact-task cancellation slice](task-cancellation.md) implements Stop
+admission, receipts, recovery and presentation, but hard-disables Stop on Eve
+0.81.1 because its idle owner can ignore the target turn. Existing conversational
+steering and HITL controls continue to work. Edit, retry, task switching and
+review remain separate work.
 
 ## Discord contract
 
@@ -112,9 +113,11 @@ replacement generation is checkpointed before posting and selects a new stable
 nonce, avoiding the deleted message's deduplication slot. A restart reuses that
 replacement nonce. Routine retries do not allocate new generations or messages.
 
-`workCard`, `anchorGeneration`, and `textOnlyResult` are optional bot projection fields. No agent wire
-field, queue transition, lease heartbeat, provider execution, or terminal release
-condition changes. The existing index records the canonical message, so replies
+`workCard`, `anchorGeneration`, and `textOnlyResult` are optional bot projection
+fields. Cancellation metadata is a separate optional record; malformed control
+metadata reports a defect and withholds controls without blocking valid answers.
+No strict agent wire field, lease heartbeat, or terminal release condition changes.
+The existing index records the canonical message, so replies
 and reset reactions continue to resolve its turn. Existing anchors can be edited
 back to plain content and empty components; no irreversible Discord flag is set.
 Keep the new read-only interaction handler deployed if rolling back the visual
@@ -145,6 +148,7 @@ Discord canary on desktop and mobile, in light and dark themes, covering:
 - Missing Attach Files / Send Messages / thread access, revoked roles, deleted
   anchors, a gateway restart, and record expiry with the attachment still usable.
 
-Components V2, explicit task outcome fields, typing-only acknowledgement, exact-task
-stop/retry/edit, artifact galleries, and independent task routing remain separate
-work. They are not claimed as implemented by this slice.
+Components V2, further task outcomes, typing-only acknowledgement, retry/edit,
+artifact galleries, and independent task routing remain separate work. Stop
+requires the upstream runtime release gate described above plus a real Discord
+canary before it can be enabled.

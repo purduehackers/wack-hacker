@@ -35,8 +35,10 @@ import {
   renderOutcomeKey,
   renderProjectionKey,
   renderTargetKey,
+  taskControlKey,
 } from "../keys.ts";
 import { LeaseDuration, RECORD_TTL_MS } from "../lease.ts";
+import { OFFER_CONTROLS_LUA, type RenderControls } from "../records/cancellation.ts";
 import { DELIVERY_RECORD_LUA } from "../records/delivery.ts";
 import type { RenderProjection } from "../records/render.ts";
 import { projectionCodec, RENDER_TTL_SECONDS } from "../records/render.ts";
@@ -57,6 +59,7 @@ import { projectionCodec, RENDER_TTL_SECONDS } from "../records/render.ts";
  */
 const PUBLISH = `
 ${DELIVERY_RECORD_LUA}
+${OFFER_CONTROLS_LUA}
 -- render:publish
 local raw = redis.call("GET", KEYS[3])
 if not raw then return 0 end
@@ -79,6 +82,10 @@ if current then
   if stored >= wanted then return -stored end
 end
 redis.call("SET", KEYS[1], ARGV[2], "EX", tonumber(ARGV[4]))
+if ARGV[10] == "1" then
+  local intent = cjson.decode(ARGV[2])
+  offerControls(KEYS[5], intent.sessionId, intent.eveTurnId, "", tonumber(ARGV[4]))
+end
 -- Proof of life. The turn holds its conversation for as long as it keeps
 -- painting, and no longer — except while it is waiting on a person, when the
 -- caller sends the longer duration because nothing will paint until they answer.
@@ -102,6 +109,7 @@ return 3
  */
 const SETTLE_AND_PARK = `
 ${DELIVERY_RECORD_LUA}
+${OFFER_CONTROLS_LUA}
 -- render:settle-and-park
 local raw = redis.call("GET", KEYS[1])
 if not raw then return 0 end
@@ -138,6 +146,9 @@ else
 end
 redis.call("DEL", KEYS[6])
 redis.call("SADD", KEYS[5], ARGV[9])
+if ARGV[14] == "1" then
+  offerControls(KEYS[7], ARGV[3], ARGV[5], ARGV[15], tonumber(ARGV[10]))
+end
 
 record.phase = "parked"
 record.sessionId = ARGV[3]
@@ -259,7 +270,7 @@ export class RenderWriter {
   }
 
   /** Agent side: say what should be on screen. */
-  async publish(intent: RenderIntent): Promise<RenderPublication> {
+  async publish(intent: RenderIntent, controls?: RenderControls): Promise<RenderPublication> {
     // A turn showing buttons is suspended on a person, and it deliberately does
     // not park — an input request is a resumption of this turn, not a boundary
     // where an unrelated queued message may enter. So nothing refreshes its hold
@@ -277,6 +288,7 @@ export class RenderWriter {
           AGENT_RENDER_READY_SET_KEY,
           activeKey(intent.continuationKey),
           renderOutcomeKey(intent.dispatchId),
+          taskControlKey(intent.dispatchId),
         ],
         [
           intent.revision,
@@ -288,6 +300,7 @@ export class RenderWriter {
           intent.messageId,
           Date.now(),
           waitingOnPerson ? LeaseDuration.Person : LeaseDuration.Turn,
+          controls === undefined ? "0" : "1",
         ],
       ),
     );
@@ -300,7 +313,11 @@ export class RenderWriter {
    *
    * Returns the revision it settled at, or nothing if the record had moved on.
    */
-  async settleAndPark(intent: RenderIntent, parked: ParkedPayload): Promise<number | undefined> {
+  async settleAndPark(
+    intent: RenderIntent,
+    parked: ParkedPayload,
+    controls?: RenderControls,
+  ): Promise<number | undefined> {
     if (intent.phase === "streaming") throw new Error("cannot settle a streaming render intent");
     const outcome = Number(
       await this.redis.eval(
@@ -312,6 +329,7 @@ export class RenderWriter {
           renderIntentKey(intent.dispatchId),
           AGENT_RENDER_READY_SET_KEY,
           renderOutcomeKey(intent.dispatchId),
+          taskControlKey(intent.dispatchId),
         ],
         [
           parked.dispatchId,
@@ -327,6 +345,8 @@ export class RenderWriter {
           Date.now(),
           LeaseDuration.Person,
           RECORD_TTL_MS,
+          controls === undefined ? "0" : "1",
+          controls?.outcome ?? "",
         ],
       ),
     );

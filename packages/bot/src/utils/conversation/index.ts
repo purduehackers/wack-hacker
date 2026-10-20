@@ -12,6 +12,7 @@ import type { Result } from "@repo/shared/result";
 import type { MessagePayload } from "@repo/shared/wire";
 
 import type { AgentError } from "../../agent/client.ts";
+import { createCancellationRecovery, requestCancellation } from "./cancel.ts";
 import { admitScheduledFire, answerHitl, resetAndKick, submitMessage } from "./queue.ts";
 import { stopAllFollowers } from "./subagent-follower.ts";
 import { awaitSweepDrain, sweepOnce } from "./sweep.ts";
@@ -36,6 +37,7 @@ export function createConversationFlow(deps: ConversationFlowDeps): Conversation
   let sweepScheduled = false;
   let sweepRunning: Promise<void> | undefined;
   let recoveryTimer: ReturnType<typeof setInterval> | undefined;
+  const cancellations = createCancellationRecovery(deps, () => stopped);
   const runtime: FlowRuntime = {
     deps,
     pendingDispatches,
@@ -48,6 +50,7 @@ export function createConversationFlow(deps: ConversationFlowDeps): Conversation
   }
 
   async function drainSweeps(): Promise<void> {
+    cancellations.wake();
     if (sweepRunning) return sweepRunning;
     sweepRunning = (async () => {
       do {
@@ -77,6 +80,15 @@ export function createConversationFlow(deps: ConversationFlowDeps): Conversation
     submit,
     reset: (payload) => resetAndKick(runtime, payload),
     answer: (answer) => answerHitl(deps, answer),
+    cancel: async (payload) => {
+      try {
+        return await requestCancellation(deps, payload);
+      } finally {
+        pendingDispatches.add(payload.dispatchId);
+        scheduleSweep();
+      }
+    },
+    supportsCancel: (target) => deps.eve.supportsCancel(target),
     admitSchedule: (payload) => admitScheduledFire(deps, payload, submit),
     wake: (hint = {}) => {
       if (stopped) return;
@@ -105,8 +117,9 @@ export function createConversationFlow(deps: ConversationFlowDeps): Conversation
       // them, and a half-read stream would keep a lease alive past shutdown.
       stopAllFollowers();
       if (recoveryTimer) clearInterval(recoveryTimer);
-      if (!sweepRunning) return;
-      await awaitSweepDrain(sweepRunning);
+      await awaitSweepDrain(
+        Promise.all([sweepRunning, cancellations.drain()]).then(() => undefined),
+      );
     },
   };
 }

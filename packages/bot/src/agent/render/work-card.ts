@@ -1,5 +1,6 @@
 /** A Discord presentation of the existing render state, not another task lifecycle. */
 
+import type { TaskControl } from "@repo/shared/conversations";
 import { stored } from "@repo/shared/json";
 import { sliceText } from "@repo/shared/text";
 import type { RenderIntent, RenderTarget } from "@repo/shared/wire";
@@ -12,11 +13,25 @@ const LONG_ANSWER = 1_500;
 const FULL_RESULT_NOTE = "-# Open Full result to read the complete response.";
 const requestContent = stored(z.looseObject({ content: z.string() }));
 
-export type WorkCardState = "working" | "input" | "approval" | "connection" | "failed" | "ready";
+export type WorkCardState =
+  | "working"
+  | "input"
+  | "approval"
+  | "connection"
+  | "failed"
+  | "ready"
+  | "stop-requested"
+  | "stopping"
+  | "cancelled";
 
-export function workCardState(intent: RenderIntent): WorkCardState {
+export function workCardState(intent: RenderIntent, control?: TaskControl): WorkCardState {
+  const matching =
+    control?.sessionId === intent.sessionId && control.eveTurnId === intent.eveTurnId;
+  if (matching && control.outcome === "cancelled") return "cancelled";
   if (intent.phase === "failed") return "failed";
   if (intent.phase === "completed") return "ready";
+  if (matching && control.request?.status === "accepted") return "stopping";
+  if (matching && control.request?.status === "pending") return "stop-requested";
   const request = intent.inputRequests?.[0];
   if (request !== undefined) return request.kind === "tool-approval" ? "approval" : "input";
   if ((intent.authorizations?.length ?? 0) > 0) return "connection";
@@ -32,7 +47,20 @@ const STATUS: Readonly<Record<WorkCardState, string>> = {
   // Completed is a transport boundary, including steering cancellation. It is
   // not proof that every requested effect succeeded.
   ready: "Response ready",
+  "stop-requested": "Stop requested",
+  stopping: "Stopping",
+  cancelled: "Cancelled",
 };
+
+export function workCardStatus(intent: RenderIntent, control?: TaskControl): string {
+  return STATUS[workCardState(intent, control)];
+}
+
+export function cancellationNote(intent: RenderIntent, control?: TaskControl): string | undefined {
+  return workCardState(intent, control) === "cancelled"
+    ? "This task was stopped. Actions already completed remain completed."
+    : undefined;
+}
 
 export function needsWorkCard(intent: RenderIntent, progress?: string): boolean {
   return (
@@ -80,13 +108,19 @@ function idleText(state: WorkCardState): string {
       return "This turn has ended.";
     case "working":
       return "I'll keep the useful progress and result here.";
+    case "stop-requested":
+      return "Your stop request is saved. Waiting for the agent to acknowledge it.";
+    case "stopping":
+      return "The agent accepted the stop request. Waiting for the task to end.";
+    case "cancelled":
+      return "This task was stopped. Actions already completed remain completed.";
   }
 }
 
 export function workCardCustomId(
   dispatchId: string,
   revision: number,
-  action: "details" | "result",
+  action: "details" | "result" | "stop",
 ): string {
   return `wack-work:${dispatchId}:${revision}:${action}`;
 }
@@ -101,7 +135,7 @@ function clippedPreview(content: string): string {
 const locatorSchema = z.strictObject({
   dispatchId: z.uuid(),
   revision: z.coerce.number().pipe(z.int().positive()),
-  action: z.enum(["details", "result"]),
+  action: z.enum(["details", "result", "stop"]),
 });
 
 export function parseWorkCardCustomId(customId: string) {
@@ -117,13 +151,21 @@ export function renderWorkCard(input: {
   readonly target: RenderTarget;
   readonly title: string;
   readonly progress?: string;
+  readonly control?: TaskControl;
+  readonly canCancel?: boolean;
 }) {
   const { intent, target, title } = input;
-  const state = workCardState(intent);
+  const state = workCardState(intent, input.control);
   const header = `### ${title}\n-# ${STATUS[state]} · Requested by <@${target.requesterUserId}>`;
   const footer = publicFooter(intent.footer);
   const progress = intent.phase === "streaming" ? progressText(input.progress) : undefined;
-  const body = [progress, intent.text || idleText(state), footer]
+  const stoppedNote = cancellationNote(intent, input.control);
+  const body = [
+    progress,
+    intent.text || idleText(state),
+    intent.text === "" ? undefined : stoppedNote,
+    footer,
+  ]
     .filter((section) => section !== undefined && section !== "")
     .join("\n\n");
   const full = `${header}\n\n${body}`;
@@ -144,6 +186,21 @@ export function renderWorkCard(input: {
     custom_id: workCardCustomId(intent.dispatchId, intent.revision, "details"),
     label: "Details",
   });
+  if (
+    input.canCancel &&
+    intent.phase === "streaming" &&
+    input.control?.sessionId === intent.sessionId &&
+    input.control.eveTurnId === intent.eveTurnId &&
+    input.control.outcome === undefined &&
+    input.control.request === undefined
+  ) {
+    buttons.push({
+      type: ComponentType.Button,
+      style: ButtonStyle.Danger,
+      custom_id: workCardCustomId(intent.dispatchId, intent.revision, "stop"),
+      label: "Stop",
+    });
+  }
   const components: APIActionRowComponent<APIButtonComponentWithCustomId>[] = [
     { type: ComponentType.ActionRow, components: buttons },
   ];
@@ -152,7 +209,7 @@ export function renderWorkCard(input: {
     components,
     fullText: full,
     fullResult: clipped
-      ? [intent.text, footer]
+      ? [intent.text, stoppedNote, footer]
           .filter((section) => section !== undefined && section !== "")
           .join("\n\n")
       : undefined,

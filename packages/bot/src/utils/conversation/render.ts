@@ -12,6 +12,7 @@ import { Result } from "@repo/shared/result";
 import type { ParkedPayload } from "@repo/shared/wire";
 
 import { renderHitl } from "../../agent/hitl/components.ts";
+import { readTaskControl } from "../../agent/render/control-state.ts";
 import { createRenderer, toRendererProjection } from "../../agent/render/renderer.ts";
 import {
   needsWorkCard,
@@ -112,11 +113,15 @@ async function loadWork(
   if (Result.isError(loaded)) {
     return discardDefect(deps, dispatchId, "agent.render.decode-projection", loaded.error);
   }
+  const control = await readTaskControl(deps.store.cancellations, deps.reporter, dispatchId);
   return {
     intent,
     target,
     projection: toRendererProjection(loaded.value),
     appliedRevision: loaded.value.appliedRevision,
+    ...(control?.sessionId === intent.sessionId && control.eveTurnId === intent.eveTurnId
+      ? { control }
+      : {}),
   };
 }
 
@@ -203,7 +208,12 @@ async function prepareCard(
   work: RenderWork,
   progress: string | undefined,
 ) {
-  if (work.projection.workCard === undefined && needsWorkCard(work.intent, progress)) {
+  if (
+    work.projection.workCard === undefined &&
+    (needsWorkCard(work.intent, progress) ||
+      work.control?.outcome !== undefined ||
+      work.control?.request !== undefined)
+  ) {
     const delivery = await deps.store.deliveries.read(work.target.continuationKey);
     work.projection.workCard = {
       title: workCardTitle(
@@ -212,10 +222,24 @@ async function prepareCard(
     };
   }
   if (work.projection.workCard === undefined) return undefined;
+  const canCancel =
+    work.intent.phase === "streaming" &&
+    work.control !== undefined &&
+    work.control.request === undefined &&
+    work.control.outcome === undefined &&
+    (await deps.eve.supportsCancel(work.intent).catch((cause: unknown) => {
+      deps.reporter.captureDefect(cause, {
+        op: "agent.work-card.cancel-capability",
+        attributes: { dispatchId: work.intent.dispatchId },
+      });
+      return false;
+    }));
   return renderWorkCard({
     intent: work.intent,
     target: work.target,
     title: work.projection.workCard.title,
+    ...(work.control === undefined ? {} : { control: work.control }),
+    canCancel,
     ...(progress === undefined ? {} : { progress }),
   });
 }

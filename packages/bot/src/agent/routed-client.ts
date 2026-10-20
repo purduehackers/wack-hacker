@@ -2,6 +2,7 @@
 import {
   EXECUTION_PROBE_ROUTE,
   executionProbeSchema,
+  sameExecutionBinding,
   type ConversationStore,
   type ExecutionBinding,
 } from "@repo/shared/conversations";
@@ -21,6 +22,7 @@ import {
   type ExecutionTarget,
   type ExecutionTargets,
 } from "./execution-targets.ts";
+import { createRoutedCancellation, isVerifiedCancelRuntime } from "./routed-cancellation.ts";
 
 export interface ExecutionAddress {
   readonly continuationKey: string;
@@ -29,7 +31,7 @@ export interface ExecutionAddress {
 
 export type ConversationAgentClient = Pick<
   AgentClient,
-  "sendMessage" | "sendInteraction" | "sendReset" | "sendSteer"
+  "sendMessage" | "sendInteraction" | "sendReset" | "sendSteer" | "sendCancel"
 > & {
   prepareContinuation(address: ExecutionAddress): Promise<Result<void, AgentError>>;
   supportsCancel(address: ExecutionAddress): Promise<boolean>;
@@ -42,7 +44,7 @@ function unavailable(cause: unknown): AgentError {
   return new UpstreamError({ service: "agent routing", status: 503, detail: messageOf(cause) });
 }
 
-function createRouteResolver(deps: {
+export function createRouteResolver(deps: {
   readonly store: RoutingStore;
   readonly config: ExecutionTargets;
   readonly secret: string;
@@ -125,6 +127,8 @@ function createRouteResolver(deps: {
       pinned = result.value;
       if (pinned.generation !== binding.generation)
         throw new Error("task execution generation is stale");
+      if (!establish && !sameExecutionBinding(pinned, binding))
+        throw new Error("task execution binding no longer matches its conversation");
     }
     const target = targetForBinding(deps.config, pinned);
     const client = createAgentClient({
@@ -173,6 +177,10 @@ export function createRoutedAgentClient(deps: {
   }
 
   return {
+    ...createRoutedCancellation({
+      resolve: (address) => safely(() => route(address, false)),
+      isRuntimeVerified: isVerifiedCancelRuntime,
+    }),
     prepareContinuation: async (address) => {
       const selected = await safely(() => route(address, true));
       return Result.isError(selected) ? selected : Result.ok(undefined);
@@ -199,12 +207,6 @@ export function createRoutedAgentClient(deps: {
       return retired.value
         ? reset
         : Result.err(unavailable(new Error("reset execution binding fence was lost")));
-    },
-    supportsCancel: async (address) => {
-      const selected = await safely(() => route(address, false));
-      return (
-        Result.isOk(selected) && selected.value.target.capabilities.includes("exact-turn-cancel-v1")
-      );
     },
     streamAccess: async (address) => {
       const selected = await safely(() => route(address, true));

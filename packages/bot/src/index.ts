@@ -100,6 +100,8 @@ function createConversationSeam(
   });
   const workCard = createWorkCardInteractionHandler({
     renders: conversations.renders,
+    cancellations: conversations.cancellations,
+    flow,
     reporter: consoleReporter,
     guildId: DISCORD_GUILD_ID,
   });
