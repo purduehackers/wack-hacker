@@ -50,6 +50,9 @@ jobs:
           TURSO_DATABASE_URL="file:$database" bunx drizzle-kit check
           TURSO_DATABASE_URL="file:$database" bun run db:migrate
       - run: bun run build
+      - name: Check isolated agent runtime dependencies
+        run: bun run check:sandbox-bundle "$(command -v node)"
+        working-directory: packages/agents
       - run: docker build --platform linux/amd64 -f packages/bot/Dockerfile -t wack-hacker-bot:ci .
 
   # A schema change is the one thing CI cannot undo after the fact, so it is
