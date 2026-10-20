@@ -1,6 +1,5 @@
 import { readdir } from "node:fs/promises";
 
-import { isDisabledToolSentinel } from "eve/tools";
 import { bash } from "eve/tools/bash";
 import { writeFile } from "eve/tools/write_file";
 import { z } from "zod";
@@ -24,11 +23,7 @@ for (const directory of directories) {
   const writer = await load("write_file");
   const opener = await load("workspace_open");
   if (enabled) {
-    if (
-      !isWorkflowToolDefinition(shell) ||
-      !isWorkflowToolDefinition(writer) ||
-      isDisabledToolSentinel(opener)
-    )
+    if (!isWorkflowToolDefinition(shell) || !isWorkflowToolDefinition(writer))
       throw new Error("Candidate tools must use Workflow calls and expose initialization");
     const definition = z
       .object({
@@ -47,8 +42,17 @@ for (const directory of directories) {
     );
     if (initializations !== 1 || !z.object({ ready: z.literal(true) }).safeParse(result).success)
       throw new Error("workspace_open must delegate once to Eve's normal provider lifecycle");
-  } else if (shell !== bash || writer !== writeFile || !isDisabledToolSentinel(opener)) {
-    throw new Error("Native tools must retain their original definitions without workspace_open");
+  } else {
+    if (shell !== bash || writer !== writeFile)
+      throw new Error("Native tools must retain their original definitions");
+    const definition = z
+      .object({
+        events: z.strictObject({
+          "session.started": z.function({ input: [], output: z.strictObject({}) }),
+        }),
+      })
+      .parse(opener);
+    definition.events["session.started"]();
   }
 }
 process.stdout.write(JSON.stringify({ enabled, agents: directories.length }));

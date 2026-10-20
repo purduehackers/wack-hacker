@@ -7,6 +7,11 @@ selected, including the original `bash` and `write_file` definitions and no
 `workspace_open` tool. The Discord gateway supervisor still uses its existing
 Vercel Sandbox.
 
+The native branch uses Eve's public empty dynamic tool map for the optional
+opener. Its inert `session.started` resolver advertises no tool and never opens a
+sandbox. `disableTool()` cannot be used here: it only removes a lower-precedence
+slot, and Eve has no default `workspace_open`.
+
 The main agent's direct SDK/HTTP tools and inline Markdown skills never call this
 provider. A workspace is created only when Eve requests file or command access.
 No VM or database connection is needed to prepare the candidate's build artifact.
@@ -205,13 +210,20 @@ From `packages/agents`, build with `DURABLE_BASH_ENABLED=true bun run build`, th
 run `bun run check:sandbox-bundle /absolute/path/to/node`. The check copies only
 the emitted server into a temporary directory outside the checkout, rejects
 symlinks escaping the artifact, requires the authored server's external
-`just-bash` import, checks the compiled workflow tool entries on all thirteen
-agents, and executes both emitted workflow bodies against a local database with
-a simulated lost mutation-step checkpoint. It runs Python date/JSON and QuickJS
+`just-bash` import, and checks each of the thirteen agents separately. Candidate
+artifacts must expose checkpointed `bash`/`write_file` and `workspace_open`; the
+check executes both emitted workflow bodies against a local database with a
+simulated lost mutation-step checkpoint. Native artifacts must retain the
+framework's original descriptions, input schemas and inline handling for
+`bash`/`write_file`, with no callable `workspace_open`. Selection tests also
+execute each native opener resolver and require an empty map. The check runs
+Python date/JSON and QuickJS
 BigInt computations with an empty environment and enforces a 200 MiB candidate
 server-artifact budget. These are artifact and local protocol checks, not a
 deployed HTTP/session test;
 Linux native dependencies, platform limits and the full session lifecycle still
 need the candidate-deployment checks above. Build and runtime must use the same
-provider flag. The unchanged native/default build path may require its normal
+provider flag. Validate all three values (`true`, `false`, and absent) with real
+environment parsing; `SKIP_ENV_VALIDATION=1` bypasses boolean decoding and cannot
+verify an explicit `false`. The native/default build path may require its normal
 provider setup or `--skip-sandbox-prewarm` for local validation.

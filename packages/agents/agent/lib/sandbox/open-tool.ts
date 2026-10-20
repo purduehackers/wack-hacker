@@ -1,4 +1,4 @@
-import { defineTool, disableTool } from "eve/tools";
+import { defineDynamic, defineTool } from "eve/tools";
 import { z } from "zod";
 
 import { env } from "../../env.ts";
@@ -16,4 +16,9 @@ const workspaceOpen = defineTool({
   },
 });
 
-export default env.DURABLE_BASH_ENABLED ? workspaceOpen : disableTool();
+// disableTool() only removes a lower-precedence tool, and workspace_open has
+// no framework default. An empty dynamic set is Eve's public optional surface:
+// no tool is advertised or callable, and no sandbox opens in native sessions.
+export default env.DURABLE_BASH_ENABLED
+  ? workspaceOpen
+  : defineDynamic({ events: { "session.started": () => ({}) } });

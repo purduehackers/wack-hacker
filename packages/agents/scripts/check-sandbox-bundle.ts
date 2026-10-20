@@ -66,7 +66,7 @@ for (const entry of commands) {
   const result = await shell.exec(entry.command);
   if (result.exitCode !== 0 || result.stdout !== entry.expected) throw new Error(JSON.stringify(result));
 }
-console.log(JSON.stringify({ runtime: process.version, engines: ['CPython/WASM', 'QuickJS'], artifactBytes: ${bytes} }));
+console.log(JSON.stringify({ runtime: process.version, engines: ['CPython/WASM', 'QuickJS'], workspaceMode: ${JSON.stringify(workspace.mode)}, agents: ${workspace.agents}, artifactBytes: ${bytes} }));
 `,
   );
   const processHandle = Bun.spawn([process.argv[2] ?? process.execPath, probe], {
