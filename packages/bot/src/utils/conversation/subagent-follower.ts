@@ -23,6 +23,7 @@ import { Result } from "@repo/shared/result";
 import { Client } from "eve/client";
 import type { MessageStreamEvent } from "eve/client";
 
+import { decodeActionProgress, decodeTaskProgress } from "./eve-task-events.ts";
 import type { ConversationFlowDeps } from "./types.ts";
 
 const MAX_LINE = 200;
@@ -68,33 +69,10 @@ export function subagentProgress(dispatchId: string): string | undefined {
 }
 
 /**
- * One entry of `actions.requested`, reached through the public event union.
- *
- * eve does not export the action type from `eve/client`. Derived rather than
- * restated, so a new action kind is a compile error here instead of a string this
- * file quietly cannot name.
- */
-type ActionRequest = Extract<
-  MessageStreamEvent,
-  { type: "actions.requested" }
->["data"]["actions"][number];
-
-function actionName(action: ActionRequest): string {
-  if (action.kind === "tool-call") return action.toolName;
-  if (action.kind === "load-skill") return "loading a skill";
-  return action.kind === "subagent-call" ? action.subagentName : action.remoteAgentName;
-}
-
-function describeActions(subagent: string, actions: readonly ActionRequest[]): string | undefined {
-  return actions.length === 0 ? undefined : `${subagent}: ${actions.map(actionName).join(", ")}`;
-}
-
-/**
  * One line of narration, or nothing when the event is not worth showing.
  *
- * The `default` is not a fallback for malformed input — the union is eve's — but
- * the honest answer for the twenty-odd event types that say nothing a person
- * waiting on a delegation wants to read.
+ * Legacy events remain supported while retained deployments drain. Action
+ * frames use a decoder shared by both protocol generations.
  */
 function summarize(subagent: string, event: MessageStreamEvent): string | undefined {
   switch (event.type) {
@@ -107,12 +85,10 @@ function summarize(subagent: string, event: MessageStreamEvent): string | undefi
     // eve runs some subagents inline and forwards their events onto the parent's
     // stream wrapped in this one; those children have no session to attach to.
     case "subagent.event": {
-      return event.data.event.type === "actions.requested"
-        ? describeActions(event.data.subagentName, event.data.event.data.actions)
-        : undefined;
+      return decodeActionProgress(event.data.event);
     }
     case "actions.requested": {
-      return describeActions(subagent, event.data.actions);
+      return decodeActionProgress(event);
     }
     // What the child actually said. Deltas are deliberately not read: they arrive
     // per-token and would refresh the lease hundreds of times a minute.
@@ -183,6 +159,16 @@ async function readStream(follow: Follow, stream: Stream): Promise<void> {
     if (signal.aborted) return;
     if (Date.parse(event.meta.at) < stream.since) continue;
 
+    const taskProgress = decodeTaskProgress(event);
+    if (taskProgress?.child !== undefined && stream.depth < MAX_DEPTH) {
+      launch(follow, {
+        sessionId: taskProgress.child.sessionId,
+        subagent: taskProgress.child.name,
+        since: 0,
+        depth: stream.depth + 1,
+      });
+    }
+
     // Not awaited: this stream must keep draining, and every level feeds the
     // same line.
     if (event.type === "subagent.called" && stream.depth < MAX_DEPTH) {
@@ -196,7 +182,8 @@ async function readStream(follow: Follow, stream: Stream): Promise<void> {
       });
     }
 
-    const summary = summarize(stream.subagent, event);
+    const summary =
+      taskProgress?.summary ?? decodeActionProgress(event) ?? summarize(stream.subagent, event);
     if (summary === undefined) continue;
 
     if (!(await deps.store.delivery.refreshTurn(continuationKey, dispatchId))) return;

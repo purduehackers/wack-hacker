@@ -198,6 +198,9 @@ export async function answerHitl(
   if (claimed !== "acquired") return { status: claimed };
   const sent = await deps.eve.sendInteraction(payload);
   if (Result.isError(sent)) return { status: "failed", error: sent.error };
+  // This receipt deduplicates submission of this render revision. It does not
+  // mean Eve accepted an approval decision. A rejected candidate remains in a
+  // newer render revision, whose claim is independent and can be answered again.
   const completed = await deps.store.hitl.accept(
     claim.dispatchId,
     claim.revision,

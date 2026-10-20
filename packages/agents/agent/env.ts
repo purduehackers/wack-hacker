@@ -50,6 +50,11 @@ export const env = createEnv({
     SENTRY_TRACES_SAMPLE_RATE: unitFraction.optional(),
     SENTRY_RELEASE: identifier.optional(),
 
+    /** Candidate runtime only. Enable after versioned deployment routing is verified. */
+    MAIN_AGENT_CATALOG_ENABLED: z
+      .stringbool({ truthy: ["true"], falsy: ["false"], case: "sensitive" })
+      .default(false),
+
     /** Optional Phase-3/4 integration credentials; tools deny when absent. */
     GLOBAL_CONFIG: httpUrl.optional(),
     CLOUDFLARE_API_TOKEN: secret.optional(),

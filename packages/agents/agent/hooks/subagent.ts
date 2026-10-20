@@ -9,15 +9,12 @@
  * per connection over `WIRE_ROUTES.streamToken` — this record carries only the
  * address.
  *
- * **On `actions.requested`, not `subagent.called`.** The latter never reaches a
- * hook: eve dispatches it through `callAdapterEventHandler` to the channel adapter
- * and onto the parent's event stream, and authored `ChannelEvents` does not carry
- * it either. A probe on both settled it.
- *
- * That costs the child's session id, which exists only on the stream — and the
- * child is where the work happens, since eve publishes a delegated subagent's
- * progress on its own child-session stream. So this records the parent, and the
- * bot reads `childSessionId` off the parent's stream where the hook could not.
+ * Eve 0.81 announces workflow and agent calls with `task.started`. Its `callId`
+ * identifies the initiating call; `taskId` identifies the resumable task. Record
+ * the parent session so the bot sees all task events and follows local children
+ * from `agent.started`. The action hook also covers legacy-shaped direct
+ * delegation requests. `turn.waiting` is not terminal: keep the follower and
+ * lease alive until this turn actually completes.
  */
 
 import { createConversationStore } from "@repo/shared/conversations";
@@ -67,6 +64,17 @@ function firstDelegation(
 
 export default defineHook({
   events: {
+    async "task.started"(event, ctx) {
+      const dispatchId = dispatchOf(ctx.session.auth.current?.attributes);
+      if (dispatchId === undefined) return;
+      await conversations.delegation.begin(dispatchId, {
+        callId: event.data.callId,
+        name: event.data.name,
+        sessionId: ctx.session.id,
+        startedAt: event.meta.at,
+      });
+    },
+
     async "actions.requested"(event, ctx) {
       const delegation = firstDelegation(event.data.actions);
       if (delegation === undefined) return;

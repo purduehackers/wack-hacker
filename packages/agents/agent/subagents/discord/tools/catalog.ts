@@ -20,9 +20,13 @@ export default defineDynamic({
             toolName,
             defineTool({
               description: spec.description,
-              inputSchema: spec.input,
-              approval: async (approvalCtx) =>
-                await DISCORD_RUNTIME.approvalForTool(toolName, approvalCtx),
+              inputSchema: DISCORD_TOOLS[toolName].input,
+              approval: {
+                request: async (approvalCtx) =>
+                  await DISCORD_RUNTIME.approvalForTool(toolName, approvalCtx),
+                response: async (approvalCtx) =>
+                  await DISCORD_RUNTIME.approvalResponseForTool(toolName, approvalCtx),
+              },
               execute: async (input, toolCtx) =>
                 guardToolExecution(
                   async () => await DISCORD_RUNTIME.executeTool(toolName, input, toolCtx),

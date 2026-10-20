@@ -1,7 +1,6 @@
 import { defineAgent, defineDynamic } from "eve";
 
 import { subagentDiscoverable } from "../../lib/policy/discovery.ts";
-import { SUBAGENT_OUTPUT_SCHEMA } from "../../lib/subagent-output.ts";
 import { SHOPPING_RUNTIME } from "./lib/runtime.ts";
 
 export default defineDynamic({
@@ -21,7 +20,6 @@ export default defineDynamic({
             gateway: { caching: "auto" },
           },
         },
-        outputSchema: SUBAGENT_OUTPUT_SCHEMA,
       });
     },
   },

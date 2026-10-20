@@ -51,11 +51,12 @@ import { applyInputRequests } from "../lib/discord/input-requests.ts";
 import { discordMessageContent } from "../lib/discord/message-input.ts";
 import { createRenderPublisher, renderFooter } from "../lib/discord/render-intent.ts";
 import {
-  appendStreamingMessage,
+  appendStreamingDelta,
   beginDiscordTurn,
   completeStreamingMessage,
   initialDiscordState,
   isWaitingForHuman,
+  resolveDiscordInputs,
   stateForMessage,
 } from "../lib/discord/state.ts";
 import type { DiscordChannelState } from "../lib/discord/state.ts";
@@ -558,7 +559,7 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
 
     async "message.appended"(data, channel, ctx) {
       const state = channel.state;
-      appendStreamingMessage(state, data);
+      appendStreamingDelta(state, data);
       await publishDesiredRender(state, {
         sessionId: ctx.session.id,
         eveTurnId: data.turnId,
@@ -577,6 +578,40 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
         userId: currentUserId(ctx),
         sessionId: ctx.session.id,
         approvalPolicies: approvalPolicyStore,
+      });
+      channel.state.activity = "waiting for input…";
+      await publishDesiredRender(channel.state, {
+        sessionId: ctx.session.id,
+        eveTurnId: data.turnId,
+        phase: "streaming",
+        force: true,
+      });
+    },
+
+    async "input.resolved"(data, channel, ctx) {
+      resolveDiscordInputs(
+        channel.state,
+        data.resolutions.map(({ requestId }) => requestId),
+      );
+      await publishDesiredRender(channel.state, {
+        sessionId: ctx.session.id,
+        eveTurnId: data.turnId,
+        phase: "streaming",
+        force: true,
+      });
+    },
+
+    async "turn.waiting"(data, channel, ctx) {
+      // In-call questions and running tasks keep this same Eve turn open.
+      // Publish controls/progress without releasing the Discord delivery lease.
+      channel.state.activity = isWaitingForHuman(channel.state)
+        ? "waiting for input…"
+        : "working on your request…";
+      await publishDesiredRender(channel.state, {
+        sessionId: ctx.session.id,
+        eveTurnId: data.turnId,
+        phase: "streaming",
+        force: true,
       });
     },
 
@@ -672,6 +707,8 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
         switch (action.kind) {
           case "tool-call":
             return `calling ${action.toolName}`;
+          case "workflow-tool-call":
+            return "working on your request";
           case "subagent-call":
             return `delegating to ${action.subagentName}`;
           case "remote-agent-call":

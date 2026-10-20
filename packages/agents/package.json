@@ -28,6 +28,7 @@
     "@repo/shared": "workspace:*",
     "@sentry/api": "0.113.0",
     "@sentry/node": "10.69.0",
+    "@sentry/opentelemetry": "10.69.0",
     "@t3-oss/env-core": "^0.13.11",
     "@vercel/connect": "^0.6.1",
     "@vercel/oidc": "^3.8.4",
@@ -38,7 +39,7 @@
     "croner": "9.1.0",
     "discord-api-types": "^0.38.49",
     "drizzle-orm": "0.45.2",
-    "eve": "0.31.3",
+    "eve": "0.81.1",
     "octokit": "5.0.5",
     "zod": "4.4.3"
   },

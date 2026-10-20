@@ -182,6 +182,20 @@ export function isWaitingForHuman(state: DiscordChannelState): boolean {
   return state.pendingInputRequestIds.length > 0 || state.pendingAuthorizationNames.length > 0;
 }
 
+/** In-call answers in Eve 0.81 resume the existing turn without turn.started. */
+export function resolveDiscordInputs(
+  state: DiscordChannelState,
+  requestIds: readonly string[],
+): void {
+  const resolved = new Set(requestIds);
+  state.pendingInputRequestIds = state.pendingInputRequestIds.filter((id) => !resolved.has(id));
+  state.answeredInputRequestIds = state.answeredInputRequestIds.filter((id) => !resolved.has(id));
+  state.renderInputRequests = state.renderInputRequests.filter(
+    ({ requestId }) => !resolved.has(requestId),
+  );
+  state.activity = isWaitingForHuman(state) ? "waiting for input…" : "working on your request…";
+}
+
 function appendBlock(existing: string, block: string): string {
   if (block === "") return existing;
   return existing === "" ? block : `${existing}\n\n${block}`;
@@ -194,6 +208,15 @@ export function appendStreamingMessage(
   // Naturally idempotent: `messageSoFar` is cumulative, so a replayed delta
   // replaces the in-progress text with the same value rather than doubling it.
   state.streamingText = input.messageSoFar;
+  state.text = appendBlock(state.completedText, state.streamingText);
+}
+
+/** Eve 0.81 emits deltas; a durable step restores its checkpoint before retry. */
+export function appendStreamingDelta(
+  state: DiscordChannelState,
+  input: { readonly messageDelta: string },
+): void {
+  state.streamingText += input.messageDelta;
   state.text = appendBlock(state.completedText, state.streamingText);
 }
 

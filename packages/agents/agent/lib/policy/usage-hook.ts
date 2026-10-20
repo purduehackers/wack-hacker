@@ -4,6 +4,7 @@ import { defineHook } from "eve/hooks";
 
 import { requirePrincipal } from "./principal.ts";
 import { BudgetStore, getBudgetStore } from "./stores.ts";
+import { recordUsageTelemetry } from "./usage-telemetry.ts";
 
 /**
  * One safe, structured usage event per provider call plus the durable daily
@@ -16,6 +17,7 @@ export function defineUsageHook(budgets: BudgetStore) {
       async "step.completed"(event, ctx) {
         const usage = event.data.usage;
         if (usage === undefined) return;
+        await recordUsageTelemetry(event, ctx);
 
         console.info(
           JSON.stringify({

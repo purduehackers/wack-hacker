@@ -20,9 +20,13 @@ export default defineDynamic({
             toolName,
             defineTool({
               description: spec.description,
-              inputSchema: spec.input,
-              approval: async (approvalCtx) =>
-                await NOTION_RUNTIME.approvalForTool(toolName, approvalCtx),
+              inputSchema: NOTION_TOOLS[toolName].input,
+              approval: {
+                request: async (approvalCtx) =>
+                  await NOTION_RUNTIME.approvalForTool(toolName, approvalCtx),
+                response: async (approvalCtx) =>
+                  await NOTION_RUNTIME.approvalResponseForTool(toolName, approvalCtx),
+              },
               execute: async (input, toolCtx) =>
                 guardToolExecution(
                   async () => await NOTION_RUNTIME.executeTool(toolName, input, toolCtx),

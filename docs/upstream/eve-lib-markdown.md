@@ -1,8 +1,9 @@
 # Eve rejects non-module files anywhere under `lib/`
 
-**Status:** patched locally via `patches/eve@0.31.3.patch`. Not yet filed upstream.
-**Affects:** eve 0.31.3 (latest) and 0.29.5 — the discovery code is byte-identical
-between them, so upgrading does not resolve it.
+**Status:** patched locally via `patches/eve@0.31.3.patch` and the separately
+verified `patches/eve@0.81.1.patch`. Not yet filed upstream.
+**Affects:** eve 0.29.5, 0.31.3, and 0.81.1. The newer discovery implementation
+retains the same diagnostic gate, so upgrading does not resolve it.
 
 ## Summary
 

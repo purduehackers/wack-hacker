@@ -84,8 +84,10 @@ test("full registry inventory is deterministic, complete, namespaced, and honest
   ]);
   const operations = report.domains.flatMap((domain) => domain.tools);
   expect(new Set(operations.map((tool) => tool.id)).size).toBe(operations.length);
+  // Direct main-agent execution now carries the former provider admission
+  // floor in the descriptor itself; effective admitted access is unchanged.
   expect(operations.find((tool) => tool.id === "discord__get_server_info")).toMatchObject({
-    toolRole: "public",
+    toolRole: "organizer",
     admittedRole: "organizer",
   });
   expect(report.domains.every((domain) => domain.entryRole === "organizer")).toBe(true);
