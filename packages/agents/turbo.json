@@ -28,6 +28,7 @@
         "HCB_ORG_SLUG",
         "HUNTER_API_KEY",
         "LINEAR_API_KEY",
+        "MAIN_AGENT_CATALOG_ENABLED",
         "NOTION_TOKEN",
         "PAYLOAD_CMS_API_KEY",
         "PHACK_API_TOKEN",

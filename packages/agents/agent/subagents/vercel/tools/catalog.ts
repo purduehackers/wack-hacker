@@ -21,8 +21,12 @@ export default defineDynamic({
             defineTool({
               description: spec.description,
               inputSchema: VERCEL_TOOLS[toolName].input,
-              approval: async (approvalCtx) =>
-                await VERCEL_RUNTIME.approvalForTool(toolName, approvalCtx),
+              approval: {
+                request: async (approvalCtx) =>
+                  await VERCEL_RUNTIME.approvalForTool(toolName, approvalCtx),
+                response: async (approvalCtx) =>
+                  await VERCEL_RUNTIME.approvalResponseForTool(toolName, approvalCtx),
+              },
               execute: async (input, toolCtx) =>
                 guardToolExecution(
                   async () => await VERCEL_RUNTIME.executeTool(toolName, input, toolCtx),

@@ -22,8 +22,12 @@ export default defineDynamic({
               // Inline lookup lets Eve replay the live Zod validator by names,
               // instead of serializing a resolver-local schema or SDK object.
               inputSchema: integrationTool(domainName, toolName).input,
-              approval: async (approvalCtx) =>
-                await integrationDomainNamed(domainName).approval(toolName, approvalCtx),
+              approval: {
+                request: async (approvalCtx) =>
+                  await integrationDomainNamed(domainName).approval(toolName, approvalCtx),
+                response: async (approvalCtx) =>
+                  await integrationDomainNamed(domainName).approvalResponse(toolName, approvalCtx),
+              },
               execute: async (input, toolCtx) =>
                 guardToolExecution(
                   async () =>

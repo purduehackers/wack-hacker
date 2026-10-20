@@ -1,6 +1,6 @@
 import type { SessionAuthContext } from "eve/context";
 import type { ToolContext } from "eve/tools";
-import type { ApprovalContext } from "eve/tools/approval";
+import type { ApprovalContext, ApprovalResponseContext } from "eve/tools/approval";
 
 import { subagentDiscoverable } from "../policy/discovery.ts";
 import type { createDomainRuntime } from "../policy/domain-runtime.ts";
@@ -33,6 +33,8 @@ export function integrationDomain<R extends DomainToolRegistry>(input: {
         ? runtime.visibleToolNames(current, Object.keys(input.tools))
         : Promise.resolve([]),
     approval: (name: string, ctx: ApprovalContext) => runtime.approvalForTool(toolName(name), ctx),
+    approvalResponse: (name: string, ctx: ApprovalResponseContext) =>
+      runtime.approvalResponseForTool(toolName(name), ctx),
     execute: (name: string, value: unknown, ctx: ToolContext) =>
       runtime.executeTool(toolName(name), value, ctx),
   };

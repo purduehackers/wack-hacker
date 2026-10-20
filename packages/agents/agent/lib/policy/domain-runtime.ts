@@ -16,7 +16,12 @@ import {
 } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import type { ToolContext } from "eve/tools";
-import type { ApprovalContext, ApprovalStatus } from "eve/tools/approval";
+import type {
+  ApprovalContext,
+  ApprovalResponseContext,
+  ApprovalResponseDecision,
+  ApprovalStatus,
+} from "eve/tools/approval";
 import { z } from "zod";
 
 import { assertToolOutput, type JsonValue } from "../serialization.ts";
@@ -159,6 +164,7 @@ async function visibleToolNamesOf<R extends DomainToolRegistry>(
 ): Promise<DomainToolName<R>[]> {
   const principal = requirePrincipal(current);
   if (Result.isError(principal)) return [];
+  if (!roleAtLeast(principal.value.role, UserRole.Organizer)) return [];
   const context = await readBudgetContext(principal.value, adapter.domain);
   return candidates.filter((toolName): toolName is DomainToolName<R> => {
     if (!hasToolName(adapter, toolName)) return false;
@@ -192,7 +198,7 @@ async function requestSecondPartyApproval<R extends DomainToolRegistry>(
     requesterUserId: principal.userId,
     mode: "second-party",
     minApproverRole: expectedApproverRole(descriptor.minRole),
-    tool: name,
+    tool: ctx.toolName,
     risk: descriptor.risk,
   });
   const entry = { adapter, principal, name, input: ctx.toolInput, decidedBy: undefined };
@@ -212,6 +218,9 @@ async function approvalFor<R extends DomainToolRegistry>(
   const principal = requirePrincipal(ctx.session.auth.current);
   if (Result.isError(principal)) {
     return { type: "denied", reason: principal.error.message };
+  }
+  if (!roleAtLeast(principal.value.role, descriptorOf(adapter, name).minRole)) {
+    return { type: "denied", reason: "Your current role cannot use this integration operation." };
   }
   const context = await readBudgetContext(principal.value, adapter.domain);
   const decision = decideCapability(principal.value, descriptorOf(adapter, name), context);
@@ -257,8 +266,18 @@ async function executionAuthorityOf<R extends DomainToolRegistry>(
   name: DomainToolName<R>,
   ctx: ToolContext,
 ): Promise<ExecutionAuthority | undefined> {
+  if (ctx.approval !== undefined) {
+    return approvedAuthorityOf(adapter, name, {
+      callId: ctx.callId,
+      sessionId: ctx.session.id,
+      toolName: ctx.toolName,
+      requester: ctx.session.auth.current,
+      responder: ctx.approval.responder,
+    });
+  }
   const current = requirePrincipal(ctx.session.auth.current);
   if (Result.isError(current)) return undefined;
+  if (!roleAtLeast(current.value.role, descriptorOf(adapter, name).minRole)) return undefined;
   const attributes = ctx.session.auth.current?.attributes;
 
   const requesterId = z.string().safeParse(attributes?.approvalRequesterId).data;
@@ -274,7 +293,7 @@ async function executionAuthorityOf<R extends DomainToolRegistry>(
     Result.isError(policy) ||
     policy.value === undefined ||
     policy.value.requesterUserId !== requesterId ||
-    policy.value.tool !== name ||
+    policy.value.tool !== ctx.toolName ||
     policy.value.risk !== descriptor.risk ||
     policy.value.minApproverRole !== expectedApproverRole(descriptor.minRole) ||
     current.value.userId === requesterId ||
@@ -289,6 +308,83 @@ async function executionAuthorityOf<R extends DomainToolRegistry>(
     principal: { userId: requesterId, role: requesterAccess, source: PolicySource.Chat },
     decidedBy: current.value.userId,
   };
+}
+
+interface ApprovalIdentity {
+  readonly callId: string;
+  readonly sessionId: string;
+  readonly toolName: string;
+  readonly requester: ApprovalContext["session"]["auth"]["current"];
+  readonly responder: NonNullable<ApprovalContext["session"]["auth"]["current"]>;
+}
+
+/** Eve 0.81 keeps requester and responder distinct across a parked call. */
+async function approvedAuthorityOf<R extends DomainToolRegistry>(
+  adapter: DomainRuntimeAdapter<R>,
+  name: DomainToolName<R>,
+  identity: ApprovalIdentity,
+): Promise<ExecutionAuthority | undefined> {
+  const requester = requirePrincipal(identity.requester);
+  const responder = requirePrincipal(identity.responder);
+  if (Result.isError(requester) || Result.isError(responder)) return undefined;
+  const descriptor = descriptorOf(adapter, name);
+  if (requester.value.userId === responder.value.userId) {
+    if (descriptor.confirmation === Confirmation.SecondParty) return undefined;
+    return roleAtLeast(responder.value.role, descriptor.minRole)
+      ? { principal: responder.value }
+      : undefined;
+  }
+  if (descriptor.confirmation !== Confirmation.SecondParty) return undefined;
+  const policy = await getApprovalPolicyStore().read(identity.sessionId, identity.callId);
+  const freshRoles = z
+    .array(z.string())
+    .safeParse(identity.responder.attributes.approvalRequesterMemberRoles).data;
+  if (
+    Result.isError(policy) ||
+    policy.value === undefined ||
+    policy.value.requesterUserId !== requester.value.userId ||
+    policy.value.tool !== identity.toolName ||
+    policy.value.risk !== descriptor.risk ||
+    policy.value.minApproverRole !== expectedApproverRole(descriptor.minRole) ||
+    identity.responder.attributes.approvalRequesterId !== requester.value.userId ||
+    freshRoles === undefined ||
+    !roleAtLeast(responder.value.role, policy.value.minApproverRole)
+  ) {
+    return undefined;
+  }
+  const requesterAccess = roleFromMemberRoles(freshRoles);
+  return roleAtLeast(requesterAccess, descriptor.minRole)
+    ? {
+        principal: { ...requester.value, role: requesterAccess },
+        decidedBy: responder.value.userId,
+      }
+    : undefined;
+}
+
+async function respondToApproval<R extends DomainToolRegistry>(
+  adapter: DomainRuntimeAdapter<R>,
+  name: DomainToolName<R>,
+  ctx: ApprovalResponseContext,
+): Promise<ApprovalResponseDecision> {
+  if (
+    ctx.response.decision === "cancel" &&
+    ctx.request.principal?.principalId === ctx.response.principal.principalId
+  ) {
+    return { status: "allowed" };
+  }
+  const authority = await approvedAuthorityOf(adapter, name, {
+    callId: ctx.request.callId,
+    sessionId: ctx.session.id,
+    toolName: ctx.request.toolName,
+    requester: ctx.request.principal,
+    responder: ctx.response.principal,
+  });
+  return authority === undefined
+    ? {
+        status: "rejected",
+        reason: "Current requester and approver roles do not authorize this action.",
+      }
+    : { status: "allowed" };
 }
 
 /** The denial subject reported to the model when policy refuses execution. */
@@ -349,6 +445,9 @@ async function executeToolFor<R extends DomainToolRegistry>(
       principal.role,
       name,
     );
+  }
+  if (decision.value.approve !== Confirmation.None && ctx.approval === undefined) {
+    return denied("a settled approval for this call", principal.role, name);
   }
   if (authority.decidedBy !== undefined) {
     await recordAudit({ ...entry, decision: AuditDecision.Approved });
@@ -420,6 +519,10 @@ export function createDomainRuntime<const R extends DomainToolRegistry>(
   return {
     approvalForTool: (name: Name, ctx: ApprovalContext): Promise<ApprovalStatus> =>
       approvalFor(adapter, name, ctx),
+    approvalResponseForTool: (
+      name: Name,
+      ctx: ApprovalResponseContext,
+    ): Promise<ApprovalResponseDecision> => respondToApproval(adapter, name, ctx),
     descriptorForTool: (name: Name): CapabilityDescriptor => descriptorOf(adapter, name),
     executeTool: (name: Name, input: unknown, ctx: ToolContext): Promise<unknown> =>
       executeToolFor(adapter, name, input, ctx),

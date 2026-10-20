@@ -56,8 +56,13 @@ for (const path of await authoredTypeScriptFiles(agentRoot)) {
         `${displayPath}: each integration catalog must directly author one inline Eve defineTool executor`,
       );
     }
-    if (!/\bapproval\s*:\s*async\s*\([^)]*\)\s*=>/u.test(source)) {
-      failures.push(`${displayPath}: Eve defineTool approval must remain an inline async function`);
+    if (
+      !/\brequest\s*:\s*async\s*\([^)]*\)\s*=>/u.test(source) ||
+      !/\bresponse\s*:\s*async\s*\([^)]*\)\s*=>/u.test(source)
+    ) {
+      failures.push(
+        `${displayPath}: Eve approval request and response must remain inline async functions`,
+      );
     }
   }
 }

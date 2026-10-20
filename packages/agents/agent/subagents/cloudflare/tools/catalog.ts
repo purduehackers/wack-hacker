@@ -21,8 +21,12 @@ export default defineDynamic({
             defineTool({
               description: spec.description,
               inputSchema: CLOUDFLARE_TOOLS[toolName].input,
-              approval: async (approvalCtx) =>
-                await CLOUDFLARE_RUNTIME.approvalForTool(toolName, approvalCtx),
+              approval: {
+                request: async (approvalCtx) =>
+                  await CLOUDFLARE_RUNTIME.approvalForTool(toolName, approvalCtx),
+                response: async (approvalCtx) =>
+                  await CLOUDFLARE_RUNTIME.approvalResponseForTool(toolName, approvalCtx),
+              },
               execute: async (input, toolCtx) =>
                 guardToolExecution(
                   async () => await CLOUDFLARE_RUNTIME.executeTool(toolName, input, toolCtx),

@@ -28,6 +28,7 @@
     "@repo/shared": "workspace:*",
     "@sentry/api": "0.113.0",
     "@sentry/node": "10.69.0",
+    "@sentry/opentelemetry": "10.69.0",
     "@t3-oss/env-core": "^0.13.11",
     "@vercel/connect": "^0.6.1",
     "@vercel/oidc": "^3.8.4",

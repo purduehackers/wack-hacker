@@ -32,6 +32,7 @@
         "@repo/shared": "workspace:*",
         "@sentry/api": "0.113.0",
         "@sentry/node": "10.69.0",
+        "@sentry/opentelemetry": "10.69.0",
         "@t3-oss/env-core": "^0.13.11",
         "@vercel/connect": "^0.6.1",
         "@vercel/oidc": "^3.8.4",
@@ -99,6 +100,7 @@
     },
   },
   "patchedDependencies": {
+    "eve@0.81.1": "patches/eve@0.81.1.patch",
     "eve@0.31.3": "patches/eve@0.31.3.patch",
   },
   "packages": {
