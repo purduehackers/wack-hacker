@@ -61,6 +61,9 @@ describe("Embedfix preview delivery", () => {
     for (const content of [
       "hello",
       "https://github.com/purduehackers/wack-hacker",
+      "https://soundcloud.com/artist/track",
+      "https://soundcloud.com/artist/sets/playlist",
+      "https://on.soundcloud.com/Abc123Def",
       `<${URL}>`,
       `\`${URL}\``,
     ]) {
@@ -101,11 +104,11 @@ describe("Embedfix preview delivery", () => {
     expect(message.reply).toHaveBeenCalledTimes(1);
   });
 
-  test("preserves unrelated embeds while sending the replacement", async () => {
+  test("preserves SoundCloud embeds while sending a supported replacement", async () => {
     const { message, effects, deps } = source();
     const outcome = await replyWithEmbedPreview(
       message,
-      embedPreviewFor(`${URL} https://example.com`),
+      embedPreviewFor(`${URL} https://soundcloud.com/artist/track`),
       deps,
     );
     expect(Result.isOk(outcome)).toBe(true);
@@ -116,9 +119,7 @@ describe("Embedfix preview delivery", () => {
     const { message, effects, deps } = source();
     const ready = Promise.withResolvers<boolean>();
     deps.waitForPreviews.mockReturnValueOnce(ready.promise);
-    const preview = embedPreviewFor(
-      `${URL} https://instagram.com/p/BQ0eAlwhDrw https://soundcloud.com/artist/track`,
-    );
+    const preview = embedPreviewFor(`${URL} https://instagram.com/p/BQ0eAlwhDrw`);
     const sending = replyWithEmbedPreview(message, preview, deps);
     await Bun.sleep(0);
     expect(message.suppressEmbeds).not.toHaveBeenCalled();

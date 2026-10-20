@@ -18,21 +18,6 @@ const SOURCES = [
     route: "i",
     path: /^\/(?:[\w.]{1,30}\/)?(?:p|reel|reels|tv)\/[\w-]{5,32}(?:\/(?:[1-9]|1\d|20))?\/?$/u,
   },
-  {
-    hosts: new Set([
-      "soundcloud.com",
-      "www.soundcloud.com",
-      "m.soundcloud.com",
-      "mobile.soundcloud.com",
-    ]),
-    route: "s",
-    path: /^\/[\w-]{1,200}\/(?:sets\/)?[\w-]{1,200}\/?$/u,
-  },
-  {
-    hosts: new Set(["on.soundcloud.com"]),
-    route: "s",
-    path: /^\/[a-zA-Z0-9]{4,100}\/?$/u,
-  },
 ];
 
 const MAX_PREVIEWS = 10;
@@ -44,8 +29,6 @@ function embedfixUrl(value: string): string | undefined {
 
   const source = SOURCES.find((candidate) => candidate.hosts.has(url.hostname));
   if (!source?.path.test(url.pathname)) return undefined;
-  // Embedfix handles public posts; don't strip access tokens from private links.
-  if (source.route === "s" && url.searchParams.has("secret_token")) return undefined;
 
   const selection =
     source.route === "i" ? (url.searchParams.get("img_index") ?? undefined) : undefined;

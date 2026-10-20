@@ -51,6 +51,11 @@ describe("Embedfix preview links", () => {
     "https://x.com/NASAWebb/status/not-a-number",
     "https://x.com/NASAWebb/status/0",
     `https://x.com/${POST}/anything-else`,
+    "https://soundcloud.com/hewillyeah/2f-2-08-14-2026?si=tracking",
+    "https://www.soundcloud.com/artist/sets/playlist/",
+    "https://m.soundcloud.com/artist/track",
+    "https://mobile.soundcloud.com/artist/track",
+    "https://on.soundcloud.com/Abc123Def?si=tracking",
   ])("does not unfurl opted-out or unsupported content: %s", (content) => {
     expect(embedPreviewFor(content).links).toEqual([]);
   });
@@ -88,7 +93,7 @@ describe("Embedfix preview links", () => {
   });
 });
 
-describe("Instagram and SoundCloud routes", () => {
+describe("Instagram routes", () => {
   test.each([
     ["https://www.instagram.com/reel/Cop84x6u7CP/?igsh=tracking", "i/reel/Cop84x6u7CP"],
     [
@@ -97,14 +102,6 @@ describe("Instagram and SoundCloud routes", () => {
     ],
     ["https://m.instagram.com/enbiggen/reels/Cop84x6u7CP/", "i/enbiggen/reels/Cop84x6u7CP"],
     ["https://instagram.com/tv/Cop84x6u7CP/3", "i/tv/Cop84x6u7CP/3"],
-    [
-      "https://soundcloud.com/hewillyeah/2f-2-08-14-2026?si=tracking",
-      "s/hewillyeah/2f-2-08-14-2026",
-    ],
-    ["https://www.soundcloud.com/artist/sets/playlist/", "s/artist/sets/playlist"],
-    ["https://m.soundcloud.com/artist/track", "s/artist/track"],
-    ["https://mobile.soundcloud.com/artist/track", "s/artist/track"],
-    ["https://on.soundcloud.com/Abc123Def?si=tracking", "s/Abc123Def"],
   ])("routes %s to the deployed Embedfix path", (content, path) => {
     expect(embedPreviewFor(content)).toEqual({
       links: [`https://fx.purduehackers.com/${path}`],
@@ -120,17 +117,10 @@ describe("Instagram and SoundCloud routes", () => {
     "https://instagram.com/p/BQ0eAlwhDrw?img_index=21",
     "https://instagram.com/p/BQ0eAlwhDrw?img_index=2%29",
     "https://instagram.com.evil.example/p/BQ0eAlwhDrw",
-    "https://soundcloud.com/artist",
-    "https://soundcloud.com/artist/track/s-secret",
-    "https://soundcloud.com/artist/track?secret_token=s-secret",
-    "https://on.soundcloud.com/artist/track",
-    "https://on.soundcloud.com/abc",
-    "https://soundcloud.com.evil.example/artist/track",
     "https://fx.purduehackers.com/i/p/BQ0eAlwhDrw",
-    "https://fx.purduehackers.com/s/artist/track",
     "<https://instagram.com/p/BQ0eAlwhDrw>",
-    "||https://soundcloud.com/artist/track||",
-  ])("preserves unsupported, private, or already fixed links: %s", (content) => {
+    "||https://instagram.com/p/BQ0eAlwhDrw||",
+  ])("preserves unsupported, opted-out, or already fixed links: %s", (content) => {
     expect(embedPreviewFor(content).links).toEqual([]);
   });
 });
@@ -143,7 +133,6 @@ describe("multiple Embedfix links", () => {
         "https://instagram.com/p/BQ0eAlwhDrw?img_index=2&igsh=tracking",
         "https://www.instagram.com/p/BQ0eAlwhDrw/?img_index=2",
         "https://instagram.com/p/BQ0eAlwhDrw?img_index=3",
-        "https://on.soundcloud.com/Abc123Def",
       ].join("\n"),
     );
     expect(preview).toEqual({
@@ -151,20 +140,20 @@ describe("multiple Embedfix links", () => {
         FX_URL,
         "https://fx.purduehackers.com/i/p/BQ0eAlwhDrw?img_index=2",
         "https://fx.purduehackers.com/i/p/BQ0eAlwhDrw?img_index=3",
-        "https://fx.purduehackers.com/s/Abc123Def",
       ],
       suppressOriginal: true,
     });
   });
 
-  test("fits Discord content limits even with long SoundCloud paths", () => {
+  test("fits Discord content limits with ten maximum-length Instagram paths", () => {
     const content = Array.from(
       { length: 10 },
-      (_, i) => `https://soundcloud.com/${"a".repeat(200)}/${"b".repeat(199)}${i}`,
+      (_, i) =>
+        `https://instagram.com/${"a".repeat(30)}/reels/${"b".repeat(31)}${i}/20?img_index=20`,
     ).join("\n");
     const preview = embedPreviewFor(content);
-    expect(preview.links).toHaveLength(4);
-    expect(preview.suppressOriginal).toBe(false);
+    expect(preview.links).toHaveLength(10);
+    expect(preview.suppressOriginal).toBe(true);
     expect(hiddenEmbedLinks(preview.links).length).toBeLessThanOrEqual(2_000);
   });
 });
