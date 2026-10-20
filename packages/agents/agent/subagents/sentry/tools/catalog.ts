@@ -20,7 +20,7 @@ export default defineDynamic({
             toolName,
             defineTool({
               description: spec.description,
-              inputSchema: spec.input,
+              inputSchema: SENTRY_TOOLS[toolName].input,
               approval: async (approvalCtx) =>
                 await SENTRY_RUNTIME.approvalForTool(toolName, approvalCtx),
               execute: async (input, toolCtx) =>

@@ -23,6 +23,7 @@ import { Result } from "@repo/shared/result";
 import { Client } from "eve/client";
 import type { MessageStreamEvent } from "eve/client";
 
+import { decodeTaskProgress } from "./eve-task-events.ts";
 import type { ConversationFlowDeps } from "./types.ts";
 
 const MAX_LINE = 200;
@@ -183,6 +184,16 @@ async function readStream(follow: Follow, stream: Stream): Promise<void> {
     if (signal.aborted) return;
     if (Date.parse(event.meta.at) < stream.since) continue;
 
+    const taskProgress = decodeTaskProgress(event);
+    if (taskProgress?.child !== undefined && stream.depth < MAX_DEPTH) {
+      launch(follow, {
+        sessionId: taskProgress.child.sessionId,
+        subagent: taskProgress.child.name,
+        since: 0,
+        depth: stream.depth + 1,
+      });
+    }
+
     // Not awaited: this stream must keep draining, and every level feeds the
     // same line.
     if (event.type === "subagent.called" && stream.depth < MAX_DEPTH) {
@@ -196,7 +207,7 @@ async function readStream(follow: Follow, stream: Stream): Promise<void> {
       });
     }
 
-    const summary = summarize(stream.subagent, event);
+    const summary = taskProgress?.summary ?? summarize(stream.subagent, event);
     if (summary === undefined) continue;
 
     if (!(await deps.store.delivery.refreshTurn(continuationKey, dispatchId))) return;

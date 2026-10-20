@@ -51,7 +51,7 @@ import { applyInputRequests } from "../lib/discord/input-requests.ts";
 import { discordMessageContent } from "../lib/discord/message-input.ts";
 import { createRenderPublisher, renderFooter } from "../lib/discord/render-intent.ts";
 import {
-  appendStreamingMessage,
+  appendStreamingDelta,
   beginDiscordTurn,
   completeStreamingMessage,
   initialDiscordState,
@@ -558,7 +558,7 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
 
     async "message.appended"(data, channel, ctx) {
       const state = channel.state;
-      appendStreamingMessage(state, data);
+      appendStreamingDelta(state, data);
       await publishDesiredRender(state, {
         sessionId: ctx.session.id,
         eveTurnId: data.turnId,
@@ -672,6 +672,8 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
         switch (action.kind) {
           case "tool-call":
             return `calling ${action.toolName}`;
+          case "workflow-tool-call":
+            return `working on ${action.toolName}`;
           case "subagent-call":
             return `delegating to ${action.subagentName}`;
           case "remote-agent-call":

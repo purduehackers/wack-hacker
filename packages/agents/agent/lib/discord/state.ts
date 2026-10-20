@@ -197,6 +197,15 @@ export function appendStreamingMessage(
   state.text = appendBlock(state.completedText, state.streamingText);
 }
 
+/** Eve 0.81 emits deltas; a durable step restores its checkpoint before retry. */
+export function appendStreamingDelta(
+  state: DiscordChannelState,
+  input: { readonly messageDelta: string },
+): void {
+  state.streamingText += input.messageDelta;
+  state.text = appendBlock(state.completedText, state.streamingText);
+}
+
 /** Preserves preliminary assistant text across tool-call model steps, replay-safely. */
 export function completeStreamingMessage(
   state: DiscordChannelState,

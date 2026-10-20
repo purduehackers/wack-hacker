@@ -20,7 +20,7 @@ export default defineDynamic({
             toolName,
             defineTool({
               description: spec.description,
-              inputSchema: spec.input,
+              inputSchema: GITHUB_TOOLS[toolName].input,
               approval: async (approvalCtx) =>
                 await GITHUB_RUNTIME.approvalForTool(toolName, approvalCtx),
               execute: async (input, toolCtx) =>

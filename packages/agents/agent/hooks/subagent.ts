@@ -67,6 +67,17 @@ function firstDelegation(
 
 export default defineHook({
   events: {
+    async "task.started"(event, ctx) {
+      const dispatchId = dispatchOf(ctx.session.auth.current?.attributes);
+      if (dispatchId === undefined) return;
+      await conversations.delegation.begin(dispatchId, {
+        callId: event.data.callId,
+        name: event.data.name,
+        sessionId: ctx.session.id,
+        startedAt: event.meta.at,
+      });
+    },
+
     async "actions.requested"(event, ctx) {
       const delegation = firstDelegation(event.data.actions);
       if (delegation === undefined) return;

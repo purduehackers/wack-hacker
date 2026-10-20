@@ -21,7 +21,7 @@ export default defineDynamic({
     "turn.started": () => {
       const now = new Date();
       return defineInstructions({
-        markdown: [
+        content: [
           "# Now",
           "",
           `The current time is ${now.toISOString()}.`,

@@ -67,39 +67,15 @@ export default defineHook({
       const visibleTokens = (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0);
       await persistTurnTokens(ctx.session.id, event.data.turnId, event.meta.id, visibleTokens);
     },
-    async "subagent.event"(event, ctx) {
-      const child = event.data.event;
-      if (child.type === "turn.failed") {
-        countAgentEvent("agent.delegation", {
-          delegate: event.data.subagentName,
-          status: "failed",
-        });
-        return;
-      }
-      if (child.type !== "step.completed" || child.data.usage === undefined) return;
-      const usage = child.data.usage;
-      countTokens("input", usage.inputTokens, event.data.subagentName);
-      countTokens("output", usage.outputTokens, event.data.subagentName);
-      countTokens("cache_read", usage.cacheReadTokens, event.data.subagentName);
-      countTokens("cache_write", usage.cacheWriteTokens, event.data.subagentName);
-      if (usage.costUsd !== undefined && usage.costUsd >= 0) {
-        distributeAgentEvent("agent.cost", usage.costUsd, "none", {
-          delegate: event.data.subagentName,
-        });
-      }
-      const visibleTokens = (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0);
-      await persistTurnTokens(ctx.session.id, ctx.session.turn.id, event.meta.id, visibleTokens);
+    "task.started"(event) {
+      if (event.data.kind !== "agent") return;
+      const attributes = { delegate: event.data.name, status: "called" };
+      countAgentEvent("agent.delegation", attributes);
+      logAgentEvent("agent.delegation", attributes);
     },
-    "subagent.called"(event) {
-      const attributes = {
-        delegate: event.data.name,
-        remote: event.data.remote !== undefined,
-      };
-      countAgentEvent("agent.delegation", { ...attributes, status: "called" });
-      logAgentEvent("agent.delegation", { ...attributes, status: "called" });
-    },
-    "subagent.completed"(event) {
-      const attributes = { delegate: event.data.subagentName, status: "completed" };
+    "task.settled"(event) {
+      if (event.data.kind !== "agent") return;
+      const attributes = { delegate: event.data.name ?? "agent", status: event.data.status };
       countAgentEvent("agent.delegation", attributes);
       logAgentEvent("agent.delegation", attributes);
     },

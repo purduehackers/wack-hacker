@@ -15,7 +15,8 @@ import {
   UpstreamError,
 } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
-import type { ApprovalContext, ApprovalStatus, ToolContext } from "eve/tools";
+import type { ToolContext } from "eve/tools";
+import type { ApprovalContext, ApprovalStatus } from "eve/tools/approval";
 import { z } from "zod";
 
 import { assertToolOutput, type JsonValue } from "../serialization.ts";
@@ -105,8 +106,12 @@ function descriptorOf<R extends DomainToolRegistry>(
   return {
     kind: CapabilityKind.Tool,
     name,
-    minRole:
-      access.minRole ?? (access.risk === RiskLevel.Read ? UserRole.Public : UserRole.Organizer),
+    // Every provider was admitted through an organizer-only subagent. Keep
+    // that effective boundary when the same operation is called by the root,
+    // including a stale discovered tool after its requester's role changes.
+    minRole: roleAtLeast(access.minRole ?? UserRole.Public, UserRole.Organizer)
+      ? (access.minRole ?? UserRole.Organizer)
+      : UserRole.Organizer,
     risk: access.risk,
     ...(access.confirm === undefined ? {} : { confirmation: access.confirm }),
   };
