@@ -141,8 +141,8 @@ bun run lint
 bunx oxfmt --check .
 bunx tsc --noEmit -p packages/agents/tsconfig.json
 bunx tsc --noEmit -p packages/bot/tsconfig.json
-bun run --cwd packages/agents check:capabilities
-bun run --cwd packages/agents check:serialization
+SKIP_ENV_VALIDATION=1 bun run --cwd packages/agents check:capabilities
+SKIP_ENV_VALIDATION=1 bun run --cwd packages/agents check:serialization
 SKIP_ENV_VALIDATION=1 bun run --cwd packages/agents build --skip-sandbox-prewarm
 ```
 
