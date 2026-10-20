@@ -3,9 +3,11 @@
 The Eve 0.81 candidate previews for PRs [191](https://github.com/purduehackers/wack-hacker/pull/191)
 and [192](https://github.com/purduehackers/wack-hacker/pull/192) exhausted the
 4-core, 8 GB Vercel builder. Repository validation passed. A successful local
-compile does not establish that this deployment failure is fixed.
+compile did not establish deployability. The capped build in PR
+[197](https://github.com/purduehackers/wack-hacker/pull/197) subsequently completed
+on the same builder, as recorded below.
 
-## Candidate
+## Build process
 
 `bun run build` still runs the installed Eve CLI under Node, as required by the
 repository's toolchain. The agent package passes Node a 3072 MiB old-space ceiling
@@ -13,11 +15,39 @@ for that build process only. It preserves inherited `NODE_OPTIONS`, including
 conditions and import settings. It does not set a deployment environment variable
 or change the deployed server's heap.
 
-This is a bounded-memory candidate for remote verification. Node's old-space
-ceiling is not a total process limit: young-generation allocations, native
-Rolldown allocations, child processes, and the rest of the builder use additional
-memory. It must not be described as a verified fix until the full Vercel preview
-build succeeds on the same builder.
+Node's old-space ceiling is not a total process limit: young-generation
+allocations, native Rolldown allocations, child processes, and the rest of the
+builder use additional memory.
+
+## Remote verification — 2026-10-20 UTC
+
+At commit `659b05661e7a4bae31df78286fe413a88d87d0ab`, the
+[Vercel preview](https://vercel.com/purdue-hackers/wack-hacker-v2/DfdtHcpkggvfTqAoy87Y4RZguFqY)
+reached **READY** on the unchanged 4-core, 8 GB builder. Its logs confirm
+`node --max-old-space-size=3072 node_modules/eve/bin/eve.js build`, initialization
+of all 13 sandbox templates, a 12,795 ms Nitro server build, and a Nitro-reported
+size of 51.8 MB. Turbo completed in 1m52.967s and Vercel reported
+`Build Completed in /vercel/output [2m]`.
+
+The uncapped previews for PRs [194](https://github.com/purduehackers/wack-hacker/pull/194),
+[195](https://github.com/purduehackers/wack-hacker/pull/195), and
+[196](https://github.com/purduehackers/wack-hacker/pull/196) all exhausted memory.
+The last reported an OOM event, SIGKILL, and exit 137 after 7m25.834s in Turbo.
+This comparison supports retaining the build-only ceiling. One successful capped
+preview is not causal proof of memory savings or a production latency measurement.
+
+The [Linux validation job](https://github.com/purduehackers/wack-hacker/actions/runs/39399504410/job/118550391898)
+passed formatting, strict lint with zero warnings/errors, 222 tests with zero
+failures, and the bot Docker build. Redis-dependent tests were skipped there;
+separate local validation passed all 259 tests against real Redis. The isolated
+Linux artifact probe passed CPython/WASM and QuickJS for all 13 agents in native
+mode on Node 24.21.0, with 51,627,638 artifact bytes. Migration review and Socket
+checks also passed at this head.
+
+Separate local validation with validated environment values passed the combined
+durable-mode build and emitted replay probe on Node 24.19.0: all 13 agents and a
+51,556,437-byte artifact. These checks establish preview build and packaging
+success, not production rollout, a Discord canary, or runtime performance gains.
 
 ## Local investigation
 
@@ -59,7 +89,7 @@ The 3072 MiB candidate completed without that regression and produced the same
 function sizes, but its measured RSS was higher than the baseline. These runs
 establish neither a memory reduction nor a speed improvement. The candidate tests
 whether a ceiling below Node's default leaves enough room for native allocations
-on the Linux builder; the remote preview must decide whether to retain it.
+on the Linux builder; the successful remote preview above supports retaining it.
 
 For a credential-free hosted candidate compile from `packages/agents`, explicitly
 enable the features instead of relying on the raw-string behavior:
@@ -111,8 +141,7 @@ bun run check:sandbox-bundle "$(command -v node)" \
   .vercel/output/functions/.well-known/workflow/v1/flow.func
 ```
 
-A full preview build must also pass with sandbox prewarming enabled, the actual
-deployment environment, both hosted functions packaged, and no memory-machine
-upgrade. If the build-only ceiling does not fix that run, remove the candidate
-ceiling and retain the artifact gate and diagnostic evidence. Local success
-does not clear the runtime migration, Discord canary, or latency release gates.
+The verified preview passed with sandbox prewarming enabled, the actual
+deployment environment, both hosted functions packaged, and no builder upgrade.
+Future changes must preserve those checks. The runtime migration, Discord canary,
+and latency release gates remain separate and are not cleared by this build.
