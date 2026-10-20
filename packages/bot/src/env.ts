@@ -51,7 +51,9 @@ export const env = createEnv({
     DISCORD_BOT_CLIENT_ID: secret,
 
     /** Base URL of the eve deployment. No trailing slash. */
-    AGENT_URL: z.url({ protocol: /^https?$/u }),
+    AGENT_URL: z.url({ protocol: /^https?$/u }).optional(),
+    /** Verified immutable deployments; a missing routing map fails startup. */
+    AGENT_EXECUTION_TARGETS: z.string().min(1),
     /** Bearer the bot presents to the agent. */
     AGENT_INGRESS_SECRET: secret,
     /** Bearer the agent must present on the parked callback. */

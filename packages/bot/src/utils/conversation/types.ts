@@ -13,14 +13,15 @@ import type {
   ScheduledFirePayload,
 } from "@repo/shared/wire";
 
-import type { AgentClient, AgentError } from "../../agent/client.ts";
+import type { AgentError } from "../../agent/client.ts";
 import type { DiscordRest } from "../../agent/render/discord-rest.ts";
 import type { RendererProjection } from "../../agent/render/renderer.ts";
+import type { ConversationAgentClient } from "../../agent/routed-client.ts";
 import type { ScheduledDiscordAdapter } from "../../agent/scheduled.ts";
 import type { TurnMessageWriter } from "../../agent/turn-messages.ts";
 
 export interface ConversationFlowDeps {
-  readonly eve: AgentClient;
+  readonly eve: ConversationAgentClient;
   readonly store: ConversationStore;
   readonly rest: DiscordRest;
   readonly turnMessages: TurnMessageWriter;

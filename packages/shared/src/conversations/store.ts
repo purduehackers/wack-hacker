@@ -11,11 +11,13 @@ import { resetKey } from "./keys.ts";
 import { AuthorizationReader } from "./readers/authorization.ts";
 import { DelegationReader } from "./readers/delegation.ts";
 import { DeliveryReader } from "./readers/delivery.ts";
+import { ExecutionReader } from "./readers/execution.ts";
 import { InteractionReader } from "./readers/interaction.ts";
 import { RenderReader } from "./readers/render.ts";
 import { AuthorizationWriter } from "./writers/authorization.ts";
 import { DelegationWriter } from "./writers/delegation.ts";
 import { DeliveryWriter } from "./writers/delivery.ts";
+import { ExecutionWriter } from "./writers/execution.ts";
 import { HitlWriter } from "./writers/hitl.ts";
 import { InteractionWriter } from "./writers/interaction.ts";
 import { RenderWriter } from "./writers/render.ts";
@@ -25,6 +27,8 @@ export function createConversationStore(deps: { readonly redis: RedisClient }) {
   const { redis } = deps;
   const deliveries = new DeliveryReader(redis);
   return {
+    executions: new ExecutionReader(redis),
+    execution: new ExecutionWriter(redis),
     /** A turn's hold on one conversation: queue, admission, park, release. */
     deliveries,
     delivery: new DeliveryWriter(redis),

@@ -100,7 +100,7 @@ async function watchDelegation(deps: ConversationFlowDeps, continuationKey: stri
     stopFollowing(dispatchId);
     return;
   }
-  followSubagent(deps, dispatchId, continuationKey, delegation.value, async () => {
+  await followSubagent(deps, dispatchId, continuationKey, delegation.value, async () => {
     await applyLatest(deps, dispatchId);
   });
 }

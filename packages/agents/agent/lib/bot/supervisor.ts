@@ -279,7 +279,7 @@ type SupervisorRedis = Pick<RedisClient, "eval" | "get">;
 export type BotProcessEnvironment = Readonly<Record<string, string>> & {
   readonly DISCORD_BOT_TOKEN: string;
   readonly DISCORD_BOT_CLIENT_ID: string;
-  readonly AGENT_URL: string;
+  readonly AGENT_EXECUTION_TARGETS: string;
   readonly AGENT_INGRESS_SECRET: string;
   readonly BOT_INGRESS_SECRET: string;
   readonly REDIS_URL: string;
@@ -296,7 +296,7 @@ export type BotProcessEnvironment = Readonly<Record<string, string>> & {
 const REQUIRED_BOT_ENV_KEYS = [
   "DISCORD_BOT_TOKEN",
   "DISCORD_BOT_CLIENT_ID",
-  "AGENT_URL",
+  "AGENT_EXECUTION_TARGETS",
   "AGENT_INGRESS_SECRET",
   "BOT_INGRESS_SECRET",
   "REDIS_URL",

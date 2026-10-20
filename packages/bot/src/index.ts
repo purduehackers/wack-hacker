@@ -27,7 +27,7 @@ import { Result } from "@repo/shared/result";
 import * as Sentry from "@sentry/bun";
 import { Events } from "discord.js";
 
-import { createAgentClient } from "./agent/client.ts";
+import { parseExecutionTargets } from "./agent/execution-targets.ts";
 import { createHitlInteractionHandler } from "./agent/hitl/interaction.ts";
 import type { HitlInteractionHandler } from "./agent/hitl/interaction.ts";
 import { createDiscordRest } from "./agent/render/discord-rest.ts";
@@ -35,6 +35,7 @@ import {
   createWorkCardInteractionHandler,
   type WorkCardInteractionHandler,
 } from "./agent/render/work-card-interaction.ts";
+import { createRoutedAgentClient } from "./agent/routed-client.ts";
 import { createScheduledDiscordAdapter } from "./agent/scheduled.ts";
 import { createTurnMessageStore } from "./agent/turn-messages.ts";
 import { buildCommands } from "./commands/index.ts";
@@ -79,8 +80,9 @@ function createConversationSeam(
   commands: readonly SlashCommand[],
 ) {
   const flow = createConversationFlow({
-    eve: createAgentClient({
-      baseUrl: env.AGENT_URL,
+    eve: createRoutedAgentClient({
+      store: conversations,
+      config: parseExecutionTargets(env.AGENT_EXECUTION_TARGETS),
       secret: env.AGENT_INGRESS_SECRET,
     }),
     store: conversations,

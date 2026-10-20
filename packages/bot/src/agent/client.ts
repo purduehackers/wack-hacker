@@ -16,6 +16,7 @@
  *   acknowledgement or wedge the ambiguous admission window.
  */
 
+import { EXECUTION_GENERATION_HEADER } from "@repo/shared/conversations";
 import { httpStatusOf, messageOf, Transient, UpstreamError } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { noRetry, quickRetry } from "@repo/shared/result/retry";
@@ -48,6 +49,7 @@ interface AgentClientDeps {
   readonly baseUrl: string;
   /** Bearer presented on every request. */
   readonly secret: string;
+  readonly execution?: { readonly continuationKey: string; readonly generation: string };
 }
 
 /**
@@ -108,9 +110,13 @@ export function createAgentClient(deps: AgentClientDeps) {
             "Content-Type": "application/json",
             Authorization: `Bearer ${deps.secret}`,
             ...traceHeaders(traceparentOf(payload)),
+            ...(deps.execution === undefined
+              ? {}
+              : { [EXECUTION_GENERATION_HEADER]: deps.execution.generation }),
           },
           body: JSON.stringify(payload),
           signal: AbortSignal.timeout(10_000),
+          redirect: "manual",
         });
         const response = await globalThis.fetch(request);
 
@@ -152,7 +158,7 @@ export function createAgentClient(deps: AgentClientDeps) {
     streamToken: async (): Promise<Result<string, AgentError>> => {
       const answered = await post(
         WIRE_ROUTES.streamToken,
-        { continuationKey: "" },
+        { continuationKey: deps.execution?.continuationKey ?? "" },
         "agent.stream-token",
         quickRetry,
         (body: unknown) => decodeStreamToken(body),

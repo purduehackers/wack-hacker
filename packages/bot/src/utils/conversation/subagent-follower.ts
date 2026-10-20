@@ -19,10 +19,10 @@
 
 import type { Delegation } from "@repo/shared/conversations";
 import { messageOf } from "@repo/shared/errors";
-import { Result } from "@repo/shared/result";
-import { Client } from "eve/client";
+import type { Client } from "eve/client";
 import type { MessageStreamEvent } from "eve/client";
 
+import { createExecutionStreamClient } from "../../agent/execution-stream.ts";
 import { decodeActionProgress, decodeTaskProgress } from "./eve-task-events.ts";
 import type { ConversationFlowDeps } from "./types.ts";
 
@@ -99,19 +99,6 @@ function summarize(subagent: string, event: MessageStreamEvent): string | undefi
       return undefined;
     }
   }
-}
-
-/**
- * A credential for the next connection, or the empty string.
- *
- * Empty rather than a throw: the client treats it as "no auth", the route
- * answers 401, and `launch` reports that once — a stream that cannot authenticate
- * is the same outcome either way, and this keeps the failure on the reporting
- * path rather than escaping an auth callback.
- */
-async function freshToken(deps: ConversationFlowDeps): Promise<string> {
-  const minted = await deps.eve.streamToken();
-  return Result.isOk(minted) ? minted.value : "";
 }
 
 interface Follow {
@@ -214,18 +201,26 @@ function launch(follow: Follow, stream: Stream): void {
  * Idempotent because the render sweep revisits a dispatch on every pass, and a
  * second set of streams would double every line and every lease refresh.
  */
-export function followSubagent(
+export async function followSubagent(
   deps: ConversationFlowDeps,
   dispatchId: string,
   continuationKey: string,
   delegation: Delegation,
   onLine: () => Promise<void>,
-): void {
+): Promise<void> {
   if (running.has(dispatchId)) return;
   // One controller for the whole tree, so stopping the delivery stops the parent
   // stream and every child it adopted in one call.
   const following: Following = { controller: new AbortController(), streams: new Set() };
   running.set(dispatchId, following);
+  let client: Client;
+  try {
+    client = await createExecutionStreamClient(deps.eve, { continuationKey, dispatchId });
+  } catch (cause) {
+    if (running.get(dispatchId) === following) running.delete(dispatchId);
+    throw cause;
+  }
+  if (following.controller.signal.aborted) return;
 
   launch(
     {
@@ -235,20 +230,7 @@ export function followSubagent(
       signal: following.controller.signal,
       onLine,
       following,
-      // Fetched per connection, not stored. The credential is a Vercel OIDC
-      // token, which the bot cannot mint itself and which carries a *fixed*
-      // expiry shared across every mint — so a copy taken when the delegation
-      // started can be dead long before the delegation is. This callback re-runs
-      // on every reconnect, which is exactly where a renewal belongs.
-      //
-      // Declaring it as OIDC also sends the trusted-OIDC header deployment
-      // protection reads; `redirect: "manual"` keeps it from following a
-      // redirect to another origin.
-      client: new Client({
-        host: deps.eve.baseUrl,
-        auth: { vercelOidc: { token: () => freshToken(deps) } },
-        redirect: "manual",
-      }),
+      client,
     },
     {
       sessionId: delegation.sessionId,
