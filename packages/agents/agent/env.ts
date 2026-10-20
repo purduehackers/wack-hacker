@@ -55,6 +55,11 @@ export const env = createEnv({
       .stringbool({ truthy: ["true"], falsy: ["false"], case: "sensitive" })
       .default(false),
 
+    /** Candidate only: requires the additive agent_workspaces migration. */
+    DURABLE_BASH_ENABLED: z
+      .stringbool({ truthy: ["true"], falsy: ["false"], case: "sensitive" })
+      .default(false),
+
     /** Optional Phase-3/4 integration credentials; tools deny when absent. */
     GLOBAL_CONFIG: httpUrl.optional(),
     CLOUDFLARE_API_TOKEN: secret.optional(),

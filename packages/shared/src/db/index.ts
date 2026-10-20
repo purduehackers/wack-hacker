@@ -14,6 +14,7 @@ import { createClient } from "@libsql/client/web";
 import { drizzle } from "drizzle-orm/libsql/web";
 
 import * as actionAudit from "./schemas/action-audit.ts";
+import * as agentWorkspaces from "./schemas/agent-workspaces.ts";
 import * as relations from "./schemas/relations.ts";
 import * as scheduledTasks from "./schemas/scheduled-tasks.ts";
 import * as shoppingCartItems from "./schemas/shopping-cart-items.ts";
@@ -21,6 +22,7 @@ import * as shoppingCarts from "./schemas/shopping-carts.ts";
 
 export * from "./enums.ts";
 export { actionAudit } from "./schemas/action-audit.ts";
+export { agentWorkspaces } from "./schemas/agent-workspaces.ts";
 export { scheduledTasks } from "./schemas/scheduled-tasks.ts";
 export { shoppingCartItems } from "./schemas/shopping-cart-items.ts";
 export { shoppingCarts } from "./schemas/shopping-carts.ts";
@@ -30,6 +32,7 @@ const schema = {
   ...shoppingCartItems,
   ...scheduledTasks,
   ...actionAudit,
+  ...agentWorkspaces,
   ...relations,
 };
 
