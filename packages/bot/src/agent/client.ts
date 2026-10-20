@@ -104,6 +104,20 @@ function traceparentOf(payload: AgentRequestPayload): string | undefined {
   return "traceparent" in payload ? payload.traceparent : undefined;
 }
 
+function executionHeaders(
+  execution: AgentClientDeps["execution"],
+): Readonly<Record<string, string>> {
+  return execution === undefined ? {} : { [EXECUTION_GENERATION_HEADER]: execution.generation };
+}
+
+/** A bare origin proves no capability. Only verified persisted routing may enable Stop. */
+async function supportsNoCancellation(_target: {
+  readonly continuationKey: string;
+  readonly dispatchId: string;
+}): Promise<boolean> {
+  return false;
+}
+
 export function createAgentClient(deps: AgentClientDeps) {
   const post = async <T>(
     route: string,
@@ -121,9 +135,7 @@ export function createAgentClient(deps: AgentClientDeps) {
               "Content-Type": "application/json",
               Authorization: `Bearer ${deps.secret}`,
               ...traceHeaders(traceparentOf(payload)),
-              ...(deps.execution === undefined
-                ? {}
-                : { [EXECUTION_GENERATION_HEADER]: deps.execution.generation }),
+              ...executionHeaders(deps.execution),
             },
             body: JSON.stringify(payload),
             signal: AbortSignal.timeout(10_000),
@@ -195,11 +207,7 @@ export function createAgentClient(deps: AgentClientDeps) {
     sendSteer: async (payload: SteerRequestPayload): Promise<Result<undefined, AgentError>> =>
       post(WIRE_ROUTES.steer, payload, "agent.steer", noRetry, decodeCommandAck),
 
-    /** A bare origin proves no capability. Only verified persisted routing may enable Stop. */
-    supportsCancel: async (_target: {
-      readonly continuationKey: string;
-      readonly dispatchId: string;
-    }): Promise<boolean> => false,
+    supportsCancel: supportsNoCancellation,
 
     sendCancel: async (
       payload: CancelRequestPayload,

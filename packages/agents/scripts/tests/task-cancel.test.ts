@@ -119,6 +119,7 @@ async function fixture(held = false) {
 }
 
 function renderingDeps(store: ConversationStore, reporter: Reporter, painted: unknown[]) {
+  const client = createAgentClient({ baseUrl: "http://127.0.0.1:1", secret: "unused" });
   return {
     store,
     reporter,
@@ -131,7 +132,11 @@ function renderingDeps(store: ConversationStore, reporter: Reporter, painted: un
       },
       delete: async () => undefined,
     }),
-    eve: createAgentClient({ baseUrl: "http://127.0.0.1:1", secret: "unused" }),
+    eve: {
+      ...client,
+      prepareContinuation: async () => Result.ok(undefined),
+      streamAccess: async () => Result.ok(client),
+    },
     turnMessages: { record: async () => Result.ok(undefined) },
     schedules: {
       admit: async () => {

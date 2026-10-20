@@ -19,6 +19,20 @@ export const executionBindingSchema = z.strictObject({
 export type ExecutionIdentity = z.output<typeof executionIdentitySchema>;
 export type ExecutionBinding = z.output<typeof executionBindingSchema>;
 
+/** A read-only task command must match the whole pinned generation, including its owner. */
+export function sameExecutionBinding(left: ExecutionBinding, right: ExecutionBinding): boolean {
+  return (
+    left.version === right.version &&
+    left.generation === right.generation &&
+    left.identity.id === right.identity.id &&
+    left.identity.projectId === right.identity.projectId &&
+    left.identity.runtime === right.identity.runtime &&
+    left.identity.sandbox === right.identity.sandbox &&
+    left.originHash === right.originHash &&
+    left.sessionId === right.sessionId
+  );
+}
+
 export const EXECUTION_PROBE_ROUTE = "/discord/execution";
 export const EXECUTION_GENERATION_HEADER = "x-wack-execution-generation";
 

@@ -4,10 +4,10 @@ import { Result } from "@repo/shared/result";
 import type { Reporter } from "@repo/shared/result/observe";
 import type { CancelRequestPayload } from "@repo/shared/wire";
 
-import type { AgentClient } from "../../agent/client.ts";
+import type { ConversationAgentClient } from "../../agent/routed-client.ts";
 
 interface CancellationDeps {
-  readonly eve: Pick<AgentClient, "sendCancel" | "supportsCancel">;
+  readonly eve: Pick<ConversationAgentClient, "sendCancel" | "supportsCancel">;
   readonly store: Pick<ConversationStore, "cancellations">;
   readonly reporter: Reporter;
 }

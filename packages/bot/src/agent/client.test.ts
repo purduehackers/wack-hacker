@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 
+import { EXECUTION_GENERATION_HEADER } from "@repo/shared/conversations";
 import { Result } from "@repo/shared/result";
 import type { CancelRequestPayload, DeliveryPayload } from "@repo/shared/wire";
 
@@ -44,6 +45,7 @@ test("ambiguous new-message admission and unscoped steering are never retried", 
   });
   try {
     const client = createAgentClient({ baseUrl: server.url.toString(), secret: "test" });
+    expect(await client.supportsCancel(delivery)).toBe(false);
     expect(Result.isError(await client.sendMessage(delivery))).toBe(true);
     expect(bodies).toEqual([JSON.stringify(delivery)]);
     const steer = { continuationKey: delivery.continuationKey };
@@ -55,17 +57,26 @@ test("ambiguous new-message admission and unscoped steering are never retried", 
 });
 
 test("idempotent commands retry once, preserve exact request bytes, and remain bounded", async () => {
-  const seen: { path: string; body: string }[] = [];
+  const seen: { path: string; body: string; generation: string | undefined }[] = [];
+  const generation = crypto.randomUUID();
   const server = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
     fetch: async (request) => {
-      seen.push({ path: new URL(request.url).pathname, body: await request.text() });
+      seen.push({
+        path: new URL(request.url).pathname,
+        body: await request.text(),
+        generation: request.headers.get(EXECUTION_GENERATION_HEADER) ?? undefined,
+      });
       return new Response("temporary failure", { status: 503 });
     },
   });
   try {
-    const client = createAgentClient({ baseUrl: server.url.toString(), secret: "test" });
+    const client = createAgentClient({
+      baseUrl: server.url.toString(),
+      secret: "test",
+      execution: { continuationKey: delivery.continuationKey, generation },
+    });
     const reset = {
       continuationKey: delivery.continuationKey,
       resetId: "12e101e0-36a7-4d5b-a194-9745530ca24a",
@@ -86,6 +97,7 @@ test("idempotent commands retry once, preserve exact request bytes, and remain b
     expect(Result.isError(await client.sendInteraction(interaction))).toBe(true);
     expect(Result.isError(await client.sendCancel(cancel))).toBe(true);
     expect(seen).toHaveLength(6);
+    expect(seen.every((attempt) => attempt.generation === generation)).toBe(true);
     for (let index = 0; index < seen.length; index += 2)
       expect(seen[index]).toEqual(seen[index + 1]);
   } finally {

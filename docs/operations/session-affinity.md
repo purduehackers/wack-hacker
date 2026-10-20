@@ -9,7 +9,8 @@ No production infrastructure, database or Discord state was changed by this PR.
 The bot persists a conversation's deployment identity before putting a new
 message into the durable queue. It retains that identity across restart, queue
 recovery, promotion, rollback, follow-ups, attachments, human-input responses,
-steering, reset and root/local-child streams. It no longer reads `AGENT_URL` to
+steering, reset, supported exact-task Stop commands and root/local-child streams.
+It no longer reads `AGENT_URL` to
 choose a task's execution host. The configuration contains operator-owned
 origins; no URL, credential or deployment selector comes from a user payload.
 
@@ -116,9 +117,15 @@ MCP configuration are introduced.
 The schema accepts `durable-bash-v1` and `durable-bash-v2` as distinct protocols.
 The current candidate reports v2 when its provider is enabled. Retain any v1
 destinations with their original identity; never relabel old saved state as v2.
-`exact-turn-cancel-v1` is reserved for a separately validated capability. It is
-not advertised by this change. A route selection alone cannot establish that
-an installed runtime implements cancellation correctly.
+`exact-turn-cancel-v1` requires separate runtime validation. The routed bot's
+code-owned verified-runtime allowlist is currently empty, and the installed
+Eve 0.81.1 endpoint independently refuses cancellation. Operator declarations
+cannot enable it. See [the cancellation release gate](../system/task-cancellation.md).
+Once a runtime is verified, capability checks and Stop commands read existing
+conversation/dispatch bindings without creating or migrating either. They
+compare the complete generation and session identity and preserve the generation
+header through bounded retries. The endpoint rechecks the current generation
+and dispatch before execution, including resets racing route selection.
 
 ## Why the legacy Workflow project must stay separate
 

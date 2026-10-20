@@ -16,6 +16,13 @@ route refuses before execution. Operator routing capabilities alone cannot
 override that refusal. Do not remove this guard simply because the public method
 accepts a turn ID or because the application tests pass.
 
+The routed bot also has a code-owned verified-runtime allowlist in
+`packages/bot/src/agent/routed-cancellation.ts`, currently empty. Neither
+`eve-0.81.1`, the legacy runtime, nor an unknown future version can advertise
+Stop merely by declaring `exact-turn-cancel-v1` in operator configuration. Bare
+HTTP clients report no cancellation capability. Enabling a future runtime
+requires deliberate code changes to both independent release gates.
+
 The installed-runtime regression in `task-cancel-runtime.test.ts` uses Eve's real
 fixed-session adapter, `ActiveTurn`, and `nextTurnDelivery`. It verifies the
 preserved session/turn command, correct active-turn rejection, and the unsafe idle
@@ -38,7 +45,8 @@ terminal render, and explains that completed actions remain completed.
 
 Once the engine release gate is met, Stop appears only when both the runtime's
 stored control offer and the continuation's persisted deployment capability
-support `exact-turn-cancel-v1`. A short answer may stay a plain streamed reply;
+support `exact-turn-cancel-v1`, and its runtime version is verified in code.
+A short answer may stay a plain streamed reply;
 promoted task cards carry the contextual button.
 
 The bot privately acknowledges the interaction before reads. It refreshes guild
@@ -64,6 +72,19 @@ command and execution owner, then calls
 `attachSession(sessionId).cancel({ turnId: eveTurnId })`. It never calls
 `from(channel).cancel()`, starts a session, resolves a replacement, resets history,
 replays the requested work, or bypasses a legacy deployment binding.
+
+Capability checks and command routing only read existing conversation and
+dispatch bindings; they do not probe for a replacement or establish new
+bindings. Both snapshots must agree on generation, session, deployment/project,
+runtime, sandbox protocol and origin digest. The configured target must still
+be enabled at its immutable origin. `current` changes cannot redirect accepted
+work, and missing or changed targets do not fall back to another deployment.
+
+The raw client carries the persisted generation in
+`x-wack-execution-generation` on every attempt. Before a supported cancellation
+can enter Eve, the agent verifies its actual deployment identity, the current
+generation, the dispatch snapshot and the exact session again. A reset between
+bot route selection and agent admission therefore refuses the old request.
 
 ## Receipt, recovery, and truthfulness
 
@@ -134,6 +155,13 @@ approval preservation until settlement, bounded retention, empty arrays,
 corrupt optional metadata, and the terminal visibility barrier. Interaction and
 renderer checks cover authorization refusal, private acknowledgement, legacy
 capabilities, status wording, and retained partial results.
+
+Routing checks use real Redis bindings and local HTTP deployments. They prove
+current/legacy/unknown runtime refusal despite operator capabilities, stale
+generation/session refusal, immutable endpoint fencing, and a reset racing HTTP
+admission. A narrow transport helper tests a simulated future verified runtime
+through rollback and lost acknowledgements; it does not change the public
+adapter's empty allowlist or establish cancellation safety in any Eve release.
 
 These are code, payload, and recovery checks. They do not establish appearance or
 accessibility in a real Discord client. After the upstream engine gate is fixed,

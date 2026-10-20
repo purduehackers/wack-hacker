@@ -17,6 +17,7 @@ export {
   executionIdentitySchema,
   executionBindingSchema,
   executionProbeSchema,
+  sameExecutionBinding,
   EXECUTION_PROBE_ROUTE,
   EXECUTION_GENERATION_HEADER,
   type ExecutionIdentity,

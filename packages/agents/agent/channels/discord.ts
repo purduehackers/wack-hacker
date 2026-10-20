@@ -623,6 +623,10 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
       }
       const decoded = decodeCancelRequestPayload(await request.json());
       if (Result.isError(decoded)) return failed(decoded.error);
+      // Keep the installed-engine release gate ahead of all execution lookups.
+      if (!EXACT_TURN_CANCEL_SUPPORTED) return Response.json({ ok: true, status: "unsupported" });
+      const binding = await executionBridge.guardTask(request, decoded.value);
+      if (binding instanceof Response) return binding;
       const response = await cancelDiscordTask(
         conversations.cancellations,
         {
