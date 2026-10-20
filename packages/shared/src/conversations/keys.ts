@@ -18,6 +18,11 @@ const renderMemberSchema = z.stringFormat("render-member", /^r:[0-9a-f-]{36}$/iu
 export const QUEUE_INDEX_KEY = "agent:queues";
 export const AGENT_READY_SET_KEY = "agent:ready";
 export const AGENT_RENDER_READY_SET_KEY = "agent:render-ready";
+export const AGENT_CANCEL_READY_SET_KEY = "agent:cancel-ready";
+
+export function taskControlKey(dispatchId: string): string {
+  return `agent:task-control:${dispatchId}`;
+}
 
 export function pendingKey(continuationKey: string): string {
   return `pending:${continuationKey}`;

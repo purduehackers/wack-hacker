@@ -1,8 +1,8 @@
 /**
  * The bot's HTTP client for the agent.
  *
- * Three calls, one per route on the agent's custom Discord channel. Everything
- * the bot knows about the agent is here and in `@repo/shared/wire`.
+ * One method per route on the agent's custom Discord channel. Everything the
+ * bot knows about the agent is here and in `@repo/shared/wire`.
  *
  * The retry policy differs per route on purpose, and the distinction is
  * correctness rather than tuning:
@@ -14,6 +14,8 @@
  * - Reset retries because it is naturally idempotent. HITL input retries with
  *   the same Discord interaction id; agent ingress receipts return the accepted
  *   acknowledgement or wedge the ambiguous admission window.
+ * - Legacy steering makes one attempt: its channel-scoped cancellation has no
+ *   exact turn target or receipt, so a retry could stop a newer turn.
  */
 
 import { EXECUTION_GENERATION_HEADER } from "@repo/shared/conversations";
@@ -21,13 +23,20 @@ import { httpStatusOf, messageOf, Transient, UpstreamError } from "@repo/shared/
 import { Result } from "@repo/shared/result";
 import { noRetry, quickRetry } from "@repo/shared/result/retry";
 import type { RetryPolicy } from "@repo/shared/result/retry";
-import { decodeStreamToken, WIRE_ROUTES, wireResponseSchema } from "@repo/shared/wire";
+import {
+  cancelResponseSchema,
+  decodeStreamToken,
+  WIRE_ROUTES,
+  wireResponseSchema,
+} from "@repo/shared/wire";
 import type {
   InteractionPayload,
   DeliveryPayload,
   ResetRequestPayload,
   SteerRequestPayload,
   WireResponse,
+  CancelRequestPayload,
+  CancelResponse,
 } from "@repo/shared/wire";
 import { z } from "zod";
 
@@ -40,7 +49,8 @@ type AgentRequestPayload =
   | DeliveryPayload
   | InteractionPayload
   | ResetRequestPayload
-  | SteerRequestPayload;
+  | SteerRequestPayload
+  | CancelRequestPayload;
 
 type AgentAck = Omit<Extract<WireResponse, { readonly ok: true }>, "ok">;
 
@@ -102,40 +112,42 @@ export function createAgentClient(deps: AgentClientDeps) {
     policy: RetryPolicy<AgentError>,
     decodeSuccess: (body: unknown, status: number) => T,
   ): Promise<Result<T, AgentError>> =>
-    Result.tryPromise({
-      try: async () => {
-        const request = new Request(new URL(route, deps.baseUrl).toString(), {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${deps.secret}`,
-            ...traceHeaders(traceparentOf(payload)),
-            ...(deps.execution === undefined
-              ? {}
-              : { [EXECUTION_GENERATION_HEADER]: deps.execution.generation }),
-          },
-          body: JSON.stringify(payload),
-          signal: AbortSignal.timeout(10_000),
-          redirect: "manual",
-        });
-        const response = await globalThis.fetch(request);
-
-        if (!response.ok) throw await errorFor(response, operation);
-
-        const body: unknown = await response.json();
-        const wire = wireResponseSchema.safeParse(body);
-        if (wire.success && !wire.data.ok) {
-          throw new UpstreamError({
-            service: "agent",
-            status: response.status,
-            detail: `${wire.data.tag}: ${wire.data.message}`,
+    Result.tryPromise(
+      {
+        try: async () => {
+          const request = new Request(new URL(route, deps.baseUrl).toString(), {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${deps.secret}`,
+              ...traceHeaders(traceparentOf(payload)),
+              ...(deps.execution === undefined
+                ? {}
+                : { [EXECUTION_GENERATION_HEADER]: deps.execution.generation }),
+            },
+            body: JSON.stringify(payload),
+            signal: AbortSignal.timeout(10_000),
+            redirect: "manual",
           });
-        }
-        return decodeSuccess(body, response.status);
+          const response = await globalThis.fetch(request);
+
+          if (!response.ok) throw await errorFor(response, operation);
+
+          const body: unknown = await response.json();
+          const wire = wireResponseSchema.safeParse(body);
+          if (wire.success && !wire.data.ok) {
+            throw new UpstreamError({
+              service: "agent",
+              status: response.status,
+              detail: `${wire.data.tag}: ${wire.data.message}`,
+            });
+          }
+          return decodeSuccess(body, response.status);
+        },
+        catch: toAgentError(operation),
       },
-      catch: toAgentError(operation),
-      ...policy,
-    });
+      policy,
+    );
 
   return {
     /** The agent's origin, for routes reached outside this client's envelope. */
@@ -181,7 +193,18 @@ export function createAgentClient(deps: AgentClientDeps) {
       post(WIRE_ROUTES.reset, payload, "agent.reset", quickRetry, decodeCommandAck),
 
     sendSteer: async (payload: SteerRequestPayload): Promise<Result<undefined, AgentError>> =>
-      post(WIRE_ROUTES.steer, payload, "agent.steer", quickRetry, decodeCommandAck),
+      post(WIRE_ROUTES.steer, payload, "agent.steer", noRetry, decodeCommandAck),
+
+    /** A bare origin proves no capability. Only verified persisted routing may enable Stop. */
+    supportsCancel: async (_target: {
+      readonly continuationKey: string;
+      readonly dispatchId: string;
+    }): Promise<boolean> => false,
+
+    sendCancel: async (
+      payload: CancelRequestPayload,
+    ): Promise<Result<CancelResponse, AgentError>> =>
+      post(WIRE_ROUTES.cancel, payload, "agent.cancel", quickRetry, decodeCancelAck),
   };
 }
 
@@ -209,6 +232,12 @@ const commandAckSchema = z.object({ ok: z.literal(true), status: z.string().opti
 
 function decodeCommandAck(value: unknown, status: number): undefined {
   if (!commandAckSchema.safeParse(value).success) throw invalidWireResponse(status);
+}
+
+function decodeCancelAck(value: unknown, status: number): CancelResponse {
+  const parsed = cancelResponseSchema.safeParse(value);
+  if (!parsed.success) throw invalidWireResponse(status);
+  return parsed.data;
 }
 
 export type AgentClient = ReturnType<typeof createAgentClient>;

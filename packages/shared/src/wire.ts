@@ -304,6 +304,24 @@ const steerRequestPayloadSchema = z.strictObject({
   continuationKey: snowflake,
 });
 
+/** An exact observed task, never a dynamic channel-wide cancellation. */
+export const cancelRequestPayloadSchema = z.strictObject({
+  continuationKey: snowflake,
+  dispatchId: z.uuid(),
+  sessionId: z.string().min(1).max(128),
+  eveTurnId: z.string().min(1).max(128),
+  renderRevision: z.int().positive(),
+  anchorMessageId: snowflake,
+  channelId: snowflake,
+  interactionId: snowflake,
+  principal: principalSchema,
+});
+
+export const cancelResponseSchema = z.object({
+  ok: z.literal(true),
+  status: z.enum(["accepted", "no-active-turn", "stale", "unsupported", "busy"]),
+});
+
 const resetRequestPayloadSchema = z.strictObject({
   ...resetPayloadSchema.shape,
   resetId: z.uuid(),
@@ -408,6 +426,8 @@ export type AuthorizationChallenge = z.output<typeof authorizationChallengeSchem
 export type ResetPayload = z.output<typeof resetPayloadSchema>;
 export type ResetRequestPayload = z.output<typeof resetRequestPayloadSchema>;
 export type SteerRequestPayload = z.output<typeof steerRequestPayloadSchema>;
+export type CancelRequestPayload = z.output<typeof cancelRequestPayloadSchema>;
+export type CancelResponse = z.output<typeof cancelResponseSchema>;
 export type ParkedPayload = z.output<typeof parkedPayloadSchema>;
 export type RenderTarget = z.output<typeof renderTargetSchema>;
 export type RenderIntent = z.output<typeof renderIntentSchema>;
@@ -462,6 +482,7 @@ export const WIRE_ROUTES = {
   interaction: "/discord/interaction",
   reset: "/discord/reset",
   steer: "/discord/steer",
+  cancel: "/discord/cancel",
   /**
    * A freshly minted credential for reading a session's event stream.
    *
@@ -471,6 +492,10 @@ export const WIRE_ROUTES = {
    */
   streamToken: "/discord/stream-token",
 } as const;
+
+export function decodeCancelRequestPayload(input: unknown) {
+  return decode(cancelRequestPayloadSchema, "cancel request", input);
+}
 
 /** The bot's own internal route, called only by the agent. */
 export const BOT_ROUTES = {

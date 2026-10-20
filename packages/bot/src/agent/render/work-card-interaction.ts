@@ -1,24 +1,38 @@
-/** Read-only views of a work card. Approval and mutation controls stay in HITL. */
+/** Private work-card views and exact-task stop; approval still belongs to HITL. */
 
-import type { ConversationStore, StoredRenderProjection } from "@repo/shared/conversations";
+import type {
+  CancellationStatus,
+  ConversationStore,
+  StoredRenderProjection,
+  TaskControl,
+} from "@repo/shared/conversations";
 import { roleAtLeast, roleFromMemberRoles, UserRole } from "@repo/shared/discord";
 import { messageOf, tagOf } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import type { Reporter } from "@repo/shared/result/observe";
 import { sliceText } from "@repo/shared/text";
-import type { RenderIntent, RenderTarget } from "@repo/shared/wire";
+import type { Principal, RenderIntent, RenderTarget } from "@repo/shared/wire";
 import { ChannelType, MessageFlags, PermissionFlagsBits } from "discord.js";
 import type { ButtonInteraction, Interaction, InteractionEditReplyOptions } from "discord.js";
 
-import { parseWorkCardCustomId, publicFooter, workCardState } from "./work-card.ts";
+import type { ConversationFlow } from "../../utils/conversation/types.ts";
+import { readTaskControl } from "./control-state.ts";
+import {
+  cancellationNote,
+  parseWorkCardCustomId,
+  publicFooter,
+  workCardStatus,
+} from "./work-card.ts";
 
 interface Access {
   readonly visible: boolean;
   readonly diagnostics: boolean;
+  readonly principal?: Principal;
 }
 
 export interface WorkCardInteraction {
   readonly customId: string;
+  readonly interactionId: string;
   readonly channelId: string;
   readonly guildId?: string;
   readonly messageId: string;
@@ -29,6 +43,8 @@ export interface WorkCardInteraction {
 
 interface WorkCardInteractionDeps {
   readonly renders: Pick<ConversationStore["renders"], "intent" | "target" | "projection">;
+  readonly cancellations?: Pick<ConversationStore["cancellations"], "read">;
+  readonly flow?: Pick<ConversationFlow, "cancel" | "supportsCancel">;
   readonly reporter: Reporter;
   readonly guildId: string;
 }
@@ -37,6 +53,7 @@ interface Snapshot {
   readonly intent: RenderIntent;
   readonly target: RenderTarget;
   readonly projection: StoredRenderProjection;
+  readonly control?: TaskControl;
 }
 
 const UNAVAILABLE = "This task is temporarily unavailable. Try Details again in a moment.";
@@ -69,6 +86,7 @@ async function loadSnapshot(
     intent.continuationKey !== target.continuationKey ||
     intent.messageId !== target.messageId ||
     intent.revision < locator.revision ||
+    (locator.action === "stop" && intent.revision !== locator.revision) ||
     interaction.channelId !== target.channelId
   ) {
     return { rejection: EXPIRED };
@@ -76,13 +94,26 @@ async function loadSnapshot(
   const projected = await deps.renders.projection(locator.dispatchId, target.anchorMessageId);
   if (Result.isError(projected)) throw projected.error;
   if (projected.value.anchorMessageId !== interaction.messageId) return { rejection: EXPIRED };
-  return { intent, target, projection: projected.value };
+  if (locator.action === "stop" && projected.value.appliedRevision !== locator.revision)
+    return { rejection: EXPIRED };
+  const control = await readTaskControl(deps.cancellations, deps.reporter, locator.dispatchId);
+  return {
+    intent,
+    target,
+    projection: projected.value,
+    ...(control === undefined ? {} : { control }),
+  };
 }
 
 function details(snapshot: Snapshot, diagnostics: boolean): string {
   const { intent, projection } = snapshot;
   const title = projection.workCard?.title ?? "Your request";
-  const lines = [`**${title}**`, `Current state: ${workCardState(intent)}.`];
+  const lines = [`**${title}**`, `Current state: ${workCardStatus(intent, snapshot.control)}.`];
+  if (snapshot.control?.request?.status === "no-active-turn") {
+    lines.push(
+      "The stop request reached a task that had already ended. Its final response may still be arriving.",
+    );
+  }
   const footer = publicFooter(intent.footer);
   if (footer !== undefined) lines.push(footer);
   if (diagnostics) {
@@ -97,8 +128,53 @@ function details(snapshot: Snapshot, diagnostics: boolean): string {
   return sliceText(lines.join("\n\n"), 1_900);
 }
 
-async function fullResult(interaction: WorkCardInteraction, intent: RenderIntent): Promise<void> {
-  const content = [intent.text, publicFooter(intent.footer)]
+const STOP_RESPONSE: Readonly<Record<CancellationStatus, string>> = {
+  pending: "Your stop request is saved. I'll keep trying to deliver it for this task.",
+  accepted:
+    "Stop requested. The card will say Cancelled only after the agent confirms it stopped. Actions already completed remain completed.",
+  "no-active-turn": "This task has already ended. Its final response may still be arriving.",
+  stale: "This control no longer matches the active task. Use Stop on its latest card.",
+  busy: "This task is processing an answer. Try Stop again on the updated card in a moment.",
+  unsupported: "Stop isn’t available for this task yet.",
+};
+
+async function stopTask(
+  deps: WorkCardInteractionDeps,
+  interaction: WorkCardInteraction,
+  snapshot: Snapshot,
+  access: Access,
+): Promise<void> {
+  const principal = access.principal;
+  if (principal === undefined || principal.userId !== snapshot.target.requesterUserId) {
+    return respond(interaction, "Only the person who requested this task can stop it.");
+  }
+  if (snapshot.intent.phase !== "streaming")
+    return respond(interaction, STOP_RESPONSE["no-active-turn"]);
+  if (
+    deps.flow === undefined ||
+    snapshot.control?.sessionId !== snapshot.intent.sessionId ||
+    snapshot.control.eveTurnId !== snapshot.intent.eveTurnId ||
+    !(await deps.flow.supportsCancel(snapshot.intent))
+  ) {
+    return respond(interaction, STOP_RESPONSE.unsupported);
+  }
+  const status = await deps.flow.cancel({
+    continuationKey: snapshot.intent.continuationKey,
+    dispatchId: snapshot.intent.dispatchId,
+    sessionId: snapshot.intent.sessionId,
+    eveTurnId: snapshot.intent.eveTurnId,
+    renderRevision: snapshot.intent.revision,
+    anchorMessageId: interaction.messageId,
+    channelId: snapshot.target.channelId,
+    interactionId: interaction.interactionId,
+    principal,
+  });
+  return respond(interaction, STOP_RESPONSE[status]);
+}
+
+async function fullResult(interaction: WorkCardInteraction, snapshot: Snapshot): Promise<void> {
+  const { intent, control } = snapshot;
+  const content = [intent.text, cancellationNote(intent, control), publicFooter(intent.footer)]
     .filter((section) => section !== undefined && section !== "")
     .join("\n\n");
   if (content.length <= 1_900) {
@@ -131,16 +207,22 @@ export async function handleWorkCard(
     const access = await interaction.access(snapshot.target);
     if (!access.visible)
       return respond(interaction, "You no longer have access to this task's channel.");
-    if (locator.action === "result") return fullResult(interaction, snapshot.intent);
+    if (locator.action === "stop") return stopTask(deps, interaction, snapshot, access);
+    if (locator.action === "result") return fullResult(interaction, snapshot);
     await respond(interaction, details(snapshot, access.diagnostics));
   } catch (error) {
     deps.reporter.emit({
-      op: "agent.work-card.read",
+      op: locator.action === "stop" ? "agent.work-card.stop" : "agent.work-card.read",
       status: "error",
       errorTag: tagOf(error),
       errorMessage: messageOf(error),
     });
-    await respond(interaction, UNAVAILABLE).catch(() => undefined);
+    await respond(
+      interaction,
+      locator.action === "stop"
+        ? "I couldn't confirm the stop request. Check the task card or try Stop again; I won't target a newer task."
+        : UNAVAILABLE,
+    ).catch(() => undefined);
   }
 }
 
@@ -173,6 +255,12 @@ async function currentAccess(
   const roles = [...member.roles.cache.keys()];
   return {
     visible: true,
+    principal: {
+      userId: member.id,
+      username: member.user.username,
+      nickname: member.displayName,
+      memberRoles: roles,
+    },
     diagnostics:
       member.id === target.requesterUserId ||
       roleAtLeast(roleFromMemberRoles(roles), UserRole.Organizer),
@@ -184,6 +272,7 @@ export function createWorkCardInteractionHandler(deps: WorkCardInteractionDeps) 
     if (!interaction.isButton() || !interaction.customId.startsWith("wack-work:")) return false;
     await handleWorkCard(deps, {
       customId: interaction.customId,
+      interactionId: interaction.id,
       channelId: interaction.channelId,
       ...(interaction.guildId === null ? {} : { guildId: interaction.guildId }),
       messageId: interaction.message.id,

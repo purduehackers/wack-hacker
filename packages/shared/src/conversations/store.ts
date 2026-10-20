@@ -15,6 +15,7 @@ import { ExecutionReader } from "./readers/execution.ts";
 import { InteractionReader } from "./readers/interaction.ts";
 import { RenderReader } from "./readers/render.ts";
 import { AuthorizationWriter } from "./writers/authorization.ts";
+import { CancellationWriter } from "./writers/cancellation.ts";
 import { DelegationWriter } from "./writers/delegation.ts";
 import { DeliveryWriter } from "./writers/delivery.ts";
 import { ExecutionWriter } from "./writers/execution.ts";
@@ -35,6 +36,8 @@ export function createConversationStore(deps: { readonly redis: RedisClient }) {
     /** What should be on screen, and what is. */
     renders: new RenderReader(redis),
     render: new RenderWriter(redis),
+    /** Exact-turn cancellation commands and their durable acknowledgement. */
+    cancellations: new CancellationWriter(redis),
     /** One component click, and the receipt that makes its retry idempotent. */
     interactions: new InteractionReader(redis),
     interaction: new InteractionWriter(redis),

@@ -6,6 +6,8 @@ export {
   type StoredRenderProjection,
 } from "./records/render.ts";
 export type { Holder } from "./readers/delivery.ts";
+export type { TaskControl, RenderControls } from "./records/cancellation.ts";
+export type { CancellationStatus } from "./writers/cancellation.ts";
 export { RECOVERY_FOOTER, RECOVERY_TEXT } from "./writers/delivery.ts";
 export type { HitlClaim, HitlClaimInput } from "./writers/hitl.ts";
 export type { ClaimedInteraction, InteractionClaim } from "./writers/interaction.ts";

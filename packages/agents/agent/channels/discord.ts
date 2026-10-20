@@ -31,6 +31,7 @@ import { sliceText } from "@repo/shared/text";
 import {
   BOT_ROUTES,
   decodeDeliveryPayload,
+  decodeCancelRequestPayload,
   decodeInteractionPayload,
   decodeResetRequestPayload,
   decodeSteerRequestPayload,
@@ -47,6 +48,7 @@ import { z } from "zod";
 import { env } from "../env.ts";
 import { resolveBotBaseUrl } from "../lib/bot/endpoint.ts";
 import { authFor } from "../lib/discord/auth.ts";
+import { cancelDiscordTask, EXACT_TURN_CANCEL_SUPPORTED } from "../lib/discord/cancellation.ts";
 import {
   acceptedSessionId,
   createExecutionBridge,
@@ -614,6 +616,23 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
       );
       return Response.json({ ok: true, status: "accepted" });
     }),
+
+    POST(WIRE_ROUTES.cancel, async (request, { attachSession }) => {
+      if (!botAuthenticated(request)) {
+        return createUnauthorizedResponse({ status: 401, message: "bad bearer" });
+      }
+      const decoded = decodeCancelRequestPayload(await request.json());
+      if (Result.isError(decoded)) return failed(decoded.error);
+      const response = await cancelDiscordTask(
+        conversations.cancellations,
+        {
+          supported: EXACT_TURN_CANCEL_SUPPORTED,
+          attachSession,
+        },
+        decoded.value,
+      );
+      return Response.json(response);
+    }),
   ],
 
   events: {
@@ -843,7 +862,13 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
       // The earlier note here said the replacement turn would paint over this.
       // It cannot. The replacement turn is the thing being blocked.
       const state = channel.state;
+      if (state.activeEveTurnId !== data.turnId) return;
       state.activity = "";
+      state.cancelled = true;
+      state.pendingInputRequestIds = [];
+      state.pendingAuthorizationNames = [];
+      state.renderInputRequests = [];
+      state.renderAuthorizations = [];
       state.finalRenderPhase ??= "completed";
       state.finalRenderFooter ??= renderFooter({
         referenceId: ctx.session.id.slice(-8),
@@ -956,7 +981,11 @@ async function settleAndNotifyParked(
     authoredAt: new Date().toISOString(),
   };
 
-  const settledRevision = await renderPublisher.settleAndPark(intent, payload);
+  const settledRevision = await renderPublisher.settleAndPark(
+    intent,
+    payload,
+    state.cancelled ? { outcome: "cancelled" } : {},
+  );
   // A stale replay must not wake the bot or overwrite a newer turn's marker.
   if (settledRevision === undefined) return;
   state.renderRevision = settledRevision;

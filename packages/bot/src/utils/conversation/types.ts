@@ -1,6 +1,11 @@
 /** Shared shapes for the conversation reconciler. Nothing here has behavior. */
 
-import type { ConversationStore, HitlClaimInput } from "@repo/shared/conversations";
+import type {
+  CancellationStatus,
+  ConversationStore,
+  HitlClaimInput,
+  TaskControl,
+} from "@repo/shared/conversations";
 import type { KnownError } from "@repo/shared/errors";
 import type { Result } from "@repo/shared/result";
 import type { Reporter } from "@repo/shared/result/observe";
@@ -11,6 +16,7 @@ import type {
   RenderTarget,
   ResetPayload,
   ScheduledFirePayload,
+  CancelRequestPayload,
 } from "@repo/shared/wire";
 
 import type { AgentError } from "../../agent/client.ts";
@@ -44,6 +50,7 @@ export interface RenderWork {
   readonly target: RenderTarget;
   readonly projection: RendererProjection;
   readonly appliedRevision: number;
+  readonly control?: TaskControl;
 }
 
 export interface ConversationWake {
@@ -55,6 +62,11 @@ export interface ConversationFlow {
   submit(payload: MessagePayload): Promise<Result<void, AgentError>>;
   reset(payload: ResetPayload): Promise<Result<void, KnownError>>;
   answer(answer: ConversationAnswer): Promise<ConversationAnswerResult>;
+  cancel(payload: CancelRequestPayload): Promise<CancellationStatus>;
+  supportsCancel(target: {
+    readonly continuationKey: string;
+    readonly dispatchId: string;
+  }): Promise<boolean>;
   admitSchedule(payload: ScheduledFirePayload): Promise<void>;
   wake(hint?: ConversationWake): void;
   sweep(): Promise<void>;

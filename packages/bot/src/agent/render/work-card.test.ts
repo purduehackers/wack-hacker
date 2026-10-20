@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { renderProjectionSchema } from "@repo/shared/conversations";
+import { renderProjectionSchema, type TaskControl } from "@repo/shared/conversations";
 import { stored } from "@repo/shared/json";
 import type { RenderIntent, RenderTarget } from "@repo/shared/wire";
 
@@ -31,6 +31,63 @@ const target: RenderTarget = {
   authChannelId: "100000000000000001",
   requesterUserId: "100000000000000003",
 };
+
+const control: TaskControl = {
+  capability: "exact-turn-cancel-v1",
+  sessionId: intent.sessionId,
+  eveTurnId: intent.eveTurnId,
+};
+
+test("Stop requires both a matching runtime offer and persisted route capability", () => {
+  const card = (extras = {}) => renderWorkCard({ intent, target, title: "Task", ...extras });
+  const stop = (value: ReturnType<typeof card>) =>
+    value.components[0]?.components.some((button) => button.label === "Stop");
+  expect(stop(card())).toBe(false);
+  expect(stop(card({ control }))).toBe(false);
+  expect(stop(card({ control, canCancel: true }))).toBe(true);
+  expect(stop(card({ control: { ...control, eveTurnId: "older-turn" }, canCancel: true }))).toBe(
+    false,
+  );
+  expect(stop(card({ control, canCancel: true, intent: { ...intent, phase: "completed" } }))).toBe(
+    false,
+  );
+});
+
+test("saved stop intent and engine acknowledgement remain distinct from authoritative cancellation", () => {
+  const payload = {
+    continuationKey: intent.continuationKey,
+    dispatchId: intent.dispatchId,
+    sessionId: intent.sessionId,
+    eveTurnId: intent.eveTurnId,
+    renderRevision: intent.revision,
+    anchorMessageId: "100000000000000004",
+    channelId: target.channelId,
+    interactionId: "100000000000000005",
+    principal: {
+      userId: target.requesterUserId,
+      username: "requester",
+      nickname: "Requester",
+      memberRoles: [],
+    },
+  };
+  const pending: TaskControl = { ...control, request: { payload, status: "pending" } };
+  expect(workCardState(intent, pending)).toBe("stop-requested");
+  expect(workCardState(intent, { ...control, request: { payload, status: "accepted" } })).toBe(
+    "stopping",
+  );
+  expect(workCardState({ ...intent, phase: "completed" }, pending)).toBe("ready");
+  const ended = renderWorkCard({
+    intent: { ...intent, phase: "completed" },
+    target,
+    title: "Task",
+    control: { ...control, outcome: "cancelled" },
+    canCancel: true,
+  });
+  expect(ended.text).toContain("Cancelled");
+  expect(ended.text).toContain(intent.text);
+  expect(ended.text).toContain("Actions already completed remain completed");
+  expect(ended.components[0]?.components.some((button) => button.label === "Stop")).toBe(false);
+});
 
 test("quick answers stay plain; tools, long responses, failures and requests promote", () => {
   expect(needsWorkCard(intent)).toBe(false);
@@ -156,7 +213,7 @@ test("malformed, oversized and future-shaped controls are rejected by the locato
     `wack-work:${intent.dispatchId}:0:details`,
     `wack-work:${intent.dispatchId}:Infinity:details`,
     `wack-work:${intent.dispatchId}:9007199254740992:details`,
-    `wack-work:${intent.dispatchId}:1:stop`,
+    `wack-work:${intent.dispatchId}:1:retry`,
     `wack-work:${intent.dispatchId}:1:details:extra`,
   ]) {
     expect(parseWorkCardCustomId(value)).toBeUndefined();

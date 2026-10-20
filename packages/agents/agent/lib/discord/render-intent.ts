@@ -1,12 +1,13 @@
 /** Durable desired-state publication plus best-effort bot wakeups. */
 
-import type { ConversationStore } from "@repo/shared/conversations";
+import type { ConversationStore, RenderControls } from "@repo/shared/conversations";
 import { BOT_ROUTES } from "@repo/shared/wire";
 import type { ParkedPayload, RenderIntent } from "@repo/shared/wire";
 
 type RenderPublication = Awaited<ReturnType<ConversationStore["render"]["publish"]>>;
 
 import { traceHeaders } from "../telemetry.ts";
+import { EXACT_TURN_CANCEL_SUPPORTED } from "./cancellation.ts";
 
 export interface FooterInput {
   readonly referenceId?: string;
@@ -35,7 +36,10 @@ export interface RenderPublisherDeps {
 export function createRenderPublisher(deps: RenderPublisherDeps) {
   return {
     publish: async (intent: RenderIntent): Promise<RenderPublication> => {
-      const publication = await deps.store.publish(intent);
+      const publication = await deps.store.publish(
+        intent,
+        EXACT_TURN_CANCEL_SUPPORTED ? {} : undefined,
+      );
       if (!publication.accepted) return publication;
       if (!publication.shouldWake) return publication;
 
@@ -60,7 +64,15 @@ export function createRenderPublisher(deps: RenderPublisherDeps) {
       return publication;
     },
 
-    settleAndPark: (intent: RenderIntent, parked: ParkedPayload): Promise<number | undefined> =>
-      deps.store.settleAndPark(intent, parked),
+    settleAndPark: (
+      intent: RenderIntent,
+      parked: ParkedPayload,
+      controls: RenderControls = {},
+    ): Promise<number | undefined> =>
+      deps.store.settleAndPark(
+        intent,
+        parked,
+        EXACT_TURN_CANCEL_SUPPORTED || controls.outcome === "cancelled" ? controls : undefined,
+      ),
   };
 }
