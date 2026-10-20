@@ -1,0 +1,1201 @@
+{
+  "version": 1,
+  "sourceCommit": "8e14f97d4a62be1c64bac45118b85ae58da144d6",
+  "domains": [
+    {
+      "name": "cloudflare",
+      "baseTools": ["cloudflare__get_zone", "cloudflare__list_zones"],
+      "skills": [
+        {
+          "id": "cloudflare__destination-addresses",
+          "tools": [
+            "cloudflare__create_destination_address",
+            "cloudflare__delete_destination_address",
+            "cloudflare__get_destination_address",
+            "cloudflare__list_destination_addresses"
+          ]
+        },
+        {
+          "id": "cloudflare__dns-records",
+          "tools": [
+            "cloudflare__create_dns_record",
+            "cloudflare__delete_dns_record",
+            "cloudflare__export_zone_file",
+            "cloudflare__get_dns_record",
+            "cloudflare__list_dns_records",
+            "cloudflare__update_dns_record"
+          ]
+        },
+        {
+          "id": "cloudflare__email-routing",
+          "tools": [
+            "cloudflare__create_routing_rule",
+            "cloudflare__delete_routing_rule",
+            "cloudflare__disable_email_routing",
+            "cloudflare__enable_email_routing",
+            "cloudflare__get_catch_all_rule",
+            "cloudflare__get_routing_dns",
+            "cloudflare__get_routing_rule",
+            "cloudflare__get_routing_settings",
+            "cloudflare__list_routing_rules",
+            "cloudflare__update_catch_all_rule",
+            "cloudflare__update_routing_rule"
+          ]
+        },
+        {
+          "id": "cloudflare__email-sending",
+          "tools": ["cloudflare__send_email"]
+        },
+        {
+          "id": "cloudflare__sending-domains",
+          "tools": [
+            "cloudflare__create_sending_subdomain",
+            "cloudflare__delete_sending_subdomain",
+            "cloudflare__get_sending_dns_records",
+            "cloudflare__get_sending_subdomain",
+            "cloudflare__list_sending_subdomains"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "cms",
+      "baseTools": [
+        "cms__list_events",
+        "cms__list_hack_night_sessions",
+        "cms__list_media",
+        "cms__list_shelter_projects",
+        "cms__list_ugrants"
+      ],
+      "skills": [
+        {
+          "id": "cms__events",
+          "tools": [
+            "cms__create_email",
+            "cms__create_event",
+            "cms__create_rsvp",
+            "cms__delete_email",
+            "cms__delete_event",
+            "cms__delete_rsvp",
+            "cms__get_email",
+            "cms__get_event",
+            "cms__get_rsvp",
+            "cms__list_emails",
+            "cms__list_events",
+            "cms__list_rsvps",
+            "cms__publish_event",
+            "cms__send_blast",
+            "cms__send_email",
+            "cms__unpublish_event",
+            "cms__update_email",
+            "cms__update_event",
+            "cms__update_rsvp"
+          ]
+        },
+        {
+          "id": "cms__hack-nights",
+          "tools": [
+            "cms__create_hack_night_session",
+            "cms__delete_hack_night_session",
+            "cms__get_hack_night_session",
+            "cms__list_hack_night_sessions",
+            "cms__publish_hack_night_session",
+            "cms__unpublish_hack_night_session",
+            "cms__update_hack_night_session"
+          ]
+        },
+        {
+          "id": "cms__media",
+          "tools": ["cms__delete_media", "cms__get_media", "cms__list_media", "cms__upload_media"]
+        },
+        {
+          "id": "cms__service-accounts",
+          "tools": [
+            "cms__create_service_account",
+            "cms__delete_service_account",
+            "cms__get_service_account",
+            "cms__list_service_accounts",
+            "cms__update_service_account"
+          ]
+        },
+        {
+          "id": "cms__showcases",
+          "tools": [
+            "cms__create_shelter_project",
+            "cms__create_ugrant",
+            "cms__delete_shelter_project",
+            "cms__delete_ugrant",
+            "cms__get_shelter_project",
+            "cms__get_ugrant",
+            "cms__list_shelter_projects",
+            "cms__list_ugrants",
+            "cms__publish_shelter_project",
+            "cms__publish_ugrant",
+            "cms__unpublish_shelter_project",
+            "cms__unpublish_ugrant",
+            "cms__update_shelter_project",
+            "cms__update_ugrant"
+          ]
+        },
+        {
+          "id": "cms__users",
+          "tools": [
+            "cms__create_user",
+            "cms__delete_user",
+            "cms__get_user",
+            "cms__list_users",
+            "cms__update_user"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "discord",
+      "baseTools": [
+        "discord__get_server_info",
+        "discord__list_channels",
+        "discord__list_roles",
+        "discord__search_members"
+      ],
+      "skills": [
+        {
+          "id": "discord__audit-log",
+          "tools": ["discord__get_audit_log"]
+        },
+        {
+          "id": "discord__auto-moderation",
+          "tools": [
+            "discord__create_auto_mod_rule",
+            "discord__delete_auto_mod_rule",
+            "discord__get_auto_mod_rule",
+            "discord__list_auto_mod_rules",
+            "discord__update_auto_mod_rule"
+          ]
+        },
+        {
+          "id": "discord__channels",
+          "tools": [
+            "discord__create_channel",
+            "discord__delete_channel",
+            "discord__edit_channel",
+            "discord__follow_announcement_channel",
+            "discord__get_channel"
+          ]
+        },
+        {
+          "id": "discord__emojis",
+          "tools": [
+            "discord__create_emoji",
+            "discord__create_sticker",
+            "discord__delete_emoji",
+            "discord__delete_sticker",
+            "discord__edit_emoji",
+            "discord__edit_sticker",
+            "discord__list_emojis",
+            "discord__list_stickers"
+          ]
+        },
+        {
+          "id": "discord__events",
+          "tools": [
+            "discord__create_event",
+            "discord__delete_event",
+            "discord__edit_event",
+            "discord__list_events"
+          ]
+        },
+        {
+          "id": "discord__guild",
+          "tools": [
+            "discord__get_guild_preview",
+            "discord__get_vanity_url",
+            "discord__update_guild"
+          ]
+        },
+        {
+          "id": "discord__invites",
+          "tools": ["discord__create_invite", "discord__delete_invite", "discord__list_invites"]
+        },
+        {
+          "id": "discord__member-management",
+          "tools": [
+            "discord__ban_member",
+            "discord__clear_timeout",
+            "discord__kick_member",
+            "discord__list_bans",
+            "discord__timeout_member",
+            "discord__unban_member"
+          ]
+        },
+        {
+          "id": "discord__members",
+          "tools": ["discord__get_member", "discord__set_nickname"]
+        },
+        {
+          "id": "discord__membership",
+          "tools": ["discord__add_member_to_platform", "discord__remove_member_from_platform"]
+        },
+        {
+          "id": "discord__messages",
+          "tools": [
+            "discord__add_reaction",
+            "discord__bulk_delete_messages",
+            "discord__crosspost_message",
+            "discord__delete_message",
+            "discord__edit_message",
+            "discord__fetch_messages",
+            "discord__get_message",
+            "discord__pin_message",
+            "discord__remove_all_reactions",
+            "discord__remove_reaction",
+            "discord__send_message",
+            "discord__unpin_message"
+          ]
+        },
+        {
+          "id": "discord__roles",
+          "tools": [
+            "discord__assign_role",
+            "discord__create_role",
+            "discord__delete_role",
+            "discord__edit_role",
+            "discord__remove_role"
+          ]
+        },
+        {
+          "id": "discord__threads",
+          "tools": [
+            "discord__create_thread",
+            "discord__delete_thread",
+            "discord__edit_thread",
+            "discord__list_threads"
+          ]
+        },
+        {
+          "id": "discord__webhooks",
+          "tools": [
+            "discord__create_webhook",
+            "discord__delete_webhook",
+            "discord__edit_webhook",
+            "discord__list_webhooks"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "figma",
+      "baseTools": [
+        "figma__get_file",
+        "figma__list_project_files",
+        "figma__list_projects",
+        "figma__search_files"
+      ],
+      "skills": [
+        {
+          "id": "figma__comments",
+          "tools": [
+            "figma__add_reaction",
+            "figma__create_comment",
+            "figma__delete_comment",
+            "figma__delete_reaction",
+            "figma__list_comments"
+          ]
+        },
+        {
+          "id": "figma__components",
+          "tools": [
+            "figma__get_component",
+            "figma__get_component_set",
+            "figma__get_style",
+            "figma__list_file_components",
+            "figma__list_file_styles",
+            "figma__list_team_component_sets",
+            "figma__list_team_components",
+            "figma__list_team_styles"
+          ]
+        },
+        {
+          "id": "figma__dev-resources",
+          "tools": [
+            "figma__create_dev_resources",
+            "figma__delete_dev_resource",
+            "figma__list_dev_resources",
+            "figma__update_dev_resource"
+          ]
+        },
+        {
+          "id": "figma__nodes",
+          "tools": ["figma__get_file_nodes", "figma__get_image_fills", "figma__get_images"]
+        },
+        {
+          "id": "figma__variables",
+          "tools": [
+            "figma__get_local_variables",
+            "figma__get_published_variables",
+            "figma__modify_variables"
+          ]
+        },
+        {
+          "id": "figma__versions",
+          "tools": ["figma__list_versions"]
+        },
+        {
+          "id": "figma__webhooks",
+          "tools": [
+            "figma__create_webhook",
+            "figma__delete_webhook",
+            "figma__get_webhook",
+            "figma__list_team_webhooks",
+            "figma__update_webhook"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "finance",
+      "baseTools": [
+        "finance__get_balance",
+        "finance__get_organization",
+        "finance__get_transaction",
+        "finance__list_transactions"
+      ],
+      "skills": [
+        {
+          "id": "finance__card-charges",
+          "tools": ["finance__list_card_charges"]
+        },
+        {
+          "id": "finance__donations",
+          "tools": ["finance__donation_totals", "finance__get_donation", "finance__list_donations"]
+        },
+        {
+          "id": "finance__invoices",
+          "tools": ["finance__get_invoice", "finance__list_invoices", "finance__list_open_invoices"]
+        },
+        {
+          "id": "finance__receipts",
+          "tools": ["finance__get_receipt_status", "finance__list_missing_receipts"]
+        },
+        {
+          "id": "finance__transactions",
+          "tools": [
+            "finance__find_transactions",
+            "finance__get_transaction",
+            "finance__list_transactions"
+          ]
+        },
+        {
+          "id": "finance__transfers",
+          "tools": ["finance__get_transfer", "finance__list_transfers"]
+        }
+      ]
+    },
+    {
+      "name": "github",
+      "baseTools": [
+        "github__get_repository",
+        "github__list_repositories",
+        "github__search_code",
+        "github__search_issues"
+      ],
+      "skills": [
+        {
+          "id": "github__actions",
+          "tools": [
+            "github__cancel_workflow_run",
+            "github__download_artifact",
+            "github__get_workflow_run",
+            "github__list_workflow_jobs",
+            "github__list_workflow_runs",
+            "github__list_workflows",
+            "github__rerun_workflow",
+            "github__trigger_workflow"
+          ]
+        },
+        {
+          "id": "github__collaborators",
+          "tools": [
+            "github__add_collaborator",
+            "github__cancel_repo_invitation",
+            "github__list_collaborators",
+            "github__list_repo_invitations",
+            "github__remove_collaborator"
+          ]
+        },
+        {
+          "id": "github__contents",
+          "tools": [
+            "github__compare_commits",
+            "github__create_or_update_file",
+            "github__delete_file",
+            "github__get_commit",
+            "github__get_directory_tree",
+            "github__get_file_content",
+            "github__list_commits"
+          ]
+        },
+        {
+          "id": "github__deployments",
+          "tools": [
+            "github__create_deployment",
+            "github__create_deployment_status",
+            "github__get_pages_info",
+            "github__list_deployments",
+            "github__list_pages_builds",
+            "github__trigger_pages_build"
+          ]
+        },
+        {
+          "id": "github__environments",
+          "tools": [
+            "github__create_or_update_environment",
+            "github__delete_environment",
+            "github__get_environment",
+            "github__list_environments"
+          ]
+        },
+        {
+          "id": "github__issues",
+          "tools": [
+            "github__add_assignees",
+            "github__create_issue",
+            "github__create_issue_comment",
+            "github__delete_issue_comment",
+            "github__list_issue_comments",
+            "github__lock_issue",
+            "github__manage_labels",
+            "github__manage_milestones",
+            "github__remove_assignees",
+            "github__unlock_issue",
+            "github__update_issue",
+            "github__update_issue_comment"
+          ]
+        },
+        {
+          "id": "github__membership",
+          "tools": ["github__add_member_to_platform", "github__remove_member_from_platform"]
+        },
+        {
+          "id": "github__organization",
+          "tools": [
+            "github__add_team_member",
+            "github__create_webhook",
+            "github__delete_webhook",
+            "github__get_org_member",
+            "github__get_team",
+            "github__invite_org_member",
+            "github__list_org_members",
+            "github__list_org_webhooks",
+            "github__list_repo_webhooks",
+            "github__list_team_members",
+            "github__list_teams",
+            "github__remove_org_member",
+            "github__remove_team_member",
+            "github__update_webhook"
+          ]
+        },
+        {
+          "id": "github__packages",
+          "tools": [
+            "github__delete_package_version",
+            "github__get_package",
+            "github__list_package_versions",
+            "github__list_packages"
+          ]
+        },
+        {
+          "id": "github__projects",
+          "tools": [
+            "github__create_project_item",
+            "github__delete_project_item",
+            "github__get_project",
+            "github__list_org_projects",
+            "github__list_project_items",
+            "github__update_project_item"
+          ]
+        },
+        {
+          "id": "github__pull-requests",
+          "tools": [
+            "github__close_pull_request",
+            "github__create_pr_review",
+            "github__create_pull_request",
+            "github__list_pr_comments",
+            "github__list_pr_files",
+            "github__list_pr_reviews",
+            "github__merge_pull_request",
+            "github__remove_requested_reviewers",
+            "github__request_reviewers",
+            "github__update_pull_request"
+          ]
+        },
+        {
+          "id": "github__reactions",
+          "tools": [
+            "github__add_comment_reaction",
+            "github__add_issue_reaction",
+            "github__remove_comment_reaction",
+            "github__remove_issue_reaction"
+          ]
+        },
+        {
+          "id": "github__releases",
+          "tools": [
+            "github__create_release",
+            "github__delete_release",
+            "github__get_release",
+            "github__list_release_assets",
+            "github__list_releases",
+            "github__update_release"
+          ]
+        },
+        {
+          "id": "github__repositories",
+          "tools": [
+            "github__archive_repository",
+            "github__create_repository",
+            "github__delete_branch_protection",
+            "github__delete_repository",
+            "github__get_branch_protection",
+            "github__list_branches",
+            "github__set_branch_protection",
+            "github__transfer_repository",
+            "github__update_repository"
+          ]
+        },
+        {
+          "id": "github__secrets-and-variables",
+          "tools": [
+            "github__create_or_update_org_secret",
+            "github__create_or_update_org_variable",
+            "github__create_or_update_repo_secret",
+            "github__create_or_update_repo_variable",
+            "github__delete_org_secret",
+            "github__delete_org_variable",
+            "github__delete_repo_secret",
+            "github__delete_repo_variable",
+            "github__list_org_secrets",
+            "github__list_org_variables",
+            "github__list_repo_secrets",
+            "github__list_repo_variables"
+          ]
+        },
+        {
+          "id": "github__tags-refs",
+          "tools": [
+            "github__create_ref",
+            "github__delete_ref",
+            "github__get_ref",
+            "github__list_refs",
+            "github__list_tags",
+            "github__update_ref"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "linear",
+      "baseTools": [
+        "linear__aggregate_issues",
+        "linear__retrieve_entities",
+        "linear__search_entities",
+        "linear__suggest_property_values"
+      ],
+      "skills": [
+        {
+          "id": "linear__comments",
+          "tools": ["linear__create_comment", "linear__delete_comment", "linear__edit_comment"]
+        },
+        {
+          "id": "linear__customer-requests",
+          "tools": [
+            "linear__create_customer_need",
+            "linear__list_customer_needs",
+            "linear__update_customer_need"
+          ]
+        },
+        {
+          "id": "linear__cycles",
+          "tools": [
+            "linear__archive_cycle",
+            "linear__create_cycle",
+            "linear__get_cycle",
+            "linear__list_cycles",
+            "linear__update_cycle"
+          ]
+        },
+        {
+          "id": "linear__documents",
+          "tools": ["linear__create_document", "linear__update_document"]
+        },
+        {
+          "id": "linear__initiative-updates",
+          "tools": [
+            "linear__create_initiative_update",
+            "linear__query_initiative_updates",
+            "linear__update_initiative_update"
+          ]
+        },
+        {
+          "id": "linear__initiatives",
+          "tools": [
+            "linear__create_initiative",
+            "linear__list_initiatives",
+            "linear__query_initiative_activity",
+            "linear__update_initiative"
+          ]
+        },
+        {
+          "id": "linear__issue-views",
+          "tools": ["linear__query_issue_view"]
+        },
+        {
+          "id": "linear__issues",
+          "tools": [
+            "linear__archive_issue",
+            "linear__create_issue",
+            "linear__delete_issue",
+            "linear__query_issue_activity",
+            "linear__unarchive_issue",
+            "linear__update_issue"
+          ]
+        },
+        {
+          "id": "linear__labels",
+          "tools": [
+            "linear__create_label",
+            "linear__delete_label",
+            "linear__get_label",
+            "linear__list_labels",
+            "linear__update_label"
+          ]
+        },
+        {
+          "id": "linear__membership",
+          "tools": ["linear__add_member_to_platform", "linear__remove_member_from_platform"]
+        },
+        {
+          "id": "linear__project-updates",
+          "tools": [
+            "linear__create_project_update",
+            "linear__query_project_updates",
+            "linear__update_project_update"
+          ]
+        },
+        {
+          "id": "linear__project-views",
+          "tools": ["linear__query_project_view"]
+        },
+        {
+          "id": "linear__projects",
+          "tools": [
+            "linear__archive_project",
+            "linear__create_project",
+            "linear__create_project_milestone",
+            "linear__delete_project",
+            "linear__get_project",
+            "linear__query_project_activity",
+            "linear__query_project_view",
+            "linear__unarchive_project",
+            "linear__update_project",
+            "linear__update_project_milestone"
+          ]
+        },
+        {
+          "id": "linear__reminders",
+          "tools": ["linear__set_reminder"]
+        },
+        {
+          "id": "linear__teams",
+          "tools": [
+            "linear__add_user_to_team",
+            "linear__list_team_members",
+            "linear__remove_user_from_team"
+          ]
+        },
+        {
+          "id": "linear__users",
+          "tools": [
+            "linear__delete_invite",
+            "linear__get_user",
+            "linear__get_user_assigned_issues",
+            "linear__get_user_teams",
+            "linear__invite_user",
+            "linear__list_invites",
+            "linear__list_users",
+            "linear__suspend_user",
+            "linear__unsuspend_user"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "notion",
+      "baseTools": [
+        "notion__list_users",
+        "notion__retrieve_database",
+        "notion__retrieve_page",
+        "notion__search_notion"
+      ],
+      "skills": [
+        {
+          "id": "notion__blocks",
+          "tools": [
+            "notion__append_block_children",
+            "notion__delete_block",
+            "notion__list_block_children",
+            "notion__retrieve_block",
+            "notion__update_block"
+          ]
+        },
+        {
+          "id": "notion__comments",
+          "tools": ["notion__create_comment", "notion__list_comments", "notion__retrieve_comment"]
+        },
+        {
+          "id": "notion__databases",
+          "tools": [
+            "notion__archive_database",
+            "notion__create_database",
+            "notion__query_database",
+            "notion__update_database"
+          ]
+        },
+        {
+          "id": "notion__pages",
+          "tools": [
+            "notion__archive_page",
+            "notion__create_page",
+            "notion__read_page_content",
+            "notion__retrieve_bot_user",
+            "notion__retrieve_page_property",
+            "notion__retrieve_user",
+            "notion__update_page",
+            "notion__update_page_content"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "outreach",
+      "baseTools": [
+        "outreach__get_company",
+        "outreach__get_contact",
+        "outreach__get_deal",
+        "outreach__list_companies",
+        "outreach__list_contacts",
+        "outreach__list_deals",
+        "outreach__retrieve_crm_schema"
+      ],
+      "skills": [
+        {
+          "id": "outreach__crm-writes",
+          "tools": [
+            "outreach__archive_company",
+            "outreach__archive_contact",
+            "outreach__create_company",
+            "outreach__create_contact",
+            "outreach__update_company_email",
+            "outreach__update_company_next_followup",
+            "outreach__update_company_status",
+            "outreach__update_contact_email",
+            "outreach__update_contact_status"
+          ]
+        },
+        {
+          "id": "outreach__deals-management",
+          "tools": ["outreach__create_deal", "outreach__update_deal", "outreach__update_deal_stage"]
+        },
+        {
+          "id": "outreach__email-enrichment",
+          "tools": ["outreach__find_email_for_lead", "outreach__verify_email"]
+        },
+        {
+          "id": "outreach__emails",
+          "tools": ["outreach__send_outreach_email"]
+        },
+        {
+          "id": "outreach__status-tracking",
+          "tools": ["outreach__get_email_status"]
+        }
+      ]
+    },
+    {
+      "name": "sentry",
+      "baseTools": [
+        "sentry__get_issue",
+        "sentry__get_project",
+        "sentry__list_projects",
+        "sentry__search_issues"
+      ],
+      "skills": [
+        {
+          "id": "sentry__alerts",
+          "tools": [
+            "sentry__create_alert_rule",
+            "sentry__delete_alert_rule",
+            "sentry__get_alert_rule",
+            "sentry__get_metric_alert_rule",
+            "sentry__list_alert_rules",
+            "sentry__list_metric_alert_rules",
+            "sentry__update_alert_rule"
+          ]
+        },
+        {
+          "id": "sentry__events",
+          "tools": [
+            "sentry__get_event",
+            "sentry__get_latest_event",
+            "sentry__list_issue_events",
+            "sentry__list_project_events"
+          ]
+        },
+        {
+          "id": "sentry__issue-management",
+          "tools": [
+            "sentry__bulk_update_issues",
+            "sentry__delete_issue",
+            "sentry__get_issue_tag_values",
+            "sentry__list_issue_tags",
+            "sentry__update_issue"
+          ]
+        },
+        {
+          "id": "sentry__log-search",
+          "tools": ["sentry__get_log_stats", "sentry__search_logs"]
+        },
+        {
+          "id": "sentry__members",
+          "tools": [
+            "sentry__add_team_member",
+            "sentry__create_team",
+            "sentry__delete_team",
+            "sentry__get_member",
+            "sentry__get_team",
+            "sentry__list_members",
+            "sentry__list_team_members",
+            "sentry__list_teams",
+            "sentry__remove_team_member",
+            "sentry__update_member_role",
+            "sentry__update_team"
+          ]
+        },
+        {
+          "id": "sentry__membership",
+          "tools": ["sentry__add_member_to_platform", "sentry__remove_member_from_platform"]
+        },
+        {
+          "id": "sentry__metrics",
+          "tools": [
+            "sentry__get_metric_tag_values",
+            "sentry__list_metric_tags",
+            "sentry__list_metrics",
+            "sentry__query_metrics"
+          ]
+        },
+        {
+          "id": "sentry__monitors",
+          "tools": [
+            "sentry__delete_monitor",
+            "sentry__get_monitor",
+            "sentry__list_monitor_checkins",
+            "sentry__list_monitors",
+            "sentry__update_monitor"
+          ]
+        },
+        {
+          "id": "sentry__performance",
+          "tools": [
+            "sentry__get_transaction_summary",
+            "sentry__list_spans",
+            "sentry__list_transactions"
+          ]
+        },
+        {
+          "id": "sentry__profiling",
+          "tools": ["sentry__get_flamegraph", "sentry__list_profiled_functions"]
+        },
+        {
+          "id": "sentry__projects-management",
+          "tools": [
+            "sentry__create_project",
+            "sentry__create_project_key",
+            "sentry__delete_project",
+            "sentry__delete_project_key",
+            "sentry__list_project_environments",
+            "sentry__list_project_keys",
+            "sentry__update_project"
+          ]
+        },
+        {
+          "id": "sentry__releases",
+          "tools": [
+            "sentry__create_deploy",
+            "sentry__create_release",
+            "sentry__get_release",
+            "sentry__list_release_commits",
+            "sentry__list_release_deploys",
+            "sentry__list_releases"
+          ]
+        },
+        {
+          "id": "sentry__replays",
+          "tools": ["sentry__get_replay", "sentry__list_replays"]
+        },
+        {
+          "id": "sentry__stats",
+          "tools": ["sentry__get_org_stats", "sentry__get_project_stats"]
+        },
+        {
+          "id": "sentry__traces",
+          "tools": ["sentry__get_trace", "sentry__list_traces"]
+        }
+      ]
+    },
+    {
+      "name": "shopping",
+      "baseTools": ["shopping__search_products", "shopping__view_cart"],
+      "skills": [
+        {
+          "id": "shopping__cart",
+          "tools": [
+            "shopping__add_to_cart",
+            "shopping__clear_cart",
+            "shopping__remove_from_cart",
+            "shopping__update_quantity"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "vercel",
+      "baseTools": [
+        "vercel__get_deployment",
+        "vercel__get_project",
+        "vercel__list_aliases",
+        "vercel__list_deployments",
+        "vercel__list_domains",
+        "vercel__list_projects",
+        "vercel__list_teams",
+        "vercel__whoami"
+      ],
+      "skills": [
+        {
+          "id": "vercel__artifacts",
+          "tools": ["vercel__artifact_exists", "vercel__artifact_query", "vercel__artifacts_status"]
+        },
+        {
+          "id": "vercel__deployments",
+          "tools": [
+            "vercel__cancel_deployment",
+            "vercel__delete_deployment",
+            "vercel__get_deployment",
+            "vercel__get_deployment_events",
+            "vercel__get_deployment_file_contents",
+            "vercel__list_deployment_files",
+            "vercel__list_deployments",
+            "vercel__promote_deployment",
+            "vercel__rollback_deployment",
+            "vercel__update_integration_deployment_action",
+            "vercel__update_rollback_description"
+          ]
+        },
+        {
+          "id": "vercel__domains",
+          "tools": [
+            "vercel__assign_alias",
+            "vercel__check_domain_availability",
+            "vercel__delete_alias",
+            "vercel__delete_domain",
+            "vercel__get_alias",
+            "vercel__get_cert",
+            "vercel__get_domain",
+            "vercel__get_domain_auth_code",
+            "vercel__get_domain_config",
+            "vercel__get_domain_price",
+            "vercel__get_domain_transfer_in_status",
+            "vercel__get_registrar_order",
+            "vercel__issue_cert",
+            "vercel__list_aliases",
+            "vercel__list_deployment_aliases",
+            "vercel__list_dns_records",
+            "vercel__list_domains",
+            "vercel__list_supported_tlds",
+            "vercel__remove_cert",
+            "vercel__remove_dns_record"
+          ]
+        },
+        {
+          "id": "vercel__edge-platform",
+          "tools": [
+            "vercel__create_global_config",
+            "vercel__create_global_config_token",
+            "vercel__create_sdk_key",
+            "vercel__dangerously_delete_edge_cache_by_src_images",
+            "vercel__dangerously_delete_edge_cache_by_tags",
+            "vercel__delete_flag",
+            "vercel__delete_flag_segment",
+            "vercel__delete_global_config",
+            "vercel__delete_global_config_schema",
+            "vercel__delete_global_config_tokens",
+            "vercel__delete_sdk_key",
+            "vercel__get_deployment_feature_flags",
+            "vercel__get_flag",
+            "vercel__get_flag_segment",
+            "vercel__get_flag_settings",
+            "vercel__get_global_config",
+            "vercel__get_global_config_backup",
+            "vercel__get_global_config_item",
+            "vercel__get_global_config_schema",
+            "vercel__get_global_config_token",
+            "vercel__invalidate_edge_cache_by_src_images",
+            "vercel__invalidate_edge_cache_by_tags",
+            "vercel__list_flag_segments",
+            "vercel__list_flag_versions",
+            "vercel__list_flags",
+            "vercel__list_global_config_backups",
+            "vercel__list_global_config_items",
+            "vercel__list_global_config_tokens",
+            "vercel__list_global_configs",
+            "vercel__list_sdk_keys",
+            "vercel__list_team_flag_settings",
+            "vercel__list_team_flags",
+            "vercel__patch_global_config_items",
+            "vercel__update_global_config"
+          ]
+        },
+        {
+          "id": "vercel__integrations",
+          "tools": [
+            "vercel__connect_integration_resource_to_project",
+            "vercel__create_integration_store_direct",
+            "vercel__delete_integration_configuration",
+            "vercel__delete_integration_resource",
+            "vercel__get_integration_billing_plans",
+            "vercel__get_integration_configuration",
+            "vercel__get_integration_configuration_products",
+            "vercel__get_integration_resource",
+            "vercel__list_git_namespaces",
+            "vercel__list_integration_configurations",
+            "vercel__list_integration_resources",
+            "vercel__search_git_repos"
+          ]
+        },
+        {
+          "id": "vercel__observability",
+          "tools": [
+            "vercel__delete_configurable_log_drain",
+            "vercel__delete_drain",
+            "vercel__delete_integration_log_drain",
+            "vercel__get_drain",
+            "vercel__get_log_drain",
+            "vercel__get_observability_config",
+            "vercel__get_runtime_logs",
+            "vercel__list_drains",
+            "vercel__list_event_types",
+            "vercel__list_integration_log_drains",
+            "vercel__list_log_drains",
+            "vercel__list_user_events",
+            "vercel__update_observability_config"
+          ]
+        },
+        {
+          "id": "vercel__projects",
+          "tools": [
+            "vercel__create_project_env_vars",
+            "vercel__create_project_transfer_request",
+            "vercel__delete_project",
+            "vercel__edit_project_env_var",
+            "vercel__get_project",
+            "vercel__get_project_domain",
+            "vercel__get_project_env_var",
+            "vercel__list_project_domains",
+            "vercel__list_project_env_vars",
+            "vercel__list_project_members",
+            "vercel__list_projects",
+            "vercel__list_promote_aliases",
+            "vercel__pause_project",
+            "vercel__remove_project_domain",
+            "vercel__remove_project_env_var",
+            "vercel__remove_project_member",
+            "vercel__unpause_project",
+            "vercel__verify_project_domain"
+          ]
+        },
+        {
+          "id": "vercel__rollouts",
+          "tools": [
+            "vercel__approve_rolling_release_stage",
+            "vercel__complete_rolling_release",
+            "vercel__delete_project_check",
+            "vercel__delete_rolling_release_config",
+            "vercel__get_deployment_check_run",
+            "vercel__get_project_check",
+            "vercel__get_rolling_release",
+            "vercel__get_rolling_release_billing_status",
+            "vercel__get_rolling_release_config",
+            "vercel__list_check_runs",
+            "vercel__list_deployment_check_runs",
+            "vercel__list_project_checks"
+          ]
+        },
+        {
+          "id": "vercel__sandboxes",
+          "tools": [
+            "vercel__delete_sandbox_snapshot",
+            "vercel__extend_sandbox_timeout",
+            "vercel__get_sandbox",
+            "vercel__get_sandbox_command",
+            "vercel__get_sandbox_command_logs",
+            "vercel__get_sandbox_snapshot",
+            "vercel__kill_sandbox_command",
+            "vercel__list_sandbox_commands",
+            "vercel__list_sandbox_snapshots",
+            "vercel__list_sandboxes",
+            "vercel__stop_sandbox"
+          ]
+        },
+        {
+          "id": "vercel__security",
+          "tools": [
+            "vercel__delete_auth_token",
+            "vercel__get_active_attack_status",
+            "vercel__get_auth_token",
+            "vercel__get_firewall_config",
+            "vercel__list_auth_tokens",
+            "vercel__list_bypass_ips",
+            "vercel__list_firewall_events",
+            "vercel__update_attack_challenge_mode"
+          ]
+        },
+        {
+          "id": "vercel__team-admin",
+          "tools": [
+            "vercel__delete_access_group",
+            "vercel__delete_connect_network",
+            "vercel__delete_team_invite_code",
+            "vercel__delete_webhook",
+            "vercel__get_access_group",
+            "vercel__get_connect_network",
+            "vercel__get_custom_environment",
+            "vercel__get_team",
+            "vercel__get_webhook",
+            "vercel__list_access_group_members",
+            "vercel__list_access_groups",
+            "vercel__list_billing_charges",
+            "vercel__list_connect_networks",
+            "vercel__list_contract_commitments",
+            "vercel__list_custom_environments",
+            "vercel__list_microfrontend_groups",
+            "vercel__list_project_route_versions",
+            "vercel__list_project_routes",
+            "vercel__list_team_members",
+            "vercel__list_webhooks",
+            "vercel__remove_custom_environment",
+            "vercel__remove_team_member"
+          ]
+        }
+      ]
+    }
+  ]
+}
