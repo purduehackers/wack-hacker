@@ -4,7 +4,6 @@ import { BADGES_CHANNEL_ID, MAX_BADGE_COUNT, reviewSchema } from "@purduehackers
 import { stockItemSchema } from "@purduehackers/badges/inventory-contracts";
 import { failureGuidance } from "@purduehackers/badges/presentation";
 import { actionName, actionSchema, componentId } from "@purduehackers/badges/wire";
-import type { Action } from "@purduehackers/badges/wire";
 import { bearerMatches } from "@repo/shared/bearer";
 import { DISCORD_GUILD_ID, roleAtLeast, roleFromMemberRoles, UserRole } from "@repo/shared/discord";
 import { messageOf } from "@repo/shared/errors";
@@ -15,7 +14,6 @@ import type {
   ModalSubmitInteraction,
   StringSelectMenuInteraction,
   InteractionReplyOptions,
-  APIModalInteractionResponseCallbackData,
 } from "discord.js";
 import { z } from "zod";
 
@@ -34,36 +32,12 @@ const controlSchema = z.tuple([
   z.string(),
 ]);
 
-function uploadModal(
-  control: string,
-  role: "badge" | "stamp",
-): APIModalInteractionResponseCallbackData {
-  return {
-    custom_id: control,
-    title: `Upload your ${role}`,
-    components: [
-      {
-        type: ComponentType.Label,
-        label: `${role === "badge" ? "Badge" : "Stamp"} SVG`,
-        description: "Upload one SVG.",
-        component: {
-          type: ComponentType.FileUpload,
-          custom_id: "design",
-          required: true,
-          min_values: 1,
-          max_values: 1,
-        },
-      },
-    ],
-  };
-}
 const controlResponse = z.object({
   review: reviewSchema,
   availableSheets: z.array(stockItemSchema).default([]),
 });
-function commandFor(interaction: BadgeInteraction, name: string): Action {
+function commandFor(interaction: BadgeInteraction, name: string) {
   const [kind, role] = name.split(".");
-  if (kind === "sheets" || kind === "material") return { kind };
   if (kind === "quantity") {
     const value = interaction.isModalSubmit()
       ? interaction.fields.getTextInputValue("count").trim()
@@ -74,28 +48,28 @@ function commandFor(interaction: BadgeInteraction, name: string): Action {
       (!/^\d+$/u.test(value) || Number(value) < 1 || Number(value) > MAX_BADGE_COUNT)
     )
       throw new Error(`Enter a whole number from 1 to ${MAX_BADGE_COUNT}.`);
-    return actionSchema.parse({
+    return {
       kind,
       ...(value && value !== "custom" ? { count: Number(value) } : {}),
-    });
+    };
   }
   if (kind === "upload") {
     const attachment = interaction.isModalSubmit()
       ? interaction.fields.getUploadedFiles("design", true).first()
       : undefined;
-    return actionSchema.parse({
-      kind: "upload",
+    return {
+      kind,
       role,
       ...(attachment
         ? { file: { url: attachment.url, filename: attachment.name, size: attachment.size } }
         : {}),
-    });
+    };
   }
-  if (kind === "roles") return actionSchema.parse({ kind, badge: Number(role) });
-  if (kind === "replace") return actionSchema.parse({ kind, role });
+  if (kind === "roles") return { kind, badge: Number(role) };
+  if (kind === "replace") return { kind, role };
   if (kind === "event" && interaction.isStringSelectMenu())
-    return actionSchema.parse({ kind, id: interaction.values[0] });
-  return actionSchema.parse({ kind });
+    return { kind, id: interaction.values[0] };
+  return { kind };
 }
 async function requestFor(interaction: BadgeInteraction, secret: string) {
   const [, id, version, name] = controlSchema.parse(interaction.customId.split(":"));
@@ -111,7 +85,7 @@ async function requestFor(interaction: BadgeInteraction, secret: string) {
   )
     throw new Error("This control belongs to a different review thread.");
   const member = await interaction.guild.members.fetch({ user: interaction.user.id, force: true });
-  const action = commandFor(interaction, name);
+  const action = actionSchema.parse(commandFor(interaction, name));
   return {
     id,
     version: Number(version),
@@ -130,22 +104,21 @@ async function requestFor(interaction: BadgeInteraction, secret: string) {
   };
 }
 async function beforeModal(interaction: BadgeInteraction, api: BadgeClient, secret: string) {
-  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const deadline = Promise.withResolvers<never>();
+  const timer = setTimeout(
+    () => deadline.reject(new Error("The review check timed out. Try again.")),
+    2300,
+  );
   try {
     return await Promise.race([
-      (async () => {
-        const input = await requestFor(interaction, secret);
-        return { ...input, ...controlResponse.parse(await api.post("control", input, 1800)) };
-      })(),
-      new Promise<never>((_resolve, reject) => {
-        timeout = setTimeout(
-          () => reject(new Error("The review check timed out. Try again.")),
-          2300,
-        );
-      }),
+      requestFor(interaction, secret).then(async (input) => ({
+        ...input,
+        ...controlResponse.parse(await api.post("control", input, 1800)),
+      })),
+      deadline.promise,
     ]);
   } finally {
-    if (timeout !== undefined) clearTimeout(timeout);
+    clearTimeout(timer);
   }
 }
 async function privateFailure(interaction: BadgeInteraction, cause: unknown) {
@@ -200,7 +173,24 @@ async function openBadgeModal(
 ): Promise<void> {
   const input = await beforeModal(interaction, api, secret);
   if (input.action.kind === "upload")
-    await interaction.showModal(uploadModal(input.control, input.action.role));
+    await interaction.showModal({
+      custom_id: input.control,
+      title: `Upload your ${input.action.role}`,
+      components: [
+        {
+          type: ComponentType.Label,
+          label: `${input.action.role === "badge" ? "Badge" : "Stamp"} SVG`,
+          description: "Upload one SVG.",
+          component: {
+            type: ComponentType.FileUpload,
+            custom_id: "design",
+            required: true,
+            min_values: 1,
+            max_values: 1,
+          },
+        },
+      ],
+    });
   if (input.action.kind === "material")
     await interaction.showModal(
       materialsModal(componentId(input.id, input.version, "material.search", secret)),
@@ -233,49 +223,48 @@ async function openBadgeModal(
     );
 }
 
-async function showMaterialResults(
-  interaction: ModalSubmitInteraction | StringSelectMenuInteraction,
-  api: BadgeClient,
-  secret: string,
-) {
-  if (interaction.isModalSubmit() && !interaction.isFromMessage())
-    throw new Error("Use the latest review card.");
-  const listed = materialOptions(interaction.message ?? undefined);
-  if (interaction.isStringSelectMenu() || interaction.message?.flags.has(MessageFlags.Ephemeral))
-    await interaction.deferUpdate();
-  else await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  const input = await requestFor(interaction, secret);
-  const { availableSheets } = z
-    .object({ availableSheets: z.array(stockItemSchema) })
-    .parse(await api.post("control", input));
-  const selected = interaction.isStringSelectMenu()
-    ? interaction.values
-    : listed.filter((option) => option.default).map((option) => option.value);
-  if (selected.some((value) => !listed.some((option) => option.value === value)))
-    throw new Error("Choose sheets from the dropdown.");
-  await interaction.editReply(
-    materialsPicker({
-      stock: availableSheets,
-      selected,
-      search: interaction.isModalSubmit()
-        ? interaction.fields.getTextInputValue("search").trim()
-        : listed.map((choice) => choice.value),
-      control: (action) => componentId(input.id, input.version, action, secret),
-    }),
-  );
-}
-
-async function applyBadgeAction(
+async function handleBadgeAction(
   interaction: BadgeInteraction,
   api: BadgeClient,
   secret: string,
   name: string,
 ) {
-  // Acknowledge first. Only accepted actions settle the card; opening a modal does not.
   if (interaction.isModalSubmit() && !interaction.isFromMessage())
     throw new Error("Use the latest review card.");
-  await interaction.deferUpdate();
+  const choosingMaterial =
+    (name === "material.search" && interaction.isModalSubmit()) ||
+    (name === "material.select" && interaction.isStringSelectMenu());
+  const listed = choosingMaterial ? materialOptions(interaction.message ?? undefined) : [];
+  // Search opens a private picker; later selections update that same message.
+  if (
+    choosingMaterial &&
+    interaction.isModalSubmit() &&
+    !interaction.message?.flags.has(MessageFlags.Ephemeral)
+  )
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  else await interaction.deferUpdate();
   const input = await requestFor(interaction, secret);
+  if (choosingMaterial) {
+    const { availableSheets } = z
+      .object({ availableSheets: z.array(stockItemSchema) })
+      .parse(await api.post("control", input));
+    const selected = interaction.isStringSelectMenu()
+      ? interaction.values
+      : listed.filter((option) => option.default).map((option) => option.value);
+    if (selected.some((value) => !listed.some((option) => option.value === value)))
+      throw new Error("Choose sheets from the dropdown.");
+    await interaction.editReply(
+      materialsPicker({
+        stock: availableSheets,
+        selected,
+        search: interaction.isModalSubmit()
+          ? interaction.fields.getTextInputValue("search").trim()
+          : listed.map((choice) => choice.value),
+        control: (action) => componentId(input.id, input.version, action, secret),
+      }),
+    );
+    return;
+  }
   if (name === "material.use" && interaction.isButton())
     input.action = {
       kind: "material",
@@ -327,14 +316,7 @@ export function createBadgeInteractionHandler(api: BadgeClient, secret: string) 
         await openBadgeModal(interaction, api, secret, name);
         return true;
       }
-      if (
-        (name === "material.search" && interaction.isModalSubmit()) ||
-        (name === "material.select" && interaction.isStringSelectMenu())
-      ) {
-        await showMaterialResults(interaction, api, secret);
-        return true;
-      }
-      await applyBadgeAction(interaction, api, secret, name);
+      await handleBadgeAction(interaction, api, secret, name);
     } catch (cause) {
       await privateFailure(interaction, cause);
     }

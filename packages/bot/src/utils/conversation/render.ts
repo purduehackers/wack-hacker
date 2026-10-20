@@ -196,22 +196,9 @@ async function paint(
 }
 
 async function writeContent(rendering: RendererDeps, work: RenderWork, progress?: string) {
-  const hitl = work.intent.phase === "streaming" ? renderHitl(work.intent) : undefined;
-  if (work.target.agentTarget !== undefined && hitl?.key)
-    return renderBadgeReply(
-      rendering,
-      work.projection,
-      work.intent.inputRequests?.[0]?.prompt ?? "Connect the requested account to continue.",
-      { key: `${hitl.key}:${work.intent.revision}`, components: hitl.components },
-    );
   if (work.target.agentTarget !== undefined)
-    return renderBadgeReply(
-      rendering,
-      work.projection,
-      work.intent.phase === "failed"
-        ? "I couldn’t finish that reply. Mention me again to retry."
-        : work.intent.text,
-    );
+    return renderBadgeReply(rendering, work.projection, work.intent);
+  const hitl = work.intent.phase === "streaming" ? renderHitl(work.intent) : undefined;
   return createRenderer(rendering, work.projection).write({
     text: work.intent.text,
     activity: work.intent.activity,

@@ -18,18 +18,15 @@ export async function routeMessage(api: BadgeClient, payload: MessagePayload) {
     throw new Error("Use a badge thread.");
   const redis = getRedis({ url: env.REDIS_URL });
   const key = `badges:thread-agent:${threadId}`;
-  let route = agentTargetSchema.optional().parse((await redis.get(key)) ?? undefined);
-  if (route === undefined) {
-    const { exists: current } = z
-      .object({ exists: z.boolean() })
-      .parse(await api.post("lookup", { threadId }));
-    const proposed = current ? "badge" : await classify(payload);
-    // Keep the thread's first route across replies, restarts, and Eve resets.
-    // Concurrent first pings converge on the same route before delivery.
-    const saved = await redis.set(key, proposed, { nx: true });
-    route = saved === "OK" ? proposed : agentTargetSchema.parse(await redis.get(key));
-  }
-  return route;
+  const route = agentTargetSchema.optional().parse((await redis.get(key)) ?? undefined);
+  if (route !== undefined) return route;
+  const { exists } = z
+    .object({ exists: z.boolean() })
+    .parse(await api.post("lookup", { threadId }));
+  const proposed = exists ? "badge" : await classify(payload);
+  // Keep the first route across replies, restarts, Eve resets, and concurrent first pings.
+  const saved = await redis.set(key, proposed, { nx: true });
+  return saved === "OK" ? proposed : agentTargetSchema.parse(await redis.get(key));
 }
 
 async function classify(payload: MessagePayload) {

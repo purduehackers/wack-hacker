@@ -9,8 +9,6 @@ import type { BadgeCard } from "./card.ts";
 import { messageControls } from "./components.ts";
 import { badgeColors } from "./messages.ts";
 
-type CardMessage = Pick<Message, "embeds" | "components">;
-
 const confirmed = `✅ **Automatic QA passed**
 -# - Allowed colors
 -# - Vector artwork
@@ -25,7 +23,7 @@ const confirmed = `✅ **Automatic QA passed**
 -# - Strong connections
 -# - Clear stamp impression`;
 
-function completedDesign(commands: string[], review: Review, title: string): APIEmbed | undefined {
+function completedDesign(commands: string[], review: Review): APIEmbed | undefined {
   if (commands.includes("confirm") && !remainingCriteria(review).length)
     return staticPassed(review)
       ? { description: confirmed }
@@ -46,11 +44,7 @@ function completedDesign(commands: string[], review: Review, title: string): API
       title: "Hack Night selected",
       description: `${escapeMarkdown(review.event.name)}\n${displayDate(review.event.date)}`,
     };
-  if (
-    review.rolesConfirmed &&
-    (commands.some((name) => /^(?:roles|replace)\./u.test(name)) ||
-      ["✅ Badge Selected", "✅ Stamp Selected"].includes(title))
-  )
+  if (review.rolesConfirmed && commands.some((name) => /^(?:roles|replace)\./u.test(name)))
     return {
       title: review.badge ? "Badge Selected" : "Stamp Selected",
       description: (["badge", "stamp"] as const)
@@ -64,22 +58,22 @@ function completedDesign(commands: string[], review: Review, title: string): API
   return undefined;
 }
 
-function completedDetails(message: CardMessage, { review }: BadgeCard): APIEmbed | undefined {
+function completedDetails(
+  message: Pick<Message, "components">,
+  { review }: BadgeCard,
+): APIEmbed | undefined {
   const commands = messageControls(message).flatMap((component) =>
     "customId" in component && component.customId?.startsWith(`badge:${review.id}:`)
       ? [component.customId.split(":")[3] ?? ""]
       : [],
   );
-  const title = message.embeds.at(-1)?.title ?? "";
-  const design = completedDesign(commands, review, title);
+  const design = completedDesign(commands, review);
   if (design) return design;
-  if ((commands.includes("publish") && review.approval) || title === "Saving files")
+  if (commands.includes("publish") && review.approval)
     return review.publication?.shortlink
       ? { title: "Files published" }
       : { title: "Saving files", color: badgeColors.warning };
   if (commands.includes("sheets")) return { title: "Production updated" };
-  if (commands.some((name) => name.startsWith("quantity.")) && review.targetCount)
-    return { title: `Target: ${review.targetCount} badges` };
   if (commands.includes("keep-design") && !review.pendingRole)
     return { title: "Current design kept" };
   if (commands.includes("retry") && !review.failure) return { title: "Retry complete" };
@@ -91,12 +85,11 @@ function completedDetails(message: CardMessage, { review }: BadgeCard): APIEmbed
       return { title: `Replacing ${review.pendingRole}`, color: badgeColors.warning };
     return { title: `${upload.endsWith("stamp") ? "Stamp" : "Badge"} updated` };
   }
-  if (["Checking again", "Retrying"].includes(title)) return { title: "Check complete" };
   return undefined;
 }
 
 /** Both button and chat actions settle here, immediately before the next card is acknowledged. */
-export function settledCard(message: CardMessage, card: BadgeCard) {
+export function settledCard(message: Pick<Message, "components">, card: BadgeCard) {
   let embed = completedDetails(message, card);
   if (!embed) return undefined;
   if (card.review.failure || card.review.contextChanged)

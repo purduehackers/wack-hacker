@@ -54,11 +54,7 @@ export function buildEventHandlers(deps: EventDeps): readonly AnyEventHandler[] 
   const turnMessages = createTurnMessageStore(deps.redis);
 
   return [
-    agentChat({
-      agent: deps.agent,
-      ...(deps.badges === undefined ? {} : { badges: deps.badges }),
-      ...(deps.badgeSecret ? { badgeSecret: deps.badgeSecret } : {}),
-    }),
+    agentChat(deps),
     ...(deps.badges && deps.badgeSecret ? [badgeUploads(deps.badges, deps.badgeSecret)] : []),
     conversationDone({ agent: deps.agent, turnMessages }),
     chatFeedback({ turnMessages, reporter: deps.reporter }),
