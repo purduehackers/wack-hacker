@@ -23,7 +23,7 @@ import { createGitHubCodeClient } from "../integrations/github-code.ts";
 import { createImageDropStore } from "../integrations/image-drop.ts";
 import { createShipsClient } from "../integrations/ships.ts";
 import type { ConversationFlow } from "../utils/conversation/index.ts";
-import { agentChat, conversationDone } from "./agent-chat.ts";
+import { agentChat, badgeUploads, conversationDone } from "./agent-chat.ts";
 import { antiSpam } from "./anti-spam.ts";
 import { autoThread } from "./auto-thread.ts";
 import { bheePing } from "./bhee-ping.ts";
@@ -37,6 +37,8 @@ import { rsvpReminder } from "./rsvp-reminder.ts";
 import { createTranscriber, transcribeVoiceMessage } from "./transcribe-voice-message.ts";
 
 export interface EventDeps {
+  readonly badgeSecret?: string;
+  readonly badges?: import("@purduehackers/badges/client").BadgeClient;
   readonly redis: RedisClient;
   readonly agent: ConversationFlow;
   readonly reporter: Reporter;
@@ -56,7 +58,8 @@ export function buildEventHandlers(deps: EventDeps): readonly AnyEventHandler[] 
   const gateway = createGateway({ apiKey: deps.vercelToken, teamIdOrSlug: "purdue-hackers" });
 
   return [
-    agentChat({ agent: deps.agent }),
+    agentChat(deps),
+    ...(deps.badges && deps.badgeSecret ? [badgeUploads(deps.badges, deps.badgeSecret)] : []),
     conversationDone({ agent: deps.agent, turnMessages }),
     chatFeedback({ turnMessages, reporter: deps.reporter }),
     praise,

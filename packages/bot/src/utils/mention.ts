@@ -6,7 +6,25 @@
  * busy channel.
  */
 
-import type { Message } from "discord.js";
+import { BADGES_CHANNEL_ID } from "@purduehackers/badges/contracts";
+import type { Interaction, Message } from "discord.js";
+
+export function isBadgeChannel(
+  message: Pick<Interaction | Message, "channel" | "channelId">,
+): boolean {
+  return (
+    (message.channel?.isThread() ? message.channel.parentId : message.channelId) ===
+    BADGES_CHANNEL_ID
+  );
+}
+
+export function isBadgePing(message: Message, botUserId: string): boolean {
+  return (
+    isBadgeChannel(message) &&
+    message.mentions.users.has(botUserId) &&
+    (message.content.includes(`<@${botUserId}>`) || message.content.includes(`<@!${botUserId}>`))
+  );
+}
 
 /**
  * True when the bot is @-mentioned *at the start* of the message.

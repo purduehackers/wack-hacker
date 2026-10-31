@@ -1,0 +1,167 @@
+import { createHash } from "node:crypto";
+
+import type { BadgeClient } from "@purduehackers/badges/client";
+import { BADGES_CHANNEL_ID } from "@purduehackers/badges/contracts";
+import { reviewStep } from "@purduehackers/badges/presentation";
+import { workResponse } from "@purduehackers/badges/wire";
+import { DISCORD_GUILD_ID } from "@repo/shared/discord";
+import { messageOf, Transient } from "@repo/shared/errors";
+import { Result } from "@repo/shared/result";
+import { AttachmentBuilder, DiscordAPIError } from "discord.js";
+import type { Client, Message, ThreadChannel } from "discord.js";
+
+import type { Schedule } from "../framework/schedules.ts";
+import { cardEmbeds, controls } from "./card.ts";
+import type { BadgeCard } from "./card.ts";
+import { messageControls } from "./components.ts";
+import { settledCard } from "./status.ts";
+
+async function clearAcrylicCards(channel: ThreadChannel, card: BadgeCard, botId: string) {
+  const history: Message[] = [];
+  const prefix = `badge:${card.review.id}:${card.version}:`;
+  let before: string | undefined;
+  while (true) {
+    const page = await channel.messages.fetch({
+      limit: 100,
+      ...(before ? { before } : {}),
+      cache: false,
+    });
+    history.push(
+      ...page
+        .filter(
+          (message) =>
+            message.author.id === botId &&
+            message.embeds.length > 0 &&
+            !messageControls(message).some(
+              (component) => "customId" in component && component.customId?.startsWith(prefix),
+            ),
+        )
+        .values(),
+    );
+    const oldest = page.last();
+    if (!oldest || page.size < 100) break;
+    before = oldest.id;
+  }
+  const firstAcrylic = history.findLastIndex((message) =>
+    message.embeds.some((embed) =>
+      ["✅ Acrylic Selected", "Choose your acrylic", "Acrylic is out of stock"].includes(
+        embed.title ?? "",
+      ),
+    ),
+  );
+  // Delete newest first so the acrylic card remains a retry boundary until cleanup finishes.
+  for (const message of history.slice(0, firstAcrylic + 1)) {
+    try {
+      await message.delete();
+    } catch (cause) {
+      if (!(cause instanceof DiscordAPIError) || cause.code !== 10_008) throw cause;
+    }
+  }
+}
+
+async function settlePreviousCard(
+  channel: ThreadChannel,
+  message: Message,
+  card: BadgeCard,
+  botId: string | undefined,
+) {
+  if (!botId) return;
+  const previousId = card.review.cardId;
+  if (!previousId || previousId === message.id) return;
+  try {
+    const previous = await channel.messages.fetch({ message: previousId, force: true });
+    const update = settledCard(previous, card);
+    if (previous.author.id === botId && update) await previous.edit(update);
+  } catch (cause) {
+    // Deleting an old card must not block delivery; other failures retry before ack.
+    if (!(cause instanceof DiscordAPIError) || cause.code !== 10_008) throw cause;
+  }
+}
+
+export function badgeWork(api: BadgeClient, secret: string): Schedule {
+  return {
+    name: "badge-review-work",
+    cron: "* * * * *",
+    run: async ({ client }) =>
+      Result.tryPromise({
+        try: async () => {
+          for (let i = 0; i < 8; i += 1) {
+            const { card, worked } = workResponse.parse(await api.post("work", {}, 90_000));
+            if (!card) {
+              if (worked) continue;
+              return;
+            }
+            const channel = await client.channels.fetch(card.review.threadId);
+            if (
+              !channel?.isThread() ||
+              channel.parentId !== BADGES_CHANNEL_ID ||
+              channel.guildId !== DISCORD_GUILD_ID
+            )
+              throw new Error("Badge review thread is unavailable.");
+            const components = controls(card, secret);
+            const attachments = card.files.map(
+              (file) =>
+                new AttachmentBuilder(Buffer.from(file.data, "base64"), { name: file.name }),
+            );
+            if (reviewStep(card.review) === "material" && client.user)
+              await clearAcrylicCards(channel, card, client.user.id);
+            // Each step arrives at the bottom of the thread. Retries reuse its nonce.
+            const nonce = createHash("sha256")
+              .update(`${card.review.id}:${card.version}`)
+              .digest("hex")
+              .slice(0, 24);
+            const message = await channel.send({
+              embeds: cardEmbeds(card),
+              components,
+              files: attachments,
+              nonce,
+              enforceNonce: true,
+              allowedMentions: { parse: [] },
+            });
+            await settlePreviousCard(channel, message, card, client.user?.id);
+            await api.post("ack", {
+              id: card.jobId,
+              lease: card.lease,
+              reviewId: card.review.id,
+              version: card.version,
+              messageId: message.id,
+            });
+          }
+        },
+        catch: (cause) => new Transient({ operation: "badge workflow", detail: messageOf(cause) }),
+      }),
+  };
+}
+
+/** Typing is transient; durable delivery settles the previous card and sends the next step. */
+export async function runBadgeWork(
+  api: BadgeClient,
+  secret: string,
+  client: Client,
+  threadId?: string,
+) {
+  const channel = threadId
+    ? await client.channels.fetch(threadId).catch(() => undefined)
+    : undefined;
+  await withBadgeTyping(channel?.isThread() ? channel : undefined, async () => {
+    if (!client.isReady()) return;
+    const result = await badgeWork(api, secret).run({ client });
+    if (Result.isError(result)) console.error("Badge delivery will retry:", result.error);
+  });
+}
+
+export async function withBadgeTyping<T>(
+  channel: { sendTyping(): Promise<void> } | undefined,
+  work: () => Promise<T>,
+): Promise<T> {
+  const typing = () => channel?.sendTyping().catch(() => undefined);
+  await typing();
+  const timer = setInterval(() => {
+    void typing();
+  }, 8000);
+  try {
+    return await work();
+  } finally {
+    clearInterval(timer);
+  }
+}

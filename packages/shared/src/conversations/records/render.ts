@@ -77,6 +77,7 @@ export const RENDER_TTL_SECONDS = 7 * 24 * 60 * 60;
  */
 export function renderTargetFor(delivery: DeliveryPayload): RenderTarget {
   return {
+    ...(delivery.agentTarget === undefined ? {} : { agentTarget: delivery.agentTarget }),
     dispatchId: delivery.dispatchId,
     continuationKey: delivery.continuationKey,
     messageId: delivery.messageId,

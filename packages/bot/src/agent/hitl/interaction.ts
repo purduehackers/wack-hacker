@@ -23,8 +23,10 @@ import {
 } from "discord.js";
 import type { GuildMember, Interaction } from "discord.js";
 
+import { badgeEmbed } from "../../badges/messages.ts";
 import { activeTraceparent } from "../../framework/observability.ts";
 import type { ConversationFlow } from "../../utils/conversation/index.ts";
+import { isBadgeChannel } from "../../utils/mention.ts";
 import { modalCustomId, parseLocator } from "./components.ts";
 import type { HitlLocator } from "./components.ts";
 
@@ -61,9 +63,19 @@ async function principalOf(interaction: Interaction, guildId: string): Promise<P
   };
 }
 
+function replyBody(interaction: Interaction, content: string) {
+  return isBadgeChannel(interaction)
+    ? { embeds: [badgeEmbed(content, "wack hacker")] }
+    : { content };
+}
+
 async function ephemeral(interaction: Interaction, content: string): Promise<void> {
   if (!interaction.isRepliable()) return;
-  await interaction.editReply({ content, components: [], allowedMentions: { parse: [] } });
+  await interaction.editReply({
+    ...replyBody(interaction, content),
+    components: [],
+    allowedMentions: { parse: [] },
+  });
 }
 
 function modalFor(locator: Extract<HitlLocator, { readonly kind: "input" }>): ModalBuilder {
@@ -118,7 +130,7 @@ async function revealAuthorization(
         ];
   if (!interaction.isRepliable()) return;
   await interaction.editReply({
-    content: sliceText(sections.join("\n\n"), 1_900),
+    ...replyBody(interaction, sliceText(sections.join("\n\n"), 1_900)),
     components,
     allowedMentions: { parse: [] },
   });
@@ -407,6 +419,10 @@ async function settleRequestMessage(
   freeform: string | undefined,
 ): Promise<void> {
   if (!interaction.isRepliable()) return;
+  if (isBadgeChannel(interaction)) {
+    await interaction.deleteReply();
+    return;
+  }
   const source = interaction.isMessageComponent()
     ? interaction.message
     : interaction.isModalSubmit()
