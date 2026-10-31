@@ -1,6 +1,6 @@
 /** Create short links through the phack.rs API; keep the same slug after uncertain writes. */
 
-import { createClient } from "@purduehackers/phack";
+import { createClient } from "@purduehackers/phack-cli";
 import { z } from "zod";
 
 import { messageOf } from "./errors.ts";
