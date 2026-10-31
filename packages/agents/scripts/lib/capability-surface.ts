@@ -1,0 +1,458 @@
+/// <reference types="node" />
+
+/**
+ * Cross-file invariants for the agent's capability surface.
+ *
+ * Every check here is a relationship *between* files, which is exactly what a
+ * code review cannot see: each hunk reads as correct on its own and the defect
+ * only exists in the pairing. A skill listing a tool the registry no longer
+ * defines, or a registry tool no skill can reach, is a silent runtime failure —
+ * the tool either fails to resolve or is undiscoverable by any role.
+ *
+ * Deriving the surface also imports every registry, so a top-level throw in any
+ * of them fails here rather than at boot.
+ *
+ * Shared by the checker and inventory report. Import actual registries rather
+ * than scrape source text, and validate the layout before reporting provenance.
+ * The migration baseline pins identities and reachability, not policy copies.
+ */
+
+import { access, readdir } from "node:fs/promises";
+import { join, relative, sep } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+import { ConfirmMode, RiskLevel } from "@repo/shared/db/enums";
+import { UserRole, roleAtLeast } from "@repo/shared/discord";
+import { z } from "zod";
+
+import { parseSkillDoc } from "../../agent/lib/policy/skill-catalog.ts";
+import { normalizeReadme, renderSubagentReadme, type SkillDoc } from "./subagent-readme.ts";
+
+export const packageRoot = fileURLToPath(new URL("../..", import.meta.url));
+const agentRoot = join(packageRoot, "agent");
+const repositoryRoot = join(packageRoot, "../..");
+
+/**
+ * A skill as declared today: policy here, prose in `lib/skill_defs/<name>.md`.
+ *
+ * Converted domains export these as `<DOMAIN>_SKILLS` from `lib/registry.ts`
+ * alongside the tools; the rest still export `<DOMAIN>_SKILL_DEFINITIONS` from
+ * `skills/catalog.ts` until their tools are split. The shape is the same either
+ * way — only the module differs.
+ */
+const registrySkillSchema = z.strictObject({
+  name: z.string().trim().min(1),
+  minRole: z.enum(UserRole),
+  tools: z.array(z.string()),
+  doc: z.string().trim().min(1),
+});
+
+const accessSchema = z.looseObject({
+  risk: z.enum(RiskLevel),
+  minRole: z.enum(UserRole).optional(),
+  confirm: z.enum(ConfirmMode).optional(),
+});
+const toolSpecSchema = z.looseObject({
+  description: z.string().trim().min(1),
+  access: accessSchema,
+  requires: z.union([z.string(), z.array(z.string())]).optional(),
+  execute: z.function(),
+});
+
+const descriptorSchema = z.looseObject({
+  minRole: z.enum(UserRole),
+  risk: z.enum(RiskLevel),
+  confirmation: z.enum(ConfirmMode).optional(),
+});
+const runtimeSchema = z.looseObject({
+  subagentDescriptor: descriptorSchema,
+  descriptorForTool: z.function({ input: [z.string()], output: descriptorSchema }),
+});
+
+export interface ToolSurface {
+  readonly id: string;
+  readonly name: string;
+  readonly source: string;
+  readonly description: string;
+  readonly risk: RiskLevel;
+  readonly declaredRole: UserRole | "runtime-default";
+  readonly toolRole: UserRole;
+  readonly admittedRole: UserRole;
+  readonly confirmation: ConfirmMode | "runtime-default";
+  readonly declaredRequirements: readonly string[];
+  readonly base: boolean;
+  readonly skills: readonly { readonly id: string; readonly admittedRole: UserRole }[];
+}
+
+export interface SkillSurface {
+  readonly id: string;
+  readonly name: string;
+  readonly source: string;
+  readonly description: string;
+  readonly declaredRole: UserRole;
+  readonly admittedRole: UserRole;
+  readonly tools: readonly string[];
+}
+
+export interface DomainSurface {
+  readonly name: string;
+  readonly converted: boolean;
+  readonly registrySource: string;
+  readonly runtimeSource: string;
+  readonly entryRole: UserRole;
+  readonly baseTools: readonly string[];
+  readonly tools: readonly ToolSurface[];
+  readonly skills: readonly SkillSurface[];
+}
+
+export function assertUnique(label: string, entries: readonly string[]): void {
+  const repeated = entries.filter((entry, index) => entries.indexOf(entry) !== index);
+  if (repeated.length > 0) throw new Error(`${label} contains duplicates: ${repeated.join(",")}`);
+}
+
+/** Reserve the separator so two domain/name pairs cannot encode the same ID. */
+export function capabilityId(domain: string, name: string): string {
+  for (const segment of [domain, name]) {
+    if (!/^[a-z][a-z0-9_-]*$/u.test(segment) || segment.includes("__")) {
+      throw new Error(`Ambiguous capability identity segment: ${segment}`);
+    }
+  }
+  const id = `${domain}__${name}`;
+  if (id.length > 64 || id.startsWith("eve__")) {
+    throw new Error(`Unsupported capability identity: ${id}`);
+  }
+  return id;
+}
+
+function sourcePath(path: string): string {
+  return relative(repositoryRoot, path).split(sep).join("/");
+}
+
+function stricterRole(left: UserRole, right: UserRole): UserRole {
+  return roleAtLeast(left, right) ? left : right;
+}
+
+function constantName(domain: string): string {
+  return domain.toUpperCase().replaceAll("-", "_");
+}
+
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** A subagent directory is only complete with both an agent and its instructions. */
+async function subagentNames(): Promise<string[]> {
+  const subagentsRoot = join(agentRoot, "subagents");
+  const discoveredSubagents = (await readdir(subagentsRoot, { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort((left, right) => left.localeCompare(right));
+  for (const subagent of discoveredSubagents) {
+    for (const required of ["agent.ts", "instructions.md"]) {
+      const path = join(subagentsRoot, subagent, required);
+      if (!(await fileExists(path))) throw new Error(`${path} is required for a declared subagent`);
+    }
+  }
+  return discoveredSubagents;
+}
+
+/** Skills and a tool registry are meaningless apart: one resolves against the other. */
+async function integrationDomains(subagents: readonly string[]): Promise<string[]> {
+  const domains: string[] = [];
+  for (const name of subagents) {
+    const root = join(agentRoot, "subagents", name);
+    const converted = await fileExists(join(root, "lib/registry.ts"));
+    const hasSkills = converted || (await fileExists(join(root, "skills/catalog.ts")));
+    const hasTools = converted || (await fileExists(join(root, "lib/tool-registry.ts")));
+    if (hasSkills !== hasTools) {
+      throw new Error(`${name} must declare both a native skill catalog and tool registry`);
+    }
+    if (hasSkills) domains.push(name);
+  }
+  return domains;
+}
+
+/** Every `.md` in `lib/skill_defs/` must be claimed by the registry, and vice versa. */
+async function skillDocNames(root: string): Promise<string[]> {
+  const dir = join(root, "lib/skill_defs");
+  if (!(await fileExists(dir))) return [];
+  return (await readdir(dir))
+    .filter((entry) => entry.endsWith(".md"))
+    .map((entry) => entry.slice(0, -3))
+    .sort((left, right) => left.localeCompare(right));
+}
+
+async function checkDomain(domain: string): Promise<DomainSurface> {
+  const root = join(agentRoot, "subagents", domain);
+  const constant = constantName(domain);
+  const converted = await fileExists(join(root, "lib/registry.ts"));
+
+  const modulePath = converted ? "lib/registry.ts" : "skills/catalog.ts";
+  const skillModule = z
+    .record(z.string(), z.unknown())
+    .parse(await import(pathToFileURL(join(root, modulePath)).href));
+  const registryModule = converted
+    ? skillModule
+    : z
+        .record(z.string(), z.unknown())
+        .parse(await import(pathToFileURL(join(root, "lib/tool-registry.ts")).href));
+
+  const baseTools = z.array(z.string()).parse(skillModule[`${constant}_BASE_TOOL_NAMES`]);
+  const toolSpecs = z.record(z.string(), toolSpecSchema).parse(registryModule[`${constant}_TOOLS`]);
+  const tools = Object.keys(toolSpecs);
+
+  const skills = z
+    .array(registrySkillSchema)
+    .parse(skillModule[converted ? `${constant}_SKILLS` : `${constant}_SKILL_DEFINITIONS`]);
+
+  assertUnique(`${domain} base tools`, baseTools);
+  assertUnique(
+    `${domain} skill names`,
+    skills.map((entry) => entry.name),
+  );
+  assertUnique(`${domain} tools`, tools);
+
+  // Every referenced tool must exist…
+  const knownTools = new Set(tools);
+  for (const [label, toolNames] of [
+    ["base", baseTools],
+    ...skills.map((entry) => [entry.name, entry.tools] as const),
+  ] as const) {
+    assertUnique(`${domain}/${label} tools`, toolNames);
+    const unknown = toolNames.filter((name) => !knownTools.has(name));
+    if (unknown.length > 0) {
+      throw new Error(`${domain}/${label} references unknown tools: ${unknown.join(",")}`);
+    }
+  }
+
+  // …and every defined tool must be reachable by some role.
+  const coveredTools = new Set([...baseTools, ...skills.flatMap((entry) => entry.tools)]);
+  const uncovered = tools.filter((name) => !coveredTools.has(name));
+  if (uncovered.length > 0) {
+    throw new Error(`${domain} registry tools lack skill/base coverage: ${uncovered.join(",")}`);
+  }
+
+  // Prose lives in files for every domain now, so these run everywhere; the
+  // README check is the only part that waits for `lib/registry.ts`.
+  await checkSkillDocs(domain, root, skills);
+  const sources = await checkToolLayout(domain, root, skills, baseTools, tools);
+  if (converted) await checkReadme(domain, root, skills, baseTools, toolSpecs);
+
+  const runtimePath = join(root, "lib/runtime.ts");
+  const runtimeModule = z
+    .record(z.string(), z.unknown())
+    .parse(await import(pathToFileURL(runtimePath).href));
+  const runtime = runtimeSchema.parse(runtimeModule[`${constant}_RUNTIME`]);
+  const entryRole = runtime.subagentDescriptor.minRole;
+  const documentedSkills = skills.map((entry): SkillSurface => ({
+    id: capabilityId(domain, entry.name),
+    name: entry.name,
+    source: sourcePath(join(root, "lib/skill_defs", `${entry.name}.md`)),
+    description: parseSkillDoc(entry.doc).description,
+    declaredRole: entry.minRole,
+    admittedRole: stricterRole(entryRole, entry.minRole),
+    tools: entry.tools.map((name) => capabilityId(domain, name)).sort(),
+  }));
+  return {
+    name: domain,
+    converted,
+    registrySource: sourcePath(join(root, modulePath)),
+    runtimeSource: sourcePath(runtimePath),
+    entryRole,
+    baseTools: baseTools.map((name) => capabilityId(domain, name)).sort(),
+    tools: describeTools({ domain, toolSpecs, runtime, sources, baseTools, documentedSkills }),
+    skills: documentedSkills.sort((left, right) => left.id.localeCompare(right.id)),
+  };
+}
+
+type RegistrySkill = z.output<typeof registrySkillSchema>;
+type ToolSpecs =
+  z.output<typeof toolSpecSchema> extends infer Spec ? Readonly<Record<string, Spec>> : never;
+
+function describeTools(input: {
+  readonly domain: string;
+  readonly toolSpecs: ToolSpecs;
+  readonly runtime: z.output<typeof runtimeSchema>;
+  readonly sources: ReadonlyMap<string, string>;
+  readonly baseTools: readonly string[];
+  readonly documentedSkills: readonly SkillSurface[];
+}): ToolSurface[] {
+  const { domain, toolSpecs, runtime, sources, baseTools, documentedSkills } = input;
+  return Object.entries(toolSpecs)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, spec]): ToolSurface => {
+      const source = sources.get(name);
+      if (source === undefined) throw new Error(`${domain}/${name} has no source file`);
+      const descriptor = runtime.descriptorForTool(name);
+      const id = capabilityId(domain, name);
+      return {
+        id,
+        name,
+        source: sourcePath(source),
+        description: spec.description,
+        risk: descriptor.risk,
+        declaredRole: spec.access.minRole ?? "runtime-default",
+        toolRole: descriptor.minRole,
+        admittedRole: stricterRole(runtime.subagentDescriptor.minRole, descriptor.minRole),
+        confirmation: descriptor.confirmation ?? "runtime-default",
+        declaredRequirements:
+          spec.requires === undefined
+            ? []
+            : (Array.isArray(spec.requires) ? spec.requires : [spec.requires]).toSorted(),
+        base: baseTools.includes(name),
+        skills: documentedSkills
+          .filter((entry) => entry.tools.includes(id))
+          .map((entry) => ({
+            id: entry.id,
+            admittedRole: stricterRole(entry.admittedRole, descriptor.minRole),
+          }))
+          .sort((left, right) => left.id.localeCompare(right.id)),
+      };
+    });
+}
+
+/** The invariants that only exist once prose and policy live in separate files. */
+/**
+ * `lib/tool_defs/` must mirror the skill list: one directory per skill plus
+ * `base`, one file per tool, each file in the bundle whose skill lists it.
+ *
+ * Nothing else enforces this. The registry compiles whatever it imports, so an
+ * orphan file, a tool filed under the wrong skill, or a directory named after a
+ * skill that no longer exists all ship silently — the exact drift the split was
+ * done to remove.
+ */
+export async function checkToolLayout(
+  domain: string,
+  root: string,
+  skills: readonly RegistrySkill[],
+  baseTools: readonly string[],
+  toolNames: readonly string[],
+): Promise<ReadonlyMap<string, string>> {
+  const defsRoot = join(root, "lib/tool_defs");
+  if (!(await fileExists(defsRoot))) throw new Error(`${defsRoot} is required`);
+
+  const expectedBundles = new Set(skills.map((entry) => entry.name));
+  if (baseTools.length > 0) expectedBundles.add("base");
+
+  // A tool may be listed by more than one skill, so it may legitimately live in
+  // any bundle that claims it.
+  const claimedBy = new Map<string, Set<string>>();
+  const claim = (tool: string, bundle: string) =>
+    claimedBy.set(tool, (claimedBy.get(tool) ?? new Set()).add(bundle));
+  for (const entry of skills) for (const name of entry.tools) claim(name, entry.name);
+  for (const name of baseTools) claim(name, "base");
+
+  const problems: string[] = [];
+  const seen = new Map<string, string>();
+  for (const bundle of await readdir(defsRoot, { withFileTypes: true })) {
+    if (!bundle.isDirectory()) {
+      problems.push(`lib/tool_defs/${bundle.name} is not a bundle directory`);
+      continue;
+    }
+    if (!expectedBundles.has(bundle.name)) {
+      problems.push(`lib/tool_defs/${bundle.name}/ matches no skill`);
+      continue;
+    }
+    for (const file of await readdir(join(defsRoot, bundle.name))) {
+      if (!file.endsWith(".ts")) continue;
+      const tool = file.slice(0, -3);
+      const source = join(defsRoot, bundle.name, file);
+      if (seen.has(tool)) problems.push(`${tool} has multiple source files`);
+      seen.set(tool, source);
+      const owners = claimedBy.get(tool);
+      if (owners === undefined) problems.push(`${tool} is not in the registry`);
+      else if (!owners.has(bundle.name)) {
+        problems.push(
+          `${tool} sits in ${bundle.name}/ but only ${[...owners].join(", ")} claims it`,
+        );
+      }
+    }
+  }
+  const unfiled = toolNames.filter((name) => !seen.has(name));
+  if (unfiled.length > 0) problems.push(`no tool_defs file for: ${unfiled.join(",")}`);
+
+  if (problems.length > 0) {
+    throw new Error(`${domain} tool_defs layout:\n  ${problems.join("\n  ")}`);
+  }
+  return seen;
+}
+
+/** Prose and policy are separate files; neither may name a skill the other lacks. */
+async function checkSkillDocs(
+  domain: string,
+  root: string,
+  skills: readonly RegistrySkill[],
+): Promise<void> {
+  const declared = skills.map((entry) => entry.name).sort((a, b) => a.localeCompare(b));
+  const documented = await skillDocNames(root);
+  const missingDoc = declared.filter((name) => !documented.includes(name));
+  const orphanDoc = documented.filter((name) => !declared.includes(name));
+  if (missingDoc.length > 0 || orphanDoc.length > 0) {
+    throw new Error(
+      `${domain} skills and lib/skill_defs/*.md disagree` +
+        (missingDoc.length > 0 ? `; no prose for: ${missingDoc.join(",")}` : "") +
+        (orphanDoc.length > 0 ? `; no registry entry for: ${orphanDoc.join(",")}` : ""),
+    );
+  }
+  for (const entry of skills) {
+    if (parseSkillDoc(entry.doc).description === "") {
+      throw new Error(`${domain}/${entry.name}.md needs a \`description\` in its frontmatter`);
+    }
+  }
+}
+
+/** The README's tool table is derived, so it cannot be allowed to rot. */
+async function checkReadme(
+  domain: string,
+  root: string,
+  skills: readonly RegistrySkill[],
+  baseTools: readonly string[],
+  toolSpecs: ToolSpecs,
+): Promise<void> {
+  const docs: SkillDoc[] = skills.map((entry) => ({
+    name: entry.name,
+    minRole: entry.minRole,
+    tools: entry.tools,
+    description: parseSkillDoc(entry.doc).description,
+  }));
+
+  const readmePath = join(root, "README.md");
+  if (!(await fileExists(readmePath))) {
+    throw new Error(`${readmePath} is required; run \`bun run readmes\` to create it`);
+  }
+  const current = await Bun.file(readmePath).text();
+  const expected = renderSubagentReadme({
+    domain,
+    skills: docs,
+    baseTools: [...baseTools],
+    tools: toolSpecs,
+    existing: current,
+  });
+  if (normalizeReadme(expected) !== normalizeReadme(current)) {
+    throw new Error(`${domain}/README.md is stale; run \`bun run readmes\``);
+  }
+}
+
+export async function readCapabilitySurface() {
+  const subagents = await subagentNames();
+  const names = await integrationDomains(subagents);
+  const surfaces = await Promise.all(names.map(checkDomain));
+  assertUnique(
+    "namespaced tools",
+    surfaces.flatMap((domain) => domain.tools.map((tool) => tool.id)),
+  );
+  assertUnique(
+    "namespaced skills",
+    surfaces.flatMap((domain) => domain.skills.map((skill) => skill.id)),
+  );
+  return {
+    domains: surfaces,
+    auxiliary: subagents.filter((entry) => !names.includes(entry)),
+    subagentCount: subagents.length,
+  };
+}
