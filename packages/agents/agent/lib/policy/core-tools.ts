@@ -28,7 +28,7 @@ function integrationConfigured(name: CoreToolName): boolean {
         env.GLOBAL_CONFIG !== undefined && isGlobalConfigConnectionConfigured(env.GLOBAL_CONFIG)
       );
     case "create_phack_link":
-      return env.VERCEL_API_TOKEN !== undefined;
+      return env.PHACK_TOKEN !== undefined;
     case "list_audit_log":
       // `TURSO_DATABASE_URL` is required by `env.ts`, so the audit log is
       // configured whenever the process started at all.

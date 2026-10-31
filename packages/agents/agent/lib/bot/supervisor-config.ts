@@ -75,6 +75,8 @@ function botEnvironment(source: AgentEnv): BotProcessEnvironment {
     BOT_INGRESS_SECRET: required(source.BOT_INGRESS_SECRET, "BOT_INGRESS_SECRET"),
     REDIS_URL: source.REDIS_URL,
     VERCEL_API_TOKEN: required(source.VERCEL_API_TOKEN, "VERCEL_API_TOKEN"),
+    PHACK_TOKEN: required(source.PHACK_TOKEN, "PHACK_TOKEN"),
+    PHACK_URL: source.PHACK_URL,
     DASHBOARD_GLOBAL_CONFIG: required(source.DASHBOARD_GLOBAL_CONFIG, "DASHBOARD_GLOBAL_CONFIG"),
     PAYLOAD_CMS_API_KEY: required(source.PAYLOAD_CMS_API_KEY, "PAYLOAD_CMS_API_KEY"),
     SHIP_API_KEY: required(source.SHIP_API_KEY, "SHIP_API_KEY"),

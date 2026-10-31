@@ -69,6 +69,10 @@ export const env = createEnv({
     VERCEL_API_TOKEN: secret,
     DASHBOARD_GLOBAL_CONFIG: secret,
 
+    /** The shortener API uses its own credential, separate from PHACK_API_KEY. */
+    PHACK_TOKEN: secret,
+    PHACK_URL: z.url({ protocol: /^https?$/u }).default("https://phack.rs"),
+
     /** The image-drop archive in Payload CMS, and the events photos are filed against. */
     PAYLOAD_CMS_API_KEY: secret,
 

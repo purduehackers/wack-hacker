@@ -1,15 +1,19 @@
-/** Create phack.rs redirects in the Vercel Global Config read by the redirect middleware. */
+/** Create short links through the phack.rs API; keep the same slug after uncertain writes. */
 
+import { createClient } from "@purduehackers/phack";
 import { z } from "zod";
 
 import { messageOf } from "./errors.ts";
 
-const CONFIG_URL = "https://api.vercel.com/v1/global-config/ecfg_k1ocmrcfwo57k9v2klgtljycqsqj";
-const TEAM_QUERY = "teamId=team_kOQWJUQYzGW4blWthdK71Y8A";
 export const PHACK_SLUG_PATTERN = /^[A-Za-z0-9][A-Za-z0-9-]{0,62}[A-Za-z0-9]$/u;
 export const PHACK_RESERVED_SLUGS = new Set(["404", "api", "dashboard", "favicon", "login"]);
 
-const storedLink = z.looseObject({ value: z.looseObject({ d: z.string() }) });
+const storedLink = z.object({ d: z.string() });
+const createdLink = z.object({
+  slug: z.string(),
+  d: z.string(),
+  status: z.enum(["created", "existing"]),
+});
 
 export type PhackWriteResult =
   | { readonly kind: "created" | "same" | "exists" }
@@ -23,55 +27,54 @@ export type PhackWriteResult =
 async function existingLink(
   slug: string,
   destination: string,
-  token: string,
+  client: ReturnType<typeof createClient>,
 ): Promise<"same" | "exists" | undefined> {
   try {
-    const response = await fetch(`${CONFIG_URL}/item/${encodeURIComponent(slug)}?${TEAM_QUERY}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(3_000),
-    });
-    if (response.status === 204 || !response.ok) return undefined;
-    const parsed = storedLink.safeParse(await response.json());
+    // The write signal may already be aborted. Reconcile with a separate bounded read.
+    const response = await client
+      .links({ slug })
+      .get({ fetch: { signal: AbortSignal.timeout(3_000) } });
+    if (response.status !== 200) return undefined;
+    const parsed = storedLink.safeParse(response.data);
     if (!parsed.success) return undefined;
-    return parsed.data.value.d === destination ? "same" : "exists";
+    return parsed.data.d === destination ? "same" : "exists";
   } catch {
     return undefined;
   }
 }
 
+/** Does not retry writes. A lost response triggers one read of the original slug. */
 export async function writePhackLink(input: {
   readonly slug: string;
   readonly destination: string;
   readonly token: string;
   readonly signal: AbortSignal;
+  readonly url?: string;
 }): Promise<PhackWriteResult> {
-  const { slug, destination, token, signal } = input;
-  let response: Response;
+  const { slug, destination, token, signal, url = "https://phack.rs" } = input;
+  const client = createClient(url, token);
   try {
-    response = await fetch(`${CONFIG_URL}/items?${TEAM_QUERY}`, {
-      method: "PATCH",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        items: [{ operation: "create", key: slug, value: { d: destination, v: 0 } }],
-      }),
-      signal,
-    });
+    const response = await client.links.post({ slug, destination }, { fetch: { signal } });
+    const status = response.status;
+    if (status === 200) {
+      const parsed = createdLink.safeParse(response.data);
+      if (parsed.success && parsed.data.slug === slug && parsed.data.d === destination) {
+        return { kind: parsed.data.status === "created" ? "created" : "same" };
+      }
+    }
+    // The API only returns 409 after confirming that this slug points elsewhere.
+    if (status === 409) return { kind: "exists" };
+    const detail = `Short-link API returned ${status}`;
+    if (status === 400 || status === 422) return { kind: "invalid_request", status, detail };
+    if (status === 200 || status === 408 || status >= 500) {
+      const existing = await existingLink(slug, destination, client);
+      return existing === undefined ? { kind: "unverified", status, detail } : { kind: existing };
+    }
+    return { kind: "error", status, detail };
   } catch (cause) {
-    const existing = await existingLink(slug, destination, token);
+    const existing = await existingLink(slug, destination, client);
     return existing === undefined
       ? { kind: "unverified", detail: messageOf(cause) }
       : { kind: existing };
   }
-  if (response.ok) return { kind: "created" };
-
-  const status = response.status;
-  if (status === 400 || status === 408 || status === 409 || status >= 500) {
-    const existing = await existingLink(slug, destination, token);
-    if (existing !== undefined) return { kind: existing };
-  }
-  const detail = (await response.text().catch(() => "")).slice(0, 200);
-  if (status === 400) return { kind: "invalid_request", status, detail };
-  if (status === 409) return { kind: "conflict", status, detail };
-  if (status === 408 || status >= 500) return { kind: "unverified", status, detail };
-  return { kind: "error", status, detail };
 }
