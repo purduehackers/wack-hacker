@@ -284,6 +284,8 @@ export type BotProcessEnvironment = Readonly<Record<string, string>> & {
   readonly BOT_INGRESS_SECRET: string;
   readonly REDIS_URL: string;
   readonly VERCEL_API_TOKEN: string;
+  readonly PHACK_TOKEN: string;
+  readonly PHACK_URL: string;
   readonly DASHBOARD_GLOBAL_CONFIG: string;
   readonly PAYLOAD_CMS_API_KEY: string;
   readonly SHIP_API_KEY: string;
@@ -301,6 +303,8 @@ const REQUIRED_BOT_ENV_KEYS = [
   "BOT_INGRESS_SECRET",
   "REDIS_URL",
   "VERCEL_API_TOKEN",
+  "PHACK_TOKEN",
+  "PHACK_URL",
   "DASHBOARD_GLOBAL_CONFIG",
   "PAYLOAD_CMS_API_KEY",
   "SHIP_API_KEY",

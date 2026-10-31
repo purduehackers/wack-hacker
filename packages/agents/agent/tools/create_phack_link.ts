@@ -7,7 +7,6 @@ import { env } from "../env.ts";
 import { authorizeCoreTool, coreToolFailure, isCoreToolVisible } from "../lib/policy/core-tools.ts";
 import { guardToolExecution } from "../lib/serialization.ts";
 
-const PROPAGATION_NOTE = "The redirect may take a few seconds to start working everywhere.";
 const RANDOM_SLUG_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
 const RANDOM_SLUG_LENGTH = 8;
 const RANDOM_SLUG_ATTEMPTS = 5;
@@ -79,10 +78,10 @@ async function createLinkOnce(
   token: string,
   signal: AbortSignal,
 ) {
-  const result = await writePhackLink({ slug, destination, token, signal });
+  const result = await writePhackLink({ slug, destination, token, signal, url: env.PHACK_URL });
   const url = `https://phack.rs/${slug}`;
   if (result.kind === "created" || result.kind === "same") {
-    return { ok: true, created: result.kind === "created", url, note: PROPAGATION_NOTE } as const;
+    return { ok: true, created: result.kind === "created", url } as const;
   }
   if (result.kind === "exists") {
     return {
@@ -93,14 +92,14 @@ async function createLinkOnce(
   }
   if (result.kind === "error") {
     throw new UpstreamError({
-      service: "Vercel Global Config",
+      service: "phack.rs API",
       status: result.status,
       detail: "link creation failed",
     });
   }
   const messages = {
-    invalid_request: "Vercel rejected this link. Check the slug and destination.",
-    conflict: `Vercel reported a conflict for ${slug}. Check the link before trying another slug.`,
+    invalid_request: "The short-link API rejected this link. Check the slug and destination.",
+    conflict: `The short-link API reported a conflict for ${slug}. Check the link before trying another slug.`,
     unverified: `Could not verify whether ${url} was created. Check the link before retrying.`,
   };
   return { ok: false, code: result.kind, message: messages[result.kind] } as const;
@@ -112,10 +111,10 @@ export async function createPhackLink(
   callKey: string,
   signal = AbortSignal.timeout(10_000),
 ) {
-  const token = env.VERCEL_API_TOKEN;
+  const token = env.PHACK_TOKEN;
   if (token === undefined) {
     throw new UpstreamError({
-      service: "Vercel Global Config",
+      service: "phack.rs API",
       status: 503,
       detail: "integration is not configured",
     });
@@ -158,7 +157,7 @@ export default defineDynamic({
                 signal,
               );
             } catch (cause) {
-              return coreToolFailure("Vercel Global Config", cause);
+              return coreToolFailure("phack.rs API", cause);
             }
           });
         },

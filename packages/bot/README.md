@@ -111,3 +111,7 @@ docker build -f packages/bot/Dockerfile -t wack-hacker-bot .
 ```
 
 It listens on `PORT` (default 8080) for the agent's render, parked and scheduled callbacks, and for liveness probes.
+
+The command uses the shortener API through the shared Eden client. Set `PHACK_TOKEN`; `PHACK_URL` defaults to `https://phack.rs`.
+The Sandbox supervisor forwards both variables. Keep `VERCEL_API_TOKEN` for `/hack-night`, which updates a separate config store.
+Before rollout, configure `PHACK_TOKEN` on the agent deployment and standalone bot hosts, then rebuild the bot image.
