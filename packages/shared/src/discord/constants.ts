@@ -32,7 +32,7 @@ export const DISCORD_IDS = {
     HACK_NIGHT: "1020777328172859412",
     /**
      * Organizers only. Where `anti-spam` reports a suspected spree, which is why
-     * that alert may link messages from channels the wider guild cannot read.
+     * that alert may link channels the wider guild cannot read.
      */
     COMMUNITY: "938671895430180865",
   },
