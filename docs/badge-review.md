@@ -52,6 +52,8 @@ flowchart LR
 
 The first ping in an unassigned #p-badges thread uses Luna to choose the badge or general agent. Saved thread routes bypass classification. Both agents use the existing [Discord conversation engine](system/conversation-engine.md); badge work does not add Eve HTTP channels.
 
+A designer can create the thread themselves and then mention Wack Hacker. A new review reuses SVGs from that designer’s opening message when the mention has no attachments. Later turns keep the current review’s files.
+
 ## What the badge agent can do
 
 Eve refreshes `tools/catalog.ts` before every model step. The badge service returns only actions that the current person can perform at the current stage. Native Discord interactions call the same controller checks.
@@ -83,8 +85,12 @@ Use these files to change Discord behavior or agent instructions:
 
 Change validation, packing, rendering, materials, stock accounting, or publishing in the badges repository. Its [workflow documentation](https://github.com/purduehackers/badges/blob/main/docs/workflow.md) explains confirmation hashes and recovery. Its [service reference](https://github.com/purduehackers/badges/blob/main/docs/service.md) lists environment variables and migrations.
 
+The package's typed HTTP client validates request and response contracts. Bot and agent code consume its parsed result directly; they do not declare local response schemas. Browser-safe data schemas come from `badges/contracts`, review rules from `badges/review`, signed controls from `badges/wire`, and sheet naming from `badges/sheets`. Stock search also uses the shared inventory helper. Pin the bot and badge-agent packages to the same badges commit when changing this boundary.
+
 ## What enables the feature
 
-Deploy the badge service and badge Eve agent before setting `BADGES_API_URL` and `BADGE_AGENT_URL` in the bot. Set the same `BADGES_API_SECRET` in all three processes and provide `AI_GATEWAY_API_KEY` to the bot for initial routing. The URLs must be configured together, and the bot remains the only Discord writer.
+Deploy the badge service and badge Eve agent before setting `BADGES_API_URL` and `BADGE_AGENT_URL` in the bot. Set the same `BADGES_API_SECRET` in all three processes. Initial routing uses `AI_GATEWAY_API_KEY` or, for linked local development, `VERCEL_OIDC_TOKEN` from `vercel env pull`. The URLs must be configured together, and the bot remains the only Discord writer.
 
 Apply badge migrations from the badges repository. Stop any old badge worker before starting the replacement. Keep the feature disabled until the service, database, model provider, and publication credentials work together.
+
+For local Eve runs, copy the two `WORKFLOW_LOCAL_*_TIMEOUT_MS` values from `.env.example` into the badge agent's environment. The local transport otherwise retries after 30 seconds, which can overlap a model call that is still running.

@@ -12,6 +12,9 @@
         "BADGES_API_URL",
         "BADGES_API_SECRET",
         "AI_GATEWAY_API_KEY",
+        "REDIS_URL",
+        "TURSO_AUTH_TOKEN",
+        "TURSO_DATABASE_URL",
         "SKIP_ENV_VALIDATION"
       ]
     }

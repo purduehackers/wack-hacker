@@ -10,7 +10,7 @@ import {
   MATERIAL_TYPE_CONFIGS,
   thicknessLabel,
 } from "@purduehackers/badges/materials";
-import { sheetKey, sheetLabel } from "@purduehackers/badges/presentation";
+import { sheetKey, sheetLabel } from "@purduehackers/badges/sheets";
 import { ComponentType } from "discord.js";
 import type { ModalSubmitFields } from "discord.js";
 

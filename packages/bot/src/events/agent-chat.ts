@@ -19,7 +19,6 @@ import { continuationKeyFor } from "@repo/shared/wire";
 import type { MessagePayload, Principal } from "@repo/shared/wire";
 import { ChannelType } from "discord.js";
 import type { AnyThreadChannel, Client, Message } from "discord.js";
-import { z } from "zod";
 
 import { attachmentsOf, fetchReplyTo } from "../agent/message-context.ts";
 import type { TurnMessageReader } from "../agent/turn-messages.ts";
@@ -210,7 +209,7 @@ export function agentChat(deps: AgentChatDeps) {
         ...(traceparent === undefined ? {} : { traceparent }),
       };
 
-      if (badgePing && (await routeBadgeTurn(deps, payload, context.client, target)))
+      if (badgePing && (await routeBadgeTurn(deps, payload, context.client, target, message)))
         return Result.ok(undefined);
       const submitted = await deps.agent.submit(payload);
       if (Result.isError(submitted) && badgePing)
@@ -228,6 +227,7 @@ async function routeBadgeTurn(
   payload: MessagePayload,
   client: Client,
   target: Message["channel"],
+  message: Message,
 ): Promise<boolean> {
   if (!deps.badges) return false;
   try {
@@ -236,9 +236,15 @@ async function routeBadgeTurn(
       const route = await routeMessage(api, payload);
       payload.agentTarget = route;
       if (route !== "badge") return false;
-      return z
-        .object({ handled: z.boolean() })
-        .parse(await api.post("submit", badgePayload(payload), 60_000)).handled;
+      if (!payload.attachments?.length && message.channel.isThread()) {
+        const { exists } = await api.post("lookup", { threadId: message.channelId });
+        if (!exists) {
+          const starter = await message.channel.fetchStarterMessage().catch(() => undefined);
+          if (starter?.author.id === message.author.id)
+            payload.attachments = attachmentsOf(starter);
+        }
+      }
+      return (await api.post("submit", badgePayload(payload), 60_000)).handled;
     });
     if (handled && deps.badgeSecret)
       await runBadgeWork(deps.badges, deps.badgeSecret, client, target.id);
@@ -427,13 +433,9 @@ export function badgeUploads(api: BadgeClient, secret: string) {
         ...threadRefOf(message, undefined),
       };
       try {
-        const result = z
-          .object({ handled: z.boolean() })
-          .parse(
-            await withBadgeTyping(message.channel, () =>
-              api.post("continue", badgePayload(payload), 60_000),
-            ),
-          );
+        const result = await withBadgeTyping(message.channel, () =>
+          api.post("continue", badgePayload(payload), 60_000),
+        );
         if (result.handled) await runBadgeWork(api, secret, context.client, message.channelId);
       } catch (cause) {
         await badgeNotice(message.channel, failureGuidance(messageOf(cause)));

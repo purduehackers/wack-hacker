@@ -12,7 +12,7 @@ export interface PhackLinkWriter {
   ) => Promise<Result<CreateLinkOutcome, CreateLinkError>>;
 }
 
-export function createPhackLinkWriter(token: string): PhackLinkWriter {
+export function createPhackLinkWriter(token: string, url: string): PhackLinkWriter {
   return {
     create: (slug, destination) =>
       Result.tryPromise({
@@ -21,12 +21,13 @@ export function createPhackLinkWriter(token: string): PhackLinkWriter {
             slug,
             destination,
             token,
+            url,
             signal: AbortSignal.timeout(10_000),
           });
           if (!("detail" in result)) return result.kind;
           throw result.status !== undefined && result.status < 500
             ? new UpstreamError({
-                service: "vercel-global-config",
+                service: "phack-api",
                 status: result.status,
                 detail: result.detail,
               })

@@ -78,6 +78,9 @@ export const env = createEnv({
     SENTRY_API_TOKEN: secret.optional(),
     SENTRY_ORG: identifier.optional(),
     VERCEL_API_TOKEN: secret.optional(),
+    /** Short-link API configuration, also injected into the bot container. */
+    PHACK_TOKEN: secret.optional(),
+    PHACK_URL: httpUrl.default("https://phack.rs"),
 
     /**
      * Bot Sandbox supervision. Off by default; enabling it without the full

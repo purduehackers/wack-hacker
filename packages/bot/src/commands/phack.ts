@@ -89,9 +89,7 @@ async function run(
     const created = await writer.create(slug, destination);
     if (Result.isError(created)) return created;
     if (created.value === "created") {
-      return Result.ok(
-        `Created https://phack.rs/${slug} — it may take a few seconds to start redirecting.`,
-      );
+      return Result.ok(`Created https://phack.rs/${slug}.`);
     }
     if (created.value === "same") {
       return Result.ok(`https://phack.rs/${slug} already points to that destination.`);

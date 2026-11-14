@@ -34,6 +34,7 @@
   },
   "dependencies": {
     "@libsql/client": "^0.17.4",
+    "@purduehackers/phack-cli": "0.2.0",
     "better-result": "^3.0.0",
     "drizzle-orm": "^0.45.2",
     "redis": "^6.2.1",

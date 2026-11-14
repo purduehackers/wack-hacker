@@ -1,8 +1,8 @@
 import { BadgeApiError } from "@purduehackers/badges/client";
 import type { BadgeClient } from "@purduehackers/badges/client";
-import { BADGES_CHANNEL_ID, MAX_BADGE_COUNT, reviewSchema } from "@purduehackers/badges/contracts";
-import { stockItemSchema } from "@purduehackers/badges/inventory-contracts";
+import { MAX_BADGE_COUNT } from "@purduehackers/badges/contracts";
 import { failureGuidance } from "@purduehackers/badges/presentation";
+import { BADGES_CHANNEL_ID } from "@purduehackers/badges/wire";
 import { actionName, actionSchema, componentId } from "@purduehackers/badges/wire";
 import { bearerMatches } from "@repo/shared/bearer";
 import { DISCORD_GUILD_ID, roleAtLeast, roleFromMemberRoles, UserRole } from "@repo/shared/discord";
@@ -32,10 +32,6 @@ const controlSchema = z.tuple([
   z.string(),
 ]);
 
-const controlResponse = z.object({
-  review: reviewSchema,
-  availableSheets: z.array(stockItemSchema).default([]),
-});
 function commandFor(interaction: BadgeInteraction, name: string) {
   const [kind, role] = name.split(".");
   if (kind === "quantity") {
@@ -113,7 +109,7 @@ async function beforeModal(interaction: BadgeInteraction, api: BadgeClient, secr
     return await Promise.race([
       requestFor(interaction, secret).then(async (input) => ({
         ...input,
-        ...controlResponse.parse(await api.post("control", input, 1800)),
+        ...(await api.post("control", input, 1800)),
       })),
       deadline.promise,
     ]);
@@ -125,10 +121,21 @@ async function privateFailure(interaction: BadgeInteraction, cause: unknown) {
   const detail = messageOf(cause);
   const stale = /newer step|latest review|stale/iu.test(detail);
   const url = stale && cause instanceof BadgeApiError ? cause.url : undefined;
-  const title = stale ? "There’s a newer step below" : "Continue with your designs";
+  const sameMessage = url && "message" in interaction && interaction.message?.url === url;
+  let title = "Continue with your designs";
+  if (stale) title = "There’s a newer step below";
+  if (sameMessage) title = "Step submitted";
   const options = {
-    embeds: [badgeEmbed(failureGuidance(detail), title, stale ? "warning" : "error")],
-    components: url ? [row(link("Go to latest step", url))] : [],
+    embeds: [
+      badgeEmbed(
+        sameMessage
+          ? "This step was already submitted. Wait for the result."
+          : failureGuidance(detail),
+        title,
+        stale ? "warning" : "error",
+      ),
+    ],
+    components: url && !sameMessage ? [row(link("Go to latest step", url))] : [],
     allowedMentions: { parse: [] },
   };
   if (interaction.deferred && !interaction.replied && interaction.ephemeral)
@@ -245,9 +252,7 @@ async function handleBadgeAction(
   else await interaction.deferUpdate();
   const input = await requestFor(interaction, secret);
   if (choosingMaterial) {
-    const { availableSheets } = z
-      .object({ availableSheets: z.array(stockItemSchema) })
-      .parse(await api.post("control", input));
+    const { availableSheets } = await api.post("control", input);
     const selected = interaction.isStringSelectMenu()
       ? interaction.values
       : listed.filter((option) => option.default).map((option) => option.value);
@@ -275,7 +280,7 @@ async function handleBadgeAction(
       ),
     };
   if (input.action.kind === "sheets" && interaction.isModalSubmit()) {
-    const current = controlResponse.parse(await api.post("control", input));
+    const current = await api.post("control", input);
     input.action = {
       kind: "sheets",
       sheets: parseSheets(interaction.fields, current.review, current.availableSheets),
@@ -284,10 +289,20 @@ async function handleBadgeAction(
   await withBadgeTyping(interaction.channel?.isThread() ? interaction.channel : undefined, () =>
     api.post("action", input, 60_000),
   );
-  if (name === "material.use")
-    await interaction
-      .deleteReply()
-      .catch((cause) => console.error("Could not dismiss acrylic picker:", messageOf(cause)));
+  switch (name) {
+    case "publish":
+      await interaction.editReply({
+        embeds: [badgeEmbed("Saving your badge, stamp, and cutting sheets.", "Saving files")],
+        components: [],
+        attachments: [],
+      });
+      break;
+    case "material.use":
+      await interaction
+        .deleteReply()
+        .catch((cause) => console.error("Could not dismiss acrylic picker:", messageOf(cause)));
+      break;
+  }
   await runBadgeWork(api, secret, interaction.client, interaction.channelId ?? undefined);
 }
 

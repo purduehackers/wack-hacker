@@ -1,7 +1,9 @@
-import { remainingCriteria, staticPassed, reviewMaterials } from "@purduehackers/badges/contracts";
+import { reviewMaterials } from "@purduehackers/badges/contracts";
 import type { Review } from "@purduehackers/badges/contracts";
 import { materialDescription } from "@purduehackers/badges/materials";
-import { displayDate, sheetLabel } from "@purduehackers/badges/presentation";
+import { displayDate } from "@purduehackers/badges/presentation";
+import { remainingCriteria, staticPassed } from "@purduehackers/badges/review";
+import { sheetLabel } from "@purduehackers/badges/sheets";
 import { AttachmentBuilder, escapeMarkdown } from "discord.js";
 import type { APIEmbed, Message } from "discord.js";
 
@@ -13,7 +15,7 @@ const confirmed = `✅ **Automatic QA passed**
 -# - Allowed colors
 -# - Vector artwork
 -# - Outlined text
--# - No red fills or red borders on filled artwork
+-# - No red-filled artwork
 -# - Closed cutting outlines
 -# - No unsupported effects or linked artwork
 
@@ -61,7 +63,7 @@ function completedDesign(commands: string[], review: Review): APIEmbed | undefin
 function completedDetails(
   message: Pick<Message, "components">,
   { review }: BadgeCard,
-): APIEmbed | undefined {
+): APIEmbed | "delete" | undefined {
   const commands = messageControls(message).flatMap((component) =>
     "customId" in component && component.customId?.startsWith(`badge:${review.id}:`)
       ? [component.customId.split(":")[3] ?? ""]
@@ -73,10 +75,11 @@ function completedDetails(
     return review.publication?.shortlink
       ? { title: "Files published" }
       : { title: "Saving files", color: badgeColors.warning };
-  if (commands.includes("sheets")) return { title: "Production updated" };
+  if (commands.includes("sheets")) return "delete";
+  if (commands.some((name) => name.startsWith("quantity."))) return "delete";
   if (commands.includes("keep-design") && !review.pendingRole)
     return { title: "Current design kept" };
-  if (commands.includes("retry") && !review.failure) return { title: "Retry complete" };
+  if (commands.includes("retry")) return "delete";
   if (commands.includes("refresh") && !review.contextChanged) return { title: "Details updated" };
   if (commands.includes("confirm") && !reviewMaterials(review).length) return undefined;
   const upload = commands.find((name) => name.startsWith("upload."));
@@ -89,9 +92,14 @@ function completedDetails(
 }
 
 /** Both button and chat actions settle here, immediately before the next card is acknowledged. */
-export function settledCard(message: Pick<Message, "components">, card: BadgeCard) {
+export function settledCard(message: Pick<Message, "components" | "embeds">, card: BadgeCard) {
+  if (
+    card.review.publication?.shortlink &&
+    message.embeds.some((embed) => embed.title === "Saving files")
+  )
+    return "delete";
   let embed = completedDetails(message, card);
-  if (!embed) return undefined;
+  if (!embed || embed === "delete") return embed;
   if (card.review.failure || card.review.contextChanged)
     embed = { title: "Needs attention", color: badgeColors.error };
   const keepPreview = ["Badge Selected", "Stamp Selected"].includes(embed.title ?? "");

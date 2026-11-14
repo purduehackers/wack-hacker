@@ -58,6 +58,7 @@ export const env = createEnv({
     BADGE_AGENT_URL: z.url({ protocol: /^https?$/u }).optional(),
     /** Luna classifies the first mention in an unassigned badge thread. */
     AI_GATEWAY_API_KEY: secret.optional(),
+    VERCEL_OIDC_TOKEN: secret.optional(),
     /** Bearer the bot presents to the agent. */
     AGENT_INGRESS_SECRET: secret,
     /** Bearer the agent must present on the parked callback. */
@@ -74,6 +75,10 @@ export const env = createEnv({
     /** `/hack-night` bumps the dashboard's Global Config `version` key. */
     VERCEL_API_TOKEN: secret,
     DASHBOARD_GLOBAL_CONFIG: secret,
+
+    /** The shortener API uses its own credential, separate from PHACK_API_KEY. */
+    PHACK_TOKEN: secret,
+    PHACK_URL: z.url({ protocol: /^https?$/u }).default("https://phack.rs"),
 
     /** The image-drop archive in Payload CMS, and the events photos are filed against. */
     PAYLOAD_CMS_API_KEY: secret,

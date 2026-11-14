@@ -1,10 +1,9 @@
 import type { BadgeClient } from "@purduehackers/badges/client";
-import { BADGES_CHANNEL_ID } from "@purduehackers/badges/contracts";
+import { BADGES_CHANNEL_ID } from "@purduehackers/badges/wire";
 import { getRedis } from "@repo/shared/redis";
 import type { MessagePayload } from "@repo/shared/wire";
 import { agentTargetSchema } from "@repo/shared/wire";
 import { createGateway, experimental_decide as decide } from "ai";
-import { z } from "zod";
 
 import { env } from "../env.ts";
 
@@ -20,9 +19,7 @@ export async function routeMessage(api: BadgeClient, payload: MessagePayload) {
   const key = `badges:thread-agent:${threadId}`;
   const route = agentTargetSchema.optional().parse((await redis.get(key)) ?? undefined);
   if (route !== undefined) return route;
-  const { exists } = z
-    .object({ exists: z.boolean() })
-    .parse(await api.post("lookup", { threadId }));
+  const { exists } = await api.post("lookup", { threadId });
   const proposed = exists ? "badge" : await classify(payload);
   // Keep the first route across replies, restarts, Eve resets, and concurrent first pings.
   const saved = await redis.set(key, proposed, { nx: true });
@@ -30,11 +27,10 @@ export async function routeMessage(api: BadgeClient, payload: MessagePayload) {
 }
 
 async function classify(payload: MessagePayload) {
-  if (!env.AI_GATEWAY_API_KEY) throw new Error("Badge routing is not configured.");
+  if (!env.AI_GATEWAY_API_KEY && !env.VERCEL_OIDC_TOKEN)
+    throw new Error("Badge routing is not configured.");
   const result = await decide({
-    model: createGateway({ apiKey: env.AI_GATEWAY_API_KEY }).decisionModel(
-      "openai/gpt-6-luna-decisions",
-    ),
+    model: createGateway().decisionModel("openai/gpt-6-luna-decisions"),
     abortSignal: AbortSignal.timeout(10_000),
     maxRetries: 0,
     state: JSON.stringify({

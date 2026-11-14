@@ -1,4 +1,3 @@
-import { remainingCriteria, reviewable } from "@purduehackers/badges/contracts";
 import { materialDescription } from "@purduehackers/badges/materials";
 import {
   dimensions,
@@ -7,9 +6,10 @@ import {
   reviewPrompt,
   reviewStep,
   verificationChecks,
-  sheetLabel,
 } from "@purduehackers/badges/presentation";
 import type { ReviewStep } from "@purduehackers/badges/presentation";
+import { remainingCriteria, reviewable } from "@purduehackers/badges/review";
+import { sheetLabel } from "@purduehackers/badges/sheets";
 import { cardSchema, componentId } from "@purduehackers/badges/wire";
 import { ButtonStyle, ComponentType } from "discord.js";
 import type {
@@ -110,7 +110,7 @@ export function controls(
           action("80 badges", "quantity.80", ButtonStyle.Primary),
           action("100 badges", "quantity.100", ButtonStyle.Primary),
           action("Enter quantity", "quantity.custom"),
-          action("Change sheets", "sheets"),
+          ...(review.stockReceipt ? [] : [action("Change sheets", "sheets")]),
         ),
       ];
     case "layout":
@@ -118,29 +118,45 @@ export function controls(
         row(
           action("Publish cutting files", "publish", ButtonStyle.Success),
           action("Change quantity", "quantity.custom"),
-          action("Change sheets", "sheets"),
+          ...(review.stockReceipt ? [] : [action("Change sheets", "sheets")]),
         ),
       ];
-    case "error": {
-      const retry = row(
-        action("Try again", review.contextChanged ? "refresh" : "retry", ButtonStyle.Primary),
-      );
-      if (
-        !review.contextChanged &&
-        !review.approval &&
-        reviewable(review) &&
-        !remainingCriteria(review).length
-      )
-        retry.components.push(action("Change sheets", "sheets"));
-      return [retry];
-    }
+    case "error":
+      return errorControls(review, action);
     case "done":
       return review.publication?.shortlink
-        ? [row(link("Download files", review.publication.shortlink))]
+        ? [
+            row(
+              link("Download files", review.publication.shortlink),
+              action("Change quantity", "quantity.custom"),
+            ),
+          ]
         : [];
     default:
       return [];
   }
+}
+
+function errorControls(
+  review: BadgeCard["review"],
+  action: (
+    label: string,
+    name: string,
+    style?: APIButtonComponentWithCustomId["style"],
+  ) => ReturnType<typeof button>,
+) {
+  const retry = row(
+    action("Try again", review.contextChanged ? "refresh" : "retry", ButtonStyle.Primary),
+  );
+  if (
+    !review.stockReceipt &&
+    !review.contextChanged &&
+    !review.approval &&
+    reviewable(review) &&
+    !remainingCriteria(review).length
+  )
+    retry.components.push(action("Change sheets", "sheets"));
+  return [retry];
 }
 
 export function cardEmbeds(card: BadgeCard): APIEmbed[] {
@@ -188,7 +204,8 @@ export function cardEmbeds(card: BadgeCard): APIEmbed[] {
     ];
   }
   if (step === "quantity" && !review.quantityShortfall)
-    embed.description = "How many badges do you want to make? Choose a target or enter your own.";
+    embed.description =
+      "How many badges do you need? I’ll fit at least this many and fill the remaining space.";
   if (step === "quantity" && review.sheetBatch)
     embed.fields = [
       {
@@ -217,7 +234,11 @@ export function cardEmbeds(card: BadgeCard): APIEmbed[] {
             .join("\n"),
         },
       ];
-    embed.footer = { text: "Publishing saves the files and deducts the sheets used." };
+    embed.footer = {
+      text: review.stockReceipt
+        ? "Publishing updates the files using this batch’s allocated sheets."
+        : "Publishing saves the files and deducts the sheets used.",
+    };
   }
   if (step === "done") embed.footer = { text: `Designed by ${review.author.username}` };
   return [embed];

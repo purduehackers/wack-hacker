@@ -53,8 +53,8 @@ import { createConversationFlow } from "./utils/conversation/index.ts";
 
 if (Boolean(env.BADGES_API_URL) !== Boolean(env.BADGE_AGENT_URL))
   throw new Error("Configure BADGES_API_URL and BADGE_AGENT_URL together to enable badges.");
-if (env.BADGES_API_URL && !env.AI_GATEWAY_API_KEY)
-  throw new Error("AI_GATEWAY_API_KEY is required for badge routing.");
+if (env.BADGES_API_URL && !env.AI_GATEWAY_API_KEY && !env.VERCEL_OIDC_TOKEN)
+  throw new Error("AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN is required for badge routing.");
 const badgeSecret = env.BADGES_API_SECRET ?? env.AGENT_INGRESS_SECRET;
 const badges = env.BADGES_API_URL ? createBadgeClient(env.BADGES_API_URL, badgeSecret) : undefined;
 
@@ -153,13 +153,13 @@ async function main(): Promise<void> {
   const client = createClient();
 
   // These HTTP clients make no connection before the callback server binds.
-  const redis = getRedis({
-    url: env.REDIS_URL,
-  });
+  const redis = getRedis({ url: env.REDIS_URL });
 
   const built = buildCommands({
     ...(badges ? { badges } : {}),
     redis,
+    phackToken: env.PHACK_TOKEN,
+    phackUrl: env.PHACK_URL,
     vercelToken: env.VERCEL_API_TOKEN,
     dashboardGlobalConfig: env.DASHBOARD_GLOBAL_CONFIG,
     cmsApiKey: env.PAYLOAD_CMS_API_KEY,

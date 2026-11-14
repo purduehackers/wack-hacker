@@ -34,6 +34,8 @@ export interface CommandDeps {
   readonly badges?: BadgeClient;
   readonly redis: RedisClient;
   readonly vercelToken: string;
+  readonly phackToken: string;
+  readonly phackUrl: string;
   readonly dashboardGlobalConfig: string;
   readonly cmsApiKey: string;
   readonly reporter: Reporter;
@@ -65,6 +67,6 @@ export function buildCommands(deps: CommandDeps): Result<readonly SlashCommand[]
     privacyCommand(deps.redis),
     hackNightCommand({ dashboard: dashboard.value, cms, drops, directory }),
     imageDropCommand({ cms, drops, directory }),
-    phackCommand(createPhackLinkWriter(deps.vercelToken)),
+    phackCommand(createPhackLinkWriter(deps.phackToken, deps.phackUrl)),
   ]);
 }

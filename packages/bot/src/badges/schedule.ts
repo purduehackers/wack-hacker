@@ -1,9 +1,8 @@
 import { createHash } from "node:crypto";
 
 import type { BadgeClient } from "@purduehackers/badges/client";
-import { BADGES_CHANNEL_ID } from "@purduehackers/badges/contracts";
 import { reviewStep } from "@purduehackers/badges/presentation";
-import { workResponse } from "@purduehackers/badges/wire";
+import { BADGES_CHANNEL_ID } from "@purduehackers/badges/wire";
 import { DISCORD_GUILD_ID } from "@repo/shared/discord";
 import { messageOf, Transient } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
@@ -70,8 +69,10 @@ async function settlePreviousCard(
   if (!previousId || previousId === message.id) return;
   try {
     const previous = await channel.messages.fetch({ message: previousId, force: true });
+    if (previous.author.id !== botId) return;
     const update = settledCard(previous, card);
-    if (previous.author.id === botId && update) await previous.edit(update);
+    if (update === "delete") await previous.delete();
+    else if (update) await previous.edit(update);
   } catch (cause) {
     // Deleting an old card must not block delivery; other failures retry before ack.
     if (!(cause instanceof DiscordAPIError) || cause.code !== 10_008) throw cause;
@@ -86,7 +87,7 @@ export function badgeWork(api: BadgeClient, secret: string): Schedule {
       Result.tryPromise({
         try: async () => {
           for (let i = 0; i < 8; i += 1) {
-            const { card, worked } = workResponse.parse(await api.post("work", {}, 90_000));
+            const { card, worked } = await api.post("work", {}, 90_000);
             if (!card) {
               if (worked) continue;
               return;

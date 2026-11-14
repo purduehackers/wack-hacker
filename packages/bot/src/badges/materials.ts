@@ -1,5 +1,9 @@
 import { MAX_CUTTING_SHEETS } from "@purduehackers/badges/contracts";
-import { stockLabel, stockSelectionSchema } from "@purduehackers/badges/inventory-contracts";
+import {
+  stockLabel,
+  stockSelectionSchema,
+  matchesStock,
+} from "@purduehackers/badges/inventory-contracts";
 import type { StockItem, StockSelection } from "@purduehackers/badges/inventory-contracts";
 import {
   getMaterial,
@@ -53,17 +57,6 @@ export function parseMaterials(selected: string[]): StockSelection {
   return selection.data;
 }
 
-function searchable(text: string): string {
-  return text
-    .toLowerCase()
-    .replaceAll(
-      /(\d+(?:\.\d+)?)\s*(?:x|×|by)\s*(\d+(?:\.\d+)?)/gu,
-      (_match, a, b) => `${Math.min(Number(a), Number(b))}x${Math.max(Number(a), Number(b))}`,
-    )
-    .replaceAll(/[^a-z0-9.]+/gu, " ")
-    .trim();
-}
-
 function stockOptions(stock: StockItem[]): APISelectMenuOption[] {
   return stock.flatMap((item) => {
     const material = getMaterial(item.materialId);
@@ -91,13 +84,9 @@ export function materialsPicker({
   const selection = selected.length ? parseMaterials(selected) : [];
   if (selected.some((value) => !available.some((option) => option.value === value)))
     throw new Error("Some selected sheets are no longer available. Reopen Choose acrylic.");
-  const terms = Array.isArray(search) ? [] : searchable(search).split(/\s+/u);
   const matches = Array.isArray(search)
     ? available.filter((option) => search.includes(option.value))
-    : available.filter((option) => {
-        const text = searchable(`${option.label} ${option.description}`);
-        return terms.every((term) => text.includes(term));
-      });
+    : available.filter((option) => matchesStock(`${option.label} ${option.description}`, search));
   const choices = [
     ...available.filter((option) => selected.includes(option.value)),
     ...matches.filter((option) => !selected.includes(option.value)),

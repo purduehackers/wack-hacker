@@ -1,10 +1,6 @@
 import { BadgeApiError } from "@purduehackers/badges/client";
 import type { BadgeClient } from "@purduehackers/badges/client";
-import {
-  inventoryActionSchema,
-  inventoryResponseSchema,
-  stockLabel,
-} from "@purduehackers/badges/inventory-contracts";
+import { inventoryActionSchema, stockLabel } from "@purduehackers/badges/inventory-contracts";
 import type { InventoryAction, InventoryResponse } from "@purduehackers/badges/inventory-contracts";
 import { STOCK_MATERIALS } from "@purduehackers/badges/materials";
 import { designerText } from "@purduehackers/badges/presentation";
@@ -162,7 +158,7 @@ function requestFor(
   memberRoles: string[],
 ) {
   return {
-    guildId: interaction.guildId,
+    guildId: DISCORD_GUILD_ID,
     actor: { id: interaction.user.id, username: interaction.user.username },
     canManufacture: roleAtLeast(roleFromMemberRoles(memberRoles), UserRole.Organizer),
     interactionId: interaction.id,
@@ -184,12 +180,10 @@ async function suggestions(interaction: AutocompleteInteraction, api?: BadgeClie
       .filter((material) => material.name.toLowerCase().includes(focused.value.toLowerCase()))
       .slice(0, 25);
   if (!api || focused.name !== "item") return [];
-  const response = inventoryResponseSchema.parse(
-    await api.post(
-      "inventory",
-      requestFor(interaction, { kind: "suggest", query: focused.value }, []),
-      1600,
-    ),
+  const response = await api.post(
+    "inventory",
+    requestFor(interaction, { kind: "suggest", query: focused.value }, []),
+    1600,
   );
   return response.items.map((item) => ({
     name: `${stockLabel(item)} · ${item.quantity} sheets`.slice(0, 100),
@@ -215,11 +209,9 @@ async function inventoryReply(
   if (Result.isError(parsed)) return { title: "Check your entry", description: parsed.error };
   const member = await interaction.guild.members.fetch({ user: interaction.user.id, force: true });
   try {
-    const response = inventoryResponseSchema.parse(
-      await api.post(
-        "inventory",
-        requestFor(interaction, parsed.value, [...member.roles.cache.keys()]),
-      ),
+    const response = await api.post(
+      "inventory",
+      requestFor(interaction, parsed.value, [...member.roles.cache.keys()]),
     );
     return inventoryEmbed(response, parsed.value);
   } catch (cause) {
