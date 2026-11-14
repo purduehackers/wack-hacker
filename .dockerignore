@@ -15,3 +15,7 @@ coverage
 **/.env.*
 !.env.example
 !**/.env.example
+
+# Eve apps are built separately from the gateway image.
+**/.output
+**/.eve

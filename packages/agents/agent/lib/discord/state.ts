@@ -20,6 +20,8 @@ export interface DiscordChannelState {
   activeEveTurnId?: string;
   /** Completed assistant blocks from earlier tool-call steps in this turn. */
   completedText: string;
+  /** Badge-channel conversations deliver the final answer without preliminary tool-step prose. */
+  finalReplyOnly: boolean;
   /** Cumulative text for the model step currently streaming. */
   streamingText: string;
   /** Full visible assistant text for the current turn. */
@@ -61,6 +63,7 @@ export function initialDiscordState(): DiscordChannelState {
   return {
     channelId: "",
     completedText: "",
+    finalReplyOnly: false,
     streamingText: "",
     text: "",
     activity: "",
@@ -86,6 +89,7 @@ export function stateForMessage(payload: DeliveryPayload): DiscordChannelState {
     ...(payload.thread === undefined ? {} : { threadId: payload.thread.id }),
     activeMessageId: payload.messageId,
     activeDispatchId: payload.dispatchId,
+    finalReplyOnly: payload.agentTarget !== undefined,
   };
 }
 
@@ -153,6 +157,7 @@ export function beginDiscordTurn(
   state.channelId = renderChannelId;
   state.activeMessageId = messageId;
   state.activeDispatchId = dispatchId;
+  state.finalReplyOnly = stringAttribute(attributes, "agentTarget") !== undefined;
 
   const threadId = stringAttribute(attributes, "threadId");
   if (threadId === undefined) delete state.threadId;
@@ -197,14 +202,16 @@ export function appendStreamingMessage(
   state.text = appendBlock(state.completedText, state.streamingText);
 }
 
-/** Preserves preliminary assistant text across tool-call model steps, replay-safely. */
+/** Keeps the final answer for embed replies, or accumulates streamed text replay-safely. */
 export function completeStreamingMessage(
   state: DiscordChannelState,
   input: { readonly message: string | null },
 ): void {
   // Framework boundary: Eve uses null when a step emitted no assistant message.
   if (input.message !== null && input.message !== state.lastCompletedMessage) {
-    state.completedText = appendBlock(state.completedText, input.message);
+    state.completedText = state.finalReplyOnly
+      ? input.message
+      : appendBlock(state.completedText, input.message);
     state.lastCompletedMessage = input.message;
   }
   state.streamingText = "";

@@ -120,7 +120,10 @@ async function steerHolder(
   holder: Holder,
   continuationKey: string,
 ): Promise<void> {
-  const steered = await deps.eve.sendSteer({ continuationKey });
+  const steered = await deps.eve.sendSteer({
+    continuationKey,
+    ...(holder.agentTarget === undefined ? {} : { agentTarget: holder.agentTarget }),
+  });
   if (Result.isOk(steered)) return;
   deps.reporter.emit({
     op: "agent.router.steer",
@@ -145,9 +148,11 @@ export async function submitMessage(
       // the turn *this* message just started and cancels it, which is a turn
       // that never gets to answer anything.
       const holder = await deps.store.deliveries.holder(payload.continuationKey);
-      await deps.store.delivery.enqueue(coalesce(payload, holder?.content));
+      const sameAgent = (holder?.agentTarget ?? "general") === (payload.agentTarget ?? "general");
+      await deps.store.delivery.enqueue(sameAgent ? coalesce(payload, holder?.content) : payload);
       if (runtime.isStopped()) return undefined;
-      if (holder !== undefined) await steerHolder(deps, holder, payload.continuationKey);
+      if (holder !== undefined && sameAgent)
+        await steerHolder(deps, holder, payload.continuationKey);
       return kick(deps, payload.continuationKey);
     },
     catch: transient("agent.router.submit"),
@@ -161,6 +166,15 @@ export async function resetAndKick(
   payload: ResetPayload,
 ): Promise<Result<void, KnownError>> {
   const { deps } = runtime;
+  const active = await deps.store.deliveries.holder(payload.continuationKey);
+  if (active && (active.agentTarget ?? "general") !== (payload.agentTarget ?? "general"))
+    return Result.err(
+      new Transient({
+        operation: "agent.router.reset",
+        detail:
+          "Another agent is active in this thread. Finish that turn before resetting this conversation.",
+      }),
+    );
   const prepared = await Result.tryPromise({
     try: () => deps.store.delivery.beginReset(payload.continuationKey),
     catch: transient("agent.router.begin-reset"),

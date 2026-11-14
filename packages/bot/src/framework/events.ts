@@ -30,7 +30,7 @@ import type { Reporter } from "@repo/shared/result/observe";
 import { Events } from "discord.js";
 import type { Client, ClientEvents } from "discord.js";
 
-import { isBotMention, isReplyToBot } from "../utils/mention.ts";
+import { isBadgeChannel, isBadgePing, isBotMention, isReplyToBot } from "../utils/mention.ts";
 import { traceOperation } from "./observability.ts";
 
 /**
@@ -128,6 +128,7 @@ export interface Deduplicator {
 }
 
 interface RouterDeps {
+  readonly badgesEnabled?: boolean;
   readonly handlers: readonly AnyEventHandler[];
   readonly reporter: Reporter;
   readonly dedup: Deduplicator;
@@ -242,7 +243,10 @@ export function attachEventRouter(client: Client<true>, deps: RouterDeps): void 
       // handlers never see them, so none of them need their own check.
       if (message.author.bot) return;
 
-      const addressed = isBotMention(message, botUserId) || isReplyToBot(message, botUserId);
+      const addressed =
+        deps.badgesEnabled && isBadgeChannel(message)
+          ? isBadgePing(message, botUserId)
+          : isBotMention(message, botUserId) || isReplyToBot(message, botUserId);
       const context: EventContext = { client, botUserId, isBotMention: addressed };
 
       // Mention handlers first, to completion. They decide whether a

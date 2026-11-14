@@ -3,6 +3,11 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    "./env": "./agent/env.ts",
+    "./channels/discord": "./agent/channels/discord.ts",
+    "./channels/eve": "./agent/channels/eve.ts"
+  },
   "scripts": {
     "build": "eve build",
     "check:capabilities": "bun scripts/check-capabilities.ts",

@@ -16,25 +16,19 @@
 import { messageOf, Transient } from "@repo/shared/errors";
 import type { RedisClient } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
+import { agentTargetSchema } from "@repo/shared/wire";
 import { z } from "zod";
 
 const TTL_SECONDS = 7 * 24 * 60 * 60;
 
-interface TurnMessage {
-  /** The durable session the reply belongs to. */
-  readonly sessionId: string;
-  /** Joins feedback to the exact Eve turn. */
-  readonly eveTurnId: string;
-  /** Only this requester or a current organizer may end the conversation. */
-  readonly requesterUserId: string;
-}
-
 /** The stored entry, field for field. Anything else reads as a miss. */
 const turnMessageSchema = z.object({
+  agentTarget: agentTargetSchema.optional(),
   sessionId: z.string(),
   eveTurnId: z.string(),
   requesterUserId: z.string(),
 });
+type TurnMessage = Readonly<z.output<typeof turnMessageSchema>>;
 
 function turnMessageKey(messageId: string): string {
   return `turn-message:${messageId}`;

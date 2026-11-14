@@ -47,6 +47,9 @@ export const MAX_SCHEDULE_CONTENT_CHARS = 9_000;
 const MAX_LEADIN_MESSAGES = 20;
 export const MAX_ATTACHMENTS = 10;
 
+export const agentTargetSchema = z.enum(["general", "badge"]);
+export type AgentTarget = z.output<typeof agentTargetSchema>;
+
 const principalSchema = z.strictObject({
   userId: snowflake,
   username: z.string().trim().min(1).max(64),
@@ -108,6 +111,7 @@ const replyToSchema = messageReferenceSchema.extend({
 const messagePayloadSchema = z
   .strictObject({
     kind: z.enum(["mention", "followup", "scheduled"]),
+    agentTarget: agentTargetSchema.optional(),
     scheduleId: z.uuid().optional(),
     occurrenceId: shortId.optional(),
     continuationKey: snowflake,
@@ -284,6 +288,7 @@ const interactionPayloadSchema = z
 
 /** Retires the session so the next message starts fresh. */
 const resetPayloadSchema = z.strictObject({
+  agentTarget: agentTargetSchema.optional(),
   continuationKey: snowflake,
   reason: z.string().trim().min(1).max(256),
   principal: principalSchema,
@@ -301,6 +306,7 @@ const resetPayloadSchema = z.strictObject({
  * for.
  */
 const steerRequestPayloadSchema = z.strictObject({
+  agentTarget: agentTargetSchema.optional(),
   continuationKey: snowflake,
 });
 
@@ -331,6 +337,7 @@ const parkedPayloadSchema = z.strictObject({
 
 /** Immutable bot-authored Discord target for a queued delivery. */
 const renderTargetSchema = z.strictObject({
+  agentTarget: agentTargetSchema.optional(),
   dispatchId: z.uuid(),
   continuationKey: snowflake,
   messageId: snowflake,

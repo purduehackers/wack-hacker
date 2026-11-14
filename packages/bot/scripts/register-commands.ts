@@ -7,6 +7,7 @@ import { REST, Routes } from "discord.js";
 import type { RESTPostAPIChatInputApplicationCommandsJSONBody } from "discord.js";
 import { z } from "zod";
 
+import { builder as badge } from "../src/commands/badge.ts";
 import { builder as hackNight } from "../src/commands/hack-night.ts";
 import { builder as imageDrop } from "../src/commands/image-drop.ts";
 import { builder as phack } from "../src/commands/phack.ts";
@@ -29,6 +30,7 @@ const credentialsSchema = z.object({
 });
 
 const registrationBody: readonly RESTPostAPIChatInputApplicationCommandsJSONBody[] = [
+  badge.toJSON(),
   ping.builder.toJSON(),
   privacy.toJSON(),
   hackNight.toJSON(),
