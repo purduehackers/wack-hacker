@@ -101,6 +101,8 @@ const renderPublisher = createRenderPublisher({
   store: conversations.render,
   botUrl: () => resolveBotBaseUrl(redis, env.BOT_URL),
   botSecret: env.BOT_INGRESS_SECRET,
+  artifacts: async (dispatchId) =>
+    env.CHART_ATTACHMENTS_ENABLED ? deliveryArtifacts(dispatchId) : undefined,
 });
 const approvalPolicyStore = new ApprovalPolicyStore(redis);
 
@@ -258,9 +260,6 @@ async function publishDesiredRender(
   const revision = state.renderRevision + 1;
   const traceparent = currentTraceparent();
   const intent: RenderIntent = {
-    ...(env.CHART_ATTACHMENTS_ENABLED && input.phase === "completed"
-      ? { artifacts: await deliveryArtifacts(dispatchId) }
-      : {}),
     dispatchId,
     continuationKey: state.threadId ?? state.channelId,
     messageId,

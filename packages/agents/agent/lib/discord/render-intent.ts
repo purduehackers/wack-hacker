@@ -2,7 +2,7 @@
 
 import type { ConversationStore } from "@repo/shared/conversations";
 import { BOT_ROUTES } from "@repo/shared/wire";
-import type { ParkedPayload, RenderIntent } from "@repo/shared/wire";
+import type { ParkedPayload, RenderArtifact, RenderIntent } from "@repo/shared/wire";
 
 type RenderPublication = Awaited<ReturnType<ConversationStore["render"]["publish"]>>;
 
@@ -27,15 +27,24 @@ export function renderFooter(input: FooterInput): string {
 }
 
 export interface RenderPublisherDeps {
-  readonly store: ConversationStore["render"];
+  readonly store: Pick<ConversationStore["render"], "publish" | "settleAndPark">;
   readonly botUrl: () => Promise<string>;
   readonly botSecret: string;
+  readonly artifacts: (dispatchId: string) => Promise<RenderArtifact[] | undefined>;
 }
 
 export function createRenderPublisher(deps: RenderPublisherDeps) {
+  // Completion also passes through settleAndPark, which replaces earlier frames.
+  // Resolve files at both write boundaries so the terminal frame retains them.
+  const withArtifacts = async (intent: RenderIntent): Promise<RenderIntent> => {
+    if (intent.phase !== "completed") return intent;
+    const artifacts = await deps.artifacts(intent.dispatchId);
+    return artifacts === undefined ? intent : { ...intent, artifacts };
+  };
+
   return {
     publish: async (intent: RenderIntent): Promise<RenderPublication> => {
-      const publication = await deps.store.publish(intent);
+      const publication = await deps.store.publish(await withArtifacts(intent));
       if (!publication.accepted) return publication;
       if (!publication.shouldWake) return publication;
 
@@ -60,7 +69,9 @@ export function createRenderPublisher(deps: RenderPublisherDeps) {
       return publication;
     },
 
-    settleAndPark: (intent: RenderIntent, parked: ParkedPayload): Promise<number | undefined> =>
-      deps.store.settleAndPark(intent, parked),
+    settleAndPark: async (
+      intent: RenderIntent,
+      parked: ParkedPayload,
+    ): Promise<number | undefined> => deps.store.settleAndPark(await withArtifacts(intent), parked),
   };
 }
