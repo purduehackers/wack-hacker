@@ -45,6 +45,8 @@ import type { SessionContext } from "eve/context";
 import { z } from "zod";
 
 import { env } from "../env.ts";
+import { artifactDownload } from "../lib/artifacts/download.ts";
+import { deliveryArtifacts } from "../lib/artifacts/store.ts";
 import { resolveBotBaseUrl } from "../lib/bot/endpoint.ts";
 import { authFor } from "../lib/discord/auth.ts";
 import { applyInputRequests } from "../lib/discord/input-requests.ts";
@@ -256,6 +258,9 @@ async function publishDesiredRender(
   const revision = state.renderRevision + 1;
   const traceparent = currentTraceparent();
   const intent: RenderIntent = {
+    ...(env.CHART_ATTACHMENTS_ENABLED && input.phase === "completed"
+      ? { artifacts: await deliveryArtifacts(dispatchId) }
+      : {}),
     dispatchId,
     continuationKey: state.threadId ?? state.channelId,
     messageId,
@@ -325,6 +330,10 @@ export default defineChannel<DiscordChannelState, DiscordChannelContext>({
   }),
 
   routes: [
+    POST(WIRE_ROUTES.artifact, async (request) => {
+      if (!botAuthenticated(request)) return createUnauthorizedResponse();
+      return artifactDownload(request, conversations);
+    }),
     /** A user turn: a mention that opens a conversation, or a follow-up. */
     POST(WIRE_ROUTES.message, async (request, { from, resolveSession }) => {
       if (!botAuthenticated(request)) {

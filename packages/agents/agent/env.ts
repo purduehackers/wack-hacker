@@ -68,6 +68,12 @@ export const env = createEnv({
     PHACK_ASK_API_KEY: secret.optional(),
     PAYLOAD_CMS_API_KEY: secret.optional(),
     HUNTER_API_KEY: secret.optional(),
+    BUFFER_API_KEY: secret.optional(),
+    BUFFER_ORGANIZATION_IDS: identifier.optional(),
+    BUFFER_SNAPSHOTS_ENABLED: z.stringbool().default(false),
+    ARTIFACT_READ_WRITE_TOKEN: secret.optional(),
+    ARTIFACT_PUBLIC_READ_WRITE_TOKEN: secret.optional(),
+    CHART_ATTACHMENTS_ENABLED: z.stringbool().default(false),
     /**
      * Release upload and source maps, managed by the Vercel Sentry integration.
      * Its scopes are `project:read`, `project:releases`, `project:write` — the

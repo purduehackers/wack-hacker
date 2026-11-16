@@ -8,6 +8,7 @@ import {
   UpstreamError,
 } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
+import type { RenderArtifact } from "@repo/shared/wire";
 import type {
   APIMessage,
   Client,
@@ -16,8 +17,10 @@ import type {
 } from "discord.js";
 import { z } from "zod";
 
+import { synchronizeAttachments, type ArtifactLoader } from "./attachments.ts";
+
 export type DiscordError = RateLimited | Transient | UpstreamError;
-type RestClient = Pick<Client["rest"], "delete" | "patch" | "post">;
+type RestClient = Pick<Client["rest"], "delete" | "patch" | "post" | "get">;
 
 function toDiscordError(operation: string) {
   return (cause: unknown): DiscordError => {
@@ -49,8 +52,24 @@ function readPostedMessage(created: unknown): Result<PostedMessage, DiscordError
   );
 }
 
+function attachmentSync(rest: RestClient) {
+  return (
+    channelId: string,
+    messageId: string,
+    artifacts: readonly RenderArtifact[],
+    load: ArtifactLoader,
+    beforeWrite: () => Promise<boolean>,
+  ) =>
+    Result.tryPromise({
+      try: () =>
+        synchronizeAttachments({ rest, channelId, messageId, artifacts, load, beforeWrite }),
+      catch: toDiscordError("synchronize chart attachments"),
+    });
+}
+
 export function createDiscordRest(rest: RestClient) {
   return {
+    syncAttachments: attachmentSync(rest),
     postMessage: async (
       channelId: string,
       body: RESTPostAPIChannelMessageJSONBody,

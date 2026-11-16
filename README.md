@@ -2,7 +2,7 @@
 
 AI agent for [Purdue Hackers](https://purduehackers.com), living in Discord. Mention it in a thread and it can read and act across the services the club runs on — GitHub, Linear, Notion, Vercel, Sentry, Figma, the CMS, the bank — without anyone leaving the channel.
 
-- **Talk to your tools.** 670 provider operations behind 106 role-gated skills, in one conversation.
+- **Talk to your tools.** 720 provider tools behind 116 role-gated skills, in one conversation, including the complete public Buffer API.
 - **Conversations survive everything.** Threads persist across messages, restarts and deploys. Come back hours later and pick up where you left off.
 - **Permissions follow your Discord role.** Public users get safe reads; organizers unlock writes; admins get destructive operations. Every decision is fail-closed and audited.
 - **It schedules.** Ask for a reminder, a recurring post, or a one-off task at a specific time. Recurring jobs survive redeploys.
@@ -25,7 +25,7 @@ flowchart LR
   subgraph agents["packages/agents — Eve"]
     CH["Discord channel"]
     SE["session + policy"]
-    TO["12 domain subagents"]
+    TO["13 domain subagents"]
   end
 
   ST["ConversationStore"]

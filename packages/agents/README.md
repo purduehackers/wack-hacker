@@ -27,7 +27,7 @@ scripts/              check-capabilities, check-serialization-boundaries, sandbo
 
 ## Subagents
 
-Twelve native provider domains plus one auxiliary (`code`) — **670 tools across 106 skills**.
+Thirteen native provider domains plus the auxiliary `code` capability — **720 tools across 116 skills**.
 
 | Domain  | Tools | Skills |     | Domain     | Tools | Skills |
 | ------- | ----: | -----: | --- | ---------- | ----: | -----: |
@@ -37,6 +37,9 @@ Twelve native provider domains plus one auxiliary (`code`) — **670 tools acros
 | sentry  |    68 |     15 |     | notion     |    24 |      4 |
 | linear  |    64 |     16 |     | finance    |    16 |      6 |
 | cms     |    54 |      6 |     | shopping   |     6 |      1 |
+| buffer  |    50 |     10 |     |            |       |        |
+
+Buffer includes all 49 public API operations and one local history query. The root `render_chart` tool produces PNG/SVG/CSV from any authorized dataset or supplied table; `publish_artifact` provides stable public media URLs when requested. See [setup and rollout](../../docs/operations/buffer-and-charts.md).
 
 Each domain's own `README.md` carries its skill tree and full tool table,
 generated from its registry; `AGENTS.md` beside it holds what the next person
@@ -86,7 +89,7 @@ flowchart LR
   R --> AU["audit<br/>append-only, Turso"]
 ```
 
-Decisions are fail-closed: a principal that cannot be resolved gets `public`, and current raw Discord roles override any asserted role tier. Skills are gated `organizer` (92) or `admin` (12); none is `public`.
+Decisions are fail-closed: a principal that cannot be resolved gets `public`, and current raw Discord roles override any asserted role tier. Skills are gated `organizer` or `admin`; none is `public`.
 
 Discovery filters by role independently of skill loading. Provider configuration is deliberately _not_ a discovery condition — a missing credential is a typed execution-time failure, not a silently hidden capability.
 
@@ -108,6 +111,7 @@ Two different things share the name:
 ```bash
 bun run check:capabilities     # cross-file invariants over the capability surface
 bun run check:serialization    # every Eve boundary is guarded
+bun run buffer:schema          # every public Buffer operation and input field is covered
 bun run build                  # eve build (requires Node 24+)
 bun run info                   # eve discovery diagnostics
 ```

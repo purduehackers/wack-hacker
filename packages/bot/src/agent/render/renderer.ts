@@ -6,8 +6,10 @@ import type { RenderProjection, StoredRenderProjection } from "@repo/shared/conv
 import { Transient, UpstreamError } from "@repo/shared/errors";
 import { Result } from "@repo/shared/result";
 import { sliceText, splitText } from "@repo/shared/text";
+import type { RenderArtifact } from "@repo/shared/wire";
 import type { RESTPostAPIChannelMessageJSONBody } from "discord.js";
 
+import type { ArtifactLoader } from "./attachments.ts";
 import type { DiscordError, DiscordRest } from "./discord-rest.ts";
 
 const MAX_MESSAGE_CHARS = 1_900;
@@ -47,6 +49,7 @@ export function toRendererProjection({
 }
 
 interface RenderInput {
+  readonly artifacts?: readonly RenderArtifact[];
   readonly text: string;
   readonly activity: string;
   readonly footer?: string;
@@ -133,6 +136,7 @@ function requestNonce(messageId: string, key: string): string {
 type RenderWriteError = DiscordError | Transient;
 
 interface RendererDeps {
+  readonly loadArtifact?: ArtifactLoader;
   readonly rest: DiscordRest;
   readonly channelId: string;
   readonly sourceMessageId: string;
@@ -443,6 +447,37 @@ async function removeStaleOverflow(
   return Result.ok(undefined);
 }
 
+async function writeArtifacts(
+  rendering: RenderContext,
+  artifacts: readonly RenderArtifact[],
+): Promise<Result<undefined, RenderWriteError>> {
+  const { deps, state } = rendering;
+  if (artifacts.length === 0 && state.artifactHash === undefined) return Result.ok(undefined);
+  const artifactHash = hash(JSON.stringify(artifacts));
+  const messageId = state.anchorMessageId;
+  if (state.artifactHash === artifactHash && state.artifactMessageId === messageId)
+    return Result.ok(undefined);
+  if (!messageId || !deps.loadArtifact)
+    return Result.err(
+      new Transient({
+        operation: "render artifacts",
+        detail: "Attachment loader or reply message missing",
+      }),
+    );
+  const result = await deps.rest.syncAttachments(
+    deps.channelId,
+    messageId,
+    artifacts,
+    deps.loadArtifact,
+    deps.verifyLease,
+  );
+  if (Result.isError(result)) return result;
+  state.artifactHash = artifactHash;
+  state.artifactMessageId = messageId;
+  state.attachmentIds = result.value;
+  return checkpoint(rendering);
+}
+
 export function createRenderer(deps: RendererDeps, state: RendererProjection) {
   const rendering: RenderContext = { deps, state };
   return {
@@ -482,6 +517,8 @@ export function createRenderer(deps: RendererDeps, state: RendererProjection) {
       }
       const anchor = await writeAnchor(rendering, head, [], true);
       if (Result.isError(anchor)) return anchor;
+      const attached = await writeArtifacts(rendering, input.artifacts ?? []);
+      if (Result.isError(attached)) return attached;
       // A finished turn has nothing left to answer.
       const hitl = await writeHitl(rendering, undefined, [], [], undefined);
       if (Result.isError(hitl)) return hitl;
