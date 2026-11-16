@@ -11,8 +11,8 @@
  *    snapshot rather than the message body — miss that and legitimate forwards
  *    get deleted.
  * 2. **Threading.** A compliant post gets a thread, so replies do not bury the
- *    next person's work. Every ship and checkpoint gets three reactions chosen
- *    from its text; the WACKY role still unlocks a celebration reply.
+ *    next person's work. Jev chooses three reactions from the post's meaning;
+ *    the WACKY role still unlocks a celebration reply if the model is unavailable.
  *
  * The DM is best-effort: a user with DMs closed still gets their message
  * removed, because the channel rule matters more than the courtesy copy. That is
@@ -29,6 +29,7 @@ import { defineEvent } from "../framework/events.ts";
 import { postContent } from "../utils/post-content.ts";
 import { shipPostIssue } from "../utils/ship-post.ts";
 import type { ShipPostIssue } from "../utils/ship-post.ts";
+import { loadPostImages } from "./post-emoji-images.ts";
 import { selectPostEmojis } from "./post-emojis.ts";
 
 const URL_PATTERN = /https?:\/\/\S+/i;
@@ -161,7 +162,16 @@ export const autoThread = defineEvent({
           autoArchiveDuration: AUTO_ARCHIVE_MINUTES,
         });
 
-        const reactions = selectPostEmojis(postText);
+        let reactions: readonly string[] = [];
+        try {
+          reactions = await selectPostEmojis({
+            text: postText,
+            kind: message.channelId === DISCORD_IDS.channels.SHIP ? "ship" : "checkpoint",
+            images: await loadPostImages(message),
+          });
+        } catch (cause) {
+          console.warn(`could not select reactions for ${message.id}`, messageOf(cause));
+        }
         // A failed reaction must not block later reactions or the WACKY reply.
         for (const emoji of reactions) {
           try {
@@ -175,7 +185,7 @@ export const autoThread = defineEvent({
           const responseOptions =
             message.channelId === DISCORD_IDS.channels.SHIP ? SHIP_RESPONSES : CHECKPOINT_RESPONSES;
           const chosenReply = responseOptions[Math.floor(Math.random() * responseOptions.length)];
-          if (chosenReply !== undefined) await thread.send(`${chosenReply} ${reactions.join(" ")}`);
+          if (chosenReply !== undefined) await thread.send([chosenReply, ...reactions].join(" "));
         }
         return undefined;
       },

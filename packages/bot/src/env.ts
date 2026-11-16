@@ -93,6 +93,7 @@ export const env = createEnv({
 
     /** Voice-message transcription via Groq whisper-large-v3-turbo. */
     GROQ_API_KEY: secret,
+    AI_GATEWAY_API_KEY: secret,
 
     INSTAGRAM_USER_ID: z.string().regex(/^\d+$/u),
     INSTAGRAM_ACCESS_TOKEN: secret,
