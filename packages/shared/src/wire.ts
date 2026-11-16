@@ -47,6 +47,16 @@ export const MAX_SCHEDULE_CONTENT_CHARS = 9_000;
 const MAX_LEADIN_MESSAGES = 20;
 export const MAX_ATTACHMENTS = 10;
 
+export const renderArtifactSchema = z.strictObject({
+  id: z.string().regex(/^[a-f0-9]{32}$/u),
+  filename: z.string().regex(/^[a-zA-Z0-9._-]{1,100}$/u),
+  mediaType: z.string().min(1).max(100),
+  bytes: z.int().min(1).max(8_000_000),
+  sha256: z.string().regex(/^[a-f0-9]{64}$/u),
+  description: z.string().max(1000).optional(),
+});
+export type RenderArtifact = z.output<typeof renderArtifactSchema>;
+
 const principalSchema = z.strictObject({
   userId: snowflake,
   username: z.string().trim().min(1).max(64),
@@ -345,6 +355,7 @@ const renderTargetSchema = z.strictObject({
 
 /** Latest desired Discord presentation for one delivery. */
 const renderIntentSchema = z.strictObject({
+  artifacts: z.array(renderArtifactSchema).max(10).optional(),
   dispatchId: z.uuid(),
   continuationKey: snowflake,
   messageId: snowflake,
@@ -458,6 +469,7 @@ export function decodeStreamToken(
  * channel gets whatever it asks for.
  */
 export const WIRE_ROUTES = {
+  artifact: "/discord/artifact",
   message: "/discord/message",
   interaction: "/discord/interaction",
   reset: "/discord/reset",

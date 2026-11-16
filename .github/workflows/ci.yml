@@ -42,6 +42,8 @@ jobs:
         working-directory: packages/agents
       - run: bun run check:serialization
         working-directory: packages/agents
+      - run: bun run buffer:schema
+        working-directory: packages/agents
       - name: Validate database migrations
         run: |
           database="$(mktemp /tmp/wack-hacker-ci-XXXXXX.db)"

@@ -3,6 +3,7 @@ import { defineAgent } from "eve";
 const TWO_HOURS_MS = 2 * 60 * 60_000;
 
 export default defineAgent({
+  build: { externalDependencies: ["@resvg/resvg-js"] },
   model: "deepseek/deepseek-v4-flash-0731",
   modelOptions: {
     providerOptions: {

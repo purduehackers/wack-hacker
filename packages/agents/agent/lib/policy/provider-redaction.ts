@@ -58,6 +58,9 @@ export function redactProviderText(value: string): string {
     env.SENTRY_AUTH_TOKEN,
     env.SENTRY_API_TOKEN,
     env.VERCEL_API_TOKEN,
+    env.BUFFER_API_KEY,
+    env.ARTIFACT_READ_WRITE_TOKEN,
+    env.ARTIFACT_PUBLIC_READ_WRITE_TOKEN,
   ]) {
     if (secret && secret.length >= 4) redacted = redacted.split(secret).join("[REDACTED]");
   }

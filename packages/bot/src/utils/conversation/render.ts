@@ -159,6 +159,7 @@ async function paint(
   const renderer = createRenderer(
     {
       rest: deps.rest,
+      loadArtifact: (artifact) => deps.eve.fetchArtifact(artifact, dispatchId),
       channelId: work.target.channelId,
       sourceMessageId: work.target.messageId,
       ...(work.target.replyToMessageId === undefined
@@ -172,6 +173,7 @@ async function paint(
   );
   const hitl = work.intent.phase === "streaming" ? renderHitl(work.intent) : undefined;
   const painted = await renderer.write({
+    ...(work.intent.artifacts === undefined ? {} : { artifacts: work.intent.artifacts }),
     text: work.intent.text,
     activity: work.intent.activity,
     ...(work.intent.footer === undefined ? {} : { footer: work.intent.footer }),

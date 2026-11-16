@@ -14,6 +14,9 @@ import { jsonCodec } from "../../json.ts";
 import type { DeliveryPayload, RenderTarget } from "../../wire.ts";
 
 export const renderProjectionSchema = z.object({
+  artifactHash: contentHash.optional(),
+  artifactMessageId: discordSnowflake.optional(),
+  attachmentIds: z.array(discordSnowflake).max(10).optional(),
   anchorMessageId: discordSnowflake.optional(),
   anchorContentHash: contentHash.optional(),
   /**

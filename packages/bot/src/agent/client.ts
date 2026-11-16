@@ -28,6 +28,7 @@ import type {
   SteerRequestPayload,
   WireResponse,
 } from "@repo/shared/wire";
+import type { RenderArtifact } from "@repo/shared/wire";
 import { z } from "zod";
 
 import { activeTraceparent } from "../framework/observability.ts";
@@ -134,6 +135,20 @@ export function createAgentClient(deps: AgentClientDeps) {
   return {
     /** The agent's origin, for routes reached outside this client's envelope. */
     baseUrl: deps.baseUrl,
+    fetchArtifact: async (artifact: RenderArtifact, dispatchId: string): Promise<Buffer> => {
+      const response = await fetch(new URL(WIRE_ROUTES.artifact, deps.baseUrl), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${deps.secret}` },
+        body: JSON.stringify({ id: artifact.id, dispatchId }),
+        redirect: "error",
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!response.ok) throw await errorFor(response, "agent.artifact");
+      const body = Buffer.from(await response.arrayBuffer());
+      if (body.length !== artifact.bytes)
+        throw new Error("Artifact size differs from its render intent");
+      return body;
+    },
 
     /** Not retried — see the note at the top of this file. */
     sendMessage: async (payload: DeliveryPayload): Promise<Result<AgentAck, AgentError>> =>

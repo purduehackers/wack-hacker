@@ -8,6 +8,20 @@ import {
 } from "./policy/types.ts";
 
 export const CORE_TOOL_DESCRIPTORS = {
+  render_chart: {
+    kind: CapabilityKind.Tool,
+    name: "render_chart",
+    minRole: UserRole.Organizer,
+    risk: RiskLevel.Write,
+    confirmation: Confirmation.None,
+  },
+  publish_artifact: {
+    kind: CapabilityKind.Tool,
+    name: "publish_artifact",
+    minRole: UserRole.Organizer,
+    risk: RiskLevel.Write,
+    confirmation: Confirmation.None,
+  },
   documentation: {
     kind: CapabilityKind.Tool,
     name: "documentation",

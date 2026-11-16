@@ -19,6 +19,13 @@ import { readBudgetContext } from "./stores.ts";
 
 function integrationConfigured(name: CoreToolName): boolean {
   switch (name) {
+    case "render_chart":
+      return env.CHART_ATTACHMENTS_ENABLED && env.ARTIFACT_READ_WRITE_TOKEN !== undefined;
+    case "publish_artifact":
+      return (
+        env.ARTIFACT_READ_WRITE_TOKEN !== undefined &&
+        env.ARTIFACT_PUBLIC_READ_WRITE_TOKEN !== undefined
+      );
     case "documentation":
       return env.PHACK_ASK_API_KEY !== undefined;
     case "web_search":
