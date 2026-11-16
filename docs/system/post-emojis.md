@@ -149,7 +149,29 @@ The production Dockerfile builds successfully for `linux/amd64`. A network-free
 check inside that Alpine image imported the selector/catalog and converted a
 transparent WebP into a valid 1024 × 280 JPEG using the installed sharp binary.
 
-The local and linked-project environments still need `AI_GATEWAY_API_KEY` for
-the long-lived bot before rollout. Temporary development OIDC was only used
-for validation. This change has not been deployed or tested with live Discord
-reactions.
+## Production release
+
+Deployed November 16, 2026, from isolated release commit `15332321`, based on
+production commit `cec97ac4`. [PR #202](https://github.com/purduehackers/wack-hacker/pull/202)
+contains the release source. The original workspace's unrelated changes were
+excluded. The isolated checkout passed all 73 tests (six optional integration
+tests skipped), full lint and formatting, and GitHub validation/migration checks.
+Pullfrog review could not run because the repository's Router balance was empty.
+
+A dedicated Gateway key is configured as a Production Secret and forwarded into
+the bot. Local development still requires its own credential or fresh development
+OIDC. No credential is embedded in the image or committed to source.
+
+- Agent deployment: `dpl_bQwP8W8Q3c1UcUxTnFNaiGeEggBC`, serving
+  [eve.purduehackers.com](https://eve.purduehackers.com).
+- Bot image: `vcr.vercel.com/purdue-hackers/wack-hacker-v2/wack-hacker@sha256:cc207a280f42a48434db74495977fccfc90a14fdd0c4ae5b5117c931d4ef868c`.
+- The scheduled supervisor adopted generation 27926 at 08:50 UTC; bot health
+  reported ready and a 16 ms Discord websocket ping.
+- In-container inference confirmed the injected credential, all 1,158 candidates,
+  and image priority: a piano image with a scarf caption returned 🎹 🎵 🎶.
+- No Discord messages or reactions were posted during these checks. The agent's
+  runtime error log query was empty after activation.
+
+The previous bot image is
+`vcr.vercel.com/purdue-hackers/wack-hacker-v2/wack-hacker@sha256:ce54424a1b2403a4b3a217814dfb904058f4ea5f6518259521c1b4c0ea9f47ca`;
+the previous agent deployment is `dpl_BMdN4eAWJFoESVSbGai4d7t8Sj3e`.
