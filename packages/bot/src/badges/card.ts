@@ -8,7 +8,7 @@ import {
   verificationChecks,
 } from "@purduehackers/badges/presentation";
 import type { ReviewStep } from "@purduehackers/badges/presentation";
-import { remainingCriteria, reviewable } from "@purduehackers/badges/review";
+import { designRoles, remainingCriteria, reviewable } from "@purduehackers/badges/review";
 import { sheetLabel } from "@purduehackers/badges/sheets";
 import { cardSchema, componentId } from "@purduehackers/badges/wire";
 import { ButtonStyle, ComponentType } from "discord.js";
@@ -54,6 +54,7 @@ export function controls(
   const upload = (role: "badge" | "stamp") =>
     action(`Upload ${review[role] ? "revised " : ""}${role}`, `upload.${role}`);
   const step = reviewStep(review);
+  const confirmation = review.stampSkipped ? "Confirm design" : "Confirm designs";
   switch (step) {
     case "files":
       return [
@@ -66,7 +67,12 @@ export function controls(
           : row(action("Badge", "replace.badge"), action("Stamp", "replace.stamp")),
       ];
     case "missing":
-      return [row(upload(review.badge ? "stamp" : "badge"))];
+      return [
+        row(
+          upload(review.badge ? "stamp" : "badge"),
+          ...(review.badge ? [action("No stamp", "skip-stamp")] : []),
+        ),
+      ];
     case "upload":
       return [
         row(upload(review.pendingRole ?? "badge"), action("Keep current design", "keep-design")),
@@ -98,10 +104,10 @@ export function controls(
       return [row(upload(fixRole(review)))];
     case "qa":
       return [
-        row(upload("badge"), upload("stamp"), action("Change acrylic", "choose-material")),
+        row(...designRoles(review).map(upload), action("Change acrylic", "choose-material")),
         row(
           ...(viewerUrl ? [link("View in 3D", viewerUrl)] : []),
-          action("Confirm designs", "confirm", ButtonStyle.Success),
+          action(confirmation, "confirm", ButtonStyle.Success),
         ),
       ];
     case "quantity":
@@ -188,8 +194,7 @@ export function cardEmbeds(card: BadgeCard): APIEmbed[] {
   }
   if (step === "qa" && review.event && review.manufacturing) {
     const [year, month, day] = review.event.date.split("-");
-    embed.description =
-      "Check the version, date, readability, and thin connections. Make sure the stamp impression looks right.";
+    embed.title = review.stampSkipped ? "Check your design" : titles.qa;
     embed.fields = [
       {
         name: "Version",

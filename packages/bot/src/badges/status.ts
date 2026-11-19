@@ -22,13 +22,12 @@ const confirmed = `✅ **Automatic QA passed**
 ✅ **Manual QA passed**
 -# - Correct version and date
 -# - Readable details
--# - Strong connections
--# - Clear stamp impression`;
+-# - Strong connections`;
 
 function completedDesign(commands: string[], review: Review): APIEmbed | undefined {
   if (commands.includes("confirm") && !remainingCriteria(review).length)
     return staticPassed(review)
-      ? { description: confirmed }
+      ? { description: confirmed + (review.stampSkipped ? "" : "\n-# - Clear stamp impression") }
       : { title: "Design checks pending", color: badgeColors.warning };
   if (commands.some((name) => /^material(?:\.|$)/u.test(name)) && reviewMaterials(review).length)
     return {
@@ -76,6 +75,13 @@ function completedDetails(
       ? { title: "Files published" }
       : { title: "Saving files", color: badgeColors.warning };
   if (commands.includes("sheets")) return "delete";
+  if (
+    review.stampSkipped &&
+    commands.includes("upload.stamp") &&
+    !review.pendingRole &&
+    !commands.includes("confirm")
+  )
+    return "delete";
   if (commands.some((name) => name.startsWith("quantity."))) return "delete";
   if (commands.includes("keep-design") && !review.pendingRole)
     return { title: "Current design kept" };
