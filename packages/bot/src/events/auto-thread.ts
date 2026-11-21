@@ -11,8 +11,9 @@
  *    snapshot rather than the message body — miss that and legitimate forwards
  *    get deleted.
  * 2. **Threading.** A compliant post gets a thread, so replies do not bury the
- *    next person's work. Jev chooses three reactions from the post's meaning;
- *    the WACKY role still unlocks a celebration reply if the model is unavailable.
+ *    next person's work. The bot adds up to three reactions from distinct
+ *    categories using Jev's scores. The WACKY role still unlocks a celebration
+ *    reply if the model is unavailable.
  *
  * The DM is best-effort: a user with DMs closed still gets their message
  * removed, because the channel rule matters more than the courtesy copy. That is
