@@ -29,30 +29,94 @@ function scoredModel(
 const picture = { data: new Uint8Array([1, 2, 3]), mediaType: "image/jpeg" } as const;
 
 describe("post emoji candidates", () => {
-  test("covers every object/technology emoji and excludes faces and variants", () => {
-    const candidates = new Set(POST_EMOJI_CANDIDATES.map(({ emoji }) => emoji));
+  const candidates = new Set(POST_EMOJI_CANDIDATES.map(({ emoji }) => emoji));
+
+  test("keeps project objects, neutral variants and the robot", () => {
     expect(candidates.size).toBeGreaterThan(1_000);
     expect(candidates.size).toBe(POST_EMOJI_CANDIDATES.length);
     for (const entry of data.filter((entry) => entry.group === 7)) {
-      expect(candidates.has(entry.emoji)).toBe(true);
+      expect(candidates.has(entry.emoji)).toBe(!["🔗", "⛓️", "⛓️‍💥"].includes(entry.emoji));
     }
     expect(candidates.has("🤖")).toBe(true);
+    expect(candidates.has("🧑‍🔬")).toBe(true);
+    expect(candidates.has("🔢")).toBe(true);
+    expect(candidates.has("🔣")).toBe(true);
     expect(candidates.has("😀")).toBe(false);
-    expect(candidates.has("👨🏻‍💻")).toBe(false);
+  });
+
+  test("excludes link, information, technologist and letter reactions from scoring", () => {
+    for (const emoji of [
+      "🔗",
+      "⛓️",
+      "⛓️‍💥",
+      "ℹ️",
+      "🧑‍💻",
+      "👩‍💻",
+      "👨🏻‍💻",
+      "🔤",
+      "🔠",
+      "🔡",
+      "🅰️",
+      "🆎",
+      "Ⓜ️",
+      "🅿️",
+      "🆗",
+      "🈁",
+      "🇦",
+      "🇿",
+      "®️",
+      "🔝",
+    ]) {
+      expect(candidates.has(emoji)).toBe(false);
+    }
   });
 });
 
-describe("post emoji decisions", () => {
+describe("post emoji ranking", () => {
   test("uses model scores rather than keyword order", async () => {
-    const model = scoredModel({ "🧶": 4, "🎨": 3, "🛠️": 2, "🎮": 0.01, "🎉": 1 });
+    const model = scoredModel({ "🧶": 4, "🧣": 3, "🛠️": 2, "🎮": 0.01, "🎉": 1 });
     expect(
       await selectPostEmojis(
         { text: "Not a game: I finished a scarf from loops of wool.", kind: "ship" },
         model,
       ),
-    ).toEqual(["🧶", "🎨", "🛠️"]);
+    ).toEqual(["🧶", "🧣", "🛠️"]);
   });
 
+  test("a flower website gets one flower alongside its illustration and interaction", async () => {
+    const model = scoredModel(
+      { "🖱️": 4, "🖌️": 3, "🌹": 4, "🔗": 4, ℹ️: 4, "🧑‍💻": 4, "🔠": 4 },
+      { "🌷": 4, "🎴": 3.95, "🌻": 3.9, "🪴": 3.8, "🌹": 2, "🖌️": 2.5 },
+    );
+    expect(
+      await selectPostEmojis(
+        {
+          text: "I painted a tulip that opens as you scroll https://example.org/garden",
+          kind: "ship",
+          images: [picture],
+        },
+        model,
+      ),
+    ).toEqual(["🌷", "🖌️", "🖱️"]);
+  });
+
+  test("flower playing cards also count as games when they are the strongest match", async () => {
+    const model = scoredModel({ "🎴": 4, "🃏": 3.5, "🌸": 3, "🖌️": 2 });
+    expect(
+      await selectPostEmojis({ text: "I painted my own hanafuda deck", kind: "ship" }, model),
+    ).toEqual(["🎴", "🖌️"]);
+  });
+
+  test("returns only the categories the post supports", async () => {
+    const input = { text: "I knitted a scarf", kind: "checkpoint" } as const;
+    expect(
+      await selectPostEmojis(input, scoredModel({ "🧶": 4, "🪡": 3.9, "🧣": 3, "🎉": 1 })),
+    ).toEqual(["🧶", "🧣"]);
+    expect(await selectPostEmojis(input, scoredModel({ "🎉": 1 }))).toEqual([]);
+  });
+});
+
+describe("post emoji scoring", () => {
   test("scores the entire catalog in bounded batches with bounded text", async () => {
     const seen = new Set<string>();
     const scored = scoredModel({ "🎨": 4, "🖌️": 3, "✨": 2 });
@@ -69,43 +133,49 @@ describe("post emoji decisions", () => {
         return scored.doDecide(options);
       },
     });
-    await selectPostEmojis({ text: "x".repeat(20_000), kind: "checkpoint" }, model);
+    const link = "<https://example.org/" + "a".repeat(10_000) + ">";
+    await selectPostEmojis({ text: link + "x".repeat(20_000), kind: "checkpoint" }, model);
     expect(seen.size).toBe(POST_EMOJI_CANDIDATES.length);
   });
 
   test("image relevance outweighs conflicting text by three to one", async () => {
-    const model = scoredModel({ "🧶": 4, "🎨": 4, "🍰": 4 }, { "🎹": 4, "🎵": 3, "🎧": 2 });
+    const model = scoredModel({ "🧶": 4, "🎨": 4, "🍰": 4 }, { "🎹": 4, "🎮": 3, "💻": 2 });
     expect(
       await selectPostEmojis({ text: "a scarf", kind: "ship", images: [picture] }, model),
-    ).toEqual(["🎹", "🎵", "🎧"]);
+    ).toEqual(["🎹", "🎮", "💻"]);
   });
 
-  test("image-only checkpoints send image bytes without inventing text", async () => {
-    const scored = scoredModel({}, { "🎹": 4, "🎵": 3, "🎧": 2 });
+  test.each(["", "<https://example.org/>"])(
+    "scores only the available image for %j",
+    async (text) => {
+      const scored = scoredModel({}, { "🎹": 4, "🎵": 3, "🎧": 2 });
+      const model = new DecisionMockModelV4({
+        doDecide: async (options) => {
+          expect(options.state).toMatchObject([
+            { type: "json", value: { kind: "checkpoint" } },
+            {
+              type: "file",
+              mediaType: picture.mediaType,
+              data: { type: "data", data: picture.data },
+            },
+          ]);
+          return scored.doDecide(options);
+        },
+      });
+      expect(
+        await selectPostEmojis({ text, kind: "checkpoint", images: [picture] }, model),
+      ).toEqual(["🎹"]);
+    },
+  );
+
+  test("skips inference for bare links without a preview", async () => {
     const model = new DecisionMockModelV4({
-      doDecide: async (options) => {
-        expect(options.state).toMatchObject([
-          { type: "json", value: { kind: "checkpoint" } },
-          {
-            type: "file",
-            mediaType: picture.mediaType,
-            data: { type: "data", data: picture.data },
-          },
-        ]);
-        return scored.doDecide(options);
+      doDecide: async () => {
+        throw new Error("Unexpected inference for a bare link");
       },
     });
-    expect(
-      await selectPostEmojis({ text: "", kind: "checkpoint", images: [picture] }, model),
-    ).toEqual(["🎹", "🎵", "🎧"]);
-  });
-
-  test("does not pad insufficient scores with canned reactions", async () => {
-    expect(
-      await rejected(
-        selectPostEmojis({ text: "scarf", kind: "checkpoint" }, scoredModel({ "🧶": 4 })),
-      ),
-    ).toContain("fewer than three");
+    const text = "https://example.org/one\n<https://example.org/two>";
+    expect(await selectPostEmojis({ text, kind: "checkpoint" }, model)).toEqual([]);
   });
 
   test("rejects incomplete batches rather than ranking partial data", async () => {

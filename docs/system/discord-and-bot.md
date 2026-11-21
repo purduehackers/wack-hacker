@@ -364,12 +364,12 @@ words after URLs are removed. Word segmentation supports languages written
 without spaces. Attachment-only posts and shorter explanations receive separate
 DM instructions when deleted.
 
-- compliant: create a `<displayName> - <first 54 chars>` thread with three-day
-  archive; add three distinct reactions based on post text, filling gaps with
-  🎉 ✨ 🚀. Keyword matching ignores URLs. WACKY members also get a celebration reply. No channel or seasonal
-  reactions are added;
-- noncompliant: copy, delete, then best-effort DM the author a saved copy and
-  instructions.
+- Compliant posts get a `<displayName> - <first 54 chars>` thread with a three-day
+  archive and up to three reactions based on the caption and images. Each
+  reaction comes from a different category. WACKY members also get a celebration
+  reply. See [checkpoint and ship emoji selection](post-emojis.md).
+- For noncompliant posts, the bot saves a copy, deletes the post and tries to
+  DM the author the copy and reposting instructions.
 
 Sibling community handlers are concurrent. The dashboard skips ships that fail
 the explanation rule, but deletion is not an ordered gate for other invalid

@@ -1,38 +1,36 @@
 # Checkpoint and ship emoji selection
 
-Reviewed November 16, 2026. The bot uses `typesafe-ai/jev-1.14.0` through
+The bot uses `typesafe-ai/jev-1.14.0` through
 Vercel AI Gateway and AI SDK `experimental_decide` (requires AI SDK 7.0.173).
 
 ## Candidates and ranking
 
-The catalog contains **1,158 candidates** from the pinned `emojibase-data` 18.0.0
-English dataset. It includes every object/technology emoji, plus animals,
-nature, food, places, activities, symbols, and neutral professions, sports and
-useful body parts. Faces, families, country flags and redundant skin/gender
-variants are excluded. Robot is included explicitly despite Unicode classifying
-it as a face. A few meanings supplement Unicode labels with project context,
-such as Rust for crab, Python for snake and fabrication for printer. Those are
-model descriptions, not keyword matching rules.
+The catalog contains **1,107 candidates** from the pinned `emojibase-data` 18.0.0
+English dataset. It covers objects, technology, nature, food, places, activities,
+symbols and selected neutral people emojis. The bot omits links and chains,
+the information sign, technologists, letter buttons and letter signs before
+scoring. Numeric inputs, symbol inputs and project tools such as the laptop
+remain eligible. A few descriptions include project meanings such as Rust for
+crab, Python for snake and fabrication for printer.
 
-Every candidate is scored in batches of at most 128, with three simultaneous
-requests. There is no regex shortlist and no fallback reaction list. Each
-candidate uses the same 0–4 rubric: unrelated, generic encouragement, loosely
-related, direct aspect, central subject/tool/medium. The three highest positive
-scores become distinct Unicode reactions. Generic celebration competes on that
-same rubric and ranks below a subject match.
+Jev scores every candidate in batches of up to 128, with up to three requests
+at a time. Scores run from 0 (unrelated) to 4 (central subject, tool or medium).
+A candidate needs at least 2 (loosely related) in either source to qualify.
+With both sources present, the ranking uses **75% image score + 25% caption
+score**. With one source, its score determines the order.
 
-Image and caption relevance are evaluated separately, then combined in code:
-
-- Caption plus images: **75% image score + 25% text score**.
-- Images alone: 100% image score.
-- Text alone, including when no image can be prepared: 100% text score.
+The bot walks that ranking and takes at most one emoji per category, up to
+three per post. Categories follow Unicode subgroups, with flowers and other
+plants grouped together, and music, instruments and sound grouped together.
+Flower playing cards count toward both games and plants. If only a flower
+qualifies, the bot adds a single flower.
 
 The image pass excludes the caption, so a conflicting caption cannot override
 what the model sees before weighting. Instructions tell the model to focus on
-the work's subject, medium and tools, discount incidental backgrounds, and
-ignore instructions in the content asking for particular reactions. Text is
-capped at 8,000 characters and includes forwarded text. Linked pages are not
-fetched.
+the work's subject, medium and tools and discount incidental details. The
+selector strips URLs from the caption and forwarded text before applying the
+8,000-character limit. A link with a Discord image preview can earn reactions
+from the image alone. A bare link with no caption or usable image skips scoring.
 
 ## Images
 
@@ -58,10 +56,10 @@ shared state, rather than being repeated inside every candidate question.
 ## Failure behavior and configuration
 
 The SDK validates response completeness, types and score bounds. Missing,
-invalid, refused or failed decisions do not produce partial rankings. Fewer
-than three positive scores also produces no reactions. Each request permits
-one transient retry within a shared 20-second scoring deadline. Pending sibling
-requests are aborted if selection fails.
+invalid, refused or failed decisions do not produce partial rankings. A
+completed ranking with no qualifying categories yields zero reactions. Each
+request permits one transient retry within a shared 20-second scoring deadline.
+Pending sibling requests are aborted if selection fails.
 
 Thread creation happens first. Image/model failures are isolated from the WACKY
 celebration reply. Discord reaction failures are isolated from later reactions
@@ -105,14 +103,14 @@ pricing elsewhere. Retries and additional images can add cost.
   thresholds from labeled examples rather than assuming universal calibration.
 - [Jev Book Tags](https://github.com/iamjonatha/jev-book-tags#classification)
   evaluates tags independently, checks evidence sufficiency and caches by
-  model/input/category definitions. Its review thresholds suit persistent book
-  labels; these reactions instead need the highest three scores.
+  model/input/category definitions. The bot uses its own relevance threshold
+  and category limit for reactions.
 
 These follow [TypeSafe's guidance](https://docs.typesafe.ai/introduction) to
 make independent judgments and combine them in code. The image/text weighting
 is our implementation choice, not a claim that the other projects use it.
 
-## Verification
+## November 16 verification of PR #202
 
 All 23 bot tests pass. Selector tests cover complete catalog evaluation,
 object/technology coverage, bounded requests, caption truncation, image weighting,

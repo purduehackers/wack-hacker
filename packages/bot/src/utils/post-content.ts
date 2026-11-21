@@ -10,5 +10,5 @@ export function postContent(message: Message): string {
 }
 
 export function postTextWithoutUrls(content: string): string {
-  return content.replace(/https?:\/\/\S+/giu, " ");
+  return content.replace(/<?https?:\/\/[^\s<>]+>?/giu, " ");
 }
