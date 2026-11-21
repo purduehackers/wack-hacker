@@ -41,6 +41,7 @@ import { traceOperation } from "./observability.ts";
 type EventKind =
   | "mention"
   | "message"
+  | "messageUpdate"
   | "messageDelete"
   | "reactionAdd"
   | "reactionRemove"
@@ -58,6 +59,11 @@ export type ReactorLike = ClientEvents[Events.MessageReactionAdd][1];
 interface EventPayloads {
   mention: ClientEvents[Events.MessageCreate][0];
   message: ClientEvents[Events.MessageCreate][0];
+  messageUpdate: {
+    previous: ClientEvents[Events.MessageUpdate][0];
+    message: ClientEvents[Events.MessageUpdate][1];
+    receivedAt: number;
+  };
   messageDelete: ClientEvents[Events.MessageDelete][0];
   reactionAdd: {
     readonly reaction: ClientEvents[Events.MessageReactionAdd][0];
@@ -140,6 +146,7 @@ function buildRegistry(declared: readonly AnyEventHandler[]): Registry {
   const registry: Registry = {
     mention: [],
     message: [],
+    messageUpdate: [],
     messageDelete: [],
     reactionAdd: [],
     reactionRemove: [],
@@ -154,6 +161,9 @@ function buildRegistry(declared: readonly AnyEventHandler[]): Registry {
         break;
       case "message":
         registry.message.push(handler);
+        break;
+      case "messageUpdate":
+        registry.messageUpdate.push(handler);
         break;
       case "messageDelete":
         registry.messageDelete.push(handler);
@@ -251,6 +261,26 @@ export function attachEventRouter(client: Client<true>, deps: RouterDeps): void 
         addressed ? [registry.mention, registry.message] : [registry.message],
         message,
         context,
+        deps,
+      );
+    });
+  });
+
+  let lastUpdateTime = 0;
+  client.on(Events.MessageUpdate, (previous, updated) => {
+    const receivedAt = Math.max(Date.now(), lastUpdateTime + 1);
+    lastUpdateTime = receivedAt;
+    guard("event.router.messageUpdate", async () => {
+      const message = updated.partial ? await updated.fetch() : updated;
+      if (message.author.bot) return;
+      await runAll(
+        registry.messageUpdate,
+        { previous, message, receivedAt },
+        {
+          client,
+          botUserId,
+          isBotMention: isBotMention(message, botUserId) || isReplyToBot(message, botUserId),
+        },
         deps,
       );
     });
