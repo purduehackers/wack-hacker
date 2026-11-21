@@ -24,7 +24,7 @@ import { isOptedOut } from "@repo/shared/privacy";
 import type { RedisClient } from "@repo/shared/redis";
 import { Result } from "@repo/shared/result";
 import { upstreamRetry } from "@repo/shared/result/retry";
-import { ChannelType, PermissionFlagsBits } from "discord.js";
+import { ChannelType, MessageFlags, PermissionFlagsBits } from "discord.js";
 import type { Client, Message } from "discord.js";
 import rehypeStringify from "rehype-stringify";
 import remarkParse from "remark-parse";
@@ -115,74 +115,100 @@ function isPubliclyMirrorable(message: Message): boolean {
   return parent.permissionsFor(everyone)?.has(PermissionFlagsBits.ViewChannel) ?? false;
 }
 
-export function emitDashboardMessage(deps: {
+function visibleEmbeds(message: Pick<Message, "embeds" | "flags">) {
+  return message.flags.has(MessageFlags.SuppressEmbeds) ? [] : message.embeds;
+}
+
+export function emitDashboardMessages(deps: {
   readonly apiUrl: string;
   readonly apiToken: string;
   readonly redis: RedisClient;
 }) {
   const dashboardUrl = `${deps.apiUrl}/discord/bot`;
 
-  return defineEvent({
-    name: "emit-dashboard-message",
-    kind: "message",
-    dedupKey: (message) => message.id,
-    handle: async (message, context) => {
-      if (context.isBotMention) return Result.ok(undefined);
-      if (!isPubliclyMirrorable(message)) return Result.ok(undefined);
-      if (!message.inGuild()) return Result.ok(undefined);
-      if (
-        message.channelId === DISCORD_IDS.channels.SHIP &&
-        shipPostIssue(postContent(message)) !== undefined
-      )
-        return Result.ok(undefined);
-      if (await isOptedOut(deps.redis, message.author.id)) return Result.ok(undefined);
+  async function publish(message: Message, isBotMention: boolean, embedRevision?: number) {
+    if (isBotMention) return Result.ok(undefined);
+    if (!isPubliclyMirrorable(message)) return Result.ok(undefined);
+    if (!message.inGuild()) return Result.ok(undefined);
+    if (
+      message.channelId === DISCORD_IDS.channels.SHIP &&
+      shipPostIssue(postContent(message)) !== undefined
+    )
+      return Result.ok(undefined);
+    const { content } = message;
+    const attachments = [...message.attachments.values()].map((file) => file.url);
+    const embeds = visibleEmbeds(message).map((card) => card.toJSON());
+    if (await isOptedOut(deps.redis, message.author.id)) return Result.ok(undefined);
 
-      const html = await renderHtml(
-        message.content,
-        createResolver(message.client, message.guildId),
-      );
+    const html = await renderHtml(content, createResolver(message.client, message.guildId));
 
-      return Result.tryPromise(
-        {
-          try: async () => {
-            const response = await fetch(dashboardUrl, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${deps.apiToken}`,
+    return Result.tryPromise(
+      {
+        try: async () => {
+          const response = await fetch(dashboardUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${deps.apiToken}`,
+            },
+            body: JSON.stringify({
+              id: message.id,
+              channel: { id: message.channelId, name: message.channel.name },
+              author: {
+                id: message.author.id,
+                name: message.member?.displayName ?? message.author.username,
+                avatarHash: message.author.avatar,
               },
-              body: JSON.stringify({
-                id: message.id,
-                channel: { id: message.channelId, name: message.channel.name },
-                author: {
-                  id: message.author.id,
-                  name: message.member?.displayName ?? message.author.username,
-                  avatarHash: message.author.avatar,
-                },
-                timestamp: message.createdAt.toISOString(),
-                content: { markdown: message.content, html },
-                attachments: [...message.attachments.values()].map((a) => a.url),
-              }),
-            });
+              timestamp: message.createdAt.toISOString(),
+              content: { markdown: content, html },
+              attachments,
+              embeds,
+              embedRevision,
+            }),
+          });
 
-            if (!response.ok) {
-              throw new Transient({
-                operation: "forward to dashboard",
-                detail: `${response.status} ${(await response.text().catch(() => "")).slice(0, 200)}`,
-              });
-            }
-            return undefined;
-          },
-          catch: (cause) =>
-            cause instanceof Transient
-              ? cause
-              : new Transient({
-                  operation: "forward to dashboard",
-                  detail: messageOf(cause),
-                }),
+          if (!response.ok) {
+            throw new Transient({
+              operation: "forward to dashboard",
+              detail: `${response.status} ${(await response.text().catch(() => "")).slice(0, 200)}`,
+            });
+          }
+          return undefined;
         },
-        upstreamRetry,
-      );
-    },
-  });
+        catch: (cause) =>
+          cause instanceof Transient
+            ? cause
+            : new Transient({
+                operation: "forward to dashboard",
+                detail: messageOf(cause),
+              }),
+      },
+      upstreamRetry,
+    );
+  }
+
+  return [
+    defineEvent({
+      name: "emit-dashboard-message",
+      kind: "message",
+      dedupKey: (message) => message.id,
+      handle: (message, context) => publish(message, context.isBotMention),
+    }),
+    defineEvent({
+      name: "update-dashboard-embeds",
+      kind: "messageUpdate",
+      handle: async ({ previous, message, receivedAt }, context) => {
+        const before = visibleEmbeds(previous);
+        const after = visibleEmbeds(message);
+        if (
+          !previous.partial &&
+          before.length === after.length &&
+          before.every((card, index) => after[index]?.equals(card))
+        ) {
+          return Result.ok(undefined);
+        }
+        return publish(message, context.isBotMention, receivedAt);
+      },
+    }),
+  ];
 }
